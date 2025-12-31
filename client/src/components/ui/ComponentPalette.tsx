@@ -1,0 +1,293 @@
+import React from 'react';
+import { useAppTheme } from '../../hooks/useAppTheme';
+import { ComponentPaletteProps } from '../../types/ComponentTypes';
+import { INodeTypeDescription } from '../../types/INodeProperties';
+import ComponentItem from './ComponentItem';
+import CollapsibleSection from './CollapsibleSection';
+
+// Category emoji icons
+const CATEGORY_EMOJIS: Record<string, string> = {
+  workflow: '⚡',
+  trigger: '🕐',
+  ai: '🤖',
+  location: '📍',
+  whatsapp: '💬',
+  android: '📱',
+  chat: '💭',
+  code: '💻',
+  data: '🗄️',
+  util: '🔧',
+};
+
+const ComponentPalette: React.FC<ComponentPaletteProps> = ({
+  nodeDefinitions,
+  searchQuery,
+  onSearchChange,
+  collapsedSections,
+  onToggleSection,
+  onDragStart,
+}) => {
+  const theme = useAppTheme();
+
+  const getCategoryConfig = (category: string) => {
+    const key = category.toLowerCase();
+    // Use theme-specific category colors (darker for light mode, vibrant for dark mode)
+    const colors = theme.colors as Record<string, string>;
+    const colorMap: Record<string, string> = {
+      workflow: colors.categoryWorkflow || theme.dracula.orange,
+      trigger: colors.categoryTrigger || theme.dracula.pink,
+      ai: colors.categoryAI || theme.dracula.purple,
+      location: colors.categoryLocation || theme.dracula.red,
+      whatsapp: colors.categoryWhatsapp || theme.dracula.green,
+      android: colors.categoryAndroid || theme.dracula.cyan,
+      chat: colors.categoryChat || theme.dracula.yellow,
+      code: colors.categoryCode || theme.dracula.orange,
+      data: colors.categoryTrigger || theme.dracula.pink,
+      util: colors.categoryUtil || theme.dracula.purple,
+    };
+    const labelMap: Record<string, string> = {
+      workflow: 'Workflow',
+      trigger: 'Triggers',
+      ai: 'AI',
+      location: 'Google Maps',
+      whatsapp: 'WhatsApp',
+      android: 'Android',
+      chat: 'Chat',
+      code: 'Code Executors',
+      data: 'Data',
+      util: 'Utilities',
+    };
+    return {
+      icon: CATEGORY_EMOJIS[key] || '📦',
+      color: colorMap[key] || theme.colors.textSecondary,
+      label: labelMap[key] || category
+    };
+  };
+
+  const categorizedComponents = React.useMemo(() => {
+    const categories: Record<string, INodeTypeDescription[]> = {};
+    
+    const filteredDefinitions = Object.values(nodeDefinitions).filter((definition) => {
+      if (!searchQuery.trim()) return true;
+      
+      try {
+        const query = searchQuery.toLowerCase();
+        return (
+          (definition.displayName || '').toLowerCase().includes(query) ||
+          (definition.description || '').toLowerCase().includes(query) ||
+          (definition.group?.[0] || '').toLowerCase().includes(query)
+        );
+      } catch (error) {
+        return false;
+      }
+    });
+    
+    filteredDefinitions.forEach((definition) => {
+      try {
+        const categoryKey = definition.group?.[0] || 'Uncategorized';
+        if (!categories[categoryKey]) {
+          categories[categoryKey] = [];
+        }
+        categories[categoryKey].push(definition);
+      } catch (error) {
+        // Skip invalid definitions
+      }
+    });
+
+    return categories;
+  }, [nodeDefinitions, searchQuery]);
+
+  const totalComponents = Object.values(categorizedComponents).reduce(
+    (acc, components) => acc + components.length, 
+    0
+  );
+
+  return (
+    <div style={{
+      width: '100%',
+      height: '100%',
+      overflowY: 'auto',
+      backgroundColor: theme.colors.backgroundPanel,
+      display: 'flex',
+      flexDirection: 'column',
+    }}>
+      {/* Header Section */}
+      <div style={{
+        padding: theme.spacing.lg,
+        borderBottom: `1px solid ${theme.colors.border}`,
+        background: theme.colors.background,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: theme.spacing.md }}>
+          <h2 style={{
+            margin: 0,
+            fontSize: theme.fontSize.lg,
+            fontWeight: theme.fontWeight.semibold,
+            color: theme.colors.text,
+            fontFamily: 'system-ui, sans-serif',
+          }}>
+            Components
+          </h2>
+          <span style={{
+            fontSize: theme.fontSize.xs,
+            padding: '4px 10px',
+            backgroundColor: theme.colors.backgroundAlt,
+            borderRadius: '12px',
+            color: theme.colors.textSecondary,
+            fontWeight: theme.fontWeight.medium,
+          }}>
+            {totalComponents}
+          </span>
+        </div>
+
+        {/* Search Input */}
+        <div style={{ position: 'relative' }}>
+          <input
+            type="text"
+            placeholder="Search..."
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '10px 12px',
+              paddingLeft: '36px',
+              fontSize: theme.fontSize.sm,
+              border: `1px solid ${theme.colors.border}`,
+              borderRadius: theme.borderRadius.md,
+              backgroundColor: theme.colors.backgroundAlt,
+              color: theme.colors.text,
+              fontFamily: 'system-ui, sans-serif',
+              outline: 'none',
+              transition: `all ${theme.transitions.fast}`,
+            }}
+            onFocus={(e) => {
+              e.currentTarget.style.borderColor = theme.colors.focus;
+              e.currentTarget.style.backgroundColor = theme.colors.background;
+            }}
+            onBlur={(e) => {
+              e.currentTarget.style.borderColor = theme.colors.border;
+              e.currentTarget.style.backgroundColor = theme.colors.backgroundAlt;
+            }}
+          />
+          <svg
+            style={{
+              position: 'absolute',
+              left: '12px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              width: '16px',
+              height: '16px',
+              color: theme.colors.textSecondary,
+              pointerEvents: 'none',
+            }}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+        </div>
+      </div>
+
+      {/* Categories */}
+      <div style={{ 
+        padding: theme.spacing.md,
+        flex: 1,
+        overflowY: 'auto',
+      }}>
+        {Object.keys(categorizedComponents).length === 0 ? (
+          <div style={{
+            textAlign: 'center',
+            padding: theme.spacing.xxl,
+            color: theme.colors.textSecondary,
+          }}>
+            <svg
+              style={{ width: '48px', height: '48px', marginBottom: theme.spacing.md, opacity: 0.5 }}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <p style={{ margin: 0, fontSize: theme.fontSize.sm }}>
+              No components found matching "{searchQuery}"
+            </p>
+          </div>
+        ) : (
+          Object.entries(categorizedComponents).map(([category, components]) => {
+            try {
+              const isCollapsed = collapsedSections[category];
+              const config = getCategoryConfig(category);
+
+              return (
+                <div key={category || 'unknown'} style={{ marginBottom: theme.spacing.md }}>
+                  <CollapsibleSection
+                    title={
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <span style={{
+                            width: '28px',
+                            height: '28px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: `${config.color}20`,
+                            borderRadius: '6px',
+                            fontSize: '16px',
+                          }}>
+                            {config.icon}
+                          </span>
+                          <span style={{
+                            fontWeight: theme.fontWeight.semibold,
+                            color: theme.colors.text,
+                          }}>
+                            {config.label}
+                          </span>
+                        </div>
+                        <span style={{
+                          fontSize: theme.fontSize.xs,
+                          padding: '3px 10px',
+                          backgroundColor: `${config.color}15`,
+                          borderRadius: '12px',
+                          color: theme.colors.textSecondary,
+                          fontWeight: theme.fontWeight.medium,
+                        }}>
+                          {components?.length || 0}
+                        </span>
+                      </div>
+                    }
+                    isCollapsed={isCollapsed}
+                    onToggle={() => onToggleSection(category)}
+                  >
+                    <div style={{
+                      display: 'grid',
+                      gap: theme.spacing.sm,
+                      paddingTop: theme.spacing.sm,
+                    }}>
+                      {(components || []).map((definition, idx) => {
+                        try {
+                          return (
+                            <ComponentItem
+                              key={definition?.name || `item-${idx}`}
+                              definition={definition}
+                              onDragStart={onDragStart}
+                            />
+                          );
+                        } catch (error) {
+                          return null;
+                        }
+                      })}
+                    </div>
+                  </CollapsibleSection>
+                </div>
+              );
+            } catch (error) {
+              return null;
+            }
+          })
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default ComponentPalette;

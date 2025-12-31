@@ -1,0 +1,87 @@
+services:
+  # Python FastAPI Backend
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: machina-backend
+    ports:
+      - "3010:3010"
+    volumes:
+      - ./server:/app
+      - backend-data:/app/data
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3010/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    environment:
+      - PORT=3010
+      - TZ=UTC
+      - LOG_LEVEL=INFO
+      # Android relay WebSocket (optional, set in .env)
+      - ANDROID_RELAY_URL=${ANDROID_RELAY_URL:-}
+      # WhatsApp RPC service URL (internal Docker network)
+      - WHATSAPP_RPC_URL=ws://whatsapp:9400/ws/rpc
+    depends_on:
+      whatsapp:
+        condition: service_healthy
+
+  # React Frontend (Vite)
+  frontend:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      target: development
+    container_name: machina-frontend
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./client:/app
+      - /app/node_modules
+    networks:
+      - app-network
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      - VITE_API_URL=http://backend:3010
+      - VITE_WS_URL=ws://backend:3010
+      - TZ=UTC
+
+  # WhatsApp RPC Service (Go + Flask)
+  whatsapp:
+    build:
+      context: ./server/whatsapp-rpc
+      dockerfile: Dockerfile
+    container_name: machina-whatsapp
+    ports:
+      - "9400:9400"
+      - "5000:5000"
+    volumes:
+      - whatsapp-data:/app/data
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    environment:
+      - TZ=UTC
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  backend-data:
+    driver: local
+  whatsapp-data:
+    driver: local

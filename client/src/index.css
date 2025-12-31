@@ -1,0 +1,315 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222.2 84% 4.9%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222.2 84% 4.9%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 84% 4.9%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 94.1%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    height: 100vh;
+    width: 100vw;
+    margin: 0;
+    padding: 0;
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  }
+
+  #root {
+    height: 100vh;
+    width: 100vw;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+/* ============================================================================
+   LIGHT MODE STYLES - Modern, clean design with proper contrast
+   ============================================================================ */
+
+/* Light mode React Flow canvas - cooler gray for better node contrast */
+.react-flow {
+  background-color: #e8ecf1 !important;
+}
+
+/* Light mode dot pattern for canvas - more visible */
+.react-flow__background pattern circle {
+  fill: #9ca3af !important;
+}
+
+/* Light mode controls - elevated card style */
+.react-flow__controls {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.react-flow__controls button,
+.react-flow__controls-button {
+  background: #ffffff;
+  border: none;
+  border-bottom: 1px solid #f1f5f9;
+  color: #475569;
+}
+
+.react-flow__controls button:last-child,
+.react-flow__controls-button:last-child {
+  border-bottom: none;
+}
+
+.react-flow__controls button:hover,
+.react-flow__controls-button:hover {
+  background: #f8fafc;
+}
+
+.react-flow__controls button svg,
+.react-flow__controls-button svg {
+  fill: #475569 !important;
+}
+
+.react-flow__controls button svg path,
+.react-flow__controls-button svg path {
+  fill: #475569 !important;
+}
+
+/* Light mode minimap */
+.react-flow__minimap {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* Light mode attribution */
+.react-flow__attribution {
+  background: rgba(255, 255, 255, 0.9);
+  color: #94a3b8;
+}
+
+/* Light mode scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+::-webkit-scrollbar-corner {
+  background: #f1f5f9;
+}
+
+/* Firefox scrollbar - light mode */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f1f5f9;
+}
+
+/* Light mode selection box */
+.react-flow__selection {
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+}
+
+/* Light mode connection line */
+.react-flow__connection-line {
+  stroke: #94a3b8;
+  stroke-width: 2;
+}
+
+/* ============================================================================
+   DARK MODE STYLES - Solarized/Dracula inspired
+   ============================================================================ */
+
+.dark .react-flow {
+  background-color: hsl(var(--background)) !important;
+}
+
+.dark .react-flow__node {
+  color: hsl(var(--foreground));
+}
+
+.dark .react-flow__edge {
+  stroke: hsl(var(--border));
+}
+
+.dark .react-flow__controls {
+  background: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.dark .react-flow__controls button,
+.dark .react-flow__controls-button {
+  background: #1f2937;
+  border: none;
+  border-bottom: 1px solid #374151;
+  color: #e5e7eb;
+}
+
+.dark .react-flow__controls button:last-child,
+.dark .react-flow__controls-button:last-child {
+  border-bottom: none;
+}
+
+.dark .react-flow__controls button:hover,
+.dark .react-flow__controls-button:hover {
+  background: #374151;
+}
+
+.dark .react-flow__controls button svg,
+.dark .react-flow__controls-button svg {
+  fill: #e5e7eb !important;
+}
+
+.dark .react-flow__controls button svg path,
+.dark .react-flow__controls-button svg path {
+  fill: #e5e7eb !important;
+}
+
+.dark .react-flow__minimap {
+  background: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 8px;
+}
+
+.dark .react-flow__background {
+  background-color: hsl(var(--background));
+}
+
+.dark .react-flow__attribution {
+  background: hsl(var(--card));
+  color: hsl(var(--muted-foreground));
+}
+
+/* Node execution status animations - enhanced for visibility */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.03);
+  }
+}
+
+/* Light mode specific pulse with stronger effect */
+@keyframes pulseLight {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(1.04);
+    filter: brightness(1.05);
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Custom Scrollbar - Solarized Dark Theme */
+.dark ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: #073642;
+  border-radius: 4px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #586e75;
+  border-radius: 4px;
+  border: 1px solid #073642;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #657b83;
+}
+
+.dark ::-webkit-scrollbar-corner {
+  background: #073642;
+}
+
+/* Firefox scrollbar - dark mode */
+.dark {
+  scrollbar-width: thin;
+  scrollbar-color: #586e75 #073642;
+}

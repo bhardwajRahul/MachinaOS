@@ -1,0 +1,78 @@
+"""Authentication middleware for route protection."""
+
+import logging
+from fastapi import Request, HTTPException
+from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
+
+from core.container import container
+
+logger = logging.getLogger(__name__)
+
+# Public routes that don't require authentication
+PUBLIC_PATHS = frozenset([
+    "/health",
+    "/docs",
+    "/openapi.json",
+    "/redoc",
+    "/api/auth/status",
+    "/api/auth/login",
+    "/api/auth/register",
+    "/api/auth/logout",
+])
+
+# Path prefixes that are public
+PUBLIC_PREFIXES = (
+    "/webhook/",
+)
+
+
+class AuthMiddleware(BaseHTTPMiddleware):
+    """Middleware to protect routes requiring authentication."""
+
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+
+        # Allow public paths
+        if self._is_public_path(path):
+            return await call_next(request)
+
+        # Get settings and token
+        settings = container.settings()
+        token = request.cookies.get(settings.jwt_cookie_name)
+
+        if not token:
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Not authenticated"}
+            )
+
+        # Verify token
+        user_auth = container.user_auth_service()
+        payload = user_auth.verify_token(token)
+
+        if not payload:
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Invalid or expired session"}
+            )
+
+        # Attach user info to request state for downstream handlers
+        request.state.user_id = payload.get("sub")
+        request.state.user_email = payload.get("email")
+        request.state.is_owner = payload.get("is_owner", False)
+
+        return await call_next(request)
+
+    def _is_public_path(self, path: str) -> bool:
+        """Check if path is public (no auth required)."""
+        # Exact match
+        if path in PUBLIC_PATHS:
+            return True
+
+        # Prefix match
+        for prefix in PUBLIC_PREFIXES:
+            if path.startswith(prefix):
+                return True
+
+        return False

@@ -1,0 +1,10 @@
+{
+  "node_id": "battery_1",
+  "node_type": "batteryMonitor",
+  "parameters": {
+    "service_id": "battery",
+    "action": "status",
+    "parameters": {}
+  },
+  "connected_nodes": {}
+}

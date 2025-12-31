@@ -1,0 +1,522 @@
+"""Workflow Service - Facade for workflow execution and deployment.
+
+This is a thin facade that delegates to specialized modules:
+- NodeExecutor: Single node execution
+- ParameterResolver: Template variable resolution
+- DeploymentManager: Event-driven deployment lifecycle
+- WorkflowExecutor: Parallel/sequential orchestration
+
+Following n8n/Conductor patterns for clean separation of concerns.
+"""
+
+import time
+from datetime import datetime
+from typing import Dict, Any, List, Optional, TYPE_CHECKING
+
+from core.logging import get_logger
+from constants import WORKFLOW_TRIGGER_TYPES
+from services.node_executor import NodeExecutor
+from services.parameter_resolver import ParameterResolver
+from services.deployment import DeploymentManager
+from services.execution import WorkflowExecutor, ExecutionCache
+
+if TYPE_CHECKING:
+    from core.config import Settings
+    from core.database import Database
+    from core.cache import CacheService
+    from services.ai import AIService
+    from services.maps import MapsService
+    from services.text import TextService
+    from services.android_service import AndroidService
+
+logger = get_logger(__name__)
+
+
+class WorkflowService:
+    """Workflow execution and deployment service.
+
+    Thin facade delegating to specialized modules for:
+    - Node execution (NodeExecutor)
+    - Parameter resolution (ParameterResolver)
+    - Deployment lifecycle (DeploymentManager)
+    - Workflow orchestration (WorkflowExecutor)
+    """
+
+    def __init__(
+        self,
+        database: "Database",
+        ai_service: "AIService",
+        maps_service: "MapsService",
+        text_service: "TextService",
+        android_service: "AndroidService",
+        cache: "CacheService",
+        settings: "Settings",
+    ):
+        self.database = database
+        self.settings = settings
+
+        # In-memory output storage (fast access during execution)
+        self._outputs: Dict[str, Dict[str, Any]] = {}
+
+        # Initialize NodeExecutor
+        self._node_executor = NodeExecutor(
+            database=database,
+            ai_service=ai_service,
+            maps_service=maps_service,
+            text_service=text_service,
+            android_service=android_service,
+            settings=settings,
+            output_store=self.store_node_output,
+        )
+
+        # Initialize ParameterResolver
+        self._param_resolver = ParameterResolver(
+            database=database,
+            get_output_fn=self.get_node_output,
+        )
+
+        # Initialize Execution Cache
+        self._execution_cache = ExecutionCache(cache)
+        self._workflow_executor: Optional[WorkflowExecutor] = None
+
+        # Initialize DeploymentManager (lazy - needs broadcaster)
+        self._deployment_manager: Optional[DeploymentManager] = None
+        self._broadcaster = None
+
+        # Deployment settings
+        self._settings = {
+            "stop_on_error": False,
+            "max_concurrent_runs": 100,
+            "use_parallel_executor": True,
+        }
+
+    def _get_deployment_manager(self) -> DeploymentManager:
+        """Get or create DeploymentManager."""
+        if self._deployment_manager is None:
+            from services.status_broadcaster import get_status_broadcaster
+            self._broadcaster = get_status_broadcaster()
+            self._deployment_manager = DeploymentManager(
+                database=self.database,
+                execute_workflow_fn=self.execute_workflow,
+                store_output_fn=self.store_node_output,
+                broadcaster=self._broadcaster,
+            )
+        return self._deployment_manager
+
+    def _get_workflow_executor(self, status_callback=None) -> WorkflowExecutor:
+        """Get or create WorkflowExecutor."""
+        if self._workflow_executor is None or status_callback:
+            self._workflow_executor = WorkflowExecutor(
+                cache=self._execution_cache,
+                node_executor=self._execute_node_adapter,
+                status_callback=status_callback,
+                dlq_enabled=self.settings.dlq_enabled,
+            )
+        return self._workflow_executor
+
+    # =========================================================================
+    # NODE EXECUTION
+    # =========================================================================
+
+    async def execute_node(
+        self,
+        node_id: str,
+        node_type: str,
+        parameters: Dict[str, Any],
+        nodes: List[Dict] = None,
+        edges: List[Dict] = None,
+        session_id: str = "default",
+        execution_id: str = None,
+        workflow_id: str = None,
+    ) -> Dict[str, Any]:
+        """Execute a single workflow node."""
+        context = {
+            "nodes": nodes,
+            "edges": edges,
+            "session_id": session_id,
+            "execution_id": execution_id,
+            "workflow_id": workflow_id,  # For per-workflow status scoping (n8n pattern)
+            "get_output_fn": self.get_node_output,
+        }
+        return await self._node_executor.execute(
+            node_id=node_id,
+            node_type=node_type,
+            parameters=parameters,
+            context=context,
+            resolve_params_fn=self._param_resolver.resolve,
+        )
+
+    async def _execute_node_adapter(
+        self,
+        node_id: str,
+        node_type: str,
+        parameters: Dict[str, Any],
+        context: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Adapter for WorkflowExecutor to call NodeExecutor."""
+        return await self.execute_node(
+            node_id=node_id,
+            node_type=node_type,
+            parameters=parameters,
+            nodes=context.get("nodes"),
+            edges=context.get("edges"),
+            session_id=context.get("session_id", "default"),
+            execution_id=context.get("execution_id"),
+            workflow_id=context.get("workflow_id"),  # Pass workflow_id for status scoping
+        )
+
+    # =========================================================================
+    # WORKFLOW EXECUTION
+    # =========================================================================
+
+    async def execute_workflow(
+        self,
+        nodes: List[Dict],
+        edges: List[Dict],
+        session_id: str = "default",
+        status_callback=None,
+        use_parallel: bool = None,
+        skip_clear_outputs: bool = False,
+        workflow_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Execute entire workflow.
+
+        Args:
+            nodes: Workflow nodes
+            edges: Workflow edges
+            session_id: Session identifier
+            status_callback: Status update callback
+            use_parallel: Force parallel/sequential execution
+            skip_clear_outputs: Skip clearing outputs (for deployment runs)
+            workflow_id: Workflow ID for per-workflow status scoping (n8n pattern)
+        """
+        start_time = time.time()
+
+        # Clear outputs unless skipped
+        if not skip_clear_outputs:
+            await self.clear_all_outputs(session_id)
+
+        if not nodes:
+            return self._error_result("No nodes in workflow", start_time)
+
+        # Find start node
+        start_node = self._find_start_node(nodes)
+        if not start_node:
+            return self._error_result("No start node found", start_time)
+
+        # Determine execution mode
+        if use_parallel is None:
+            use_parallel = self._settings.get("use_parallel_executor", True)
+
+        # Use parallel executor if enabled and Redis available
+        if use_parallel and self.settings.redis_enabled:
+            return await self._execute_parallel(nodes, edges, session_id, status_callback, start_time, workflow_id)
+
+        # Fall back to sequential
+        return await self._execute_sequential(nodes, edges, session_id, status_callback, start_time, workflow_id)
+
+    async def _execute_parallel(self, nodes, edges, session_id, status_callback, start_time, workflow_id: Optional[str] = None) -> Dict:
+        """Execute with parallel orchestration engine."""
+        # Use passed workflow_id (from deployment) or generate new one
+        if not workflow_id:
+            workflow_id = f"workflow_{session_id}_{int(time.time() * 1000)}"
+        executor = self._get_workflow_executor(status_callback)
+
+        result = await executor.execute_workflow(
+            workflow_id=workflow_id,
+            nodes=nodes,
+            edges=edges,
+            session_id=session_id,
+            enable_caching=True,
+        )
+
+        return {
+            "success": result.get("success", False),
+            "execution_id": result.get("execution_id"),
+            "nodes_executed": result.get("nodes_executed", []),
+            "outputs": result.get("outputs", {}),
+            "errors": result.get("errors", []),
+            "execution_time": result.get("execution_time", time.time() - start_time),
+            "parallel_execution": True,
+            "timestamp": datetime.now().isoformat(),
+        }
+
+    async def _execute_sequential(self, nodes, edges, session_id, status_callback, start_time, workflow_id: Optional[str] = None) -> Dict:
+        """Execute nodes sequentially (fallback mode)."""
+        start_node = self._find_start_node(nodes)
+        execution_order = self._build_execution_order(start_node, nodes, edges)
+
+        results = {}
+        executed = []
+
+        for node in execution_order:
+            node_id = node['id']
+            node_type = node.get('type', 'unknown')
+
+            # Skip pre-executed trigger nodes
+            if node.get('_pre_executed'):
+                executed.append(node_id)
+                continue
+
+            # Skip disabled nodes (n8n-style disable)
+            if node.get('data', {}).get('disabled'):
+                logger.debug(f"Skipping disabled node: {node_id}")
+                executed.append(node_id)
+                if status_callback:
+                    try:
+                        await status_callback(node_id, "skipped", {"disabled": True})
+                    except Exception:
+                        pass
+                continue
+
+            # Notify executing
+            if status_callback:
+                try:
+                    await status_callback(node_id, "executing", {})
+                except Exception:
+                    pass
+
+            # Execute with workflow_id for per-workflow status scoping (n8n pattern)
+            result = await self.execute_node(
+                node_id=node_id,
+                node_type=node_type,
+                parameters={},
+                nodes=nodes,
+                edges=edges,
+                session_id=session_id,
+                workflow_id=workflow_id,
+            )
+
+            results[node_id] = result
+            executed.append(node_id)
+
+            # Notify completed
+            if status_callback:
+                status = "completed" if result.get("success") else "error"
+                try:
+                    await status_callback(node_id, status, result)
+                except Exception:
+                    pass
+
+            if not result.get("success") and self._settings.get("stop_on_error"):
+                break
+
+        return {
+            "success": all(r.get("success", False) for r in results.values()),
+            "nodes_executed": executed,
+            "node_results": results,
+            "execution_time": time.time() - start_time,
+            "parallel_execution": False,
+            "timestamp": datetime.now().isoformat(),
+        }
+
+    # =========================================================================
+    # DEPLOYMENT
+    # =========================================================================
+
+    async def deploy_workflow(
+        self,
+        nodes: List[Dict],
+        edges: List[Dict],
+        session_id: str = "default",
+        status_callback=None,
+        workflow_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Deploy workflow in event-driven mode.
+
+        Args:
+            nodes: Workflow nodes
+            edges: Workflow edges
+            session_id: Session identifier
+            status_callback: Status update callback
+            workflow_id: Workflow ID for per-workflow deployment tracking
+        """
+        manager = self._get_deployment_manager()
+        return await manager.deploy(nodes, edges, session_id, status_callback, workflow_id)
+
+    async def cancel_deployment(self, workflow_id: Optional[str] = None) -> Dict[str, Any]:
+        """Cancel active deployment.
+
+        Args:
+            workflow_id: Specific workflow to cancel. If None, cancels first running deployment.
+        """
+        manager = self._get_deployment_manager()
+        return await manager.cancel(workflow_id)
+
+    def get_deployment_status(self, workflow_id: Optional[str] = None) -> Dict[str, Any]:
+        """Get deployment status.
+
+        Args:
+            workflow_id: Get status for specific workflow. If None, returns global status.
+        """
+        manager = self._get_deployment_manager()
+        return manager.get_status(workflow_id)
+
+    def is_deployment_running(self, workflow_id: Optional[str] = None) -> bool:
+        """Check if deployment is running.
+
+        Args:
+            workflow_id: Check specific workflow. If None, checks if ANY deployment is running.
+        """
+        manager = self._get_deployment_manager()
+        if workflow_id:
+            return manager.is_workflow_deployed(workflow_id)
+        return manager.is_running
+
+    def is_workflow_deployed(self, workflow_id: str) -> bool:
+        """Check if a specific workflow is deployed."""
+        return self._get_deployment_manager().is_workflow_deployed(workflow_id)
+
+    def get_deployed_workflows(self) -> List[str]:
+        """Get list of deployed workflow IDs."""
+        return self._get_deployment_manager().get_deployed_workflows()
+
+    # =========================================================================
+    # OUTPUT STORAGE
+    # =========================================================================
+
+    async def store_node_output(
+        self,
+        session_id: str,
+        node_id: str,
+        output_name: str,
+        data: Dict[str, Any],
+    ) -> None:
+        """Store node execution output."""
+        key = f"{session_id}_{node_id}"
+        if key not in self._outputs:
+            self._outputs[key] = {}
+        self._outputs[key][output_name] = data
+        await self.database.save_node_output(node_id, session_id, output_name, data)
+
+    async def get_node_output(
+        self,
+        session_id: str,
+        node_id: str,
+        output_name: str,
+    ) -> Optional[Dict[str, Any]]:
+        """Get stored node output."""
+        key = f"{session_id}_{node_id}"
+        output = self._outputs.get(key, {}).get(output_name)
+
+        if output is None:
+            output = await self.database.get_node_output(node_id, session_id, output_name)
+            if output:
+                if key not in self._outputs:
+                    self._outputs[key] = {}
+                self._outputs[key][output_name] = output
+
+        # Special handling for start nodes
+        if output is None and node_id.startswith('start-'):
+            import json
+            params = await self.database.get_node_parameters(node_id)
+            if params and 'initialData' in params:
+                try:
+                    output = json.loads(params.get('initialData', '{}'))
+                except Exception:
+                    output = {}
+
+        return output
+
+    async def get_workflow_node_output(
+        self,
+        node_id: str,
+        output_name: str = "output_0",
+        session_id: str = "default",
+    ) -> Dict[str, Any]:
+        """Get stored output data for a node."""
+        output = await self.get_node_output(session_id, node_id, output_name)
+        if output:
+            return {"success": True, "node_id": node_id, "data": output}
+        return {"success": False, "node_id": node_id, "error": "No output found"}
+
+    async def clear_all_outputs(self, session_id: str = "default") -> None:
+        """Clear all outputs for a session."""
+        keys = [k for k in self._outputs if k.startswith(f"{session_id}_")]
+        for k in keys:
+            del self._outputs[k]
+        await self.database.clear_session_outputs(session_id)
+
+    # =========================================================================
+    # HELPERS
+    # =========================================================================
+
+    def _find_start_node(self, nodes: List[Dict]) -> Optional[Dict]:
+        """Find workflow entry point."""
+        # Priority: start > cronScheduler > other triggers
+        for node in nodes:
+            if node.get('type') == 'start':
+                return node
+        for node in nodes:
+            if node.get('type') == 'cronScheduler':
+                return node
+        for node in nodes:
+            if node.get('type') in WORKFLOW_TRIGGER_TYPES:
+                return node
+        return None
+
+    def _build_execution_order(self, start: Dict, nodes: List[Dict], edges: List[Dict]) -> List[Dict]:
+        """Build BFS execution order from start node."""
+        visited = set()
+        order = []
+        queue = [start['id']]
+
+        # Build adjacency map
+        adj = {}
+        for e in edges:
+            src = e.get('source')
+            if src:
+                adj.setdefault(src, []).append(e.get('target'))
+
+        node_map = {n['id']: n for n in nodes}
+
+        while queue:
+            nid = queue.pop(0)
+            if nid in visited:
+                continue
+            visited.add(nid)
+            node = node_map.get(nid)
+            if node:
+                order.append(node)
+                queue.extend(t for t in adj.get(nid, []) if t not in visited)
+
+        return order
+
+    def _error_result(self, error: str, start_time: float) -> Dict:
+        """Build error result."""
+        return {
+            "success": False,
+            "error": error,
+            "nodes_executed": [],
+            "execution_time": time.time() - start_time,
+            "timestamp": datetime.now().isoformat(),
+        }
+
+    # =========================================================================
+    # SETTINGS
+    # =========================================================================
+
+    async def load_deployment_settings(self) -> Dict[str, Any]:
+        """Load deployment settings from database."""
+        try:
+            db = await self.database.get_deployment_settings()
+            if db:
+                self._settings.update(db)
+        except Exception:
+            pass
+        return self._settings.copy()
+
+    async def update_deployment_settings(self, settings: Dict[str, Any]) -> Dict[str, Any]:
+        """Update deployment settings."""
+        self._settings.update(settings)
+        await self.database.save_deployment_settings(self._settings)
+        return self._settings.copy()
+
+    def get_deployment_settings(self) -> Dict[str, Any]:
+        """Get current deployment settings."""
+        return self._settings.copy()
+
+    @property
+    def node_outputs(self) -> Dict[str, Dict[str, Any]]:
+        """Backward compatibility: expose outputs as node_outputs."""
+        return self._outputs

@@ -1,0 +1,508 @@
+// Unified theme system - consolidated design tokens and component styles
+
+// ============================================================================
+// DRACULA COLOR PALETTE (vibrant action colors + dark theme backgrounds)
+// ============================================================================
+export const dracula = {
+  // Vibrant action colors
+  green: '#50fa7b',    // Run/Success - bright green
+  purple: '#bd93f9',   // Deploy/Save - purple
+  pink: '#ff79c6',     // Cancel/Stop - pink
+  cyan: '#8be9fd',     // Info/Alternative - cyan
+  red: '#ff5555',      // Error/Danger - red
+  orange: '#ffb86c',   // Warning - orange
+  yellow: '#f1fa8c',   // Highlight - yellow
+  // Dark theme backgrounds
+  background: '#282a36',     // Main background
+  currentLine: '#44475a',    // Current line / elevated background
+  selection: '#44475a',      // Selection / panel background
+  comment: '#6272a4',        // Comments / muted text
+  foreground: '#f8f8f2',     // Main text
+} as const;
+
+// ============================================================================
+// SOLARIZED COLOR PALETTE
+// ============================================================================
+export const solarized = {
+  // Base colors (dark to light)
+  base03: '#002b36', // darkest background
+  base02: '#073642', // dark background highlights
+  base01: '#586e75', // dark content tone (comments)
+  base00: '#657b83', // light content tone
+  base0: '#839496',  // dark content tone
+  base1: '#93a1a1',  // light content tone (emphasis)
+  base2: '#eee8d5',  // light background highlights
+  base3: '#fdf6e3',  // lightest background
+  // Accent colors
+  yellow: '#b58900',
+  orange: '#cb4b16',
+  red: '#dc322f',
+  magenta: '#d33682',
+  violet: '#6c71c4',
+  blue: '#268bd2',
+  cyan: '#2aa198',
+  green: '#859900',
+} as const;
+
+// ============================================================================
+// LIGHT THEME COLORS - Modern, clean design with proper contrast
+// ============================================================================
+export const lightColors = {
+  // Backgrounds - slightly warmer canvas for depth
+  background: '#f5f7fa',          // Slightly blue-gray canvas
+  backgroundAlt: '#eef1f5',       // Subtle gray for contrast areas
+  backgroundPanel: '#ffffff',     // Pure white for panels
+  backgroundElevated: '#ffffff',  // Elevated surfaces
+  backgroundHover: 'rgba(0,0,0,0.05)',
+  backgroundActive: 'rgba(0,0,0,0.08)',
+  backgroundCanvas: '#e8ecf1',    // Cooler gray for canvas - more contrast with white nodes
+  // Text - high contrast
+  text: '#1a1d21',                // Near-black for readability
+  textSecondary: '#374151',       // Darker secondary text (gray-700)
+  textMuted: '#4b5563',           // gray-600 - muted but readable
+  // Borders - subtle but defined
+  border: '#d1d5db',              // gray-300 - more visible
+  borderHover: '#9ca3af',         // gray-400
+  borderFocus: '#3b82f6',         // Brighter blue for focus
+  borderNode: '#c7ccd4',          // Slightly darker for nodes
+  // Shadows - more depth for light mode
+  shadow: 'rgba(0,0,0,0.12)',
+  shadowLight: 'rgba(0,0,0,0.06)',
+  shadowHeavy: 'rgba(0,0,0,0.18)',
+  shadowNode: '0 2px 8px rgba(0,0,0,0.1), 0 4px 16px rgba(0,0,0,0.06)',
+  // Focus
+  focus: '#3b82f6',
+  focusRing: 'rgba(59, 130, 246, 0.25)',
+  // Semantic
+  primary: '#2563eb',             // Blue-600 - slightly darker for contrast
+  success: '#059669',             // Emerald-600
+  warning: '#d97706',             // Amber-600
+  error: '#dc2626',               // Red-600
+  info: '#0891b2',                // Cyan-600
+  // Special
+  templateVariable: '#7c3aed',    // Violet for variables
+  // Node-specific
+  nodeBackground: '#ffffff',
+  nodeBorder: '#d1d5db',
+  nodeHeaderBg: '#f3f4f6',
+  // Action colors (optimized for light backgrounds - darker for contrast)
+  actionRun: '#059669',           // Emerald-600
+  actionDeploy: '#7c3aed',        // Violet
+  actionStop: '#dc2626',          // Red-600
+  actionSave: '#0284c7',          // Sky-600
+  actionSettings: '#d97706',      // Amber-600
+  actionCredentials: '#ca8a04',   // Yellow-600
+  actionTheme: '#7c3aed',         // Violet
+  actionSidebar: '#0891b2',       // Cyan-600
+  actionPalette: '#7c3aed',       // Violet
+  statusSaved: '#059669',         // Emerald-600
+  statusModified: '#d97706',      // Amber-600
+  // Edge colors for light mode - MUCH darker for visibility
+  edgeDefault: '#6b7280',         // gray-500 - much more visible
+  edgeSelected: '#7c3aed',        // Violet
+  edgeExecuting: '#7c3aed',       // Violet
+  edgeCompleted: '#059669',       // Emerald-600
+  edgeError: '#dc2626',           // Red-600
+  // Category colors for light mode (darker, more saturated)
+  categoryWorkflow: '#ea580c',    // Orange-600
+  categoryTrigger: '#db2777',     // Pink-600
+  categoryAI: '#7c3aed',          // Violet-600
+  categoryLocation: '#dc2626',    // Red-600
+  categoryWhatsapp: '#059669',    // Emerald-600
+  categoryAndroid: '#0891b2',     // Cyan-600
+  categoryChat: '#ca8a04',        // Yellow-600
+  categoryCode: '#ea580c',        // Orange-600
+  categoryUtil: '#7c3aed',        // Violet-600
+} as const;
+
+// ============================================================================
+// DARK THEME COLORS (Dracula text for better contrast)
+// ============================================================================
+export const darkColors = {
+  // Backgrounds - Solarized dark
+  background: solarized.base03,
+  backgroundAlt: solarized.base02,
+  backgroundPanel: solarized.base02,
+  backgroundElevated: '#0d1f2d',
+  backgroundHover: 'rgba(255,255,255,0.04)',
+  backgroundActive: 'rgba(255,255,255,0.08)',
+  backgroundCanvas: solarized.base03,
+  // Text - Dracula for better contrast
+  text: dracula.foreground,                  // #f8f8f2 - bright white text
+  textSecondary: '#bfbfbf',                  // Lighter secondary text
+  textMuted: dracula.comment,                // #6272a4 - muted/comments
+  // Borders
+  border: solarized.base01 + '60',
+  borderHover: solarized.base01,
+  borderFocus: solarized.blue,
+  borderNode: solarized.base01,
+  // Shadows
+  shadow: 'rgba(0,0,0,0.4)',
+  shadowLight: 'rgba(0,0,0,0.25)',
+  shadowHeavy: 'rgba(0,0,0,0.5)',
+  shadowNode: '0 2px 12px rgba(0,0,0,0.3)',
+  // Focus
+  focus: solarized.blue,
+  focusRing: 'rgba(38, 139, 210, 0.3)',
+  // Semantic
+  primary: solarized.blue,
+  success: solarized.green,
+  warning: solarized.yellow,
+  error: solarized.red,
+  info: solarized.cyan,
+  // Special
+  templateVariable: solarized.cyan,
+  // Node-specific
+  nodeBackground: solarized.base02,
+  nodeBorder: solarized.base01,
+  nodeHeaderBg: solarized.base03,
+  // Action colors (Dracula - optimized for dark backgrounds)
+  actionRun: dracula.green,        // #50fa7b - bright green
+  actionDeploy: dracula.purple,    // #bd93f9 - purple
+  actionStop: dracula.pink,        // #ff79c6 - pink
+  actionSave: dracula.cyan,        // #8be9fd - cyan
+  actionSettings: dracula.orange,  // #ffb86c - orange
+  actionCredentials: dracula.yellow, // #f1fa8c - yellow
+  actionTheme: dracula.yellow,     // #f1fa8c - yellow (sun icon)
+  actionSidebar: dracula.cyan,     // #8be9fd - cyan
+  actionPalette: dracula.purple,   // #bd93f9 - purple
+  statusSaved: dracula.green,      // #50fa7b - green
+  statusModified: dracula.orange,  // #ffb86c - orange
+  // Edge colors for dark mode
+  edgeDefault: dracula.cyan,       // Cyan
+  edgeSelected: dracula.purple,    // Purple
+  edgeExecuting: dracula.purple,   // Purple
+  edgeCompleted: dracula.green,    // Green
+  edgeError: dracula.red,          // Red
+  // Category colors for dark mode (Dracula - vibrant)
+  categoryWorkflow: dracula.orange,
+  categoryTrigger: dracula.pink,
+  categoryAI: dracula.purple,
+  categoryLocation: dracula.red,
+  categoryWhatsapp: dracula.green,
+  categoryAndroid: dracula.cyan,
+  categoryChat: dracula.yellow,
+  categoryCode: dracula.orange,
+  categoryUtil: dracula.purple,
+} as const;
+
+// ============================================================================
+// BASE THEME (uses light colors by default)
+// ============================================================================
+export const theme = {
+  // Color palette - use lightColors as default
+  colors: lightColors,
+
+  // Solarized accent colors (available in both themes)
+  accent: solarized,
+
+  // Dracula vibrant colors (for action buttons)
+  dracula: dracula,
+  
+  // Essential spacing scale
+  spacing: {
+    xs: '4px',
+    sm: '8px',
+    md: '12px',
+    lg: '16px',
+    xl: '20px',
+    xxl: '32px',
+  },
+  
+  // Simplified typography
+  fontSize: {
+    xs: '11px',
+    sm: '12px',
+    base: '14px',
+    lg: '16px',
+    xl: '18px',
+  },
+  
+  fontWeight: {
+    normal: '400',
+    medium: '500',
+    semibold: '600',
+  },
+  
+  borderRadius: {
+    sm: '4px',
+    md: '6px',
+    lg: '8px',
+  },
+
+  // Node sizes (fixed per industry standard)
+  nodeSize: {
+    square: '60px',          // SquareNode, BaseChatModelNode, ModelNode
+    squareIcon: '28px',      // Icon inside square node
+    handle: '8px',           // Connection handles
+    statusIndicator: '10px', // Status dot
+    paramButton: '16px',     // Parameters gear button
+    outputBadge: '14px',     // Output data indicator
+  },
+
+  // Icon sizes
+  iconSize: {
+    xs: '12px',
+    sm: '16px',
+    md: '24px',
+    lg: '28px',
+    xl: '32px',
+  },
+
+  // Button sizes
+  buttonSize: {
+    sm: '24px',
+    md: '32px',
+    lg: '34px',
+  },
+
+  // Layout constants
+  layout: {
+    sidebarWidth: '288px',
+    workflowSidebarWidth: '280px',
+    parameterPanelWidth: '320px',
+    headerHeight: '60px',
+    toolbarHeight: '48px',
+  },
+  
+  transitions: {
+    fast: '0.2s ease',
+    medium: '0.3s ease',
+  },
+  
+  // App constants - moved from utils/constants.ts
+  constants: {
+    storageKeys: {
+      workflows: 'react-flow-workflows',
+      workflowData: (id: string) => `react-flow-workflows-${id}`,
+    },
+    defaultWorkflowName: 'Untitled Workflow',
+    debounceDelay: {
+      workflowUpdate: 100,
+      search: 300,
+    },
+    gridSize: 20,
+    defaultNodePosition: { x: 100, y: 200 },
+    dragOffset: { x: 75, y: 50 },
+  },
+};
+
+// Component styles - consolidated from components.ts + theme.ts
+export const styles = {
+  // Button variants
+  button: {
+    base: {
+      padding: `${theme.spacing.sm} ${theme.spacing.lg}`,
+      borderRadius: theme.borderRadius.md,
+      fontSize: theme.fontSize.sm,
+      fontWeight: theme.fontWeight.medium,
+      cursor: 'pointer',
+      transition: theme.transitions.fast,
+      border: 'none',
+      outline: 'none',
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: theme.spacing.sm,
+    },
+    primary: {
+      backgroundColor: theme.colors.focus,
+      color: 'white',
+    },
+    secondary: {
+      backgroundColor: 'transparent',
+      border: `1px solid ${theme.colors.border}`,
+      color: theme.colors.textSecondary,
+    },
+    danger: {
+      backgroundColor: '#ef4444',
+      color: 'white',
+    },
+  },
+
+  // Input styles
+  input: {
+    base: {
+      width: '100%',
+      padding: `${theme.spacing.sm} ${theme.spacing.md}`,
+      fontSize: theme.fontSize.base,
+      border: `1px solid ${theme.colors.border}`,
+      borderRadius: theme.borderRadius.md,
+      backgroundColor: theme.colors.background,
+      color: theme.colors.text,
+      fontFamily: 'system-ui, sans-serif',
+      outline: 'none',
+      transition: `border-color ${theme.transitions.fast}`,
+    },
+  },
+
+  // Card styles
+  card: {
+    base: {
+      backgroundColor: theme.colors.background,
+      border: `1px solid ${theme.colors.border}`,
+      borderRadius: theme.borderRadius.lg,
+      boxShadow: `0 1px 2px ${theme.colors.shadowLight}`,
+      transition: theme.transitions.fast,
+    },
+  },
+
+  // Modal styles
+  modal: {
+    overlay: {
+      position: 'fixed' as const,
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 1000,
+      padding: theme.spacing.xl,
+    },
+    content: {
+      backgroundColor: theme.colors.background,
+      borderRadius: theme.borderRadius.lg,
+      boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+      width: '100%',
+      maxHeight: '90vh',
+      display: 'flex',
+      flexDirection: 'column' as const,
+      overflow: 'hidden',
+    },
+    header: {
+      padding: theme.spacing.xl,
+      borderBottom: `1px solid ${theme.colors.border}`,
+      backgroundColor: theme.colors.backgroundAlt,
+    },
+    title: {
+      margin: 0,
+      fontSize: theme.fontSize.xl,
+      fontWeight: theme.fontWeight.semibold,
+      color: theme.colors.text,
+    },
+  },
+
+  // Layout components
+  sidebar: {
+    width: '100%',
+    height: '100%',
+    overflowY: 'auto' as const,
+    backgroundColor: theme.colors.backgroundPanel,
+    display: 'flex',
+    flexDirection: 'column' as const,
+  },
+  
+  sidebarHeader: {
+    padding: theme.spacing.xl,
+    borderBottom: `1px solid ${theme.colors.border}`,
+    backgroundColor: theme.colors.background,
+  },
+  
+  sidebarTitle: {
+    margin: 0,
+    fontSize: theme.fontSize.xl,
+    fontWeight: theme.fontWeight.semibold,
+    color: theme.colors.text,
+    fontFamily: 'system-ui, sans-serif',
+  },
+
+  // Component item styles
+  componentItem: {
+    padding: '10px',
+    marginBottom: theme.spacing.sm,
+    backgroundColor: theme.colors.background,
+    border: `1px solid ${theme.colors.border}`,
+    borderRadius: theme.borderRadius.md,
+    cursor: 'grab',
+    transition: theme.transitions.fast,
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    boxShadow: `0 1px 2px ${theme.colors.shadowLight}`,
+    fontFamily: 'system-ui, sans-serif',
+  },
+
+  componentIcon: {
+    fontSize: theme.fontSize.lg,
+    width: '28px',
+    height: '28px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: theme.borderRadius.md,
+    color: theme.colors.background,
+    boxShadow: `0 2px 4px ${theme.colors.shadow}`,
+    flexShrink: 0,
+  },
+
+  componentTitle: {
+    fontWeight: theme.fontWeight.medium,
+    fontSize: theme.fontSize.base,
+    color: theme.colors.text,
+    marginBottom: '1px',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap' as const,
+  },
+
+  componentDescription: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.textSecondary,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap' as const,
+  },
+
+  // Section styles
+  sectionHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: `${theme.spacing.sm} ${theme.spacing.md}`,
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.semibold,
+    color: theme.colors.textSecondary,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.05em',
+    fontFamily: 'system-ui, sans-serif',
+    backgroundColor: theme.colors.backgroundPanel,
+    border: `1px solid ${theme.colors.border}`,
+    borderRadius: theme.borderRadius.md,
+    cursor: 'pointer',
+    transition: theme.transitions.fast,
+    userSelect: 'none' as const,
+  },
+
+  sectionContent: {
+    overflow: 'hidden',
+    transition: `max-height ${theme.transitions.medium}, opacity ${theme.transitions.fast}`,
+  },
+
+  // Layout containers
+  mainContainer: {
+    width: '100%',
+    height: '100%',
+    display: 'flex',
+    backgroundColor: theme.colors.background,
+    color: theme.colors.text,
+    fontFamily: 'system-ui, sans-serif',
+  },
+
+  canvasContainer: {
+    flex: 1,
+    height: '100%',
+    position: 'relative' as const,
+    backgroundColor: theme.colors.backgroundAlt,
+    transition: `margin-left ${theme.transitions.medium}`,
+  },
+
+  reactFlowContainer: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: theme.colors.background,
+  },
+};
+

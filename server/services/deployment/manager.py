@@ -1,0 +1,613 @@
+"""Deployment Manager - Event-driven workflow deployment lifecycle.
+
+Implements n8n/Conductor pattern where:
+- Workflow is a template stored in memory
+- Trigger events spawn independent execution runs
+- Runs execute concurrently (up to max_concurrent_runs)
+"""
+
+import asyncio
+import json
+import time
+from datetime import datetime
+from typing import Dict, Any, List, Optional, Callable, TYPE_CHECKING
+
+from core.logging import get_logger
+from constants import WORKFLOW_TRIGGER_TYPES
+from services import event_waiter
+from .state import DeploymentState, TriggerInfo
+from .triggers import TriggerManager
+
+if TYPE_CHECKING:
+    from core.database import Database
+
+logger = get_logger(__name__)
+
+
+class DeploymentManager:
+    """Manages event-driven workflow deployment.
+
+    Supports per-workflow deployments following n8n pattern:
+    - Each workflow can be deployed independently
+    - Multiple workflows can run concurrently
+    - Each deployment has its own state, triggers, and runs
+    """
+
+    def __init__(
+        self,
+        database: "Database",
+        execute_workflow_fn: Callable,
+        store_output_fn: Callable,
+        broadcaster: Any,
+    ):
+        self.database = database
+        self._execute_workflow = execute_workflow_fn
+        self._store_output = store_output_fn
+        self._broadcaster = broadcaster
+
+        # Per-workflow deployment state (n8n pattern)
+        self._deployments: Dict[str, DeploymentState] = {}
+        self._trigger_managers: Dict[str, TriggerManager] = {}
+        self._active_runs: Dict[str, Dict[str, asyncio.Task]] = {}  # workflow_id -> {run_id: task}
+        self._run_counters: Dict[str, int] = {}
+        self._status_callbacks: Dict[str, Callable] = {}
+        self._main_loop: Optional[asyncio.AbstractEventLoop] = None
+
+        self._settings = {
+            "stop_on_error": False,
+            "max_concurrent_runs": 100,
+            "use_parallel_executor": True
+        }
+
+    @property
+    def is_running(self) -> bool:
+        """Check if ANY deployment is running (backward compatibility)."""
+        return any(state.is_running for state in self._deployments.values())
+
+    def is_workflow_deployed(self, workflow_id: str) -> bool:
+        """Check if a specific workflow is deployed."""
+        state = self._deployments.get(workflow_id)
+        return state is not None and state.is_running
+
+    def get_deployed_workflows(self) -> List[str]:
+        """Get list of deployed workflow IDs."""
+        return [wid for wid, state in self._deployments.items() if state.is_running]
+
+    # =========================================================================
+    # DEPLOYMENT LIFECYCLE
+    # =========================================================================
+
+    async def deploy(
+        self,
+        nodes: List[Dict],
+        edges: List[Dict],
+        session_id: str = "default",
+        status_callback: Optional[Callable] = None,
+        workflow_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Deploy workflow in event-driven mode.
+
+        Args:
+            nodes: Workflow nodes
+            edges: Workflow edges
+            session_id: Session identifier
+            status_callback: Status update callback
+            workflow_id: Workflow ID for per-workflow deployment tracking
+        """
+        # Generate workflow_id if not provided
+        if not workflow_id:
+            workflow_id = f"workflow_{int(time.time() * 1000)}"
+
+        # Check if THIS workflow is already deployed
+        if self.is_workflow_deployed(workflow_id):
+            return {
+                "success": False,
+                "error": f"Workflow {workflow_id} is already deployed",
+                "workflow_id": workflow_id,
+                "deployment_id": self._deployments[workflow_id].deployment_id
+            }
+
+        # Setup
+        deployment_id = f"deploy_{workflow_id}_{int(time.time() * 1000)}"
+        self._status_callbacks[workflow_id] = status_callback
+        self._run_counters[workflow_id] = 0
+        self._active_runs[workflow_id] = {}
+
+        try:
+            self._main_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            self._main_loop = asyncio.get_event_loop()
+
+        # Create trigger manager for this workflow
+        trigger_manager = TriggerManager()
+        trigger_manager.set_main_loop(self._main_loop)
+        trigger_manager.set_running(True)
+        self._trigger_managers[workflow_id] = trigger_manager
+
+        # Load settings
+        await self._load_settings()
+
+        # Create state for this workflow
+        self._deployments[workflow_id] = DeploymentState(
+            deployment_id=deployment_id,
+            workflow_id=workflow_id,
+            is_running=True,
+            nodes=nodes,
+            edges=edges,
+            session_id=session_id,
+            settings=self._settings.copy()
+        )
+
+        logger.info("Deployment starting", deployment_id=deployment_id, workflow_id=workflow_id, nodes=len(nodes))
+
+        triggers_setup = []
+
+        try:
+            # Setup cron triggers
+            for cron_node in TriggerManager.find_cron_nodes(nodes):
+                info = await self._setup_cron_trigger(cron_node, workflow_id)
+                triggers_setup.append(info.to_dict())
+
+            # Find start and event triggers
+            start_nodes, event_triggers = TriggerManager.find_trigger_nodes(nodes, edges)
+
+            # Fire start nodes immediately
+            for node in start_nodes:
+                info = await self._fire_start_trigger(node, workflow_id)
+                triggers_setup.append(info.to_dict())
+
+            # Setup event triggers
+            for node in event_triggers:
+                info = await self._setup_event_trigger(node, workflow_id)
+                triggers_setup.append(info.to_dict())
+
+            # Notify started
+            await self._notify("started", {
+                "deployment_id": deployment_id,
+                "workflow_id": workflow_id,
+                "triggers": triggers_setup
+            }, workflow_id)
+
+            return {
+                "success": True,
+                "deployment_id": deployment_id,
+                "workflow_id": workflow_id,
+                "message": "Workflow deployed",
+                "triggers_setup": triggers_setup
+            }
+
+        except Exception as e:
+            logger.error("Deployment failed", workflow_id=workflow_id, error=str(e))
+            await self.cancel(workflow_id)
+            return {"success": False, "error": str(e), "workflow_id": workflow_id}
+
+    async def cancel(self, workflow_id: Optional[str] = None) -> Dict[str, Any]:
+        """Cancel deployment for a specific workflow.
+
+        Args:
+            workflow_id: Workflow to cancel. If None, cancels the first running deployment.
+        """
+        # Find workflow to cancel
+        if workflow_id:
+            if not self.is_workflow_deployed(workflow_id):
+                return {"success": False, "error": f"Workflow {workflow_id} is not deployed"}
+        else:
+            # Backward compatibility: cancel first running deployment
+            deployed = self.get_deployed_workflows()
+            if not deployed:
+                return {"success": False, "error": "No deployment running"}
+            workflow_id = deployed[0]
+
+        state = self._deployments.get(workflow_id)
+        if not state:
+            return {"success": False, "error": f"Deployment state not found for {workflow_id}"}
+
+        deployment_id = state.deployment_id
+        logger.info("Cancelling deployment", deployment_id=deployment_id, workflow_id=workflow_id)
+
+        # Get trigger manager for this workflow
+        trigger_manager = self._trigger_managers.get(workflow_id)
+        if trigger_manager:
+            trigger_manager.set_running(False)
+
+        # Cancel active runs for this workflow
+        workflow_runs = self._active_runs.get(workflow_id, {})
+        listener_nodes = trigger_manager.get_listener_node_ids() if trigger_manager else []
+
+        for task in workflow_runs.values():
+            if not task.done():
+                task.cancel()
+
+        if workflow_runs:
+            await asyncio.gather(*workflow_runs.values(), return_exceptions=True)
+        run_count = len(workflow_runs)
+
+        # Cleanup triggers for this workflow
+        listener_count = 0
+        cron_count = 0
+        if trigger_manager:
+            listener_count = await trigger_manager.teardown_all_listeners()
+            cron_count = trigger_manager.teardown_all_crons()
+
+        # Cancel event waiters for nodes in this workflow
+        waiter_count = 0
+        for node in state.nodes:
+            waiter_count += event_waiter.cancel_for_node(node['id'])
+
+        # Clear state for this workflow
+        self._deployments.pop(workflow_id, None)
+        self._trigger_managers.pop(workflow_id, None)
+        self._active_runs.pop(workflow_id, None)
+        self._run_counters.pop(workflow_id, None)
+        self._status_callbacks.pop(workflow_id, None)
+
+        return {
+            "success": True,
+            "deployment_id": deployment_id,
+            "workflow_id": workflow_id,
+            "runs_cancelled": run_count,
+            "listeners_cancelled": listener_count,
+            "crons_cancelled": cron_count,
+            "waiters_cancelled": waiter_count,
+            "cancelled_listener_node_ids": listener_nodes
+        }
+
+    def get_status(self, workflow_id: Optional[str] = None) -> Dict[str, Any]:
+        """Get deployment status.
+
+        Args:
+            workflow_id: Get status for specific workflow. If None, returns global status.
+        """
+        if workflow_id:
+            # Status for specific workflow
+            state = self._deployments.get(workflow_id)
+            if not state or not state.is_running:
+                return {"deployed": False, "deployment_id": None, "active_runs": 0, "workflow_id": workflow_id}
+
+            workflow_runs = self._active_runs.get(workflow_id, {})
+            execution_runs = [k for k in workflow_runs if k.startswith("run_")]
+            return {
+                "deployed": True,
+                "deployment_id": state.deployment_id,
+                "workflow_id": workflow_id,
+                "active_runs": len(execution_runs),
+                "active_listeners": len(workflow_runs) - len(execution_runs),
+                "run_counter": self._run_counters.get(workflow_id, 0),
+                "deployed_at": state.deployed_at
+            }
+
+        # Global status (backward compatibility)
+        if not self.is_running:
+            return {"deployed": False, "deployment_id": None, "active_runs": 0}
+
+        # Aggregate across all workflows
+        total_runs = 0
+        total_listeners = 0
+        total_run_counter = 0
+        deployed_workflows = []
+
+        for wid, state in self._deployments.items():
+            if state.is_running:
+                deployed_workflows.append(wid)
+                workflow_runs = self._active_runs.get(wid, {})
+                execution_runs = [k for k in workflow_runs if k.startswith("run_")]
+                total_runs += len(execution_runs)
+                total_listeners += len(workflow_runs) - len(execution_runs)
+                total_run_counter += self._run_counters.get(wid, 0)
+
+        return {
+            "deployed": True,
+            "deployed_workflows": deployed_workflows,
+            "active_runs": total_runs,
+            "active_listeners": total_listeners,
+            "run_counter": total_run_counter
+        }
+
+    # =========================================================================
+    # TRIGGER SETUP
+    # =========================================================================
+
+    async def _setup_cron_trigger(self, node: Dict, workflow_id: str) -> TriggerInfo:
+        """Setup cron trigger for a node."""
+        node_id = node['id']
+        params = await self.database.get_node_parameters(node_id) or {}
+
+        cron_expr = TriggerManager.build_cron_expression(params)
+        timezone = params.get('timezone', 'UTC')
+
+        def on_tick():
+            if self._main_loop and self._main_loop.is_running():
+                trigger_data = {
+                    'node_id': node_id,
+                    'timestamp': datetime.now().isoformat(),
+                    'trigger_type': 'cron'
+                }
+                asyncio.run_coroutine_threadsafe(
+                    self._spawn_run(node_id, trigger_data, workflow_id=workflow_id),
+                    self._main_loop
+                )
+
+        trigger_manager = self._trigger_managers.get(workflow_id)
+        if not trigger_manager:
+            raise RuntimeError(f"No trigger manager for workflow {workflow_id}")
+
+        job_id = trigger_manager.setup_cron(node_id, cron_expr, timezone, on_tick)
+        return TriggerInfo(node_id, "cron", job_id=job_id)
+
+    async def _fire_start_trigger(self, node: Dict, workflow_id: str) -> TriggerInfo:
+        """Fire a start trigger immediately."""
+        node_id = node['id']
+        params = await self.database.get_node_parameters(node_id) or {}
+
+        initial_data_str = params.get('initialData', '{}')
+        try:
+            initial_data = json.loads(initial_data_str) if initial_data_str else {}
+        except json.JSONDecodeError:
+            initial_data = {}
+
+        trigger_data = {
+            'node_id': node_id,
+            'timestamp': datetime.now().isoformat(),
+            'trigger_type': 'start',
+            'event_data': initial_data
+        }
+
+        await self._spawn_run(node_id, trigger_data, workflow_id=workflow_id)
+        return TriggerInfo(node_id, "start", fired=True)
+
+    async def _setup_event_trigger(self, node: Dict, workflow_id: str) -> TriggerInfo:
+        """Setup event-based trigger."""
+        node_id = node['id']
+        node_type = node.get('type', '')
+        params = await self.database.get_node_parameters(node_id) or {}
+
+        async def on_event(event_data: Dict):
+            trigger_data = {
+                'node_id': node_id,
+                'timestamp': datetime.now().isoformat(),
+                'trigger_type': node_type,
+                'event_data': event_data
+            }
+            await self._spawn_run(node_id, trigger_data, wait=True, workflow_id=workflow_id)
+
+        trigger_manager = self._trigger_managers.get(workflow_id)
+        if not trigger_manager:
+            raise RuntimeError(f"No trigger manager for workflow {workflow_id}")
+
+        await trigger_manager.setup_event_trigger(
+            node_id, node_type, params, on_event, self._broadcaster,
+            workflow_id=workflow_id
+        )
+        return TriggerInfo(node_id, node_type)
+
+    # =========================================================================
+    # EXECUTION RUNS
+    # =========================================================================
+
+    async def _spawn_run(
+        self,
+        trigger_node_id: str,
+        trigger_data: Dict[str, Any],
+        wait: bool = False,
+        workflow_id: Optional[str] = None
+    ) -> Optional[asyncio.Task]:
+        """Spawn a new execution run for a specific workflow."""
+        if not workflow_id:
+            # Backward compatibility: find workflow for this trigger node
+            for wid, state in self._deployments.items():
+                if state.is_running and any(n['id'] == trigger_node_id for n in state.nodes):
+                    workflow_id = wid
+                    break
+
+        if not workflow_id or not self.is_workflow_deployed(workflow_id):
+            return None
+
+        state = self._deployments[workflow_id]
+
+        # Check concurrent limit for this workflow
+        workflow_runs = self._active_runs.get(workflow_id, {})
+        active_count = sum(1 for k in workflow_runs if k.startswith("run_"))
+        max_concurrent = self._settings.get("max_concurrent_runs", 100)
+        if active_count >= max_concurrent:
+            logger.warning("Max concurrent runs reached", workflow_id=workflow_id, active=active_count)
+            return None
+
+        # Generate run ID
+        self._run_counters[workflow_id] = self._run_counters.get(workflow_id, 0) + 1
+        run_id = f"run_{state.deployment_id}_{self._run_counters[workflow_id]}"
+
+        await self._notify("run_started", {
+            "run_id": run_id,
+            "workflow_id": workflow_id,
+            "trigger_node_id": trigger_node_id,
+            "active_runs": active_count + 1
+        }, workflow_id)
+
+        async def execute():
+            try:
+                result = await self._execute_from_trigger(
+                    run_id, trigger_node_id, trigger_data, workflow_id
+                )
+                await self._notify("run_completed", {
+                    "run_id": run_id,
+                    "workflow_id": workflow_id,
+                    "success": result.get("success", False),
+                    "execution_time": result.get("execution_time")
+                }, workflow_id)
+            except asyncio.CancelledError:
+                logger.debug("Run cancelled", run_id=run_id, workflow_id=workflow_id)
+            except Exception as e:
+                logger.error("Run failed", run_id=run_id, workflow_id=workflow_id, error=str(e))
+                await self._notify("run_failed", {"run_id": run_id, "error": str(e)}, workflow_id)
+            finally:
+                if workflow_id in self._active_runs:
+                    self._active_runs[workflow_id].pop(run_id, None)
+
+        task = asyncio.create_task(execute())
+        if workflow_id not in self._active_runs:
+            self._active_runs[workflow_id] = {}
+        self._active_runs[workflow_id][run_id] = task
+
+        if wait:
+            try:
+                await task
+            except (asyncio.CancelledError, Exception):
+                pass
+            return None
+
+        return task
+
+    async def _execute_from_trigger(
+        self,
+        run_id: str,
+        trigger_node_id: str,
+        trigger_data: Dict[str, Any],
+        workflow_id: str
+    ) -> Dict[str, Any]:
+        """Execute workflow from a trigger node."""
+        state = self._deployments.get(workflow_id)
+        if not state:
+            return {"success": False, "error": f"Workflow {workflow_id} not deployed"}
+
+        start_time = time.time()
+        run_session_id = f"{state.session_id}_{run_id}"
+
+        # Store trigger output
+        trigger_output = trigger_data.get('event_data', trigger_data)
+        await self._store_output(run_session_id, trigger_node_id, "output_0", trigger_output)
+
+        # Get downstream nodes
+        downstream = self._get_downstream_nodes(
+            trigger_node_id,
+            state.nodes,
+            state.edges
+        )
+
+        if not downstream:
+            return {
+                "success": True,
+                "run_id": run_id,
+                "workflow_id": workflow_id,
+                "nodes_executed": [trigger_node_id],
+                "execution_time": time.time() - start_time,
+                "message": "No downstream nodes"
+            }
+
+        # Build filtered graph
+        run_filter = {trigger_node_id} | {n['id'] for n in downstream}
+
+        filtered_nodes = []
+        for node in state.nodes:
+            if node['id'] not in run_filter:
+                continue
+            node_copy = node.copy()
+            if node['id'] == trigger_node_id:
+                node_copy['_pre_executed'] = True
+                node_copy['_trigger_output'] = trigger_output
+            filtered_nodes.append(node_copy)
+
+        filtered_edges = [
+            e for e in state.edges
+            if e.get('source') in run_filter and e.get('target') in run_filter
+        ]
+
+        # Execute filtered graph with deployment's workflow_id for scoped status
+        status_callback = self._status_callbacks.get(workflow_id)
+        result = await self._execute_workflow(
+            nodes=filtered_nodes,
+            edges=filtered_edges,
+            session_id=run_session_id,
+            status_callback=status_callback,
+            skip_clear_outputs=True,
+            workflow_id=workflow_id,  # Pass deployment's workflow_id for status scoping
+        )
+
+        result["run_id"] = run_id
+        result["workflow_id"] = workflow_id
+        result["trigger_node_id"] = trigger_node_id
+        return result
+
+    def _get_downstream_nodes(
+        self,
+        node_id: str,
+        nodes: List[Dict],
+        edges: List[Dict]
+    ) -> List[Dict]:
+        """Get all downstream nodes from a trigger."""
+        downstream_ids = set()
+        node_types = {n['id']: n.get('type', '') for n in nodes}
+        nodes_with_inputs = {e.get('target') for e in edges if e.get('target')}
+
+        def collect(current_id: str):
+            for edge in edges:
+                if edge.get('source') != current_id:
+                    continue
+                target_id = edge.get('target')
+                if not target_id or target_id in downstream_ids:
+                    continue
+
+                target_type = node_types.get(target_id, '')
+                is_trigger = target_type in WORKFLOW_TRIGGER_TYPES
+                has_inputs = target_id in nodes_with_inputs
+
+                # Stop at independent triggers (no inputs)
+                if is_trigger and not has_inputs:
+                    continue
+
+                downstream_ids.add(target_id)
+                collect(target_id)
+
+        collect(node_id)
+
+        # Include config nodes connected to downstream nodes
+        for edge in edges:
+            target = edge.get('target')
+            source = edge.get('source')
+            handle = edge.get('targetHandle', '')
+
+            is_config = handle and handle.startswith('input-') and handle != 'input-main'
+            if is_config and target in downstream_ids and source not in downstream_ids:
+                downstream_ids.add(source)
+
+        return [n for n in nodes if n['id'] in downstream_ids]
+
+    # =========================================================================
+    # HELPERS
+    # =========================================================================
+
+    async def _load_settings(self):
+        """Load deployment settings from database."""
+        try:
+            db_settings = await self.database.get_deployment_settings()
+            if db_settings:
+                self._settings.update({
+                    "stop_on_error": db_settings.get("stop_on_error", False),
+                    "max_concurrent_runs": db_settings.get("max_concurrent_runs", 100),
+                    "use_parallel_executor": db_settings.get("use_parallel_executor", True)
+                })
+        except Exception:
+            pass
+
+    async def _notify(self, event: str, data: Dict[str, Any], workflow_id: Optional[str] = None):
+        """Send status notification for a specific workflow."""
+        status_callback = None
+        if workflow_id:
+            status_callback = self._status_callbacks.get(workflow_id)
+        else:
+            # Backward compatibility: use first available callback
+            for cb in self._status_callbacks.values():
+                if cb:
+                    status_callback = cb
+                    break
+
+        if not status_callback:
+            return
+
+        try:
+            await status_callback("__deployment__", event, {
+                **data,
+                "workflow_id": workflow_id,
+                "timestamp": datetime.now().isoformat()
+            })
+        except Exception as e:
+            logger.warning("Status callback failed", workflow_id=workflow_id, error=str(e))

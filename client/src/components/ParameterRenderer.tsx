@@ -1,0 +1,1807 @@
+import React, { useState, useEffect } from 'react';
+import { NodeParameter } from '../types/NodeTypes';
+import { INodeProperties, INodePropertyOption } from '../types/INodeProperties';
+import APIKeyValidator from './APIKeyValidator';
+import CodeEditor from './ui/CodeEditor';
+import DynamicParameterService from '../services/dynamicParameterService';
+import { useAppStore } from '../store/useAppStore';
+import { ANDROID_SERVICE_NODE_TYPES } from '../nodeDefinitions/androidServiceNodes';
+import { useAppTheme } from '../hooks/useAppTheme';
+import { API_CONFIG } from '../config/api';
+import { useWebSocket } from '../contexts/WebSocketContext';
+import { useApiKeys } from '../hooks/useApiKeys';
+
+// Map node types to provider keys for AI model nodes
+const NODE_TYPE_TO_PROVIDER: Record<string, string> = {
+  'openaiChatModel': 'openai',
+  'anthropicChatModel': 'anthropic',
+  'claudeChatModel': 'anthropic',
+  'googleChatModel': 'gemini',
+  'geminiChatModel': 'gemini',
+  'azureChatModel': 'azure_openai',
+  'cohereChatModel': 'cohere',
+  'ollamaChatModel': 'ollama',
+  'mistralChatModel': 'mistral'
+};
+
+// Collection Renderer - n8n official style
+const CollectionRenderer: React.FC<{
+  parameter: any;
+  value: any;
+  onChange: (value: any) => void;
+  allParameters?: Record<string, any>;
+  theme: ReturnType<typeof useAppTheme>;
+}> = ({ parameter, value, onChange, allParameters, theme }) => {
+  const [showAddOption, setShowAddOption] = useState(false);
+  const currentValue = value || {};
+  const addedOptions = Object.keys(currentValue).filter(key => currentValue[key] !== undefined);
+  const availableOptions = parameter.options?.filter((opt: any) => !addedOptions.includes(opt.name)) || [];
+
+  const addOption = (optionName: string) => {
+    const option = parameter.options?.find((opt: any) => opt.name === optionName);
+    if (option) {
+      onChange({
+        ...currentValue,
+        [optionName]: option.default
+      });
+      setShowAddOption(false);
+    }
+  };
+
+  const removeOption = (optionName: string) => {
+    const newValue = { ...currentValue };
+    delete newValue[optionName];
+    onChange(newValue);
+  };
+
+  const updateOption = (optionName: string, optionValue: any) => {
+    onChange({
+      ...currentValue,
+      [optionName]: optionValue
+    });
+  };
+
+  return (
+    <div>
+      {addedOptions.length === 0 && (
+        <div style={{
+          fontSize: '14px',
+          color: theme.colors.textSecondary,
+          marginBottom: '12px',
+          padding: '8px 0'
+        }}>
+          No properties
+        </div>
+      )}
+
+      {addedOptions.map((optionName) => {
+        const option = parameter.options?.find((opt: any) => opt.name === optionName);
+        if (!option) return null;
+
+        return (
+          <div key={optionName} style={{
+            marginBottom: '16px',
+            padding: '12px',
+            border: `1px solid ${theme.colors.border}`,
+            borderRadius: '4px',
+            backgroundColor: theme.colors.backgroundAlt,
+            position: 'relative'
+          }}>
+            <button
+              onClick={() => removeOption(optionName)}
+              style={{
+                position: 'absolute',
+                top: '6px',
+                right: '6px',
+                background: 'none',
+                border: 'none',
+                color: theme.colors.textSecondary,
+                cursor: 'pointer',
+                fontSize: '14px',
+                padding: '2px 4px',
+                borderRadius: '2px'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.colors.border}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+              title="Remove"
+            >
+              ✕
+            </button>
+            <ParameterRenderer
+              parameter={option}
+              value={currentValue[optionName]}
+              onChange={(newValue) => updateOption(optionName, newValue)}
+              allParameters={allParameters}
+            />
+          </div>
+        );
+      })}
+
+      {availableOptions.length > 0 && (
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={() => setShowAddOption(!showAddOption)}
+            style={{
+              width: '100%',
+              padding: '10px 12px',
+              border: `1px solid ${theme.colors.border}`,
+              borderRadius: '4px',
+              backgroundColor: theme.colors.backgroundAlt,
+              color: theme.colors.textSecondary,
+              cursor: 'pointer',
+              fontSize: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.colors.borderHover}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = theme.colors.backgroundAlt}
+          >
+            {parameter.placeholder || 'Add Option'}
+            <span style={{
+              transform: showAddOption ? 'rotate(180deg)' : 'rotate(0deg)',
+              transition: 'transform 0.2s ease'
+            }}>
+              ▼
+            </span>
+          </button>
+
+          {showAddOption && (
+            <div style={{
+              position: 'absolute',
+              top: '100%',
+              left: 0,
+              right: 0,
+              zIndex: 1000,
+              backgroundColor: theme.colors.background,
+              border: `1px solid ${theme.colors.border}`,
+              borderRadius: '4px',
+              marginTop: '2px',
+              boxShadow: `0 4px 6px -1px ${theme.colors.shadow}`,
+              maxHeight: '200px',
+              overflowY: 'auto'
+            }}>
+              {availableOptions.map((option: any, index: number) => (
+                <button
+                  key={option.name}
+                  onClick={() => addOption(option.name)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: 'none',
+                    backgroundColor: 'transparent',
+                    color: theme.colors.text,
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    textAlign: 'left',
+                    borderBottom: index < availableOptions.length - 1 ? `1px solid ${theme.colors.border}` : 'none'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.colors.backgroundAlt}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  <div style={{ fontWeight: '500' }}>
+                    {option.displayName}
+                  </div>
+                  {option.description && (
+                    <div style={{
+                      fontSize: '12px',
+                      color: theme.colors.textSecondary,
+                      marginTop: '2px'
+                    }}>
+                      {option.description}
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Group ID Selector - with Load Groups button and dropdown
+const GroupIdSelector: React.FC<{
+  value: string;
+  onChange: (value: string) => void;
+  onNameChange?: (name: string) => void;
+  storedName?: string;
+  placeholder?: string;
+  theme: ReturnType<typeof useAppTheme>;
+  isDragOver: boolean;
+  onDragOver: (e: React.DragEvent) => void;
+  onDragLeave: (e: React.DragEvent) => void;
+  onDrop: (e: React.DragEvent) => void;
+}> = ({ value, onChange, onNameChange, storedName, placeholder, theme, isDragOver, onDragOver, onDragLeave, onDrop }) => {
+  const [groups, setGroups] = useState<Array<{ jid: string; name: string; topic?: string; size?: number }>>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // Use stored name if available, otherwise local state
+  const [localGroupName, setLocalGroupName] = useState<string | null>(null);
+  const selectedGroupName = storedName || localGroupName;
+  const { getWhatsAppGroups } = useWebSocket();
+
+  // Sync local state with stored name
+  useEffect(() => {
+    if (storedName) {
+      setLocalGroupName(storedName);
+    }
+  }, [storedName]);
+
+  const handleLoadGroups = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const result = await getWhatsAppGroups();
+      if (result.success && result.groups.length > 0) {
+        setGroups(result.groups);
+        setShowDropdown(true);
+        // If we already have a value, try to find its name and update storage
+        if (value) {
+          const matchingGroup = result.groups.find(g => g.jid === value);
+          if (matchingGroup && matchingGroup.name !== storedName) {
+            setLocalGroupName(matchingGroup.name);
+            onNameChange?.(matchingGroup.name);
+          }
+        }
+      } else if (result.error) {
+        setError(result.error);
+      } else {
+        setError('No groups found');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to load groups');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSelectGroup = (group: { jid: string; name: string }) => {
+    onChange(group.jid);
+    setLocalGroupName(group.name);
+    onNameChange?.(group.name);
+    setShowDropdown(false);
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    onChange(e.target.value);
+    // Clear group name when user types manually
+    setLocalGroupName(null);
+    onNameChange?.('');
+  };
+
+  // Display value: show group name if selected, otherwise show JID
+  const displayValue = selectedGroupName || value;
+  const isGroupSelected = selectedGroupName !== null && value;
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <input
+          type="text"
+          value={displayValue}
+          onChange={handleInputChange}
+          placeholder={placeholder || '123456789@g.us'}
+          onDragOver={onDragOver}
+          onDragLeave={onDragLeave}
+          onDrop={onDrop}
+          style={{
+            flex: 1,
+            padding: '8px 12px',
+            border: isDragOver ? `2px solid ${theme.colors.focus}` : `1px solid ${theme.colors.border}`,
+            borderRadius: '6px',
+            fontSize: '14px',
+            backgroundColor: isGroupSelected ? theme.colors.backgroundAlt : (isDragOver ? theme.colors.focusRing : theme.colors.background),
+            color: isGroupSelected ? theme.colors.success : (value && value.includes('{{') ? theme.colors.templateVariable : theme.colors.text),
+            outline: 'none',
+            transition: 'all 0.2s ease',
+            fontFamily: value && value.includes('{{') ? 'monospace' : 'system-ui, sans-serif',
+            fontWeight: isGroupSelected ? '500' : 'normal'
+          }}
+          onFocus={(e) => e.target.style.borderColor = theme.colors.focus}
+          onBlur={(e) => e.target.style.borderColor = theme.colors.border}
+        />
+        <button
+          onClick={handleLoadGroups}
+          disabled={isLoading}
+          style={{
+            padding: '8px 12px',
+            border: `1px solid ${isLoading ? theme.colors.border : `${theme.colors.focus}40`}`,
+            borderRadius: '6px',
+            backgroundColor: isLoading ? 'transparent' : `${theme.colors.focus}18`,
+            color: isLoading ? theme.colors.textMuted : theme.colors.focus,
+            cursor: isLoading ? 'wait' : 'pointer',
+            fontSize: '13px',
+            fontWeight: 600,
+            transition: 'all 0.2s ease',
+            whiteSpace: 'nowrap',
+            opacity: isLoading ? 0.7 : 1
+          }}
+          onMouseEnter={(e) => {
+            if (!isLoading) {
+              e.currentTarget.style.backgroundColor = `${theme.colors.focus}30`;
+            }
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = isLoading ? 'transparent' : `${theme.colors.focus}18`;
+          }}
+          title="Load WhatsApp groups"
+        >
+          {isLoading ? 'Loading...' : 'Load'}
+        </button>
+      </div>
+      {/* Show JID below when group name is displayed */}
+      {isGroupSelected && (
+        <div style={{
+          fontSize: '11px',
+          color: theme.colors.textSecondary,
+          marginTop: '4px',
+          fontFamily: 'monospace'
+        }}>
+          {value}
+        </div>
+      )}
+
+      {error && (
+        <div style={{
+          fontSize: '12px',
+          color: theme.colors.error,
+          marginTop: '4px'
+        }}>
+          {error}
+        </div>
+      )}
+
+      {showDropdown && groups.length > 0 && (
+        <div style={{
+          position: 'absolute',
+          top: '100%',
+          left: 0,
+          right: 0,
+          marginTop: '4px',
+          backgroundColor: theme.colors.background,
+          border: `1px solid ${theme.colors.border}`,
+          borderRadius: '6px',
+          boxShadow: `0 4px 12px ${theme.colors.shadow}`,
+          maxHeight: '200px',
+          overflowY: 'auto',
+          zIndex: 1000
+        }}>
+          {groups.map((group, index) => (
+            <button
+              key={group.jid}
+              onClick={() => handleSelectGroup(group)}
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                border: 'none',
+                backgroundColor: 'transparent',
+                color: theme.colors.text,
+                cursor: 'pointer',
+                fontSize: '13px',
+                textAlign: 'left',
+                borderBottom: index < groups.length - 1 ? `1px solid ${theme.colors.border}` : 'none'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.colors.backgroundAlt}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              <div style={{ fontWeight: '500' }}>{group.name}</div>
+              <div style={{
+                fontSize: '11px',
+                color: theme.colors.textSecondary,
+                marginTop: '2px',
+                fontFamily: 'monospace'
+              }}>
+                {group.jid}
+                {group.size && <span style={{ marginLeft: '8px' }}>({group.size} members)</span>}
+              </div>
+            </button>
+          ))}
+          <button
+            onClick={() => setShowDropdown(false)}
+            style={{
+              width: '100%',
+              padding: '8px 12px',
+              border: 'none',
+              borderTop: `1px solid ${theme.colors.border}`,
+              backgroundColor: theme.colors.backgroundAlt,
+              color: theme.colors.textSecondary,
+              cursor: 'pointer',
+              fontSize: '12px',
+              textAlign: 'center'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.color = theme.colors.text}
+            onMouseLeave={(e) => e.currentTarget.style.color = theme.colors.textSecondary}
+          >
+            Close
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Sender Number Selector - with Load Members button and dropdown (loads from selected group)
+const SenderNumberSelector: React.FC<{
+  value: string;
+  onChange: (value: string) => void;
+  onNameChange?: (name: string) => void;
+  storedName?: string;
+  placeholder?: string;
+  theme: ReturnType<typeof useAppTheme>;
+  isDragOver: boolean;
+  onDragOver: (e: React.DragEvent) => void;
+  onDragLeave: (e: React.DragEvent) => void;
+  onDrop: (e: React.DragEvent) => void;
+  groupId: string; // The selected group to load members from
+}> = ({ value, onChange, onNameChange, storedName, placeholder, theme, isDragOver, onDragOver, onDragLeave, onDrop, groupId }) => {
+  const [members, setMembers] = useState<Array<{ phone: string; name: string; jid: string; is_admin?: boolean }>>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // Use stored name if available, otherwise local state
+  const [localMemberName, setLocalMemberName] = useState<string | null>(null);
+  const selectedMemberName = storedName || localMemberName;
+  const { getWhatsAppGroupInfo } = useWebSocket();
+
+  // Sync local state with stored name
+  useEffect(() => {
+    if (storedName) {
+      setLocalMemberName(storedName);
+    }
+  }, [storedName]);
+
+  const handleLoadMembers = async () => {
+    if (!groupId) {
+      setError('Select a group first');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    try {
+      const result = await getWhatsAppGroupInfo(groupId);
+      if (result.success && result.participants && result.participants.length > 0) {
+        setMembers(result.participants);
+        setShowDropdown(true);
+        // If we already have a value, try to find its name and update storage
+        if (value) {
+          const matchingMember = result.participants.find((m: any) => m.phone === value);
+          if (matchingMember) {
+            const name = matchingMember.name || matchingMember.phone;
+            if (name !== storedName) {
+              setLocalMemberName(name);
+              onNameChange?.(name);
+            }
+          }
+        }
+      } else if (result.error) {
+        setError(result.error);
+      } else {
+        setError('No members found');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to load members');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSelectMember = (member: { phone: string; name: string }) => {
+    const name = member.name || member.phone;
+    onChange(member.phone);
+    setLocalMemberName(name);
+    onNameChange?.(name);
+    setShowDropdown(false);
+  };
+
+  const handleClearSelection = () => {
+    onChange('');
+    setLocalMemberName(null);
+    onNameChange?.('');
+    setShowDropdown(false);
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    onChange(e.target.value);
+    // Clear member name when user types manually
+    setLocalMemberName(null);
+    onNameChange?.('');
+  };
+
+  // Display value: show member name if selected, otherwise show phone
+  const displayValue = selectedMemberName || value;
+  const isMemberSelected = selectedMemberName !== null && value;
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <input
+          type="text"
+          value={displayValue}
+          onChange={handleInputChange}
+          placeholder={placeholder || 'All members (leave empty)'}
+          onDragOver={onDragOver}
+          onDragLeave={onDragLeave}
+          onDrop={onDrop}
+          style={{
+            flex: 1,
+            padding: '8px 12px',
+            border: isDragOver ? `2px solid ${theme.colors.focus}` : `1px solid ${theme.colors.border}`,
+            borderRadius: '6px',
+            fontSize: '14px',
+            backgroundColor: isMemberSelected ? theme.colors.backgroundAlt : (isDragOver ? theme.colors.focusRing : theme.colors.background),
+            color: isMemberSelected ? theme.colors.success : (value && value.includes('{{') ? theme.colors.templateVariable : theme.colors.text),
+            outline: 'none',
+            transition: 'all 0.2s ease',
+            fontFamily: value && value.includes('{{') ? 'monospace' : 'system-ui, sans-serif',
+            fontWeight: isMemberSelected ? '500' : 'normal'
+          }}
+          onFocus={(e) => e.target.style.borderColor = theme.colors.focus}
+          onBlur={(e) => e.target.style.borderColor = theme.colors.border}
+        />
+        <button
+          onClick={handleLoadMembers}
+          disabled={isLoading || !groupId}
+          style={{
+            padding: '8px 12px',
+            border: `1px solid ${(isLoading || !groupId) ? theme.colors.border : `${theme.colors.focus}40`}`,
+            borderRadius: '6px',
+            backgroundColor: (isLoading || !groupId) ? 'transparent' : `${theme.colors.focus}18`,
+            color: (isLoading || !groupId) ? theme.colors.textMuted : theme.colors.focus,
+            cursor: (isLoading || !groupId) ? 'not-allowed' : 'pointer',
+            fontSize: '13px',
+            fontWeight: 600,
+            transition: 'all 0.2s ease',
+            whiteSpace: 'nowrap',
+            opacity: (isLoading || !groupId) ? 0.7 : 1
+          }}
+          onMouseEnter={(e) => {
+            if (!isLoading && groupId) {
+              e.currentTarget.style.backgroundColor = `${theme.colors.focus}30`;
+            }
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = (isLoading || !groupId) ? 'transparent' : `${theme.colors.focus}18`;
+          }}
+          title={groupId ? "Load group members" : "Select a group first"}
+        >
+          {isLoading ? 'Loading...' : 'Load'}
+        </button>
+      </div>
+      {/* Show phone below when member name is displayed */}
+      {isMemberSelected && (
+        <div style={{
+          fontSize: '11px',
+          color: theme.colors.textSecondary,
+          marginTop: '4px',
+          fontFamily: 'monospace'
+        }}>
+          {value}
+        </div>
+      )}
+
+      {error && (
+        <div style={{
+          fontSize: '12px',
+          color: theme.colors.error,
+          marginTop: '4px'
+        }}>
+          {error}
+        </div>
+      )}
+
+      {showDropdown && members.length > 0 && (
+        <div style={{
+          position: 'absolute',
+          top: '100%',
+          left: 0,
+          right: 0,
+          marginTop: '4px',
+          backgroundColor: theme.colors.background,
+          border: `1px solid ${theme.colors.border}`,
+          borderRadius: '6px',
+          boxShadow: `0 4px 12px ${theme.colors.shadow}`,
+          maxHeight: '250px',
+          overflowY: 'auto',
+          zIndex: 1000
+        }}>
+          {/* All Members option */}
+          <button
+            onClick={handleClearSelection}
+            style={{
+              width: '100%',
+              padding: '10px 12px',
+              border: 'none',
+              backgroundColor: !value ? theme.colors.backgroundAlt : 'transparent',
+              color: theme.colors.text,
+              cursor: 'pointer',
+              fontSize: '13px',
+              textAlign: 'left',
+              borderBottom: `1px solid ${theme.colors.border}`
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.colors.backgroundAlt}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = !value ? theme.colors.backgroundAlt : 'transparent'}
+          >
+            <div style={{ fontWeight: '500', color: theme.colors.textSecondary }}>All Members</div>
+            <div style={{ fontSize: '11px', color: theme.colors.textMuted, marginTop: '2px' }}>
+              Receive from anyone in group
+            </div>
+          </button>
+          {members.map((member, index) => (
+            <button
+              key={member.jid || member.phone}
+              onClick={() => handleSelectMember(member)}
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                border: 'none',
+                backgroundColor: value === member.phone ? theme.colors.backgroundAlt : 'transparent',
+                color: theme.colors.text,
+                cursor: 'pointer',
+                fontSize: '13px',
+                textAlign: 'left',
+                borderBottom: index < members.length - 1 ? `1px solid ${theme.colors.border}` : 'none'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.colors.backgroundAlt}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = value === member.phone ? theme.colors.backgroundAlt : 'transparent'}
+            >
+              <div style={{ fontWeight: '500' }}>
+                {member.name || member.phone}
+                {member.is_admin && <span style={{ marginLeft: '8px', fontSize: '10px', color: theme.colors.warning }}>(Admin)</span>}
+              </div>
+              <div style={{
+                fontSize: '11px',
+                color: theme.colors.textSecondary,
+                marginTop: '2px',
+                fontFamily: 'monospace'
+              }}>
+                {member.phone}
+              </div>
+            </button>
+          ))}
+          <button
+            onClick={() => setShowDropdown(false)}
+            style={{
+              width: '100%',
+              padding: '8px 12px',
+              border: 'none',
+              borderTop: `1px solid ${theme.colors.border}`,
+              backgroundColor: theme.colors.backgroundAlt,
+              color: theme.colors.textSecondary,
+              cursor: 'pointer',
+              fontSize: '12px',
+              textAlign: 'center'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.color = theme.colors.text}
+            onMouseLeave={(e) => e.currentTarget.style.color = theme.colors.textSecondary}
+          >
+            Close
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Fixed Collection Renderer - n8n style fixed collection
+const FixedCollectionRenderer: React.FC<{
+  parameter: any;
+  value: any;
+  onChange: (value: any) => void;
+  allParameters?: Record<string, any>;
+  theme: ReturnType<typeof useAppTheme>;
+}> = ({ parameter, value, onChange, allParameters, theme }) => {
+  const currentValue = value || {};
+
+  return (
+    <div style={{
+      border: `1px solid ${theme.colors.border}`,
+      borderRadius: '6px',
+      backgroundColor: theme.colors.backgroundAlt,
+      padding: '12px'
+    }}>
+      {parameter.options?.map((option: any) => {
+        const optionValue = currentValue[option.name] || {};
+
+        return (
+          <div key={option.name} style={{ marginBottom: '16px' }}>
+            <div style={{
+              fontSize: '14px',
+              fontWeight: '500',
+              color: theme.colors.text,
+              marginBottom: '8px'
+            }}>
+              {option.displayName}
+            </div>
+            <div style={{
+              border: `1px solid ${theme.colors.border}`,
+              borderRadius: '6px',
+              backgroundColor: theme.colors.background,
+              padding: '12px'
+            }}>
+              {option.values?.map((valueParam: any) => (
+                <ParameterRenderer
+                  key={valueParam.name}
+                  parameter={valueParam}
+                  value={optionValue[valueParam.name]}
+                  onChange={(newValue) => {
+                    onChange({
+                      ...currentValue,
+                      [option.name]: {
+                        ...optionValue,
+                        [valueParam.name]: newValue
+                      }
+                    });
+                  }}
+                  allParameters={allParameters}
+                />
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+interface ParameterRendererProps {
+  parameter: NodeParameter | INodeProperties;
+  value: any;
+  onChange: (value: any) => void;
+  allParameters?: Record<string, any>;
+  onParameterChange?: (paramName: string, value: any) => void;
+  onClosePanel?: () => void;
+  isLoadingParameters?: boolean;
+}
+
+// Type guard to check if parameter is INodeProperties
+const isINodeProperties = (param: NodeParameter | INodeProperties): param is INodeProperties => {
+  return 'typeOptions' in param;
+};
+
+const ParameterRenderer: React.FC<ParameterRendererProps> = ({
+  parameter,
+  value,
+  onChange,
+  allParameters,
+  onParameterChange,
+  isLoadingParameters = false,
+}) => {
+  const theme = useAppTheme();
+  // Don't use default while loading - wait for actual saved value to load
+  // This prevents showing template code briefly before saved code appears
+  const currentValue = isLoadingParameters ? (value ?? '') : (value !== undefined ? value : parameter.default);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [dynamicOptions, setDynamicOptions] = useState<INodePropertyOption[]>([]);
+  const [nodeParameters, setNodeParameters] = useState<Record<string, any>>({});
+
+  const { selectedNode } = useAppStore();
+  const { getNodeParameters } = useWebSocket();
+  const { getStoredApiKey, hasStoredKey, getStoredModels } = useApiKeys();
+
+  // Don't render hidden parameters
+  if (parameter.type === 'hidden') {
+    return null;
+  }
+
+  // Load node parameters for expression resolution
+  useEffect(() => {
+    const loadParameters = async () => {
+      if (selectedNode?.id) {
+        const result = await getNodeParameters(selectedNode.id);
+        if (result?.parameters) setNodeParameters(result.parameters);
+      }
+    };
+    loadParameters();
+  }, [selectedNode?.id, getNodeParameters]);
+
+  // Auto-load stored API key and models when provider changes
+  // Use ref to track previous provider to prevent infinite loops
+  const prevProviderRef = React.useRef<string | null>(null);
+  // Track if we've done initial auto-select after parameters loaded
+  const hasAutoSelectedRef = React.useRef(false);
+
+  // Reset auto-select tracking when node changes
+  useEffect(() => {
+    hasAutoSelectedRef.current = false;
+    prevProviderRef.current = null;
+  }, [selectedNode?.id]);
+
+  useEffect(() => {
+    const loadStoredKeyForProvider = async () => {
+      // Only run for apiKey or model parameters
+      if (parameter.name !== 'apiKey' && parameter.name !== 'model') return;
+
+      // Don't run while parameters are still loading from database
+      if (isLoadingParameters) return;
+
+      // Get provider from allParameters or derive from node type
+      let provider = allParameters?.provider;
+      if (!provider && selectedNode) {
+        const nodeType = selectedNode.type || selectedNode.data?.nodeType;
+        if (nodeType) {
+          provider = NODE_TYPE_TO_PROVIDER[nodeType];
+        }
+      }
+      if (!provider) return;
+
+      // Distinguish between initial load (prevProvider was null) and actual user-initiated provider change
+      // On initial load: respect saved model if it exists
+      // On provider change: reset to first model to prevent mismatched provider/model
+      const isInitialLoad = prevProviderRef.current === null;
+      const isActualProviderChange = !isInitialLoad && prevProviderRef.current !== provider;
+      const shouldAutoSelectModel = parameter.name === 'model' &&
+        (isActualProviderChange || isInitialLoad || !hasAutoSelectedRef.current);
+
+      // Skip if provider hasn't changed (except for initial model load)
+      if (!isActualProviderChange && !isInitialLoad && parameter.name !== 'model') return;
+      if (!isActualProviderChange && !isInitialLoad && hasAutoSelectedRef.current) return;
+
+      prevProviderRef.current = provider;
+
+      try {
+        const hasKey = await hasStoredKey(provider);
+
+        if (hasKey) {
+          // Auto-load API key for apiKey parameter - always update when provider changes
+          if (parameter.name === 'apiKey' && isActualProviderChange) {
+            const storedKey = await getStoredApiKey(provider);
+            if (storedKey) {
+              onChange(storedKey);
+            }
+          }
+
+          // Auto-load models for model parameter
+          if (shouldAutoSelectModel && selectedNode) {
+            const models = await getStoredModels(provider);
+            if (models?.length) {
+              const modelOptions = DynamicParameterService.createModelOptions(models);
+              DynamicParameterService.updateParameterOptions(selectedNode.id, 'model', modelOptions);
+
+              // When user actively changes provider, reset to first model
+              // to prevent mismatched provider/model combinations (e.g., OpenAI model with Anthropic provider)
+              if (isActualProviderChange) {
+                onChange(models[0]);
+              } else {
+                // Initial load or no provider change - only auto-select if no saved model exists
+                const savedModel = value || allParameters?.model;
+                if (!savedModel || savedModel === '') {
+                  onChange(models[0]);
+                }
+                // If saved model exists, keep it (don't call onChange)
+              }
+              hasAutoSelectedRef.current = true;
+            }
+          }
+        } else {
+          // No stored key for this provider - clear the fields
+          if (parameter.name === 'apiKey') {
+            onChange('');
+          }
+          if (parameter.name === 'model') {
+            onChange('');
+            hasAutoSelectedRef.current = true;
+          }
+        }
+      } catch (error) {
+        console.warn('Error loading stored key info:', error);
+      }
+    };
+
+    loadStoredKeyForProvider();
+  }, [allParameters?.provider, parameter.name, hasStoredKey, getStoredApiKey, getStoredModels, selectedNode?.id, selectedNode?.type, onChange, isLoadingParameters, value, allParameters?.model]);
+
+  // Merge database params with current form params (current takes precedence)
+  const resolvedParameters = { ...nodeParameters, ...allParameters };
+
+  // Helper functions to get values from both interface types
+  const getMin = () => (parameter as any).min || (parameter as any).typeOptions?.minValue || 0;
+  const getMax = () => (parameter as any).max || (parameter as any).typeOptions?.maxValue || 100;
+  const getStep = () => (parameter as any).step || (parameter as any).typeOptions?.numberStepSize || 1;
+
+  // Load dynamic options based on loadOptionsMethod
+  useEffect(() => {
+    const loadDynamicOptions = async () => {
+      if (!selectedNode || !isINodeProperties(parameter) || !parameter.typeOptions?.loadOptionsMethod) return;
+
+      const dependsOn = parameter.typeOptions.loadOptionsDependsOn || [];
+      const allParamsResolved = { ...nodeParameters, ...allParameters };
+
+      // Check if all dependencies are satisfied
+      const hasAllDependencies = dependsOn.every((dep: string) => allParamsResolved[dep]);
+      if (dependsOn.length > 0 && !hasAllDependencies) return;
+
+      try {
+        // Get the node definition to access methods
+        const { nodeDefinitions } = await import('../nodeDefinitions');
+        const nodeType = selectedNode.data?.nodeType || selectedNode.type;
+        const nodeDef = nodeType ? nodeDefinitions[nodeType] : null;
+
+        if (nodeDef?.methods?.loadOptions?.[parameter.typeOptions.loadOptionsMethod]) {
+          const loadMethod = nodeDef.methods.loadOptions[parameter.typeOptions.loadOptionsMethod];
+
+          // Create context for the load method
+          const context = {
+            getCurrentNodeParameter: (paramName: string) => allParamsResolved[paramName]
+          };
+
+          // Call the load method with context
+          const options = await loadMethod.call(context);
+          setDynamicOptions(options);
+
+          // Also update the DynamicParameterService for consistency
+          DynamicParameterService.updateParameterOptions(selectedNode.id, parameter.name, options);
+
+          // Auto-select first option if current value is empty and options are available
+          if (options.length > 0 && (!currentValue || currentValue === '')) {
+            console.log(`[ParameterRenderer] Auto-selecting first option for ${parameter.name}:`, options[0].value);
+            onChange(options[0].value);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading dynamic options:', error);
+      }
+    };
+
+    loadDynamicOptions();
+  }, [selectedNode?.id, isINodeProperties(parameter) && parameter.typeOptions?.loadOptionsMethod, nodeParameters, allParameters, parameter.name]);
+
+  // Load default parameters for Android service nodes when service_id or action changes
+  useEffect(() => {
+    const loadDefaultParameters = async () => {
+      if (!selectedNode || parameter.name !== 'parameters') return;
+
+      const nodeType = selectedNode.data?.nodeType || selectedNode.type;
+      if (!ANDROID_SERVICE_NODE_TYPES.includes(nodeType)) return;
+
+      // Merge database params with current form params (current takes precedence)
+      const allParamsResolved = { ...nodeParameters, ...allParameters };
+      const serviceId = allParamsResolved.service_id;
+      const action = allParamsResolved.action;
+
+      if (!serviceId || !action) {
+        console.log('[AndroidService] Skipping - missing serviceId or action:', { serviceId, action });
+        return;
+      }
+
+      try {
+        console.log('[AndroidService] Fetching default parameters for:', { serviceId, action });
+        const response = await fetch(`${API_CONFIG.PYTHON_BASE_URL}/api/android/services/${serviceId}/actions/${action}/parameters`, {
+          credentials: 'include'
+        });
+        const data = await response.json();
+        console.log('[AndroidService] Default parameters response:', data);
+
+        if (data.success && data.default_parameters) {
+          // Always update with new defaults when service/action changes
+          console.log('[AndroidService] Setting parameters to:', data.default_parameters);
+          onChange(data.default_parameters);
+        }
+      } catch (error) {
+        console.error('[AndroidService] Error loading default parameters:', error);
+      }
+    };
+
+    loadDefaultParameters();
+  }, [
+    selectedNode?.id,
+    parameter.name,
+    allParameters?.service_id,
+    allParameters?.action,
+    nodeParameters?.service_id,
+    nodeParameters?.action
+  ]);
+
+  // Subscribe to dynamic parameter updates
+  useEffect(() => {
+    if (!selectedNode) return;
+
+
+    const unsubscribe = DynamicParameterService.subscribe((nodeId, parameterName, options) => {
+
+      if (nodeId === selectedNode.id && parameterName === parameter.name) {
+        setDynamicOptions(options);
+      }
+    });
+
+    // Check for existing dynamic options
+    const existingOptions = DynamicParameterService.getParameterOptions(selectedNode.id, parameter.name);
+
+    if (existingOptions) {
+      setDynamicOptions(existingOptions);
+    }
+
+    return unsubscribe;
+  }, [selectedNode?.id, parameter.name]);
+
+  // Handle API key validation success
+  const handleApiKeyValidationSuccess = (models: string[]) => {
+
+    if (!selectedNode) {
+      console.warn('ParameterRenderer: No selected node for dynamic options update');
+      return;
+    }
+
+    // Always update the 'model' parameter with dynamic options when API key validation succeeds
+    // This callback can be triggered from any parameter (usually the apiKey parameter)
+    const modelOptions = DynamicParameterService.createModelOptions(models);
+    DynamicParameterService.updateParameterOptions(selectedNode.id, 'model', modelOptions);
+
+    // If this callback is triggered from the model parameter itself and it's empty, auto-select first model
+    if (parameter.name === 'model' && !currentValue && models.length > 0) {
+      onChange(models[0]);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+
+    // Check if this is a coordinate parameter (lat/lng) for special handling
+    const paramName = parameter.name.toLowerCase();
+    const isCoordinate = paramName.includes('lat') || paramName.includes('lng') ||
+                        paramName.includes('lon') || paramName === 'latitude' ||
+                        paramName === 'longitude';
+
+    // Try to get JSON data first (from connected node outputs)
+    const jsonData = e.dataTransfer.getData('application/json');
+    if (jsonData) {
+      try {
+        const parsedData = JSON.parse(jsonData);
+        if (parsedData.type === 'nodeVariable') {
+          // For coordinate parameters, try to extract actual numeric value from connected node data
+          if (isCoordinate && typeof parsedData.dataType === 'string' && parsedData.dataType === 'number') {
+            // Look for actual coordinate values in global execution data
+            // This is a simplified approach - in production you'd want more robust data access
+
+            // For now, use template string but mark it for coordinate processing
+            const existingValue = currentValue || '';
+            const needsSpace = existingValue && !existingValue.endsWith(' ') && existingValue.length > 0;
+            const newValue = existingValue + (needsSpace ? ' ' : '') + parsedData.variableTemplate;
+            onChange(newValue);
+            return;
+          }
+
+          // Handle variable template data - use the template string
+          const existingValue = currentValue || '';
+          // Add smart spacing - add space if existing content doesn't end with space
+          const needsSpace = existingValue && !existingValue.endsWith(' ') && existingValue.length > 0;
+          const newValue = existingValue + (needsSpace ? ' ' : '') + parsedData.variableTemplate;
+          onChange(newValue);
+          return;
+        }
+        if (parsedData.type === 'nodeOutput') {
+          // Handle node output data - use the actual value for direct mapping
+          onChange(parsedData.value);
+          return;
+        }
+      } catch (err) {
+        console.warn('Failed to parse JSON drag data:', err);
+      }
+    }
+
+    // Fallback to existing text/plain format (OutputPanel drag-drop)
+    const data = e.dataTransfer.getData('text/plain');
+    if (data && data.startsWith('{{') && data.endsWith('}}')) {
+      // For coordinate parameters, allow template strings but process them appropriately
+      if (isCoordinate) {
+        onChange(data); // Set the template directly for coordinate resolution
+        return;
+      }
+
+      // Append to existing content instead of replacing
+      const existingValue = currentValue || '';
+      // Add smart spacing - add space if existing content doesn't end with space
+      const needsSpace = existingValue && !existingValue.endsWith(' ') && existingValue.length > 0;
+      const newValue = existingValue + (needsSpace ? ' ' : '') + data;
+      onChange(newValue);
+    }
+  };
+
+  const renderInput = () => {
+    switch (parameter.type) {
+      case 'string':
+        // Check if this should be a textarea based on typeOptions.rows
+        const shouldUseTextarea = (parameter as any).typeOptions?.rows > 1;
+        // Check if this should be a password field
+        const isPassword = (parameter as any).typeOptions?.password;
+        // Check if this is a code editor
+        const isCodeEditor = (parameter as any).typeOptions?.editor === 'code';
+
+        if (shouldUseTextarea) {
+          // Use CodeEditor for code editing
+          if (isCodeEditor) {
+            // Show loading state while parameters are being fetched
+            if (isLoadingParameters) {
+              return (
+                <div style={{
+                  height: '100%',
+                  minHeight: '200px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: theme.colors.backgroundAlt,
+                  border: `1px solid ${theme.colors.border}`,
+                  borderRadius: theme.borderRadius.md,
+                  color: theme.colors.textMuted,
+                  fontSize: '14px'
+                }}>
+                  Loading code...
+                </div>
+              );
+            }
+            // Get language from typeOptions or default to python
+            const codeLanguage = (parameter as any).typeOptions?.editorLanguage || 'python';
+            return (
+              <CodeEditor
+                value={currentValue || ''}
+                onChange={onChange}
+                language={codeLanguage}
+                placeholder={parameter.placeholder}
+              />
+            );
+          }
+
+          // Regular textarea for non-code
+          return (
+            <textarea
+              value={currentValue || ''}
+              onChange={(e) => onChange(e.target.value)}
+              placeholder={parameter.placeholder}
+              rows={(parameter as any).typeOptions?.rows || 3}
+              spellCheck={true}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                border: isDragOver ? `2px solid ${theme.accent.cyan}` : `1px solid ${theme.colors.border}`,
+                borderRadius: '6px',
+                fontSize: '14px',
+                backgroundColor: isDragOver ? `${theme.accent.cyan}10` : theme.colors.backgroundAlt,
+                color: currentValue && currentValue.includes('{{') ? theme.accent.yellow : theme.colors.text,
+                outline: 'none',
+                transition: 'all 0.2s ease',
+                fontFamily: currentValue && currentValue.includes('{{') ? 'monospace' : 'system-ui, sans-serif',
+                resize: 'vertical',
+                minHeight: '80px',
+                boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.05)',
+                lineHeight: '1.5'
+              }}
+              onFocus={(e) => {
+                e.target.style.borderColor = theme.accent.cyan;
+                e.target.style.boxShadow = `0 0 0 3px ${theme.accent.cyan}20, inset 0 1px 2px rgba(0,0,0,0.05)`;
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = theme.colors.border;
+                e.target.style.boxShadow = 'inset 0 1px 2px rgba(0,0,0,0.05)';
+              }}
+            />
+          );
+        }
+
+        // Check if this parameter has API key validation
+        const validationArray = (parameter as any).validation;
+        const apiKeyValidation = validationArray?.find((v: any) => v.type === 'apiKey' && v.showValidateButton);
+
+        if (apiKeyValidation) {
+          // Resolve provider expression if it's a template like {{ $parameter["provider"] }}
+          let resolvedProvider = apiKeyValidation.provider;
+          if (typeof resolvedProvider === 'string' && resolvedProvider.includes('$parameter[')) {
+            // Extract parameter name from expression like {{ $parameter["provider"] }}
+            const match = resolvedProvider.match(/\$parameter\["([^"]+)"\]|\$parameter\['([^']+)'\]/);
+            if (match) {
+              const paramName = match[1] || match[2];
+              resolvedProvider = resolvedParameters[paramName] || resolvedProvider;
+            }
+          }
+
+          const resolvedValidationConfig = {
+            ...apiKeyValidation,
+            provider: resolvedProvider
+          };
+
+          return (
+            <APIKeyValidator
+              value={currentValue || ''}
+              onChange={onChange}
+              placeholder={parameter.placeholder}
+              validationConfig={resolvedValidationConfig}
+              onValidationSuccess={handleApiKeyValidationSuccess}
+              isDragOver={isDragOver}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            />
+          );
+        }
+
+        // Check if this parameter has dynamic options (like models after API key validation)
+
+        if (dynamicOptions.length > 0 && parameter.type === 'string') {
+          return (
+            <select
+              value={currentValue || ''}
+              onChange={(e) => onChange(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: `1px solid ${theme.colors.border}`,
+                borderRadius: '6px',
+                fontSize: '14px',
+                outline: 'none',
+                transition: 'border-color 0.2s ease',
+                cursor: 'pointer',
+                backgroundColor: theme.colors.background,
+                color: theme.colors.text,
+                fontFamily: 'system-ui, sans-serif'
+              }}
+              onFocus={(e) => e.target.style.borderColor = theme.colors.focus}
+              onBlur={(e) => e.target.style.borderColor = theme.colors.border}
+            >
+              {!currentValue && (
+                <option value="" disabled>
+                  Select a model...
+                </option>
+              )}
+              {dynamicOptions.map((option) => (
+                <option key={String(option.value)} value={String(option.value)}>
+                  {option.label || option.name || String(option.value)}
+                </option>
+              ))}
+            </select>
+          );
+        }
+
+        // Log why we're not using dynamic options for this parameter
+        if (parameter.type === 'string' && parameter.name === 'model') {
+        }
+
+        // Special case for group_id parameter - add Load Groups button
+        if (parameter.name === 'group_id') {
+          const storedGroupName = allParameters?.group_name || '';
+          return (
+            <GroupIdSelector
+              value={currentValue || ''}
+              onChange={onChange}
+              onNameChange={(name) => onParameterChange?.('group_name', name)}
+              storedName={storedGroupName}
+              placeholder={parameter.placeholder}
+              theme={theme}
+              isDragOver={isDragOver}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            />
+          );
+        }
+
+        // Special case for senderNumber parameter - add Load Members button (uses group_id)
+        if (parameter.name === 'senderNumber') {
+          const groupId = resolvedParameters?.group_id || allParameters?.group_id || '';
+          const storedSenderName = allParameters?.sender_name || '';
+          return (
+            <SenderNumberSelector
+              value={currentValue || ''}
+              onChange={onChange}
+              onNameChange={(name) => onParameterChange?.('sender_name', name)}
+              storedName={storedSenderName}
+              placeholder={parameter.placeholder}
+              theme={theme}
+              isDragOver={isDragOver}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              groupId={groupId}
+            />
+          );
+        }
+
+        return (
+          <input
+            type={isPassword ? "password" : "text"}
+            value={currentValue || ''}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={parameter.placeholder}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            style={{
+              width: '100%',
+              padding: '10px 12px',
+              border: isDragOver ? `2px solid ${theme.accent.cyan}` : `1px solid ${theme.colors.border}`,
+              borderRadius: '6px',
+              fontSize: '14px',
+              backgroundColor: isDragOver ? `${theme.accent.cyan}10` : theme.colors.backgroundAlt,
+              color: currentValue && currentValue.includes('{{') ? theme.accent.yellow : theme.colors.text,
+              outline: 'none',
+              transition: 'all 0.2s ease',
+              fontFamily: currentValue && currentValue.includes('{{') ? 'monospace' : 'system-ui, sans-serif',
+              boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.05)'
+            }}
+            onFocus={(e) => {
+              e.target.style.borderColor = theme.accent.cyan;
+              e.target.style.boxShadow = `0 0 0 3px ${theme.accent.cyan}20, inset 0 1px 2px rgba(0,0,0,0.05)`;
+            }}
+            onBlur={(e) => {
+              e.target.style.borderColor = theme.colors.border;
+              e.target.style.boxShadow = 'inset 0 1px 2px rgba(0,0,0,0.05)';
+            }}
+          />
+        );
+
+      case 'number':
+
+        return (
+          <input
+            type="number"
+            value={currentValue !== undefined ? currentValue : (parameter.default || 0)}
+            onChange={(e) => onChange(Number(e.target.value))}
+            min={getMin()}
+            max={getMax()}
+            step={getStep()}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            style={{
+              width: '100%',
+              padding: '8px 12px',
+              border: isDragOver ? `2px solid ${theme.colors.focus}` : `1px solid ${theme.colors.border}`,
+              borderRadius: '6px',
+              fontSize: '14px',
+              backgroundColor: isDragOver ? theme.colors.focusRing : theme.colors.background,
+              color: theme.colors.text,
+              outline: 'none',
+              transition: 'all 0.2s ease',
+              fontFamily: 'system-ui, sans-serif'
+            }}
+            onFocus={(e) => e.target.style.borderColor = theme.colors.focus}
+            onBlur={(e) => e.target.style.borderColor = theme.colors.border}
+          />
+        );
+
+      case 'boolean':
+        return (
+          <label style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            cursor: 'pointer',
+            fontSize: '14px',
+            fontFamily: 'system-ui, sans-serif',
+            color: theme.colors.text
+          }}>
+            <input
+              type="checkbox"
+              checked={currentValue || false}
+              onChange={(e) => onChange(e.target.checked)}
+              style={{ width: '16px', height: '16px', accentColor: theme.colors.focus }}
+            />
+            {parameter.displayName}
+          </label>
+        );
+
+      case 'select':
+      case 'options':
+        // Use dynamic options if available, otherwise use static options
+        const optionsToRender = dynamicOptions.length > 0 ? dynamicOptions : (parameter.options || []);
+        const selectOptions = optionsToRender.filter((option): option is import('../types/INodeProperties').INodePropertyOption =>
+          'value' in option
+        );
+
+        return (
+          <select
+            value={currentValue || parameter.default}
+            onChange={(e) => onChange(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '10px 12px',
+              border: `1px solid ${theme.colors.border}`,
+              borderRadius: '6px',
+              fontSize: '14px',
+              outline: 'none',
+              transition: 'all 0.2s ease',
+              cursor: 'pointer',
+              backgroundColor: theme.colors.backgroundAlt,
+              color: theme.colors.text,
+              fontFamily: 'system-ui, sans-serif',
+              boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.05)',
+              appearance: 'none',
+              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23657b83' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
+              backgroundRepeat: 'no-repeat',
+              backgroundPosition: 'right 12px center',
+              paddingRight: '36px'
+            }}
+            onFocus={(e) => {
+              e.target.style.borderColor = theme.accent.cyan;
+              e.target.style.boxShadow = `0 0 0 3px ${theme.accent.cyan}20, inset 0 1px 2px rgba(0,0,0,0.05)`;
+            }}
+            onBlur={(e) => {
+              e.target.style.borderColor = theme.colors.border;
+              e.target.style.boxShadow = 'inset 0 1px 2px rgba(0,0,0,0.05)';
+            }}
+          >
+            {selectOptions.map((option) => (
+              <option key={String(option.value)} value={String(option.value)}>
+                {option.label || option.name || String(option.value)}
+              </option>
+            ))}
+          </select>
+        );
+
+      case 'slider':
+        return (
+          <div>
+            <input
+              type="range"
+              min={getMin()}
+              max={getMax()}
+              step={getStep()}
+              value={currentValue !== undefined ? currentValue : (parameter.default || 0)}
+              onChange={(e) => onChange(Number(e.target.value))}
+              style={{
+                width: '100%',
+                height: '8px',
+                backgroundColor: theme.colors.backgroundAlt,
+                borderRadius: '8px',
+                outline: 'none',
+                accentColor: theme.colors.focus
+              }}
+            />
+            <div style={{
+              textAlign: 'center',
+              fontSize: '12px',
+              color: theme.colors.textSecondary,
+              marginTop: '4px',
+              fontFamily: 'system-ui, sans-serif'
+            }}>
+              {currentValue !== undefined ? currentValue : (parameter.default || 0)}
+              {parameter.type === 'slider' ? '%' : ''}
+            </div>
+          </div>
+        );
+
+      case 'percentage':
+        return (
+          <div>
+            <input
+              type="range"
+              min={getMin()}
+              max={getMax()}
+              step={getStep()}
+              value={currentValue !== undefined ? currentValue : (parameter.default || 0)}
+              onChange={(e) => onChange(Number(e.target.value))}
+              style={{
+                width: '100%',
+                height: '8px',
+                backgroundColor: theme.colors.backgroundAlt,
+                borderRadius: '8px',
+                outline: 'none',
+                accentColor: theme.colors.success
+              }}
+            />
+            <div style={{
+              textAlign: 'center',
+              fontSize: '12px',
+              color: theme.colors.textSecondary,
+              marginTop: '4px',
+              fontFamily: 'system-ui, sans-serif'
+            }}>
+              {currentValue !== undefined ? currentValue : (parameter.default || 0)}%
+            </div>
+          </div>
+        );
+
+      case 'text':
+        return (
+          <input
+            type="text"
+            value={currentValue || ''}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={parameter.placeholder}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            style={{
+              width: '100%',
+              padding: '8px 12px',
+              border: isDragOver ? `2px solid ${theme.colors.focus}` : `1px solid ${theme.colors.border}`,
+              borderRadius: '6px',
+              fontSize: '14px',
+              backgroundColor: isDragOver ? theme.colors.focusRing : theme.colors.background,
+              color: currentValue && currentValue.includes('{{') ? theme.colors.templateVariable : theme.colors.text,
+              outline: 'none',
+              transition: 'all 0.2s ease',
+              fontFamily: currentValue && currentValue.includes('{{') ? 'monospace' : 'system-ui, sans-serif'
+            }}
+            onFocus={(e) => e.target.style.borderColor = theme.colors.focus}
+            onBlur={(e) => e.target.style.borderColor = theme.colors.border}
+          />
+        );
+
+      case 'file':
+        const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+        const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+
+          const reader = new FileReader();
+          reader.onload = () => {
+            const base64 = (reader.result as string).split(',')[1]; // Remove data:mime;base64, prefix
+            // Store as object with base64 data, filename, and mime type
+            onChange({
+              type: 'upload',
+              data: base64,
+              filename: file.name,
+              mimeType: file.type || 'application/octet-stream'
+            });
+          };
+          reader.readAsDataURL(file);
+        };
+
+        const isUploadedFile = currentValue && typeof currentValue === 'object' && currentValue.type === 'upload';
+
+        // Determine file accept type based on context (e.g., messageType for WhatsApp)
+        const getFileAcceptType = () => {
+          const messageType = allParameters?.messageType;
+          if (messageType) {
+            switch (messageType) {
+              case 'image':
+                return 'image/*';
+              case 'video':
+                return 'video/*';
+              case 'audio':
+                return 'audio/*,.ogg,.opus,.mp3,.wav,.m4a';
+              case 'document':
+                return '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar';
+              case 'sticker':
+                return 'image/webp,.webp';
+              default:
+                return (parameter as any).typeOptions?.accept || '*/*';
+            }
+          }
+          return (parameter as any).typeOptions?.accept || '*/*';
+        };
+
+        return (
+          <div>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <input
+                type="text"
+                value={isUploadedFile ? `[Uploaded] ${currentValue.filename}` : (currentValue || '')}
+                onChange={(e) => onChange(e.target.value)}
+                placeholder={parameter.placeholder || 'Enter file path or upload'}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                readOnly={isUploadedFile}
+                style={{
+                  flex: 1,
+                  padding: '8px 12px',
+                  border: isDragOver ? `2px solid ${theme.colors.focus}` : `1px solid ${theme.colors.border}`,
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  backgroundColor: isUploadedFile ? theme.colors.backgroundAlt : (isDragOver ? theme.colors.focusRing : theme.colors.background),
+                  color: isUploadedFile ? theme.colors.success : (currentValue && currentValue.includes?.('{{') ? theme.colors.templateVariable : theme.colors.text),
+                  outline: 'none',
+                  transition: 'all 0.2s ease',
+                  fontFamily: 'monospace'
+                }}
+                onFocus={(e) => e.target.style.borderColor = theme.colors.focus}
+                onBlur={(e) => e.target.style.borderColor = theme.colors.border}
+              />
+              <input
+                key={`file-input-${allParameters?.messageType || 'default'}`}
+                ref={fileInputRef}
+                type="file"
+                onChange={handleFileUpload}
+                style={{ display: 'none' }}
+                accept={getFileAcceptType()}
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                style={{
+                  padding: '8px 12px',
+                  border: `1px solid ${theme.colors.focus}40`,
+                  borderRadius: '6px',
+                  backgroundColor: `${theme.colors.focus}18`,
+                  color: theme.colors.focus,
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  transition: 'all 0.2s ease',
+                  whiteSpace: 'nowrap'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = `${theme.colors.focus}30`;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = `${theme.colors.focus}18`;
+                }}
+                title="Upload file"
+              >
+                Upload
+              </button>
+              {isUploadedFile && (
+                <button
+                  onClick={() => {
+                    onChange('');
+                    if (fileInputRef.current) fileInputRef.current.value = '';
+                  }}
+                  style={{
+                    padding: '8px 10px',
+                    border: `1px solid ${theme.colors.error}40`,
+                    borderRadius: '6px',
+                    backgroundColor: `${theme.colors.error}18`,
+                    color: theme.colors.error,
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = `${theme.colors.error}30`;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = `${theme.colors.error}18`;
+                  }}
+                  title="Clear uploaded file"
+                >
+                  X
+                </button>
+              )}
+            </div>
+            <div style={{
+              fontSize: '11px',
+              color: theme.colors.textSecondary,
+              marginTop: '4px',
+              fontStyle: 'italic'
+            }}>
+              {isUploadedFile
+                ? `Size: ${(currentValue.data.length * 0.75 / 1024).toFixed(1)} KB | Type: ${currentValue.mimeType}`
+                : 'Enter server path or click Upload to select a file'}
+            </div>
+          </div>
+        );
+
+      case 'array':
+        const arrayValue = Array.isArray(currentValue) ? currentValue : [];
+        return (
+          <div>
+            <div style={{
+              border: `1px solid ${theme.colors.border}`,
+              borderRadius: '6px',
+              backgroundColor: theme.colors.background,
+              maxHeight: '120px',
+              overflowY: 'auto'
+            }}>
+              {parameter.options?.map((option) => (
+                <label key={option.value} style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 12px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontFamily: 'system-ui, sans-serif',
+                  color: theme.colors.text,
+                  borderBottom: `1px solid ${theme.colors.border}`
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={arrayValue.includes(option.value)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        onChange([...arrayValue, option.value]);
+                      } else {
+                        onChange(arrayValue.filter((v: any) => v !== option.value));
+                      }
+                    }}
+                    style={{ width: '16px', height: '16px', accentColor: theme.colors.focus }}
+                  />
+                  {option.label}
+                </label>
+              ))}
+            </div>
+            <div style={{
+              fontSize: '11px',
+              color: theme.colors.textSecondary,
+              marginTop: '4px'
+            }}>
+              Selected: {arrayValue.length} item{arrayValue.length !== 1 ? 's' : ''}
+            </div>
+          </div>
+        );
+
+      case 'collection':
+        return <CollectionRenderer parameter={parameter} value={currentValue} onChange={onChange} allParameters={allParameters} theme={theme} />;
+
+      case 'fixedCollection':
+        return <FixedCollectionRenderer parameter={parameter} value={currentValue} onChange={onChange} allParameters={allParameters} theme={theme} />;
+
+      case 'notice':
+        // Info/notice display - shows informational text without input
+        return (
+          <div style={{
+            padding: '10px 12px',
+            backgroundColor: theme.colors.backgroundAlt,
+            border: `1px solid ${theme.colors.border}`,
+            borderRadius: '6px',
+            fontSize: '13px',
+            color: theme.colors.textSecondary,
+            lineHeight: '1.5'
+          }}>
+            {parameter.default || parameter.description || ''}
+          </div>
+        );
+
+      default:
+        return <div style={{ color: theme.colors.error, fontSize: '14px', padding: '8px 12px', backgroundColor: `${theme.colors.error}15`, border: `1px solid ${theme.colors.error}30`, borderRadius: '6px' }}>Unsupported parameter type: {parameter.type}</div>;
+    }
+  };
+
+  return (
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      {parameter.type !== 'boolean' && (
+        <label style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          marginBottom: '8px',
+          fontSize: '13px',
+          fontWeight: 600,
+          color: theme.colors.text,
+          fontFamily: 'system-ui, sans-serif',
+          flexShrink: 0
+        }}>
+          <span>{parameter.displayName}</span>
+          {parameter.required && (
+            <span style={{
+              color: theme.accent.red,
+              fontSize: '14px',
+              fontWeight: 700
+            }}>*</span>
+          )}
+        </label>
+      )}
+
+      <div style={{ flex: 1, minHeight: 0 }}>
+        {renderInput()}
+      </div>
+
+      {parameter.description && (
+        <div style={{
+          fontSize: '12px',
+          color: theme.colors.textSecondary,
+          marginTop: '6px',
+          lineHeight: '1.5',
+          fontFamily: 'system-ui, sans-serif',
+          paddingLeft: '2px',
+          flexShrink: 0
+        }}>
+          {parameter.description}
+        </div>
+      )}
+
+    </div>
+  );
+};
+
+export default ParameterRenderer;
