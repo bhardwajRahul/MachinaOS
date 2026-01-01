@@ -7,7 +7,7 @@ Visual workflow automation platform. Build workflows by connecting nodes - like 
 **Prerequisites:** Node.js 18+, Python 3.10+, Go 1.21+
 
 ```bash
-git clone https://github.com/user/MachinaOs.git
+git clone https://github.com/trohitg/MachinaOS.git
 cd MachinaOs
 npm run build
 npm run start
