@@ -65,11 +65,11 @@ process.env.PYTHONUTF8 = '1';
 console.log('\n=== MachinaOS Starting ===\n');
 
 // Step 1: Create .env if not exists
-const envPath = resolve(ROOT, 'server', '.env');
-const templatePath = resolve(ROOT, 'server', '.env.template');
+const envPath = resolve(ROOT, '.env');
+const templatePath = resolve(ROOT, '.env.template');
 if (!existsSync(envPath) && existsSync(templatePath)) {
   copyFileSync(templatePath, envPath);
-  log('Created server/.env from template');
+  log('Created .env from template');
 }
 
 // Step 2: Free ports

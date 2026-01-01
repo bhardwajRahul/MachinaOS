@@ -14,7 +14,7 @@ const dirsToRemove = [
 ];
 
 const filesToRemove = [
-  'server/.env'
+  '.env'
 ];
 
 const filePatternsToRemove = [

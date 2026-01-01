@@ -15,7 +15,7 @@
     "whatsapp:status": "cd server/whatsapp-rpc && npm run status",
     "whatsapp:api": "cd server/whatsapp-rpc && npm run api",
     "whatsapp:build": "cd server/whatsapp-rpc && npm run build",
-    "build": "node -e \"const fs=require('fs'),p='server/.env';if(!fs.existsSync(p))fs.copyFileSync('server/.env.template',p)\" && npm install && cd client && npm install && npm run build && cd ../server && python -m pip install -r requirements.txt && cd whatsapp-rpc && npm install",
+    "build": "node -e \"const fs=require('fs'),p='.env';if(!fs.existsSync(p))fs.copyFileSync('.env.template',p)\" && npm install && cd client && npm install && npm run build && cd ../server && python -m pip install -r requirements.txt && cd whatsapp-rpc && npm install",
     "clean": "node scripts/clean.js",
     "start": "node scripts/start.js",
     "stop": "node scripts/stop.js",
