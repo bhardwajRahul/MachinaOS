@@ -2,20 +2,7 @@
 
 Visual workflow automation platform. Build workflows by connecting nodes - like n8n or Zapier.
 
-## Quick Start
-
-**Prerequisites:** Node.js 18+, Python 3.10+, Go 1.21+
-
-```bash
-git clone https://github.com/trohitg/MachinaOS.git
-cd MachinaOs
-npm run build
-npm run start
-```
-
-Open http://localhost:3000 and register your account.
-
-## Docker Setup
+## Docker Setup (Recommended)
 
 ```bash
 git clone https://github.com/trohitg/MachinaOS.git
@@ -34,6 +21,19 @@ Open http://localhost:3000
 | `npm run docker:build` | Rebuild images |
 
 **Redis (optional):** Set `REDIS_ENABLED=true` in `.env` to enable Redis caching.
+
+## Local Development
+
+**Prerequisites:** Node.js 18+, Python 3.10+, Go 1.21+
+
+```bash
+git clone https://github.com/trohitg/MachinaOS.git
+cd MachinaOs
+npm run build
+npm run start
+```
+
+Open http://localhost:3000 and register your account.
 
 ---
 
