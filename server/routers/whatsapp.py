@@ -61,11 +61,13 @@ class RPCClient:
 
     async def connect(self):
         # 2 second timeout for initial connection (fail fast if Go service not running)
+        logger.info(f"[WhatsApp RPC] Connecting to {self.url}...")
         self.ws = await asyncio.wait_for(
             websockets.connect(self.url, ping_interval=30, max_size=100*1024*1024),
             timeout=2.0
         )
         self._connected = True
+        logger.info("[WhatsApp RPC] WebSocket connected, starting receive loop")
         self._task = asyncio.create_task(self._recv())
 
     async def close(self):
@@ -75,13 +77,19 @@ class RPCClient:
 
     async def _recv(self):
         try:
+            logger.info("[WhatsApp RPC] Receive loop started")
             async for msg in self.ws:
                 data = json.loads(msg)
+                logger.debug(f"[WhatsApp RPC] Received: {data.get('method', data.get('id', 'unknown'))}")
                 if data.get("id") in self.pending:
                     self.pending[data["id"]].set_result(data)
                 elif "method" in data and "id" not in data:
                     await self._handle_event(data)
-        except ConnectionClosed:
+        except ConnectionClosed as e:
+            logger.warning(f"[WhatsApp RPC] Connection closed: {e}")
+            self._connected = False
+        except Exception as e:
+            logger.error(f"[WhatsApp RPC] Receive loop error: {e}")
             self._connected = False
 
     async def _handle_event(self, data: dict):
@@ -193,6 +201,7 @@ class RPCClient:
 
             elif method == "event.message_received":
                 # Message received - broadcast as custom event
+                logger.info(f"[WhatsApp RPC] Broadcasting message_received event to trigger nodes")
                 await broadcaster.send_custom_event("whatsapp_message_received", params)
 
             # Forward to custom handler if set

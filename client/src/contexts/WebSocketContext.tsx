@@ -1512,45 +1512,46 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
     // Don't connect if still loading auth or not authenticated
     if (authLoading || !isAuthenticated) {
-      // If we were connected and user logs out, disconnect
-      if (wsRef.current) {
-        if (wsRef.current.readyState === WebSocket.OPEN ||
-            wsRef.current.readyState === WebSocket.CONNECTING) {
-          wsRef.current.close(1000, 'User logged out');
-        }
-        wsRef.current = null;
-        setIsConnected(false);
-      }
+      return;
+    }
+
+    // Skip if already connected
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
       return;
     }
 
     // Small delay to avoid React Strict Mode double-connection issues
     const connectTimeout = setTimeout(() => {
-      if (isMountedRef.current && isAuthenticated) {
+      if (isMountedRef.current && isAuthenticated && !wsRef.current) {
         connect();
       }
     }, 100);
 
     return () => {
-      isMountedRef.current = false;
       clearTimeout(connectTimeout);
-
-      // Cleanup on unmount
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
-      if (pingIntervalRef.current) {
-        clearInterval(pingIntervalRef.current);
-      }
-      if (wsRef.current) {
-        // Only close if WebSocket is open or connecting
-        if (wsRef.current.readyState === WebSocket.OPEN ||
-            wsRef.current.readyState === WebSocket.CONNECTING) {
-          wsRef.current.close(1000, 'Component unmounted');
-        }
-      }
     };
   }, [connect, isAuthenticated, authLoading]);
+
+  // Handle logout - separate effect to avoid reconnect loops
+  useEffect(() => {
+    if (!isAuthenticated && wsRef.current) {
+      wsRef.current.close(1000, 'User logged out');
+      wsRef.current = null;
+      setIsConnected(false);
+    }
+  }, [isAuthenticated]);
+
+  // Cleanup on unmount only
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+      if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.close(1000, 'Component unmounted');
+      }
+    };
+  }, []);
 
   const value: WebSocketContextValue = {
     // Connection state

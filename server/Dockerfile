@@ -42,4 +42,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD sh -c "curl -f http://localhost:\${PORT}/health || exit 1"
 
 # Run the application
-CMD ["npm", "run", "start"]
+CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "3010"]
