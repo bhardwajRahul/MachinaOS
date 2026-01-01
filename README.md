@@ -7,16 +7,10 @@ Visual workflow automation platform. Build workflows by connecting nodes - like 
 **Prerequisites:** Node.js 18+, Python 3.10+
 
 ```bash
-# 1. Clone and install
 git clone https://github.com/user/MachinaOs.git
 cd MachinaOs
 npm run build
-
-# 2. Setup config
-cp server/.env.template server/.env
-
-# 3. Run
-npm run dev
+npm run start
 ```
 
 Open http://localhost:3000 and register your account.
@@ -41,9 +35,9 @@ Open http://localhost:3000 and register your account.
 
 | Command | Description |
 |---------|-------------|
-| `npm run dev` | Start development server |
-| `npm run build` | Install all dependencies |
+| `npm run start` | Start all services |
 | `npm run stop` | Stop all services |
+| `npm run build` | Install all dependencies |
 
 ## Project Structure
 

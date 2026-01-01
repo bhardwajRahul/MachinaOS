@@ -2,7 +2,7 @@
 import { execSync, spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, copyFileSync } from 'fs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
@@ -64,13 +64,21 @@ process.env.PYTHONUTF8 = '1';
 
 console.log('\n=== MachinaOS Starting ===\n');
 
-// Step 1: Free ports
+// Step 1: Create .env if not exists
+const envPath = resolve(ROOT, 'server', '.env');
+const templatePath = resolve(ROOT, 'server', '.env.template');
+if (!existsSync(envPath) && existsSync(templatePath)) {
+  copyFileSync(templatePath, envPath);
+  log('Created server/.env from template');
+}
+
+// Step 2: Free ports
 log('Freeing ports...');
 for (const port of PORTS) {
   killPort(port);
 }
 log('Ports ready');
 
-// Step 2: Start dev server
+// Step 3: Start dev server
 log('Starting services...');
 spawn('npm', ['run', 'dev'], { cwd: ROOT, stdio: 'inherit', shell: true });

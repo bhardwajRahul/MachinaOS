@@ -13,6 +13,10 @@ const dirsToRemove = [
   '.eslintcache'
 ];
 
+const filesToRemove = [
+  'server/.env'
+];
+
 const filePatternsToRemove = [
   '.db',
   '.sqlite',
@@ -52,7 +56,7 @@ async function clean() {
   const rootTargets = findCleanTargets('.');
 
   const allDirs = [...dirsToRemove, ...serverTargets.dirs];
-  const allFiles = [...serverTargets.files, ...rootTargets.files.filter(f => !f.includes('node_modules'))];
+  const allFiles = [...filesToRemove, ...serverTargets.files, ...rootTargets.files.filter(f => !f.includes('node_modules'))];
 
   console.log('Cleaning build artifacts...');
 
