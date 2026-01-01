@@ -15,6 +15,26 @@ npm run start
 
 Open http://localhost:3000 and register your account.
 
+## Docker Setup
+
+```bash
+git clone https://github.com/trohitg/MachinaOS.git
+cd MachinaOs
+npm run docker:build
+npm run docker:up
+```
+
+Open http://localhost:3000
+
+| Command | Description |
+|---------|-------------|
+| `npm run docker:up` | Start containers |
+| `npm run docker:down` | Stop containers |
+| `npm run docker:logs` | View logs |
+| `npm run docker:build` | Rebuild images |
+
+**Redis (optional):** Set `REDIS_ENABLED=true` in `.env` to enable Redis caching.
+
 ---
 
 ## What You Can Build
@@ -54,15 +74,6 @@ MachinaOs/
 **API Keys:** Click the **Credentials** button (key icon) in the top toolbar to add API keys for OpenAI, Claude, Google Maps, etc.
 
 **Environment:** Edit `.env` in the project root for authentication settings, ports, and database location.
-
----
-
-## Docker Deployment
-
-```bash
-npm run docker:build
-npm run docker:up
-```
 
 ## Tech Stack
 

@@ -1,8 +1,10 @@
 services:
-  # Redis Cache
+  # Redis Cache (only starts with --profile redis or COMPOSE_PROFILES=redis)
   redis:
     image: redis:7-alpine
     container_name: machina-redis
+    profiles:
+      - redis
     ports:
       - "${REDIS_PORT:-6379}:6379"
     volumes:
@@ -43,16 +45,14 @@ services:
       - PORT=${PYTHON_BACKEND_PORT:-3010}
       - TZ=UTC
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      # Redis cache (override for Docker network)
-      - REDIS_ENABLED=true
+      # Redis cache - uses REDIS_ENABLED from .env (default false)
+      - REDIS_ENABLED=${REDIS_ENABLED:-false}
       - REDIS_URL=redis://redis:6379
       # Android relay WebSocket (optional, set in .env)
       - ANDROID_RELAY_URL=${ANDROID_RELAY_URL:-}
       # WhatsApp RPC service URL (internal Docker network)
       - WHATSAPP_RPC_URL=ws://whatsapp:${WHATSAPP_RPC_PORT:-9400}/ws/rpc
     depends_on:
-      redis:
-        condition: service_healthy
       whatsapp:
         condition: service_healthy
 
