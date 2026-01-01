@@ -51,12 +51,9 @@ MachinaOs/
 
 ## Configuration
 
-Edit `server/.env` for:
-- API keys (OpenAI, Google Maps, etc.)
-- Authentication settings
-- Database location
+**API Keys:** Click the **Credentials** button (key icon) in the top toolbar to add API keys for OpenAI, Claude, Google Maps, etc.
 
-API keys can also be added through the UI (click the key icon).
+**Environment:** Edit `.env` in the project root for authentication settings, ports, and database location.
 
 ---
 
