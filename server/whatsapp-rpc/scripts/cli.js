@@ -43,13 +43,24 @@ const py = () => {
   catch { try { execSync('python3 --version', { stdio: 'ignore' }); return 'python3'; } catch { return null; } }
 };
 
-async function api() {
+async function api(foreground = false) {
   if (await portUp(API_PORT)) { log(`API already on ${API_PORT}`, 'yellow'); return; }
   const bin = join(BIN_DIR, BIN);
   if (!existsSync(bin)) { log('Building...', 'yellow'); await build(); }
-  spawn(bin, [], { cwd: ROOT, detached: true, stdio: 'ignore' }).unref();
-  if (await wait(API_PORT)) log(`API: ws://localhost:${API_PORT}/ws/rpc`, 'green');
-  else log('API failed to start', 'red');
+
+  if (foreground) {
+    // Run in foreground - will receive Ctrl+C signals
+    const proc = spawn(bin, [], { cwd: ROOT, stdio: 'inherit' });
+    proc.on('close', (code) => process.exit(code || 0));
+    process.on('SIGINT', () => { proc.kill('SIGINT'); });
+    process.on('SIGTERM', () => { proc.kill('SIGTERM'); });
+    log(`API: ws://localhost:${API_PORT}/ws/rpc`, 'green');
+  } else {
+    // Run detached in background
+    spawn(bin, [], { cwd: ROOT, detached: true, stdio: 'ignore' }).unref();
+    if (await wait(API_PORT)) log(`API: ws://localhost:${API_PORT}/ws/rpc`, 'green');
+    else log('API failed to start', 'red');
+  }
 }
 
 async function web() {
@@ -125,7 +136,7 @@ program.command('start').description('Start all').action(start);
 program.command('stop').description('Stop all').action(stop);
 program.command('restart').description('Restart all').action(async () => { await stop(); await sleep(1000); await start(); });
 program.command('status').description('Status').action(status);
-program.command('api').description('Start API only').action(api);
+program.command('api').description('Start API only').option('-f, --foreground', 'Run in foreground (receive signals)').action((opts) => api(opts.foreground));
 program.command('web').description('Start Web only').action(web);
 program.command('build').description('Build binary').action(build);
 program.command('clean').description('Clean artifacts').action(clean);

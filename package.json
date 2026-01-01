@@ -7,7 +7,7 @@
     "client"
   ],
   "scripts": {
-    "dev": "concurrently -t -n client,python,whatsapp -c blue,green,yellow --kill-signal SIGTERM --success first \"npm:client:dev\" \"npm:python:dev\" \"npm:whatsapp:api\"",
+    "dev": "concurrently -t -n client,python,whatsapp -c blue,green,yellow --handle-input --kill-others-on-fail \"npm:client:dev\" \"npm:python:dev\" \"npm:whatsapp:api\"",
     "client:dev": "cd client && set NO_COLOR=1&& npm run dev",
     "python:dev": "cd server && python -m uvicorn main:app --host 127.0.0.1 --port 3010 --reload --reload-dir . --reload-exclude \"*.pyc\" --reload-exclude \"__pycache__\" --log-level warning",
     "whatsapp:start": "cd server/whatsapp-rpc && npm start",

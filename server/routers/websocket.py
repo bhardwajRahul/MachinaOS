@@ -145,10 +145,7 @@ async def handle_save_node_parameters(data: Dict[str, Any], websocket: WebSocket
     broadcaster = get_status_broadcaster()
     node_id, parameters = data["node_id"], data.get("parameters", {})
 
-    print(f"[SAVE_PARAMS] Node ID: {node_id}")
-    print(f"[SAVE_PARAMS] Has 'code' key: {'code' in parameters}")
-    if 'code' in parameters:
-        print(f"[SAVE_PARAMS] Code length: {len(parameters.get('code', ''))}")
+    logger.debug(f"[SAVE_PARAMS] Node ID: {node_id}, has_code: {'code' in parameters}, code_len: {len(parameters.get('code', '')) if 'code' in parameters else 0}")
     await database.save_node_parameters(node_id, parameters)
     await broadcaster.broadcast({
         "type": "node_parameters_updated", "node_id": node_id,

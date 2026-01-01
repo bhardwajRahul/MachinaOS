@@ -14,7 +14,7 @@
     "prestatus": "node -e \"require('fs').existsSync('node_modules')||require('child_process').execSync('npm i',{stdio:'inherit'})\"",
     "status": "node scripts/cli.js status",
     "preapi": "node -e \"require('fs').existsSync('node_modules')||require('child_process').execSync('npm i',{stdio:'inherit'})\"",
-    "api": "node scripts/cli.js api",
+    "api": "node scripts/cli.js api --foreground",
     "preweb": "node -e \"require('fs').existsSync('node_modules')||require('child_process').execSync('npm i',{stdio:'inherit'})\"",
     "web": "node scripts/cli.js web",
     "prebuild": "node -e \"require('fs').existsSync('node_modules')||require('child_process').execSync('npm i',{stdio:'inherit'})\"",
