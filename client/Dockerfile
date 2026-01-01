@@ -13,11 +13,14 @@ RUN npm install
 # Copy application code
 COPY . .
 
-# Expose port
-EXPOSE 3001
+# Port from environment (default 3000)
+ENV VITE_CLIENT_PORT=3000
 
-# Run development server with host binding
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3001"]
+# Expose default port (actual port set via environment)
+EXPOSE 3000
+
+# Run the application
+CMD ["npm", "run", "start"]
 
 # Build stage
 FROM node:22-alpine AS builder

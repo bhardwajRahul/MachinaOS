@@ -120,9 +120,9 @@ async def handle_get_node_parameters(data: Dict[str, Any], websocket: WebSocket)
     database = container.database()
     node_id = data["node_id"]
     parameters = await database.get_node_parameters(node_id)
-    print(f"[GET_PARAMS] Node ID: {node_id}")
-    print(f"[GET_PARAMS] Raw from DB: {parameters}")
-    print(f"[GET_PARAMS] Code length: {len(parameters.get('code', '')) if parameters and 'code' in parameters else 'no code field'}")
+    logger.debug(f"[GET_PARAMS] Node ID: {node_id}")
+    logger.debug(f"[GET_PARAMS] Raw from DB: {parameters}")
+    logger.debug(f"[GET_PARAMS] Code length: {len(parameters.get('code', '')) if parameters and 'code' in parameters else 'no code field'}")
     return {"node_id": node_id, "parameters": parameters or {}, "version": 1, "timestamp": time.time()}
 
 
@@ -223,15 +223,15 @@ async def handle_cancel_event_wait(data: Dict[str, Any], websocket: WebSocket) -
     waiter_id = data.get("waiter_id")
     node_id = data.get("node_id")
 
-    print(f"[WebSocket] handle_cancel_event_wait called: waiter_id={waiter_id}, node_id={node_id}")
+    logger.debug(f"[WebSocket] handle_cancel_event_wait called: waiter_id={waiter_id}, node_id={node_id}")
 
     if waiter_id:
         success = event_waiter.cancel(waiter_id)
-        print(f"[WebSocket] cancel by waiter_id result: success={success}")
+        logger.debug(f"[WebSocket] cancel by waiter_id result: success={success}")
         return {"success": success, "waiter_id": waiter_id, "message": "Cancelled" if success else "Not found"}
     elif node_id:
         count = event_waiter.cancel_for_node(node_id)
-        print(f"[WebSocket] cancel by node_id result: cancelled_count={count}")
+        logger.debug(f"[WebSocket] cancel by node_id result: cancelled_count={count}")
         return {"success": count > 0, "node_id": node_id, "cancelled_count": count}
     else:
         return {"success": False, "error": "waiter_id or node_id required"}

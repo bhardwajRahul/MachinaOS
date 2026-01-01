@@ -28,9 +28,7 @@ async def execute_workflow_node(
     workflow_service: WorkflowService = Depends(lambda: container.workflow_service())
 ):
     """Execute a single node in a workflow with parameter resolution."""
-    print(f"[DEBUG ROUTER] Received execution request: node_id={request.node_id}, node_type={request.node_type}")
-    logger.info("[DEBUG ROUTER] Received execution request", node_id=request.node_id,
-               node_type=request.node_type, params=request.parameters)
+    logger.debug(f"[DEBUG ROUTER] Received execution request: node_id={request.node_id}, node_type={request.node_type}")
 
     # Get broadcaster and send "executing" status
     broadcaster = get_status_broadcaster()

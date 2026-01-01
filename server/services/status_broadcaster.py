@@ -243,7 +243,7 @@ class StatusBroadcaster:
             data: Optional status data
             workflow_id: Optional workflow ID to scope the status update (n8n pattern)
         """
-        print(f"[BROADCAST] update_node_status: node={node_id}, status={status}, workflow={workflow_id}, connections={len(self._connections)}")
+        logger.debug(f"[BROADCAST] update_node_status: node={node_id}, status={status}, workflow={workflow_id}, connections={len(self._connections)}")
         self._status["nodes"][node_id] = {
             "status": status,
             "data": data or {},

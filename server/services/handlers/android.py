@@ -223,9 +223,7 @@ async def handle_android_service(
     Returns:
         Execution result dict
     """
-    print(f"[ANDROID DEBUG] Matched! node_type={node_type}")
-    logger.info("[DEBUG] Android service condition matched!", node_type=node_type,
-               in_array=node_type in ANDROID_SERVICE_NODE_TYPES)
+    logger.debug(f"[ANDROID DEBUG] Matched! node_type={node_type}")
 
     service_id = parameters.get('service_id', 'battery')
     action = parameters.get('action', 'status')
@@ -247,10 +245,8 @@ async def handle_android_service(
         if key in parameters and parameters[key]:
             service_params[key] = parameters[key]
 
-    print(f"[ANDROID DEBUG] Extracted params: service_id={service_id}, action={action}, host={android_host}, port={android_port}, service_params={service_params}")
-    print(f"[ANDROID DEBUG] About to call android_service.execute_service")
-    logger.info("[Android Service] Executing", node_id=node_id, service_id=service_id,
-               action=action, android_host=android_host, android_port=android_port)
+    logger.debug(f"[ANDROID DEBUG] Extracted params: service_id={service_id}, action={action}, host={android_host}, port={android_port}, service_params={service_params}")
+    logger.debug(f"[ANDROID DEBUG] About to call android_service.execute_service")
 
     result = await android_service.execute_service(
         node_id=node_id,
@@ -260,5 +256,5 @@ async def handle_android_service(
         android_host=android_host,
         android_port=android_port
     )
-    print(f"[ANDROID DEBUG] Got result from android_service")
+    logger.debug(f"[ANDROID DEBUG] Got result from android_service")
     return result

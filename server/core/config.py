@@ -9,10 +9,11 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     """Application settings driven entirely by environment variables."""
 
-    # Service Ports (used by start.js and vite, not hardcoded here)
+    # Service Ports (used by start.js, vite, and docker-compose, not hardcoded here)
     vite_client_port: Optional[int] = Field(default=None, env="VITE_CLIENT_PORT")
     python_backend_port: Optional[int] = Field(default=None, env="PYTHON_BACKEND_PORT")
     whatsapp_rpc_port: Optional[int] = Field(default=None, env="WHATSAPP_RPC_PORT")
+    redis_port: Optional[int] = Field(default=None, env="REDIS_PORT")
 
     # Server Configuration
     host: str = Field(env="HOST")
