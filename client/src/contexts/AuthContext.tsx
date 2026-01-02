@@ -43,13 +43,24 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const getApiBase = () => `${API_CONFIG.PYTHON_BASE_URL}/api/auth`;
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  // When auth is disabled, bypass authentication entirely
+  const authEnabled = API_CONFIG.AUTH_ENABLED;
+
+  const [user, setUser] = useState<User | null>(authEnabled ? null : { id: 0, email: 'anonymous', display_name: 'Anonymous', is_owner: true });
+  const [isLoading, setIsLoading] = useState(authEnabled);
   const [authMode, setAuthMode] = useState<'single' | 'multi'>('single');
   const [canRegister, setCanRegister] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const checkAuth = useCallback(async () => {
+  const checkAuth = useCallback(async (retryCount = 0): Promise<void> => {
+    // Skip auth check if auth is disabled
+    if (!authEnabled) {
+      setIsLoading(false);
+      return;
+    }
+    const maxRetries = 5;
+    const baseDelay = 1000; // 1 second
+
     try {
       const response = await fetch(`${getApiBase()}/status`, {
         credentials: 'include'
@@ -65,14 +76,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(null);
       }
       setError(null);
-    } catch (err) {
-      console.error('Failed to check auth status:', err);
-      setUser(null);
-      setError('Failed to connect to server');
-    } finally {
       setIsLoading(false);
+    } catch (err) {
+      console.error(`Failed to check auth status (attempt ${retryCount + 1}/${maxRetries + 1}):`, err);
+
+      // Retry with exponential backoff if server not ready
+      if (retryCount < maxRetries) {
+        const delay = baseDelay * Math.pow(2, retryCount);
+        console.log(`Retrying in ${delay}ms...`);
+        setTimeout(() => checkAuth(retryCount + 1), delay);
+      } else {
+        setUser(null);
+        setError('Failed to connect to server');
+        setIsLoading(false);
+      }
     }
-  }, []);
+  }, [authEnabled]);
 
   // Check auth status on mount
   useEffect(() => {

@@ -37,8 +37,18 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if self._is_public_path(path):
             return await call_next(request)
 
-        # Get settings and token
+        # Get settings
         settings = container.settings()
+
+        # Check if auth is disabled (VITE_AUTH_ENABLED=false)
+        if settings.vite_auth_enabled and settings.vite_auth_enabled.lower() == 'false':
+            # Auth disabled - set anonymous user and allow request
+            request.state.user_id = 0
+            request.state.user_email = 'anonymous'
+            request.state.is_owner = True
+            return await call_next(request)
+
+        # Auth enabled - check token
         token = request.cookies.get(settings.jwt_cookie_name)
 
         if not token:

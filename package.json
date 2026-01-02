@@ -7,7 +7,7 @@
     "client"
   ],
   "scripts": {
-    "dev": "concurrently -t -n client,python,whatsapp -c blue,green,yellow --handle-input --kill-others-on-fail \"npm:client:dev\" \"npm:python:dev\" \"npm:whatsapp:api\"",
+    "dev": "concurrently -t -n client,python,whatsapp -c blue,green,yellow --kill-others-on-fail \"npm:client:dev\" \"npm:python:dev\" \"npm:whatsapp:api\"",
     "client:dev": "cd client && set NO_COLOR=1&& npm run dev",
     "python:dev": "cd server && python -m uvicorn main:app --host 127.0.0.1 --port 3010 --reload --reload-dir . --reload-exclude \"*.pyc\" --reload-exclude \"__pycache__\" --log-level warning",
     "whatsapp:start": "cd server/whatsapp-rpc && npm start",
@@ -15,7 +15,7 @@
     "whatsapp:status": "cd server/whatsapp-rpc && npm run status",
     "whatsapp:api": "cd server/whatsapp-rpc && npm run api",
     "whatsapp:build": "cd server/whatsapp-rpc && npm run build",
-    "build": "node -e \"const fs=require('fs'),p='.env';if(!fs.existsSync(p))fs.copyFileSync('.env.template',p)\" && npm install && cd client && npm install && npm run build && cd ../server && python -m pip install -r requirements.txt && cd whatsapp-rpc && npm install",
+    "build": "node -e \"const fs=require('fs'),p='.env';if(!fs.existsSync(p))fs.copyFileSync('.env.template',p)\" && npm ci && cd client && npm run build && cd ../server && python -m pip install -r requirements.txt && cd whatsapp-rpc && npm ci",
     "clean": "node scripts/clean.js",
     "start": "node scripts/start.js",
     "stop": "node scripts/stop.js",

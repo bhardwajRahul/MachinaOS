@@ -7,8 +7,8 @@ WORKDIR /app
 # Copy package files
 COPY package.json package-lock.json* ./
 
-# Install dependencies
-RUN npm install
+# Install dependencies (npm ci for faster, deterministic installs)
+RUN npm ci
 
 # Copy application code
 COPY . .
@@ -30,8 +30,8 @@ WORKDIR /app
 # Copy package files
 COPY package.json package-lock.json* ./
 
-# Install dependencies
-RUN npm install
+# Install dependencies (npm ci for faster, deterministic installs)
+RUN npm ci
 
 # Copy application code
 COPY . .

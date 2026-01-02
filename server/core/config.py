@@ -60,6 +60,12 @@ class Settings(BaseSettings):
     websocket_url: str = Field(default="", env="WEBSOCKET_URL")
     websocket_api_key: Optional[str] = Field(default=None, env="WEBSOCKET_API_KEY")
 
+    # Android Relay Configuration (passed to Vite frontend)
+    vite_android_relay_url: Optional[str] = Field(default=None, env="VITE_ANDROID_RELAY_URL")
+
+    # Frontend Auth Configuration (passed to Vite frontend)
+    vite_auth_enabled: Optional[str] = Field(default=None, env="VITE_AUTH_ENABLED")
+
     # API Key Security
     api_key_encryption_key: str = Field(env="API_KEY_ENCRYPTION_KEY", min_length=32)
     api_key_cache_ttl: int = Field(default=2592000, env="API_KEY_CACHE_TTL", ge=3600)

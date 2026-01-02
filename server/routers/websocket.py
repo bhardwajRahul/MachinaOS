@@ -1443,18 +1443,24 @@ async def websocket_status_endpoint(websocket: WebSocket):
     """
     # Authenticate via cookie before accepting connection
     settings = container.settings()
-    token = websocket.cookies.get(settings.jwt_cookie_name)
 
-    if not token:
-        await websocket.close(code=4001, reason="Not authenticated")
-        return
+    # Check if auth is disabled (VITE_AUTH_ENABLED=false)
+    auth_disabled = settings.vite_auth_enabled and settings.vite_auth_enabled.lower() == 'false'
 
-    user_auth = container.user_auth_service()
-    payload = user_auth.verify_token(token)
+    if not auth_disabled:
+        # Auth enabled - verify token
+        token = websocket.cookies.get(settings.jwt_cookie_name)
 
-    if not payload:
-        await websocket.close(code=4001, reason="Invalid or expired session")
-        return
+        if not token:
+            await websocket.close(code=4001, reason="Not authenticated")
+            return
+
+        user_auth = container.user_auth_service()
+        payload = user_auth.verify_token(token)
+
+        if not payload:
+            await websocket.close(code=4001, reason="Invalid or expired session")
+            return
 
     broadcaster = get_status_broadcaster()
     await broadcaster.connect(websocket)

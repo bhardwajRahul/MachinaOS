@@ -6,6 +6,7 @@
 interface ApiConfig {
   readonly PYTHON_BASE_URL: string;
   readonly WHATSAPP_BASE_URL: string;
+  readonly AUTH_ENABLED: boolean;
 }
 
 /**
@@ -25,6 +26,9 @@ function getApiConfig(): ApiConfig {
 
     // WhatsApp Go service (port 3012) - typically not called directly from frontend
     WHATSAPP_BASE_URL: viteEnv.VITE_WHATSAPP_SERVICE_URL || (isProduction ? '' : 'http://localhost:3012'),
+
+    // Authentication enabled (default true, set VITE_AUTH_ENABLED=false to disable)
+    AUTH_ENABLED: viteEnv.VITE_AUTH_ENABLED !== 'false',
   };
 }
 
