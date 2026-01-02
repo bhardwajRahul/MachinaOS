@@ -36,6 +36,18 @@ RUN npm ci
 # Copy application code
 COPY . .
 
+# Build arguments for Vite environment variables (set at build time)
+ARG VITE_AUTH_ENABLED=true
+ARG VITE_PYTHON_SERVICE_URL=
+ARG VITE_WHATSAPP_SERVICE_URL=
+ARG VITE_ANDROID_RELAY_URL=
+
+# Expose build args as environment variables for Vite build
+ENV VITE_AUTH_ENABLED=$VITE_AUTH_ENABLED
+ENV VITE_PYTHON_SERVICE_URL=$VITE_PYTHON_SERVICE_URL
+ENV VITE_WHATSAPP_SERVICE_URL=$VITE_WHATSAPP_SERVICE_URL
+ENV VITE_ANDROID_RELAY_URL=$VITE_ANDROID_RELAY_URL
+
 # Increase Node.js memory limit for large builds (GCP e2-micro has limited RAM)
 ENV NODE_OPTIONS="--max-old-space-size=2048"
 

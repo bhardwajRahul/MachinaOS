@@ -42,16 +42,11 @@ services:
     env_file:
       - .env
     environment:
+      # Override specific vars for Docker networking
       - PORT=${PYTHON_BACKEND_PORT:-3010}
-      - TZ=UTC
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      # Redis cache - uses REDIS_ENABLED from .env (default false)
-      - REDIS_ENABLED=${REDIS_ENABLED:-false}
       - REDIS_URL=redis://redis:6379
-      # Android relay WebSocket (optional, set in .env)
-      - ANDROID_RELAY_URL=${ANDROID_RELAY_URL:-}
-      # WhatsApp RPC service URL (internal Docker network)
       - WHATSAPP_RPC_URL=ws://whatsapp:${WHATSAPP_RPC_PORT:-9400}/ws/rpc
+      - TZ=UTC
     depends_on:
       whatsapp:
         condition: service_healthy
@@ -73,8 +68,10 @@ services:
     restart: unless-stopped
     depends_on:
       - backend
+    env_file:
+      - .env
     environment:
-      - VITE_CLIENT_PORT=${VITE_CLIENT_PORT:-3000}
+      # Override for Docker networking
       - VITE_API_URL=http://backend:${PYTHON_BACKEND_PORT:-3010}
       - VITE_WS_URL=ws://backend:${PYTHON_BACKEND_PORT:-3010}
       - TZ=UTC
