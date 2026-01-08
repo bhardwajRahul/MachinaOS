@@ -301,9 +301,12 @@ class CacheService:
         """
         try:
             if self.use_redis and self.redis and self._streams_available:
-                # Serialize data to JSON string for storage
-                serialized = {k: json.dumps(v) if isinstance(v, (dict, list)) else str(v)
-                             for k, v in data.items()}
+                # Serialize ALL values with json.dumps to preserve types
+                # This matches the pattern used in set() and ensures proper round-trip:
+                # - json.dumps(True) → "true" (lowercase, valid JSON)
+                # - json.loads("true") → True (Python bool)
+                # Using str() would break: str(True) → "True" → json.loads fails
+                serialized = {k: json.dumps(v, default=str) for k, v in data.items()}
                 msg_id = await self.redis.xadd(stream, serialized, maxlen=maxlen, approximate=True)
                 logger.debug(f"Stream add: {stream} -> {msg_id}")
                 return msg_id

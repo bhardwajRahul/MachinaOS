@@ -338,7 +338,11 @@ class AIService:
                 "model": model,
                 "provider": provider,
                 "finish_reason": "stop",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
+                "input": {
+                    "prompt": prompt,
+                    "system_prompt": system_prompt,
+                }
             }
 
             log_execution_time(logger, "ai_chat", start_time, time.time())
@@ -547,7 +551,11 @@ class AIService:
                 "agent_type": "langgraph",
                 "iterations": iterations,
                 "finish_reason": "stop",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
+                "input": {
+                    "prompt": prompt,
+                    "system_message": system_message,
+                }
             }
 
             # Add memory info if used
