@@ -86,7 +86,7 @@ services:
     # Privileged mode for proper SQLite WAL mmap support
     privileged: true
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9400/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9400/health"]
       interval: 30s
       timeout: 10s
       retries: 3

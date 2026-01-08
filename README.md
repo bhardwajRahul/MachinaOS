@@ -7,7 +7,8 @@ Visual workflow automation platform. Build workflows by connecting nodes - like 
 ```bash
 git clone https://github.com/trohitg/MachinaOS.git
 cd MachinaOs
-npm run docker:build && npm run docker:up
+npm run docker:build
+npm run docker:up
 ```
 
 Open http://localhost:3000
@@ -32,12 +33,20 @@ npm run start
 
 ## Docker Commands
 
+### Development (hot reload, larger images)
 | Command | Description |
 |---------|-------------|
-| `npm run docker:up` | Start containers |
+| `npm run docker:build` | Build dev images |
+| `npm run docker:up` | Start dev containers |
 | `npm run docker:down` | Stop containers |
 | `npm run docker:logs` | View logs |
-| `npm run docker:build` | Rebuild images |
+
+### Production (optimized, smaller images)
+| Command | Description |
+|---------|-------------|
+| `npm run docker:prod:build` | Build prod images |
+| `npm run docker:prod:up` | Start prod containers |
+| `npm run docker:prod:logs` | View logs |
 
 **Redis (optional):** Set `REDIS_ENABLED=true` in `.env`
 
