@@ -26,6 +26,7 @@ import { SCHEDULER_NODE_TYPES } from './nodeDefinitions/schedulerNodes';
 import { CHAT_NODE_TYPES } from './nodeDefinitions/chatNodes';
 import { CODE_NODE_TYPES } from './nodeDefinitions/codeNodes';
 import { UTILITY_NODE_TYPES } from './nodeDefinitions/utilityNodes';
+import { TOOL_NODE_TYPES } from './nodeDefinitions/toolNodes';
 import ParameterPanel from './ParameterPanel';
 import LocationParameterPanel from './components/LocationParameterPanel';
 import { useAppStore } from './store/useAppStore';
@@ -94,6 +95,9 @@ const createNodeTypes = (): Record<string, React.ComponentType<any>> => {
       // Utility nodes (HTTP, Webhooks) use SquareNode component
       // Note: webhookTrigger is already handled as trigger above
       types[type] = SquareNode;
+    } else if (TOOL_NODE_TYPES.includes(type)) {
+      // Tool nodes (Calculator, etc.) use circular ModelNode like Simple Memory
+      types[type] = ModelNode;
     } else if (definition?.group?.includes('model')) {
       // Fallback for other model nodes
       types[type] = ModelNode;
@@ -276,7 +280,7 @@ const DashboardContent: React.FC = () => {
   } = useWorkflowManagement();
 
   const { collapsedSections, searchQuery, setSearchQuery, toggleSection } = useComponentPalette();
-  const { saveNodeParameters, getAllNodeParameters, executeWorkflow, deployWorkflow, cancelDeployment, nodeStatuses, deploymentStatus, workflowLock, isConnected } = useWebSocket();
+  const { saveNodeParameters, executeWorkflow, deployWorkflow, cancelDeployment, nodeStatuses, deploymentStatus, workflowLock } = useWebSocket();
 
   // Scope deployment and lock to current workflow (n8n pattern)
   // Only show as "running" or "locked" if it applies to the currently viewed workflow
@@ -582,17 +586,13 @@ const DashboardContent: React.FC = () => {
     }
 
     try {
-      console.log('[Dashboard] Starting deployment (using backend stored settings)');
-
       // Settings are already synced to backend via WebSocket from SettingsPanel
       // Backend will use the stored settings
       const result = await deployWorkflow(currentWorkflow.id, nodes, edges, 'default');
 
       if (!result.success) {
-        console.error('[Dashboard] Deployment failed to start:', result.error);
+        console.error('[Dashboard] Deployment failed:', result.error);
         alert(`Failed to start deployment: ${result.error}`);
-      } else {
-        console.log('[Dashboard] Deployment started successfully');
       }
     } catch (error: any) {
       console.error('[Dashboard] Deployment error:', error);

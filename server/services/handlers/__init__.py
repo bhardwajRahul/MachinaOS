@@ -5,6 +5,7 @@ This package contains all node execution handlers organized by category:
 - android.py: Android Device Setup, Android Services
 - code.py: Python Executor, JavaScript Executor
 - http.py: HTTP Request, Webhook Response
+- tools.py: Tool execution handlers for AI Agent tool calling
 - triggers.py: Generic trigger node handler
 - utility.py: Maps, Text, Chat, Cron, Start
 - whatsapp.py: WhatsApp Send, WhatsApp Connect
@@ -60,6 +61,11 @@ from .whatsapp import (
     handle_whatsapp_connect,
 )
 
+# Tool execution handlers (for AI Agent tool calling)
+from .tools import (
+    execute_tool,
+)
+
 __all__ = [
     # AI
     'handle_ai_agent',
@@ -90,4 +96,6 @@ __all__ = [
     # WhatsApp
     'handle_whatsapp_send',
     'handle_whatsapp_connect',
+    # Tools
+    'execute_tool',
 ]

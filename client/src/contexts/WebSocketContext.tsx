@@ -11,6 +11,7 @@
  */
 
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { flushSync } from 'react-dom';
 import { API_CONFIG } from '../config/api';
 import { useAppStore } from '../store/useAppStore';
 import { useAuth } from './AuthContext';
@@ -484,13 +485,26 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           // Store status under workflow_id -> node_id structure
           if (node_id) {
             const statusWorkflowId = message.workflow_id || 'unknown';
-            setAllNodeStatuses((prev: Record<string, Record<string, NodeStatus>>) => ({
-              ...prev,
-              [statusWorkflowId]: {
-                ...(prev[statusWorkflowId] || {}),
-                [node_id]: { ...data, workflow_id: statusWorkflowId }
-              }
-            }));
+            const phase = data?.phase;
+
+            // Use flushSync for tool execution phases to force immediate re-render
+            // This ensures the spinning animation appears before tool_completed arrives
+            const isToolPhase = phase === 'executing_tool' || phase === 'tool_completed';
+            const updateFn = () => {
+              setAllNodeStatuses((prev: Record<string, Record<string, NodeStatus>>) => ({
+                ...prev,
+                [statusWorkflowId]: {
+                  ...(prev[statusWorkflowId] || {}),
+                  [node_id]: { ...data, workflow_id: statusWorkflowId }
+                }
+              }));
+            };
+
+            if (isToolPhase) {
+              flushSync(updateFn);
+            } else {
+              updateFn();
+            }
           }
           break;
 
@@ -1702,6 +1716,21 @@ export const useWhatsAppMessages = (): {
     lastMessage: lastWhatsAppMessage,
     clearMessages: clearWhatsAppMessages
   };
+};
+
+// Hook to check if a tool is currently being executed by any AI Agent
+// Used by tool nodes to show spinning indicator when they're being used
+export const useIsToolExecuting = (toolName: string): boolean => {
+  const { nodeStatuses } = useWebSocket();
+
+  // Scan all node statuses to find if any AI Agent is executing this tool
+  for (const nodeId in nodeStatuses) {
+    const status = nodeStatuses[nodeId];
+    if (status?.data?.phase === 'executing_tool' && status?.data?.tool_name === toolName) {
+      return true;
+    }
+  }
+  return false;
 };
 
 export default WebSocketContext;

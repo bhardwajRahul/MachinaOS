@@ -2,8 +2,8 @@ import React, { useMemo } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { NodeData } from '../types/NodeTypes';
 import { useAppStore } from '../store/useAppStore';
-import { nodeDefinitions } from '../nodeDefinitions';
-import { useWebSocket, useNodeStatus } from '../contexts/WebSocketContext';
+import { nodeDefinitions, TOOL_NODES } from '../nodeDefinitions';
+import { useWebSocket, useNodeStatus, useIsToolExecuting } from '../contexts/WebSocketContext';
 import { useAppTheme } from '../hooks/useAppTheme';
 
 // Map credential names to provider keys
@@ -28,6 +28,22 @@ const ModelNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectabl
   const isExecuting = executionStatus === 'executing' || executionStatus === 'waiting';
 
   const definition = nodeDefinitions[type as keyof typeof nodeDefinitions];
+
+  // Check if this is a tool node and if it's being executed by an AI Agent
+  const isToolNode = TOOL_NODES.includes(type || '');
+  // Get tool name from node data or definition defaults
+  const toolName = useMemo(() => {
+    if (!isToolNode) return '';
+    // Check node data first, then definition defaults
+    const nameFromData = data?.toolName;
+    if (nameFromData) return nameFromData;
+    // Get default from definition properties
+    const toolNameProp = definition?.properties?.find((p: any) => p.name === 'toolName');
+    return toolNameProp?.default || '';
+  }, [isToolNode, data?.toolName, definition?.properties]);
+  const isToolBeingExecuted = useIsToolExecuting(toolName);
+  // Tool is "executing" when AI Agent is using it
+  const isToolActive = isToolNode && isToolBeingExecuted;
 
   // Determine provider from node definition or type
   const provider = useMemo(() => {
@@ -119,7 +135,7 @@ const ModelNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectabl
           background: theme.isDarkMode
             ? `linear-gradient(135deg, ${nodeColor}20 0%, ${theme.colors.backgroundAlt} 100%)`
             : `linear-gradient(145deg, #ffffff 0%, ${nodeColor}10 100%)`,
-          border: `2px solid ${isExecuting
+          border: `2px solid ${(isExecuting || isToolActive)
             ? (theme.isDarkMode ? theme.dracula.cyan : '#2563eb')
             : selected
               ? theme.colors.focus
@@ -133,7 +149,7 @@ const ModelNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectabl
           fontSize: type === 'aiAgent' ? theme.fontSize.lg : theme.iconSize.xl,
           fontWeight: theme.fontWeight.semibold,
           transition: theme.transitions.fast,
-          boxShadow: isExecuting
+          boxShadow: (isExecuting || isToolActive)
             ? theme.isDarkMode
               ? `0 4px 12px ${theme.dracula.cyan}66, 0 0 0 3px ${theme.dracula.cyan}4D`
               : `0 0 0 3px rgba(37, 99, 235, 0.5), 0 4px 16px rgba(37, 99, 235, 0.35)`
@@ -144,9 +160,30 @@ const ModelNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectabl
                     ? `0 2px 8px ${nodeColor}30`
                     : `0 2px 8px ${nodeColor}25, 0 4px 12px rgba(0,0,0,0.06)`)
                 : `0 2px 8px ${theme.dracula.red}4D`,
-          animation: isExecuting ? 'pulse 1.5s ease-in-out infinite' : 'none',
+          animation: (isExecuting || isToolActive) ? 'pulse 1.5s ease-in-out infinite' : 'none',
         }}
       >
+        {/* Spinning Arrow Ring - shows when tool is being executed by AI Agent */}
+        {isToolActive && (
+          <div
+            style={{
+              position: 'absolute',
+              top: -8,
+              left: -8,
+              right: -8,
+              bottom: -8,
+              borderRadius: '50%',
+              border: '3px solid transparent',
+              borderTopColor: theme.dracula.cyan,
+              borderRightColor: theme.dracula.purple,
+              borderBottomColor: theme.dracula.cyan,
+              animation: 'spin 1s linear infinite',
+              zIndex: 50,
+              pointerEvents: 'none',
+            }}
+          />
+        )}
+
         {/* AI Text */}
         {getProviderDisplay()}
 
@@ -189,7 +226,7 @@ const ModelNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectabl
             width: theme.nodeSize.statusIndicator,
             height: theme.nodeSize.statusIndicator,
             borderRadius: '50%',
-            backgroundColor: isExecuting
+            backgroundColor: (isExecuting || isToolActive)
               ? theme.dracula.cyan
               : executionStatus === 'success'
                 ? theme.dracula.green
@@ -201,7 +238,7 @@ const ModelNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectabl
                       ? theme.dracula.orange
                       : theme.dracula.red,
             border: `2px solid ${theme.isDarkMode ? theme.colors.background : '#ffffff'}`,
-            boxShadow: isExecuting
+            boxShadow: (isExecuting || isToolActive)
               ? theme.isDarkMode
                 ? `0 0 6px ${theme.dracula.cyan}80`
                 : '0 0 4px rgba(37, 99, 235, 0.5)'
@@ -209,18 +246,22 @@ const ModelNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectabl
                 ? `0 1px 3px ${theme.colors.shadow}`
                 : '0 1px 3px rgba(0,0,0,0.15)',
             zIndex: 30,
-            animation: isExecuting ? 'pulse 1s ease-in-out infinite' : 'none',
+            animation: (isExecuting || isToolActive) ? 'pulse 1s ease-in-out infinite' : 'none',
           }}
           title={
-            isExecuting
-              ? 'Executing...'
-              : isMemoryNode
-                ? 'Memory node ready'
-                : isConfigured
-                  ? 'Model configured and ready'
-                  : hasApiKey
-                    ? 'API key found, model needs configuration'
-                    : 'API key required'
+            isToolActive
+              ? 'Tool executing...'
+              : isExecuting
+                ? 'Executing...'
+                : isMemoryNode
+                  ? 'Memory node ready'
+                  : isToolNode
+                    ? 'Tool ready'
+                    : isConfigured
+                      ? 'Model configured and ready'
+                      : hasApiKey
+                        ? 'API key found, model needs configuration'
+                        : 'API key required'
           }
         />
 

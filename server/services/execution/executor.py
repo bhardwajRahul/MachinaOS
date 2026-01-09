@@ -988,10 +988,18 @@ class WorkflowExecutor:
         Returns:
             List of NodeExecution ready to run
         """
+        from constants import CONFIG_NODE_TYPES
+
         # Build set of completed nodes
         completed = set(ctx.get_completed_nodes())
 
+        # Build map of node_id -> node_type for config node detection
+        node_types: Dict[str, str] = {}
+        for node in ctx.nodes:
+            node_types[node.get("id", "")] = node.get("type", "unknown")
+
         # Build dependency map and track conditional edges
+        # Skip edges from config nodes (they don't execute, provide config only)
         dependencies: Dict[str, Set[str]] = defaultdict(set)
         conditional_edges: Dict[str, List[Dict]] = defaultdict(list)  # target -> edges with conditions
 
@@ -999,6 +1007,11 @@ class WorkflowExecutor:
             target = edge.get("target")
             source = edge.get("source")
             if target and source:
+                # Skip edges from config nodes - they provide configuration, not execution dependencies
+                source_type = node_types.get(source, "unknown")
+                if source_type in CONFIG_NODE_TYPES:
+                    continue
+
                 dependencies[target].add(source)
                 # Track edges with conditions for evaluation
                 if edge.get("data", {}).get("condition"):

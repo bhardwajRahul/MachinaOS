@@ -1,6 +1,6 @@
 """AI node handlers - AI Agent, AI Chat Model, Simple Memory."""
 
-from typing import Dict, Any, TYPE_CHECKING
+from typing import Dict, Any, List, TYPE_CHECKING
 from core.logging import get_logger
 
 if TYPE_CHECKING:
@@ -18,7 +18,7 @@ async def handle_ai_agent(
     ai_service: "AIService",
     database: "Database"
 ) -> Dict[str, Any]:
-    """Handle AI agent node execution with memory support.
+    """Handle AI agent node execution with memory and tool support.
 
     Args:
         node_id: The node ID
@@ -34,15 +34,26 @@ async def handle_ai_agent(
     nodes = context.get('nodes')
     edges = context.get('edges')
     execution_id = context.get('execution_id', 'unknown')
+    workflow_id = context.get('workflow_id')  # Extract for status broadcasts
     memory_data = None
+    tool_data: List[Dict[str, Any]] = []  # Collect connected tool nodes
 
     if edges and nodes:
         for edge in edges:
-            if edge.get('target') == node_id and edge.get('targetHandle') == 'input-memory':
-                memory_node_id = edge.get('source')
-                memory_node = next((n for n in nodes if n.get('id') == memory_node_id), None)
-                if memory_node and memory_node.get('type') == 'simpleMemory':
-                    memory_params = await database.get_node_parameters(memory_node_id) or {}
+            if edge.get('target') != node_id:
+                continue
+
+            target_handle = edge.get('targetHandle')
+            source_node_id = edge.get('source')
+            source_node = next((n for n in nodes if n.get('id') == source_node_id), None)
+
+            if not source_node:
+                continue
+
+            # Memory detection (existing)
+            if target_handle == 'input-memory':
+                if source_node.get('type') == 'simpleMemory':
+                    memory_params = await database.get_node_parameters(source_node_id) or {}
                     memory_session_id = memory_params.get('sessionId', 'default')
                     memory_type = memory_params.get('memoryType', 'buffer')
                     window_size = int(memory_params.get('windowSize', 10)) if memory_type == 'window' else None
@@ -53,13 +64,32 @@ async def handle_ai_agent(
                     }
                     logger.info("AI Agent connected memory node", node_id=node_id, execution_id=execution_id,
                                memory_session=memory_session_id, memory_type=memory_type)
-                break
+
+            # Tool detection (new) - any node connected to input-tools becomes a tool
+            elif target_handle == 'input-tools':
+                tool_type = source_node.get('type')
+                tool_params = await database.get_node_parameters(source_node_id) or {}
+                tool_data.append({
+                    'node_id': source_node_id,
+                    'node_type': tool_type,
+                    'parameters': tool_params,
+                    'label': source_node.get('data', {}).get('label', tool_type)
+                })
+                logger.info("AI Agent connected tool node", node_id=node_id, execution_id=execution_id,
+                           tool_type=tool_type, tool_node_id=source_node_id)
 
     # Get broadcaster for real-time status updates
     from services.status_broadcaster import get_status_broadcaster
     broadcaster = get_status_broadcaster()
 
-    return await ai_service.execute_agent(node_id, parameters, memory_data, broadcaster)
+    return await ai_service.execute_agent(
+        node_id,
+        parameters,
+        memory_data=memory_data,
+        tool_data=tool_data if tool_data else None,
+        broadcaster=broadcaster,
+        workflow_id=workflow_id
+    )
 
 
 async def handle_ai_chat_model(

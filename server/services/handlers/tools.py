@@ -1,0 +1,475 @@
+"""Tool execution handlers for AI Agent tool calling.
+
+This module contains handlers for executing tools called by the AI Agent.
+Each tool type has its own handler function that processes the tool call
+and returns results.
+"""
+
+import math
+import json
+from typing import Dict, Any, Optional
+from core.logging import get_logger
+
+logger = get_logger(__name__)
+
+
+async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
+                       config: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute a tool by name using the appropriate handler.
+
+    This is the main dispatch function that routes tool calls to specific handlers
+    based on the node_type in the config.
+
+    Args:
+        tool_name: Name of the tool (for logging)
+        tool_args: Arguments provided by the AI model
+        config: Tool configuration containing node_type, node_id, parameters
+
+    Returns:
+        Tool execution result dict
+    """
+    node_type = config.get('node_type', '')
+
+    logger.info(f"[Tool] Executing tool '{tool_name}' (node_type: {node_type})")
+
+    # Calculator tool
+    if node_type == 'calculatorTool':
+        return await _execute_calculator(tool_args)
+
+    # HTTP Request tool (existing httpRequest node as tool)
+    if node_type in ('httpRequest', 'httpRequestTool'):
+        return await _execute_http_request(tool_args, config.get('parameters', {}))
+
+    # Python executor tool
+    if node_type == 'pythonExecutor':
+        return await _execute_python_code(tool_args, config.get('parameters', {}))
+
+    # Current time tool
+    if node_type == 'currentTimeTool':
+        return await _execute_current_time(tool_args, config.get('parameters', {}))
+
+    # Web search tool
+    if node_type == 'webSearchTool':
+        return await _execute_web_search(tool_args, config.get('parameters', {}))
+
+    # WhatsApp send (existing node used as tool)
+    if node_type == 'whatsappSend':
+        return await _execute_whatsapp_send(tool_args, config.get('parameters', {}))
+
+    # Generic fallback for unknown node types
+    logger.warning(f"[Tool] Unknown tool type: {node_type}, using generic handler")
+    return await _execute_generic(tool_args, config)
+
+
+async def _execute_calculator(args: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute calculator operations.
+
+    Supported operations: add, subtract, multiply, divide, power, sqrt, mod, abs
+
+    Args:
+        args: Dict with 'operation', 'a', and optionally 'b'
+
+    Returns:
+        Dict with operation, inputs, and result
+    """
+    operation = args.get('operation', '').lower()
+    a = float(args.get('a', 0))
+    b = float(args.get('b', 0))
+
+    operations = {
+        'add': lambda: a + b,
+        'subtract': lambda: a - b,
+        'multiply': lambda: a * b,
+        'divide': lambda: a / b if b != 0 else float('inf'),
+        'power': lambda: math.pow(a, b),
+        'sqrt': lambda: math.sqrt(abs(a)),  # Use abs to handle negative
+        'mod': lambda: a % b if b != 0 else 0,
+        'abs': lambda: abs(a),
+    }
+
+    if operation not in operations:
+        return {
+            "error": f"Unknown operation: {operation}",
+            "supported_operations": list(operations.keys())
+        }
+
+    try:
+        result = operations[operation]()
+        logger.info(f"[Calculator] {operation}({a}, {b}) = {result}")
+        return {
+            "operation": operation,
+            "a": a,
+            "b": b,
+            "result": result
+        }
+    except Exception as e:
+        logger.error(f"[Calculator] Error: {e}")
+        return {"error": str(e)}
+
+
+async def _execute_http_request(args: Dict[str, Any],
+                                 node_params: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute HTTP request tool.
+
+    Args:
+        args: Dict with 'url', 'method', optionally 'body'
+        node_params: Node parameters containing base_url, headers, etc.
+
+    Returns:
+        Dict with status code, data, and url
+    """
+    import httpx
+
+    base_url = node_params.get('url', '')
+    url = args.get('url', '')
+    method = args.get('method', 'GET').upper()
+    body = args.get('body')
+
+    # Build full URL
+    if base_url and url and not url.startswith('http'):
+        full_url = f"{base_url.rstrip('/')}/{url.lstrip('/')}"
+    else:
+        full_url = url or base_url
+
+    if not full_url:
+        return {"error": "No URL provided"}
+
+    # Parse headers from node params
+    try:
+        default_headers = json.loads(node_params.get('headers', '{}'))
+    except:
+        default_headers = {}
+
+    logger.info(f"[HTTP Tool] {method} {full_url}")
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.request(
+                method=method,
+                url=full_url,
+                headers=default_headers,
+                json=body if body else None
+            )
+
+            # Try to parse JSON response
+            try:
+                data = response.json()
+            except:
+                data = response.text
+
+            return {
+                "status": response.status_code,
+                "data": data,
+                "url": full_url,
+                "method": method
+            }
+
+    except httpx.TimeoutException:
+        return {"error": "Request timed out"}
+    except httpx.ConnectError as e:
+        return {"error": f"Connection failed: {str(e)}"}
+    except Exception as e:
+        logger.error(f"[HTTP Tool] Error: {e}")
+        return {"error": str(e)}
+
+
+async def _execute_python_code(args: Dict[str, Any],
+                                node_params: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute Python code tool.
+
+    Args:
+        args: Dict with 'code'
+        node_params: Node parameters containing timeout, etc.
+
+    Returns:
+        Dict with result or output
+    """
+    import subprocess
+    import tempfile
+    import os
+
+    code = args.get('code', '')
+    timeout = int(node_params.get('timeout', 30))
+
+    if not code:
+        return {"error": "No code provided"}
+
+    # Create a temporary file with the code
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+        # Wrap code to capture the result
+        wrapped_code = f"""
+import json
+import sys
+
+def main():
+{chr(10).join('    ' + line for line in code.split(chr(10)))}
+
+try:
+    result = main()
+    if result is not None:
+        print(json.dumps({{"result": result}}, default=str))
+    else:
+        print(json.dumps({{"result": "Code executed successfully"}}))
+except Exception as e:
+    print(json.dumps({{"error": str(e)}}))
+"""
+        f.write(wrapped_code)
+        temp_path = f.name
+
+    try:
+        logger.info(f"[Python Tool] Executing code (timeout: {timeout}s)")
+        result = subprocess.run(
+            ['python', temp_path],
+            capture_output=True,
+            text=True,
+            timeout=timeout
+        )
+
+        if result.returncode == 0:
+            try:
+                output = json.loads(result.stdout.strip())
+                return output
+            except:
+                return {"output": result.stdout.strip()}
+        else:
+            return {"error": result.stderr or "Code execution failed"}
+
+    except subprocess.TimeoutExpired:
+        return {"error": f"Code execution timed out after {timeout} seconds"}
+    except Exception as e:
+        logger.error(f"[Python Tool] Error: {e}")
+        return {"error": str(e)}
+    finally:
+        # Clean up temp file
+        try:
+            os.unlink(temp_path)
+        except:
+            pass
+
+
+async def _execute_current_time(args: Dict[str, Any],
+                                 node_params: Dict[str, Any]) -> Dict[str, Any]:
+    """Get current date and time.
+
+    Args:
+        args: Dict with optional 'timezone'
+        node_params: Node parameters containing default timezone
+
+    Returns:
+        Dict with datetime, date, time, timezone, day_of_week, timestamp
+    """
+    from datetime import datetime
+    import pytz
+
+    timezone_str = args.get('timezone') or node_params.get('timezone', 'UTC')
+
+    try:
+        tz = pytz.timezone(timezone_str)
+        now = datetime.now(tz)
+
+        result = {
+            "datetime": now.isoformat(),
+            "date": now.strftime("%Y-%m-%d"),
+            "time": now.strftime("%H:%M:%S"),
+            "timezone": timezone_str,
+            "day_of_week": now.strftime("%A"),
+            "timestamp": int(now.timestamp())
+        }
+        logger.info(f"[CurrentTime] {timezone_str}: {result['datetime']}")
+        return result
+    except Exception as e:
+        logger.error(f"[CurrentTime] Error: {e}")
+        return {"error": f"Invalid timezone: {timezone_str}. Error: {str(e)}"}
+
+
+async def _execute_web_search(args: Dict[str, Any],
+                               node_params: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute web search.
+
+    Args:
+        args: Dict with 'query'
+        node_params: Node parameters containing provider, apiKey, maxResults
+
+    Returns:
+        Dict with query, results list, provider
+    """
+    import httpx
+    import asyncio
+
+    query = args.get('query', '')
+    if not query:
+        return {"error": "No search query provided"}
+
+    provider = node_params.get('provider', 'duckduckgo')
+    max_results = int(node_params.get('maxResults', 5))
+
+    logger.info(f"[WebSearch] Searching '{query}' via {provider}")
+
+    try:
+        if provider == 'duckduckgo':
+            # Use the duckduckgo-search library for proper web search results
+            try:
+                from duckduckgo_search import DDGS
+
+                # Run synchronous DDGS in a thread pool to not block async
+                def do_search():
+                    with DDGS() as ddgs:
+                        return list(ddgs.text(query, max_results=max_results))
+
+                search_results = await asyncio.get_event_loop().run_in_executor(
+                    None, do_search
+                )
+
+                results = []
+                for item in search_results:
+                    results.append({
+                        "title": item.get('title', ''),
+                        "snippet": item.get('body', ''),
+                        "url": item.get('href', '')
+                    })
+
+                logger.info(f"[WebSearch] Found {len(results)} results via DuckDuckGo")
+                return {
+                    "query": query,
+                    "results": results,
+                    "provider": "duckduckgo"
+                }
+
+            except ImportError:
+                logger.warning("[WebSearch] duckduckgo-search not installed, falling back to Instant Answer API")
+                # Fallback to Instant Answer API (limited results)
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    response = await client.get(
+                        "https://api.duckduckgo.com/",
+                        params={"q": query, "format": "json", "no_html": 1}
+                    )
+                    data = response.json()
+
+                    results = []
+                    if data.get('AbstractText'):
+                        results.append({
+                            "title": data.get('Heading', 'Result'),
+                            "snippet": data.get('AbstractText'),
+                            "url": data.get('AbstractURL', '')
+                        })
+
+                    for topic in data.get('RelatedTopics', [])[:max_results]:
+                        if isinstance(topic, dict) and 'Text' in topic:
+                            results.append({
+                                "title": topic.get('Text', '')[:50],
+                                "snippet": topic.get('Text', ''),
+                                "url": topic.get('FirstURL', '')
+                            })
+
+                    logger.info(f"[WebSearch] Found {len(results)} results (Instant Answer API fallback)")
+                    return {
+                        "query": query,
+                        "results": results[:max_results],
+                        "provider": "duckduckgo"
+                    }
+
+        elif provider == 'serper':
+            api_key = node_params.get('apiKey', '')
+            if not api_key:
+                return {"error": "Serper API key required"}
+
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(
+                    "https://google.serper.dev/search",
+                    headers={"X-API-KEY": api_key, "Content-Type": "application/json"},
+                    json={"q": query, "num": max_results}
+                )
+                data = response.json()
+
+                results = []
+                for item in data.get('organic', [])[:max_results]:
+                    results.append({
+                        "title": item.get('title', ''),
+                        "snippet": item.get('snippet', ''),
+                        "url": item.get('link', '')
+                    })
+
+                logger.info(f"[WebSearch] Found {len(results)} results via Serper")
+                return {
+                    "query": query,
+                    "results": results,
+                    "provider": "serper"
+                }
+
+        return {"error": f"Unknown search provider: {provider}"}
+
+    except Exception as e:
+        logger.error(f"[WebSearch] Error: {e}")
+        return {"error": f"Search failed: {str(e)}"}
+
+
+async def _execute_whatsapp_send(args: Dict[str, Any],
+                                  node_params: Dict[str, Any]) -> Dict[str, Any]:
+    """Send WhatsApp message.
+
+    Args:
+        args: Dict with 'phone_number' and 'message'
+        node_params: Node parameters containing defaultPhone, etc.
+
+    Returns:
+        Dict with success status, phone, message_sent
+    """
+    import httpx
+
+    phone = args.get('phone_number') or node_params.get('phoneNumber', '') or node_params.get('to', '')
+    message = args.get('message') or node_params.get('message', '')
+
+    if not phone:
+        return {"error": "No phone number provided"}
+    if not message:
+        return {"error": "No message provided"}
+
+    # Clean phone number
+    phone = phone.replace('+', '').replace(' ', '').replace('-', '')
+    if not phone.endswith('@s.whatsapp.net'):
+        phone = f"{phone}@s.whatsapp.net"
+
+    logger.info(f"[WhatsApp] Sending message to {phone[:10]}...")
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                "http://localhost:5000/send",
+                json={"to": phone, "message": message}
+            )
+
+            if response.status_code == 200:
+                logger.info(f"[WhatsApp] Message sent successfully")
+                return {
+                    "success": True,
+                    "phone": phone,
+                    "message_sent": message[:100] + "..." if len(message) > 100 else message
+                }
+            else:
+                return {"error": f"Failed to send: {response.text}"}
+
+    except Exception as e:
+        logger.error(f"[WhatsApp] Error: {e}")
+        return {"error": f"WhatsApp send failed: {str(e)}"}
+
+
+async def _execute_generic(args: Dict[str, Any],
+                           config: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute a generic tool (fallback handler).
+
+    For node types without specific handlers, this returns the input
+    along with node information.
+
+    Args:
+        args: Tool arguments
+        config: Tool configuration
+
+    Returns:
+        Dict with input echoed and node info
+    """
+    return {
+        "input": args.get('input', ''),
+        "node_type": config.get('node_type'),
+        "node_id": config.get('node_id'),
+        "message": "Generic tool executed - no specific handler for this node type"
+    }

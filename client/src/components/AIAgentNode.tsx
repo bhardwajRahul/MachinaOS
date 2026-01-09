@@ -11,8 +11,11 @@ const PHASE_CONFIG: Record<string, { icon: string; label: string; color: string 
   initializing: { icon: '⚡', label: 'Initializing', color: '#8be9fd' },
   loading_memory: { icon: '💾', label: 'Loading Memory', color: '#bd93f9' },
   memory_loaded: { icon: '✓', label: 'Memory Ready', color: '#50fa7b' },
+  building_tools: { icon: '🔧', label: 'Building Tools', color: '#ffb86c' },
   building_graph: { icon: '🔗', label: 'Building Graph', color: '#ffb86c' },
   invoking_llm: { icon: '🧠', label: 'Thinking...', color: '#ff79c6' },
+  executing_tool: { icon: '⚡', label: 'Using Tool', color: '#ff79c6' },
+  tool_completed: { icon: '✓', label: 'Tool Done', color: '#50fa7b' },
   saving_memory: { icon: '💾', label: 'Saving Memory', color: '#bd93f9' },
 };
 
@@ -206,29 +209,6 @@ const AIAgentNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
         {isExecuting && phaseConfig ? phaseConfig.label : 'LangGraph Agent'}
       </div>
 
-      {/* Memory Info Badge - shows when loading/using memory */}
-      {isExecuting && nodeStatus?.data?.has_memory && (
-        <div style={{
-          position: 'absolute',
-          top: '-8px',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          backgroundColor: theme.dracula.purple,
-          color: '#fff',
-          fontSize: '10px',
-          padding: '2px 8px',
-          borderRadius: '10px',
-          whiteSpace: 'nowrap',
-          boxShadow: `0 0 8px ${theme.dracula.purple}80`,
-          animation: 'pulse 1s ease-in-out infinite',
-          zIndex: 30
-        }}>
-          {nodeStatus?.data?.history_count !== undefined
-            ? `Memory: ${nodeStatus.data.history_count} msgs`
-            : 'Using Memory'}
-        </div>
-      )}
-
       {/* Parameter Labels */}
       <div style={{
         position: 'absolute',
@@ -257,18 +237,10 @@ const AIAgentNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
           left: '35%',
           width: theme.nodeSize.handle,
           height: theme.nodeSize.handle,
-          backgroundColor: isExecuting && nodeStatus?.data?.has_memory
-            ? theme.dracula.purple
-            : theme.colors.background,
-          border: `2px solid ${isExecuting && nodeStatus?.data?.has_memory
-            ? theme.dracula.purple
-            : theme.colors.textSecondary}`,
+          backgroundColor: theme.colors.background,
+          border: `2px solid ${theme.colors.textSecondary}`,
           borderRadius: '0',
-          transform: 'translateX(-50%) rotate(45deg)',
-          boxShadow: isExecuting && nodeStatus?.data?.has_memory
-            ? `0 0 10px ${theme.dracula.purple}`
-            : 'none',
-          transition: 'all 0.3s ease'
+          transform: 'translateX(-50%) rotate(45deg)'
         }}
         title="Memory"
       />

@@ -4,6 +4,7 @@ import { INodeTypeDescription } from './types/INodeProperties';
 // Import modular node definitions
 import { aiModelNodes } from './nodeDefinitions/aiModelNodes';
 import { aiAgentNodes, AI_NODE_TYPES } from './nodeDefinitions/aiAgentNodes';
+import { toolNodes, TOOL_NODE_TYPES } from './nodeDefinitions/toolNodes';
 import { locationNodes, LOCATION_NODE_TYPES } from './nodeDefinitions/locationNodes';
 import { whatsappNodes, WHATSAPP_NODE_TYPES } from './nodeDefinitions/whatsappNodes';
 import { workflowNodes } from './nodeDefinitions/workflowNodes';
@@ -24,6 +25,7 @@ export const nodeDefinitions: Record<string, INodeTypeDescription> = {
   ...schedulerNodes,
   ...aiModelNodes,
   ...aiAgentNodes,
+  ...toolNodes,
   ...locationNodes,
   ...whatsappNodes,
   ...androidServiceNodes,
@@ -80,6 +82,10 @@ export const CODE_NODES = [
 
 export const UTILITY_NODES = [
   ...UTILITY_NODE_TYPES
+];
+
+export const TOOL_NODES = [
+  ...TOOL_NODE_TYPES
 ];
 
 // Re-export types and utilities from modular files for external access

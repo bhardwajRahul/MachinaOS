@@ -10,8 +10,11 @@ import operator
 from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, BaseMessage
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, BaseMessage, ToolMessage
+from langchain_core.tools import StructuredTool
 from langgraph.graph import StateGraph, END
+from pydantic import BaseModel, Field
+import json
 
 from core.config import Settings
 from core.logging import get_logger, log_execution_time, log_api_call
@@ -119,8 +122,10 @@ class AgentState(TypedDict):
     This is the core pattern from LangGraph for stateful conversations.
     """
     messages: Annotated[Sequence[BaseMessage], operator.add]
-    # Tool outputs for future tool integration
+    # Tool outputs storage
     tool_outputs: Dict[str, Any]
+    # Tool calling support
+    pending_tool_calls: List[Dict[str, Any]]  # Tool calls from LLM to execute
     # Agent metadata
     iteration: int
     max_iterations: int
@@ -133,7 +138,8 @@ def create_agent_node(chat_model):
     The agent node:
     1. Receives current state with messages
     2. Invokes the LLM
-    3. Returns updated state with new AI message
+    3. Checks for tool calls in response
+    4. Returns updated state with new AI message and pending tool calls
     """
     def agent_node(state: AgentState) -> Dict[str, Any]:
         """Process messages through the LLM and return response."""
@@ -141,16 +147,31 @@ def create_agent_node(chat_model):
         iteration = state.get("iteration", 0)
         max_iterations = state.get("max_iterations", 10)
 
+        logger.info(f"[LangGraph] Agent node invoked, iteration={iteration}, messages={len(messages)}")
+
         # Invoke the model
         response = chat_model.invoke(list(messages))
 
-        # Check if we should continue (for future tool use)
-        # Currently we just do single turn, but structure supports multi-turn
+        logger.info(f"[LangGraph] LLM response type: {type(response)}, has tool_calls attr: {hasattr(response, 'tool_calls')}")
+        if hasattr(response, 'tool_calls'):
+            logger.info(f"[LangGraph] tool_calls value: {response.tool_calls}")
+
+        # Check for tool calls in the response
+        pending_tool_calls = []
         should_continue = False
+
+        if hasattr(response, 'tool_calls') and response.tool_calls:
+            # Model wants to use tools
+            pending_tool_calls = response.tool_calls
+            should_continue = True
+            logger.info(f"[LangGraph] Agent requesting {len(pending_tool_calls)} tool call(s): {[tc.get('name', tc) for tc in pending_tool_calls]}")
+        else:
+            logger.info(f"[LangGraph] No tool calls in response, content preview: {str(response.content)[:100]}")
 
         return {
             "messages": [response],  # Will be appended via operator.add
             "tool_outputs": {},
+            "pending_tool_calls": pending_tool_calls,
             "iteration": iteration + 1,
             "max_iterations": max_iterations,
             "should_continue": should_continue
@@ -159,49 +180,125 @@ def create_agent_node(chat_model):
     return agent_node
 
 
+def create_tool_node(tool_executor: Callable):
+    """Create an async tool execution node for LangGraph.
+
+    The tool node:
+    1. Receives pending tool calls from agent
+    2. Executes each tool via the async tool_executor callback
+    3. Returns ToolMessages with results for the agent
+
+    Note: This returns an async function for use with ainvoke().
+    LangGraph supports async node functions natively.
+    """
+    async def tool_node(state: AgentState) -> Dict[str, Any]:
+        """Execute pending tool calls and return results as ToolMessages."""
+        tool_messages = []
+
+        for tool_call in state.get("pending_tool_calls", []):
+            tool_name = tool_call.get("name", "unknown")
+            tool_args = tool_call.get("args", {})
+            tool_id = tool_call.get("id", "")
+
+            logger.info(f"[LangGraph] Executing tool: {tool_name} with args: {tool_args}")
+
+            try:
+                # Directly await the async tool executor (proper async pattern)
+                result = await tool_executor(tool_name, tool_args)
+            except Exception as e:
+                logger.error(f"[LangGraph] Tool execution failed: {tool_name}", error=str(e))
+                result = {"error": str(e)}
+
+            # Create ToolMessage with result
+            tool_messages.append(ToolMessage(
+                content=json.dumps(result, default=str),
+                tool_call_id=tool_id,
+                name=tool_name
+            ))
+
+            logger.info(f"[LangGraph] Tool {tool_name} completed with result: {result}")
+
+        return {
+            "messages": tool_messages,
+            "pending_tool_calls": [],  # Clear pending after execution
+        }
+
+    return tool_node
+
+
 def should_continue(state: AgentState) -> str:
     """Determine if the agent should continue or end.
 
     This is the conditional edge function for LangGraph.
-    Returns "continue" to loop back to tools, or "end" to finish.
+    Returns "tools" to execute pending tool calls, or "end" to finish.
     """
     if state.get("should_continue", False):
         if state.get("iteration", 0) < state.get("max_iterations", 10):
-            return "continue"
+            return "tools"
     return "end"
 
 
-def build_agent_graph(chat_model):
-    """Build the LangGraph agent workflow.
+def build_agent_graph(chat_model, tools: List = None, tool_executor: Callable = None):
+    """Build the LangGraph agent workflow with optional tool support.
 
-    Architecture:
-        START -> agent -> (conditional) -> END
-                   ^            |
-                   |            v
-                   +--- tools --+  (future: tool execution loop)
+    Architecture (with tools):
+        START -> agent -> (conditional) -> tools -> agent -> ... -> END
+                             |
+                             +-> END (no tool calls)
 
-    For now, this is a simple single-node graph that can be extended
-    with tool nodes when tool integration is added.
+    Architecture (without tools):
+        START -> agent -> END
+
+    Args:
+        chat_model: The LangChain chat model
+        tools: Optional list of LangChain tools to bind to the model
+        tool_executor: Optional async callback to execute tools
     """
     # Create the graph with our state schema
     graph = StateGraph(AgentState)
 
+    # Bind tools to model if provided
+    model_with_tools = chat_model
+    if tools:
+        model_with_tools = chat_model.bind_tools(tools)
+        logger.info(f"[LangGraph] Bound {len(tools)} tools to model")
+
     # Add the agent node
-    agent_fn = create_agent_node(chat_model)
+    agent_fn = create_agent_node(model_with_tools)
     graph.add_node("agent", agent_fn)
 
     # Set entry point
     graph.set_entry_point("agent")
 
-    # Add conditional edge - currently always ends, but structured for tools
-    graph.add_conditional_edges(
-        "agent",
-        should_continue,
-        {
-            "continue": "agent",  # Loop back for multi-turn (future tools)
-            "end": END
-        }
-    )
+    if tools and tool_executor:
+        # Add tool execution node
+        tool_fn = create_tool_node(tool_executor)
+        graph.add_node("tools", tool_fn)
+
+        # Conditional routing: agent -> tools or end
+        graph.add_conditional_edges(
+            "agent",
+            should_continue,
+            {
+                "tools": "tools",
+                "end": END
+            }
+        )
+
+        # Tools always route back to agent
+        graph.add_edge("tools", "agent")
+
+        logger.info("[LangGraph] Built graph with tool execution loop")
+    else:
+        # Simple graph without tools
+        graph.add_conditional_edges(
+            "agent",
+            should_continue,
+            {
+                "tools": "agent",  # Fallback loop (shouldn't happen without tools)
+                "end": END
+            }
+        )
 
     # Compile the graph
     return graph.compile()
@@ -372,12 +469,14 @@ class AIService:
 
     async def execute_agent(self, node_id: str, parameters: Dict[str, Any],
                             memory_data: Optional[Dict[str, Any]] = None,
-                            broadcaster = None) -> Dict[str, Any]:
+                            tool_data: Optional[List[Dict[str, Any]]] = None,
+                            broadcaster = None,
+                            workflow_id: Optional[str] = None) -> Dict[str, Any]:
         """Execute AI Agent using LangGraph state machine.
 
         This method uses LangGraph for structured agent execution with:
         - State management via TypedDict
-        - Conditional edges for future tool integration
+        - Tool calling via bind_tools and tool execution node
         - Message accumulation via operator.add pattern
         - Real-time status broadcasts for UI animations
 
@@ -386,20 +485,22 @@ class AIService:
             parameters: Node parameters including prompt, model, etc.
             memory_data: Optional memory data from connected simpleMemory node
                         containing session_id, window_size for conversation history
+            tool_data: Optional list of tool configurations from connected tool nodes
             broadcaster: Optional StatusBroadcaster for real-time UI updates
+            workflow_id: Optional workflow ID for scoped status broadcasts
         """
         start_time = time.time()
         provider = 'unknown'
         model = 'unknown'
 
-        # Helper to broadcast status updates
+        # Helper to broadcast status updates with workflow_id for proper scoping
         async def broadcast_status(phase: str, details: Dict[str, Any] = None):
             if broadcaster:
                 await broadcaster.update_node_status(node_id, "executing", {
                     "phase": phase,
                     "agent_type": "langgraph",
                     **(details or {})
-                })
+                }, workflow_id=workflow_id)
 
         try:
             # Extract top-level parameters (always visible in UI)
@@ -417,7 +518,7 @@ class AIService:
             temperature = float(flattened.get('temperature', 0.7))
             max_tokens = int(flattened.get('max_tokens') or flattened.get('maxTokens') or 1000)
 
-            logger.info(f"[LangGraph] AI Agent execution - Provider: {provider}, Model: {model}, Memory: {bool(memory_data)}")
+            logger.info(f"[LangGraph] AI Agent execution - Provider: {provider}, Model: {model}, Memory: {bool(memory_data)}, Tools: {len(tool_data) if tool_data else 0}")
 
             # If no model specified or model doesn't match provider, use default from registry
             if not model or not is_model_valid_for_provider(model, provider):
@@ -484,22 +585,70 @@ class AIService:
             # Add current user prompt
             initial_messages.append(HumanMessage(content=prompt))
 
+            # Build tools if provided
+            tools = []
+            tool_configs = {}
+
+            if tool_data:
+                await broadcast_status("building_tools", {
+                    "message": f"Building {len(tool_data)} tool(s)...",
+                    "tool_count": len(tool_data)
+                })
+
+                for tool_info in tool_data:
+                    tool, config = self._build_tool_from_node(tool_info)
+                    if tool:
+                        tools.append(tool)
+                        tool_configs[tool.name] = config
+
+                logger.info(f"[LangGraph] Built {len(tools)} tools: {[t.name for t in tools]}")
+
+            # Create tool executor callback
+            async def tool_executor(tool_name: str, tool_args: Dict) -> Any:
+                """Execute a tool by name."""
+                from services.handlers.tools import execute_tool
+
+                logger.info(f"[LangGraph] tool_executor called for: {tool_name}, broadcasting executing_tool status")
+                await broadcast_status("executing_tool", {
+                    "message": f"Executing tool: {tool_name}",
+                    "tool_name": tool_name,
+                    "tool_args": tool_args
+                })
+                logger.info(f"[LangGraph] broadcast_status completed for executing_tool: {tool_name}")
+
+                config = tool_configs.get(tool_name, {})
+                result = await execute_tool(tool_name, tool_args, config)
+
+                await broadcast_status("tool_completed", {
+                    "message": f"Tool completed: {tool_name}",
+                    "tool_name": tool_name,
+                    "result_preview": str(result)[:100]
+                })
+
+                return result
+
             # Broadcast: Building graph
             await broadcast_status("building_graph", {
                 "message": "Building LangGraph agent...",
                 "message_count": len(initial_messages),
                 "has_memory": bool(session_id),
-                "history_count": history_count
+                "history_count": history_count,
+                "tool_count": len(tools)
             })
 
             # Build and execute LangGraph agent
-            logger.info(f"[LangGraph] Building agent graph with {len(initial_messages)} initial messages")
-            agent_graph = build_agent_graph(chat_model)
+            logger.info(f"[LangGraph] Building agent graph with {len(initial_messages)} initial messages and {len(tools)} tools")
+            agent_graph = build_agent_graph(
+                chat_model,
+                tools=tools if tools else None,
+                tool_executor=tool_executor if tools else None
+            )
 
             # Create initial state
             initial_state: AgentState = {
                 "messages": initial_messages,
                 "tool_outputs": {},
+                "pending_tool_calls": [],
                 "iteration": 0,
                 "max_iterations": 10,
                 "should_continue": False
@@ -515,8 +664,9 @@ class AIService:
                 "history_count": history_count
             })
 
-            # Execute the graph
-            final_state = agent_graph.invoke(initial_state)
+            # Execute the graph using ainvoke for proper async support
+            # This allows async tool nodes and WebSocket broadcasts to work correctly
+            final_state = await agent_graph.ainvoke(initial_state)
 
             # Extract the AI response (last message in the accumulated messages)
             all_messages = final_state["messages"]
@@ -588,3 +738,149 @@ class AIService:
                 "execution_time": time.time() - start_time,
                 "timestamp": datetime.now().isoformat()
             }
+
+    def _build_tool_from_node(self, tool_info: Dict[str, Any]) -> tuple:
+        """Convert a node configuration into a LangChain StructuredTool.
+
+        Args:
+            tool_info: Dict containing node_id, node_type, parameters, label
+
+        Returns:
+            Tuple of (StructuredTool, config_dict) or (None, None) on failure
+        """
+        # Default tool names matching frontend toolNodes.ts definitions
+        DEFAULT_TOOL_NAMES = {
+            'calculatorTool': 'calculator',
+            'currentTimeTool': 'get_current_time',
+            'webSearchTool': 'web_search',
+        }
+        DEFAULT_TOOL_DESCRIPTIONS = {
+            'calculatorTool': 'Perform mathematical calculations. Operations: add, subtract, multiply, divide, power, sqrt, mod, abs',
+            'currentTimeTool': 'Get the current date and time. Optionally specify timezone.',
+            'webSearchTool': 'Search the web for information. Returns relevant search results.',
+        }
+
+        try:
+            node_type = tool_info.get('node_type', '')
+            node_params = tool_info.get('parameters', {})
+            node_label = tool_info.get('label', node_type)
+            node_id = tool_info.get('node_id', '')
+
+            # Get tool name from params, then type-specific default, then generic fallback
+            tool_name = (
+                node_params.get('toolName') or
+                DEFAULT_TOOL_NAMES.get(node_type) or
+                f"tool_{node_label}".replace(' ', '_').replace('-', '_').lower()
+            )
+            tool_description = (
+                node_params.get('toolDescription') or
+                DEFAULT_TOOL_DESCRIPTIONS.get(node_type) or
+                f"Execute {node_label} node"
+            )
+
+            # Clean tool name (LangChain requires alphanumeric + underscores)
+            import re
+            tool_name = re.sub(r'[^a-zA-Z0-9_]', '_', tool_name)
+
+            # Build schema based on node type
+            schema = self._get_tool_schema(node_type, node_params)
+
+            # Create StructuredTool - the func is a placeholder, actual execution via tool_executor
+            def placeholder_func(**kwargs):
+                return kwargs
+
+            tool = StructuredTool.from_function(
+                name=tool_name,
+                description=tool_description,
+                func=placeholder_func,
+                args_schema=schema
+            )
+
+            config = {
+                'node_type': node_type,
+                'node_id': node_id,
+                'parameters': node_params,
+                'label': node_label
+            }
+
+            logger.info(f"[LangGraph] Built tool '{tool_name}' from node type '{node_type}'")
+            return tool, config
+
+        except Exception as e:
+            logger.error(f"[LangGraph] Failed to build tool from node: {e}")
+            return None, None
+
+    def _get_tool_schema(self, node_type: str, params: Dict[str, Any]) -> Type[BaseModel]:
+        """Get Pydantic schema for tool based on node type.
+
+        Args:
+            node_type: The node type (e.g., 'calculatorTool', 'httpRequest')
+            params: Node parameters
+
+        Returns:
+            Pydantic BaseModel class for the tool's arguments
+        """
+        # Calculator tool schema
+        if node_type == 'calculatorTool':
+            class CalculatorSchema(BaseModel):
+                """Schema for calculator tool arguments."""
+                operation: str = Field(
+                    description="Math operation: add, subtract, multiply, divide, power, sqrt, mod, abs"
+                )
+                a: float = Field(description="First number")
+                b: float = Field(default=0, description="Second number (not needed for sqrt, abs)")
+
+            return CalculatorSchema
+
+        # HTTP Request tool schema
+        if node_type in ('httpRequest', 'httpRequestTool'):
+            class HttpRequestSchema(BaseModel):
+                """Schema for HTTP request tool arguments."""
+                url: str = Field(description="URL path or full URL to request")
+                method: str = Field(default="GET", description="HTTP method: GET, POST, PUT, DELETE")
+                body: Optional[Dict[str, Any]] = Field(default=None, description="Request body as JSON object")
+
+            return HttpRequestSchema
+
+        # Python executor tool schema
+        if node_type == 'pythonExecutor':
+            class PythonCodeSchema(BaseModel):
+                """Schema for Python code execution."""
+                code: str = Field(description="Python code to execute")
+
+            return PythonCodeSchema
+
+        # Current time tool schema
+        if node_type == 'currentTimeTool':
+            class CurrentTimeSchema(BaseModel):
+                """Schema for current time tool arguments."""
+                timezone: str = Field(
+                    default="UTC",
+                    description="Timezone (e.g., UTC, America/New_York, Europe/London)"
+                )
+
+            return CurrentTimeSchema
+
+        # Web search tool schema
+        if node_type == 'webSearchTool':
+            class WebSearchSchema(BaseModel):
+                """Schema for web search tool arguments."""
+                query: str = Field(description="Search query to look up on the web")
+
+            return WebSearchSchema
+
+        # WhatsApp send schema (existing node used as tool)
+        if node_type == 'whatsappSend':
+            class WhatsAppSendSchema(BaseModel):
+                """Schema for WhatsApp send tool arguments."""
+                phone_number: str = Field(description="Phone number to send message to (e.g., +1234567890)")
+                message: str = Field(description="Message text to send")
+
+            return WhatsAppSendSchema
+
+        # Generic schema for other nodes
+        class GenericToolSchema(BaseModel):
+            """Generic schema for tool arguments."""
+            input: str = Field(description="Input data for the tool")
+
+        return GenericToolSchema

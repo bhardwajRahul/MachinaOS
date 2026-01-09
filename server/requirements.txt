@@ -49,6 +49,9 @@ googlemaps>=4.10.0
 # Scheduling
 APScheduler>=3.10.0
 
+# Web Search
+duckduckgo-search>=8.0.0
+
 # Authentication
 bcrypt>=4.1.0
 python-jose[cryptography]>=3.3.0

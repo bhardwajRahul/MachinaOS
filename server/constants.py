@@ -24,8 +24,27 @@ AI_MEMORY_TYPES: FrozenSet[str] = frozenset([
     'simpleMemory',
 ])
 
+# Tool node types (connect to AI Agent's input-tools handle)
+AI_TOOL_TYPES: FrozenSet[str] = frozenset([
+    'calculatorTool',
+    'currentTimeTool',
+    'webSearchTool',
+])
+
 # All AI-related node types (for API key injection)
 AI_MODEL_TYPES: FrozenSet[str] = AI_AGENT_TYPES | AI_CHAT_MODEL_TYPES
+
+# =============================================================================
+# CONFIG NODE TYPES (excluded from workflow execution)
+# =============================================================================
+
+# Config nodes provide configuration to other nodes via special handles
+# (input-memory, input-tools, input-model). They don't execute independently.
+CONFIG_NODE_TYPES: FrozenSet[str] = (
+    AI_MEMORY_TYPES |  # Memory nodes (connect to input-memory)
+    AI_TOOL_TYPES |     # Tool nodes (connect to input-tools)
+    AI_CHAT_MODEL_TYPES  # Model config nodes (connect to input-model)
+)
 
 # =============================================================================
 # GOOGLE MAPS NODE TYPES

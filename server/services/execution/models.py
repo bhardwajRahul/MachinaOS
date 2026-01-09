@@ -302,7 +302,12 @@ class ExecutionContext:
 
         Supports pre-executed nodes (marked with _pre_executed=True) for
         event-driven execution where trigger nodes are already complete.
+
+        Config nodes (memory, tools, model configs) are excluded from execution
+        as they provide configuration to other nodes via special handles.
         """
+        from constants import CONFIG_NODE_TYPES
+
         execution_id = str(uuid.uuid4())
         ctx = cls(
             execution_id=execution_id,
@@ -312,10 +317,15 @@ class ExecutionContext:
             edges=edges or [],
         )
 
-        # Initialize node executions for all nodes
+        # Initialize node executions for all nodes (excluding config nodes)
         for node in (nodes or []):
             node_id = node.get("id")
             node_type = node.get("type", "unknown")
+
+            # Skip config nodes - they don't execute independently
+            # They provide configuration to other nodes via special handles
+            if node_type in CONFIG_NODE_TYPES:
+                continue
 
             # Check if node is pre-executed (e.g., trigger that already fired)
             if node.get("_pre_executed"):
