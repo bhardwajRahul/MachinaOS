@@ -127,7 +127,7 @@ export const useReactFlowNodes = ({ setNodes, setEdges }: UseReactFlowNodesProps
     (params: Edge | Connection) => {
       const { currentWorkflow } = useAppStore.getState();
       const nodes = currentWorkflow?.nodes || [];
-      
+
       // Convert Edge to Connection format for validation
       const connection: Connection = {
         source: params.source,
@@ -135,7 +135,15 @@ export const useReactFlowNodes = ({ setNodes, setEdges }: UseReactFlowNodesProps
         sourceHandle: params.sourceHandle ?? null,
         targetHandle: params.targetHandle ?? null
       };
-      
+
+      // Debug: Log all connection attempts
+      console.log('[onConnect] Connection attempt:', {
+        source: params.source,
+        target: params.target,
+        sourceHandle: params.sourceHandle,
+        targetHandle: params.targetHandle
+      });
+
       // Validate connection before adding
       if (!isValidConnection(connection, nodes)) {
         // Show user feedback for rejected connection (non-blocking)
@@ -146,7 +154,8 @@ export const useReactFlowNodes = ({ setNodes, setEdges }: UseReactFlowNodesProps
         }, 0);
         return;
       }
-      
+
+      console.log('[onConnect] Connection accepted, adding edge');
       // Add the connection
       setEdges((eds) => addEdge(params, eds));
     },

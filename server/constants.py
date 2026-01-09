@@ -29,6 +29,7 @@ AI_TOOL_TYPES: FrozenSet[str] = frozenset([
     'calculatorTool',
     'currentTimeTool',
     'webSearchTool',
+    'androidTool',
 ])
 
 # All AI-related node types (for API key injection)

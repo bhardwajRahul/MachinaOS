@@ -48,12 +48,20 @@ function createAndroidServiceNode(config: {
       description: 'Service trigger',
       required: false
     }],
-    outputs: [{
-      name: 'main',
-      displayName: 'Output',
-      type: 'main' as NodeConnectionType,
-      description: 'Service execution result'
-    }],
+    outputs: [
+      {
+        name: 'main',
+        displayName: 'Output',
+        type: 'main' as NodeConnectionType,
+        description: 'Service execution result'
+      },
+      {
+        name: 'tool',
+        displayName: 'Tool Output',
+        type: 'main' as NodeConnectionType,
+        description: 'Connect to Android Toolkit (top handle)'
+      }
+    ],
     properties: [
       // Hidden service_id - automatically set based on node type
       {

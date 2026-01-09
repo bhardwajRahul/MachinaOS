@@ -617,6 +617,8 @@ class AIService:
                 logger.info(f"[LangGraph] broadcast_status completed for executing_tool: {tool_name}")
 
                 config = tool_configs.get(tool_name, {})
+                # Include workflow_id in config so tool handlers can broadcast with proper scoping
+                config['workflow_id'] = workflow_id
                 result = await execute_tool(tool_name, tool_args, config)
 
                 await broadcast_status("tool_completed", {
@@ -743,7 +745,7 @@ class AIService:
         """Convert a node configuration into a LangChain StructuredTool.
 
         Args:
-            tool_info: Dict containing node_id, node_type, parameters, label
+            tool_info: Dict containing node_id, node_type, parameters, label, connected_services (for androidTool)
 
         Returns:
             Tuple of (StructuredTool, config_dict) or (None, None) on failure
@@ -753,11 +755,13 @@ class AIService:
             'calculatorTool': 'calculator',
             'currentTimeTool': 'get_current_time',
             'webSearchTool': 'web_search',
+            'androidTool': 'android_device',
         }
         DEFAULT_TOOL_DESCRIPTIONS = {
             'calculatorTool': 'Perform mathematical calculations. Operations: add, subtract, multiply, divide, power, sqrt, mod, abs',
             'currentTimeTool': 'Get the current date and time. Optionally specify timezone.',
             'webSearchTool': 'Search the web for information. Returns relevant search results.',
+            'androidTool': 'Control Android device. Available services are determined by connected nodes.',
         }
 
         try:
@@ -765,6 +769,7 @@ class AIService:
             node_params = tool_info.get('parameters', {})
             node_label = tool_info.get('label', node_type)
             node_id = tool_info.get('node_id', '')
+            connected_services = tool_info.get('connected_services', [])
 
             # Get tool name from params, then type-specific default, then generic fallback
             tool_name = (
@@ -778,12 +783,20 @@ class AIService:
                 f"Execute {node_label} node"
             )
 
+            # For androidTool, enhance description with connected services
+            if node_type == 'androidTool' and connected_services:
+                service_names = [s.get('label') or s.get('service_id', 'unknown') for s in connected_services]
+                tool_description = f"{tool_description} Connected: {', '.join(service_names)}"
+
             # Clean tool name (LangChain requires alphanumeric + underscores)
             import re
             tool_name = re.sub(r'[^a-zA-Z0-9_]', '_', tool_name)
 
-            # Build schema based on node type
-            schema = self._get_tool_schema(node_type, node_params)
+            # Build schema based on node type - pass connected_services for androidTool
+            schema_params = dict(node_params)
+            if connected_services:
+                schema_params['connected_services'] = connected_services
+            schema = self._get_tool_schema(node_type, schema_params)
 
             # Create StructuredTool - the func is a placeholder, actual execution via tool_executor
             def placeholder_func(**kwargs):
@@ -796,11 +809,13 @@ class AIService:
                 args_schema=schema
             )
 
+            # Build config dict - include connected_services for toolkit nodes
             config = {
                 'node_type': node_type,
                 'node_id': node_id,
                 'parameters': node_params,
-                'label': node_label
+                'label': node_label,
+                'connected_services': connected_services  # Pass through for execution
             }
 
             logger.info(f"[LangGraph] Built tool '{tool_name}' from node type '{node_type}'")
@@ -877,6 +892,48 @@ class AIService:
                 message: str = Field(description="Message text to send")
 
             return WhatsAppSendSchema
+
+        # Android toolkit schema - dynamic based on connected services
+        # Follows LangChain dynamic tool binding pattern
+        if node_type == 'androidTool':
+            connected_services = params.get('connected_services', [])
+
+            if not connected_services:
+                # No services connected - minimal schema with helpful error
+                class EmptyAndroidSchema(BaseModel):
+                    """Android toolkit with no connected services."""
+                    query: str = Field(
+                        default="status",
+                        description="No Android services connected. Connect Android nodes to the toolkit."
+                    )
+                return EmptyAndroidSchema
+
+            # Build dynamic service list for schema description
+            from services.android_service import SERVICE_ACTIONS
+
+            service_info = []
+            for svc in connected_services:
+                svc_id = svc.get('service_id') or svc.get('node_type', 'unknown')
+                actions = SERVICE_ACTIONS.get(svc_id, [])
+                action_list = [a['value'] for a in actions] if actions else ['status']
+                service_info.append(f"{svc_id}: {'/'.join(action_list)}")
+
+            services_description = "; ".join(service_info)
+
+            class AndroidToolSchema(BaseModel):
+                """Schema for Android device control via connected services."""
+                service_id: str = Field(
+                    description=f"Service to use. Connected: {services_description}"
+                )
+                action: str = Field(
+                    description="Action to perform (see service list for available actions)"
+                )
+                parameters: Optional[Dict[str, Any]] = Field(
+                    default=None,
+                    description="Action parameters. Examples: {package_name: 'com.app'} for app_launcher, {volume: 50} for audio"
+                )
+
+            return AndroidToolSchema
 
         # Generic schema for other nodes
         class GenericToolSchema(BaseModel):

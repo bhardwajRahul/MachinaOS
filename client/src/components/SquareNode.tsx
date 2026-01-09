@@ -14,6 +14,9 @@ import { PlayCircleFilled, ScheduleOutlined } from '@ant-design/icons';
 // All Android node types combined
 const ALL_ANDROID_NODE_TYPES = [...ANDROID_SERVICE_NODE_TYPES, ...ANDROID_DEVICE_NODE_TYPES];
 
+// Android service nodes that can connect to Android Toolkit as tools
+const ANDROID_TOOL_CAPABLE_NODES = ANDROID_SERVICE_NODE_TYPES;
+
 // Google Maps node types
 const GOOGLE_MAPS_NODE_TYPES = ['createMap', 'addLocations', 'showNearbyPlaces'];
 
@@ -58,6 +61,9 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
 
   // Check if this is an Android node
   const isAndroidNode = type ? ALL_ANDROID_NODE_TYPES.includes(type) : false;
+
+  // Check if this node can be used as a tool (connects to Android Toolkit)
+  const isToolCapable = type ? ANDROID_TOOL_CAPABLE_NODES.includes(type) : false;
 
   // Android connection status from WebSocket (real-time updates)
   // Service nodes need a paired device to execute, not just relay connection
@@ -566,6 +572,36 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
           </div>
         )}
 
+        {/* Animated Border - shows when tool-capable node is being executed via toolkit */}
+        {isExecuting && isToolCapable && (
+          <div
+            style={{
+              position: 'absolute',
+              top: -3,
+              left: -3,
+              right: -3,
+              bottom: -3,
+              borderRadius: `calc(${theme.borderRadius.lg} + 1px)`,
+              border: `2px solid ${theme.dracula.purple}`,
+              animation: 'toolPulse 0.8s ease-in-out infinite',
+              zIndex: 50,
+              pointerEvents: 'none',
+            }}
+          />
+        )}
+        <style>{`
+          @keyframes toolPulse {
+            0%, 100% {
+              border-color: ${theme.dracula.cyan};
+              box-shadow: 0 0 8px ${theme.dracula.cyan}80, inset 0 0 4px ${theme.dracula.cyan}40;
+            }
+            50% {
+              border-color: ${theme.dracula.purple};
+              box-shadow: 0 0 12px ${theme.dracula.purple}80, inset 0 0 6px ${theme.dracula.purple}40;
+            }
+          }
+        `}</style>
+
         {/* Service Icon */}
         {getServiceIcon()}
 
@@ -664,6 +700,29 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
           }}
           title="Service Output"
         />
+
+        {/* Top Tool Output Handle - only for Android service nodes that can connect to Toolkit */}
+        {isToolCapable && (
+          <Handle
+            id="output-tool"
+            type="source"
+            position={Position.Top}
+            isConnectable={isConnectable}
+            style={{
+              position: 'absolute',
+              top: '-6px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: theme.nodeSize.handle,
+              height: theme.nodeSize.handle,
+              backgroundColor: '#3DDC84', // Android green to match Toolkit
+              border: `2px solid ${theme.isDarkMode ? theme.colors.background : '#ffffff'}`,
+              borderRadius: '50%',
+              zIndex: 20
+            }}
+            title="Connect to Android Toolkit"
+          />
+        )}
 
         {/* Output Data Indicator - shows when node has execution output */}
         {executionStatus === 'success' && nodeStatus?.data && (

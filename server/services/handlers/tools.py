@@ -56,6 +56,10 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
     if node_type == 'whatsappSend':
         return await _execute_whatsapp_send(tool_args, config.get('parameters', {}))
 
+    # Android toolkit - routes to connected service nodes
+    if node_type == 'androidTool':
+        return await _execute_android_toolkit(tool_args, config)
+
     # Generic fallback for unknown node types
     logger.warning(f"[Tool] Unknown tool type: {node_type}, using generic handler")
     return await _execute_generic(tool_args, config)
@@ -451,6 +455,139 @@ async def _execute_whatsapp_send(args: Dict[str, Any],
     except Exception as e:
         logger.error(f"[WhatsApp] Error: {e}")
         return {"error": f"WhatsApp send failed: {str(e)}"}
+
+
+async def _execute_android_toolkit(args: Dict[str, Any],
+                                    config: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute Android toolkit by routing to connected service.
+
+    Follows n8n Sub-Node execution pattern - the toolkit routes
+    to the appropriate connected Android service node.
+
+    Uses the existing AndroidService which handles both relay (remote)
+    and local HTTP connections automatically.
+
+    Args:
+        args: LLM-provided arguments {service_id, action, parameters}
+        config: Toolkit config with connected_services list
+
+    Returns:
+        Service execution result
+    """
+    from services.android_service import AndroidService
+    from services.status_broadcaster import get_status_broadcaster
+
+    service_id = args.get('service_id', '')
+    action = args.get('action', '')
+    parameters = args.get('parameters') or {}
+
+    connected_services = config.get('connected_services', [])
+
+    # Validate service_id provided
+    if not service_id:
+        available = [s.get('service_id') or s.get('node_type') for s in connected_services]
+        return {
+            "error": "No service_id provided",
+            "hint": f"Available services: {', '.join(available)}" if available else "No services connected"
+        }
+
+    # Find matching connected service
+    target_service = None
+    for svc in connected_services:
+        svc_id = svc.get('service_id') or svc.get('node_type')
+        if svc_id == service_id:
+            target_service = svc
+            break
+
+    if not target_service:
+        available = [s.get('service_id') or s.get('node_type') for s in connected_services]
+        return {
+            "error": f"Service '{service_id}' not connected to toolkit",
+            "available_services": available
+        }
+
+    # Get connection parameters from connected Android node
+    svc_params = target_service.get('parameters', {})
+    host = svc_params.get('android_host', 'localhost')
+    port = int(svc_params.get('android_port', 8888))
+
+    # Use provided action, or fall back to node's default action
+    if not action:
+        action = svc_params.get('action') or target_service.get('action', 'status')
+
+    # Get the connected service's node_id for status broadcast
+    service_node_id = target_service.get('node_id')
+    # Get workflow_id from config for proper status scoping
+    workflow_id = config.get('workflow_id')
+
+    logger.info(f"[Android Toolkit] Executing {service_id}.{action} via '{target_service.get('label')}' (node: {service_node_id}, workflow: {workflow_id})")
+
+    # Broadcast executing status for the connected Android service node
+    # This makes the SquareNode show the animation
+    broadcaster = get_status_broadcaster()
+    if service_node_id:
+        await broadcaster.update_node_status(
+            service_node_id,
+            "executing",
+            {"message": f"Executing {action} via AI Agent toolkit"},
+            workflow_id=workflow_id
+        )
+
+    try:
+        # Use AndroidService which handles relay vs local connection automatically
+        android_service = AndroidService()
+        result = await android_service.execute_service(
+            node_id=config.get('node_id', 'toolkit'),
+            service_id=service_id,
+            action=action,
+            parameters=parameters,
+            android_host=host,
+            android_port=port
+        )
+
+        # Broadcast success/error status for the connected service node
+        if service_node_id:
+            if result.get('success'):
+                await broadcaster.update_node_status(
+                    service_node_id,
+                    "success",
+                    {"message": f"{action} completed", "result": result.get('result', {})},
+                    workflow_id=workflow_id
+                )
+            else:
+                await broadcaster.update_node_status(
+                    service_node_id,
+                    "error",
+                    {"message": result.get('error', 'Unknown error')},
+                    workflow_id=workflow_id
+                )
+
+        # Extract and return the relevant data
+        if result.get('success'):
+            return {
+                "success": True,
+                "service": service_id,
+                "action": action,
+                "data": result.get('result', {}).get('data', result.get('result', {}))
+            }
+        else:
+            return {
+                "error": result.get('error', 'Unknown error'),
+                "service": service_id,
+                "action": action
+            }
+
+    except Exception as e:
+        logger.error(f"[Android Toolkit] Unexpected error: {e}")
+        # Broadcast error status for the connected service node
+        if service_node_id:
+            await broadcaster.update_node_status(
+                service_node_id,
+                "error",
+                {"message": str(e)},
+                workflow_id=workflow_id
+            )
+        return {"error": str(e)}
 
 
 async def _execute_generic(args: Dict[str, Any],

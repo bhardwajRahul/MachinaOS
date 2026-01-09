@@ -2,6 +2,7 @@
 
 from typing import Dict, Any, List, TYPE_CHECKING
 from core.logging import get_logger
+from constants import ANDROID_SERVICE_NODE_TYPES
 
 if TYPE_CHECKING:
     from services.ai import AIService
@@ -38,6 +39,12 @@ async def handle_ai_agent(
     memory_data = None
     tool_data: List[Dict[str, Any]] = []  # Collect connected tool nodes
 
+    # DEBUG: Log what we're working with
+    logger.info(f"[AI Agent] Processing node {node_id}, context has {len(edges) if edges else 0} edges, {len(nodes) if nodes else 0} nodes")
+    if edges:
+        toolkit_edges = [e for e in edges if 'androidTool' in str(e)]
+        logger.info(f"[AI Agent] Toolkit-related edges: {toolkit_edges}")
+
     if edges and nodes:
         for edge in edges:
             if edge.get('target') != node_id:
@@ -69,12 +76,61 @@ async def handle_ai_agent(
             elif target_handle == 'input-tools':
                 tool_type = source_node.get('type')
                 tool_params = await database.get_node_parameters(source_node_id) or {}
-                tool_data.append({
+
+                # Build base tool entry
+                tool_entry = {
                     'node_id': source_node_id,
                     'node_type': tool_type,
                     'parameters': tool_params,
                     'label': source_node.get('data', {}).get('label', tool_type)
-                })
+                }
+
+                # Special handling for androidTool - discover connected Android services
+                # Follows n8n Sub-Node pattern
+                if tool_type == 'androidTool':
+                    connected_services = []
+
+                    # Debug: log all edges to understand the structure
+                    logger.info(f"[Android Toolkit] Looking for edges targeting toolkit node: {source_node_id}")
+                    logger.info(f"[Android Toolkit] Total edges in context: {len(edges)}")
+                    for i, e in enumerate(edges):
+                        logger.info(f"[Android Toolkit] Edge {i}: source={e.get('source')}, target={e.get('target')}, sourceHandle={e.get('sourceHandle')}, targetHandle={e.get('targetHandle')}")
+
+                    toolkit_edges = [e for e in edges if e.get('target') == source_node_id]
+                    logger.info(f"[Android Toolkit] Edges targeting toolkit {source_node_id}: {toolkit_edges}")
+
+                    # Scan edges for Android nodes connected to this toolkit
+                    for service_edge in edges:
+                        # Skip if not targeting this androidTool node
+                        if service_edge.get('target') != source_node_id:
+                            continue
+
+                        target_handle = service_edge.get('targetHandle')
+                        # Accept input-main or no handle (ReactFlow may omit handle for single-input nodes)
+                        if target_handle is not None and target_handle != 'input-main':
+                            logger.debug(f"[Android Toolkit] Skipping edge with targetHandle: {target_handle}")
+                            continue
+
+                        android_node_id = service_edge.get('source')
+                        android_node = next((n for n in nodes if n.get('id') == android_node_id), None)
+
+                        if android_node and android_node.get('type') in ANDROID_SERVICE_NODE_TYPES:
+                            android_params = await database.get_node_parameters(android_node_id) or {}
+                            connected_services.append({
+                                'node_id': android_node_id,
+                                'node_type': android_node.get('type'),
+                                'service_id': android_params.get('service_id'),
+                                'action': android_params.get('action'),  # Default action
+                                'parameters': android_params,
+                                'label': android_node.get('data', {}).get('label', android_node.get('type'))
+                            })
+                            logger.debug(f"Android toolkit connected service: {android_params.get('service_id')}")
+
+                    tool_entry['connected_services'] = connected_services
+                    logger.info(f"Android toolkit has {len(connected_services)} connected services",
+                               node_id=source_node_id, services=[s.get('service_id') for s in connected_services])
+
+                tool_data.append(tool_entry)
                 logger.info("AI Agent connected tool node", node_id=node_id, execution_id=execution_id,
                            tool_type=tool_type, tool_node_id=source_node_id)
 

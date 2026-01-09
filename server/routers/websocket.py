@@ -560,6 +560,14 @@ async def handle_deploy_workflow(data: Dict[str, Any], websocket: WebSocket) -> 
     edges = data.get("edges", [])
     session_id = data.get("session_id", "default")
 
+    # DEBUG: Log received edges to trace toolkit connection issues
+    logger.info(f"[Deploy] Received {len(edges)} edges for workflow {workflow_id}")
+    toolkit_edges = [e for e in edges if 'androidTool' in (e.get('source', '') + e.get('target', ''))]
+    if toolkit_edges:
+        logger.info(f"[Deploy] Android Toolkit edges: {toolkit_edges}")
+    else:
+        logger.info(f"[Deploy] No Android Toolkit edges found. All edges: {edges}")
+
     if not nodes:
         return {"success": False, "error": "No nodes provided"}
 

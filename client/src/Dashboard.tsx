@@ -17,6 +17,7 @@ import AIAgentNode from './components/AIAgentNode';
 import ModelNode from './components/ModelNode';
 import SquareNode from './components/SquareNode';
 import TriggerNode from './components/TriggerNode';
+import ToolkitNode from './components/ToolkitNode';
 import ConditionalEdge from './components/ConditionalEdge';
 import NodeContextMenu from './components/ui/NodeContextMenu';
 import { nodeDefinitions } from './nodeDefinitions';
@@ -96,8 +97,13 @@ const createNodeTypes = (): Record<string, React.ComponentType<any>> => {
       // Note: webhookTrigger is already handled as trigger above
       types[type] = SquareNode;
     } else if (TOOL_NODE_TYPES.includes(type)) {
-      // Tool nodes (Calculator, etc.) use circular ModelNode like Simple Memory
-      types[type] = ModelNode;
+      // Most tool nodes use circular ModelNode
+      // Exception: androidTool uses ToolkitNode with top/bottom handles
+      if (type === 'androidTool') {
+        types[type] = ToolkitNode;
+      } else {
+        types[type] = ModelNode;
+      }
     } else if (definition?.group?.includes('model')) {
       // Fallback for other model nodes
       types[type] = ModelNode;
@@ -588,6 +594,23 @@ const DashboardContent: React.FC = () => {
     try {
       // Settings are already synced to backend via WebSocket from SettingsPanel
       // Backend will use the stored settings
+
+      // DEBUG: Log edges being sent to deployment
+      console.log('[Dashboard] Deploying with edges:', {
+        edgeCount: edges.length,
+        edges: edges.map(e => ({
+          id: e.id,
+          source: e.source,
+          target: e.target,
+          sourceHandle: e.sourceHandle,
+          targetHandle: e.targetHandle
+        })),
+        // Check for toolkit connections specifically
+        toolkitEdges: edges.filter(e =>
+          e.target?.includes('androidTool') || e.source?.includes('androidTool')
+        )
+      });
+
       const result = await deployWorkflow(currentWorkflow.id, nodes, edges, 'default');
 
       if (!result.success) {
@@ -705,6 +728,12 @@ const DashboardContent: React.FC = () => {
   // and when backend executes nodes (NodeExecutor._prepare_parameters)
   useEffect(() => {
     if (currentWorkflow && currentWorkflow.id) {
+      console.log('[Dashboard] Sync Store -> ReactFlow', {
+        workflowId: currentWorkflow.id,
+        storeEdgeCount: (currentWorkflow.edges || []).length,
+        storeEdges: (currentWorkflow.edges || []).map(e => ({ id: e.id, source: e.source, target: e.target })),
+        lastModified: currentWorkflow.lastModified
+      });
       const workflowNodes = currentWorkflow.nodes || [];
       setNodes(workflowNodes);
       setEdges(currentWorkflow.edges || []);
@@ -717,22 +746,27 @@ const DashboardContent: React.FC = () => {
   // Sync ReactFlow state → workflow state (debounced for performance)
   useEffect(() => {
     if (!currentWorkflow || !currentWorkflow.id) return;
-    
+
     const timeoutId = setTimeout(() => {
       try {
         const currentNodesStr = JSON.stringify(sanitizeNodesForComparison(nodes));
         const currentEdgesStr = JSON.stringify(sanitizeEdgesForComparison(edges));
         const workflowNodesStr = JSON.stringify(sanitizeNodesForComparison(currentWorkflow.nodes || []));
         const workflowEdgesStr = JSON.stringify(sanitizeEdgesForComparison(currentWorkflow.edges || []));
-        
+
         if (currentNodesStr !== workflowNodesStr || currentEdgesStr !== workflowEdgesStr) {
+          console.log('[Dashboard] Syncing ReactFlow -> Store', {
+            reactFlowEdgeCount: edges.length,
+            storeEdgeCount: (currentWorkflow.edges || []).length,
+            newEdges: edges.filter(e => !(currentWorkflow.edges || []).find(we => we.id === e.id))
+          });
           updateWorkflow({ nodes, edges });
         }
       } catch (error) {
         console.warn('Failed to sync workflow state:', error);
       }
     }, theme.constants.debounceDelay.workflowUpdate);
-    
+
     return () => clearTimeout(timeoutId);
   }, [nodes, edges, currentWorkflow?.id, updateWorkflow]);
 

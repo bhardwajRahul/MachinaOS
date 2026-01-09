@@ -158,6 +158,51 @@ export const toolNodes: Record<string, INodeTypeDescription> = {
         description: 'Maximum number of results to return'
       }
     ]
+  },
+
+  // Android Toolkit - aggregates Android service nodes for AI Agent
+  // Follows n8n Sub-Node pattern and LangChain Toolkit pattern
+  androidTool: {
+    displayName: 'Android Toolkit',
+    name: 'androidTool',
+    icon: '📱',
+    group: ['ai', 'tool'],
+    version: 1,
+    subtitle: 'Device Control',
+    description: 'Aggregate Android service nodes into a single AI-callable tool. Connect Android nodes to enable those capabilities.',
+    defaults: { name: 'Android Toolkit', color: '#3DDC84' },
+    // Input for connecting Android service nodes (uses SquareNode's input-main)
+    inputs: [{
+      name: 'main',
+      displayName: 'Android Services',
+      type: 'main' as NodeConnectionType,
+      description: 'Connect Android service nodes (battery, wifi, apps, etc.)'
+    }],
+    // Output connects to AI Agent's input-tools handle (uses SquareNode's output-main)
+    outputs: [{
+      name: 'main',
+      displayName: 'Tool Output',
+      type: 'main' as NodeConnectionType,
+      description: 'Connect to AI Agent tool handle'
+    }],
+    properties: [
+      {
+        displayName: 'Tool Name',
+        name: 'toolName',
+        type: 'string',
+        default: 'android_device',
+        required: true,
+        description: 'Name the AI will use to call this tool'
+      },
+      {
+        displayName: 'Description',
+        name: 'toolDescription',
+        type: 'string',
+        default: 'Control Android device. Available services are determined by connected nodes.',
+        typeOptions: { rows: 2 },
+        description: 'Base description (connected services auto-appended)'
+      }
+    ]
   }
 };
 
@@ -166,4 +211,4 @@ export const toolNodes: Record<string, INodeTypeDescription> = {
 // ============================================================================
 
 // List of tool node types for identification
-export const TOOL_NODE_TYPES = ['calculatorTool', 'currentTimeTool', 'webSearchTool'];
+export const TOOL_NODE_TYPES = ['calculatorTool', 'currentTimeTool', 'webSearchTool', 'androidTool'];

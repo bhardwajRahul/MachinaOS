@@ -495,6 +495,7 @@ class DeploymentManager:
 
         # Build filtered graph
         run_filter = {trigger_node_id} | {n['id'] for n in downstream}
+        logger.info(f"[Run] run_filter has {len(run_filter)} nodes: {[n.get('type') for n in state.nodes if n['id'] in run_filter]}")
 
         filtered_nodes = []
         for node in state.nodes:
@@ -510,6 +511,7 @@ class DeploymentManager:
             e for e in state.edges
             if e.get('source') in run_filter and e.get('target') in run_filter
         ]
+        logger.info(f"[Run] filtered_edges: {len(filtered_edges)} edges (from {len(state.edges)} total)")
 
         # Execute filtered graph with deployment's workflow_id for scoped status
         status_callback = self._status_callbacks.get(workflow_id)
@@ -568,6 +570,18 @@ class DeploymentManager:
             is_config = handle and handle.startswith('input-') and handle != 'input-main'
             if is_config and target in downstream_ids and source not in downstream_ids:
                 downstream_ids.add(source)
+
+        # Include sub-nodes connected to toolkit nodes (n8n Sub-Node pattern)
+        # Android service nodes connect to androidTool's input-main, not config handles
+        # These need to be included so the toolkit can discover its connected services
+        toolkit_node_ids = {n['id'] for n in nodes if n.get('type') == 'androidTool' and n['id'] in downstream_ids}
+        for edge in edges:
+            target = edge.get('target')
+            source = edge.get('source')
+            # Include nodes that connect to toolkit nodes
+            if target in toolkit_node_ids and source not in downstream_ids:
+                downstream_ids.add(source)
+                logger.debug(f"[Deployment] Including sub-node {source} connected to toolkit {target}")
 
         return [n for n in nodes if n['id'] in downstream_ids]
 
