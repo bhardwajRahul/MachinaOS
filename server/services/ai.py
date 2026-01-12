@@ -608,24 +608,46 @@ class AIService:
                 """Execute a tool by name."""
                 from services.handlers.tools import execute_tool
 
-                logger.info(f"[LangGraph] tool_executor called for: {tool_name}, broadcasting executing_tool status")
+                config = tool_configs.get(tool_name, {})
+                tool_node_id = config.get('node_id')
+
+                logger.info(f"[LangGraph] tool_executor called for: {tool_name} (node_id: {tool_node_id})")
+
+                # Broadcast executing status to the AI Agent node
                 await broadcast_status("executing_tool", {
                     "message": f"Executing tool: {tool_name}",
                     "tool_name": tool_name,
                     "tool_args": tool_args
                 })
-                logger.info(f"[LangGraph] broadcast_status completed for executing_tool: {tool_name}")
 
-                config = tool_configs.get(tool_name, {})
+                # Also broadcast executing status directly to the tool node so it glows
+                if tool_node_id and broadcaster:
+                    await broadcaster.update_node_status(
+                        tool_node_id,
+                        "executing",
+                        {"message": f"Executing {tool_name}"},
+                        workflow_id=workflow_id
+                    )
+
                 # Include workflow_id in config so tool handlers can broadcast with proper scoping
                 config['workflow_id'] = workflow_id
                 result = await execute_tool(tool_name, tool_args, config)
 
+                # Broadcast completion to AI Agent node
                 await broadcast_status("tool_completed", {
                     "message": f"Tool completed: {tool_name}",
                     "tool_name": tool_name,
                     "result_preview": str(result)[:100]
                 })
+
+                # Broadcast success status to the tool node
+                if tool_node_id and broadcaster:
+                    await broadcaster.update_node_status(
+                        tool_node_id,
+                        "success",
+                        {"message": f"{tool_name} completed", "result": result},
+                        workflow_id=workflow_id
+                    )
 
                 return result
 

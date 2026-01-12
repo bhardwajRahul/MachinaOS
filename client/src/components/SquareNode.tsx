@@ -572,35 +572,6 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
           </div>
         )}
 
-        {/* Animated Border - shows when tool-capable node is being executed via toolkit */}
-        {isExecuting && isToolCapable && (
-          <div
-            style={{
-              position: 'absolute',
-              top: -3,
-              left: -3,
-              right: -3,
-              bottom: -3,
-              borderRadius: `calc(${theme.borderRadius.lg} + 1px)`,
-              border: `2px solid ${theme.dracula.purple}`,
-              animation: 'toolPulse 0.8s ease-in-out infinite',
-              zIndex: 50,
-              pointerEvents: 'none',
-            }}
-          />
-        )}
-        <style>{`
-          @keyframes toolPulse {
-            0%, 100% {
-              border-color: ${theme.dracula.cyan};
-              box-shadow: 0 0 8px ${theme.dracula.cyan}80, inset 0 0 4px ${theme.dracula.cyan}40;
-            }
-            50% {
-              border-color: ${theme.dracula.purple};
-              box-shadow: 0 0 12px ${theme.dracula.purple}80, inset 0 0 6px ${theme.dracula.purple}40;
-            }
-          }
-        `}</style>
 
         {/* Service Icon */}
         {getServiceIcon()}
