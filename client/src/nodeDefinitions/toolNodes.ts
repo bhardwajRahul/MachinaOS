@@ -185,24 +185,8 @@ export const toolNodes: Record<string, INodeTypeDescription> = {
       type: 'main' as NodeConnectionType,
       description: 'Connect to AI Agent tool handle'
     }],
-    properties: [
-      {
-        displayName: 'Tool Name',
-        name: 'toolName',
-        type: 'string',
-        default: 'android_device',
-        required: true,
-        description: 'Name the AI will use to call this tool'
-      },
-      {
-        displayName: 'Description',
-        name: 'toolDescription',
-        type: 'string',
-        default: 'Control Android device. Available services are determined by connected nodes.',
-        typeOptions: { rows: 2 },
-        description: 'Base description (connected services auto-appended)'
-      }
-    ]
+    // No properties - schema is managed by ToolSchemaEditor component
+    properties: []
   }
 };
 

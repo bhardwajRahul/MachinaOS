@@ -134,3 +134,28 @@ class ConversationMessage(SQLModel, table=True):
         default_factory=lambda: datetime.now(timezone.utc),
         sa_column=Column(DateTime(timezone=True), server_default=func.now())
     )
+
+
+class ToolSchema(SQLModel, table=True):
+    """Tool node schema configuration - stores LLM-visible schema for tool nodes.
+
+    This allows Android Toolkit and other aggregator nodes to update the schema
+    of connected tool nodes, providing the LLM with accurate capability information.
+    """
+
+    __tablename__ = "tool_schemas"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    node_id: str = Field(index=True, unique=True, max_length=255)
+    tool_name: str = Field(max_length=255)  # e.g., 'android_device', 'calculator'
+    tool_description: str = Field(max_length=2000)  # Description shown to LLM
+    schema_config: Dict[str, Any] = Field(sa_column=Column(JSON))  # Schema fields and types
+    connected_services: Optional[Dict[str, Any]] = Field(default=None, sa_column=Column(JSON))  # For toolkit nodes
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(DateTime(timezone=True), server_default=func.now())
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(DateTime(timezone=True), onupdate=func.now())
+    )

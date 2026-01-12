@@ -13,7 +13,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, BaseMessage, ToolMessage
 from langchain_core.tools import StructuredTool
 from langgraph.graph import StateGraph, END
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, create_model
 import json
 
 from core.config import Settings
@@ -596,7 +596,7 @@ class AIService:
                 })
 
                 for tool_info in tool_data:
-                    tool, config = self._build_tool_from_node(tool_info)
+                    tool, config = await self._build_tool_from_node(tool_info)
                     if tool:
                         tools.append(tool)
                         tool_configs[tool.name] = config
@@ -763,8 +763,11 @@ class AIService:
                 "timestamp": datetime.now().isoformat()
             }
 
-    def _build_tool_from_node(self, tool_info: Dict[str, Any]) -> tuple:
+    async def _build_tool_from_node(self, tool_info: Dict[str, Any]) -> tuple:
         """Convert a node configuration into a LangChain StructuredTool.
+
+        Uses database-stored schema as source of truth if available, otherwise
+        falls back to dynamic schema generation.
 
         Args:
             tool_info: Dict containing node_id, node_type, parameters, label, connected_services (for androidTool)
@@ -793,17 +796,29 @@ class AIService:
             node_id = tool_info.get('node_id', '')
             connected_services = tool_info.get('connected_services', [])
 
-            # Get tool name from params, then type-specific default, then generic fallback
-            tool_name = (
-                node_params.get('toolName') or
-                DEFAULT_TOOL_NAMES.get(node_type) or
-                f"tool_{node_label}".replace(' ', '_').replace('-', '_').lower()
-            )
-            tool_description = (
-                node_params.get('toolDescription') or
-                DEFAULT_TOOL_DESCRIPTIONS.get(node_type) or
-                f"Execute {node_label} node"
-            )
+            # Check database for stored schema (source of truth)
+            db_schema = await self.database.get_tool_schema(node_id) if node_id else None
+
+            if db_schema:
+                # Use database schema as source of truth
+                logger.info(f"[LangGraph] Using DB schema for tool node {node_id}")
+                tool_name = db_schema.get('tool_name', DEFAULT_TOOL_NAMES.get(node_type, f"tool_{node_label}"))
+                tool_description = db_schema.get('tool_description', DEFAULT_TOOL_DESCRIPTIONS.get(node_type, f"Execute {node_label}"))
+                # Use stored connected_services if available (for toolkit nodes)
+                if db_schema.get('connected_services'):
+                    connected_services = db_schema['connected_services']
+            else:
+                # Fall back to dynamic generation from node params
+                tool_name = (
+                    node_params.get('toolName') or
+                    DEFAULT_TOOL_NAMES.get(node_type) or
+                    f"tool_{node_label}".replace(' ', '_').replace('-', '_').lower()
+                )
+                tool_description = (
+                    node_params.get('toolDescription') or
+                    DEFAULT_TOOL_DESCRIPTIONS.get(node_type) or
+                    f"Execute {node_label} node"
+                )
 
             # For androidTool, enhance description with connected services
             if node_type == 'androidTool' and connected_services:
@@ -815,9 +830,12 @@ class AIService:
             tool_name = re.sub(r'[^a-zA-Z0-9_]', '_', tool_name)
 
             # Build schema based on node type - pass connected_services for androidTool
+            # If DB has schema_config, use it to build custom schema, otherwise use dynamic
             schema_params = dict(node_params)
             if connected_services:
                 schema_params['connected_services'] = connected_services
+            if db_schema and db_schema.get('schema_config'):
+                schema_params['db_schema_config'] = db_schema['schema_config']
             schema = self._get_tool_schema(node_type, schema_params)
 
             # Create StructuredTool - the func is a placeholder, actual execution via tool_executor
@@ -850,13 +868,21 @@ class AIService:
     def _get_tool_schema(self, node_type: str, params: Dict[str, Any]) -> Type[BaseModel]:
         """Get Pydantic schema for tool based on node type.
 
+        Uses db_schema_config from database if available (source of truth),
+        otherwise falls back to built-in schema definitions.
+
         Args:
             node_type: The node type (e.g., 'calculatorTool', 'httpRequest')
-            params: Node parameters
+            params: Node parameters, may include db_schema_config from database
 
         Returns:
             Pydantic BaseModel class for the tool's arguments
         """
+        # Check if we have a database-stored schema config (source of truth)
+        db_schema_config = params.get('db_schema_config')
+        if db_schema_config:
+            return self._build_schema_from_config(db_schema_config)
+
         # Calculator tool schema
         if node_type == 'calculatorTool':
             class CalculatorSchema(BaseModel):
@@ -963,3 +989,72 @@ class AIService:
             input: str = Field(description="Input data for the tool")
 
         return GenericToolSchema
+
+    def _build_schema_from_config(self, schema_config: Dict[str, Any]) -> Type[BaseModel]:
+        """Build a Pydantic schema from database-stored configuration.
+
+        Schema config format:
+        {
+            "description": "Schema description",
+            "fields": {
+                "field_name": {
+                    "type": "string" | "number" | "boolean" | "object" | "array",
+                    "description": "Field description",
+                    "required": True | False,
+                    "default": <optional default value>,
+                    "enum": [<optional enum values>]
+                }
+            }
+        }
+        """
+        fields_config = schema_config.get('fields', {})
+        schema_description = schema_config.get('description', 'Tool arguments schema')
+
+        # Build field annotations and defaults
+        annotations = {}
+        field_defaults = {}
+
+        TYPE_MAP = {
+            'string': str,
+            'number': float,
+            'integer': int,
+            'boolean': bool,
+            'object': Dict[str, Any],
+            'array': list,
+        }
+
+        for field_name, field_config in fields_config.items():
+            field_type_str = field_config.get('type', 'string')
+            field_type = TYPE_MAP.get(field_type_str, str)
+            field_description = field_config.get('description', '')
+            is_required = field_config.get('required', True)
+            default_value = field_config.get('default')
+            enum_values = field_config.get('enum')
+
+            # Handle optional fields
+            if not is_required:
+                field_type = Optional[field_type]
+
+            annotations[field_name] = field_type
+
+            # Build Field with description and enum if provided
+            field_kwargs = {'description': field_description}
+            if enum_values:
+                # For enums, include in description since Pydantic Field doesn't support enum directly
+                field_kwargs['description'] = f"{field_description} Options: {', '.join(str(v) for v in enum_values)}"
+
+            if default_value is not None:
+                field_defaults[field_name] = Field(default=default_value, **field_kwargs)
+            elif not is_required:
+                field_defaults[field_name] = Field(default=None, **field_kwargs)
+            else:
+                field_defaults[field_name] = Field(**field_kwargs)
+
+        # Create dynamic Pydantic model
+        DynamicSchema = create_model(
+            'DynamicToolSchema',
+            __doc__=schema_description,
+            **{name: (annotations[name], field_defaults[name]) for name in annotations}
+        )
+
+        return DynamicSchema

@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from contextlib import asynccontextmanager
 
 from core.config import Settings
-from models.database import NodeParameter, Workflow, Execution, APIKey, APIKeyValidation, NodeOutput, ConversationMessage
+from models.database import NodeParameter, Workflow, Execution, APIKey, APIKeyValidation, NodeOutput, ConversationMessage, ToolSchema
 from models.cache import CacheEntry  # SQLite-backed cache for Redis alternative
 from models.auth import User  # Import User model to ensure table creation
 from core.logging import get_logger
@@ -757,3 +757,111 @@ class Database:
         except Exception as e:
             logger.error("Failed to check cache exists", key=key, error=str(e))
             return False
+
+    # ============================================================================
+    # Tool Schemas (Source of truth for tool node configurations)
+    # ============================================================================
+
+    async def save_tool_schema(self, node_id: str, tool_name: str, tool_description: str,
+                               schema_config: Dict[str, Any],
+                               connected_services: Optional[Dict[str, Any]] = None) -> bool:
+        """Save or update tool schema for a node."""
+        try:
+            async with self.get_session() as session:
+                # Try to get existing schema
+                stmt = select(ToolSchema).where(ToolSchema.node_id == node_id)
+                result = await session.execute(stmt)
+                existing = result.scalar_one_or_none()
+
+                action = "updated"
+                if existing:
+                    existing.tool_name = tool_name
+                    existing.tool_description = tool_description
+                    existing.schema_config = schema_config
+                    existing.connected_services = connected_services
+                else:
+                    action = "created"
+                    existing = ToolSchema(
+                        node_id=node_id,
+                        tool_name=tool_name,
+                        tool_description=tool_description,
+                        schema_config=schema_config,
+                        connected_services=connected_services
+                    )
+                    session.add(existing)
+
+                await session.commit()
+                logger.info(f"[DB] Tool schema {action}", node_id=node_id, tool_name=tool_name)
+                return True
+
+        except Exception as e:
+            logger.error("Failed to save tool schema", node_id=node_id, error=str(e))
+            return False
+
+    async def get_tool_schema(self, node_id: str) -> Optional[Dict[str, Any]]:
+        """Get tool schema for a node."""
+        try:
+            async with self.get_session() as session:
+                stmt = select(ToolSchema).where(ToolSchema.node_id == node_id)
+                result = await session.execute(stmt)
+                schema = result.scalar_one_or_none()
+
+                if not schema:
+                    return None
+
+                return {
+                    "node_id": schema.node_id,
+                    "tool_name": schema.tool_name,
+                    "tool_description": schema.tool_description,
+                    "schema_config": schema.schema_config,
+                    "connected_services": schema.connected_services,
+                    "created_at": schema.created_at.isoformat() if schema.created_at else None,
+                    "updated_at": schema.updated_at.isoformat() if schema.updated_at else None
+                }
+
+        except Exception as e:
+            logger.error("Failed to get tool schema", node_id=node_id, error=str(e))
+            return None
+
+    async def delete_tool_schema(self, node_id: str) -> bool:
+        """Delete tool schema for a node."""
+        try:
+            async with self.get_session() as session:
+                stmt = select(ToolSchema).where(ToolSchema.node_id == node_id)
+                result = await session.execute(stmt)
+                schema = result.scalar_one_or_none()
+
+                if schema:
+                    await session.delete(schema)
+                    await session.commit()
+                    logger.info("[DB] Tool schema deleted", node_id=node_id)
+
+                return True
+
+        except Exception as e:
+            logger.error("Failed to delete tool schema", node_id=node_id, error=str(e))
+            return False
+
+    async def get_all_tool_schemas(self) -> List[Dict[str, Any]]:
+        """Get all tool schemas."""
+        try:
+            async with self.get_session() as session:
+                stmt = select(ToolSchema).order_by(ToolSchema.updated_at.desc())
+                result = await session.execute(stmt)
+                schemas = result.scalars().all()
+
+                return [
+                    {
+                        "node_id": s.node_id,
+                        "tool_name": s.tool_name,
+                        "tool_description": s.tool_description,
+                        "schema_config": s.schema_config,
+                        "connected_services": s.connected_services,
+                        "updated_at": s.updated_at.isoformat() if s.updated_at else None
+                    }
+                    for s in schemas
+                ]
+
+        except Exception as e:
+            logger.error("Failed to get all tool schemas", error=str(e))
+            return []

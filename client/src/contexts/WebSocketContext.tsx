@@ -11,7 +11,6 @@
  */
 
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { flushSync } from 'react-dom';
 import { API_CONFIG } from '../config/api';
 import { useAppStore } from '../store/useAppStore';
 import { useAuth } from './AuthContext';

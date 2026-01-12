@@ -42,6 +42,7 @@ const LocationPanelLayout: React.FC<LocationPanelLayoutProps> = ({
       {/* Middle: Parameter Content */}
       <div style={{ flex: 1, height: '100%', overflow: 'hidden' }}>
         <MiddleSection
+          nodeId={selectedNode.id}
           nodeDefinition={nodeDefinition}
           parameters={parameters}
           onParameterChange={onParameterChange}

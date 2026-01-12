@@ -55,6 +55,7 @@ const ParameterPanelLayout: React.FC<ParameterPanelLayoutProps> = ({
       {/* Middle: Parameter Content */}
       <div style={{ flex: 1.6, height: '100%', overflow: 'hidden', minWidth: 0 }}>
         <MiddleSection
+          nodeId={selectedNode.id}
           nodeDefinition={nodeDefinition}
           parameters={parameters}
           onParameterChange={onParameterChange}

@@ -1,10 +1,15 @@
 import React, { useState } from 'react';
 import ParameterRenderer from '../ParameterRenderer';
+import ToolSchemaEditor from './ToolSchemaEditor';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { INodeTypeDescription, INodeProperties } from '../../types/INodeProperties';
 import { ExecutionResult } from '../../services/executionService';
 
+// Tool node types that support schema editing
+const TOOL_NODE_TYPES = ['androidTool', 'calculatorTool', 'currentTimeTool', 'webSearchTool'];
+
 interface MiddleSectionProps {
+  nodeId: string;
   nodeDefinition: INodeTypeDescription;
   parameters: Record<string, any>;
   onParameterChange: (paramName: string, value: any) => void;
@@ -37,6 +42,7 @@ const shouldShowParameter = (param: INodeProperties, allParameters: Record<strin
 };
 
 const MiddleSection: React.FC<MiddleSectionProps> = ({
+  nodeId,
   nodeDefinition,
   parameters,
   onParameterChange,
@@ -51,6 +57,9 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
 
   // Check if this is a code executor node (Python or JavaScript)
   const isCodeExecutorNode = nodeDefinition.name === 'pythonExecutor' || nodeDefinition.name === 'javascriptExecutor';
+
+  // Check if this is a tool node that supports schema editing
+  const isToolNode = TOOL_NODE_TYPES.includes(nodeDefinition.name);
 
   // Extract console output from execution results
   const getConsoleOutput = (): string => {
@@ -156,6 +165,15 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
                 />
               </div>
             ))}
+
+            {/* Tool Schema Editor - Only for tool nodes */}
+            {isToolNode && (
+              <ToolSchemaEditor
+                nodeId={nodeId}
+                toolName={parameters.toolName || nodeDefinition.name}
+                toolDescription={parameters.toolDescription || nodeDefinition.description || ''}
+              />
+            )}
           </div>
         </div>
 

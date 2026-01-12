@@ -163,6 +163,69 @@ async def handle_delete_node_parameters(data: Dict[str, Any], websocket: WebSock
 
 
 # ============================================================================
+# Tool Schema Handlers (Source of truth for tool node configurations)
+# ============================================================================
+
+@ws_handler("node_id")
+async def handle_get_tool_schema(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Get tool schema for a node."""
+    database = container.database()
+    schema = await database.get_tool_schema(data["node_id"])
+    return {"node_id": data["node_id"], "schema": schema}
+
+
+@ws_handler("node_id", "tool_name", "tool_description", "schema_config")
+async def handle_save_tool_schema(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Save tool schema for a node. Used by Android Toolkit to update connected service schemas."""
+    database = container.database()
+    broadcaster = get_status_broadcaster()
+
+    node_id = data["node_id"]
+    tool_name = data["tool_name"]
+    tool_description = data["tool_description"]
+    schema_config = data["schema_config"]
+    connected_services = data.get("connected_services")
+
+    success = await database.save_tool_schema(
+        node_id=node_id,
+        tool_name=tool_name,
+        tool_description=tool_description,
+        schema_config=schema_config,
+        connected_services=connected_services
+    )
+
+    if success:
+        # Broadcast schema update to all clients
+        await broadcaster.broadcast({
+            "type": "tool_schema_updated",
+            "node_id": node_id,
+            "tool_name": tool_name,
+            "timestamp": time.time()
+        })
+
+    return {
+        "node_id": node_id,
+        "tool_name": tool_name,
+        "saved": success
+    }
+
+
+@ws_handler("node_id")
+async def handle_delete_tool_schema(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Delete tool schema for a node."""
+    database = container.database()
+    await database.delete_tool_schema(data["node_id"])
+    return {"node_id": data["node_id"]}
+
+
+async def handle_get_all_tool_schemas(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Get all tool schemas."""
+    database = container.database()
+    schemas = await database.get_all_tool_schemas()
+    return {"success": True, "schemas": schemas}
+
+
+# ============================================================================
 # Node Execution Handlers
 # ============================================================================
 
@@ -1334,6 +1397,12 @@ MESSAGE_HANDLERS: Dict[str, MessageHandler] = {
     "get_all_node_parameters": handle_get_all_node_parameters,
     "save_node_parameters": handle_save_node_parameters,
     "delete_node_parameters": handle_delete_node_parameters,
+
+    # Tool schemas (source of truth for tool configurations)
+    "get_tool_schema": handle_get_tool_schema,
+    "save_tool_schema": handle_save_tool_schema,
+    "delete_tool_schema": handle_delete_tool_schema,
+    "get_all_tool_schemas": handle_get_all_tool_schemas,
 
     # Node execution
     "execute_node": handle_execute_node,
