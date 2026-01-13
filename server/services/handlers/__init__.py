@@ -59,6 +59,7 @@ from .utility import (
 from .whatsapp import (
     handle_whatsapp_send,
     handle_whatsapp_connect,
+    handle_whatsapp_chat_history,
 )
 
 # Tool execution handlers (for AI Agent tool calling)
@@ -96,6 +97,7 @@ __all__ = [
     # WhatsApp
     'handle_whatsapp_send',
     'handle_whatsapp_connect',
+    'handle_whatsapp_chat_history',
     # Tools
     'execute_tool',
 ]

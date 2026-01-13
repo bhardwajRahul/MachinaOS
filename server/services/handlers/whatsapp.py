@@ -164,3 +164,106 @@ async def handle_whatsapp_connect(
             "execution_time": time.time() - start_time,
             "timestamp": datetime.now().isoformat()
         }
+
+
+async def handle_whatsapp_chat_history(
+    node_id: str,
+    node_type: str,
+    parameters: Dict[str, Any],
+    context: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Handle WhatsApp chat history - retrieve messages from history store.
+
+    Messages are automatically captured from:
+    - HistorySync event on first login (all past messages)
+    - Real-time incoming messages
+
+    Args:
+        node_id: The node ID
+        node_type: The node type (whatsappChatHistory)
+        parameters: Resolved parameters including:
+            - chatType: 'individual' or 'group'
+            - phone: Phone number for individual chats
+            - group_id: Group JID for group chats
+            - groupFilter: 'all' or 'contact' for group message filtering
+            - senderPhone: Filter by sender in groups
+            - messageFilter: 'all' or 'text_only'
+            - limit: Max messages to return
+            - offset: Pagination offset
+        context: Execution context
+
+    Returns:
+        Execution result dict with messages array
+    """
+    from routers.whatsapp import handle_whatsapp_chat_history as whatsapp_chat_history_handler
+    start_time = time.time()
+
+    try:
+        chat_type = parameters.get('chatType', 'individual')
+
+        # Build RPC params based on chat type
+        rpc_params: Dict[str, Any] = {}
+
+        if chat_type == 'individual':
+            phone = parameters.get('phone')
+            if not phone:
+                raise ValueError("Phone number is required for individual chats")
+            rpc_params['phone'] = phone
+        else:
+            group_id = parameters.get('group_id')
+            if not group_id:
+                raise ValueError("Group ID is required for group chats")
+            rpc_params['group_id'] = group_id
+
+            # Optional sender filter for groups
+            group_filter = parameters.get('groupFilter', 'all')
+            if group_filter == 'contact':
+                sender_phone = parameters.get('senderPhone')
+                if sender_phone:
+                    rpc_params['sender_phone'] = sender_phone
+
+        # Message type filter
+        message_filter = parameters.get('messageFilter', 'all')
+        rpc_params['text_only'] = message_filter == 'text_only'
+
+        # Pagination
+        rpc_params['limit'] = parameters.get('limit', 50)
+        rpc_params['offset'] = parameters.get('offset', 0)
+
+        # Call WhatsApp Go RPC service
+        data = await whatsapp_chat_history_handler(rpc_params)
+
+        success = data.get('success', False)
+        if not success:
+            raise Exception(data.get('error', 'Failed to retrieve chat history'))
+
+        messages = data.get('messages', [])
+        total = data.get('total', 0)
+        has_more = data.get('has_more', False)
+
+        return {
+            "success": True,
+            "node_id": node_id,
+            "node_type": "whatsappChatHistory",
+            "result": {
+                "messages": messages,
+                "total": total,
+                "has_more": has_more,
+                "count": len(messages),
+                "chat_type": chat_type,
+                "timestamp": datetime.now().isoformat()
+            },
+            "execution_time": time.time() - start_time,
+            "timestamp": datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        logger.error("WhatsApp chat history failed", node_id=node_id, error=str(e))
+        return {
+            "success": False,
+            "node_id": node_id,
+            "node_type": "whatsappChatHistory",
+            "error": str(e),
+            "execution_time": time.time() - start_time,
+            "timestamp": datetime.now().isoformat()
+        }

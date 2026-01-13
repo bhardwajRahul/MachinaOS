@@ -663,3 +663,74 @@ async def handle_whatsapp_group_info(group_id: str) -> dict:
     except Exception as e:
         logger.error(f"WhatsApp group_info fetch failed for {group_id}: {e}")
         return {"success": False, "error": str(e), "participants": []}
+
+
+async def handle_whatsapp_chat_history(params: dict) -> dict:
+    """Get chat history from WhatsApp via direct RPC.
+
+    Retrieves stored messages from the Go service's history store.
+    Messages are automatically stored from HistorySync (on first login)
+    and from real-time incoming messages.
+
+    Params:
+    - chat_id: Direct chat JID (e.g., '919876543210@s.whatsapp.net')
+    - phone: Phone number (alternative to chat_id, will be converted)
+    - group_id: Group JID (alternative for group chats)
+    - limit: Max messages to return (default 50, max 500)
+    - offset: Pagination offset (default 0)
+    - sender_phone: Filter by sender phone in group chats
+    - text_only: Only return text messages (default false)
+
+    Returns:
+    - messages: Array of MessageRecord
+    - total: Total matching messages count
+    - has_more: Whether more messages exist
+    """
+    try:
+        client = await get_client()
+
+        # Build RPC params
+        rpc_params = {}
+
+        # Determine chat_id from various inputs
+        chat_id = params.get("chat_id")
+        phone = params.get("phone")
+        group_id = params.get("group_id")
+
+        if chat_id:
+            rpc_params["chat_id"] = chat_id
+        elif phone:
+            rpc_params["phone"] = phone
+        elif group_id:
+            rpc_params["group_id"] = group_id
+        else:
+            return {"success": False, "error": "Either chat_id, phone, or group_id is required"}
+
+        # Optional filters
+        limit = params.get("limit", 50)
+        if limit > 500:
+            limit = 500
+        rpc_params["limit"] = limit
+
+        offset = params.get("offset", 0)
+        rpc_params["offset"] = offset
+
+        sender_phone = params.get("sender_phone")
+        if sender_phone:
+            rpc_params["sender_phone"] = sender_phone
+
+        text_only = params.get("text_only", False)
+        rpc_params["text_only"] = text_only
+
+        result = await client.call("chat_history", rpc_params)
+
+        return {
+            "success": True,
+            "messages": result.get("messages", []),
+            "total": result.get("total", 0),
+            "has_more": result.get("has_more", False),
+            "timestamp": time.time()
+        }
+    except Exception as e:
+        logger.error(f"WhatsApp chat_history fetch failed: {e}")
+        return {"success": False, "error": str(e), "messages": [], "total": 0, "has_more": False}

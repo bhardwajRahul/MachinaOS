@@ -31,7 +31,7 @@ from services.handlers import (
     handle_text_generator, handle_file_handler,
     handle_chat_send, handle_chat_history,
     handle_start, handle_cron_scheduler, handle_timer,
-    handle_whatsapp_send, handle_whatsapp_connect,
+    handle_whatsapp_send, handle_whatsapp_connect, handle_whatsapp_chat_history,
 )
 
 if TYPE_CHECKING:
@@ -115,6 +115,7 @@ class NodeExecutor:
             # WhatsApp
             'whatsappSend': handle_whatsapp_send,
             'whatsappConnect': handle_whatsapp_connect,
+            'whatsappChatHistory': handle_whatsapp_chat_history,
             # Chat
             'chatSend': handle_chat_send,
             'chatHistory': handle_chat_history,

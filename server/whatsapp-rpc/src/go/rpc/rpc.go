@@ -304,6 +304,48 @@ func (h *RPCHandler) HandleRequest(req *RPCRequest) RPCResponse {
 			resp.Result = result
 		}
 
+	case "chat_history":
+		var p struct {
+			ChatID      string `json:"chat_id"`
+			Phone       string `json:"phone"`
+			GroupID     string `json:"group_id"`
+			Limit       int    `json:"limit"`
+			Offset      int    `json:"offset"`
+			SenderPhone string `json:"sender_phone"`
+			TextOnly    bool   `json:"text_only"`
+		}
+		if err := json.Unmarshal(req.Params, &p); err != nil {
+			resp.Error = &RPCError{Code: -32602, Message: "Invalid params: " + err.Error()}
+		} else {
+			// Resolve chat_id from phone or group_id if not directly provided
+			chatID := p.ChatID
+			if chatID == "" {
+				if p.Phone != "" {
+					chatID = p.Phone + "@s.whatsapp.net"
+				} else if p.GroupID != "" {
+					chatID = p.GroupID
+				} else {
+					resp.Error = &RPCError{Code: -32602, Message: "Either chat_id, phone, or group_id is required"}
+					break
+				}
+			}
+
+			// Set defaults
+			limit := p.Limit
+			if limit <= 0 {
+				limit = 50
+			}
+			if limit > 500 {
+				limit = 500
+			}
+
+			if result, err := h.service.GetChatHistory(chatID, limit, p.Offset, p.SenderPhone, p.TextOnly); err != nil {
+				resp.Error = &RPCError{Code: -32000, Message: err.Error()}
+			} else {
+				resp.Result = result
+			}
+		}
+
 	case "rate_limit_get":
 		resp.Result = map[string]interface{}{
 			"config": h.service.GetRateLimitConfig(),

@@ -39,6 +39,7 @@ type Service struct {
 	lastQRCodeTime time.Time
 	messages       map[string]*events.Message // Store messages by ID for media download
 	messageOrder   []string                   // Track message insertion order for FIFO cleanup
+	historyStore   *HistoryStore              // Persistent message history store
 
 	// Rate limiting for anti-ban protection
 	rateMu           sync.Mutex
@@ -101,7 +102,16 @@ func NewService(dbConfig config.DatabaseConfig, logger *logrus.Logger) (*Service
 		newContactsToday: make(map[string]time.Time),
 		dailyResetTime:   time.Now(),
 	}
-	
+
+	// Initialize history store for message persistence
+	historyStore, err := NewHistoryStore(dbConfig.Path, logger)
+	if err != nil {
+		logger.Warnf("Failed to init history store (history disabled): %v", err)
+	} else {
+		service.historyStore = historyStore
+		logger.Info("History store initialized")
+	}
+
 	// Reset any previous connection state on service creation
 	if client.IsConnected() {
 		client.Disconnect()
@@ -346,6 +356,8 @@ func (s *Service) eventHandler(evt interface{}) {
 			},
 			Time: time.Now(),
 		})
+	case *events.HistorySync:
+		s.handleHistorySync(v)
 	case *events.Message:
 		s.handleIncomingMessage(v)
 	default:
@@ -624,12 +636,170 @@ func (s *Service) handleIncomingMessage(v *events.Message) {
 	// Log the message
 	s.logger.Infof("Received %s message from %s", messageType, sender)
 
+	// Persist ALL messages to history store for future retrieval
+	if s.historyStore != nil {
+		textContent := ""
+		if t, ok := eventData["text"].(string); ok {
+			textContent = t
+		}
+		record := MessageRecord{
+			MessageID:   messageID,
+			ChatID:      chatID,
+			Sender:      sender,
+			SenderPhone: senderPhone,
+			MessageType: messageType,
+			Text:        textContent,
+			Timestamp:   timestamp,
+			IsGroup:     isGroup,
+			IsFromMe:    v.Info.IsFromMe,
+		}
+		go func() {
+			if err := s.historyStore.StoreMessage(record); err != nil {
+				s.logger.Debugf("Failed to store message: %v", err)
+			}
+		}()
+	}
+
 	// Broadcast event
 	s.safeEventSend(Event{
 		Type: "message_received",
 		Data: eventData,
 		Time: time.Now(),
 	})
+}
+
+// handleHistorySync processes history sync events received on first login
+// This contains all past conversations and messages from WhatsApp
+func (s *Service) handleHistorySync(evt *events.HistorySync) {
+	if s.historyStore == nil {
+		s.logger.Warn("History sync received but history store not initialized")
+		return
+	}
+
+	historyData := evt.Data
+	if historyData == nil {
+		return
+	}
+
+	conversations := historyData.GetConversations()
+	s.logger.Infof("Processing history sync: %d conversations", len(conversations))
+
+	totalMessages := 0
+	for _, conv := range conversations {
+		chatJID, err := types.ParseJID(conv.GetID())
+		if err != nil {
+			s.logger.Warnf("Invalid chat JID in history: %s", conv.GetID())
+			continue
+		}
+
+		isGroup := chatJID.Server == "g.us"
+		chatID := chatJID.String()
+
+		for _, historyMsg := range conv.GetMessages() {
+			webMsg := historyMsg.GetMessage()
+			if webMsg == nil {
+				continue
+			}
+
+			// Parse the web message to get standard message format
+			parsedMsg, err := s.client.ParseWebMessage(chatJID, webMsg)
+			if err != nil {
+				continue
+			}
+
+			// Extract message info
+			msgInfo := parsedMsg.Info
+			messageID := msgInfo.ID
+			sender := msgInfo.Sender.String()
+			senderPhone := msgInfo.Sender.User
+			timestamp := msgInfo.Timestamp
+
+			// Determine message type and extract text content
+			messageType := "unknown"
+			text := ""
+
+			msg := parsedMsg.Message
+			if msg == nil {
+				// Skip messages with nil content (protocol messages, etc.)
+				continue
+			}
+
+			switch {
+			case msg.Conversation != nil && *msg.Conversation != "":
+				messageType = "text"
+				text = *msg.Conversation
+			case msg.ExtendedTextMessage != nil && msg.ExtendedTextMessage.Text != nil:
+				messageType = "text"
+				text = *msg.ExtendedTextMessage.Text
+			case msg.ImageMessage != nil:
+				messageType = "image"
+				if msg.ImageMessage.Caption != nil {
+					text = *msg.ImageMessage.Caption
+				}
+			case msg.VideoMessage != nil:
+				messageType = "video"
+				if msg.VideoMessage.Caption != nil {
+					text = *msg.VideoMessage.Caption
+				}
+			case msg.AudioMessage != nil:
+				messageType = "audio"
+			case msg.DocumentMessage != nil:
+				messageType = "document"
+				if msg.DocumentMessage.Caption != nil {
+					text = *msg.DocumentMessage.Caption
+				}
+			case msg.StickerMessage != nil:
+				messageType = "sticker"
+			case msg.LocationMessage != nil:
+				messageType = "location"
+			case msg.ContactMessage != nil:
+				messageType = "contact"
+			default:
+				// Skip unknown/protocol messages
+				continue
+			}
+
+			// Store ALL message types
+			record := MessageRecord{
+				MessageID:   messageID,
+				ChatID:      chatID,
+				Sender:      sender,
+				SenderPhone: senderPhone,
+				MessageType: messageType,
+				Text:        text,
+				Timestamp:   timestamp,
+				IsGroup:     isGroup,
+				IsFromMe:    msgInfo.IsFromMe,
+			}
+
+			if err := s.historyStore.StoreMessage(record); err != nil {
+				s.logger.Debugf("Failed to store history message: %v", err)
+			} else {
+				totalMessages++
+			}
+		}
+	}
+
+	s.logger.Infof("History sync complete: stored %d messages from %d conversations",
+		totalMessages, len(conversations))
+
+	// Broadcast event for frontend notification
+	s.safeEventSend(Event{
+		Type: "history_sync_complete",
+		Data: map[string]interface{}{
+			"conversations": len(conversations),
+			"messages":      totalMessages,
+		},
+		Time: time.Now(),
+	})
+}
+
+// GetChatHistory retrieves stored messages for a chat
+func (s *Service) GetChatHistory(chatID string, limit, offset int, senderPhone string, textOnly bool) (*ChatHistoryResult, error) {
+	if s.historyStore == nil {
+		return nil, fmt.Errorf("history store not initialized")
+	}
+	return s.historyStore.GetChatHistory(chatID, limit, offset, senderPhone, textOnly)
 }
 
 func (s *Service) GetStatus() map[string]interface{} {
@@ -870,6 +1040,7 @@ func (s *Service) GetGroups() ([]GroupInfo, error) {
 			Size:         len(g.Participants),
 			IsAnnounce:   g.IsAnnounce,
 			IsLocked:     g.IsLocked,
+			IsCommunity:  g.IsParent,
 		})
 	}
 
@@ -916,6 +1087,7 @@ func (s *Service) GetGroupInfo(groupJID string) (*GroupInfo, error) {
 		Size:         len(info.Participants),
 		IsAnnounce:   info.IsAnnounce,
 		IsLocked:     info.IsLocked,
+		IsCommunity:  info.IsParent,
 	}
 
 	s.logger.Infof("Retrieved info for group %s (%s)", info.Name, groupJID)

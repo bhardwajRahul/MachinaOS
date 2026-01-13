@@ -207,7 +207,7 @@ interface WebSocketContextValue {
   sendWhatsAppMessage: (phone: string, message: string) => Promise<{ success: boolean; messageId?: string; error?: string }>;
   startWhatsAppConnection: () => Promise<{ success: boolean; message?: string }>;
   restartWhatsAppConnection: () => Promise<{ success: boolean; message?: string }>;
-  getWhatsAppGroups: () => Promise<{ success: boolean; groups: Array<{ jid: string; name: string; topic?: string; size?: number }>; error?: string }>;
+  getWhatsAppGroups: () => Promise<{ success: boolean; groups: Array<{ jid: string; name: string; topic?: string; size?: number; is_community?: boolean }>; error?: string }>;
   getWhatsAppGroupInfo: (groupId: string) => Promise<{ success: boolean; participants: Array<{ phone: string; name: string; jid: string; is_admin?: boolean }>; name?: string; error?: string }>;
 }
 
@@ -1480,7 +1480,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, [sendRequest]);
 
-  const getWhatsAppGroupsAsync = useCallback(async (): Promise<{ success: boolean; groups: Array<{ jid: string; name: string; topic?: string; size?: number }>; error?: string }> => {
+  const getWhatsAppGroupsAsync = useCallback(async (): Promise<{ success: boolean; groups: Array<{ jid: string; name: string; topic?: string; size?: number; is_community?: boolean }>; error?: string }> => {
     try {
       const response = await sendRequest<any>('whatsapp_groups', {});
       return {

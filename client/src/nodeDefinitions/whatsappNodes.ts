@@ -67,6 +67,9 @@ const WHATSAPP_CONNECT_ICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.or
 // WhatsApp Receive - Notification bell with dot (trigger node)
 const WHATSAPP_RECEIVE_ICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2325D366'%3E%3Cpath d='M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v6z'/%3E%3Ccircle cx='18' cy='6' r='4'/%3E%3C/svg%3E";
 
+// WhatsApp Chat History - Clock icon (retrieve history)
+const WHATSAPP_HISTORY_ICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2325D366'%3E%3Cpath d='M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z'/%3E%3C/svg%3E";
+
 // ============================================================================
 // WHATSAPP NODES
 // ============================================================================
@@ -550,10 +553,15 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
       loadOptions: {
         async getWhatsAppGroups(): Promise<Array<{name: string, value: string, description?: string}>> {
           try {
-            const response = await wsRequest('whatsapp_groups') as { success: boolean; groups?: Array<{ jid: string; name: string; participant_count?: number }> };
+            const response = await wsRequest('whatsapp_groups') as { success: boolean; groups?: Array<{ jid: string; name: string; participant_count?: number; is_community?: boolean }> };
 
             if (response.success && response.groups) {
-              return response.groups.map((group) => ({
+              // Filter out communities - they don't have regular chat history
+              const regularGroups = response.groups.filter((group) => !group.is_community);
+              if (regularGroups.length === 0) {
+                return [{ name: 'No groups found', value: '', description: 'Only communities found (no chat history)' }];
+              }
+              return regularGroups.map((group) => ({
                 name: group.name || group.jid,
                 value: group.jid,
                 description: group.participant_count ? `${group.participant_count} members` : undefined
@@ -607,6 +615,154 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         }
       }
     }
+  },
+
+  // WhatsApp Chat History Node - Retrieve stored messages
+  whatsappChatHistory: {
+    displayName: 'WhatsApp Chat History',
+    name: 'whatsappChatHistory',
+    icon: WHATSAPP_HISTORY_ICON,
+    group: ['whatsapp'],
+    version: 1,
+    subtitle: 'Get Messages',
+    description: 'Retrieve chat history from WhatsApp conversations. Messages are synced on first login and stored for later retrieval.',
+    defaults: { name: 'Chat History', color: '#25D366' },
+    inputs: [{
+      name: 'main',
+      displayName: 'Input',
+      type: 'main' as NodeConnectionType,
+      description: 'Trigger input'
+    }],
+    outputs: [{
+      name: 'main',
+      displayName: 'Messages',
+      type: 'main' as NodeConnectionType,
+      description: 'Chat history messages (messages, total, has_more)'
+    }],
+    properties: [
+      // ===== CHAT TYPE =====
+      {
+        displayName: 'Chat Type',
+        name: 'chatType',
+        type: 'options',
+        options: [
+          { name: 'Individual Chat', value: 'individual' },
+          { name: 'Group Chat', value: 'group' }
+        ],
+        default: 'individual',
+        description: 'Type of chat to retrieve history from'
+      },
+
+      // ===== INDIVIDUAL CHAT =====
+      {
+        displayName: 'Phone Number',
+        name: 'phone',
+        type: 'string',
+        default: '',
+        required: true,
+        placeholder: '1234567890',
+        description: 'Phone number of the contact (without + prefix)',
+        displayOptions: {
+          show: { chatType: ['individual'] }
+        }
+      },
+
+      // ===== GROUP CHAT =====
+      {
+        displayName: 'Group',
+        name: 'group_id',
+        type: 'string',
+        default: '',
+        required: true,
+        placeholder: '123456789@g.us',
+        description: 'Group JID to retrieve messages from',
+        displayOptions: {
+          show: { chatType: ['group'] }
+        }
+      },
+      {
+        displayName: 'Message Filter',
+        name: 'groupFilter',
+        type: 'options',
+        options: [
+          { name: 'All Messages', value: 'all' },
+          { name: 'From Specific Contact', value: 'contact' }
+        ],
+        default: 'all',
+        description: 'Filter messages in group',
+        displayOptions: {
+          show: { chatType: ['group'] }
+        }
+      },
+      {
+        displayName: 'Contact Phone',
+        name: 'senderPhone',
+        type: 'string',
+        default: '',
+        placeholder: '1234567890',
+        description: 'Filter messages from specific group member',
+        displayOptions: {
+          show: { chatType: ['group'], groupFilter: ['contact'] }
+        }
+      },
+
+      // ===== MESSAGE TYPE FILTER =====
+      {
+        displayName: 'Message Type',
+        name: 'textOnly',
+        type: 'options',
+        options: [
+          { name: 'All Types', value: 'false' },
+          { name: 'Text Only', value: 'true' }
+        ],
+        default: 'false',
+        description: 'Filter by message type'
+      },
+
+      // ===== PAGINATION =====
+      {
+        displayName: 'Limit',
+        name: 'limit',
+        type: 'number',
+        default: 50,
+        typeOptions: { minValue: 1, maxValue: 500 },
+        description: 'Maximum number of messages to retrieve (1-500)'
+      },
+      {
+        displayName: 'Offset',
+        name: 'offset',
+        type: 'number',
+        default: 0,
+        typeOptions: { minValue: 0 },
+        description: 'Number of messages to skip (for pagination)'
+      }
+    ],
+    methods: {
+      loadOptions: {
+        async getWhatsAppGroups(): Promise<Array<{name: string, value: string, description?: string}>> {
+          try {
+            const response = await wsRequest('whatsapp_groups') as { success: boolean; groups?: Array<{ jid: string; name: string; participant_count?: number; is_community?: boolean }> };
+
+            if (response.success && response.groups) {
+              // Filter out communities - they don't have regular chat history
+              const regularGroups = response.groups.filter((group) => !group.is_community);
+              if (regularGroups.length === 0) {
+                return [{ name: 'No groups found', value: '', description: 'Only communities found (no chat history)' }];
+              }
+              return regularGroups.map((group) => ({
+                name: group.name || group.jid,
+                value: group.jid,
+                description: group.participant_count ? `${group.participant_count} members` : undefined
+              }));
+            }
+            return [{ name: 'No groups found', value: '', description: 'Connect WhatsApp first' }];
+          } catch (error) {
+            console.error('Error loading WhatsApp groups:', error);
+            return [{ name: 'Error loading groups', value: '', description: 'Check WhatsApp connection' }];
+          }
+        }
+      }
+    }
   }
 };
 
@@ -614,4 +770,4 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
 // EXPORTS
 // ============================================================================
 
-export const WHATSAPP_NODE_TYPES = ['whatsappSend', 'whatsappConnect', 'whatsappReceive'];
+export const WHATSAPP_NODE_TYPES = ['whatsappSend', 'whatsappConnect', 'whatsappReceive', 'whatsappChatHistory'];

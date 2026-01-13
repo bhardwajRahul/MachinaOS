@@ -204,6 +204,7 @@ export class ExecutionService {
       'whatsappSend',
       'whatsappConnect',
       'whatsappReceive',
+      'whatsappChatHistory',
       // Text Processing Nodes
       'textGenerator',
       'fileHandler',

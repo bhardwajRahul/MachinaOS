@@ -21,7 +21,7 @@ const ANDROID_TOOL_CAPABLE_NODES = ANDROID_SERVICE_NODE_TYPES;
 const GOOGLE_MAPS_NODE_TYPES = ['createMap', 'addLocations', 'showNearbyPlaces'];
 
 // WhatsApp node types
-const WHATSAPP_NODE_TYPES = ['whatsappConnect', 'whatsappSend', 'whatsappReceive'];
+const WHATSAPP_NODE_TYPES = ['whatsappConnect', 'whatsappSend', 'whatsappReceive', 'whatsappChatHistory'];
 
 // AI Model node types with their provider IDs
 const AI_MODEL_NODE_TYPES: Record<string, string> = {

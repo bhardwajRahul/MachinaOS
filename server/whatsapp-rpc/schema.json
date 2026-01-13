@@ -649,10 +649,97 @@
           }
         }
       }
+    },
+    {
+      "name": "chat_history",
+      "summary": "Get chat history from stored messages",
+      "description": "Retrieve messages from SQLite history store. Messages are synced on first WhatsApp login and stored for later retrieval. Supports filtering by chat type (individual/group), sender, and message type.",
+      "params": [
+        {
+          "name": "chat_id",
+          "description": "Chat JID (e.g., 1234567890@s.whatsapp.net for individual, 123456789@g.us for group)",
+          "schema": { "type": "string" },
+          "required": false
+        },
+        {
+          "name": "phone",
+          "description": "Phone number for individual chats (without +). Converted to JID automatically.",
+          "schema": { "type": "string" },
+          "required": false
+        },
+        {
+          "name": "group_id",
+          "description": "Group JID (e.g., 123456789@g.us)",
+          "schema": { "type": "string" },
+          "required": false
+        },
+        {
+          "name": "limit",
+          "description": "Maximum messages to return (default: 50, max: 500)",
+          "schema": { "type": "integer", "default": 50, "minimum": 1, "maximum": 500 },
+          "required": false
+        },
+        {
+          "name": "offset",
+          "description": "Number of messages to skip for pagination (default: 0)",
+          "schema": { "type": "integer", "default": 0 },
+          "required": false
+        },
+        {
+          "name": "sender_phone",
+          "description": "Filter group messages by sender phone number",
+          "schema": { "type": "string" },
+          "required": false
+        },
+        {
+          "name": "text_only",
+          "description": "Only return text messages (default: false)",
+          "schema": { "type": "boolean", "default": false },
+          "required": false
+        }
+      ],
+      "result": {
+        "name": "ChatHistoryResult",
+        "schema": { "$ref": "#/components/schemas/ChatHistoryResult" }
+      }
     }
   ],
   "components": {
     "schemas": {
+      "ChatHistoryResult": {
+        "type": "object",
+        "description": "Chat history query result",
+        "properties": {
+          "messages": {
+            "type": "array",
+            "description": "Array of message records",
+            "items": { "$ref": "#/components/schemas/MessageRecord" }
+          },
+          "total": { "type": "integer", "description": "Total matching messages in database" },
+          "has_more": { "type": "boolean", "description": "Whether more messages exist beyond limit+offset" }
+        },
+        "required": ["messages", "total", "has_more"]
+      },
+      "MessageRecord": {
+        "type": "object",
+        "description": "Stored message record from history",
+        "properties": {
+          "message_id": { "type": "string", "description": "Unique message ID" },
+          "chat_id": { "type": "string", "description": "Chat JID (individual or group)" },
+          "sender": { "type": "string", "description": "Sender JID" },
+          "sender_phone": { "type": "string", "description": "Sender phone number" },
+          "message_type": {
+            "type": "string",
+            "enum": ["text", "image", "video", "audio", "document", "sticker", "location", "contact"],
+            "description": "Type of message"
+          },
+          "text": { "type": "string", "description": "Text content (or caption for media)" },
+          "timestamp": { "type": "string", "format": "date-time", "description": "Message timestamp" },
+          "is_group": { "type": "boolean", "description": "Whether message is from a group chat" },
+          "is_from_me": { "type": "boolean", "description": "Whether message was sent by the connected device" }
+        },
+        "required": ["message_id", "chat_id", "sender", "message_type", "timestamp", "is_group", "is_from_me"]
+      },
       "MediaData": {
         "type": "object",
         "description": "Media content for sending",
@@ -959,6 +1046,13 @@
             },
             "is_reply": { "type": "boolean" },
             "quoted_message_id": { "type": "string" }
+          }
+        },
+        "event.history_sync_complete": {
+          "description": "History sync completed after first login",
+          "params": {
+            "conversations": { "type": "integer", "description": "Number of conversations synced" },
+            "messages": { "type": "integer", "description": "Total messages stored" }
           }
         }
       }

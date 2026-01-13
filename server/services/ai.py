@@ -112,6 +112,114 @@ def get_default_model(provider: str) -> str:
 
 
 # =============================================================================
+# MESSAGE FILTERING UTILITIES - Standardized for all providers
+# =============================================================================
+
+def is_valid_message_content(content: Any) -> bool:
+    """Check if message content is valid (non-empty) for API calls.
+
+    This is a standardized utility for validating message content before:
+    - Saving to conversation memory
+    - Including in API requests
+    - Building message history
+
+    Args:
+        content: The message content to validate (str, list, or other)
+
+    Returns:
+        True if content is valid and non-empty, False otherwise
+    """
+    if content is None:
+        return False
+
+    # Handle list content format (Gemini returns [{"type": "text", "text": "..."}])
+    if isinstance(content, list):
+        return any(
+            (isinstance(block, dict) and block.get('text', '').strip()) or
+            (isinstance(block, str) and block.strip())
+            for block in content
+        )
+
+    # Handle string content (most common)
+    if isinstance(content, str):
+        return bool(content.strip())
+
+    # Other truthy content types
+    return bool(content)
+
+
+def filter_empty_messages(messages: Sequence[BaseMessage]) -> List[BaseMessage]:
+    """Filter out messages with empty content to prevent API errors.
+
+    This is a standardized utility that handles empty message filtering for all
+    AI providers (OpenAI, Anthropic/Claude, Google Gemini, and future providers).
+
+    Different providers have different sensitivities:
+    - Gemini: Emits "HumanMessage with empty content was removed" warning
+    - Claude/Anthropic: Throws errors for empty HumanMessage content
+    - OpenAI: Generally tolerant but empty messages waste tokens
+
+    This filter preserves:
+    - ToolMessage: Always kept (contains tool execution results)
+    - AIMessage with tool_calls: Kept even if content empty (tool calls are content)
+    - SystemMessage: Kept only if has non-empty content
+    - HumanMessage/others: Filtered if content is empty
+
+    Args:
+        messages: Sequence of LangChain BaseMessage objects
+
+    Returns:
+        Filtered list of messages with empty content removed
+    """
+    filtered = []
+
+    for m in messages:
+        # ToolMessage - always keep (contains tool execution results from LangGraph)
+        if isinstance(m, ToolMessage):
+            filtered.append(m)
+            continue
+
+        # AIMessage with tool_calls - keep even if content is empty
+        # (the tool calls themselves are the meaningful content)
+        if isinstance(m, AIMessage) and hasattr(m, 'tool_calls') and m.tool_calls:
+            filtered.append(m)
+            continue
+
+        # SystemMessage - keep only if has non-empty content
+        if isinstance(m, SystemMessage):
+            if hasattr(m, 'content') and m.content and str(m.content).strip():
+                filtered.append(m)
+            continue
+
+        # HumanMessage and other message types - filter out empty content
+        if hasattr(m, 'content'):
+            content = m.content
+
+            # Handle list content format (Gemini returns [{"type": "text", "text": "..."}])
+            if isinstance(content, list):
+                has_content = any(
+                    (isinstance(block, dict) and block.get('text', '').strip()) or
+                    (isinstance(block, str) and block.strip())
+                    for block in content
+                )
+                if has_content:
+                    filtered.append(m)
+
+            # Handle string content (most common)
+            elif isinstance(content, str) and content.strip():
+                filtered.append(m)
+
+            # Handle other non-empty content types (keep if truthy)
+            elif content:
+                filtered.append(m)
+        else:
+            # Message without content attr - keep it (might be special message type)
+            filtered.append(m)
+
+    return filtered
+
+
+# =============================================================================
 # LANGGRAPH STATE MACHINE DEFINITIONS
 # =============================================================================
 
@@ -149,10 +257,36 @@ def create_agent_node(chat_model):
 
         logger.info(f"[LangGraph] Agent node invoked, iteration={iteration}, messages={len(messages)}")
 
+        # Filter out messages with empty content using standardized utility
+        # Prevents API errors/warnings from Gemini, Claude, and other providers
+        filtered_messages = filter_empty_messages(messages)
+
+        if len(filtered_messages) != len(messages):
+            logger.info(f"[LangGraph] Filtered out {len(messages) - len(filtered_messages)} empty messages before LLM invoke")
+
         # Invoke the model
-        response = chat_model.invoke(list(messages))
+        response = chat_model.invoke(filtered_messages)
 
         logger.info(f"[LangGraph] LLM response type: {type(response)}, has tool_calls attr: {hasattr(response, 'tool_calls')}")
+
+        # Debug log full response for troubleshooting empty responses (especially Gemini)
+        if hasattr(response, 'content'):
+            logger.info(f"[LangGraph] response.content type: {type(response.content)}, length: {len(str(response.content)) if response.content else 0}")
+
+        # Check for Gemini-specific response attributes (safety ratings, block reason)
+        if hasattr(response, 'response_metadata'):
+            meta = response.response_metadata
+            logger.info(f"[LangGraph] response_metadata: {meta}")
+            # Check for Gemini finish reason (could indicate blocked content)
+            if meta.get('finish_reason') == 'SAFETY':
+                logger.warning("[LangGraph] Gemini response blocked by safety filters")
+            if meta.get('block_reason'):
+                logger.warning(f"[LangGraph] Gemini block reason: {meta.get('block_reason')}")
+
+        # Log additional_kwargs which may contain Gemini-specific info
+        if hasattr(response, 'additional_kwargs') and response.additional_kwargs:
+            logger.info(f"[LangGraph] additional_kwargs: {response.additional_kwargs}")
+
         if hasattr(response, 'tool_calls'):
             logger.info(f"[LangGraph] tool_calls value: {response.tool_calls}")
 
@@ -317,6 +451,82 @@ class AIService:
         """Detect AI provider from model name."""
         return detect_provider_from_model(model)
 
+    def _extract_text_content(self, content, ai_response=None) -> str:
+        """Extract text content from various response formats.
+
+        Handles:
+        - String content (OpenAI, Anthropic)
+        - List of content blocks (Gemini 3+ models)
+        - Empty/None content with error details from metadata
+
+        Args:
+            content: The raw content from response (str, list, or None)
+            ai_response: The full AIMessage for metadata inspection
+
+        Returns:
+            Extracted text string
+
+        Raises:
+            ValueError: If content is empty with details about why
+        """
+        # Handle list content (Gemini format: [{"type": "text", "text": "..."}])
+        if isinstance(content, list):
+            text_parts = []
+            for block in content:
+                if isinstance(block, dict):
+                    if block.get('type') == 'text' and block.get('text'):
+                        text_parts.append(block['text'])
+                    elif 'text' in block:
+                        text_parts.append(str(block['text']))
+                elif isinstance(block, str):
+                    text_parts.append(block)
+            extracted = '\n'.join(text_parts)
+            if extracted.strip():
+                return extracted
+            # List was present but no text extracted
+            logger.warning(f"[LangGraph] Content was list but no text extracted: {content}")
+
+        # Handle string content
+        if isinstance(content, str) and content.strip():
+            return content
+
+        # Content is empty - try to get error details from metadata
+        error_details = []
+        if ai_response and hasattr(ai_response, 'response_metadata'):
+            meta = ai_response.response_metadata
+            finish_reason = meta.get('finish_reason', '')
+
+            if finish_reason == 'SAFETY':
+                error_details.append("Content blocked by safety filters")
+                # Try to get specific blocked categories
+                safety_ratings = meta.get('safety_ratings', [])
+                blocked = [r.get('category') for r in safety_ratings if r.get('blocked')]
+                if blocked:
+                    error_details.append(f"Blocked categories: {', '.join(blocked)}")
+
+            elif finish_reason == 'MAX_TOKENS':
+                # Check if reasoning consumed all tokens
+                token_details = meta.get('output_token_details', {})
+                reasoning_tokens = token_details.get('reasoning', 0)
+                output_tokens = meta.get('usage_metadata', {}).get('candidates_token_count', 0)
+                if reasoning_tokens > 0 and output_tokens == 0:
+                    error_details.append(f"Model used all tokens for reasoning ({reasoning_tokens} tokens). Try increasing max_tokens or simplifying the prompt.")
+                else:
+                    error_details.append("Response truncated due to max_tokens limit")
+
+            elif finish_reason == 'MALFORMED_FUNCTION_CALL':
+                error_details.append("Model returned malformed function call. Tool schema may be incompatible.")
+
+            if meta.get('block_reason'):
+                error_details.append(f"Block reason: {meta.get('block_reason')}")
+
+        if error_details:
+            raise ValueError(f"AI returned empty response. {'; '.join(error_details)}")
+
+        # Generic empty response
+        logger.warning(f"[LangGraph] Empty response with no error details. Content type: {type(content)}, value: {content}")
+        raise ValueError("AI generated empty response. Try rephrasing your prompt or using a different model.")
+
     def create_model(self, provider: str, api_key: str, model: str,
                     temperature: float, max_tokens: int):
         """Create LangChain model instance using provider registry."""
@@ -417,18 +627,25 @@ class AIService:
             if not api_key:
                 raise ValueError("API key is required")
 
+            # Validate prompt is not empty (prevents wasted API calls for all providers)
+            if not is_valid_message_content(prompt):
+                raise ValueError("Prompt cannot be empty")
+
             # Create model
             provider = self.detect_provider(model)
             chat_model = self.create_model(provider, api_key, model, temperature, max_tokens)
 
             # Prepare messages
             messages = []
-            if system_prompt:
+            if system_prompt and is_valid_message_content(system_prompt):
                 messages.append(SystemMessage(content=system_prompt))
             messages.append(HumanMessage(content=prompt))
 
+            # Filter messages using standardized utility (handles all providers consistently)
+            filtered_messages = filter_empty_messages(messages)
+
             # Execute
-            response = chat_model.invoke(messages)
+            response = chat_model.invoke(filtered_messages)
 
             result = {
                 "response": response.content,
@@ -566,12 +783,16 @@ class AIService:
                 history_data = await self.database.get_conversation_messages(session_id, window_size)
                 history_count = len(history_data)
 
-                # Convert to LangChain messages
+                # Convert to LangChain messages using standardized content validation
                 for m in history_data:
+                    content = m.get('content', '')
+                    if not is_valid_message_content(content):
+                        logger.debug(f"[LangGraph Memory] Skipping empty {m['role']} message")
+                        continue
                     if m['role'] == 'human':
-                        initial_messages.append(HumanMessage(content=m['content']))
+                        initial_messages.append(HumanMessage(content=content))
                     elif m['role'] == 'ai':
-                        initial_messages.append(AIMessage(content=m['content']))
+                        initial_messages.append(AIMessage(content=content))
 
                 logger.info(f"[LangGraph Memory] Loaded {history_count} messages from session '{session_id}'")
 
@@ -699,13 +920,16 @@ class AIService:
             if not ai_response or not hasattr(ai_response, 'content'):
                 raise ValueError("No response generated from agent")
 
-            response_content = ai_response.content
+            # Handle different content formats (Gemini can return list of content blocks)
+            raw_content = ai_response.content
+            response_content = self._extract_text_content(raw_content, ai_response)
             iterations = final_state.get("iteration", 1)
 
-            logger.info(f"[LangGraph] Agent completed in {iterations} iteration(s)")
+            logger.info(f"[LangGraph] Agent completed in {iterations} iteration(s), response length: {len(response_content)}")
 
             # Save to memory if connected (persist to database)
-            if session_id:
+            # Only save non-empty messages using standardized validation
+            if session_id and is_valid_message_content(prompt) and is_valid_message_content(response_content):
                 # Broadcast: Saving to memory
                 await broadcast_status("saving_memory", {
                     "message": "Saving to conversation memory...",

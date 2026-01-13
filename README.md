@@ -26,10 +26,11 @@ npm run start
 
 ## Features
 
-- **AI Workflows** - OpenAI, Claude, Gemini models
-- **Android Automation** - Control your phone
-- **WhatsApp Bots** - Send/receive messages
+- **AI Workflows** - OpenAI, Claude, Gemini models with tool calling
+- **Android Automation** - Control your phone via 17 service nodes
+- **WhatsApp Bots** - Send/receive messages with filters
 - **HTTP/Webhooks** - API integrations
+- **Tool Schema Editor** - Customize AI tool schemas per service
 
 ## Docker Commands
 

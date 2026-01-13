@@ -215,7 +215,7 @@ const GroupIdSelector: React.FC<{
   onDragLeave: (e: React.DragEvent) => void;
   onDrop: (e: React.DragEvent) => void;
 }> = ({ value, onChange, onNameChange, storedName, placeholder, theme, isDragOver, onDragOver, onDragLeave, onDrop }) => {
-  const [groups, setGroups] = useState<Array<{ jid: string; name: string; topic?: string; size?: number }>>([]);
+  const [groups, setGroups] = useState<Array<{ jid: string; name: string; topic?: string; size?: number; is_community?: boolean }>>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -236,12 +236,20 @@ const GroupIdSelector: React.FC<{
     setError(null);
     try {
       const result = await getWhatsAppGroups();
+      console.log('[GroupIdSelector] Raw groups from API:', result.groups?.map(g => ({ name: g.name, jid: g.jid, is_community: g.is_community })));
       if (result.success && result.groups.length > 0) {
-        setGroups(result.groups);
+        // Filter out communities - they don't have regular chat history
+        const regularGroups = result.groups.filter(g => !g.is_community);
+        console.log('[GroupIdSelector] After filtering communities:', regularGroups.length, 'groups remaining');
+        if (regularGroups.length === 0) {
+          setError('Only communities found (no chat history available)');
+          return;
+        }
+        setGroups(regularGroups);
         setShowDropdown(true);
         // If we already have a value, try to find its name and update storage
         if (value) {
-          const matchingGroup = result.groups.find(g => g.jid === value);
+          const matchingGroup = regularGroups.find(g => g.jid === value);
           if (matchingGroup && matchingGroup.name !== storedName) {
             setLocalGroupName(matchingGroup.name);
             onNameChange?.(matchingGroup.name);
