@@ -51,30 +51,22 @@ services:
       whatsapp:
         condition: service_healthy
 
-  # React Frontend (Vite)
+  # React Frontend (Vite) - Production build served via nginx
   frontend:
     build:
       context: ./client
       dockerfile: Dockerfile
-      target: development
+      target: production
+      args:
+        - VITE_AUTH_ENABLED=${VITE_AUTH_ENABLED:-true}
     container_name: machina-frontend
     ports:
-      - "${VITE_CLIENT_PORT:-3000}:${VITE_CLIENT_PORT:-3000}"
-    volumes:
-      - ./client:/app
-      - /app/node_modules
+      - "${VITE_CLIENT_PORT:-3000}:80"
     networks:
       - app-network
     restart: unless-stopped
     depends_on:
       - backend
-    env_file:
-      - .env
-    environment:
-      # Override for Docker networking
-      - VITE_API_URL=http://backend:${PYTHON_BACKEND_PORT:-3010}
-      - VITE_WS_URL=ws://backend:${PYTHON_BACKEND_PORT:-3010}
-      - TZ=UTC
 
   # WhatsApp RPC Service (Go API)
   whatsapp:

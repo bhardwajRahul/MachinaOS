@@ -63,9 +63,13 @@ elif [ -f "${LOCAL_DIR}/server/.env" ]; then
 elif [ -f "${LOCAL_DIR}/.env.template" ]; then
     echo "No .env found, creating from .env.template..."
     scp "${LOCAL_DIR}/.env.template" "${GCP_HOST}:/tmp/${SERVICE_NAME}/.env"
+    # Enable Redis for production Docker mode
+    ssh ${GCP_HOST} "sed -i 's/^REDIS_ENABLED=false/REDIS_ENABLED=true/' /tmp/${SERVICE_NAME}/.env"
 elif [ -f "${LOCAL_DIR}/server/.env.template" ]; then
     echo "No .env found, creating from server/.env.template..."
     scp "${LOCAL_DIR}/server/.env.template" "${GCP_HOST}:/tmp/${SERVICE_NAME}/.env"
+    # Enable Redis for production Docker mode
+    ssh ${GCP_HOST} "sed -i 's/^REDIS_ENABLED=false/REDIS_ENABLED=true/' /tmp/${SERVICE_NAME}/.env"
 else
     echo "Warning: No .env or .env.template found. Using docker-compose environment variables only."
 fi

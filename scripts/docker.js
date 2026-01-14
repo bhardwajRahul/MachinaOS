@@ -6,14 +6,14 @@
  */
 
 import { spawn } from 'child_process';
-import { readFileSync, existsSync, copyFileSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, copyFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 
-// Create .env from template if it doesn't exist
+// Create .env from template if it doesn't exist, with Docker-specific defaults
 function ensureEnvFile() {
   const envPath = resolve(ROOT, '.env');
   if (existsSync(envPath)) return true;
@@ -28,6 +28,13 @@ function ensureEnvFile() {
     if (existsSync(templatePath)) {
       console.log(`[Docker] Creating .env from ${templatePath.replace(ROOT, '.')}`);
       copyFileSync(templatePath, envPath);
+
+      // Enable Redis by default for Docker mode
+      let content = readFileSync(envPath, 'utf8');
+      content = content.replace(/^REDIS_ENABLED\s*=\s*false/m, 'REDIS_ENABLED=true');
+      writeFileSync(envPath, content);
+      console.log('[Docker] Set REDIS_ENABLED=true for Docker mode');
+
       return true;
     }
   }
