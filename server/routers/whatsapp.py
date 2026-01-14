@@ -107,7 +107,7 @@ class RPCClient:
         """
         method = data.get("method", "")
         params = data.get("params", {})
-        logger.info(f"[WhatsApp RPC] Event: {method} params={params}")
+        logger.debug(f"[WhatsApp RPC] Event: {method}")
 
         try:
             from services.status_broadcaster import get_status_broadcaster
@@ -200,8 +200,7 @@ class RPCClient:
                 await broadcaster.send_custom_event("whatsapp_message_sent", params)
 
             elif method == "event.message_received":
-                # Message received - broadcast as custom event
-                logger.info(f"[WhatsApp RPC] Broadcasting message_received event to trigger nodes")
+                # Message received - broadcast as custom event for trigger nodes
                 await broadcaster.send_custom_event("whatsapp_message_received", params)
 
             # Forward to custom handler if set

@@ -39,11 +39,7 @@ async def handle_ai_agent(
     memory_data = None
     tool_data: List[Dict[str, Any]] = []  # Collect connected tool nodes
 
-    # DEBUG: Log what we're working with
-    logger.info(f"[AI Agent] Processing node {node_id}, context has {len(edges) if edges else 0} edges, {len(nodes) if nodes else 0} nodes")
-    if edges:
-        toolkit_edges = [e for e in edges if 'androidTool' in str(e)]
-        logger.info(f"[AI Agent] Toolkit-related edges: {toolkit_edges}")
+    logger.debug(f"[AI Agent] Processing node {node_id}, edges={len(edges) if edges else 0}, nodes={len(nodes) if nodes else 0}")
 
     if edges and nodes:
         for edge in edges:
@@ -69,8 +65,7 @@ async def handle_ai_agent(
                         'memory_type': memory_type,
                         'window_size': window_size
                     }
-                    logger.info("AI Agent connected memory node", node_id=node_id, execution_id=execution_id,
-                               memory_session=memory_session_id, memory_type=memory_type)
+                    logger.debug("AI Agent connected memory node", memory_session=memory_session_id)
 
             # Tool detection (new) - any node connected to input-tools becomes a tool
             elif target_handle == 'input-tools':
@@ -89,15 +84,6 @@ async def handle_ai_agent(
                 # Follows n8n Sub-Node pattern
                 if tool_type == 'androidTool':
                     connected_services = []
-
-                    # Debug: log all edges to understand the structure
-                    logger.info(f"[Android Toolkit] Looking for edges targeting toolkit node: {source_node_id}")
-                    logger.info(f"[Android Toolkit] Total edges in context: {len(edges)}")
-                    for i, e in enumerate(edges):
-                        logger.info(f"[Android Toolkit] Edge {i}: source={e.get('source')}, target={e.get('target')}, sourceHandle={e.get('sourceHandle')}, targetHandle={e.get('targetHandle')}")
-
-                    toolkit_edges = [e for e in edges if e.get('target') == source_node_id]
-                    logger.info(f"[Android Toolkit] Edges targeting toolkit {source_node_id}: {toolkit_edges}")
 
                     # Scan edges for Android nodes connected to this toolkit
                     for service_edge in edges:
@@ -127,12 +113,10 @@ async def handle_ai_agent(
                             logger.debug(f"Android toolkit connected service: {android_params.get('service_id')}")
 
                     tool_entry['connected_services'] = connected_services
-                    logger.info(f"Android toolkit has {len(connected_services)} connected services",
-                               node_id=source_node_id, services=[s.get('service_id') for s in connected_services])
+                    logger.debug(f"Android toolkit has {len(connected_services)} connected services")
 
                 tool_data.append(tool_entry)
-                logger.info("AI Agent connected tool node", node_id=node_id, execution_id=execution_id,
-                           tool_type=tool_type, tool_node_id=source_node_id)
+                logger.debug(f"AI Agent connected tool: {tool_type}")
 
     # Get broadcaster for real-time status updates
     from services.status_broadcaster import get_status_broadcaster

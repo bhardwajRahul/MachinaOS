@@ -255,40 +255,27 @@ def create_agent_node(chat_model):
         iteration = state.get("iteration", 0)
         max_iterations = state.get("max_iterations", 10)
 
-        logger.info(f"[LangGraph] Agent node invoked, iteration={iteration}, messages={len(messages)}")
+        logger.debug(f"[LangGraph] Agent node invoked, iteration={iteration}, messages={len(messages)}")
 
         # Filter out messages with empty content using standardized utility
         # Prevents API errors/warnings from Gemini, Claude, and other providers
         filtered_messages = filter_empty_messages(messages)
 
         if len(filtered_messages) != len(messages):
-            logger.info(f"[LangGraph] Filtered out {len(messages) - len(filtered_messages)} empty messages before LLM invoke")
+            logger.debug(f"[LangGraph] Filtered out {len(messages) - len(filtered_messages)} empty messages")
 
         # Invoke the model
         response = chat_model.invoke(filtered_messages)
 
-        logger.info(f"[LangGraph] LLM response type: {type(response)}, has tool_calls attr: {hasattr(response, 'tool_calls')}")
-
-        # Debug log full response for troubleshooting empty responses (especially Gemini)
-        if hasattr(response, 'content'):
-            logger.info(f"[LangGraph] response.content type: {type(response.content)}, length: {len(str(response.content)) if response.content else 0}")
+        logger.debug(f"[LangGraph] LLM response type: {type(response).__name__}")
 
         # Check for Gemini-specific response attributes (safety ratings, block reason)
         if hasattr(response, 'response_metadata'):
             meta = response.response_metadata
-            logger.info(f"[LangGraph] response_metadata: {meta}")
-            # Check for Gemini finish reason (could indicate blocked content)
             if meta.get('finish_reason') == 'SAFETY':
                 logger.warning("[LangGraph] Gemini response blocked by safety filters")
             if meta.get('block_reason'):
                 logger.warning(f"[LangGraph] Gemini block reason: {meta.get('block_reason')}")
-
-        # Log additional_kwargs which may contain Gemini-specific info
-        if hasattr(response, 'additional_kwargs') and response.additional_kwargs:
-            logger.info(f"[LangGraph] additional_kwargs: {response.additional_kwargs}")
-
-        if hasattr(response, 'tool_calls'):
-            logger.info(f"[LangGraph] tool_calls value: {response.tool_calls}")
 
         # Check for tool calls in the response
         pending_tool_calls = []
@@ -298,9 +285,7 @@ def create_agent_node(chat_model):
             # Model wants to use tools
             pending_tool_calls = response.tool_calls
             should_continue = True
-            logger.info(f"[LangGraph] Agent requesting {len(pending_tool_calls)} tool call(s): {[tc.get('name', tc) for tc in pending_tool_calls]}")
-        else:
-            logger.info(f"[LangGraph] No tool calls in response, content preview: {str(response.content)[:100]}")
+            logger.debug(f"[LangGraph] Agent requesting {len(pending_tool_calls)} tool call(s)")
 
         return {
             "messages": [response],  # Will be appended via operator.add
@@ -334,7 +319,7 @@ def create_tool_node(tool_executor: Callable):
             tool_args = tool_call.get("args", {})
             tool_id = tool_call.get("id", "")
 
-            logger.info(f"[LangGraph] Executing tool: {tool_name} with args: {tool_args}")
+            logger.debug(f"[LangGraph] Executing tool: {tool_name}")
 
             try:
                 # Directly await the async tool executor (proper async pattern)
@@ -350,7 +335,7 @@ def create_tool_node(tool_executor: Callable):
                 name=tool_name
             ))
 
-            logger.info(f"[LangGraph] Tool {tool_name} completed with result: {result}")
+            logger.debug(f"[LangGraph] Tool {tool_name} completed")
 
         return {
             "messages": tool_messages,
@@ -395,7 +380,7 @@ def build_agent_graph(chat_model, tools: List = None, tool_executor: Callable = 
     model_with_tools = chat_model
     if tools:
         model_with_tools = chat_model.bind_tools(tools)
-        logger.info(f"[LangGraph] Bound {len(tools)} tools to model")
+        logger.debug(f"[LangGraph] Bound {len(tools)} tools to model")
 
     # Add the agent node
     agent_fn = create_agent_node(model_with_tools)
@@ -422,7 +407,7 @@ def build_agent_graph(chat_model, tools: List = None, tool_executor: Callable = 
         # Tools always route back to agent
         graph.add_edge("tools", "agent")
 
-        logger.info("[LangGraph] Built graph with tool execution loop")
+        logger.debug("[LangGraph] Built graph with tool execution loop")
     else:
         # Simple graph without tools
         graph.add_conditional_edges(
@@ -735,7 +720,7 @@ class AIService:
             temperature = float(flattened.get('temperature', 0.7))
             max_tokens = int(flattened.get('max_tokens') or flattened.get('maxTokens') or 1000)
 
-            logger.info(f"[LangGraph] AI Agent execution - Provider: {provider}, Model: {model}, Memory: {bool(memory_data)}, Tools: {len(tool_data) if tool_data else 0}")
+            logger.info(f"[LangGraph] Agent: {provider}/{model}, tools={len(tool_data) if tool_data else 0}")
 
             # If no model specified or model doesn't match provider, use default from registry
             if not model or not is_model_valid_for_provider(model, provider):
@@ -757,7 +742,7 @@ class AIService:
             })
 
             # Create LLM using the provider from node configuration
-            logger.info(f"[LangGraph] Creating {provider} model: {model}")
+            logger.debug(f"[LangGraph] Creating {provider} model: {model}")
             chat_model = self.create_model(provider, api_key, model, temperature, max_tokens)
 
             # Build initial messages for state
@@ -822,7 +807,7 @@ class AIService:
                         tools.append(tool)
                         tool_configs[tool.name] = config
 
-                logger.info(f"[LangGraph] Built {len(tools)} tools: {[t.name for t in tools]}")
+                logger.debug(f"[LangGraph] Built {len(tools)} tools")
 
             # Create tool executor callback
             async def tool_executor(tool_name: str, tool_args: Dict) -> Any:
@@ -832,7 +817,7 @@ class AIService:
                 config = tool_configs.get(tool_name, {})
                 tool_node_id = config.get('node_id')
 
-                logger.info(f"[LangGraph] tool_executor called for: {tool_name} (node_id: {tool_node_id})")
+                logger.debug(f"[LangGraph] tool_executor: {tool_name}")
 
                 # Broadcast executing status to the AI Agent node
                 await broadcast_status("executing_tool", {
@@ -882,7 +867,7 @@ class AIService:
             })
 
             # Build and execute LangGraph agent
-            logger.info(f"[LangGraph] Building agent graph with {len(initial_messages)} initial messages and {len(tools)} tools")
+            logger.debug(f"[LangGraph] Building agent graph with {len(initial_messages)} messages")
             agent_graph = build_agent_graph(
                 chat_model,
                 tools=tools if tools else None,
@@ -925,7 +910,7 @@ class AIService:
             response_content = self._extract_text_content(raw_content, ai_response)
             iterations = final_state.get("iteration", 1)
 
-            logger.info(f"[LangGraph] Agent completed in {iterations} iteration(s), response length: {len(response_content)}")
+            logger.info(f"[LangGraph] Agent completed in {iterations} iteration(s)")
 
             # Save to memory if connected (persist to database)
             # Only save non-empty messages using standardized validation
@@ -1025,7 +1010,7 @@ class AIService:
 
             if db_schema:
                 # Use database schema as source of truth
-                logger.info(f"[LangGraph] Using DB schema for tool node {node_id}")
+                logger.debug(f"[LangGraph] Using DB schema for tool node {node_id}")
                 tool_name = db_schema.get('tool_name', DEFAULT_TOOL_NAMES.get(node_type, f"tool_{node_label}"))
                 tool_description = db_schema.get('tool_description', DEFAULT_TOOL_DESCRIPTIONS.get(node_type, f"Execute {node_label}"))
                 # Use stored connected_services if available (for toolkit nodes)
@@ -1082,7 +1067,7 @@ class AIService:
                 'connected_services': connected_services  # Pass through for execution
             }
 
-            logger.info(f"[LangGraph] Built tool '{tool_name}' from node type '{node_type}'")
+            logger.debug(f"[LangGraph] Built tool '{tool_name}'")
             return tool, config
 
         except Exception as e:

@@ -314,6 +314,10 @@ class RelayWebSocketClient:
         if method == "pairing.connected":
             await self._handle_pairing_connected(params)
 
+        elif method == "pairing.restored":
+            # Handle auto-reconnect of previously paired device
+            await self._handle_pairing_restored(params)
+
         elif method == "pairing.disconnected":
             await self._handle_pairing_disconnected(params)
 
@@ -340,6 +344,24 @@ class RelayWebSocketClient:
         await broadcast_connected(self.paired_device_id, self.paired_device_name)
 
         # Persist pairing data for auto-reconnect on server restart
+        await self._save_pairing_session()
+
+        if self.on_pairing_connected:
+            await self.on_pairing_connected(params)
+
+    async def _handle_pairing_restored(self, params: dict):
+        """Handle pairing.restored event - auto-reconnect of previously paired device."""
+        self.paired = True
+        self.paired_device_id = params.get("device_id")
+        self.paired_device_name = params.get("device_name")
+
+        logger.info("[Relay] Android pairing restored (auto-reconnect)",
+                   device_id=self.paired_device_id,
+                   device_name=self.paired_device_name)
+
+        await broadcast_connected(self.paired_device_id, self.paired_device_name)
+
+        # Update saved session with latest info
         await self._save_pairing_session()
 
         if self.on_pairing_connected:

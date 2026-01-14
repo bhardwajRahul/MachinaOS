@@ -495,7 +495,7 @@ class DeploymentManager:
 
         # Build filtered graph
         run_filter = {trigger_node_id} | {n['id'] for n in downstream}
-        logger.info(f"[Run] run_filter has {len(run_filter)} nodes: {[n.get('type') for n in state.nodes if n['id'] in run_filter]}")
+        logger.debug(f"[Run] run_filter has {len(run_filter)} nodes")
 
         filtered_nodes = []
         for node in state.nodes:
@@ -511,7 +511,7 @@ class DeploymentManager:
             e for e in state.edges
             if e.get('source') in run_filter and e.get('target') in run_filter
         ]
-        logger.info(f"[Run] filtered_edges: {len(filtered_edges)} edges (from {len(state.edges)} total)")
+        logger.debug(f"[Run] filtered_edges: {len(filtered_edges)} edges")
 
         # Execute filtered graph with deployment's workflow_id for scoped status
         status_callback = self._status_callbacks.get(workflow_id)
