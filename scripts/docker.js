@@ -6,14 +6,14 @@
  */
 
 import { spawn } from 'child_process';
-import { readFileSync, writeFileSync, existsSync, copyFileSync } from 'fs';
+import { readFileSync, existsSync, copyFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 
-// Create .env from template if it doesn't exist, with Docker-specific defaults
+// Create .env from template if it doesn't exist
 function ensureEnvFile() {
   const envPath = resolve(ROOT, '.env');
   if (existsSync(envPath)) return true;
@@ -28,13 +28,6 @@ function ensureEnvFile() {
     if (existsSync(templatePath)) {
       console.log(`[Docker] Creating .env from ${templatePath.replace(ROOT, '.')}`);
       copyFileSync(templatePath, envPath);
-
-      // Enable Redis by default for Docker mode
-      let content = readFileSync(envPath, 'utf8');
-      content = content.replace(/^REDIS_ENABLED\s*=\s*false/m, 'REDIS_ENABLED=true');
-      writeFileSync(envPath, content);
-      console.log('[Docker] Set REDIS_ENABLED=true for Docker mode');
-
       return true;
     }
   }
@@ -71,12 +64,12 @@ ensureEnvFile();
 // Build docker-compose command
 const composeArgs = [];
 
-// Add Redis profile if enabled
+// Add Redis profile if enabled in .env
 if (isRedisEnabled()) {
   composeArgs.push('--profile', 'redis');
-  console.log('[Docker] Redis profile enabled (REDIS_ENABLED=true)');
+  console.log('[Docker] Redis profile enabled (REDIS_ENABLED=true in .env)');
 } else {
-  console.log('[Docker] Redis profile disabled (REDIS_ENABLED=false or not set)');
+  console.log('[Docker] Redis profile disabled (REDIS_ENABLED=false in .env)');
 }
 
 // Add command
