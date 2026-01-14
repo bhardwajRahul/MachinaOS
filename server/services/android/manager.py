@@ -51,12 +51,17 @@ async def get_relay_client(base_url: str, api_key: str) -> tuple[Optional[RelayW
         return None, error
 
 
-async def close_relay_client():
-    """Close global relay client."""
+async def close_relay_client(clear_stored_session: bool = True):
+    """Close global relay client.
+
+    Args:
+        clear_stored_session: If True, clear stored pairing session from database.
+                              This prevents auto-reconnect on next client connect.
+    """
     global _relay_client
     if _relay_client:
-        logger.info("[Manager] Closing connection")
-        await _relay_client.disconnect()
+        logger.info("[Manager] Closing connection", clear_stored_session=clear_stored_session)
+        await _relay_client.disconnect(clear_stored_session=clear_stored_session)
         _relay_client = None
 
 

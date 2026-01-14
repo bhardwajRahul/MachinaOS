@@ -865,3 +865,63 @@ class Database:
         except Exception as e:
             logger.error("Failed to get all tool schemas", error=str(e))
             return []
+
+    # ============================================================================
+    # Android Relay Session Persistence
+    # ============================================================================
+
+    async def save_android_relay_session(
+        self,
+        relay_url: str,
+        api_key: str,
+        device_id: str,
+        device_name: Optional[str] = None,
+        session_token: Optional[str] = None
+    ) -> bool:
+        """Save Android relay pairing session for auto-reconnect on server restart.
+
+        Args:
+            relay_url: WebSocket relay URL
+            api_key: API key for relay authentication
+            device_id: Paired Android device ID
+            device_name: Paired device name
+            session_token: Relay session token
+        """
+        import json
+        try:
+            session_data = json.dumps({
+                "relay_url": relay_url,
+                "api_key": api_key,
+                "device_id": device_id,
+                "device_name": device_name,
+                "session_token": session_token
+            })
+            # No TTL - session persists until explicitly cleared
+            return await self.set_cache_entry("android_relay_session", session_data)
+        except Exception as e:
+            logger.error("Failed to save Android relay session", error=str(e))
+            return False
+
+    async def get_android_relay_session(self) -> Optional[Dict[str, Any]]:
+        """Get stored Android relay session for auto-reconnect.
+
+        Returns:
+            Session data dict or None if not found
+        """
+        import json
+        try:
+            value = await self.get_cache_entry("android_relay_session")
+            if value:
+                return json.loads(value)
+            return None
+        except Exception as e:
+            logger.error("Failed to get Android relay session", error=str(e))
+            return None
+
+    async def clear_android_relay_session(self) -> bool:
+        """Clear stored Android relay session (on explicit disconnect)."""
+        try:
+            return await self.delete_cache_entry("android_relay_session")
+        except Exception as e:
+            logger.error("Failed to clear Android relay session", error=str(e))
+            return False

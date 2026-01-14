@@ -226,9 +226,51 @@ async def handle_whatsapp_chat_history(
         message_filter = parameters.get('messageFilter', 'all')
         rpc_params['text_only'] = message_filter == 'text_only'
 
-        # Pagination
-        rpc_params['limit'] = parameters.get('limit', 50)
-        rpc_params['offset'] = parameters.get('offset', 0)
+        # Result mode and pagination
+        result_mode = parameters.get('resultMode', 'multiple')
+        position = parameters.get('position', 1)
+
+        if result_mode == 'single':
+            # Single message by position mode
+            if position > 0:
+                # Positive: from newest (1=most recent)
+                rpc_params['limit'] = 1
+                rpc_params['offset'] = position - 1
+            else:
+                # Negative: from oldest (-1=oldest)
+                # First, get total count with limit=1 to minimize data transfer
+                rpc_params['limit'] = 1
+                rpc_params['offset'] = 0
+                count_data = await whatsapp_chat_history_handler(rpc_params)
+                total = count_data.get('total', 0)
+
+                if total == 0:
+                    return {
+                        "success": True,
+                        "node_id": node_id,
+                        "node_type": "whatsappChatHistory",
+                        "result": {
+                            "messages": [],
+                            "total": 0,
+                            "has_more": False,
+                            "count": 0,
+                            "chat_type": chat_type,
+                            "timestamp": datetime.now().isoformat()
+                        },
+                        "execution_time": time.time() - start_time,
+                        "timestamp": datetime.now().isoformat()
+                    }
+
+                # Calculate offset from the end: -1 = last (oldest in desc order = total-1)
+                # Since messages are ordered DESC (newest first), -1 means oldest = offset total-1
+                offset = total + position  # e.g., total=100, pos=-1 -> offset=99
+                if offset < 0:
+                    offset = 0
+                rpc_params['offset'] = offset
+        else:
+            # Multiple messages mode - use standard pagination
+            rpc_params['limit'] = parameters.get('limit', 50)
+            rpc_params['offset'] = parameters.get('offset', 0)
 
         # Call WhatsApp Go RPC service
         data = await whatsapp_chat_history_handler(rpc_params)
@@ -240,6 +282,11 @@ async def handle_whatsapp_chat_history(
         messages = data.get('messages', [])
         total = data.get('total', 0)
         has_more = data.get('has_more', False)
+
+        # Add index to each message (1-based, from offset)
+        base_offset = rpc_params.get('offset', 0)
+        for i, msg in enumerate(messages):
+            msg['index'] = base_offset + i + 1
 
         return {
             "success": True,

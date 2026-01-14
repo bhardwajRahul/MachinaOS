@@ -69,6 +69,13 @@ class StatusBroadcaster:
             self._connections.add(websocket)
         logger.info(f"[StatusBroadcaster] Client connected. Total: {len(self._connections)}")
 
+        # Fetch fresh WhatsApp status before sending initial_status
+        # This ensures client sees actual connection state (especially after auto-connect)
+        await self._refresh_whatsapp_status()
+
+        # Auto-reconnect Android relay if there's a stored session
+        await self._auto_reconnect_android_relay()
+
         # Send current full status immediately
         try:
             await websocket.send_json({
@@ -193,6 +200,106 @@ class StatusBroadcaster:
     # =========================================================================
     # WhatsApp Status Updates
     # =========================================================================
+
+    async def _refresh_whatsapp_status(self):
+        """Fetch fresh WhatsApp status from Go service and update cache.
+
+        Called on client connect to ensure initial_status has accurate data.
+        Silently fails if WhatsApp service is unavailable.
+        """
+        try:
+            from routers.whatsapp import get_client
+            import time
+
+            client = await get_client()
+            status_data = await client.call("status")
+
+            self._status["whatsapp"] = {
+                "connected": status_data.get("connected", False),
+                "has_session": status_data.get("has_session", False),
+                "running": status_data.get("running", False),
+                "pairing": status_data.get("pairing", False),
+                "device_id": status_data.get("device_id"),
+                "qr": None,
+                "timestamp": time.time()
+            }
+            logger.debug(f"[StatusBroadcaster] Refreshed WhatsApp status: connected={status_data.get('connected')}")
+        except Exception as e:
+            # Don't fail client connection if WhatsApp service is down
+            logger.debug(f"[StatusBroadcaster] Could not refresh WhatsApp status: {e}")
+
+    async def _auto_reconnect_android_relay(self):
+        """Auto-reconnect to Android relay if there's a stored pairing session.
+
+        Called on client connect to re-establish relay connection after server restart.
+        The stored session contains relay URL, API key, and paired device info.
+        """
+        try:
+            # Check if already connected
+            from services.android.manager import get_current_relay_client
+            existing = get_current_relay_client()
+            if existing and existing.is_connected():
+                # Already connected, just refresh status
+                self._status["android"] = {
+                    "connected": True,
+                    "paired": existing.is_paired(),
+                    "device_id": existing.paired_device_id,
+                    "device_name": existing.paired_device_name,
+                    "connected_devices": list(existing.get_connected_devices()),
+                    "connection_type": "relay",
+                    "qr_data": existing.qr_data,
+                    "session_token": existing.session_token
+                }
+                logger.debug("[StatusBroadcaster] Android relay already connected")
+                return
+
+            # Check for stored session
+            from core.container import container
+            database = container.database()
+
+            session = await database.get_android_relay_session()
+            if not session:
+                logger.debug("[StatusBroadcaster] No stored Android relay session")
+                return
+
+            relay_url = session.get("relay_url")
+            api_key = session.get("api_key")
+            device_id = session.get("device_id")
+            device_name = session.get("device_name")
+
+            if not relay_url or not api_key:
+                logger.debug("[StatusBroadcaster] Stored session missing relay URL or API key")
+                return
+
+            logger.info(f"[StatusBroadcaster] Auto-reconnecting to Android relay...",
+                       relay_url=relay_url, device_id=device_id)
+
+            # Attempt to reconnect
+            from services.android.manager import get_relay_client
+            client, error = await get_relay_client(relay_url, api_key)
+
+            if client and client.is_connected():
+                logger.info("[StatusBroadcaster] Android relay reconnected successfully")
+                # Update status - connected to relay but need to check if still paired
+                # The relay server creates a new session on each connect, so pairing is lost
+                # Update the cached status to reflect the current state
+                self._status["android"] = {
+                    "connected": True,
+                    "paired": client.is_paired(),
+                    "device_id": client.paired_device_id,
+                    "device_name": client.paired_device_name,
+                    "connected_devices": list(client.get_connected_devices()),
+                    "connection_type": "relay",
+                    "qr_data": client.qr_data,
+                    "session_token": client.session_token
+                }
+            else:
+                logger.warning(f"[StatusBroadcaster] Failed to reconnect Android relay: {error}")
+                # Clear the stored session since reconnect failed
+                await database.clear_android_relay_session()
+
+        except Exception as e:
+            logger.debug(f"[StatusBroadcaster] Could not auto-reconnect Android relay: {e}")
 
     async def update_whatsapp_status(
         self,

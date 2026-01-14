@@ -152,7 +152,7 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
           } else {
             const sampleSchemas: Record<string, Record<string, any>> = {
               location: { latitude: 'number', longitude: 'number', accuracy: 'number', provider: 'string', altitude: 'number' },
-              ai: { response: 'string', model: 'string', usage: { tokens: 'number' } },
+              ai: { response: 'string', model: 'string', provider: 'string', finish_reason: 'string', timestamp: 'string' },
               file: { fileName: 'string', fileSize: 'number' },
               whatsapp: {
                 message_id: 'string',
@@ -309,7 +309,8 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
 
             // Node type detection
             const isMemory = nodeType === 'simpleMemory';
-            const isAI = !isMemory && (nodeType.includes('ai') || nodeType.includes('chat'));
+            const nodeTypeLower = nodeType.toLowerCase();
+            const isAI = !isMemory && (nodeTypeLower.includes('chatmodel') || nodeTypeLower.includes('aiagent'));
             const isFile = nodeType.includes('file');
             const isWhatsApp = nodeType.includes('whatsapp') || nodeType.includes('Whatsapp');
             const isWebhook = nodeType === 'webhookTrigger';

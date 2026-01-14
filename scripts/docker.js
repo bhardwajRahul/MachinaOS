@@ -6,12 +6,35 @@
  */
 
 import { spawn } from 'child_process';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, copyFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
+
+// Create .env from template if it doesn't exist
+function ensureEnvFile() {
+  const envPath = resolve(ROOT, '.env');
+  if (existsSync(envPath)) return true;
+
+  // Try root .env.template first, then server/.env.template
+  const templates = [
+    resolve(ROOT, '.env.template'),
+    resolve(ROOT, 'server', '.env.template')
+  ];
+
+  for (const templatePath of templates) {
+    if (existsSync(templatePath)) {
+      console.log(`[Docker] Creating .env from ${templatePath.replace(ROOT, '.')}`);
+      copyFileSync(templatePath, envPath);
+      return true;
+    }
+  }
+
+  console.warn('[Docker] Warning: No .env or .env.template found');
+  return false;
+}
 
 // Read .env file and check REDIS_ENABLED
 function isRedisEnabled() {
@@ -34,6 +57,9 @@ if (!command) {
   console.error('Commands: up, down, build, logs, restart');
   process.exit(1);
 }
+
+// Ensure .env exists (create from template if needed)
+ensureEnvFile();
 
 // Build docker-compose command
 const composeArgs = [];

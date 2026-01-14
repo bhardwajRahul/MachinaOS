@@ -152,6 +152,12 @@ func (h *HistoryStore) Close() error {
 	return nil
 }
 
+// ClearHistory deletes all messages from the history store
+func (h *HistoryStore) ClearHistory() error {
+	_, err := h.db.Exec("DELETE FROM message_history")
+	return err
+}
+
 func boolToInt(b bool) int {
 	if b {
 		return 1

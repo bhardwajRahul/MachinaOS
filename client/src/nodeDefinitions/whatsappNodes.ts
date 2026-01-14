@@ -719,6 +719,29 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         description: 'Filter by message type'
       },
 
+      // ===== RESULT MODE =====
+      {
+        displayName: 'Result Mode',
+        name: 'resultMode',
+        type: 'options',
+        options: [
+          { name: 'Multiple Messages', value: 'multiple' },
+          { name: 'Single Message by Position', value: 'single' }
+        ],
+        default: 'multiple',
+        description: 'Return multiple messages or a single message at specific position'
+      },
+      {
+        displayName: 'Message Position',
+        name: 'position',
+        type: 'number',
+        default: 1,
+        description: 'Position: positive from newest (1=most recent), negative from oldest (-1=oldest)',
+        displayOptions: {
+          show: { resultMode: ['single'] }
+        }
+      },
+
       // ===== PAGINATION =====
       {
         displayName: 'Limit',
@@ -726,7 +749,10 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         type: 'number',
         default: 50,
         typeOptions: { minValue: 1, maxValue: 500 },
-        description: 'Maximum number of messages to retrieve (1-500)'
+        description: 'Maximum number of messages to retrieve (1-500)',
+        displayOptions: {
+          show: { resultMode: ['multiple'] }
+        }
       },
       {
         displayName: 'Offset',
@@ -734,7 +760,10 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         type: 'number',
         default: 0,
         typeOptions: { minValue: 0 },
-        description: 'Number of messages to skip (for pagination)'
+        description: 'Number of messages to skip (for pagination)',
+        displayOptions: {
+          show: { resultMode: ['multiple'] }
+        }
       }
     ],
     methods: {

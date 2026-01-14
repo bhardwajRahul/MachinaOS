@@ -159,9 +159,15 @@ class RelayWebSocketClient:
             logger.error("[Relay] Connection error", error=str(e), exc_info=True)
             return False, f"Connection error: {str(e)}"
 
-    async def disconnect(self):
-        """Close connection and cleanup."""
-        logger.info("[Relay] Disconnecting...")
+    async def disconnect(self, clear_stored_session: bool = True):
+        """Close connection and cleanup.
+
+        Args:
+            clear_stored_session: If True, clear stored pairing session from database.
+                                  Set to False when disconnecting due to connection drop
+                                  (will try to auto-reconnect later).
+        """
+        logger.info("[Relay] Disconnecting...", clear_stored_session=clear_stored_session)
         self._running = False
 
         # Cancel background tasks
@@ -191,10 +197,25 @@ class RelayWebSocketClient:
         # Cancel pending RPC requests
         self._rpc_tracker.cancel_all()
 
+        # Clear stored session if explicitly disconnecting
+        if clear_stored_session:
+            await self._clear_stored_session()
+
         # Broadcast relay disconnection (fully disconnected from relay server)
         await broadcast_relay_disconnected()
 
         logger.info("[Relay] Disconnected")
+
+    async def _clear_stored_session(self):
+        """Clear stored pairing session from database."""
+        try:
+            from core.container import container
+            database = container.database()
+
+            await database.clear_android_relay_session()
+            logger.info("[Relay] Cleared stored pairing session")
+        except Exception as e:
+            logger.warning("[Relay] Failed to clear stored session", error=str(e))
 
     def is_connected(self) -> bool:
         """Check if connected to relay server."""
@@ -318,8 +339,28 @@ class RelayWebSocketClient:
 
         await broadcast_connected(self.paired_device_id, self.paired_device_name)
 
+        # Persist pairing data for auto-reconnect on server restart
+        await self._save_pairing_session()
+
         if self.on_pairing_connected:
             await self.on_pairing_connected(params)
+
+    async def _save_pairing_session(self):
+        """Save pairing session to database for auto-reconnect."""
+        try:
+            from core.container import container
+            database = container.database()
+
+            await database.save_android_relay_session(
+                relay_url=self.base_url,
+                api_key=self.api_key,
+                device_id=self.paired_device_id,
+                device_name=self.paired_device_name,
+                session_token=self.session_token
+            )
+            logger.info("[Relay] Pairing session saved for auto-reconnect")
+        except Exception as e:
+            logger.warning("[Relay] Failed to save pairing session", error=str(e))
 
     async def _handle_pairing_disconnected(self, params: dict):
         """Handle pairing.disconnected event.

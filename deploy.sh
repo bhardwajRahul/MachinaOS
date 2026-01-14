@@ -55,11 +55,19 @@ tar --exclude='node_modules' \
 
 scp /tmp/machinaos-src.tar.gz "${GCP_HOST}:/tmp/${SERVICE_NAME}/"
 
-# Upload production .env (prefer .env.production, fallback to .env)
+# Upload production .env (prefer .env.production, fallback to .env, then create from template)
 if [ -f "${LOCAL_DIR}/server/.env.production" ]; then
     scp "${LOCAL_DIR}/server/.env.production" "${GCP_HOST}:/tmp/${SERVICE_NAME}/.env"
 elif [ -f "${LOCAL_DIR}/server/.env" ]; then
     scp "${LOCAL_DIR}/server/.env" "${GCP_HOST}:/tmp/${SERVICE_NAME}/.env"
+elif [ -f "${LOCAL_DIR}/.env.template" ]; then
+    echo "No .env found, creating from .env.template..."
+    scp "${LOCAL_DIR}/.env.template" "${GCP_HOST}:/tmp/${SERVICE_NAME}/.env"
+elif [ -f "${LOCAL_DIR}/server/.env.template" ]; then
+    echo "No .env found, creating from server/.env.template..."
+    scp "${LOCAL_DIR}/server/.env.template" "${GCP_HOST}:/tmp/${SERVICE_NAME}/.env"
+else
+    echo "Warning: No .env or .env.template found. Using docker-compose environment variables only."
 fi
 
 # Step 2: Build and deploy on remote

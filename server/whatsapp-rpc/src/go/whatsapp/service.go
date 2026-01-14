@@ -123,6 +123,17 @@ func NewService(dbConfig config.DatabaseConfig, logger *logrus.Logger) (*Service
 	return service, nil
 }
 
+// HasExistingSession returns true if there's a stored session that can be used to auto-connect
+func (s *Service) HasExistingSession() bool {
+	hasClient := s.client != nil
+	hasStore := hasClient && s.client.Store != nil
+	hasID := hasStore && s.client.Store.ID != nil
+
+	s.logger.Infof("HasExistingSession check: client=%v, store=%v, id=%v", hasClient, hasStore, hasID)
+
+	return hasID
+}
+
 func (s *Service) safeEventSend(event Event) {
 	if s.shutdown {
 		return
@@ -1916,23 +1927,20 @@ func (s *Service) Reset() error {
 		}
 	}
 
+	// Clear message history (belongs to old instance)
+	if s.historyStore != nil {
+		s.logger.Info("Clearing message history...")
+		if err := s.historyStore.ClearHistory(); err != nil {
+			s.logger.Warnf("Failed to clear history: %v", err)
+		}
+	}
+
 	// Clear client reference to allow GC and release DB locks
 	s.client = nil
 	s.container = nil
 
 	// Give time for database to release locks
-	time.Sleep(2 * time.Second)
-
-	// Delete database files
-	dbFiles := []string{s.dbPath, s.dbPath + "-wal", s.dbPath + "-shm"}
-	for _, file := range dbFiles {
-		if _, err := os.Stat(file); err == nil {
-			s.logger.Infof("Deleting: %s", file)
-			if err := os.Remove(file); err != nil {
-				s.logger.Warnf("Failed to delete %s: %v", file, err)
-			}
-		}
-	}
+	time.Sleep(500 * time.Millisecond)
 
 	// Reinitialize client with fresh database
 	if err := s.reinitClient(); err != nil {
