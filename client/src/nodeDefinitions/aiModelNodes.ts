@@ -172,6 +172,45 @@ const geminiConfig: ChatModelConfig = {
   ]
 };
 
+// OpenRouter Chat Model Configuration
+const openrouterConfig: ChatModelConfig = {
+  providerId: 'openrouter',
+  displayName: 'OpenRouter',
+  icon: '🔀',
+  color: '#6366F1',
+  description: 'OpenRouter unified API - access OpenAI, Claude, Gemini, Llama, and more through one API',
+  models: [], // Models fetched dynamically via API
+  parameters: [
+    STANDARD_PARAMETERS.temperature,
+    STANDARD_PARAMETERS.maxTokens,
+    STANDARD_PARAMETERS.topP,
+    STANDARD_PARAMETERS.frequencyPenalty,
+    STANDARD_PARAMETERS.presencePenalty,
+    {
+      displayName: 'Timeout',
+      name: 'timeout',
+      type: 'number',
+      default: 60000,
+      typeOptions: {
+        minValue: 1000,
+        maxValue: 180000
+      },
+      description: 'Timeout for the request in milliseconds'
+    },
+    {
+      displayName: 'Max Retries',
+      name: 'maxRetries',
+      type: 'number',
+      default: 2,
+      typeOptions: {
+        minValue: 0,
+        maxValue: 5
+      },
+      description: 'Maximum number of retries'
+    }
+  ]
+};
+
 // ============================================================================
 // GENERATED CHAT MODEL NODES
 // ============================================================================
@@ -179,9 +218,10 @@ const geminiConfig: ChatModelConfig = {
 export const aiModelNodes: Record<string, INodeTypeDescription> = {
   openaiChatModel: createBaseChatModel(openaiConfig),
   anthropicChatModel: createBaseChatModel(claudeConfig),
-  geminiChatModel: createBaseChatModel(geminiConfig)
+  geminiChatModel: createBaseChatModel(geminiConfig),
+  openrouterChatModel: createBaseChatModel(openrouterConfig)
 };
 
 // Export configurations and factory for external use
-export { openaiConfig, claudeConfig, geminiConfig, createBaseChatModel };
+export { openaiConfig, claudeConfig, geminiConfig, openrouterConfig, createBaseChatModel };
 

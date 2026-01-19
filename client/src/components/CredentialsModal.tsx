@@ -14,6 +14,7 @@ const PROVIDERS = [
   { id: 'openai', name: 'OpenAI', placeholder: 'sk-...', color: '#10a37f', desc: 'GPT-4o, GPT-4 Turbo, GPT-3.5' },
   { id: 'anthropic', name: 'Anthropic', placeholder: 'sk-ant-...', color: '#d97706', desc: 'Claude 3.5 Sonnet, Claude 3 Opus' },
   { id: 'gemini', name: 'Gemini', placeholder: 'AIza...', color: '#4285f4', desc: 'Gemini 1.5 Pro, Gemini Flash' },
+  { id: 'openrouter', name: 'OpenRouter', placeholder: 'sk-or-...', color: '#6366f1', desc: 'Unified API - OpenAI, Claude, Llama, Mistral, and more' },
   { id: 'google_maps', name: 'Google Maps', placeholder: 'AIza...', color: '#34a853', desc: 'Geocoding, Places API' },
   { id: 'android_remote', name: 'Android Remote', placeholder: 'your-api-key...', color: '#3ddc84', desc: 'Remote Android device via WebSocket' },
 ];

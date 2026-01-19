@@ -77,14 +77,19 @@ class DynamicParameterService {
 
   // Format model name for display
   private static formatModelName(modelId: string): string {
-    return modelId
+    // Preserve [FREE] prefix if present
+    const hasFreePrefix = modelId.startsWith('[FREE] ');
+    const cleanId = hasFreePrefix ? modelId.slice(7) : modelId;
+
+    const formatted = cleanId
       .replace(/^gpt-/, 'GPT-')
       .replace(/^claude-/, 'Claude ')
       .replace(/^gemini-/, 'Gemini ')
       .replace(/turbo/i, 'Turbo')
-      .replace(/^o1-/, 'O1-')
-      .replace(/-/g, ' ')
-      .replace(/\b\w/g, l => l.toUpperCase());
+      .replace(/^o1-/, 'O1-');
+
+    // Return with [FREE] prefix preserved if it was there
+    return hasFreePrefix ? `[FREE] ${formatted}` : formatted;
   }
 }
 

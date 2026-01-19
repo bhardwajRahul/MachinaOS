@@ -21,7 +21,8 @@ const NODE_TYPE_TO_PROVIDER: Record<string, string> = {
   'azureChatModel': 'azure_openai',
   'cohereChatModel': 'cohere',
   'ollamaChatModel': 'ollama',
-  'mistralChatModel': 'mistral'
+  'mistralChatModel': 'mistral',
+  'openrouterChatModel': 'openrouter'
 };
 
 // Collection Renderer - n8n official style
@@ -870,15 +871,19 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
               const modelOptions = DynamicParameterService.createModelOptions(models);
               DynamicParameterService.updateParameterOptions(selectedNode.id, 'model', modelOptions);
 
+              // Extract model ID (handles both string and object formats)
+              const getModelId = (model: any) => typeof model === 'string' ? model : model.id;
+              const firstModelId = getModelId(models[0]);
+
               // When user actively changes provider, reset to first model
               // to prevent mismatched provider/model combinations (e.g., OpenAI model with Anthropic provider)
               if (isActualProviderChange) {
-                onChange(models[0]);
+                onChange(firstModelId);
               } else {
                 // Initial load or no provider change - only auto-select if no saved model exists
                 const savedModel = value || allParameters?.model;
                 if (!savedModel || savedModel === '') {
-                  onChange(models[0]);
+                  onChange(firstModelId);
                 }
                 // If saved model exists, keep it (don't call onChange)
               }
@@ -1243,6 +1248,58 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
         // Check if this parameter has dynamic options (like models after API key validation)
 
         if (dynamicOptions.length > 0 && parameter.type === 'string') {
+          // Check if OpenRouter (has [FREE] tagged models)
+          const hasFreeModels = dynamicOptions.some(opt => String(opt.label || opt.value).includes('[FREE]'));
+
+          if (hasFreeModels) {
+            // Group into Free and Paid for OpenRouter using native select with optgroup
+            const freeModels = dynamicOptions.filter(opt => String(opt.label || opt.value).includes('[FREE]'));
+            const paidModels = dynamicOptions.filter(opt => !String(opt.label || opt.value).includes('[FREE]'));
+
+            return (
+              <select
+                value={currentValue || ''}
+                onChange={(e) => onChange(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: theme.spacing.sm,
+                  border: `1px solid ${theme.colors.border}`,
+                  borderRadius: theme.borderRadius.md,
+                  fontSize: theme.fontSize.sm,
+                  outline: 'none',
+                  transition: 'border-color 0.2s ease',
+                  cursor: 'pointer',
+                  backgroundColor: theme.colors.background,
+                  color: theme.colors.text,
+                  fontFamily: 'system-ui, sans-serif'
+                }}
+                onFocus={(e) => e.target.style.borderColor = theme.colors.focus}
+                onBlur={(e) => e.target.style.borderColor = theme.colors.border}
+              >
+                {!currentValue && (
+                  <option value="" disabled>
+                    Select a model...
+                  </option>
+                )}
+                <optgroup label={`Free Models (${freeModels.length})`}>
+                  {freeModels.map((option) => (
+                    <option key={String(option.value)} value={String(option.value)}>
+                      {option.label || option.name || String(option.value)}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label={`Paid Models (${paidModels.length})`}>
+                  {paidModels.map((option) => (
+                    <option key={String(option.value)} value={String(option.value)}>
+                      {option.label || option.name || String(option.value)}
+                    </option>
+                  ))}
+                </optgroup>
+              </select>
+            );
+          }
+
+          // Use native select for non-OpenRouter (original working code)
           return (
             <select
               value={currentValue || ''}

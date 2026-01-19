@@ -52,6 +52,14 @@ def _gemini_headers(api_key: str) -> dict:
     return {}  # API key in URL for Gemini
 
 
+def _openrouter_headers(api_key: str) -> dict:
+    return {
+        'Authorization': f'Bearer {api_key}',
+        'HTTP-Referer': 'http://localhost:3000',
+        'X-Title': 'MachinaOS'
+    }
+
+
 # Provider configurations
 PROVIDER_CONFIGS: Dict[str, ProviderConfig] = {
     'openai': ProviderConfig(
@@ -83,6 +91,16 @@ PROVIDER_CONFIGS: Dict[str, ProviderConfig] = {
         default_model='gemini-1.5-pro',
         models_endpoint='https://generativelanguage.googleapis.com/v1beta/models',
         models_header_fn=_gemini_headers
+    ),
+    'openrouter': ProviderConfig(
+        name='openrouter',
+        model_class=ChatOpenAI,  # OpenRouter is OpenAI API compatible
+        api_key_param='api_key',  # ChatOpenAI accepts 'api_key' as alias
+        max_tokens_param='max_tokens',
+        detection_patterns=('openrouter',),
+        default_model='openai/gpt-4o-mini',
+        models_endpoint='https://openrouter.ai/api/v1/models',
+        models_header_fn=_openrouter_headers
     ),
 }
 
@@ -527,6 +545,14 @@ class AIService:
             config.max_tokens_param: max_tokens
         }
 
+        # OpenRouter uses OpenAI-compatible API with custom base_url
+        if provider == 'openrouter':
+            kwargs['base_url'] = 'https://openrouter.ai/api/v1'
+            kwargs['default_headers'] = {
+                'HTTP-Referer': 'http://localhost:3000',
+                'X-Title': 'MachinaOS'
+            }
+
         return config.model_class(**kwargs)
 
     async def fetch_models(self, provider: str, api_key: str) -> List[str]:
@@ -581,6 +607,35 @@ class AIService:
 
                 return sorted(models)
 
+            elif provider == 'openrouter':
+                response = await client.get(
+                    'https://openrouter.ai/api/v1/models',
+                    headers={'Authorization': f'Bearer {api_key}'}
+                )
+                response.raise_for_status()
+                data = response.json()
+
+                free_models = []
+                paid_models = []
+                for model in data.get('data', []):
+                    model_id = model.get('id', '')
+                    arch = model.get('architecture', {})
+                    modality = arch.get('modality', '')
+                    if 'text' in modality and model_id:
+                        pricing = model.get('pricing', {})
+                        prompt_price = float(pricing.get('prompt', '0') or '0')
+                        completion_price = float(pricing.get('completion', '0') or '0')
+                        is_free = prompt_price == 0 and completion_price == 0
+                        # Add [FREE] tag to free models
+                        display_name = f"[FREE] {model_id}" if is_free else model_id
+                        if is_free:
+                            free_models.append(display_name)
+                        else:
+                            paid_models.append(display_name)
+
+                # Return free models first, then paid models (both sorted)
+                return sorted(free_models) + sorted(paid_models)
+
             else:
                 raise ValueError(f"Unsupported provider: {provider}")
 
@@ -596,6 +651,9 @@ class AIService:
             # Extract parameters with camelCase/snake_case support for LangChain
             api_key = flattened.get('api_key') or flattened.get('apiKey')
             model = flattened.get('model', 'gpt-3.5-turbo')
+            # Strip [FREE] prefix if present (added by OpenRouter model list for display)
+            if model.startswith('[FREE] '):
+                model = model[7:]
             prompt = flattened.get('prompt', 'Hello')
 
             # System prompt/message - support multiple naming conventions
@@ -616,8 +674,12 @@ class AIService:
             if not is_valid_message_content(prompt):
                 raise ValueError("Prompt cannot be empty")
 
-            # Create model
-            provider = self.detect_provider(model)
+            # Determine provider from node_type (more reliable than model name detection)
+            # OpenRouter models have format like "openai/gpt-4o" which would incorrectly detect as openai
+            if node_type == 'openrouterChatModel':
+                provider = 'openrouter'
+            else:
+                provider = self.detect_provider(model)
             chat_model = self.create_model(provider, api_key, model, temperature, max_tokens)
 
             # Prepare messages

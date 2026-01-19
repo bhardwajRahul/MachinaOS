@@ -399,9 +399,9 @@ func (s *Service) handleIncomingMessage(v *events.Message) {
 	}
 
 	if isGroup {
-		s.logger.Infof("Processing group message from %s (phone: %s) in %s (ID: %s)", sender, senderPhone, chatID, messageID)
+		s.logger.Debugf("Processing group message from %s (phone: %s) in %s (ID: %s)", sender, senderPhone, chatID, messageID)
 	} else {
-		s.logger.Infof("Processing individual message from %s (phone: %s) (ID: %s)", sender, senderPhone, messageID)
+		s.logger.Debugf("Processing individual message from %s (phone: %s) (ID: %s)", sender, senderPhone, messageID)
 	}
 
 	// Store message for later media download (keep last 100 messages to avoid memory issues)
@@ -644,8 +644,8 @@ func (s *Service) handleIncomingMessage(v *events.Message) {
 	eventData["message_type"] = messageType
 	eventData["content"] = messageContent
 
-	// Log the message
-	s.logger.Infof("Received %s message from %s", messageType, sender)
+	// Log the message (debug level to reduce noise)
+	s.logger.Debugf("Received %s message from %s", messageType, sender)
 
 	// Persist ALL messages to history store for future retrieval
 	if s.historyStore != nil {

@@ -14,7 +14,8 @@ const CREDENTIAL_TO_PROVIDER: Record<string, string> = {
   'azureOpenaiApi': 'azure_openai',
   'cohereApi': 'cohere',
   'ollamaApi': 'ollama',
-  'mistralApi': 'mistral'
+  'mistralApi': 'mistral',
+  'openrouterApi': 'openrouter'
 };
 
 const ModelNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectable, selected }) => {
@@ -40,6 +41,7 @@ const ModelNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectabl
     }
 
     // Fallback: extract provider from node type
+    if (type?.includes('openrouter')) return 'openrouter';
     if (type?.includes('openai')) return 'openai';
     if (type?.includes('claude')) return 'anthropic';
     if (type?.includes('gemini')) return 'gemini';
@@ -89,6 +91,7 @@ const ModelNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectabl
     }
 
     // Fallback logic based on node type
+    if (type?.includes('openrouter')) return '🔀';
     if (type?.includes('openai')) return '🤖';
     if (type?.includes('claude')) return '🧠';
     if (type?.includes('gemini')) return '⭐';
