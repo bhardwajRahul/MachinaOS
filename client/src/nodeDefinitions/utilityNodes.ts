@@ -182,6 +182,39 @@ export const utilityNodes: Record<string, INodeTypeDescription> = {
     ]
   },
 
+  chatTrigger: {
+    displayName: 'Chat Trigger',
+    name: 'chatTrigger',
+    icon: '💬',
+    group: ['utility', 'trigger'],
+    version: 1,
+    description: 'Trigger workflow when user sends a chat message from the console input',
+    defaults: { name: 'Chat Trigger', color: '#10b981' },
+    inputs: [],
+    outputs: [{
+      name: 'main',
+      displayName: 'Message',
+      type: 'main' as NodeConnectionType,
+      description: 'message, timestamp, session_id'
+    }],
+    properties: [
+      {
+        displayName: 'Session ID',
+        name: 'sessionId',
+        type: 'string',
+        default: 'default',
+        description: 'Session identifier for grouping messages'
+      },
+      {
+        displayName: 'Placeholder',
+        name: 'placeholder',
+        type: 'string',
+        default: 'Type a message...',
+        description: 'Placeholder text for the chat input'
+      }
+    ]
+  },
+
   console: {
     displayName: 'Console',
     name: 'console',
@@ -248,4 +281,4 @@ export const utilityNodes: Record<string, INodeTypeDescription> = {
   }
 };
 
-export const UTILITY_NODE_TYPES = ['httpRequest', 'webhookTrigger', 'webhookResponse', 'console'];
+export const UTILITY_NODE_TYPES = ['httpRequest', 'webhookTrigger', 'webhookResponse', 'chatTrigger', 'console'];

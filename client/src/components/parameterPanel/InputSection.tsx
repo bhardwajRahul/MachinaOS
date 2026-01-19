@@ -326,6 +326,11 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                 volume: 'number',
                 is_playing: 'boolean',
                 current_track: 'string'
+              },
+              chatTrigger: {
+                message: 'string',
+                timestamp: 'string',
+                session_id: 'string'
               }
             };
 
@@ -342,6 +347,7 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
             const isJavaScript = nodeType.includes('javascript') || nodeType.includes('Javascript');
             const isCodeExecutor = isPython || isJavaScript;
             const isCronScheduler = nodeType === 'cronScheduler';
+            const isChatTrigger = nodeType === 'chatTrigger';
 
             // Android service node detection - check for specific Android node types
             const androidNodeTypes = [
@@ -374,6 +380,7 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                             isHttpRequest ? sampleSchemas.httpRequest :
                             isCodeExecutor ? sampleSchemas.python :
                             isCronScheduler ? sampleSchemas.cronScheduler :
+                            isChatTrigger ? sampleSchemas.chatTrigger :
                             { data: 'any' };
             }
           }

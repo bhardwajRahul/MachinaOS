@@ -168,6 +168,7 @@ EVENT_TRIGGER_TYPES: FrozenSet[str] = frozenset([
     'webhookTrigger',
     'whatsappReceive',
     'workflowTrigger',
+    'chatTrigger',
 ])
 
 # Legacy alias for backwards compatibility
@@ -188,6 +189,7 @@ WORKFLOW_TRIGGER_TYPES: FrozenSet[str] = frozenset([
     'webhookTrigger',
     'whatsappReceive',
     'workflowTrigger',
+    'chatTrigger',
 ])
 
 # =============================================================================

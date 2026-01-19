@@ -197,6 +197,11 @@ TRIGGER_REGISTRY: Dict[str, TriggerConfig] = {
         event_type='webhook_received',
         display_name='Webhook Request'
     ),
+    'chatTrigger': TriggerConfig(
+        node_type='chatTrigger',
+        event_type='chat_message_received',
+        display_name='Chat Message'
+    ),
     # Future triggers - just add to registry:
     # 'emailTrigger': TriggerConfig('emailTrigger', 'email_received', 'Email'),
     # 'mqttTrigger': TriggerConfig('mqttTrigger', 'mqtt_message', 'MQTT Message'),
@@ -357,10 +362,31 @@ def build_webhook_filter(params: Dict) -> Callable[[Dict], bool]:
     return matches
 
 
+def build_chat_filter(params: Dict) -> Callable[[Dict], bool]:
+    """Build filter function for chat messages from console input.
+
+    Args:
+        params: Node parameters with 'sessionId' field
+
+    Returns:
+        Filter function that checks if event session_id matches
+    """
+    session_id = params.get('sessionId', 'default')
+
+    def matches(data: Dict) -> bool:
+        event_session = data.get('session_id', 'default')
+        if session_id != 'default' and event_session != session_id:
+            return False
+        return True
+
+    return matches
+
+
 # Registry of filter builders per trigger type
 FILTER_BUILDERS: Dict[str, Callable[[Dict], Callable[[Dict], bool]]] = {
     'whatsappReceive': build_whatsapp_filter,
     'webhookTrigger': build_webhook_filter,
+    'chatTrigger': build_chat_filter,
 }
 
 

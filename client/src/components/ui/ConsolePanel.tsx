@@ -1,8 +1,10 @@
 /**
- * Console Panel - n8n-style debug output panel
+ * Console Panel - n8n-style debug output panel with chat input
  *
  * Displays console log entries from Console nodes during workflow execution.
+ * Includes chat input section for triggering chatTrigger nodes.
  * Shows in a collapsible bottom bar section with clear and filter options.
+ * Chat and Console are split 50/50 side by side.
  * Supports resizing by dragging the top edge.
  */
 
@@ -19,7 +21,7 @@ interface ConsolePanelProps {
   maxHeight?: number;
 }
 
-// Storage key for persisting panel height
+// Storage keys for persisting state
 const CONSOLE_HEIGHT_KEY = 'console_panel_height';
 
 const ConsolePanel: React.FC<ConsolePanelProps> = ({
@@ -31,10 +33,16 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
 }) => {
   const theme = useAppTheme();
   const { isDarkMode } = useTheme();
-  const { consoleLogs, clearConsoleLogs } = useWebSocket();
+  const { consoleLogs, clearConsoleLogs, sendChatMessage, chatMessages, clearChatMessages } = useWebSocket();
   const [filter, setFilter] = useState('');
   const [autoScroll, setAutoScroll] = useState(true);
   const logsEndRef = useRef<HTMLDivElement>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatInputRef = useRef<HTMLInputElement>(null);
+
+  // Chat input state
+  const [chatInput, setChatInput] = useState('');
+  const [isSending, setIsSending] = useState(false);
 
   // Panel height state with localStorage persistence
   const [panelHeight, setPanelHeight] = useState(() => {
@@ -122,9 +130,44 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
     }
   }, [filteredLogs.length, autoScroll, isOpen]);
 
-  const handleClear = useCallback(() => {
+  // Auto-scroll chat when new messages arrive
+  useEffect(() => {
+    if (isOpen && chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chatMessages?.length, isOpen]);
+
+  const handleClearConsole = useCallback(() => {
     clearConsoleLogs();
   }, [clearConsoleLogs]);
+
+  const handleClearChat = useCallback(() => {
+    clearChatMessages();
+  }, [clearChatMessages]);
+
+  // Handle chat message send
+  const handleSendChat = useCallback(async () => {
+    const message = chatInput.trim();
+    if (!message || isSending) return;
+
+    setIsSending(true);
+    try {
+      await sendChatMessage(message);
+      setChatInput('');
+    } catch (error) {
+      console.error('Failed to send chat message:', error);
+    } finally {
+      setIsSending(false);
+    }
+  }, [chatInput, isSending, sendChatMessage]);
+
+  // Handle Enter key in chat input
+  const handleChatKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendChat();
+    }
+  }, [handleSendChat]);
 
   const formatTimestamp = useCallback((timestamp: string) => {
     try {
@@ -172,7 +215,7 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
     zIndex: 10
   };
 
-  // Panel header with toggle, clear, and filter
+  // Panel header with toggle
   const panelHeaderStyle: React.CSSProperties = {
     display: 'flex',
     alignItems: 'center',
@@ -185,12 +228,6 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
   };
 
   const headerLeftStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px'
-  };
-
-  const headerRightStyle: React.CSSProperties = {
     display: 'flex',
     alignItems: 'center',
     gap: '8px'
@@ -214,35 +251,68 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
     fontWeight: theme.fontWeight.medium
   };
 
+  const contentStyle: React.CSSProperties = {
+    height: isOpen ? `${panelHeight}px` : '0px',
+    overflow: 'hidden',
+    backgroundColor: isDarkMode ? theme.dracula.background : theme.colors.background,
+    transition: isResizing ? 'none' : 'height 0.2s ease-in-out',
+    display: 'flex',
+    flexDirection: 'row'  // Side by side
+  };
+
+  const sectionStyle: React.CSSProperties = {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+    borderRight: `1px solid ${isDarkMode ? theme.dracula.selection : theme.colors.border}`
+  };
+
+  const sectionHeaderStyle: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '6px 12px',
+    backgroundColor: isDarkMode ? theme.dracula.currentLine : theme.colors.backgroundPanel,
+    borderBottom: `1px solid ${isDarkMode ? theme.dracula.selection : theme.colors.border}`,
+    minHeight: '32px'
+  };
+
+  const sectionTitleStyle: React.CSSProperties = {
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.semibold,
+    color: theme.colors.text,
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px'
+  };
+
   const buttonStyle: React.CSSProperties = {
     background: 'none',
     border: 'none',
     cursor: 'pointer',
-    padding: '4px 8px',
+    padding: '2px 6px',
     borderRadius: '4px',
-    fontSize: theme.fontSize.xs,
+    fontSize: '10px',
     color: theme.colors.textSecondary,
     transition: 'background-color 0.15s ease'
   };
 
+  const clearButtonStyle: React.CSSProperties = {
+    ...buttonStyle,
+    backgroundColor: isDarkMode ? `${theme.dracula.red}20` : `${theme.colors.error}15`,
+    color: isDarkMode ? theme.dracula.red : theme.colors.error
+  };
+
   const filterInputStyle: React.CSSProperties = {
-    padding: '4px 8px',
-    fontSize: theme.fontSize.xs,
+    padding: '2px 6px',
+    fontSize: '10px',
     backgroundColor: isDarkMode ? theme.dracula.background : theme.colors.background,
     border: `1px solid ${theme.colors.border}`,
     borderRadius: '4px',
     color: theme.colors.text,
-    width: '150px',
+    width: '100px',
     outline: 'none'
-  };
-
-  const contentStyle: React.CSSProperties = {
-    height: isOpen ? `${panelHeight}px` : '0px',
-    overflow: isOpen ? 'auto' : 'hidden',
-    backgroundColor: isDarkMode ? theme.dracula.background : theme.colors.background,
-    transition: isResizing ? 'none' : 'height 0.2s ease-in-out',
-    fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, monospace',
-    fontSize: '12px'
   };
 
   const logEntryStyle: React.CSSProperties = {
@@ -287,13 +357,81 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
     padding: '24px',
     textAlign: 'center',
     color: theme.colors.textMuted,
-    fontSize: theme.fontSize.sm
+    fontSize: theme.fontSize.xs,
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center'
   };
 
   const chevronStyle: React.CSSProperties = {
     transform: isOpen ? 'rotate(0deg)' : 'rotate(180deg)',
     transition: 'transform 0.2s ease',
     color: theme.colors.textSecondary
+  };
+
+  // Chat styles
+  const chatMessagesStyle: React.CSSProperties = {
+    flex: 1,
+    overflow: 'auto',
+    padding: '8px 12px'
+  };
+
+  const chatInputContainerStyle: React.CSSProperties = {
+    display: 'flex',
+    gap: '8px',
+    padding: '8px 12px',
+    borderTop: `1px solid ${isDarkMode ? theme.dracula.selection : theme.colors.border}`,
+    backgroundColor: isDarkMode ? theme.dracula.currentLine : theme.colors.backgroundPanel
+  };
+
+  const chatInputStyle: React.CSSProperties = {
+    flex: 1,
+    padding: '6px 10px',
+    fontSize: theme.fontSize.sm,
+    backgroundColor: isDarkMode ? theme.dracula.background : theme.colors.background,
+    border: `1px solid ${theme.colors.border}`,
+    borderRadius: '6px',
+    color: theme.colors.text,
+    outline: 'none'
+  };
+
+  const sendButtonStyle: React.CSSProperties = {
+    padding: '6px 12px',
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.medium,
+    backgroundColor: isDarkMode ? theme.dracula.green : theme.colors.success,
+    color: isDarkMode ? theme.dracula.background : 'white',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: isSending ? 'not-allowed' : 'pointer',
+    opacity: isSending ? 0.7 : 1,
+    transition: 'all 0.15s ease'
+  };
+
+  const chatMessageStyle = (isUser: boolean): React.CSSProperties => ({
+    padding: '6px 10px',
+    marginBottom: '6px',
+    borderRadius: '8px',
+    backgroundColor: isUser
+      ? (isDarkMode ? `${theme.dracula.purple}30` : `${theme.colors.primary}15`)
+      : (isDarkMode ? theme.dracula.selection : theme.colors.backgroundPanel),
+    maxWidth: '85%',
+    alignSelf: isUser ? 'flex-end' : 'flex-start',
+    wordBreak: 'break-word'
+  });
+
+  const chatMessageTextStyle: React.CSSProperties = {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.text,
+    margin: 0,
+    whiteSpace: 'pre-wrap'
+  };
+
+  const chatMessageTimeStyle: React.CSSProperties = {
+    fontSize: '9px',
+    color: theme.colors.textMuted,
+    marginTop: '2px'
   };
 
   return (
@@ -330,19 +468,101 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
             </svg>
           </span>
           <span style={titleStyle}>
-            Console
-            {consoleLogs.length > 0 && (
-              <span style={badgeStyle}>{consoleLogs.length}</span>
+            Chat / Console
+            {(consoleLogs.length > 0 || (chatMessages && chatMessages.length > 0)) && (
+              <span style={badgeStyle}>
+                {consoleLogs.length + (chatMessages?.length || 0)}
+              </span>
             )}
           </span>
         </div>
+      </div>
 
-        <div style={headerRightStyle} onClick={e => e.stopPropagation()}>
-          {isOpen && (
-            <>
+      {/* Panel Content - Split 50/50 */}
+      <div style={contentStyle}>
+        {/* Chat Section - Left Half */}
+        <div style={sectionStyle}>
+          <div style={sectionHeaderStyle}>
+            <span style={sectionTitleStyle}>
+              Chat
+              {chatMessages && chatMessages.length > 0 && (
+                <span style={{
+                  ...badgeStyle,
+                  backgroundColor: isDarkMode ? `${theme.dracula.green}40` : `${theme.colors.success}20`,
+                  color: isDarkMode ? theme.dracula.green : theme.colors.success
+                }}>
+                  {chatMessages.length}
+                </span>
+              )}
+            </span>
+            {chatMessages && chatMessages.length > 0 && (
+              <button
+                style={clearButtonStyle}
+                onClick={handleClearChat}
+                onMouseEnter={e => {
+                  e.currentTarget.style.backgroundColor = isDarkMode ? `${theme.dracula.red}35` : `${theme.colors.error}25`;
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.backgroundColor = isDarkMode ? `${theme.dracula.red}20` : `${theme.colors.error}15`;
+                }}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          <div style={chatMessagesStyle}>
+            {(!chatMessages || chatMessages.length === 0) ? (
+              <div style={emptyStyle}>
+                Send a message to trigger chatTrigger nodes
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                {chatMessages.map((msg, index) => (
+                  <div key={`${msg.timestamp}-${index}`} style={chatMessageStyle(msg.role === 'user')}>
+                    <p style={chatMessageTextStyle}>{msg.message}</p>
+                    <div style={chatMessageTimeStyle}>
+                      {formatTimestamp(msg.timestamp)}
+                    </div>
+                  </div>
+                ))}
+                <div ref={chatEndRef} />
+              </div>
+            )}
+          </div>
+          <div style={chatInputContainerStyle}>
+            <input
+              ref={chatInputRef}
+              type="text"
+              placeholder="Type a message..."
+              value={chatInput}
+              onChange={e => setChatInput(e.target.value)}
+              onKeyDown={handleChatKeyDown}
+              style={chatInputStyle}
+              disabled={isSending}
+            />
+            <button
+              style={sendButtonStyle}
+              onClick={handleSendChat}
+              disabled={isSending || !chatInput.trim()}
+            >
+              {isSending ? '...' : 'Send'}
+            </button>
+          </div>
+        </div>
+
+        {/* Console Section - Right Half */}
+        <div style={{ ...sectionStyle, borderRight: 'none' }}>
+          <div style={sectionHeaderStyle}>
+            <span style={sectionTitleStyle}>
+              Console
+              {consoleLogs.length > 0 && (
+                <span style={badgeStyle}>{consoleLogs.length}</span>
+              )}
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <input
                 type="text"
-                placeholder="Filter logs..."
+                placeholder="Filter..."
                 value={filter}
                 onChange={e => setFilter(e.target.value)}
                 style={filterInputStyle}
@@ -353,76 +573,72 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
                   ...buttonStyle,
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '4px',
-                  cursor: 'pointer'
+                  gap: '3px',
+                  cursor: 'pointer',
+                  fontSize: '10px'
                 }}
-                onClick={e => e.stopPropagation()}
               >
                 <input
                   type="checkbox"
                   checked={autoScroll}
                   onChange={e => setAutoScroll(e.target.checked)}
-                  style={{ cursor: 'pointer' }}
+                  style={{ cursor: 'pointer', width: '12px', height: '12px' }}
                 />
-                Auto-scroll
+                Auto
               </label>
-              <button
-                style={{
-                  ...buttonStyle,
-                  backgroundColor: isDarkMode ? `${theme.dracula.red}20` : `${theme.colors.error}15`,
-                  color: isDarkMode ? theme.dracula.red : theme.colors.error
-                }}
-                onClick={handleClear}
-                onMouseEnter={e => {
-                  e.currentTarget.style.backgroundColor = isDarkMode ? `${theme.dracula.red}35` : `${theme.colors.error}25`;
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.backgroundColor = isDarkMode ? `${theme.dracula.red}20` : `${theme.colors.error}15`;
-                }}
-              >
-                Clear
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Panel Content */}
-      <div style={contentStyle}>
-        {filteredLogs.length === 0 ? (
-          <div style={emptyStyle}>
-            {consoleLogs.length === 0
-              ? 'No console output yet. Add a Console node to your workflow to see debug output here.'
-              : 'No logs match the current filter.'}
-          </div>
-        ) : (
-          filteredLogs.slice().reverse().map((log, index) => (
-            <div key={`${log.node_id}-${log.timestamp}-${index}`} style={logEntryStyle}>
-              <span style={timestampStyle}>{formatTimestamp(log.timestamp)}</span>
-              <span style={labelStyle} title={log.label || log.node_id}>
-                {log.label || log.node_id}
-              </span>
-              {log.source_node_label && (
-                <span style={nodeInfoStyle} title={`Source: ${log.source_node_type} (${log.source_node_id})`}>
-                  {log.source_node_label}
-                </span>
+              {consoleLogs.length > 0 && (
+                <button
+                  style={clearButtonStyle}
+                  onClick={handleClearConsole}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.backgroundColor = isDarkMode ? `${theme.dracula.red}35` : `${theme.colors.error}25`;
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.backgroundColor = isDarkMode ? `${theme.dracula.red}20` : `${theme.colors.error}15`;
+                  }}
+                >
+                  Clear
+                </button>
               )}
-              <pre
-                style={{
-                  margin: 0,
-                  flex: 1,
-                  overflow: 'auto',
-                  color: getFormatColor(log.format),
-                  whiteSpace: log.format === 'json' ? 'pre-wrap' : 'pre',
-                  wordBreak: 'break-word'
-                }}
-              >
-                {log.formatted}
-              </pre>
             </div>
-          ))
-        )}
-        <div ref={logsEndRef} />
+          </div>
+          <div style={{ flex: 1, overflow: 'auto', fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, monospace', fontSize: '12px' }}>
+            {filteredLogs.length === 0 ? (
+              <div style={emptyStyle}>
+                {consoleLogs.length === 0
+                  ? 'Add a Console node to see debug output'
+                  : 'No logs match the filter'}
+              </div>
+            ) : (
+              filteredLogs.slice().reverse().map((log, index) => (
+                <div key={`${log.node_id}-${log.timestamp}-${index}`} style={logEntryStyle}>
+                  <span style={timestampStyle}>{formatTimestamp(log.timestamp)}</span>
+                  <span style={labelStyle} title={log.label || log.node_id}>
+                    {log.label || log.node_id}
+                  </span>
+                  {log.source_node_label && (
+                    <span style={nodeInfoStyle} title={`Source: ${log.source_node_type} (${log.source_node_id})`}>
+                      {log.source_node_label}
+                    </span>
+                  )}
+                  <pre
+                    style={{
+                      margin: 0,
+                      flex: 1,
+                      overflow: 'auto',
+                      color: getFormatColor(log.format),
+                      whiteSpace: log.format === 'json' ? 'pre-wrap' : 'pre',
+                      wordBreak: 'break-word'
+                    }}
+                  >
+                    {log.formatted}
+                  </pre>
+                </div>
+              ))
+            )}
+            <div ref={logsEndRef} />
+          </div>
+        </div>
       </div>
     </div>
   );

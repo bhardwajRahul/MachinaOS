@@ -62,7 +62,7 @@ const createNodeTypes = (): Record<string, React.ComponentType<any>> => {
   const types: Record<string, React.ComponentType<any>> = {};
 
   // Trigger nodes (no input handles) - check by group or specific types
-  const TRIGGER_NODE_TYPES = ['start', 'cronScheduler', 'webhookTrigger', 'whatsappReceive'];
+  const TRIGGER_NODE_TYPES = ['start', 'cronScheduler', 'webhookTrigger', 'whatsappReceive', 'chatTrigger'];
 
   Object.keys(nodeDefinitions).forEach(type => {
     const definition = nodeDefinitions[type];
@@ -585,11 +585,11 @@ const DashboardContent: React.FC = () => {
     if (!currentWorkflow) return;
 
     // Check if there's at least one trigger node (workflow entry points)
-    // Trigger types: start, cronScheduler, webhookTrigger, whatsappReceive, workflowTrigger
-    const triggerTypes = ['start', 'cronScheduler', 'webhookTrigger', 'whatsappReceive', 'workflowTrigger'];
+    // Trigger types: start, cronScheduler, webhookTrigger, whatsappReceive, workflowTrigger, chatTrigger
+    const triggerTypes = ['start', 'cronScheduler', 'webhookTrigger', 'whatsappReceive', 'workflowTrigger', 'chatTrigger'];
     const hasTriggerNode = nodes.some(node => triggerTypes.includes(node.type || ''));
     if (!hasTriggerNode) {
-      alert('No trigger node found in workflow.\n\nAdd a trigger node (Cron Scheduler, WhatsApp Receive, Webhook, etc.) to begin deployment.');
+      alert('No trigger node found in workflow.\n\nAdd a trigger node (Cron Scheduler, WhatsApp Receive, Webhook, Chat Trigger, etc.) to begin deployment.');
       return;
     }
 

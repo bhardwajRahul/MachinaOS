@@ -31,7 +31,7 @@ interface PendingRequest {
 const REQUEST_TIMEOUT = 30000;
 
 // Trigger node types that wait indefinitely for events
-const TRIGGER_NODE_TYPES = ['whatsappReceive', 'webhookTrigger', 'cronScheduler'];
+const TRIGGER_NODE_TYPES = ['whatsappReceive', 'webhookTrigger', 'cronScheduler', 'chatTrigger'];
 
 // Status types
 export interface AndroidStatus {
@@ -113,6 +113,14 @@ export interface ConsoleLogEntry {
   source_node_label?: string;
 }
 
+// Chat message for chatTrigger nodes
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  message: string;
+  timestamp: string;
+  session_id?: string;
+}
+
 // WhatsApp received message structure (from Go service via whatsapp_message_received event)
 export interface WhatsAppMessage {
   message_id: string;
@@ -162,6 +170,7 @@ interface WebSocketContextValue {
   lastWhatsAppMessage: WhatsAppMessage | null;  // Most recent message
   apiKeyStatuses: Record<string, ApiKeyStatus>;
   consoleLogs: ConsoleLogEntry[];  // Console node output logs
+  chatMessages: ChatMessage[];  // Chat messages for chatTrigger
   nodeStatuses: Record<string, NodeStatus>;  // Current workflow's node statuses
   nodeParameters: Record<string, NodeParameters>;
   variables: Record<string, any>;
@@ -177,6 +186,8 @@ interface WebSocketContextValue {
   clearNodeStatus: (nodeId: string) => Promise<void>;
   clearWhatsAppMessages: () => void;
   clearConsoleLogs: () => void;
+  clearChatMessages: () => void;
+  sendChatMessage: (message: string, sessionId?: string) => Promise<void>;
 
   // Generic request method
   sendRequest: <T = any>(type: string, data?: Record<string, any>) => Promise<T>;
@@ -302,6 +313,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [lastWhatsAppMessage, setLastWhatsAppMessage] = useState<WhatsAppMessage | null>(null);
   const [apiKeyStatuses, setApiKeyStatuses] = useState<Record<string, ApiKeyStatus>>({});
   const [consoleLogs, setConsoleLogs] = useState<ConsoleLogEntry[]>([]);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   // Per-workflow node statuses: workflow_id -> node_id -> NodeStatus (n8n pattern)
   const [allNodeStatuses, setAllNodeStatuses] = useState<Record<string, Record<string, NodeStatus>>>({});
   const [nodeParameters, setNodeParameters] = useState<Record<string, NodeParameters>>({});
@@ -934,6 +946,11 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setConsoleLogs([]);
   }, []);
 
+  // Clear chat messages
+  const clearChatMessages = useCallback(() => {
+    setChatMessages([]);
+  }, []);
+
   // Derive current workflow's node statuses (n8n pattern)
   // This provides a flat Record<nodeId, NodeStatus> for the current workflow
   // IMPORTANT: Use currentWorkflowId state directly, not ref, to ensure re-render on workflow switch
@@ -988,6 +1005,36 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }));
     });
   }, []);
+
+  // =========================================================================
+  // Chat Message Operations
+  // =========================================================================
+
+  // Send chat message (triggers chatTrigger nodes)
+  const sendChatMessageAsync = useCallback(async (message: string, sessionId?: string): Promise<void> => {
+    const timestamp = new Date().toISOString();
+    const chatMessage: ChatMessage = {
+      role: 'user',
+      message,
+      timestamp,
+      session_id: sessionId || 'default'
+    };
+
+    // Add to local messages immediately for UI feedback
+    setChatMessages(prev => [...prev, chatMessage]);
+
+    // Send to backend to dispatch to chatTrigger nodes
+    try {
+      await sendRequest('send_chat_message', {
+        message,
+        session_id: sessionId || 'default',
+        timestamp
+      });
+    } catch (error) {
+      console.error('[WebSocket] Failed to send chat message:', error);
+      throw error;
+    }
+  }, [sendRequest]);
 
   // =========================================================================
   // Node Parameters Operations
@@ -1626,6 +1673,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     lastWhatsAppMessage,
     apiKeyStatuses,
     consoleLogs,
+    chatMessages,
     nodeStatuses,
     nodeParameters,
     variables,
@@ -1641,6 +1689,8 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     clearNodeStatus,
     clearWhatsAppMessages,
     clearConsoleLogs,
+    clearChatMessages,
+    sendChatMessage: sendChatMessageAsync,
 
     // Generic request method
     sendRequest,

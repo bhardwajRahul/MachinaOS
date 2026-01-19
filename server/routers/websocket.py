@@ -1387,6 +1387,42 @@ async def handle_delete_workflow(data: Dict[str, Any], websocket: WebSocket) -> 
 
 
 # ============================================================================
+# Chat Message Handler (for chatTrigger nodes)
+# ============================================================================
+
+@ws_handler("message")
+async def handle_send_chat_message(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Handle chat message from console panel - dispatches to chatTrigger nodes.
+
+    This handler receives messages from the frontend chat panel and dispatches
+    them as 'chat_message_received' events to any waiting chatTrigger nodes.
+    """
+    from services import event_waiter
+
+    message = data["message"]
+    session_id = data.get("session_id", "default")
+    timestamp = data.get("timestamp") or datetime.now().isoformat()
+
+    # Build event data matching chatTrigger output schema
+    event_data = {
+        "message": message,
+        "timestamp": timestamp,
+        "session_id": session_id
+    }
+
+    # Dispatch to chatTrigger waiters
+    resolved = event_waiter.dispatch("chat_message_received", event_data)
+
+    logger.info(f"[ChatMessage] Dispatched message to {resolved} chatTrigger waiter(s)")
+
+    return {
+        "success": True,
+        "message": "Chat message sent",
+        "resolved_count": resolved
+    }
+
+
+# ============================================================================
 # Message Router
 # ============================================================================
 
@@ -1472,6 +1508,9 @@ MESSAGE_HANDLERS: Dict[str, MessageHandler] = {
     "get_workflow": handle_get_workflow,
     "get_all_workflows": handle_get_all_workflows,
     "delete_workflow": handle_delete_workflow,
+
+    # Chat message (for chatTrigger nodes)
+    "send_chat_message": handle_send_chat_message,
 }
 
 
