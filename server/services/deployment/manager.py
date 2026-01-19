@@ -51,6 +51,7 @@ class DeploymentManager:
         self._active_runs: Dict[str, Dict[str, asyncio.Task]] = {}  # workflow_id -> {run_id: task}
         self._run_counters: Dict[str, int] = {}
         self._status_callbacks: Dict[str, Callable] = {}
+        self._cron_iterations: Dict[str, int] = {}  # node_id -> iteration count
         self._main_loop: Optional[asyncio.AbstractEventLoop] = None
 
         self._settings = {
@@ -225,14 +226,29 @@ class DeploymentManager:
         # Cleanup triggers for this workflow
         listener_count = 0
         cron_count = 0
+        cron_node_ids = []
         if trigger_manager:
+            # Get cron node IDs before teardown (they'll be cleared)
+            cron_node_ids = trigger_manager.get_cron_node_ids()
             listener_count = await trigger_manager.teardown_all_listeners()
             cron_count = trigger_manager.teardown_all_crons()
+
+        # Reset cron trigger node statuses to idle
+        for node_id in cron_node_ids:
+            await self._broadcaster.update_node_status(node_id, "idle", {}, workflow_id=workflow_id)
+
+        # Reset listener node statuses to idle
+        for node_id in listener_nodes:
+            await self._broadcaster.update_node_status(node_id, "idle", {}, workflow_id=workflow_id)
 
         # Cancel event waiters for nodes in this workflow
         waiter_count = 0
         for node in state.nodes:
             waiter_count += event_waiter.cancel_for_node(node['id'])
+
+        # Clear cron iteration counters for this workflow's cron nodes
+        for node_id in cron_node_ids:
+            self._cron_iterations.pop(node_id, None)
 
         # Clear state for this workflow
         self._deployments.pop(workflow_id, None)
@@ -314,13 +330,32 @@ class DeploymentManager:
 
         cron_expr = TriggerManager.build_cron_expression(params)
         timezone = params.get('timezone', 'UTC')
+        frequency = params.get('frequency', 'minutes')
+
+        # Initialize iteration counter for this cron node
+        self._cron_iterations[node_id] = 0
+
+        # Build schedule description for output
+        schedule_desc = self._get_schedule_description(params)
 
         def on_tick():
             if self._main_loop and self._main_loop.is_running():
+                # Increment iteration counter
+                self._cron_iterations[node_id] = self._cron_iterations.get(node_id, 0) + 1
+                iteration = self._cron_iterations[node_id]
+
                 trigger_data = {
                     'node_id': node_id,
                     'timestamp': datetime.now().isoformat(),
-                    'trigger_type': 'cron'
+                    'trigger_type': 'cron',
+                    'event_data': {
+                        'timestamp': datetime.now().isoformat(),
+                        'iteration': iteration,
+                        'frequency': frequency,
+                        'timezone': timezone,
+                        'schedule': schedule_desc,
+                        'cron_expression': cron_expr
+                    }
                 }
                 asyncio.run_coroutine_threadsafe(
                     self._spawn_run(node_id, trigger_data, workflow_id=workflow_id),
@@ -332,6 +367,15 @@ class DeploymentManager:
             raise RuntimeError(f"No trigger manager for workflow {workflow_id}")
 
         job_id = trigger_manager.setup_cron(node_id, cron_expr, timezone, on_tick)
+
+        # Broadcast waiting status for cron trigger (like event triggers do)
+        await self._broadcaster.update_node_status(node_id, "waiting", {
+            "message": f"Waiting for schedule: {cron_expr}",
+            "cron_expression": cron_expr,
+            "timezone": timezone,
+            "job_id": job_id
+        }, workflow_id=workflow_id)
+
         return TriggerInfo(node_id, "cron", job_id=job_id)
 
     async def _fire_start_trigger(self, node: Dict, workflow_id: str) -> TriggerInfo:
@@ -625,3 +669,36 @@ class DeploymentManager:
             })
         except Exception as e:
             logger.warning("Status callback failed", workflow_id=workflow_id, error=str(e))
+
+    @staticmethod
+    def _get_schedule_description(params: Dict[str, Any]) -> str:
+        """Get human-readable schedule description from parameters."""
+        frequency = params.get('frequency', 'minutes')
+
+        match frequency:
+            case 'seconds':
+                interval = params.get('interval', 30)
+                return f"Every {interval} seconds"
+            case 'minutes':
+                interval = params.get('intervalMinutes', 5)
+                return f"Every {interval} minutes"
+            case 'hours':
+                interval = params.get('intervalHours', 1)
+                return f"Every {interval} hours"
+            case 'days':
+                time_str = params.get('dailyTime', '09:00')
+                return f"Daily at {time_str}"
+            case 'weeks':
+                weekday = params.get('weekday', '1')
+                time_str = params.get('weeklyTime', '09:00')
+                days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+                day_name = days[int(weekday)] if str(weekday).isdigit() else weekday
+                return f"Weekly on {day_name} at {time_str}"
+            case 'months':
+                day = params.get('monthDay', '1')
+                time_str = params.get('monthlyTime', '09:00')
+                return f"Monthly on day {day} at {time_str}"
+            case 'once':
+                return "Once (no repeat)"
+            case _:
+                return "Unknown schedule"

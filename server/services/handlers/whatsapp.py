@@ -228,7 +228,12 @@ async def handle_whatsapp_chat_history(
 
         # Result mode and pagination
         result_mode = parameters.get('resultMode', 'multiple')
-        position = parameters.get('position', 1)
+        position_raw = parameters.get('position', 1)
+        # Convert position to int (may be string from template variable resolution)
+        try:
+            position = int(position_raw) if position_raw else 1
+        except (ValueError, TypeError):
+            position = 1
 
         if result_mode == 'single':
             # Single message by position mode

@@ -40,6 +40,7 @@ import AndroidSettingsPanel from './components/ui/AndroidSettingsPanel';
 import AIResultModal from './components/ui/AIResultModal';
 import CredentialsModal from './components/CredentialsModal';
 import ErrorBoundary from './components/ui/ErrorBoundary';
+import ConsolePanel from './components/ui/ConsolePanel';
 import { useAppTheme } from './hooks/useAppTheme';
 import { useWorkflowManagement } from './hooks/useWorkflowManagement';
 import { useDragAndDrop } from './hooks/useDragAndDrop';
@@ -327,6 +328,7 @@ const DashboardContent: React.FC = () => {
   });
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [credentialsOpen, setCredentialsOpen] = React.useState(false);
+  const [consolePanelOpen, setConsolePanelOpen] = React.useState(false);
 
   // Context menu state for node right-click
   const [contextMenu, setContextMenu] = React.useState<{
@@ -1068,7 +1070,13 @@ const DashboardContent: React.FC = () => {
             </div>
           </div>
         </div>
-        
+
+        {/* Console Panel - n8n-style debug output at bottom */}
+        <ConsolePanel
+          isOpen={consolePanelOpen}
+          onToggle={() => setConsolePanelOpen(prev => !prev)}
+        />
+
         {/* Parameter Panels */}
         <ErrorBoundary>
           <ParameterPanel />

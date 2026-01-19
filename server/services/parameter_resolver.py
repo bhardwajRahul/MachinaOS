@@ -61,7 +61,7 @@ class ParameterResolver:
         """
         connected = {}
 
-        logger.debug(f"[ParameterResolver] Gathering outputs for node {node_id}, total nodes in workflow: {len(nodes)}")
+        logger.debug(f"[ParameterResolver] Gathering outputs for node {node_id}, session_id={session_id}, total nodes: {len(nodes)}")
 
         # Gather outputs from ALL nodes (not just directly connected)
         # This allows {{nodeName.field}} to reference any previously executed node
@@ -71,17 +71,21 @@ class ParameterResolver:
                 continue  # Skip self
 
             node_type = source_node.get('type', '')
+            node_label = source_node.get('data', {}).get('label', 'NO_LABEL')
             node_key = self._get_template_key(source_node)
+
+            logger.debug(f"[ParameterResolver] Processing node: id={source_id}, type={node_type}, label={node_label}, key={node_key}")
 
             # Special handling for start nodes
             if node_type == 'start':
                 data = await self._get_start_node_data(source_id)
             else:
                 data = await self.get_output(session_id, source_id, "output_0")
+                logger.debug(f"[ParameterResolver] Output lookup: session={session_id}, node={source_id}, result={'FOUND' if data else 'NOT_FOUND'}")
 
             if data:
                 connected[node_key] = data
-                logger.debug(f"[ParameterResolver] Found output for {node_key} (type={node_type}): keys={list(data.keys()) if isinstance(data, dict) else type(data)}")
+                logger.debug(f"[ParameterResolver] Stored output for key '{node_key}' (type={node_type}): keys={list(data.keys()) if isinstance(data, dict) else type(data)}")
 
         logger.debug(f"[ParameterResolver] Available data keys for resolution: {list(connected.keys())}")
         return connected
@@ -176,10 +180,39 @@ class ParameterResolver:
         return result
 
     def _navigate_path(self, data: Any, path: List[str]) -> Any:
-        """Navigate through nested dict using path parts."""
+        """Navigate through nested dict/list using path parts.
+
+        Supports:
+        - Dict keys: 'field' -> data['field']
+        - Array indexing: 'items[0]' -> data['items'][0]
+        - Nested paths: 'messages[0].text' -> data['messages'][0]['text']
+        """
         current = data
         for part in path:
-            if not isinstance(current, dict) or part not in current:
+            if current is None:
                 return None
-            current = current[part]
+
+            # Check for array index notation: field[index]
+            bracket_match = re.match(r'^(\w+)\[(\d+)\]$', part)
+            if bracket_match:
+                field_name = bracket_match.group(1)
+                index = int(bracket_match.group(2))
+
+                # Navigate to the field first
+                if isinstance(current, dict) and field_name in current:
+                    current = current[field_name]
+                else:
+                    return None
+
+                # Then access the array index
+                if isinstance(current, list) and 0 <= index < len(current):
+                    current = current[index]
+                else:
+                    return None
+            else:
+                # Standard dict key navigation
+                if not isinstance(current, dict) or part not in current:
+                    return None
+                current = current[part]
+
         return current

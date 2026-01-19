@@ -23,6 +23,9 @@ const GOOGLE_MAPS_NODE_TYPES = ['createMap', 'addLocations', 'showNearbyPlaces']
 // WhatsApp node types
 const WHATSAPP_NODE_TYPES = ['whatsappConnect', 'whatsappSend', 'whatsappReceive', 'whatsappChatHistory'];
 
+// Nodes that should not have output handles (input-only nodes)
+const NO_OUTPUT_NODE_TYPES = ['console'];
+
 // AI Model node types with their provider IDs
 const AI_MODEL_NODE_TYPES: Record<string, string> = {
   'openaiChatModel': 'openai',
@@ -651,26 +654,28 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
           title="Service Input"
         />
 
-        {/* Square Output Handle */}
-        <Handle
-          id="output-main"
-          type="source"
-          position={Position.Right}
-          isConnectable={isConnectable}
-          style={{
-            position: 'absolute',
-            right: '-6px',
-            top: '50%',
-            transform: 'translateY(-50%)',
-            width: theme.nodeSize.handle,
-            height: theme.nodeSize.handle,
-            backgroundColor: isConfigured ? nodeColor : theme.colors.textSecondary,
-            border: `2px solid ${theme.isDarkMode ? theme.colors.background : '#ffffff'}`,
-            borderRadius: '50%',
-            zIndex: 20
-          }}
-          title="Service Output"
-        />
+        {/* Square Output Handle - hidden for input-only nodes like console */}
+        {!NO_OUTPUT_NODE_TYPES.includes(type || '') && (
+          <Handle
+            id="output-main"
+            type="source"
+            position={Position.Right}
+            isConnectable={isConnectable}
+            style={{
+              position: 'absolute',
+              right: '-6px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              width: theme.nodeSize.handle,
+              height: theme.nodeSize.handle,
+              backgroundColor: isConfigured ? nodeColor : theme.colors.textSecondary,
+              border: `2px solid ${theme.isDarkMode ? theme.colors.background : '#ffffff'}`,
+              borderRadius: '50%',
+              zIndex: 20
+            }}
+            title="Service Output"
+          />
+        )}
 
         {/* Top Tool Output Handle - only for Android service nodes that can connect to Toolkit */}
         {isToolCapable && (

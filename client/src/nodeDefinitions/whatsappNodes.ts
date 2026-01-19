@@ -709,13 +709,13 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
       // ===== MESSAGE TYPE FILTER =====
       {
         displayName: 'Message Type',
-        name: 'textOnly',
+        name: 'messageFilter',
         type: 'options',
         options: [
-          { name: 'All Types', value: 'false' },
-          { name: 'Text Only', value: 'true' }
+          { name: 'All Types', value: 'all' },
+          { name: 'Text Only', value: 'text_only' }
         ],
-        default: 'false',
+        default: 'all',
         description: 'Filter by message type'
       },
 
@@ -734,9 +734,10 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
       {
         displayName: 'Message Position',
         name: 'position',
-        type: 'number',
-        default: 1,
-        description: 'Position: positive from newest (1=most recent), negative from oldest (-1=oldest)',
+        type: 'string',
+        default: '1',
+        placeholder: '1 or {{node.index}}',
+        description: 'Position: positive from newest (1=most recent), negative from oldest (-1=oldest). Supports template variables.',
         displayOptions: {
           show: { resultMode: ['single'] }
         }

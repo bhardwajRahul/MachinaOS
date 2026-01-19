@@ -64,6 +64,10 @@ class TriggerManager:
             return True
         return False
 
+    def get_cron_node_ids(self) -> list:
+        """Get node IDs of active cron triggers."""
+        return list(self._active_cron_jobs.keys())
+
     def teardown_all_crons(self) -> int:
         """Remove all cron triggers."""
         count = 0

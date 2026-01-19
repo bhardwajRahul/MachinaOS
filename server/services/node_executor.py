@@ -30,7 +30,7 @@ from services.handlers import (
     handle_create_map, handle_add_locations, handle_nearby_places,
     handle_text_generator, handle_file_handler,
     handle_chat_send, handle_chat_history,
-    handle_start, handle_cron_scheduler, handle_timer,
+    handle_start, handle_cron_scheduler, handle_timer, handle_console,
     handle_whatsapp_send, handle_whatsapp_connect, handle_whatsapp_chat_history,
 )
 
@@ -123,6 +123,7 @@ class NodeExecutor:
             'httpRequest': handle_http_request,
             # Android setup
             'androidDeviceSetup': partial(handle_android_device_setup, settings=self.settings),
+            # Note: 'console' handled in _dispatch with connected_outputs
         }
 
         # Register AI chat models
@@ -246,8 +247,10 @@ class NodeExecutor:
             return await handler(node_id, node_type, params, context)
 
         # Special handlers needing connected outputs
-        if node_type in ('pythonExecutor', 'javascriptExecutor', 'webhookResponse'):
-            outputs = await self._get_connected_outputs(context, node_id)
+        if node_type in ('pythonExecutor', 'javascriptExecutor', 'webhookResponse', 'console'):
+            outputs, source_nodes = await self._get_connected_outputs_with_info(context, node_id)
+            if node_type == 'console':
+                return await handle_console(node_id, node_type, params, context, outputs, source_nodes)
             handlers = {
                 'pythonExecutor': handle_python_executor,
                 'javascriptExecutor': handle_javascript_executor,
@@ -289,3 +292,69 @@ class NodeExecutor:
                     result[source.get('type', 'unknown')] = output
 
         return result
+
+    def _get_source_nodes_info(self, context: Dict, node_id: str) -> list:
+        """Get source node info (id, type, label) for edges targeting this node.
+
+        This is used for display purposes (e.g., showing source in Console panel).
+        Does NOT filter by output availability - just returns edge source info.
+        """
+        nodes = context.get('nodes', [])
+        edges = context.get('edges', [])
+        source_nodes = []
+
+        for edge in edges:
+            if edge.get('target') == node_id:
+                source_id = edge.get('source')
+                source = next((n for n in nodes if n.get('id') == source_id), {})
+                source_type = source.get('type', 'unknown')
+                source_data = source.get('data', {})
+                source_label = source_data.get('label') or source_type
+                source_nodes.append({
+                    'id': source_id,
+                    'type': source_type,
+                    'label': source_label
+                })
+
+        return source_nodes
+
+    async def _get_connected_outputs_with_info(self, context: Dict, node_id: str) -> tuple:
+        """Get outputs from connected upstream nodes with source node info.
+
+        Returns:
+            Tuple of (outputs dict, source_nodes list with id/type/label info)
+        """
+        get_output = context.get('get_output_fn')
+        if not get_output:
+            logger.warning(f"[_get_connected_outputs_with_info] No get_output_fn in context for {node_id}")
+            return {}, []
+
+        nodes = context.get('nodes', [])
+        edges = context.get('edges', [])
+        session_id = context.get('session_id', 'default')
+        outputs = {}
+        source_nodes = []
+
+        logger.debug(f"[_get_connected_outputs_with_info] node_id={node_id}, edges={len(edges)}, session={session_id}")
+
+        for edge in edges:
+            if edge.get('target') == node_id:
+                source_id = edge.get('source')
+                logger.debug(f"[_get_connected_outputs_with_info] Found edge from {source_id} to {node_id}")
+                output = await get_output(session_id, source_id, "output_0")
+                logger.debug(f"[_get_connected_outputs_with_info] Output from {source_id}: {'FOUND' if output else 'NOT FOUND'}")
+                if output:
+                    source = next((n for n in nodes if n.get('id') == source_id), {})
+                    source_type = source.get('type', 'unknown')
+                    outputs[source_type] = output
+                    # Get label from node data if available
+                    source_data = source.get('data', {})
+                    source_label = source_data.get('label') or source_type
+                    source_nodes.append({
+                        'id': source_id,
+                        'type': source_type,
+                        'label': source_label
+                    })
+
+        logger.debug(f"[_get_connected_outputs_with_info] Returning {len(outputs)} outputs, {len(source_nodes)} source_nodes")
+        return outputs, source_nodes

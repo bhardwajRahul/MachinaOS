@@ -180,7 +180,72 @@ export const utilityNodes: Record<string, INodeTypeDescription> = {
         ]
       }
     ]
+  },
+
+  console: {
+    displayName: 'Console',
+    name: 'console',
+    icon: '🖥️',
+    group: ['utility'],
+    version: 1,
+    description: 'Log data to console panel for debugging during execution',
+    defaults: { name: 'Console', color: '#8b5cf6' },
+    inputs: [{ name: 'main', displayName: 'Input', type: 'main' as NodeConnectionType, description: 'Data to log' }],
+    outputs: [{ name: 'main', displayName: 'Output', type: 'main' as NodeConnectionType, description: 'Passes input through unchanged' }],
+    properties: [
+      {
+        displayName: 'Label',
+        name: 'label',
+        type: 'string',
+        default: '',
+        placeholder: 'Debug Point 1',
+        description: 'Optional label to identify this log entry'
+      },
+      {
+        displayName: 'Log Mode',
+        name: 'logMode',
+        type: 'options',
+        default: 'all',
+        options: [
+          { name: 'Log All Input', value: 'all' },
+          { name: 'Log Specific Field', value: 'field' },
+          { name: 'Log Expression', value: 'expression' }
+        ],
+        description: 'What to log from the input data'
+      },
+      {
+        displayName: 'Field Path',
+        name: 'fieldPath',
+        type: 'string',
+        default: '',
+        placeholder: 'data.items[0].name',
+        displayOptions: { show: { logMode: ['field'] } },
+        description: 'Path to specific field to log (e.g., data.items[0].name)'
+      },
+      {
+        displayName: 'Expression',
+        name: 'expression',
+        type: 'string',
+        default: '',
+        placeholder: '{{input.field}}',
+        displayOptions: { show: { logMode: ['expression'] } },
+        description: 'Template expression to evaluate and log'
+      },
+      {
+        displayName: 'Format',
+        name: 'format',
+        type: 'options',
+        default: 'json',
+        options: [
+          { name: 'JSON (Pretty)', value: 'json' },
+          { name: 'JSON (Compact)', value: 'json_compact' },
+          { name: 'Text', value: 'text' },
+          { name: 'Table', value: 'table' }
+        ],
+        description: 'Output format for the log'
+      }
+    ]
   }
 };
 
-export const UTILITY_NODE_TYPES = ['httpRequest', 'webhookTrigger', 'webhookResponse'];
+export const UTILITY_NODE_TYPES = ['httpRequest', 'webhookTrigger', 'webhookResponse', 'console'];

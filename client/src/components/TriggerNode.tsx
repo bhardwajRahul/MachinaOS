@@ -35,11 +35,11 @@ const TriggerNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
   const isWhatsAppTrigger = type === 'whatsappReceive';
   const whatsappStatus = useWhatsAppStatus();
 
-  // n8n Pattern: Distinguish between waiting (listening) and executing states
-  // - waiting: Trigger is listening for events (shows subtle cyan indicator, no glow/animation)
-  // - executing: Only used when trigger itself is being executed (rare, used for manual runs)
-  const isWaiting = executionStatus === 'waiting';
-  const isExecuting = executionStatus === 'executing';
+  // Combine waiting and executing states for glow animation (matching SquareNode pattern)
+  // - waiting: Trigger is listening for events (cron scheduled, webhook listening)
+  // - executing: Trigger is actively running
+  // Both states show the glow animation to indicate active state
+  const isExecuting = executionStatus === 'executing' || executionStatus === 'waiting';
 
   const definition = nodeDefinitions[type as keyof typeof nodeDefinitions];
 
@@ -99,13 +99,9 @@ const TriggerNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
 
   // Get status indicator color based on execution state
   const getStatusIndicatorColor = () => {
-    // n8n Pattern: Different colors for different trigger states
+    // Combined executing/waiting state - show purple with glow
     if (isExecuting) {
-      return theme.dracula.purple;  // Actually executing (manual run)
-    }
-    if (isWaiting) {
-      // Waiting/listening for events - show cyan (active listener)
-      return theme.dracula.cyan;
+      return theme.dracula.purple;
     }
     if (executionStatus === 'success') {
       return theme.dracula.green;
@@ -214,7 +210,7 @@ const TriggerNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
       }}
     >
       {/* Main Trigger Node */}
-      {/* n8n Pattern: Only show glow/animation for actual executing state, not for waiting */}
+      {/* Show glow animation for both executing and waiting states */}
       <div
         style={{
           position: 'relative',
@@ -306,7 +302,7 @@ const TriggerNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
         </button>
 
         {/* Execution Status Indicator */}
-        {/* n8n Pattern: No glow for waiting, only for actual execution */}
+        {/* Status Indicator - glows for both waiting and executing states */}
         <div
           style={{
             position: 'absolute',

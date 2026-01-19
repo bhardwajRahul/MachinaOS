@@ -636,6 +636,73 @@ class StatusBroadcaster:
         }
 
     # =========================================================================
+    # Console Log Updates
+    # =========================================================================
+
+    async def broadcast_console_log(self, log_data: Dict[str, Any]):
+        """Broadcast a console log entry to all connected clients.
+
+        Used by Console nodes to send debug output to the frontend console panel.
+
+        Args:
+            log_data: Dict containing:
+                - node_id: The console node ID
+                - label: User-defined label or default
+                - timestamp: ISO timestamp
+                - data: The logged data (any type)
+                - formatted: Pre-formatted string representation
+                - format: Format type (json, json_compact, text, table)
+                - workflow_id: Optional workflow ID for scoping
+        """
+        # Initialize console logs if not present
+        if "console_logs" not in self._status:
+            self._status["console_logs"] = []
+
+        # Add to console log history (keep last 100 entries)
+        self._status["console_logs"].append(log_data)
+        if len(self._status["console_logs"]) > 100:
+            self._status["console_logs"] = self._status["console_logs"][-100:]
+
+        # Broadcast to all clients
+        await self.broadcast({
+            "type": "console_log",
+            "data": log_data
+        })
+
+        logger.debug(f"[StatusBroadcaster] Console log broadcast: label={log_data.get('label')}")
+
+    def get_console_logs(self, workflow_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get console log history, optionally filtered by workflow_id."""
+        if "console_logs" not in self._status:
+            return []
+
+        if workflow_id:
+            return [
+                log for log in self._status["console_logs"]
+                if log.get("workflow_id") == workflow_id
+            ]
+        return list(self._status["console_logs"])
+
+    async def clear_console_logs(self, workflow_id: Optional[str] = None):
+        """Clear console log history."""
+        if "console_logs" not in self._status:
+            self._status["console_logs"] = []
+            return
+
+        if workflow_id:
+            self._status["console_logs"] = [
+                log for log in self._status["console_logs"]
+                if log.get("workflow_id") != workflow_id
+            ]
+        else:
+            self._status["console_logs"] = []
+
+        await self.broadcast({
+            "type": "console_logs_cleared",
+            "workflow_id": workflow_id
+        })
+
+    # =========================================================================
     # Generic Updates
     # =========================================================================
 

@@ -53,6 +53,7 @@ from .utility import (
     handle_start,
     handle_cron_scheduler,
     handle_timer,
+    handle_console,
 )
 
 # WhatsApp handlers
@@ -94,6 +95,7 @@ __all__ = [
     'handle_start',
     'handle_cron_scheduler',
     'handle_timer',
+    'handle_console',
     # WhatsApp
     'handle_whatsapp_send',
     'handle_whatsapp_connect',

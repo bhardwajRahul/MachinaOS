@@ -173,6 +173,28 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                   sender_name: 'string'
                 }
               },
+              whatsappChatHistory: {
+                // Sample message array structure for schema view
+                messages: [
+                  {
+                    text: 'string',
+                    sender: 'string',
+                    sender_phone: 'string',
+                    message_type: 'string',
+                    timestamp: 'string',
+                    message_id: 'string',
+                    is_from_me: 'boolean',
+                    is_group: 'boolean',
+                    push_name: 'string',
+                    index: 'number'
+                  }
+                ],
+                total: 'number',
+                has_more: 'boolean',
+                count: 'number',
+                chat_type: 'string',
+                timestamp: 'string'
+              },
               webhook: {
                 method: 'string',
                 path: 'string',
@@ -312,7 +334,8 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
             const nodeTypeLower = nodeType.toLowerCase();
             const isAI = !isMemory && (nodeTypeLower.includes('chatmodel') || nodeTypeLower.includes('aiagent'));
             const isFile = nodeType.includes('file');
-            const isWhatsApp = nodeType.includes('whatsapp') || nodeType.includes('Whatsapp');
+            const isWhatsAppChatHistory = nodeType === 'whatsappChatHistory';
+            const isWhatsApp = !isWhatsAppChatHistory && (nodeType.includes('whatsapp') || nodeType.includes('Whatsapp'));
             const isWebhook = nodeType === 'webhookTrigger';
             const isHttpRequest = nodeType === 'httpRequest';
             const isPython = nodeType.includes('python') || nodeType.includes('Python');
@@ -345,6 +368,7 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                             isMemory ? sampleSchemas.memory :
                             isAI ? sampleSchemas.ai :
                             isFile ? sampleSchemas.file :
+                            isWhatsAppChatHistory ? sampleSchemas.whatsappChatHistory :
                             isWhatsApp ? sampleSchemas.whatsapp :
                             isWebhook ? sampleSchemas.webhook :
                             isHttpRequest ? sampleSchemas.httpRequest :
@@ -391,10 +415,219 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
 
   // Render draggable property
   // NOTE: sourceNodeId is the unique node ID, used for template variable resolution
-  const renderDraggableProperty = (key: string, value: any, sourceNodeId: string, path: string = '', depth: number = 0) => {
+  const renderDraggableProperty = (key: string, value: any, sourceNodeId: string, path: string = '', depth: number = 0, maxArrayItems: number = 3) => {
     const currentPath = path ? `${path}.${key}` : key;
     const isObject = typeof value === 'object' && value !== null && !Array.isArray(value);
+    const isArray = Array.isArray(value);
 
+    // Handle arrays - show indexed items
+    if (isArray && value.length > 0) {
+      const templateName = getTemplateVariableName(sourceNodeId);
+      const itemsToShow = Math.min(value.length, maxArrayItems);
+
+      return (
+        <div key={currentPath} style={{ marginLeft: depth > 0 ? 16 : 0, marginBottom: 8 }}>
+          <div style={{
+            fontSize: theme.fontSize.xs,
+            fontWeight: theme.fontWeight.medium,
+            color: theme.colors.textMuted,
+            marginBottom: 4,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+          }}>
+            {key}
+            <span style={{
+              fontSize: '10px',
+              color: theme.dracula.purple,
+              padding: '1px 6px',
+              backgroundColor: theme.dracula.purple + '20',
+              borderRadius: theme.borderRadius.sm,
+            }}>
+              [{value.length} items]
+            </span>
+          </div>
+          <div>
+            {/* Render first N array items with their index */}
+            {value.slice(0, itemsToShow).map((item: any, index: number) => {
+              const indexedPath = `${key}[${index}]`;
+              const fullIndexedPath = path ? `${path}.${indexedPath}` : indexedPath;
+
+              if (typeof item === 'object' && item !== null) {
+                // Object item - render its properties with indexed path
+                return (
+                  <div key={`${currentPath}[${index}]`} style={{
+                    marginLeft: 8,
+                    marginBottom: 8,
+                    padding: theme.spacing.xs,
+                    backgroundColor: theme.colors.backgroundElevated,
+                    borderRadius: theme.borderRadius.sm,
+                    border: `1px dashed ${theme.colors.border}`,
+                  }}>
+                    <div style={{
+                      fontSize: theme.fontSize.xs,
+                      fontWeight: theme.fontWeight.medium,
+                      color: theme.dracula.cyan,
+                      marginBottom: 4,
+                    }}>
+                      [{index}]
+                    </div>
+                    {Object.entries(item).map(([itemKey, itemValue]) => {
+                      const itemPath = `${fullIndexedPath}.${itemKey}`;
+                      // For nested objects within array items, render as draggable
+                      if (typeof itemValue === 'object' && itemValue !== null && !Array.isArray(itemValue)) {
+                        return (
+                          <div key={itemPath} style={{ marginLeft: 8, marginBottom: 4 }}>
+                            <div style={{
+                              fontSize: theme.fontSize.xs,
+                              color: theme.colors.textMuted,
+                              marginBottom: 2,
+                            }}>
+                              {itemKey}:
+                            </div>
+                            {Object.entries(itemValue as Record<string, any>).map(([nestedKey, nestedValue]) => (
+                              <div
+                                key={`${itemPath}.${nestedKey}`}
+                                draggable
+                                onDragStart={(e) => handleVariableDragStart(e, sourceNodeId, `${itemPath}.${nestedKey}`, nestedValue)}
+                                style={{
+                                  marginBottom: 4,
+                                  marginLeft: 8,
+                                  padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
+                                  backgroundColor: theme.colors.backgroundAlt,
+                                  border: `1px solid ${theme.colors.focus}`,
+                                  borderRadius: theme.borderRadius.sm,
+                                  cursor: 'grab',
+                                  fontSize: theme.fontSize.xs,
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.backgroundColor = theme.colors.focusRing;
+                                  e.currentTarget.style.borderColor = theme.dracula.cyan;
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.backgroundColor = theme.colors.backgroundAlt;
+                                  e.currentTarget.style.borderColor = theme.colors.focus;
+                                }}
+                              >
+                                <span style={{ color: theme.colors.templateVariable, fontFamily: 'monospace' }}>
+                                  {`{{${templateName}.${itemPath}.${nestedKey}}}`}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      }
+                      // Primitive value in array item
+                      return (
+                        <div
+                          key={itemPath}
+                          draggable
+                          onDragStart={(e) => handleVariableDragStart(e, sourceNodeId, itemPath, itemValue)}
+                          style={{
+                            marginBottom: 4,
+                            marginLeft: 8,
+                            padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
+                            backgroundColor: theme.colors.backgroundAlt,
+                            border: `1px solid ${theme.colors.focus}`,
+                            borderRadius: theme.borderRadius.sm,
+                            cursor: 'grab',
+                            fontSize: theme.fontSize.xs,
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = theme.colors.focusRing;
+                            e.currentTarget.style.borderColor = theme.dracula.cyan;
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = theme.colors.backgroundAlt;
+                            e.currentTarget.style.borderColor = theme.colors.focus;
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                              <span style={{ color: theme.colors.templateVariable, fontFamily: 'monospace' }}>
+                                {`{{${templateName}.${itemPath}}}`}
+                              </span>
+                              <span style={{ color: theme.colors.textMuted, marginLeft: 8 }}>
+                                {itemKey}: {typeof itemValue}
+                              </span>
+                            </div>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={theme.colors.templateVariable} strokeWidth="2">
+                              <line x1="12" y1="5" x2="12" y2="19"/>
+                              <polyline points="19 12 12 19 5 12"/>
+                            </svg>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              } else {
+                // Primitive array item
+                return (
+                  <div
+                    key={`${currentPath}[${index}]`}
+                    draggable
+                    onDragStart={(e) => handleVariableDragStart(e, sourceNodeId, fullIndexedPath, item)}
+                    style={{
+                      marginBottom: 4,
+                      marginLeft: 8,
+                      padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
+                      backgroundColor: theme.colors.backgroundAlt,
+                      border: `1px solid ${theme.colors.focus}`,
+                      borderRadius: theme.borderRadius.sm,
+                      cursor: 'grab',
+                      fontSize: theme.fontSize.xs,
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = theme.colors.focusRing;
+                      e.currentTarget.style.borderColor = theme.dracula.cyan;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = theme.colors.backgroundAlt;
+                      e.currentTarget.style.borderColor = theme.colors.focus;
+                    }}
+                  >
+                    <span style={{ color: theme.colors.templateVariable, fontFamily: 'monospace' }}>
+                      {`{{${templateName}.${fullIndexedPath}}}`}
+                    </span>
+                    <span style={{ color: theme.colors.textMuted, marginLeft: 8 }}>
+                      [{index}]: {typeof item}
+                    </span>
+                  </div>
+                );
+              }
+            })}
+            {/* Show "and N more" if array has more items */}
+            {value.length > maxArrayItems && (
+              <div style={{
+                marginLeft: 8,
+                fontSize: theme.fontSize.xs,
+                color: theme.colors.textMuted,
+                fontStyle: 'italic',
+              }}>
+                ... and {value.length - maxArrayItems} more items
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // Handle empty arrays
+    if (isArray && value.length === 0) {
+      return (
+        <div key={currentPath} style={{ marginLeft: depth > 0 ? 16 : 0, marginBottom: 8 }}>
+          <div style={{
+            fontSize: theme.fontSize.xs,
+            color: theme.colors.textMuted,
+          }}>
+            {key}: <span style={{ fontStyle: 'italic' }}>empty array</span>
+          </div>
+        </div>
+      );
+    }
+
+    // Handle objects
     if (isObject) {
       return (
         <div key={currentPath} style={{ marginLeft: depth > 0 ? 16 : 0, marginBottom: 8 }}>

@@ -98,6 +98,21 @@ export interface ApiKeyStatus {
   timestamp?: number;
 }
 
+// Console log entry from Console nodes
+export interface ConsoleLogEntry {
+  node_id: string;
+  label: string;
+  timestamp: string;
+  data: any;
+  formatted: string;
+  format: 'json' | 'json_compact' | 'text' | 'table';
+  workflow_id?: string;
+  // Source node info (the node whose output is being logged)
+  source_node_id?: string;
+  source_node_type?: string;
+  source_node_label?: string;
+}
+
 // WhatsApp received message structure (from Go service via whatsapp_message_received event)
 export interface WhatsAppMessage {
   message_id: string;
@@ -146,6 +161,7 @@ interface WebSocketContextValue {
   whatsappMessages: WhatsAppMessage[];  // History of received messages
   lastWhatsAppMessage: WhatsAppMessage | null;  // Most recent message
   apiKeyStatuses: Record<string, ApiKeyStatus>;
+  consoleLogs: ConsoleLogEntry[];  // Console node output logs
   nodeStatuses: Record<string, NodeStatus>;  // Current workflow's node statuses
   nodeParameters: Record<string, NodeParameters>;
   variables: Record<string, any>;
@@ -160,6 +176,7 @@ interface WebSocketContextValue {
   requestStatus: () => void;
   clearNodeStatus: (nodeId: string) => Promise<void>;
   clearWhatsAppMessages: () => void;
+  clearConsoleLogs: () => void;
 
   // Generic request method
   sendRequest: <T = any>(type: string, data?: Record<string, any>) => Promise<T>;
@@ -284,6 +301,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [whatsappMessages, setWhatsappMessages] = useState<WhatsAppMessage[]>([]);
   const [lastWhatsAppMessage, setLastWhatsAppMessage] = useState<WhatsAppMessage | null>(null);
   const [apiKeyStatuses, setApiKeyStatuses] = useState<Record<string, ApiKeyStatus>>({});
+  const [consoleLogs, setConsoleLogs] = useState<ConsoleLogEntry[]>([]);
   // Per-workflow node statuses: workflow_id -> node_id -> NodeStatus (n8n pattern)
   const [allNodeStatuses, setAllNodeStatuses] = useState<Record<string, Record<string, NodeStatus>>>({});
   const [nodeParameters, setNodeParameters] = useState<Record<string, NodeParameters>>({});
@@ -691,6 +709,38 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           // Keep-alive response, no action needed
           break;
 
+        case 'console_log':
+          // Handle console log entries from Console nodes
+          if (data) {
+            const logEntry: ConsoleLogEntry = {
+              node_id: data.node_id || '',
+              label: data.label || 'Console',
+              timestamp: data.timestamp || new Date().toISOString(),
+              data: data.data,
+              formatted: data.formatted || JSON.stringify(data.data, null, 2),
+              format: data.format || 'json',
+              workflow_id: data.workflow_id,
+              source_node_id: data.source_node_id,
+              source_node_type: data.source_node_type,
+              source_node_label: data.source_node_label
+            };
+            // Add to logs (newest first, limit to 100 entries)
+            setConsoleLogs(prev => {
+              const updated = [logEntry, ...prev];
+              return updated.slice(0, 100);
+            });
+          }
+          break;
+
+        case 'console_logs_cleared':
+          // Handle console logs cleared from server
+          if (message.workflow_id) {
+            setConsoleLogs(prev => prev.filter(log => log.workflow_id !== message.workflow_id));
+          } else {
+            setConsoleLogs([]);
+          }
+          break;
+
         case 'workflow_lock':
           // Handle workflow lock status updates (per-workflow locking - n8n pattern)
           // Only update lock state if it's for the current workflow or if unlocking
@@ -877,6 +927,11 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const clearWhatsAppMessages = useCallback(() => {
     setWhatsappMessages([]);
     setLastWhatsAppMessage(null);
+  }, []);
+
+  // Clear console logs
+  const clearConsoleLogs = useCallback(() => {
+    setConsoleLogs([]);
   }, []);
 
   // Derive current workflow's node statuses (n8n pattern)
@@ -1570,6 +1625,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     whatsappMessages,
     lastWhatsAppMessage,
     apiKeyStatuses,
+    consoleLogs,
     nodeStatuses,
     nodeParameters,
     variables,
@@ -1584,6 +1640,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     requestStatus,
     clearNodeStatus,
     clearWhatsAppMessages,
+    clearConsoleLogs,
 
     // Generic request method
     sendRequest,

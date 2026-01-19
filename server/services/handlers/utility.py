@@ -591,3 +591,232 @@ async def handle_timer(
             "execution_time": time.time() - start_time,
             "timestamp": datetime.now().isoformat()
         }
+
+
+# =============================================================================
+# CONSOLE HANDLER
+# =============================================================================
+
+async def handle_console(
+    node_id: str,
+    node_type: str,
+    parameters: Dict[str, Any],
+    context: Dict[str, Any],
+    connected_outputs: Dict[str, Any] = None,
+    source_nodes: list = None
+) -> Dict[str, Any]:
+    """Handle console node execution - logs input data for debugging.
+
+    The console node:
+    1. Receives input data from connected upstream nodes (via _get_connected_outputs_with_info)
+    2. Logs the data to the console panel based on log mode
+    3. Passes the input through unchanged to downstream nodes
+
+    Args:
+        node_id: The node ID
+        node_type: The node type (console)
+        parameters: Resolved parameters including label, logMode, format
+        context: Execution context
+        connected_outputs: Outputs from connected upstream nodes (keyed by node type)
+        source_nodes: List of source node info dicts with id, type, label
+
+    Returns:
+        Execution result dict with logged data and passthrough output
+    """
+    from services.status_broadcaster import get_status_broadcaster
+    start_time = time.time()
+
+    try:
+        label = parameters.get('label', '')
+        log_mode = parameters.get('logMode', 'all')
+        format_type = parameters.get('format', 'json')
+        field_path = parameters.get('fieldPath', '')
+        expression = parameters.get('expression', '')
+
+        # Get input data from connected outputs (passed from _get_connected_outputs_with_info)
+        connected_outputs = connected_outputs or {}
+        source_nodes = source_nodes or []
+
+        logger.debug(f"[Console] connected_outputs keys: {list(connected_outputs.keys())}, count: {len(connected_outputs)}")
+
+        # Merge all connected outputs into a single dict
+        input_data = {}
+        for node_type, output in connected_outputs.items():
+            logger.debug(f"[Console] Processing output from {node_type}: type={type(output).__name__}")
+            if isinstance(output, dict):
+                input_data.update(output)
+            else:
+                input_data['value'] = output
+
+        logger.debug(f"[Console] input_data keys: {list(input_data.keys()) if input_data else 'empty'}")
+
+        # Get first source node info for display
+        source_info = source_nodes[0] if source_nodes else None
+
+        # Determine what to log based on mode
+        logger.debug(f"[Console] log_mode={log_mode}, field_path={field_path[:50] if field_path else 'none'}...")
+        log_value = None
+        match log_mode:
+            case 'all':
+                log_value = input_data
+            case 'field':
+                if field_path:
+                    # Check if fieldPath was a template that got resolved (no longer contains {{}})
+                    # If it was resolved, use the resolved value directly
+                    if '{{' not in field_path and field_path not in input_data:
+                        # fieldPath was likely a template like {{aiagent.response}} that got resolved
+                        # Use the resolved value directly instead of navigating
+                        log_value = field_path
+                        logger.debug(f"[Console] Using resolved fieldPath value directly")
+                    else:
+                        # fieldPath is a literal path like "response" or "data.items[0]"
+                        log_value = _navigate_field_path(input_data, field_path)
+                else:
+                    log_value = input_data
+            case 'expression':
+                # Expression is already resolved by parameter resolver
+                log_value = expression if expression else input_data
+            case _:
+                log_value = input_data
+
+        # Format the output
+        formatted_output = _format_console_output(log_value, format_type)
+
+        # Get workflow_id for scoped broadcasting
+        workflow_id = context.get('workflow_id')
+
+        # Broadcast console log to frontend
+        broadcaster = get_status_broadcaster()
+        await broadcaster.broadcast_console_log({
+            "node_id": node_id,
+            "label": label or f"Console ({node_id[:8]})",
+            "timestamp": datetime.now().isoformat(),
+            "data": log_value,
+            "formatted": formatted_output,
+            "format": format_type,
+            "workflow_id": workflow_id,
+            "source_node_id": source_info.get('id') if source_info else None,
+            "source_node_type": source_info.get('type') if source_info else None,
+            "source_node_label": source_info.get('label') if source_info else None
+        })
+
+        logger.info("[Console] Logged",
+                   node_id=node_id,
+                   label=label,
+                   format=format_type,
+                   data_type=type(log_value).__name__)
+
+        # Return success with the logged data AND pass input through as output
+        return {
+            "success": True,
+            "node_id": node_id,
+            "node_type": "console",
+            "result": {
+                "label": label or f"Console ({node_id[:8]})",
+                "logged_at": datetime.now().isoformat(),
+                "format": format_type,
+                "data": log_value,
+                "formatted": formatted_output,
+                # Pass through original input for downstream nodes
+                **input_data
+            },
+            "execution_time": time.time() - start_time,
+            "timestamp": datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        logger.error("[Console] Failed", node_id=node_id, error=str(e))
+        return {
+            "success": False,
+            "node_id": node_id,
+            "node_type": "console",
+            "error": str(e),
+            "execution_time": time.time() - start_time,
+            "timestamp": datetime.now().isoformat()
+        }
+
+
+def _navigate_field_path(data: Any, path: str) -> Any:
+    """Navigate through nested dict/list using dot notation path.
+
+    Supports:
+    - Dict keys: 'field' -> data['field']
+    - Array indexing: 'items[0]' -> data['items'][0]
+    - Nested paths: 'data.items[0].name' -> data['data']['items'][0]['name']
+    """
+    import re
+
+    if not path:
+        return data
+
+    current = data
+    parts = path.split('.')
+
+    for part in parts:
+        if current is None:
+            return None
+
+        # Check for array index notation: field[index]
+        bracket_match = re.match(r'^(\w+)\[(\d+)\]$', part)
+        if bracket_match:
+            field_name = bracket_match.group(1)
+            index = int(bracket_match.group(2))
+
+            # Navigate to the field first
+            if isinstance(current, dict) and field_name in current:
+                current = current[field_name]
+            else:
+                return None
+
+            # Then access the array index
+            if isinstance(current, list) and 0 <= index < len(current):
+                current = current[index]
+            else:
+                return None
+        else:
+            # Standard dict key navigation
+            if isinstance(current, dict) and part in current:
+                current = current[part]
+            else:
+                return None
+
+    return current
+
+
+def _format_console_output(data: Any, format_type: str) -> str:
+    """Format data for console display based on format type."""
+    match format_type:
+        case 'json':
+            try:
+                return json.dumps(data, indent=2, default=str, ensure_ascii=False)
+            except Exception:
+                return str(data)
+        case 'json_compact':
+            try:
+                return json.dumps(data, default=str, ensure_ascii=False)
+            except Exception:
+                return str(data)
+        case 'text':
+            return str(data)
+        case 'table':
+            # Format as table if data is list of dicts
+            if isinstance(data, list) and data and isinstance(data[0], dict):
+                headers = list(data[0].keys())
+                rows = [[str(row.get(h, '')) for h in headers] for row in data]
+
+                # Calculate column widths
+                widths = [max(len(h), max((len(r[i]) for r in rows), default=0))
+                         for i, h in enumerate(headers)]
+
+                # Build table string
+                header_line = ' | '.join(h.ljust(widths[i]) for i, h in enumerate(headers))
+                separator = '-+-'.join('-' * w for w in widths)
+                data_lines = [' | '.join(r[i].ljust(widths[i]) for i in range(len(headers)))
+                             for r in rows]
+
+                return '\n'.join([header_line, separator] + data_lines)
+            else:
+                # Fall back to JSON for non-tabular data
+                return json.dumps(data, indent=2, default=str, ensure_ascii=False)
+        case _:
+            return str(data)
