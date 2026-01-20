@@ -5,6 +5,7 @@ import { useAppStore } from '../store/useAppStore';
 import { nodeDefinitions } from '../nodeDefinitions';
 import { useWebSocket, useNodeStatus } from '../contexts/WebSocketContext';
 import { useAppTheme } from '../hooks/useAppTheme';
+import { getAIProviderIcon } from './icons/AIProviderIcons';
 
 // Map credential names to provider keys
 const CREDENTIAL_TO_PROVIDER: Record<string, string> = {
@@ -15,7 +16,9 @@ const CREDENTIAL_TO_PROVIDER: Record<string, string> = {
   'cohereApi': 'cohere',
   'ollamaApi': 'ollama',
   'mistralApi': 'mistral',
-  'openrouterApi': 'openrouter'
+  'openrouterApi': 'openrouter',
+  'groqApi': 'groq',
+  'cerebrasApi': 'cerebras'
 };
 
 const ModelNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectable, selected }) => {
@@ -41,6 +44,8 @@ const ModelNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectabl
     }
 
     // Fallback: extract provider from node type
+    if (type?.includes('cerebras')) return 'cerebras';
+    if (type?.includes('groq')) return 'groq';
     if (type?.includes('openrouter')) return 'openrouter';
     if (type?.includes('openai')) return 'openai';
     if (type?.includes('claude')) return 'anthropic';
@@ -84,23 +89,25 @@ const ModelNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectabl
   const nodeColor = definition?.defaults?.color || '#6b7280';
 
   // Get provider icon/text for circular display
-  const getProviderDisplay = () => {
-    // Use the icon from the node definition if available
-    if (definition?.icon) {
-      return definition.icon;
+  const getProviderDisplay = (): React.ReactNode => {
+    // Try to get official brand icon from @lobehub/icons
+    const IconComponent = getAIProviderIcon(provider);
+    if (IconComponent) {
+      return <IconComponent size={28} />;
     }
 
-    // Fallback logic based on node type
-    if (type?.includes('openrouter')) return '🔀';
-    if (type?.includes('openai')) return '🤖';
-    if (type?.includes('claude')) return '🧠';
-    if (type?.includes('gemini')) return '⭐';
-    if (type?.includes('azure')) return '☁️';
-    if (type?.includes('cohere')) return '🌊';
-    if (type?.includes('ollama')) return '🦙';
-    if (type?.includes('mistral')) return '🌪️';
+    // Use the icon from the node definition if available (emoji fallback)
+    if (definition?.icon) {
+      return <span>{definition.icon}</span>;
+    }
 
-    return 'AI';
+    // Fallback logic based on node type (emojis for providers without @lobehub/icons)
+    if (type?.includes('azure')) return <span>☁️</span>;
+    if (type?.includes('cohere')) return <span>🌊</span>;
+    if (type?.includes('ollama')) return <span>🦙</span>;
+    if (type?.includes('mistral')) return <span>🌪️</span>;
+
+    return <span>AI</span>;
   };
 
   return (

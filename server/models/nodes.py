@@ -43,8 +43,8 @@ class BaseNodeParams(BaseModel):
 # =============================================================================
 
 class AIChatModelParams(BaseNodeParams):
-    """Parameters for AI chat model nodes (OpenAI, Anthropic, Gemini, OpenRouter)."""
-    type: Literal["openaiChatModel", "anthropicChatModel", "geminiChatModel", "openrouterChatModel"]
+    """Parameters for AI chat model nodes (OpenAI, Anthropic, Gemini, OpenRouter, Groq, Cerebras)."""
+    type: Literal["openaiChatModel", "anthropicChatModel", "geminiChatModel", "openrouterChatModel", "groqChatModel", "cerebrasChatModel"]
     prompt: str = ""
     model: str = ""
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)

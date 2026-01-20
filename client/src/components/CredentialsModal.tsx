@@ -15,6 +15,8 @@ const PROVIDERS = [
   { id: 'anthropic', name: 'Anthropic', placeholder: 'sk-ant-...', color: '#d97706', desc: 'Claude 3.5 Sonnet, Claude 3 Opus' },
   { id: 'gemini', name: 'Gemini', placeholder: 'AIza...', color: '#4285f4', desc: 'Gemini 1.5 Pro, Gemini Flash' },
   { id: 'openrouter', name: 'OpenRouter', placeholder: 'sk-or-...', color: '#6366f1', desc: 'Unified API - OpenAI, Claude, Llama, Mistral, and more' },
+  { id: 'groq', name: 'Groq', placeholder: 'gsk_...', color: '#F55036', desc: 'Ultra-fast LLM inference - Llama, Mixtral, Gemma' },
+  { id: 'cerebras', name: 'Cerebras', placeholder: 'csk-...', color: '#FF6600', desc: 'Ultra-fast inference - Llama, Qwen on custom AI hardware' },
   { id: 'google_maps', name: 'Google Maps', placeholder: 'AIza...', color: '#34a853', desc: 'Geocoding, Places API' },
   { id: 'android_remote', name: 'Android Remote', placeholder: 'your-api-key...', color: '#3ddc84', desc: 'Remote Android device via WebSocket' },
 ];

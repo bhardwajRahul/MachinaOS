@@ -211,6 +211,80 @@ const openrouterConfig: ChatModelConfig = {
   ]
 };
 
+// Groq Chat Model Configuration
+const groqConfig: ChatModelConfig = {
+  providerId: 'groq',
+  displayName: 'Groq',
+  icon: '⚡',
+  color: '#F55036',
+  description: 'Groq - Ultra-fast LLM inference with Llama, Mixtral, and Gemma models',
+  models: [], // Models fetched dynamically via API
+  parameters: [
+    STANDARD_PARAMETERS.temperature,
+    STANDARD_PARAMETERS.maxTokens,
+    STANDARD_PARAMETERS.topP,
+    {
+      displayName: 'Timeout',
+      name: 'timeout',
+      type: 'number',
+      default: 60000,
+      typeOptions: {
+        minValue: 1000,
+        maxValue: 180000
+      },
+      description: 'Timeout for the request in milliseconds'
+    },
+    {
+      displayName: 'Max Retries',
+      name: 'maxRetries',
+      type: 'number',
+      default: 2,
+      typeOptions: {
+        minValue: 0,
+        maxValue: 5
+      },
+      description: 'Maximum number of retries'
+    }
+  ]
+};
+
+// Cerebras Chat Model Configuration
+const cerebrasConfig: ChatModelConfig = {
+  providerId: 'cerebras',
+  displayName: 'Cerebras',
+  icon: '🧬',
+  color: '#FF6600',
+  description: 'Cerebras - Ultra-fast inference with Llama and Qwen models on custom AI hardware',
+  models: [], // Models fetched dynamically via API
+  parameters: [
+    STANDARD_PARAMETERS.temperature,
+    STANDARD_PARAMETERS.maxTokens,
+    STANDARD_PARAMETERS.topP,
+    {
+      displayName: 'Timeout',
+      name: 'timeout',
+      type: 'number',
+      default: 60000,
+      typeOptions: {
+        minValue: 1000,
+        maxValue: 180000
+      },
+      description: 'Timeout for the request in milliseconds'
+    },
+    {
+      displayName: 'Max Retries',
+      name: 'maxRetries',
+      type: 'number',
+      default: 2,
+      typeOptions: {
+        minValue: 0,
+        maxValue: 5
+      },
+      description: 'Maximum number of retries'
+    }
+  ]
+};
+
 // ============================================================================
 // GENERATED CHAT MODEL NODES
 // ============================================================================
@@ -219,9 +293,11 @@ export const aiModelNodes: Record<string, INodeTypeDescription> = {
   openaiChatModel: createBaseChatModel(openaiConfig),
   anthropicChatModel: createBaseChatModel(claudeConfig),
   geminiChatModel: createBaseChatModel(geminiConfig),
-  openrouterChatModel: createBaseChatModel(openrouterConfig)
+  openrouterChatModel: createBaseChatModel(openrouterConfig),
+  groqChatModel: createBaseChatModel(groqConfig),
+  cerebrasChatModel: createBaseChatModel(cerebrasConfig)
 };
 
 // Export configurations and factory for external use
-export { openaiConfig, claudeConfig, geminiConfig, openrouterConfig, createBaseChatModel };
+export { openaiConfig, claudeConfig, geminiConfig, openrouterConfig, groqConfig, cerebrasConfig, createBaseChatModel };
 

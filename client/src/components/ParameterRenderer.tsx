@@ -22,7 +22,9 @@ const NODE_TYPE_TO_PROVIDER: Record<string, string> = {
   'cohereChatModel': 'cohere',
   'ollamaChatModel': 'ollama',
   'mistralChatModel': 'mistral',
-  'openrouterChatModel': 'openrouter'
+  'openrouterChatModel': 'openrouter',
+  'groqChatModel': 'groq',
+  'cerebrasChatModel': 'cerebras'
 };
 
 // Collection Renderer - n8n official style

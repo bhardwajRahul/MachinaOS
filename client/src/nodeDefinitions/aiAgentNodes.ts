@@ -9,60 +9,7 @@ import {
 // ============================================================================
 
 export const aiAgentNodes: Record<string, INodeTypeDescription> = {
-  // Simple Memory Node - conversation history storage for AI agents
-  // No run button - memory is accessed automatically when AI Agent runs
-  simpleMemory: {
-    displayName: 'Simple Memory',
-    name: 'simpleMemory',
-    icon: '🧠',
-    group: ['ai', 'memory'],
-    version: 1,
-    description: 'Store conversation history for AI agents',
-    defaults: { name: 'Memory', color: '#8b5cf6' },
-    inputs: [],  // No input - memory node is passive
-    outputs: [{
-      name: 'memory',
-      displayName: 'Memory',
-      type: 'main' as NodeConnectionType,
-      description: 'session_id, messages, message_count, memory_type'
-    }],
-    properties: [
-      {
-        displayName: 'Session ID',
-        name: 'sessionId',
-        type: 'string',
-        default: 'default',
-        required: true,
-        description: 'Unique identifier for conversation session. Use different IDs for separate conversations.'
-      },
-      {
-        displayName: 'Memory Type',
-        name: 'memoryType',
-        type: 'options',
-        default: 'buffer',
-        options: [
-          { name: 'Buffer (All Messages)', value: 'buffer' },
-          { name: 'Window (Last N)', value: 'window' }
-        ],
-        description: 'Buffer keeps all messages, Window keeps only the last N messages'
-      },
-      {
-        displayName: 'Window Size',
-        name: 'windowSize',
-        type: 'number',
-        default: 10,
-        typeOptions: { minValue: 1, maxValue: 100 },
-        description: 'Number of recent messages to keep (for Window type)',
-        displayOptions: {
-          show: {
-            memoryType: ['window']
-          }
-        }
-      }
-    ]
-  },
-
-  // AI Agent Node - n8n official style implementation
+  // AI Agent Node - n8n official style implementation (first for top position in AI category)
   aiAgent: {
     displayName: 'AI Agent',
     name: 'aiAgent',
@@ -173,6 +120,59 @@ export const aiAgentNodes: Record<string, INodeTypeDescription> = {
             description: 'Maximum number of tokens to generate'
           }
         ] as any
+      }
+    ]
+  },
+
+  // Simple Memory Node - conversation history storage for AI agents
+  // No run button - memory is accessed automatically when AI Agent runs
+  simpleMemory: {
+    displayName: 'Simple Memory',
+    name: 'simpleMemory',
+    icon: '🧠',
+    group: ['tool', 'memory'],  // 'tool' = appears in AI Tools category
+    version: 1,
+    description: 'Store conversation history for AI agents',
+    defaults: { name: 'Memory', color: '#8b5cf6' },
+    inputs: [],  // No input - memory node is passive
+    outputs: [{
+      name: 'memory',
+      displayName: 'Memory',
+      type: 'main' as NodeConnectionType,
+      description: 'session_id, messages, message_count, memory_type'
+    }],
+    properties: [
+      {
+        displayName: 'Session ID',
+        name: 'sessionId',
+        type: 'string',
+        default: 'default',
+        required: true,
+        description: 'Unique identifier for conversation session. Use different IDs for separate conversations.'
+      },
+      {
+        displayName: 'Memory Type',
+        name: 'memoryType',
+        type: 'options',
+        default: 'buffer',
+        options: [
+          { name: 'Buffer (All Messages)', value: 'buffer' },
+          { name: 'Window (Last N)', value: 'window' }
+        ],
+        description: 'Buffer keeps all messages, Window keeps only the last N messages'
+      },
+      {
+        displayName: 'Window Size',
+        name: 'windowSize',
+        type: 'number',
+        default: 10,
+        typeOptions: { minValue: 1, maxValue: 100 },
+        description: 'Number of recent messages to keep (for Window type)',
+        displayOptions: {
+          show: {
+            memoryType: ['window']
+          }
+        }
       }
     ]
   }

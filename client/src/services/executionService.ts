@@ -193,6 +193,8 @@ export class ExecutionService {
       'anthropicChatModel',
       'geminiChatModel',
       'openrouterChatModel',
+      'groqChatModel',
+      'cerebrasChatModel',
       'azure_openaiChatModel',  // Planned
       'cohereChatModel',         // Planned
       'ollamaChatModel',         // Planned

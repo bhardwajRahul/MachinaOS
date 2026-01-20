@@ -15,6 +15,8 @@ AI_CHAT_MODEL_TYPES: FrozenSet[str] = frozenset([
     'anthropicChatModel',
     'geminiChatModel',
     'openrouterChatModel',
+    'groqChatModel',
+    'cerebrasChatModel',
 ])
 
 AI_AGENT_TYPES: FrozenSet[str] = frozenset([
@@ -204,10 +206,14 @@ def detect_ai_provider(node_type: str, parameters: dict = None) -> str:
         parameters: Optional parameters dict (used for aiAgent)
 
     Returns:
-        Provider string: 'openai', 'anthropic', 'gemini', or 'openrouter'
+        Provider string: 'openai', 'anthropic', 'gemini', 'openrouter', 'groq', or 'cerebras'
     """
     if node_type == 'aiAgent':
         return (parameters or {}).get('provider', 'openai')
+    elif 'cerebras' in node_type.lower():
+        return 'cerebras'
+    elif 'groq' in node_type.lower():
+        return 'groq'
     elif 'openrouter' in node_type.lower():
         return 'openrouter'
     elif 'anthropic' in node_type.lower():

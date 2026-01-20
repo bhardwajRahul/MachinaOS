@@ -10,6 +10,8 @@ import operator
 from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_groq import ChatGroq
+from langchain_cerebras import ChatCerebras
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, BaseMessage, ToolMessage
 from langchain_core.tools import StructuredTool
 from langgraph.graph import StateGraph, END
@@ -60,6 +62,14 @@ def _openrouter_headers(api_key: str) -> dict:
     }
 
 
+def _groq_headers(api_key: str) -> dict:
+    return {'Authorization': f'Bearer {api_key}'}
+
+
+def _cerebras_headers(api_key: str) -> dict:
+    return {'Authorization': f'Bearer {api_key}'}
+
+
 # Provider configurations
 PROVIDER_CONFIGS: Dict[str, ProviderConfig] = {
     'openai': ProviderConfig(
@@ -101,6 +111,26 @@ PROVIDER_CONFIGS: Dict[str, ProviderConfig] = {
         default_model='openai/gpt-4o-mini',
         models_endpoint='https://openrouter.ai/api/v1/models',
         models_header_fn=_openrouter_headers
+    ),
+    'groq': ProviderConfig(
+        name='groq',
+        model_class=ChatGroq,
+        api_key_param='api_key',
+        max_tokens_param='max_tokens',
+        detection_patterns=('groq',),
+        default_model='llama-3.3-70b-versatile',
+        models_endpoint='https://api.groq.com/openai/v1/models',
+        models_header_fn=_groq_headers
+    ),
+    'cerebras': ProviderConfig(
+        name='cerebras',
+        model_class=ChatCerebras,
+        api_key_param='api_key',
+        max_tokens_param='max_tokens',
+        detection_patterns=('cerebras',),
+        default_model='llama-3.3-70b',
+        models_endpoint='https://api.cerebras.ai/v1/models',
+        models_header_fn=_cerebras_headers
     ),
 }
 
@@ -636,6 +666,40 @@ class AIService:
                 # Return free models first, then paid models (both sorted)
                 return sorted(free_models) + sorted(paid_models)
 
+            elif provider == 'groq':
+                response = await client.get(
+                    'https://api.groq.com/openai/v1/models',
+                    headers={'Authorization': f'Bearer {api_key}'}
+                )
+                response.raise_for_status()
+                data = response.json()
+
+                models = []
+                for model in data.get('data', []):
+                    model_id = model.get('id', '')
+                    # Include all models from Groq API
+                    if model_id:
+                        models.append(model_id)
+
+                return sorted(models)
+
+            elif provider == 'cerebras':
+                response = await client.get(
+                    'https://api.cerebras.ai/v1/models',
+                    headers={'Authorization': f'Bearer {api_key}'}
+                )
+                response.raise_for_status()
+                data = response.json()
+
+                models = []
+                for model in data.get('data', []):
+                    model_id = model.get('id', '')
+                    # Include all models from Cerebras API
+                    if model_id:
+                        models.append(model_id)
+
+                return sorted(models)
+
             else:
                 raise ValueError(f"Unsupported provider: {provider}")
 
@@ -678,6 +742,10 @@ class AIService:
             # OpenRouter models have format like "openai/gpt-4o" which would incorrectly detect as openai
             if node_type == 'openrouterChatModel':
                 provider = 'openrouter'
+            elif node_type == 'groqChatModel':
+                provider = 'groq'
+            elif node_type == 'cerebrasChatModel':
+                provider = 'cerebras'
             else:
                 provider = self.detect_provider(model)
             chat_model = self.create_model(provider, api_key, model, temperature, max_tokens)
