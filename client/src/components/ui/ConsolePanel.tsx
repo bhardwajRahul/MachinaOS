@@ -23,6 +23,7 @@ interface ConsolePanelProps {
 
 // Storage keys for persisting state
 const CONSOLE_HEIGHT_KEY = 'console_panel_height';
+const CHAT_WIDTH_KEY = 'console_chat_width_percent';
 
 const ConsolePanel: React.FC<ConsolePanelProps> = ({
   isOpen,
@@ -33,9 +34,12 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
 }) => {
   const theme = useAppTheme();
   const { isDarkMode } = useTheme();
-  const { consoleLogs, clearConsoleLogs, sendChatMessage, chatMessages, clearChatMessages } = useWebSocket();
+  const { consoleLogs, clearConsoleLogs, terminalLogs, clearTerminalLogs, sendChatMessage, chatMessages, clearChatMessages } = useWebSocket();
   const [filter, setFilter] = useState('');
+  const [terminalFilter, setTerminalFilter] = useState('');
+  const [terminalLogLevel, setTerminalLogLevel] = useState<'all' | 'error' | 'warning' | 'info' | 'debug'>('all');
   const [autoScroll, setAutoScroll] = useState(true);
+  const [consoleTab, setConsoleTab] = useState<'console' | 'terminal'>('console');
   const logsEndRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
@@ -60,10 +64,32 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
     return defaultHeight;
   });
 
-  // Resize state
+  // Chat section width (percentage) with localStorage persistence
+  const [chatWidthPercent, setChatWidthPercent] = useState(() => {
+    try {
+      const saved = localStorage.getItem(CHAT_WIDTH_KEY);
+      if (saved) {
+        const width = parseFloat(saved);
+        if (!isNaN(width) && width >= 20 && width <= 80) {
+          return width;
+        }
+      }
+    } catch {
+      // Ignore localStorage errors
+    }
+    return 50; // Default 50%
+  });
+
+  // Vertical resize state (panel height)
   const [isResizing, setIsResizing] = useState(false);
   const resizeStartY = useRef(0);
   const resizeStartHeight = useRef(0);
+
+  // Horizontal resize state (chat/console split)
+  const [isHorizontalResizing, setIsHorizontalResizing] = useState(false);
+  const resizeStartX = useRef(0);
+  const resizeStartWidth = useRef(0);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Save height to localStorage when it changes
   useEffect(() => {
@@ -74,7 +100,16 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
     }
   }, [panelHeight]);
 
-  // Handle resize start
+  // Save chat width to localStorage when it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(CHAT_WIDTH_KEY, chatWidthPercent.toString());
+    } catch {
+      // Ignore localStorage errors
+    }
+  }, [chatWidthPercent]);
+
+  // Handle vertical resize start (panel height)
   const handleResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -83,7 +118,16 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
     resizeStartHeight.current = panelHeight;
   }, [panelHeight]);
 
-  // Handle resize move
+  // Handle horizontal resize start (chat/console split)
+  const handleHorizontalResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsHorizontalResizing(true);
+    resizeStartX.current = e.clientX;
+    resizeStartWidth.current = chatWidthPercent;
+  }, [chatWidthPercent]);
+
+  // Handle vertical resize move
   useEffect(() => {
     if (!isResizing) return;
 
@@ -112,7 +156,39 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
     };
   }, [isResizing, minHeight, maxHeight]);
 
-  // Filter logs based on search input
+  // Handle horizontal resize move
+  useEffect(() => {
+    if (!isHorizontalResizing || !containerRef.current) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const container = containerRef.current;
+      if (!container) return;
+
+      const containerRect = container.getBoundingClientRect();
+      const newWidth = ((e.clientX - containerRect.left) / containerRect.width) * 100;
+      const clampedWidth = Math.min(80, Math.max(20, newWidth));
+      setChatWidthPercent(clampedWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsHorizontalResizing(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    document.body.style.cursor = 'ew-resize';
+    document.body.style.userSelect = 'none';
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isHorizontalResizing]);
+
+  // Filter console logs based on search input
   const filteredLogs = useMemo(() => {
     if (!filter) return consoleLogs;
     const lowerFilter = filter.toLowerCase();
@@ -122,6 +198,29 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
       log.node_id.toLowerCase().includes(lowerFilter)
     );
   }, [consoleLogs, filter]);
+
+  // Filter terminal logs based on search input and log level
+  const filteredTerminalLogs = useMemo(() => {
+    let filtered = terminalLogs;
+
+    // Filter by log level
+    if (terminalLogLevel !== 'all') {
+      const levelPriority: Record<string, number> = { error: 0, warning: 1, info: 2, debug: 3 };
+      const selectedPriority = levelPriority[terminalLogLevel] ?? 2;
+      filtered = filtered.filter(log => (levelPriority[log.level] ?? 2) <= selectedPriority);
+    }
+
+    // Filter by search text
+    if (terminalFilter) {
+      const lowerFilter = terminalFilter.toLowerCase();
+      filtered = filtered.filter(log =>
+        log.message.toLowerCase().includes(lowerFilter) ||
+        (log.source?.toLowerCase().includes(lowerFilter))
+      );
+    }
+
+    return filtered;
+  }, [terminalLogs, terminalFilter, terminalLogLevel]);
 
   // Auto-scroll to bottom when new logs arrive
   useEffect(() => {
@@ -255,17 +354,34 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
     height: isOpen ? `${panelHeight}px` : '0px',
     overflow: 'hidden',
     backgroundColor: isDarkMode ? theme.dracula.background : theme.colors.background,
-    transition: isResizing ? 'none' : 'height 0.2s ease-in-out',
+    transition: (isResizing || isHorizontalResizing) ? 'none' : 'height 0.2s ease-in-out',
     display: 'flex',
     flexDirection: 'row'  // Side by side
   };
 
-  const sectionStyle: React.CSSProperties = {
-    flex: 1,
+  const chatSectionStyle: React.CSSProperties = {
+    width: `${chatWidthPercent}%`,
     display: 'flex',
     flexDirection: 'column',
     overflow: 'hidden',
-    borderRight: `1px solid ${isDarkMode ? theme.dracula.selection : theme.colors.border}`
+    position: 'relative'
+  };
+
+  const consoleSectionStyle: React.CSSProperties = {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden'
+  };
+
+  const horizontalResizeHandleStyle: React.CSSProperties = {
+    width: '6px',
+    cursor: 'ew-resize',
+    backgroundColor: isHorizontalResizing
+      ? (isDarkMode ? theme.dracula.purple : theme.colors.primary)
+      : (isDarkMode ? theme.dracula.selection : theme.colors.border),
+    transition: isHorizontalResizing ? 'none' : 'background-color 0.15s ease',
+    flexShrink: 0
   };
 
   const sectionHeaderStyle: React.CSSProperties = {
@@ -374,24 +490,24 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
   const chatMessagesStyle: React.CSSProperties = {
     flex: 1,
     overflow: 'auto',
-    padding: '8px 12px'
+    padding: '12px 16px'
   };
 
   const chatInputContainerStyle: React.CSSProperties = {
     display: 'flex',
-    gap: '8px',
-    padding: '8px 12px',
+    gap: '10px',
+    padding: '10px 16px',
     borderTop: `1px solid ${isDarkMode ? theme.dracula.selection : theme.colors.border}`,
     backgroundColor: isDarkMode ? theme.dracula.currentLine : theme.colors.backgroundPanel
   };
 
   const chatInputStyle: React.CSSProperties = {
     flex: 1,
-    padding: '6px 10px',
+    padding: '8px 12px',
     fontSize: theme.fontSize.sm,
     backgroundColor: isDarkMode ? theme.dracula.background : theme.colors.background,
-    border: `1px solid ${theme.colors.border}`,
-    borderRadius: '6px',
+    border: `1px solid ${isDarkMode ? theme.dracula.selection : theme.colors.border}`,
+    borderRadius: '8px',
     color: theme.colors.text,
     outline: 'none'
   };
@@ -410,15 +526,17 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
   };
 
   const chatMessageStyle = (isUser: boolean): React.CSSProperties => ({
-    padding: '6px 10px',
-    marginBottom: '6px',
-    borderRadius: '8px',
+    padding: '8px 12px',
+    marginBottom: '8px',
+    borderRadius: isUser ? '12px 12px 4px 12px' : '12px 12px 12px 4px',
     backgroundColor: isUser
-      ? (isDarkMode ? `${theme.dracula.purple}30` : `${theme.colors.primary}15`)
+      ? (isDarkMode ? `${theme.dracula.purple}40` : `${theme.colors.primary}20`)
       : (isDarkMode ? theme.dracula.selection : theme.colors.backgroundPanel),
-    maxWidth: '85%',
-    alignSelf: isUser ? 'flex-end' : 'flex-start',
-    wordBreak: 'break-word'
+    maxWidth: '80%',
+    marginLeft: isUser ? 'auto' : '0',
+    marginRight: isUser ? '0' : 'auto',
+    wordBreak: 'break-word',
+    boxShadow: isDarkMode ? 'none' : '0 1px 2px rgba(0,0,0,0.05)'
   });
 
   const chatMessageTextStyle: React.CSSProperties = {
@@ -478,10 +596,10 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
         </div>
       </div>
 
-      {/* Panel Content - Split 50/50 */}
-      <div style={contentStyle}>
-        {/* Chat Section - Left Half */}
-        <div style={sectionStyle}>
+      {/* Panel Content - Resizable Split */}
+      <div ref={containerRef} style={contentStyle}>
+        {/* Chat Section - Left */}
+        <div style={chatSectionStyle}>
           <div style={sectionHeaderStyle}>
             <span style={sectionTitleStyle}>
               Chat
@@ -516,7 +634,7 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
                 Send a message to trigger chatTrigger nodes
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 {chatMessages.map((msg, index) => (
                   <div key={`${msg.timestamp}-${index}`} style={chatMessageStyle(msg.role === 'user')}>
                     <p style={chatMessageTextStyle}>{msg.message}</p>
@@ -550,21 +668,107 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
           </div>
         </div>
 
-        {/* Console Section - Right Half */}
-        <div style={{ ...sectionStyle, borderRight: 'none' }}>
+        {/* Horizontal Resize Handle */}
+        <div
+          style={horizontalResizeHandleStyle}
+          onMouseDown={handleHorizontalResizeStart}
+          onMouseEnter={e => {
+            if (!isHorizontalResizing) {
+              e.currentTarget.style.backgroundColor = isDarkMode
+                ? `${theme.dracula.purple}60`
+                : `${theme.colors.primary}40`;
+            }
+          }}
+          onMouseLeave={e => {
+            if (!isHorizontalResizing) {
+              e.currentTarget.style.backgroundColor = isDarkMode
+                ? theme.dracula.selection
+                : theme.colors.border;
+            }
+          }}
+        />
+
+        {/* Console/Terminal Section - Right */}
+        <div style={consoleSectionStyle}>
           <div style={sectionHeaderStyle}>
-            <span style={sectionTitleStyle}>
-              Console
-              {consoleLogs.length > 0 && (
-                <span style={badgeStyle}>{consoleLogs.length}</span>
-              )}
-            </span>
+            {/* Tab Buttons */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <button
+                onClick={() => setConsoleTab('console')}
+                style={{
+                  ...buttonStyle,
+                  padding: '3px 8px',
+                  backgroundColor: consoleTab === 'console'
+                    ? (isDarkMode ? `${theme.dracula.purple}40` : `${theme.colors.primary}20`)
+                    : 'transparent',
+                  color: consoleTab === 'console'
+                    ? (isDarkMode ? theme.dracula.purple : theme.colors.primary)
+                    : theme.colors.textSecondary,
+                  fontWeight: consoleTab === 'console' ? '600' : '400',
+                  borderRadius: '4px'
+                }}
+              >
+                Console
+                {consoleLogs.length > 0 && (
+                  <span style={{ ...badgeStyle, marginLeft: '4px', padding: '0 4px' }}>{consoleLogs.length}</span>
+                )}
+              </button>
+              <button
+                onClick={() => setConsoleTab('terminal')}
+                style={{
+                  ...buttonStyle,
+                  padding: '3px 8px',
+                  backgroundColor: consoleTab === 'terminal'
+                    ? (isDarkMode ? `${theme.dracula.cyan}40` : `${theme.colors.info}20`)
+                    : 'transparent',
+                  color: consoleTab === 'terminal'
+                    ? (isDarkMode ? theme.dracula.cyan : theme.colors.info)
+                    : theme.colors.textSecondary,
+                  fontWeight: consoleTab === 'terminal' ? '600' : '400',
+                  borderRadius: '4px'
+                }}
+              >
+                Terminal
+                {terminalLogs.length > 0 && (
+                  <span style={{
+                    ...badgeStyle,
+                    marginLeft: '4px',
+                    padding: '0 4px',
+                    backgroundColor: isDarkMode ? `${theme.dracula.cyan}40` : `${theme.colors.info}20`,
+                    color: isDarkMode ? theme.dracula.cyan : theme.colors.info
+                  }}>{terminalLogs.length}</span>
+                )}
+              </button>
+            </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              {consoleTab === 'terminal' && (
+                <select
+                  value={terminalLogLevel}
+                  onChange={e => setTerminalLogLevel(e.target.value as 'all' | 'error' | 'warning' | 'info' | 'debug')}
+                  onClick={e => e.stopPropagation()}
+                  style={{
+                    padding: '2px 4px',
+                    fontSize: '10px',
+                    backgroundColor: isDarkMode ? theme.dracula.currentLine : theme.colors.background,
+                    color: theme.colors.text,
+                    border: `1px solid ${isDarkMode ? theme.dracula.selection : theme.colors.border}`,
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    outline: 'none'
+                  }}
+                >
+                  <option value="all">All Levels</option>
+                  <option value="error">Error</option>
+                  <option value="warning">Warning+</option>
+                  <option value="info">Info+</option>
+                  <option value="debug">Debug+</option>
+                </select>
+              )}
               <input
                 type="text"
                 placeholder="Filter..."
-                value={filter}
-                onChange={e => setFilter(e.target.value)}
+                value={consoleTab === 'console' ? filter : terminalFilter}
+                onChange={e => consoleTab === 'console' ? setFilter(e.target.value) : setTerminalFilter(e.target.value)}
                 style={filterInputStyle}
                 onClick={e => e.stopPropagation()}
               />
@@ -586,10 +790,10 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
                 />
                 Auto
               </label>
-              {consoleLogs.length > 0 && (
+              {((consoleTab === 'console' && consoleLogs.length > 0) || (consoleTab === 'terminal' && terminalLogs.length > 0)) && (
                 <button
                   style={clearButtonStyle}
-                  onClick={handleClearConsole}
+                  onClick={consoleTab === 'console' ? handleClearConsole : clearTerminalLogs}
                   onMouseEnter={e => {
                     e.currentTarget.style.backgroundColor = isDarkMode ? `${theme.dracula.red}35` : `${theme.colors.error}25`;
                   }}
@@ -603,38 +807,91 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
             </div>
           </div>
           <div style={{ flex: 1, overflow: 'auto', fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, monospace', fontSize: '12px' }}>
-            {filteredLogs.length === 0 ? (
-              <div style={emptyStyle}>
-                {consoleLogs.length === 0
-                  ? 'Add a Console node to see debug output'
-                  : 'No logs match the filter'}
-              </div>
-            ) : (
-              filteredLogs.slice().reverse().map((log, index) => (
-                <div key={`${log.node_id}-${log.timestamp}-${index}`} style={logEntryStyle}>
-                  <span style={timestampStyle}>{formatTimestamp(log.timestamp)}</span>
-                  <span style={labelStyle} title={log.label || log.node_id}>
-                    {log.label || log.node_id}
-                  </span>
-                  {log.source_node_label && (
-                    <span style={nodeInfoStyle} title={`Source: ${log.source_node_type} (${log.source_node_id})`}>
-                      {log.source_node_label}
-                    </span>
-                  )}
-                  <pre
-                    style={{
-                      margin: 0,
-                      flex: 1,
-                      overflow: 'auto',
-                      color: getFormatColor(log.format),
-                      whiteSpace: log.format === 'json' ? 'pre-wrap' : 'pre',
-                      wordBreak: 'break-word'
-                    }}
-                  >
-                    {log.formatted}
-                  </pre>
+            {consoleTab === 'console' ? (
+              // Console Logs Tab
+              filteredLogs.length === 0 ? (
+                <div style={emptyStyle}>
+                  {consoleLogs.length === 0
+                    ? 'Add a Console node to see debug output'
+                    : 'No logs match the filter'}
                 </div>
-              ))
+              ) : (
+                filteredLogs.slice().reverse().map((log, index) => (
+                  <div key={`${log.node_id}-${log.timestamp}-${index}`} style={logEntryStyle}>
+                    <span style={timestampStyle}>{formatTimestamp(log.timestamp)}</span>
+                    <span style={labelStyle} title={log.label || log.node_id}>
+                      {log.label || log.node_id}
+                    </span>
+                    {log.source_node_label && (
+                      <span style={nodeInfoStyle} title={`Source: ${log.source_node_type} (${log.source_node_id})`}>
+                        {log.source_node_label}
+                      </span>
+                    )}
+                    <pre
+                      style={{
+                        margin: 0,
+                        flex: 1,
+                        overflow: 'auto',
+                        color: getFormatColor(log.format),
+                        whiteSpace: log.format === 'json' ? 'pre-wrap' : 'pre',
+                        wordBreak: 'break-word'
+                      }}
+                    >
+                      {log.formatted}
+                    </pre>
+                  </div>
+                ))
+              )
+            ) : (
+              // Terminal Logs Tab
+              filteredTerminalLogs.length === 0 ? (
+                <div style={emptyStyle}>
+                  {terminalLogs.length === 0
+                    ? 'Server logs will appear here'
+                    : 'No logs match the filter'}
+                </div>
+              ) : (
+                <div style={{ minWidth: 'max-content' }}>
+                  {filteredTerminalLogs.slice().reverse().map((log, index) => (
+                    <div key={`${log.timestamp}-${index}`} style={{
+                      padding: '3px 12px',
+                      borderBottom: `1px solid ${isDarkMode ? theme.dracula.selection : theme.colors.border}`,
+                      backgroundColor: log.level === 'error'
+                        ? (isDarkMode ? `${theme.dracula.red}10` : `${theme.colors.error}05`)
+                        : log.level === 'warning'
+                          ? (isDarkMode ? `${theme.dracula.orange}10` : `${theme.colors.warning}05`)
+                          : 'transparent',
+                      whiteSpace: 'nowrap'
+                    }}>
+                      <span style={{
+                        color: isDarkMode ? theme.dracula.comment : theme.colors.textMuted,
+                        fontSize: '11px'
+                      }}>{formatTimestamp(log.timestamp)}</span>
+                      {log.source && (
+                        <span style={{
+                          color: isDarkMode ? theme.dracula.cyan : theme.colors.info,
+                          fontSize: '11px',
+                          marginLeft: '8px'
+                        }}>
+                          [{log.source}]
+                        </span>
+                      )}
+                      <span style={{
+                        color: theme.colors.text,
+                        fontSize: '12px',
+                        marginLeft: '8px'
+                      }}>
+                        {log.message}
+                        {log.details && (
+                          <span style={{ color: isDarkMode ? theme.dracula.comment : theme.colors.textMuted, marginLeft: '8px' }}>
+                            {typeof log.details === 'string' ? log.details : JSON.stringify(log.details)}
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )
             )}
             <div ref={logsEndRef} />
           </div>

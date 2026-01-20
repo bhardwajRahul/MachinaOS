@@ -11,8 +11,44 @@ try:
 except ImportError:
     pass  # Windows - uvloop not available, use default asyncio
 
+import signal
+import sys
+import os
 from datetime import datetime
 from contextlib import asynccontextmanager
+
+# Flag to track if shutdown was requested
+_shutdown_requested = False
+
+
+def handle_signal(signum, frame):
+    """Handle SIGTERM/SIGINT for clean shutdown.
+
+    Note: We don't call sys.exit() here because it raises SystemExit
+    in the middle of async operations, causing cascading errors.
+    Instead, we set a flag and let uvicorn handle the graceful shutdown.
+    """
+    global _shutdown_requested
+    if not _shutdown_requested:
+        _shutdown_requested = True
+        print(f"\nReceived signal {signum}, shutting down gracefully...")
+        # Raise KeyboardInterrupt to trigger uvicorn's graceful shutdown
+        # This is the proper way to signal shutdown in async context
+        raise KeyboardInterrupt()
+
+
+# Register signal handlers for clean shutdown
+# Note: uvicorn already handles SIGINT/SIGTERM, but we add our own
+# to provide a cleaner message and avoid the "Terminate batch job" prompt on Windows
+if sys.platform != 'win32':
+    # Unix: handle both SIGTERM (docker stop) and SIGINT (Ctrl+C)
+    signal.signal(signal.SIGTERM, handle_signal)
+    # Don't override SIGINT on Unix - let uvicorn handle it
+else:
+    # Windows: Don't override signal handlers - let uvicorn handle Ctrl+C
+    # The "Terminate batch job" prompt is a Windows cmd.exe behavior
+    # that we can't avoid from Python
+    pass
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,7 +56,7 @@ from fastapi.responses import ORJSONResponse
 
 from core.container import container
 from core.config import Settings
-from core.logging import configure_logging, get_logger
+from core.logging import configure_logging, get_logger, setup_websocket_logging, shutdown_websocket_logging
 from routers import workflow, database, maps, nodejs_compat, android, websocket, webhook, auth
 
 # Initialize settings and logging
@@ -92,10 +128,23 @@ async def lifespan(app: FastAPI):
         await recovery_sweeper.start()
         logger.info("Execution recovery sweeper started")
 
+    # Start WebSocket logging handler to broadcast logs to frontend
+    import asyncio
+    loop = asyncio.get_running_loop()
+    setup_websocket_logging(loop)
+    logger.info("WebSocket logging handler started")
+
     logger.info("Services started successfully")
     yield
 
     # Shutdown
+    # Stop WebSocket logging handler
+    shutdown_websocket_logging()
+
+    # Close Android relay client (prevents "Unclosed client session" warning)
+    from services.android.manager import close_relay_client
+    await close_relay_client(clear_stored_session=False)
+
     # Stop recovery sweeper first
     if settings.redis_enabled:
         await recovery_sweeper.stop()

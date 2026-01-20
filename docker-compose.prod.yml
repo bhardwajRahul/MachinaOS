@@ -1,8 +1,10 @@
 services:
-  # Redis Cache (production performance)
+  # Redis Cache (optional - enable with REDIS_ENABLED=true)
   redis:
     image: redis:7-alpine
     container_name: machina-redis
+    profiles:
+      - redis
     volumes:
       - redis-data:/data
     networks:
@@ -41,13 +43,11 @@ services:
       # Production overrides
       - PORT=${PYTHON_BACKEND_PORT:-3010}
       - ENV=production
-      - REDIS_ENABLED=true
+      - REDIS_ENABLED=false
       - REDIS_URL=redis://redis:6379
       - WHATSAPP_RPC_URL=ws://whatsapp:${WHATSAPP_RPC_PORT:-9400}/ws/rpc
       - TZ=UTC
     depends_on:
-      redis:
-        condition: service_healthy
       whatsapp:
         condition: service_healthy
 

@@ -70,7 +70,7 @@ const createNodeTypes = (): Record<string, React.ComponentType<any>> => {
     // Trigger nodes - no input connections (start workflows)
     if (TRIGGER_NODE_TYPES.includes(type)) {
       types[type] = TriggerNode;
-    } else if (type === 'openaiChatModel' || type === 'anthropicChatModel' || type === 'geminiChatModel' || type === 'openrouterChatModel') {
+    } else if (type === 'openaiChatModel' || type === 'anthropicChatModel' || type === 'geminiChatModel' || type === 'openrouterChatModel' || type === 'groqChatModel' || type === 'cerebrasChatModel') {
       // AI chat model nodes use square design
       types[type] = SquareNode;
     } else if (type === 'aiAgent') {

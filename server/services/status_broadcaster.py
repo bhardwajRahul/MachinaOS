@@ -703,6 +703,51 @@ class StatusBroadcaster:
         })
 
     # =========================================================================
+    # Terminal Log Updates
+    # =========================================================================
+
+    async def broadcast_terminal_log(self, log_data: Dict[str, Any]):
+        """Broadcast a terminal log entry to all connected clients.
+
+        Used by the WebSocket logging handler to stream server logs to the frontend.
+
+        Args:
+            log_data: Dict containing:
+                - timestamp: ISO timestamp
+                - level: Log level (debug, info, warning, error)
+                - message: The log message
+                - source: Logger name/module (e.g., 'workflow', 'ai', 'android')
+                - details: Optional additional context
+        """
+        # Initialize terminal logs if not present
+        if "terminal_logs" not in self._status:
+            self._status["terminal_logs"] = []
+
+        # Add to terminal log history (keep last 200 entries)
+        self._status["terminal_logs"].append(log_data)
+        if len(self._status["terminal_logs"]) > 200:
+            self._status["terminal_logs"] = self._status["terminal_logs"][-200:]
+
+        # Broadcast to all clients
+        await self.broadcast({
+            "type": "terminal_log",
+            "data": log_data
+        })
+
+    def get_terminal_logs(self) -> List[Dict[str, Any]]:
+        """Get terminal log history."""
+        if "terminal_logs" not in self._status:
+            return []
+        return list(self._status["terminal_logs"])
+
+    async def clear_terminal_logs(self):
+        """Clear terminal log history."""
+        self._status["terminal_logs"] = []
+        await self.broadcast({
+            "type": "terminal_logs_cleared"
+        })
+
+    # =========================================================================
     # Generic Updates
     # =========================================================================
 

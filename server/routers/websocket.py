@@ -623,13 +623,21 @@ async def handle_deploy_workflow(data: Dict[str, Any], websocket: WebSocket) -> 
     edges = data.get("edges", [])
     session_id = data.get("session_id", "default")
 
-    # DEBUG: Log received edges to trace toolkit connection issues
+    # DEBUG: Log received edges to trace tool connection issues
     logger.info(f"[Deploy] Received {len(edges)} edges for workflow {workflow_id}")
-    toolkit_edges = [e for e in edges if 'androidTool' in (e.get('source', '') + e.get('target', ''))]
-    if toolkit_edges:
-        logger.info(f"[Deploy] Android Toolkit edges: {toolkit_edges}")
+    for e in edges:
+        target_handle = e.get('targetHandle')
+        if target_handle and target_handle.startswith('input-') and target_handle != 'input-main':
+            logger.info(f"[Deploy] Config edge: {e.get('source')} -> {e.get('target')} (handle={target_handle})")
+
+    # Check for tool connections to AI Agent
+    tool_edges = [e for e in edges if e.get('targetHandle') == 'input-tools']
+    if tool_edges:
+        logger.info(f"[Deploy] Tool edges found: {len(tool_edges)}")
+        for te in tool_edges:
+            logger.info(f"[Deploy] Tool edge: source={te.get('source')} -> target={te.get('target')}")
     else:
-        logger.info(f"[Deploy] No Android Toolkit edges found. All edges: {edges}")
+        logger.info(f"[Deploy] No input-tools edges found")
 
     if not nodes:
         return {"success": False, "error": "No nodes provided"}
@@ -1423,6 +1431,26 @@ async def handle_send_chat_message(data: Dict[str, Any], websocket: WebSocket) -
 
 
 # ============================================================================
+# Terminal Logs Handlers
+# ============================================================================
+
+@ws_handler()
+async def handle_get_terminal_logs(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Get terminal log history."""
+    broadcaster = get_status_broadcaster()
+    logs = broadcaster.get_terminal_logs()
+    return {"success": True, "logs": logs}
+
+
+@ws_handler()
+async def handle_clear_terminal_logs(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Clear terminal log history."""
+    broadcaster = get_status_broadcaster()
+    await broadcaster.clear_terminal_logs()
+    return {"success": True, "message": "Terminal logs cleared"}
+
+
+# ============================================================================
 # Message Router
 # ============================================================================
 
@@ -1511,6 +1539,10 @@ MESSAGE_HANDLERS: Dict[str, MessageHandler] = {
 
     # Chat message (for chatTrigger nodes)
     "send_chat_message": handle_send_chat_message,
+
+    # Terminal logs
+    "get_terminal_logs": handle_get_terminal_logs,
+    "clear_terminal_logs": handle_clear_terminal_logs,
 }
 
 

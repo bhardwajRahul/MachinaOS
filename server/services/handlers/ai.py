@@ -39,9 +39,19 @@ async def handle_ai_agent(
     memory_data = None
     tool_data: List[Dict[str, Any]] = []  # Collect connected tool nodes
 
-    logger.debug(f"[AI Agent] Processing node {node_id}, edges={len(edges) if edges else 0}, nodes={len(nodes) if nodes else 0}")
+    logger.info(f"[AI Agent] Processing node {node_id}, edges={len(edges) if edges else 0}, nodes={len(nodes) if nodes else 0}, workflow_id={workflow_id}")
 
     if edges and nodes:
+        # Log all edges targeting this AI Agent for debugging
+        incoming_edges = [e for e in edges if e.get('target') == node_id]
+        logger.info(f"[AI Agent] Incoming edges to {node_id}: {len(incoming_edges)}")
+        for e in incoming_edges:
+            logger.info(f"[AI Agent] Edge: source={e.get('source')}, targetHandle={e.get('targetHandle')}")
+
+        # Check for tool edges specifically
+        tool_incoming = [e for e in incoming_edges if e.get('targetHandle') == 'input-tools']
+        logger.info(f"[AI Agent] Tool edges (input-tools handle): {len(tool_incoming)}")
+
         for edge in edges:
             if edge.get('target') != node_id:
                 continue
@@ -70,6 +80,7 @@ async def handle_ai_agent(
             # Tool detection (new) - any node connected to input-tools becomes a tool
             elif target_handle == 'input-tools':
                 tool_type = source_node.get('type')
+                logger.info(f"[AI Agent] Found tool connected via input-tools: type={tool_type}, node_id={source_node_id}")
                 tool_params = await database.get_node_parameters(source_node_id) or {}
 
                 # Build base tool entry
@@ -117,6 +128,11 @@ async def handle_ai_agent(
 
                 tool_data.append(tool_entry)
                 logger.debug(f"AI Agent connected tool: {tool_type}")
+
+    # Log tool data collection results
+    logger.info(f"[AI Agent Handler] Collected tools: count={len(tool_data)}, workflow_id={workflow_id}")
+    for td in tool_data:
+        logger.info(f"[AI Agent Handler] Tool: type={td.get('node_type')}, node_id={td.get('node_id')}")
 
     # Get broadcaster for real-time status updates
     from services.status_broadcaster import get_status_broadcaster

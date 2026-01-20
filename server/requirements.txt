@@ -28,6 +28,9 @@ httpx>=0.27.0
 # WebSocket Client (for WhatsApp RPC)
 websockets>=12.0
 
+# Async HTTP Client (for Android relay WebSocket)
+aiohttp>=3.9.0
+
 # QR Code Generation (for WhatsApp QR display)
 qrcode[pil]>=7.4.0
 
@@ -60,4 +63,7 @@ duckduckgo-search>=8.0.0
 bcrypt>=4.1.0
 python-jose[cryptography]>=3.3.0
 email-validator>=2.0.0
+
+# Timezone support
+pytz>=2024.1
 

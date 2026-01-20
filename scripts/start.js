@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { execSync, spawn } from 'child_process';
+import { execSync, spawn, spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 import { readFileSync, existsSync, copyFileSync } from 'fs';
@@ -8,6 +8,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 const START = Date.now();
 const isWindows = process.platform === 'win32';
+const isMac = process.platform === 'darwin';
 
 // Timing helper
 const elapsed = () => `${((Date.now() - START) / 1000).toFixed(2)}s`;
@@ -20,8 +21,10 @@ function loadPorts() {
   const content = readFileSync(envPath, 'utf-8');
   const env = {};
   for (const line of content.split('\n')) {
-    const [key, val] = line.split('=');
-    if (key && val) env[key.trim()] = val.trim();
+    const match = line.match(/^([^#=]+)=(.*)$/);
+    if (match) {
+      env[match[1].trim()] = match[2].trim();
+    }
   }
   return [
     parseInt(env.VITE_CLIENT_PORT) || 3000,
@@ -30,39 +33,123 @@ function loadPorts() {
   ];
 }
 
-// Kill process by port using native commands
-function killPort(port) {
+// Execute command and return output (suppressing errors)
+function exec(cmd) {
   try {
-    if (isWindows) {
-      const output = execSync(`netstat -ano | findstr :${port} | findstr LISTENING`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
-      const lines = output.trim().split('\n');
-      const pids = new Set();
-      for (const line of lines) {
-        const parts = line.trim().split(/\s+/);
-        const pid = parts[parts.length - 1];
-        if (pid && !isNaN(parseInt(pid))) pids.add(pid);
-      }
-      for (const pid of pids) {
-        try {
-          execSync(`taskkill /PID ${pid} /F`, { stdio: 'pipe' });
-        } catch {}
-      }
-    } else {
-      const output = execSync(`lsof -ti:${port}`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
-      const pids = output.trim().split('\n').filter(Boolean);
-      for (const pid of pids) {
-        try {
-          execSync(`kill -9 ${pid}`, { stdio: 'pipe' });
-        } catch {}
+    return execSync(cmd, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+  } catch {
+    return '';
+  }
+}
+
+// Get PIDs using a port - Windows
+function getPidsWindows(port) {
+  const pids = new Set();
+  const netstatOutput = exec(`netstat -ano | findstr :${port} | findstr LISTENING`);
+  for (const line of netstatOutput.split('\n')) {
+    const parts = line.trim().split(/\s+/);
+    const pid = parts[parts.length - 1];
+    if (pid && /^\d+$/.test(pid) && pid !== '0') {
+      pids.add(pid);
+    }
+  }
+  return Array.from(pids);
+}
+
+// Get PIDs using a port - Unix
+function getPidsUnix(port) {
+  const pids = new Set();
+  const lsofOutput = exec(`lsof -ti:${port} -sTCP:LISTEN 2>/dev/null`);
+  for (const pid of lsofOutput.split('\n')) {
+    if (pid.trim() && /^\d+$/.test(pid.trim())) {
+      pids.add(pid.trim());
+    }
+  }
+  // Fallback to ss on Linux
+  if (pids.size === 0 && !isMac) {
+    const ssOutput = exec(`ss -tlnp 2>/dev/null | grep :${port}`);
+    const matches = ssOutput.matchAll(/pid=(\d+)/g);
+    for (const match of matches) {
+      pids.add(match[1]);
+    }
+  }
+  return Array.from(pids);
+}
+
+// Get child process PIDs - Windows
+function getChildPidsWindows(parentPid) {
+  const children = new Set();
+  const wmicOutput = exec(`wmic process where (ParentProcessId=${parentPid}) get ProcessId 2>nul`);
+  for (const line of wmicOutput.split('\n')) {
+    const pid = line.trim();
+    if (pid && /^\d+$/.test(pid)) {
+      children.add(pid);
+      for (const grandchild of getChildPidsWindows(pid)) {
+        children.add(grandchild);
       }
     }
-  } catch {}
+  }
+  return Array.from(children);
+}
+
+// Get child process PIDs - Unix
+function getChildPidsUnix(parentPid) {
+  const children = new Set();
+  const pgrepOutput = exec(`pgrep -P ${parentPid} 2>/dev/null`);
+  for (const pid of pgrepOutput.split('\n')) {
+    if (pid.trim() && /^\d+$/.test(pid.trim())) {
+      children.add(pid.trim());
+      for (const grandchild of getChildPidsUnix(pid.trim())) {
+        children.add(grandchild);
+      }
+    }
+  }
+  return Array.from(children);
+}
+
+// Kill process by port thoroughly
+function killPort(port) {
+  const getPids = isWindows ? getPidsWindows : getPidsUnix;
+  const getChildPids = isWindows ? getChildPidsWindows : getChildPidsUnix;
+
+  let pids = getPids(port);
+  if (pids.length === 0) return false;
+
+  // Collect all PIDs including children
+  const allPids = new Set(pids);
+  for (const pid of pids) {
+    for (const childPid of getChildPids(pid)) {
+      allPids.add(childPid);
+    }
+  }
+
+  // Kill all processes
+  for (const pid of allPids) {
+    if (isWindows) {
+      exec(`taskkill /PID ${pid} /F /T 2>nul`);
+    } else {
+      exec(`kill -9 ${pid} 2>/dev/null`);
+    }
+  }
+
+  // Wait for processes to die
+  if (isWindows) {
+    exec('ping -n 2 127.0.0.1 >nul');
+  } else {
+    spawnSync('sleep', ['0.5'], { stdio: 'pipe' });
+  }
+
+  // Verify port is free
+  const remainingPids = getPids(port);
+  return remainingPids.length === 0;
 }
 
 const PORTS = loadPorts();
 process.env.PYTHONUTF8 = '1';
 
 console.log('\n=== MachinaOS Starting ===\n');
+log(`Platform: ${isWindows ? 'Windows' : isMac ? 'macOS' : 'Linux'}`);
+log(`Ports: ${PORTS.join(', ')}`);
 
 // Step 1: Create .env if not exists
 const envPath = resolve(ROOT, '.env');
@@ -74,10 +161,26 @@ if (!existsSync(envPath) && existsSync(templatePath)) {
 
 // Step 2: Free ports
 log('Freeing ports...');
+let allFree = true;
 for (const port of PORTS) {
-  killPort(port);
+  const getPids = isWindows ? getPidsWindows : getPidsUnix;
+  const pids = getPids(port);
+  if (pids.length > 0) {
+    const freed = killPort(port);
+    if (freed) {
+      log(`  Port ${port}: Freed (killed PIDs: ${pids.join(', ')})`);
+    } else {
+      log(`  Port ${port}: Warning - could not free`);
+      allFree = false;
+    }
+  } else {
+    log(`  Port ${port}: Already free`);
+  }
 }
-log('Ports ready');
+
+if (!allFree) {
+  log('Warning: Some ports could not be freed. Services may fail to start.');
+}
 
 // Step 3: Start dev server
 log('Starting services...');

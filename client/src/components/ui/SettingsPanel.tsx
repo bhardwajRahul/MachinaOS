@@ -161,7 +161,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title="Settings"
-      maxWidth="600px"
+      maxWidth="95vw"
       maxHeight="95vh"
       headerActions={headerActions}
     >

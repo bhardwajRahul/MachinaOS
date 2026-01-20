@@ -113,6 +113,15 @@ export interface ConsoleLogEntry {
   source_node_label?: string;
 }
 
+// Terminal/server log entry
+export interface TerminalLogEntry {
+  timestamp: string;
+  level: 'debug' | 'info' | 'warning' | 'error';
+  message: string;
+  source?: string;  // e.g., 'workflow', 'ai', 'android', 'whatsapp'
+  details?: any;
+}
+
 // Chat message for chatTrigger nodes
 export interface ChatMessage {
   role: 'user' | 'assistant';
@@ -170,6 +179,7 @@ interface WebSocketContextValue {
   lastWhatsAppMessage: WhatsAppMessage | null;  // Most recent message
   apiKeyStatuses: Record<string, ApiKeyStatus>;
   consoleLogs: ConsoleLogEntry[];  // Console node output logs
+  terminalLogs: TerminalLogEntry[];  // Server/terminal logs
   chatMessages: ChatMessage[];  // Chat messages for chatTrigger
   nodeStatuses: Record<string, NodeStatus>;  // Current workflow's node statuses
   nodeParameters: Record<string, NodeParameters>;
@@ -186,6 +196,7 @@ interface WebSocketContextValue {
   clearNodeStatus: (nodeId: string) => Promise<void>;
   clearWhatsAppMessages: () => void;
   clearConsoleLogs: () => void;
+  clearTerminalLogs: () => void;
   clearChatMessages: () => void;
   sendChatMessage: (message: string, sessionId?: string) => Promise<void>;
 
@@ -313,6 +324,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [lastWhatsAppMessage, setLastWhatsAppMessage] = useState<WhatsAppMessage | null>(null);
   const [apiKeyStatuses, setApiKeyStatuses] = useState<Record<string, ApiKeyStatus>>({});
   const [consoleLogs, setConsoleLogs] = useState<ConsoleLogEntry[]>([]);
+  const [terminalLogs, setTerminalLogs] = useState<TerminalLogEntry[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   // Per-workflow node statuses: workflow_id -> node_id -> NodeStatus (n8n pattern)
   const [allNodeStatuses, setAllNodeStatuses] = useState<Record<string, Record<string, NodeStatus>>>({});
@@ -753,6 +765,29 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           }
           break;
 
+        case 'terminal_log':
+          // Handle terminal/server log entries
+          if (data) {
+            const terminalEntry: TerminalLogEntry = {
+              timestamp: data.timestamp || new Date().toISOString(),
+              level: data.level || 'info',
+              message: data.message || '',
+              source: data.source,
+              details: data.details
+            };
+            // Add to logs (newest first, limit to 200 entries)
+            setTerminalLogs(prev => {
+              const updated = [terminalEntry, ...prev];
+              return updated.slice(0, 200);
+            });
+          }
+          break;
+
+        case 'terminal_logs_cleared':
+          // Handle terminal logs cleared from server
+          setTerminalLogs([]);
+          break;
+
         case 'workflow_lock':
           // Handle workflow lock status updates (per-workflow locking - n8n pattern)
           // Only update lock state if it's for the current workflow or if unlocking
@@ -845,6 +880,42 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           } catch {
             // Ignore errors during initial check
           }
+        }
+
+        // Load terminal log history
+        try {
+          const terminalResponse = await new Promise<any>((resolve, reject) => {
+            const requestId = `terminal_logs_${Date.now()}`;
+            const timeout = setTimeout(() => reject(new Error('Timeout')), 5000);
+
+            const handler = (event: MessageEvent) => {
+              try {
+                const msg = JSON.parse(event.data);
+                if (msg.request_id === requestId) {
+                  clearTimeout(timeout);
+                  ws.removeEventListener('message', handler);
+                  resolve(msg);
+                }
+              } catch {}
+            };
+
+            ws.addEventListener('message', handler);
+            ws.send(JSON.stringify({ type: 'get_terminal_logs', request_id: requestId }));
+          });
+
+          if (terminalResponse.success && terminalResponse.logs) {
+            // Map server logs to TerminalLogEntry format (newest first)
+            const logs: TerminalLogEntry[] = terminalResponse.logs.map((log: any) => ({
+              timestamp: log.timestamp || new Date().toISOString(),
+              level: log.level || 'info',
+              message: log.message || '',
+              source: log.source,
+              details: log.details
+            })).reverse();  // Server stores oldest first, we want newest first
+            setTerminalLogs(logs);
+          }
+        } catch {
+          // Ignore errors loading terminal logs
         }
       };
 
@@ -944,6 +1015,15 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   // Clear console logs
   const clearConsoleLogs = useCallback(() => {
     setConsoleLogs([]);
+  }, []);
+
+  // Clear terminal logs (also clears on server)
+  const clearTerminalLogs = useCallback(() => {
+    setTerminalLogs([]);
+    // Also notify server to clear its terminal log history
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'clear_terminal_logs' }));
+    }
   }, []);
 
   // Clear chat messages
@@ -1151,14 +1231,15 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         node_type: nodeType,
         parameters,
         nodes,
-        edges
+        edges,
+        workflow_id: currentWorkflowId  // Include workflow_id for per-workflow status scoping
       }, timeoutMs);
       return response;
     } catch (error) {
       console.error('[WebSocket] Failed to execute node:', error);
       throw error;
     }
-  }, [sendRequest]);
+  }, [sendRequest, currentWorkflowId]);
 
   const getNodeOutputAsync = useCallback(async (
     nodeId: string,
@@ -1673,6 +1754,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     lastWhatsAppMessage,
     apiKeyStatuses,
     consoleLogs,
+    terminalLogs,
     chatMessages,
     nodeStatuses,
     nodeParameters,
@@ -1689,6 +1771,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     clearNodeStatus,
     clearWhatsAppMessages,
     clearConsoleLogs,
+    clearTerminalLogs,
     clearChatMessages,
     sendChatMessage: sendChatMessageAsync,
 

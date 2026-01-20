@@ -31,6 +31,9 @@ const AI_MODEL_NODE_TYPES: Record<string, string> = {
   'openaiChatModel': 'openai',
   'anthropicChatModel': 'anthropic',
   'geminiChatModel': 'gemini',
+  'openrouterChatModel': 'openrouter',
+  'groqChatModel': 'groq',
+  'cerebrasChatModel': 'cerebras',
 };
 
 const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectable, selected }) => {

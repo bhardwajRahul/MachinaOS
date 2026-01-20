@@ -11,8 +11,15 @@ from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
-from langchain_cerebras import ChatCerebras
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, BaseMessage, ToolMessage
+
+# Conditional import for Cerebras (requires Python <3.13)
+try:
+    from langchain_cerebras import ChatCerebras
+    CEREBRAS_AVAILABLE = True
+except ImportError:
+    ChatCerebras = None
+    CEREBRAS_AVAILABLE = False
 from langchain_core.tools import StructuredTool
 from langgraph.graph import StateGraph, END
 from pydantic import BaseModel, Field, create_model
@@ -122,7 +129,11 @@ PROVIDER_CONFIGS: Dict[str, ProviderConfig] = {
         models_endpoint='https://api.groq.com/openai/v1/models',
         models_header_fn=_groq_headers
     ),
-    'cerebras': ProviderConfig(
+}
+
+# Add Cerebras only if available (requires Python <3.13)
+if CEREBRAS_AVAILABLE:
+    PROVIDER_CONFIGS['cerebras'] = ProviderConfig(
         name='cerebras',
         model_class=ChatCerebras,
         api_key_param='api_key',
@@ -131,8 +142,7 @@ PROVIDER_CONFIGS: Dict[str, ProviderConfig] = {
         default_model='llama-3.3-70b',
         models_endpoint='https://api.cerebras.ai/v1/models',
         models_header_fn=_cerebras_headers
-    ),
-}
+    )
 
 
 def detect_provider_from_model(model: str) -> str:
@@ -367,11 +377,12 @@ def create_tool_node(tool_executor: Callable):
             tool_args = tool_call.get("args", {})
             tool_id = tool_call.get("id", "")
 
-            logger.debug(f"[LangGraph] Executing tool: {tool_name}")
+            logger.info(f"[LangGraph] Executing tool: {tool_name} (args={tool_args})")
 
             try:
                 # Directly await the async tool executor (proper async pattern)
                 result = await tool_executor(tool_name, tool_args)
+                logger.info(f"[LangGraph] Tool {tool_name} returned: {str(result)[:100]}")
             except Exception as e:
                 logger.error(f"[LangGraph] Tool execution failed: {tool_name}", error=str(e))
                 result = {"error": str(e)}
@@ -383,7 +394,7 @@ def create_tool_node(tool_executor: Callable):
                 name=tool_name
             ))
 
-            logger.debug(f"[LangGraph] Tool {tool_name} completed")
+            logger.info(f"[LangGraph] Tool {tool_name} completed, result added to messages")
 
         return {
             "messages": tool_messages,
@@ -825,6 +836,12 @@ class AIService:
         provider = 'unknown'
         model = 'unknown'
 
+        # EARLY LOG: Entry point for debugging
+        logger.info(f"[AIAgent] execute_agent called: node_id={node_id}, workflow_id={workflow_id}, tool_data_count={len(tool_data) if tool_data else 0}")
+        if tool_data:
+            for i, td in enumerate(tool_data):
+                logger.info(f"[AIAgent] Tool {i}: type={td.get('node_type')}, node_id={td.get('node_id')}")
+
         # Helper to broadcast status updates with workflow_id for proper scoping
         async def broadcast_status(phase: str, details: Dict[str, Any] = None):
             if broadcaster:
@@ -936,6 +953,7 @@ class AIService:
                     if tool:
                         tools.append(tool)
                         tool_configs[tool.name] = config
+                        logger.info(f"[LangGraph] Registered tool: name={tool.name}, node_id={config.get('node_id')}")
 
                 logger.debug(f"[LangGraph] Built {len(tools)} tools")
 
@@ -947,7 +965,7 @@ class AIService:
                 config = tool_configs.get(tool_name, {})
                 tool_node_id = config.get('node_id')
 
-                logger.debug(f"[LangGraph] tool_executor: {tool_name}")
+                logger.info(f"[LangGraph] tool_executor called: tool_name={tool_name}, node_id={tool_node_id}, workflow_id={workflow_id}")
 
                 # Broadcast executing status to the AI Agent node
                 await broadcast_status("executing_tool", {
@@ -967,25 +985,46 @@ class AIService:
 
                 # Include workflow_id in config so tool handlers can broadcast with proper scoping
                 config['workflow_id'] = workflow_id
-                result = await execute_tool(tool_name, tool_args, config)
 
-                # Broadcast completion to AI Agent node
-                await broadcast_status("tool_completed", {
-                    "message": f"Tool completed: {tool_name}",
-                    "tool_name": tool_name,
-                    "result_preview": str(result)[:100]
-                })
+                try:
+                    result = await execute_tool(tool_name, tool_args, config)
 
-                # Broadcast success status to the tool node
-                if tool_node_id and broadcaster:
-                    await broadcaster.update_node_status(
-                        tool_node_id,
-                        "success",
-                        {"message": f"{tool_name} completed", "result": result},
-                        workflow_id=workflow_id
-                    )
+                    # Broadcast completion to AI Agent node
+                    await broadcast_status("tool_completed", {
+                        "message": f"Tool completed: {tool_name}",
+                        "tool_name": tool_name,
+                        "result_preview": str(result)[:100]
+                    })
 
-                return result
+                    # Broadcast success status to the tool node
+                    if tool_node_id and broadcaster:
+                        logger.info(f"[LangGraph] Broadcasting success to tool node: node_id={tool_node_id}, workflow_id={workflow_id}")
+                        await broadcaster.update_node_status(
+                            tool_node_id,
+                            "success",
+                            {"message": f"{tool_name} completed", "result": result},
+                            workflow_id=workflow_id
+                        )
+                    else:
+                        logger.warning(f"[LangGraph] Cannot broadcast success: tool_node_id={tool_node_id}, broadcaster={broadcaster is not None}")
+
+                    return result
+
+                except Exception as e:
+                    error_msg = str(e)
+                    logger.error(f"[LangGraph] Tool execution failed: {tool_name}", error=error_msg)
+
+                    # Broadcast error status to the tool node so UI shows failure
+                    if tool_node_id and broadcaster:
+                        await broadcaster.update_node_status(
+                            tool_node_id,
+                            "error",
+                            {"message": f"{tool_name} failed", "error": error_msg},
+                            workflow_id=workflow_id
+                        )
+
+                    # Re-raise to let LangGraph handle the error
+                    raise
 
             # Broadcast: Building graph
             await broadcast_status("building_graph", {
@@ -1197,7 +1236,7 @@ class AIService:
                 'connected_services': connected_services  # Pass through for execution
             }
 
-            logger.debug(f"[LangGraph] Built tool '{tool_name}'")
+            logger.debug(f"[LangGraph] Built tool '{tool_name}' with node_id={node_id}")
             return tool, config
 
         except Exception as e:
