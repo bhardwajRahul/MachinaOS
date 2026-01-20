@@ -35,6 +35,13 @@ AI_TOOL_TYPES: FrozenSet[str] = frozenset([
     'androidTool',
 ])
 
+# Toolkit node types (aggregate sub-nodes, n8n Sub-Node pattern)
+# Sub-nodes connected to toolkits should not execute independently -
+# they only execute when called via the toolkit's tool interface
+TOOLKIT_NODE_TYPES: FrozenSet[str] = frozenset([
+    'androidTool',  # Aggregates Android service nodes (batteryMonitor, location, etc.)
+])
+
 # All AI-related node types (for API key injection)
 AI_MODEL_TYPES: FrozenSet[str] = AI_AGENT_TYPES | AI_CHAT_MODEL_TYPES
 

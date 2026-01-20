@@ -305,8 +305,11 @@ class ExecutionContext:
 
         Config nodes (memory, tools, model configs) are excluded from execution
         as they provide configuration to other nodes via special handles.
+
+        Toolkit sub-nodes (nodes connected TO a toolkit like androidTool) are also
+        excluded - they execute only when called via the toolkit's tool interface.
         """
-        from constants import CONFIG_NODE_TYPES
+        from constants import CONFIG_NODE_TYPES, TOOLKIT_NODE_TYPES
 
         execution_id = str(uuid.uuid4())
         ctx = cls(
@@ -317,7 +320,18 @@ class ExecutionContext:
             edges=edges or [],
         )
 
-        # Initialize node executions for all nodes (excluding config nodes)
+        # Find toolkit sub-nodes (nodes that connect TO a toolkit node)
+        # These should only execute when called via the toolkit, not as workflow nodes
+        toolkit_node_ids = {n.get("id") for n in (nodes or []) if n.get("type") in TOOLKIT_NODE_TYPES}
+        subnode_ids: set = set()
+        for edge in (edges or []):
+            source = edge.get("source")
+            target = edge.get("target")
+            # Any node that connects TO a toolkit is a sub-node
+            if target in toolkit_node_ids and source:
+                subnode_ids.add(source)
+
+        # Initialize node executions for all nodes (excluding config nodes and sub-nodes)
         for node in (nodes or []):
             node_id = node.get("id")
             node_type = node.get("type", "unknown")
@@ -325,6 +339,10 @@ class ExecutionContext:
             # Skip config nodes - they don't execute independently
             # They provide configuration to other nodes via special handles
             if node_type in CONFIG_NODE_TYPES:
+                continue
+
+            # Skip toolkit sub-nodes - they execute only via toolkit tool calls
+            if node_id in subnode_ids:
                 continue
 
             # Check if node is pre-executed (e.g., trigger that already fired)

@@ -877,6 +877,9 @@ class WorkflowExecutor:
         workflow. They listen for specific events/conditions and initiate
         the execution of the entire workflow.
 
+        Config nodes and toolkit sub-nodes are excluded from layers since
+        they don't execute as independent workflow nodes.
+
         Args:
             nodes: List of workflow nodes
             edges: List of edges
@@ -884,15 +887,34 @@ class WorkflowExecutor:
         Returns:
             List of layers, where each layer is a list of node IDs
         """
+        from constants import CONFIG_NODE_TYPES, TOOLKIT_NODE_TYPES
+
         # Build node type lookup for trigger detection
         node_types: Dict[str, str] = {
             node["id"]: node.get("type", "unknown") for node in nodes
         }
 
-        # Build adjacency and in-degree maps
+        # Find toolkit sub-nodes (nodes that connect TO a toolkit)
+        toolkit_node_ids = {n.get("id") for n in nodes if n.get("type") in TOOLKIT_NODE_TYPES}
+        subnode_ids: set = set()
+        for edge in edges:
+            source = edge.get("source")
+            target = edge.get("target")
+            if target in toolkit_node_ids and source:
+                subnode_ids.add(source)
+
+        # Filter out config nodes and sub-nodes from execution
+        excluded_ids = set()
+        for node in nodes:
+            node_id = node.get("id")
+            node_type = node.get("type", "unknown")
+            if node_type in CONFIG_NODE_TYPES or node_id in subnode_ids:
+                excluded_ids.add(node_id)
+
+        # Build adjacency and in-degree maps (excluding filtered nodes)
         in_degree: Dict[str, int] = defaultdict(int)
         adjacency: Dict[str, List[str]] = defaultdict(list)
-        node_ids = {node["id"] for node in nodes}
+        node_ids = {node["id"] for node in nodes if node["id"] not in excluded_ids}
 
         for edge in edges:
             source = edge.get("source")
