@@ -46,7 +46,6 @@ const Modal: React.FC<ModalProps> = ({
             height: maxHeight,
             display: 'flex',
             flexDirection: 'column',
-            fontFamily: 'system-ui, sans-serif',
             overflow: 'hidden',
             zIndex: 1001,
           }}

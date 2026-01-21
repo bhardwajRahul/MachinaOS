@@ -234,7 +234,12 @@ class NodeExecutor:
 
         elif node_type in GOOGLE_MAPS_TYPES:
             if not result.get('api_key'):
-                result['api_key'] = self.settings.google_maps_api_key
+                # Try database first, then fall back to environment variable
+                key = await self.ai_service.auth.get_api_key("google_maps", "default")
+                if key:
+                    result['api_key'] = key
+                elif self.settings.google_maps_api_key:
+                    result['api_key'] = self.settings.google_maps_api_key
 
         return result
 

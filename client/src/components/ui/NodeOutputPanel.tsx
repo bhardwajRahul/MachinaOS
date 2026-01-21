@@ -78,8 +78,16 @@ const NodeOutputPanel: React.FC<NodeOutputPanelProps> = ({
     return parsed;
   };
 
+  // Structured output types for different node responses
+  type AndroidOutput = { type: 'android'; data: any; service?: string; action?: string };
+  type WhatsAppHistoryOutput = { type: 'whatsapp_history'; messages: any[]; total: number; count: number; hasMore: boolean };
+  type MapsNearbyOutput = { type: 'maps_nearby'; places: any[]; searchParams: any; total: number };
+  type MapsGeocodeOutput = { type: 'maps_geocode'; locations: any[]; total: number };
+  type MapsCreateOutput = { type: 'maps_create'; mapUrl: string; center: { lat: number; lng: number }; zoom: number; mapType: string };
+  type StructuredOutput = AndroidOutput | WhatsAppHistoryOutput | MapsNearbyOutput | MapsGeocodeOutput | MapsCreateOutput;
+
   // Extract the main response text from execution results
-  const getMainResponse = (result: ExecutionResult): string | { type: string; data: any; service: string; action: string } | null => {
+  const getMainResponse = (result: ExecutionResult): string | StructuredOutput | null => {
     const data = getOutputData(result);
     // Python node output
     if (data?.output !== undefined) {
@@ -102,6 +110,61 @@ const NodeOutputPanel: React.FC<NodeOutputPanelProps> = ({
     }
     if (data?.messages !== undefined && data?.total !== undefined) {
       return { type: 'whatsapp_history', messages: data.messages, total: data.total, count: data.count || data.messages?.length, hasMore: data.has_more };
+    }
+    // Google Maps nearby places output
+    // Check nested result structure (from backend: { success, result: { results, search_parameters } })
+    if (data?.result?.results !== undefined && data?.result?.search_parameters !== undefined) {
+      return {
+        type: 'maps_nearby',
+        places: data.result.results,
+        searchParams: data.result.search_parameters,
+        total: data.result.total_results || data.result.results.length
+      };
+    }
+    // Also check top-level structure (if already unwrapped)
+    if (data?.results !== undefined && data?.search_parameters !== undefined) {
+      return {
+        type: 'maps_nearby',
+        places: data.results,
+        searchParams: data.search_parameters,
+        total: data.total_results || data.results.length
+      };
+    }
+    // Google Maps geocoding output
+    if (data?.result?.locations !== undefined && data?.result?.total_found !== undefined) {
+      return {
+        type: 'maps_geocode',
+        locations: data.result.locations,
+        total: data.result.total_found
+      };
+    }
+    // Geocode top-level fallback
+    if (data?.locations !== undefined && data?.total_found !== undefined) {
+      return {
+        type: 'maps_geocode',
+        locations: data.locations,
+        total: data.total_found
+      };
+    }
+    // Google Maps create map output
+    if (data?.result?.static_map_url !== undefined) {
+      return {
+        type: 'maps_create',
+        mapUrl: data.result.static_map_url,
+        center: data.result.center,
+        zoom: data.result.zoom,
+        mapType: data.result.map_type
+      };
+    }
+    // Create map top-level fallback
+    if (data?.static_map_url !== undefined) {
+      return {
+        type: 'maps_create',
+        mapUrl: data.static_map_url,
+        center: data.center,
+        zoom: data.zoom,
+        mapType: data.map_type
+      };
     }
     // Webhook trigger output
     if (data?.method && data?.path !== undefined) {
@@ -515,6 +578,314 @@ const NodeOutputPanel: React.FC<NodeOutputPanelProps> = ({
                   </div>
                 ))
               )}
+            </div>
+          </div>
+        ) : mainResponse && typeof mainResponse === 'object' && (mainResponse as any).type === 'maps_nearby' ? (
+          /* Google Maps Nearby Places Response */
+          <div style={{
+            marginBottom: theme.spacing.md,
+          }}>
+            {/* Header with search params */}
+            <div style={{
+              padding: theme.spacing.md,
+              backgroundColor: theme.colors.backgroundElevated,
+              border: `1px solid #34a85340`,
+              borderRadius: `${theme.borderRadius.md} ${theme.borderRadius.md} 0 0`,
+              borderLeft: `3px solid #34a853`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}>
+              <div style={{
+                fontSize: theme.fontSize.xs,
+                fontWeight: theme.fontWeight.semibold,
+                color: '#34a853',
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+                display: 'flex',
+                alignItems: 'center',
+                gap: theme.spacing.sm,
+              }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="#34a853">
+                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                </svg>
+                Nearby Places
+              </div>
+              <div style={{
+                fontSize: theme.fontSize.xs,
+                color: theme.colors.textSecondary,
+                display: 'flex',
+                gap: theme.spacing.md,
+              }}>
+                <span style={{ color: '#34a853' }}>{(mainResponse as any).total} places found</span>
+                {(mainResponse as any).searchParams?.type && (
+                  <span>Type: {(mainResponse as any).searchParams.type}</span>
+                )}
+                {(mainResponse as any).searchParams?.keyword && (
+                  <span>Keyword: {(mainResponse as any).searchParams.keyword}</span>
+                )}
+              </div>
+            </div>
+
+            {/* Places list */}
+            <div style={{
+              backgroundColor: theme.colors.backgroundElevated,
+              border: `1px solid #34a85340`,
+              borderTop: 'none',
+              borderRadius: `0 0 ${theme.borderRadius.md} ${theme.borderRadius.md}`,
+              maxHeight: '400px',
+              overflow: 'auto',
+            }}>
+              {(mainResponse as any).places?.length === 0 ? (
+                <div style={{
+                  padding: theme.spacing.xl,
+                  textAlign: 'center',
+                  color: theme.colors.textMuted,
+                  fontSize: theme.fontSize.sm,
+                }}>
+                  No places found for this search
+                </div>
+              ) : (
+                (mainResponse as any).places?.map((place: any, idx: number) => (
+                  <div
+                    key={place.place_id || idx}
+                    style={{
+                      padding: theme.spacing.md,
+                      borderBottom: idx < (mainResponse as any).places.length - 1 ? `1px solid ${theme.colors.border}` : 'none',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: theme.spacing.xs,
+                    }}
+                  >
+                    {/* Place header */}
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      justifyContent: 'space-between',
+                      gap: theme.spacing.sm,
+                    }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{
+                          fontSize: theme.fontSize.sm,
+                          fontWeight: theme.fontWeight.semibold,
+                          color: theme.colors.text,
+                          marginBottom: '2px',
+                        }}>
+                          {place.name}
+                        </div>
+                        {place.vicinity && (
+                          <div style={{
+                            fontSize: theme.fontSize.xs,
+                            color: theme.colors.textMuted,
+                          }}>
+                            {place.vicinity}
+                          </div>
+                        )}
+                      </div>
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: theme.spacing.sm,
+                      }}>
+                        {/* Rating */}
+                        {place.rating && (
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            padding: '2px 8px',
+                            backgroundColor: theme.dracula.yellow + '20',
+                            borderRadius: theme.borderRadius.sm,
+                          }}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill={theme.dracula.yellow}>
+                              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                            </svg>
+                            <span style={{ fontSize: theme.fontSize.xs, color: theme.dracula.yellow, fontWeight: theme.fontWeight.medium }}>
+                              {place.rating}
+                            </span>
+                            {place.user_ratings_total && (
+                              <span style={{ fontSize: '10px', color: theme.colors.textMuted }}>
+                                ({place.user_ratings_total})
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        {/* Open now */}
+                        {place.opening_hours?.open_now !== undefined && (
+                          <span style={{
+                            fontSize: '10px',
+                            padding: '2px 6px',
+                            backgroundColor: place.opening_hours.open_now ? theme.dracula.green + '20' : theme.dracula.red + '20',
+                            color: place.opening_hours.open_now ? theme.dracula.green : theme.dracula.red,
+                            borderRadius: theme.borderRadius.sm,
+                            fontWeight: theme.fontWeight.medium,
+                          }}>
+                            {place.opening_hours.open_now ? 'Open' : 'Closed'}
+                          </span>
+                        )}
+                        {/* Price level */}
+                        {place.price_level !== undefined && (
+                          <span style={{
+                            fontSize: theme.fontSize.xs,
+                            color: theme.colors.textMuted,
+                          }}>
+                            {'$'.repeat(place.price_level + 1)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {/* Place types */}
+                    {place.types && place.types.length > 0 && (
+                      <div style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: '4px',
+                        marginTop: '4px',
+                      }}>
+                        {place.types.slice(0, 4).map((type: string) => (
+                          <span key={type} style={{
+                            fontSize: '10px',
+                            padding: '2px 6px',
+                            backgroundColor: theme.colors.backgroundAlt,
+                            color: theme.colors.textSecondary,
+                            borderRadius: theme.borderRadius.sm,
+                          }}>
+                            {type.replace(/_/g, ' ')}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        ) : mainResponse && typeof mainResponse === 'object' && (mainResponse as any).type === 'maps_geocode' ? (
+          /* Google Maps Geocoding Response */
+          <div style={{
+            marginBottom: theme.spacing.md,
+          }}>
+            <div style={{
+              padding: theme.spacing.md,
+              backgroundColor: theme.colors.backgroundElevated,
+              border: `1px solid #4285f440`,
+              borderRadius: `${theme.borderRadius.md} ${theme.borderRadius.md} 0 0`,
+              borderLeft: `3px solid #4285f4`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}>
+              <div style={{
+                fontSize: theme.fontSize.xs,
+                fontWeight: theme.fontWeight.semibold,
+                color: '#4285f4',
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+                display: 'flex',
+                alignItems: 'center',
+                gap: theme.spacing.sm,
+              }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="#4285f4">
+                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                </svg>
+                Geocoded Locations
+              </div>
+              <span style={{ fontSize: theme.fontSize.xs, color: '#4285f4' }}>
+                {(mainResponse as any).total} location(s) found
+              </span>
+            </div>
+            <div style={{
+              backgroundColor: theme.colors.backgroundElevated,
+              border: `1px solid #4285f440`,
+              borderTop: 'none',
+              borderRadius: `0 0 ${theme.borderRadius.md} ${theme.borderRadius.md}`,
+              maxHeight: '300px',
+              overflow: 'auto',
+            }}>
+              {(mainResponse as any).locations?.map((loc: any, idx: number) => (
+                <div
+                  key={idx}
+                  style={{
+                    padding: theme.spacing.md,
+                    borderBottom: idx < (mainResponse as any).locations.length - 1 ? `1px solid ${theme.colors.border}` : 'none',
+                  }}
+                >
+                  <div style={{ fontWeight: theme.fontWeight.medium, color: theme.colors.text, marginBottom: '4px' }}>
+                    {loc.formatted_address || loc.address}
+                  </div>
+                  <div style={{ fontSize: theme.fontSize.xs, color: theme.colors.textMuted }}>
+                    Lat: {loc.lat?.toFixed(6)}, Lng: {loc.lng?.toFixed(6)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : mainResponse && typeof mainResponse === 'object' && (mainResponse as any).type === 'maps_create' ? (
+          /* Google Maps Create Map Response */
+          <div style={{
+            marginBottom: theme.spacing.md,
+            backgroundColor: theme.colors.backgroundElevated,
+            border: `1px solid #ea433540`,
+            borderRadius: theme.borderRadius.md,
+            borderLeft: `3px solid #ea4335`,
+            overflow: 'hidden',
+          }}>
+            <div style={{
+              padding: theme.spacing.md,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              borderBottom: `1px solid ${theme.colors.border}`,
+            }}>
+              <div style={{
+                fontSize: theme.fontSize.xs,
+                fontWeight: theme.fontWeight.semibold,
+                color: '#ea4335',
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+                display: 'flex',
+                alignItems: 'center',
+                gap: theme.spacing.sm,
+              }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="#ea4335">
+                  <path d="M20.5 3l-.16.03L15 5.1 9 3 3.36 4.9c-.21.07-.36.25-.36.48V20.5c0 .28.22.5.5.5l.16-.03L9 18.9l6 2.1 5.64-1.9c.21-.07.36-.25.36-.48V3.5c0-.28-.22-.5-.5-.5zM15 19l-6-2.11V5l6 2.11V19z"/>
+                </svg>
+                Map Created
+              </div>
+              <div style={{ fontSize: theme.fontSize.xs, color: theme.colors.textSecondary }}>
+                {(mainResponse as any).mapType} | Zoom: {(mainResponse as any).zoom}
+              </div>
+            </div>
+            <div style={{ padding: theme.spacing.md }}>
+              <div style={{ fontSize: theme.fontSize.sm, color: theme.colors.textMuted, marginBottom: theme.spacing.sm }}>
+                Center: {(mainResponse as any).center?.lat?.toFixed(4)}, {(mainResponse as any).center?.lng?.toFixed(4)}
+              </div>
+              <a
+                href={(mainResponse as any).mapUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: theme.spacing.sm,
+                  padding: `${theme.spacing.sm} ${theme.spacing.md}`,
+                  backgroundColor: '#ea433520',
+                  color: '#ea4335',
+                  borderRadius: theme.borderRadius.sm,
+                  border: `1px solid #ea433540`,
+                  fontSize: theme.fontSize.xs,
+                  fontWeight: theme.fontWeight.medium,
+                  textDecoration: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                  <polyline points="15 3 21 3 21 9"/>
+                  <line x1="10" y1="14" x2="21" y2="3"/>
+                </svg>
+                Open Map Preview
+              </a>
             </div>
           </div>
         ) : mainResponse && (

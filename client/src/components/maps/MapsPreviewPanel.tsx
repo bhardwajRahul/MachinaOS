@@ -1,6 +1,6 @@
 import React from 'react';
 import GoogleMapsPicker from './GoogleMapsPicker';
-import { theme } from '../../styles/theme';
+import { useAppTheme } from '../../hooks/useAppTheme';
 
 interface MapsPreviewPanelProps {
   lat: number;
@@ -23,14 +23,17 @@ const MapsPreviewPanel: React.FC<MapsPreviewPanelProps> = ({
   title = 'Maps Preview',
   description = 'Interactive map based on current parameters'
 }) => {
+  const theme = useAppTheme();
+
   return (
-    <div style={{
-      width: '100%',
-      height: '100%',
-      display: 'flex',
-      flexDirection: 'column',
-      backgroundColor: theme.colors.backgroundPanel
-    }}>
+    <div
+      style={{
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        backgroundColor: theme.colors.backgroundPanel
+      }}>
       {/* Maps Header */}
       <div style={{
         padding: theme.spacing.lg,
@@ -47,7 +50,7 @@ const MapsPreviewPanel: React.FC<MapsPreviewPanelProps> = ({
           alignItems: 'center',
           gap: theme.spacing.sm
         }}>
-          🗺️ {title}
+          {title}
         </h3>
         <p style={{
           margin: `${theme.spacing.xs} 0 0 0`,

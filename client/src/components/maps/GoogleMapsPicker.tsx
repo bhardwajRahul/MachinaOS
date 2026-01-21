@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import { theme } from '../../styles/theme';
 import { loadGoogleMaps } from '../../utils/googleMapsLoader';
+import { useAppTheme } from '../../hooks/useAppTheme';
 
 interface GoogleMapsPickerProps {
   lat: number;
@@ -23,6 +23,7 @@ const GoogleMapsPicker: React.FC<GoogleMapsPickerProps> = ({
   height = '100%',
   width = '100%'
 }) => {
+  const theme = useAppTheme();
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
   const markerRef = useRef<google.maps.Marker | null>(null);
@@ -107,7 +108,7 @@ const GoogleMapsPicker: React.FC<GoogleMapsPickerProps> = ({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#f5f5f5',
+        backgroundColor: theme.colors.backgroundAlt,
         color: theme.colors.textSecondary,
         fontSize: theme.fontSize.sm,
         textAlign: 'center',

@@ -1216,11 +1216,13 @@ async def handle_android_relay_reconnect(data: Dict[str, Any], websocket: WebSoc
 # ============================================================================
 
 async def handle_validate_maps_key(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
-    """Validate Google Maps API key."""
+    """Validate Google Maps API key and save to database if valid."""
     import httpx
     broadcaster = get_status_broadcaster()
+    auth_service = container.auth_service()
 
     api_key = data.get("api_key", "").strip()
+    session_id = data.get("session_id", "default")
 
     if not api_key:
         return {"success": False, "valid": False, "error": "api_key required"}
@@ -1240,6 +1242,13 @@ async def handle_validate_maps_key(data: Dict[str, Any], websocket: WebSocket) -
             response_data = response.json()
 
             if response_data.get("status") == "OK":
+                # Save the validated key to database
+                await auth_service.store_api_key(
+                    provider="google_maps",
+                    api_key=api_key,
+                    models=[],
+                    session_id=session_id
+                )
                 await broadcaster.update_api_key_status(
                     provider="google_maps",
                     valid=True,
@@ -1258,6 +1267,13 @@ async def handle_validate_maps_key(data: Dict[str, Any], websocket: WebSocket) -
 
             else:
                 # Other statuses like ZERO_RESULTS still mean the key works
+                # Save the validated key to database
+                await auth_service.store_api_key(
+                    provider="google_maps",
+                    api_key=api_key,
+                    models=[],
+                    session_id=session_id
+                )
                 await broadcaster.update_api_key_status(
                     provider="google_maps",
                     valid=True,
