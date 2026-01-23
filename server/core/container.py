@@ -13,6 +13,7 @@ from services.auth import AuthService
 from services.text import TextService
 from services.android_service import AndroidService
 from services.user_auth import UserAuthService
+from services.temporal import TemporalClientWrapper
 
 
 class Container(containers.DeclarativeContainer):
@@ -37,6 +38,13 @@ class Container(containers.DeclarativeContainer):
         CacheService,
         settings=settings,
         database=database
+    )
+
+    # Temporal client (lazy - only created when temporal_enabled)
+    temporal_client = providers.Singleton(
+        TemporalClientWrapper,
+        server_address=settings.provided.temporal_server_address,
+        namespace=settings.provided.temporal_namespace,
     )
 
     # Services

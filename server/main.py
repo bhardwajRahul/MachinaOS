@@ -134,12 +134,62 @@ async def lifespan(app: FastAPI):
     setup_websocket_logging(loop)
     logger.info("WebSocket logging handler started")
 
+    # Initialize Temporal if enabled
+    temporal_worker_manager = None
+    if settings.temporal_enabled:
+        try:
+            from services.temporal import TemporalClientWrapper, TemporalExecutor
+            from services.temporal.worker import TemporalWorkerManager
+
+            logger.info(
+                "Initializing Temporal integration",
+                server_address=settings.temporal_server_address,
+                namespace=settings.temporal_namespace,
+                task_queue=settings.temporal_task_queue,
+            )
+
+            # Connect Temporal client
+            temporal_client_wrapper = container.temporal_client()
+            temporal_client = await temporal_client_wrapper.connect()
+
+            # Create and set the Temporal executor on WorkflowService
+            temporal_executor = TemporalExecutor(
+                client=temporal_client,
+                task_queue=settings.temporal_task_queue,
+            )
+            container.workflow_service().set_temporal_executor(temporal_executor)
+
+            # Start embedded Temporal worker
+            temporal_worker_manager = TemporalWorkerManager(
+                client=temporal_client,
+                task_queue=settings.temporal_task_queue,
+            )
+            await temporal_worker_manager.start()
+
+            logger.info("Temporal integration initialized successfully")
+
+        except Exception as e:
+            logger.error(f"Failed to initialize Temporal: {str(e)}")
+            logger.warning("Falling back to Redis/sequential execution")
+
     logger.info("Services started successfully")
     yield
 
     # Shutdown
     # Stop WebSocket logging handler
     shutdown_websocket_logging()
+
+    # Stop Temporal worker if running
+    if temporal_worker_manager is not None:
+        await temporal_worker_manager.stop()
+        logger.info("Temporal worker stopped")
+
+    # Disconnect Temporal client if connected
+    if settings.temporal_enabled:
+        try:
+            await container.temporal_client().disconnect()
+        except Exception:
+            pass
 
     # Close Android relay client (prevents "Unclosed client session" warning)
     from services.android.manager import close_relay_client
@@ -225,10 +275,23 @@ async def health_check():
 
     sweeper = get_recovery_sweeper()
 
+    # Check Temporal status
+    temporal_status = {
+        "enabled": settings.temporal_enabled,
+        "connected": False,
+    }
+    if settings.temporal_enabled:
+        try:
+            temporal_status["connected"] = container.temporal_client().is_connected
+            temporal_status["server_address"] = settings.temporal_server_address
+            temporal_status["task_queue"] = settings.temporal_task_queue
+        except Exception:
+            pass
+
     return {
         "status": "OK",
         "service": "python",
-        "version": "3.1.0",  # Bumped for execution engine
+        "version": "3.2.0",  # Bumped for Temporal integration
         "environment": "development" if settings.debug else "production",
         "redis_enabled": settings.redis_enabled,
         "event_waiter_mode": event_waiter.get_backend_mode(),
@@ -236,6 +299,7 @@ async def health_check():
             "enabled": settings.redis_enabled,
             "recovery_sweeper": sweeper is not None and sweeper._running,
         },
+        "temporal": temporal_status,
         "timestamp": datetime.now().isoformat()
     }
 

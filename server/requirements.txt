@@ -50,6 +50,9 @@ langchain-cerebras>=0.1.0
 # LangGraph - State machine for AI agents
 langgraph>=1.0.6
 
+# Temporal - Durable workflow execution (optional, requires TEMPORAL_ENABLED=true)
+temporalio>=1.21.1
+
 # Google Services
 googlemaps>=4.10.0
 

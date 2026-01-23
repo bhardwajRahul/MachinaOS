@@ -5,6 +5,7 @@ This is a thin facade that delegates to specialized modules:
 - ParameterResolver: Template variable resolution
 - DeploymentManager: Event-driven deployment lifecycle
 - WorkflowExecutor: Parallel/sequential orchestration
+- TemporalExecutor: Durable workflow execution (optional)
 
 Following n8n/Conductor patterns for clean separation of concerns.
 """
@@ -28,6 +29,7 @@ if TYPE_CHECKING:
     from services.maps import MapsService
     from services.text import TextService
     from services.android_service import AndroidService
+    from services.temporal import TemporalExecutor
 
 logger = get_logger(__name__)
 
@@ -39,7 +41,7 @@ class WorkflowService:
     - Node execution (NodeExecutor)
     - Parameter resolution (ParameterResolver)
     - Deployment lifecycle (DeploymentManager)
-    - Workflow orchestration (WorkflowExecutor)
+    - Workflow orchestration (WorkflowExecutor or TemporalExecutor)
     """
 
     def __init__(
@@ -79,6 +81,9 @@ class WorkflowService:
         self._execution_cache = ExecutionCache(cache)
         self._workflow_executor: Optional[WorkflowExecutor] = None
 
+        # Temporal executor (set via set_temporal_executor when enabled)
+        self._temporal_executor: Optional["TemporalExecutor"] = None
+
         # Initialize DeploymentManager (lazy - needs broadcaster)
         self._deployment_manager: Optional[DeploymentManager] = None
         self._broadcaster = None
@@ -89,6 +94,15 @@ class WorkflowService:
             "max_concurrent_runs": 100,
             "use_parallel_executor": True,
         }
+
+    def set_temporal_executor(self, executor: "TemporalExecutor") -> None:
+        """Set the Temporal executor for durable workflow execution.
+
+        Args:
+            executor: Configured TemporalExecutor instance
+        """
+        self._temporal_executor = executor
+        logger.info("Temporal executor configured for workflow execution")
 
     def _get_deployment_manager(self) -> DeploymentManager:
         """Get or create DeploymentManager."""
@@ -178,6 +192,7 @@ class WorkflowService:
         use_parallel: bool = None,
         skip_clear_outputs: bool = False,
         workflow_id: Optional[str] = None,
+        use_temporal: bool = None,
     ) -> Dict[str, Any]:
         """Execute entire workflow.
 
@@ -189,6 +204,7 @@ class WorkflowService:
             use_parallel: Force parallel/sequential execution
             skip_clear_outputs: Skip clearing outputs (for deployment runs)
             workflow_id: Workflow ID for per-workflow status scoping (n8n pattern)
+            use_temporal: Force Temporal execution (None = use settings default)
         """
         start_time = time.time()
 
@@ -208,12 +224,63 @@ class WorkflowService:
         if use_parallel is None:
             use_parallel = self._settings.get("use_parallel_executor", True)
 
+        # Check if Temporal execution is requested
+        if use_temporal is None:
+            use_temporal = self.settings.temporal_enabled
+
+        # Use Temporal if enabled and executor is configured
+        if use_temporal and self._temporal_executor is not None:
+            return await self._execute_temporal(nodes, edges, session_id, status_callback, start_time, workflow_id)
+
         # Use parallel executor if enabled and Redis available
         if use_parallel and self.settings.redis_enabled:
             return await self._execute_parallel(nodes, edges, session_id, status_callback, start_time, workflow_id)
 
         # Fall back to sequential
         return await self._execute_sequential(nodes, edges, session_id, status_callback, start_time, workflow_id)
+
+    async def _execute_temporal(self, nodes, edges, session_id, status_callback, start_time, workflow_id: Optional[str] = None) -> Dict:
+        """Execute with Temporal for durable workflow orchestration."""
+        # Use passed workflow_id (from deployment) or generate new one
+        if not workflow_id:
+            workflow_id = f"temporal_{session_id}_{int(time.time() * 1000)}"
+
+        logger.info(
+            "Executing workflow via Temporal",
+            workflow_id=workflow_id,
+            node_count=len(nodes),
+        )
+
+        result = await self._temporal_executor.execute_workflow(
+            workflow_id=workflow_id,
+            nodes=nodes,
+            edges=edges,
+            session_id=session_id,
+            enable_caching=True,
+        )
+
+        # Notify status callback for completed nodes if provided
+        if status_callback and result.get("success"):
+            for node_id in result.get("nodes_executed", []):
+                try:
+                    await status_callback(
+                        node_id,
+                        "completed",
+                        result.get("outputs", {}).get(node_id, {}),
+                    )
+                except Exception:
+                    pass
+
+        return {
+            "success": result.get("success", False),
+            "execution_id": result.get("execution_id"),
+            "nodes_executed": result.get("nodes_executed", []),
+            "outputs": result.get("outputs", {}),
+            "errors": result.get("errors", []),
+            "execution_time": result.get("execution_time", time.time() - start_time),
+            "temporal_execution": True,
+            "timestamp": datetime.now().isoformat(),
+        }
 
     async def _execute_parallel(self, nodes, edges, session_id, status_callback, start_time, workflow_id: Optional[str] = None) -> Dict:
         """Execute with parallel orchestration engine."""

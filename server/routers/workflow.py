@@ -138,6 +138,34 @@ class TemporalNodeExecuteRequest(BaseModel):
     context: Dict[str, Any] = {}
 
 
+class BroadcastStatusRequest(BaseModel):
+    """Request to broadcast node status from Temporal activity."""
+    node_id: str
+    status: str
+    data: Dict[str, Any] = {}
+    workflow_id: str = None
+
+
+@router.post("/broadcast-status")
+async def broadcast_status_for_temporal(request: BroadcastStatusRequest):
+    """Broadcast node status - called by Temporal activities for real-time updates.
+
+    This endpoint allows Temporal activities to send status updates
+    to connected WebSocket clients during workflow execution.
+    """
+    print(f"[Broadcast] {request.node_id} -> {request.status} (workflow={request.workflow_id})")
+
+    broadcaster = get_status_broadcaster()
+    await broadcaster.update_node_status(
+        node_id=request.node_id,
+        status=request.status,
+        data=request.data,
+        workflow_id=request.workflow_id,
+    )
+
+    return {"success": True}
+
+
 @router.post("/node/execute")
 async def execute_node_for_temporal(
     request: TemporalNodeExecuteRequest,
@@ -148,16 +176,25 @@ async def execute_node_for_temporal(
     This is a simplified endpoint for Temporal activities to call.
     It extracts context and delegates to the existing execute_node method.
     """
-    logger.info(f"[Temporal] Executing node: {request.node_id} (type={request.node_type})")
+    print(f"[Temporal Endpoint] Received request for node: {request.node_id} (type={request.node_type})")
+    print(f"[Temporal Endpoint] Data: {request.data}")
+    print(f"[Temporal Endpoint] Context keys: {list(request.context.keys())}")
 
     context = request.context
-    result = await workflow_service.execute_node(
-        node_id=request.node_id,
-        node_type=request.node_type,
-        parameters=request.data,
-        nodes=context.get("nodes", []),
-        edges=context.get("edges", []),
-        session_id=context.get("session_id", "temporal"),
-    )
-
-    return result
+    try:
+        result = await workflow_service.execute_node(
+            node_id=request.node_id,
+            node_type=request.node_type,
+            parameters=request.data,
+            nodes=context.get("nodes", []),
+            edges=context.get("edges", []),
+            session_id=context.get("session_id", "temporal"),
+            workflow_id=context.get("workflow_id"),
+        )
+        print(f"[Temporal Endpoint] Node {request.node_id} result: success={result.get('success')}, error={result.get('error')}")
+        return result
+    except Exception as e:
+        print(f"[Temporal Endpoint] Node {request.node_id} EXCEPTION: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise

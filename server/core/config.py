@@ -47,6 +47,12 @@ class Settings(BaseSettings):
     # Execution Engine
     dlq_enabled: bool = Field(default=False, env="DLQ_ENABLED")
 
+    # Temporal Configuration
+    temporal_enabled: bool = Field(default=False, env="TEMPORAL_ENABLED")
+    temporal_server_address: str = Field(default="localhost:7233", env="TEMPORAL_SERVER_ADDRESS")
+    temporal_namespace: str = Field(default="default", env="TEMPORAL_NAMESPACE")
+    temporal_task_queue: str = Field(default="machina-tasks", env="TEMPORAL_TASK_QUEUE")
+
     # API Keys (all optional, injected at runtime)
     google_maps_api_key: Optional[str] = Field(default=None, env="GOOGLE_MAPS_API_KEY")
     openai_api_key: Optional[str] = Field(default=None, env="OPENAI_API_KEY")
