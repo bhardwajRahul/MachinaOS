@@ -191,5 +191,66 @@ export const STANDARD_PARAMETERS = {
     default: 0,
     typeOptions: { minValue: -2, maxValue: 2, numberStepSize: 0.1 },
     description: 'Penalty for presence of tokens'
+  },
+
+  // Thinking/Reasoning parameters
+  thinkingEnabled: {
+    displayName: 'Thinking/Reasoning Mode',
+    name: 'thinkingEnabled',
+    type: 'boolean' as const,
+    default: false,
+    description: 'Enable extended thinking for supported models'
+  },
+
+  thinkingBudget: {
+    displayName: 'Thinking Budget (Tokens)',
+    name: 'thinkingBudget',
+    type: 'number' as const,
+    default: 2048,
+    typeOptions: { minValue: 1024, maxValue: 16000 },
+    description: 'Maximum tokens for thinking (Claude, Gemini 2.5)',
+    displayOptions: { show: { thinkingEnabled: [true] } }
+  },
+
+  reasoningEffort: {
+    displayName: 'Reasoning Effort',
+    name: 'reasoningEffort',
+    type: 'options' as const,
+    options: [
+      { name: 'Minimal', value: 'minimal' },
+      { name: 'Low', value: 'low' },
+      { name: 'Medium', value: 'medium' },
+      { name: 'High', value: 'high' }
+    ],
+    default: 'medium',
+    description: 'Reasoning effort level (OpenAI o-series)',
+    displayOptions: { show: { thinkingEnabled: [true] } }
+  },
+
+  thinkingLevel: {
+    displayName: 'Thinking Level',
+    name: 'thinkingLevel',
+    type: 'options' as const,
+    options: [
+      { name: 'Low', value: 'low' },
+      { name: 'Medium', value: 'medium' },
+      { name: 'High', value: 'high' }
+    ],
+    default: 'medium',
+    description: 'Thinking depth (Gemini 3+)',
+    displayOptions: { show: { thinkingEnabled: [true] } }
+  },
+
+  reasoningFormat: {
+    displayName: 'Reasoning Format',
+    name: 'reasoningFormat',
+    type: 'options' as const,
+    options: [
+      { name: 'Parsed (show reasoning)', value: 'parsed' },
+      { name: 'Hidden (final answer only)', value: 'hidden' }
+    ],
+    default: 'parsed',
+    description: 'How to return reasoning content (Groq)',
+    displayOptions: { show: { thinkingEnabled: [true] } }
   }
 };

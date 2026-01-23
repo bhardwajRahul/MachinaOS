@@ -21,6 +21,83 @@ const highlightJSON = (json: string, dracula: any): React.ReactNode => {
   });
 };
 
+// Collapsible thinking/reasoning block for AI model responses
+interface ThinkingBlockProps {
+  thinking: string;
+  provider?: string;
+  theme: ReturnType<typeof useAppTheme>;
+}
+
+const ThinkingBlock: React.FC<ThinkingBlockProps> = ({ thinking, provider, theme }) => {
+  const [isExpanded, setIsExpanded] = useState(true);
+
+  if (!thinking || !thinking.trim()) return null;
+
+  return (
+    <div style={{
+      marginBottom: theme.spacing.md,
+      backgroundColor: theme.colors.backgroundElevated,
+      border: `1px solid ${theme.dracula.purple}40`,
+      borderRadius: theme.borderRadius.md,
+      borderLeft: `3px solid ${theme.dracula.purple}`,
+      overflow: 'hidden',
+    }}>
+      <div
+        onClick={() => setIsExpanded(!isExpanded)}
+        style={{
+          padding: theme.spacing.md,
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          backgroundColor: `${theme.dracula.purple}10`,
+          transition: theme.transitions.fast,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.sm }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={theme.dracula.purple} strokeWidth="2">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 6v6l4 2"/>
+          </svg>
+          <span style={{
+            color: theme.dracula.purple,
+            fontWeight: theme.fontWeight.semibold,
+            fontSize: theme.fontSize.xs,
+            textTransform: 'uppercase',
+            letterSpacing: '0.1em',
+          }}>
+            Thinking Process {provider && `(${provider})`}
+          </span>
+        </div>
+        <svg
+          width="12" height="12" viewBox="0 0 24 24" fill="none"
+          stroke={theme.dracula.purple} strokeWidth="2"
+          style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }}
+        >
+          <polyline points="9 18 15 12 9 6"/>
+        </svg>
+      </div>
+      {isExpanded && (
+        <pre style={{
+          padding: theme.spacing.md,
+          margin: 0,
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word',
+          fontSize: theme.fontSize.sm,
+          color: theme.colors.textSecondary,
+          fontFamily: '"Fira Code", Monaco, Menlo, monospace',
+          lineHeight: 1.6,
+          maxHeight: '300px',
+          overflow: 'auto',
+          backgroundColor: theme.colors.background,
+        }}>
+          {thinking}
+        </pre>
+      )}
+    </div>
+  );
+};
+
 interface NodeOutputPanelProps {
   results: ExecutionResult[];
   onClear?: () => void;
@@ -78,6 +155,20 @@ const NodeOutputPanel: React.FC<NodeOutputPanelProps> = ({
     return parsed;
   };
 
+  // Extract thinking content from result data
+  const getThinkingContent = (result: ExecutionResult): { thinking: string | null; provider?: string } => {
+    const data = getOutputData(result);
+    // Check nested result structure first (from backend)
+    if (data?.result?.thinking) {
+      return { thinking: data.result.thinking, provider: data.result.provider };
+    }
+    // Then top-level
+    if (data?.thinking) {
+      return { thinking: data.thinking, provider: data?.provider };
+    }
+    return { thinking: null };
+  };
+
   // Structured output types for different node responses
   type AndroidOutput = { type: 'android'; data: any; service?: string; action?: string };
   type WhatsAppHistoryOutput = { type: 'whatsapp_history'; messages: any[]; total: number; count: number; hasMore: boolean };
@@ -89,6 +180,7 @@ const NodeOutputPanel: React.FC<NodeOutputPanelProps> = ({
   // Extract the main response text from execution results
   const getMainResponse = (result: ExecutionResult): string | StructuredOutput | null => {
     const data = getOutputData(result);
+
     // Python node output
     if (data?.output !== undefined) {
       return typeof data.output === 'string' ? data.output : JSON.stringify(data.output, null, 2);
@@ -377,6 +469,12 @@ const NodeOutputPanel: React.FC<NodeOutputPanelProps> = ({
             </pre>
           </div>
         )}
+
+        {/* Thinking/Reasoning Block (shown before main response) */}
+        {(() => {
+          const { thinking, provider } = getThinkingContent(latestResult);
+          return thinking ? <ThinkingBlock thinking={thinking} provider={provider} theme={theme} /> : null;
+        })()}
 
         {/* Main Response */}
         {mainResponse && typeof mainResponse === 'object' && (mainResponse as any).type === 'android' ? (

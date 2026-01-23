@@ -128,3 +128,36 @@ async def workflow_health_check():
         "status": "OK",
         "service": "workflow"
     }
+
+
+class TemporalNodeExecuteRequest(BaseModel):
+    """Request from Temporal service to execute a single node."""
+    node_id: str
+    node_type: str
+    data: Dict[str, Any] = {}
+    context: Dict[str, Any] = {}
+
+
+@router.post("/node/execute")
+async def execute_node_for_temporal(
+    request: TemporalNodeExecuteRequest,
+    workflow_service: WorkflowService = Depends(lambda: container.workflow_service())
+):
+    """Execute a single node - called by Temporal service.
+
+    This is a simplified endpoint for Temporal activities to call.
+    It extracts context and delegates to the existing execute_node method.
+    """
+    logger.info(f"[Temporal] Executing node: {request.node_id} (type={request.node_type})")
+
+    context = request.context
+    result = await workflow_service.execute_node(
+        node_id=request.node_id,
+        node_type=request.node_type,
+        parameters=request.data,
+        nodes=context.get("nodes", []),
+        edges=context.get("edges", []),
+        session_id=context.get("session_id", "temporal"),
+    )
+
+    return result

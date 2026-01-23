@@ -7,7 +7,10 @@ import { readFileSync, existsSync, copyFileSync } from 'fs';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 const START = Date.now();
-const isWindows = process.platform === 'win32';
+
+// Detect environment: Git Bash on Windows reports win32 but uses Unix commands
+const isGitBash = process.platform === 'win32' && (process.env.MSYSTEM || process.env.SHELL?.includes('bash'));
+const isWindows = process.platform === 'win32' && !isGitBash;
 const isMac = process.platform === 'darwin';
 
 // Timing helper
@@ -123,10 +126,10 @@ function killPort(port) {
     }
   }
 
-  // Kill all processes
+  // Kill all processes (no /T flag to avoid killing parent shell)
   for (const pid of allPids) {
     if (isWindows) {
-      exec(`taskkill /PID ${pid} /F /T 2>nul`);
+      exec(`taskkill /PID ${pid} /F 2>nul`);
     } else {
       exec(`kill -9 ${pid} 2>/dev/null`);
     }
@@ -148,7 +151,8 @@ const PORTS = loadPorts();
 process.env.PYTHONUTF8 = '1';
 
 console.log('\n=== MachinaOS Starting ===\n');
-log(`Platform: ${isWindows ? 'Windows' : isMac ? 'macOS' : 'Linux'}`);
+const platformName = isWindows ? 'Windows' : isGitBash ? 'Git Bash' : isMac ? 'macOS' : 'Linux';
+log(`Platform: ${platformName}`);
 log(`Ports: ${PORTS.join(', ')}`);
 
 // Step 1: Create .env if not exists
@@ -184,4 +188,37 @@ if (!allFree) {
 
 // Step 3: Start dev server
 log('Starting services...');
-spawn('npm', ['run', 'dev'], { cwd: ROOT, stdio: 'inherit', shell: true });
+log('Press Ctrl+C to stop (use npm run stop to kill all services)');
+log('');
+
+// On Git Bash/mintty, Ctrl+C doesn't propagate properly to Node.js child processes
+// due to Cygwin pseudo-terminal limitations. The workaround is to run concurrently
+// directly without a Node.js wrapper.
+//
+// This script's job is done - it freed ports and set up env.
+// Now exec into npm run dev so the terminal controls it directly.
+
+if (isGitBash) {
+  // For Git Bash: Use exec to replace this process with npm
+  // This way Ctrl+C goes directly to npm/concurrently, not through Node.js
+  const { execFileSync } = await import('child_process');
+  try {
+    // Use bash -c to run npm, replacing this process
+    execFileSync('bash', ['-c', 'exec npm run dev'], {
+      cwd: ROOT,
+      stdio: 'inherit',
+      windowsHide: false
+    });
+  } catch {
+    // Normal exit from Ctrl+C
+  }
+} else {
+  // For native Windows cmd or Unix: execSync works fine
+  try {
+    execSync('npm run dev', { cwd: ROOT, stdio: 'inherit' });
+  } catch {
+    // Ctrl+C causes non-zero exit, which is normal
+  }
+}
+
+console.log('\nDev server stopped.');

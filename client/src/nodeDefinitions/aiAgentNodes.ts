@@ -118,6 +118,35 @@ export const aiAgentNodes: Record<string, INodeTypeDescription> = {
             default: 1000,
             typeOptions: { minValue: 1, maxValue: 8192 },
             description: 'Maximum number of tokens to generate'
+          },
+          {
+            displayName: 'Thinking/Reasoning',
+            name: 'thinkingEnabled',
+            type: 'boolean',
+            default: false,
+            description: 'Enable extended thinking for supported providers (Anthropic, OpenAI o-series, Gemini, Groq, Cerebras)'
+          },
+          {
+            displayName: 'Thinking Budget',
+            name: 'thinkingBudget',
+            type: 'number',
+            default: 2048,
+            typeOptions: { minValue: 1024, maxValue: 16000 },
+            description: 'Token budget for thinking (Claude, Gemini, Cerebras)',
+            displayOptions: { show: { thinkingEnabled: [true] } }
+          },
+          {
+            displayName: 'Reasoning Effort',
+            name: 'reasoningEffort',
+            type: 'options',
+            options: [
+              { name: 'Low', value: 'low' },
+              { name: 'Medium', value: 'medium' },
+              { name: 'High', value: 'high' }
+            ],
+            default: 'medium',
+            description: 'Reasoning effort level (OpenAI o-series, Groq)',
+            displayOptions: { show: { thinkingEnabled: [true] } }
           }
         ] as any
       }

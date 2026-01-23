@@ -1,12 +1,15 @@
 #!/usr/bin/env node
-import { execSync, spawnSync } from 'child_process';
+import { execSync } from 'child_process';
 import { readFileSync, existsSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
-const isWindows = process.platform === 'win32';
+
+// Detect environment: Git Bash on Windows reports win32 but uses Unix commands
+const isGitBash = process.platform === 'win32' && (process.env.MSYSTEM || process.env.SHELL?.includes('bash'));
+const isWindows = process.platform === 'win32' && !isGitBash;
 const isMac = process.platform === 'darwin';
 
 // Load ports from .env
@@ -29,9 +32,15 @@ function loadPorts() {
 }
 
 // Execute command and return output (suppressing errors)
+// Added timeout to prevent hanging
 function exec(cmd, options = {}) {
   try {
-    return execSync(cmd, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], ...options }).trim();
+    return execSync(cmd, {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: 10000,  // 10 second timeout to prevent hanging
+      ...options
+    }).trim();
   } catch {
     return '';
   }
@@ -133,11 +142,18 @@ function getChildPidsUnix(parentPid) {
 }
 
 // Kill a single PID - Windows
+// NOTE: Removed /T flag (tree kill) as it can kill the parent PowerShell terminal
+// Child processes are killed explicitly via getChildPidsWindows() instead
 function killPidWindows(pid) {
-  // First try graceful termination
-  exec(`taskkill /PID ${pid} /T 2>nul`);
-  // Then force kill
-  exec(`taskkill /PID ${pid} /F /T 2>nul`);
+  // First try graceful termination (no /T)
+  exec(`taskkill /PID ${pid} 2>nul`);
+  // Then force kill (no /T)
+  exec(`taskkill /PID ${pid} /F 2>nul`);
+}
+
+// Cross-platform sleep using Atomics (efficient, no busy wait)
+function sleepMs(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
 // Kill a single PID - Unix
@@ -145,7 +161,7 @@ function killPidUnix(pid) {
   // First try SIGTERM (graceful)
   exec(`kill -15 ${pid} 2>/dev/null`);
   // Give it a moment
-  spawnSync('sleep', ['0.1'], { stdio: 'pipe' });
+  sleepMs(100);
   // Then SIGKILL (force)
   exec(`kill -9 ${pid} 2>/dev/null`);
 }
@@ -156,8 +172,9 @@ function isProcessRunning(pid) {
     const output = exec(`tasklist /FI "PID eq ${pid}" 2>nul`);
     return output.includes(pid);
   } else {
-    const result = spawnSync('kill', ['-0', pid], { stdio: 'pipe' });
-    return result.status === 0;
+    // Use kill -0 via exec (returns empty string on error = process dead)
+    const output = exec(`kill -0 ${pid} 2>&1 && echo "running"`);
+    return output.includes('running');
   }
 }
 
@@ -190,11 +207,7 @@ function killPort(port) {
   }
 
   // Wait a bit for processes to die
-  if (isWindows) {
-    exec('ping -n 2 127.0.0.1 >nul'); // ~1 second delay
-  } else {
-    spawnSync('sleep', ['0.5'], { stdio: 'pipe' });
-  }
+  sleepMs(500);
 
   // Verify which ones are actually dead
   for (const pid of pidsToKill) {
@@ -207,20 +220,16 @@ function killPort(port) {
   const stillRunning = pidsToKill.filter(pid => isProcessRunning(pid));
   if (stillRunning.length > 0) {
     for (const pid of stillRunning) {
-      // Force kill again
+      // Force kill again (no /T flag to avoid killing parent shell)
       if (isWindows) {
-        exec(`taskkill /PID ${pid} /F /T 2>nul`);
+        exec(`taskkill /PID ${pid} /F 2>nul`);
       } else {
         exec(`kill -9 ${pid} 2>/dev/null`);
       }
     }
 
     // Final check
-    if (isWindows) {
-      exec('ping -n 2 127.0.0.1 >nul');
-    } else {
-      spawnSync('sleep', ['0.5'], { stdio: 'pipe' });
-    }
+    sleepMs(500);
 
     for (const pid of stillRunning) {
       if (!isProcessRunning(pid)) {
@@ -247,7 +256,8 @@ function killPort(port) {
 const PORTS = loadPorts();
 
 console.log('Stopping MachinaOs services...\n');
-console.log(`Platform: ${isWindows ? 'Windows' : isMac ? 'macOS' : 'Linux'}`);
+const platformName = isWindows ? 'Windows' : isGitBash ? 'Git Bash' : isMac ? 'macOS' : 'Linux';
+console.log(`Platform: ${platformName}`);
 console.log(`Ports: ${PORTS.join(', ')}\n`);
 
 let allStopped = true;

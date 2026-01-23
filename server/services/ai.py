@@ -1,5 +1,6 @@
 """AI service for managing language models with LangGraph state machine support."""
 
+import re
 import time
 import httpx
 from dataclasses import dataclass
@@ -47,6 +48,24 @@ class ProviderConfig:
     default_model: str  # Default model when none specified
     models_endpoint: str  # API endpoint to fetch models
     models_header_fn: Callable[[str], dict]  # Function to create headers
+
+
+@dataclass
+class ThinkingConfig:
+    """Unified thinking/reasoning configuration across AI providers.
+
+    LangChain parameters per provider (Jan 2026):
+    - Claude: thinking={"type": "enabled", "budget_tokens": budget}, temp must be 1
+    - OpenAI o-series: reasoning_effort ('minimal', 'low', 'medium', 'high')
+    - Gemini 3+: thinking_level ('low', 'medium', 'high')
+    - Gemini 2.5: thinking_budget (int tokens)
+    - Groq: reasoning_format ('parsed', 'hidden')
+    """
+    enabled: bool = False
+    budget: int = 2048      # Token budget (Claude, Gemini 2.5)
+    effort: str = 'medium'  # Effort level: 'minimal', 'low', 'medium', 'high' (OpenAI o-series)
+    level: str = 'medium'   # Thinking level: 'low', 'medium', 'high' (Gemini 3+)
+    format: str = 'parsed'  # Output format: 'parsed', 'hidden' (Groq)
 
 
 def _openai_headers(api_key: str) -> dict:
@@ -296,6 +315,112 @@ class AgentState(TypedDict):
     iteration: int
     max_iterations: int
     should_continue: bool
+    # Thinking/reasoning content accumulated across iterations
+    thinking_content: Optional[str]
+
+
+def extract_thinking_from_response(response) -> tuple:
+    """Extract text and thinking content from LLM response.
+
+    Handles multiple formats:
+    - LangChain content_blocks API (Claude, Gemini)
+    - OpenAI responses/v1 format (content list with reasoning blocks containing summary)
+    - Groq additional_kwargs.reasoning_content
+    - Raw string content
+
+    Returns:
+        Tuple of (text_content: str, thinking_content: Optional[str])
+    """
+    text_parts = []
+    thinking_parts = []
+
+    logger.debug(f"[extract_thinking] Starting extraction, response type: {type(response).__name__}")
+    logger.debug(f"[extract_thinking] has content_blocks: {hasattr(response, 'content_blocks')}, value: {getattr(response, 'content_blocks', None)}")
+    logger.debug(f"[extract_thinking] has content: {hasattr(response, 'content')}, type: {type(getattr(response, 'content', None))}")
+    logger.debug(f"[extract_thinking] has additional_kwargs: {hasattr(response, 'additional_kwargs')}, value: {getattr(response, 'additional_kwargs', None)}")
+    logger.debug(f"[extract_thinking] has response_metadata: {hasattr(response, 'response_metadata')}, keys: {list(getattr(response, 'response_metadata', {}).keys()) if hasattr(response, 'response_metadata') else None}")
+
+    # Use content_blocks API (LangChain 1.0+) for Claude/Gemini
+    if hasattr(response, 'content_blocks') and response.content_blocks:
+        for block in response.content_blocks:
+            if isinstance(block, dict):
+                block_type = block.get("type", "")
+                if block_type == "reasoning":
+                    thinking_parts.append(block.get("reasoning", ""))
+                elif block_type == "thinking":
+                    thinking_parts.append(block.get("thinking", ""))
+                elif block_type == "text":
+                    text_parts.append(block.get("text", ""))
+
+    # Check additional_kwargs for reasoning_content (Groq, older OpenAI responses)
+    if not thinking_parts and hasattr(response, 'additional_kwargs'):
+        reasoning = response.additional_kwargs.get('reasoning_content')
+        if reasoning:
+            thinking_parts.append(reasoning)
+
+    # Check response_metadata for OpenAI o-series reasoning (responses/v1 format)
+    # The output array contains reasoning items with summaries
+    if not thinking_parts and hasattr(response, 'response_metadata'):
+        metadata = response.response_metadata
+        output = metadata.get('output', [])
+        if isinstance(output, list):
+            for item in output:
+                if isinstance(item, dict) and item.get('type') == 'reasoning':
+                    summary = item.get('summary', [])
+                    if isinstance(summary, list):
+                        for s in summary:
+                            if isinstance(s, dict):
+                                # Handle both summary_text and text types
+                                text = s.get('text', '')
+                                if text:
+                                    thinking_parts.append(text)
+                            elif isinstance(s, str):
+                                thinking_parts.append(s)
+
+    # Check raw content for OpenAI responses/v1 format and other list formats
+    if hasattr(response, 'content'):
+        content = response.content
+        if isinstance(content, str):
+            if not text_parts:
+                text_parts.append(content)
+        elif isinstance(content, list):
+            for block in content:
+                if isinstance(block, dict):
+                    block_type = block.get('type', '')
+                    if block_type == 'text' or block_type == 'output_text':
+                        # Handle both 'text' and 'output_text' (responses/v1 format)
+                        if not text_parts:  # Only add if not already extracted
+                            text_parts.append(block.get('text', ''))
+                    elif block_type == 'reasoning':
+                        # OpenAI responses/v1 format: reasoning block with summary array
+                        # Format: {"type": "reasoning", "summary": [{"type": "text", "text": "..."}, {"type": "summary_text", "text": "..."}]}
+                        summary = block.get('summary', [])
+                        if isinstance(summary, list):
+                            for s in summary:
+                                if isinstance(s, dict):
+                                    s_type = s.get('type', '')
+                                    if s_type in ('text', 'summary_text'):
+                                        thinking_parts.append(s.get('text', ''))
+                                elif isinstance(s, str):
+                                    thinking_parts.append(s)
+                        elif isinstance(summary, str):
+                            thinking_parts.append(summary)
+                        # Also check direct reasoning field
+                        if block.get('reasoning'):
+                            thinking_parts.append(block.get('reasoning', ''))
+                    elif block_type == 'thinking':
+                        thinking_parts.append(block.get('thinking', ''))
+                elif isinstance(block, str) and not text_parts:
+                    text_parts.append(block)
+
+    text = '\n'.join(filter(None, text_parts))
+    thinking = '\n'.join(filter(None, thinking_parts)) if thinking_parts else None
+
+    logger.debug(f"[extract_thinking] Final text_parts: {text_parts}")
+    logger.debug(f"[extract_thinking] Final thinking_parts: {thinking_parts}")
+    logger.debug(f"[extract_thinking] Returning text={repr(text[:100] if text else None)}, thinking={repr(thinking[:100] if thinking else None)}")
+
+    return text, thinking
 
 
 def create_agent_node(chat_model):
@@ -304,14 +429,16 @@ def create_agent_node(chat_model):
     The agent node:
     1. Receives current state with messages
     2. Invokes the LLM
-    3. Checks for tool calls in response
-    4. Returns updated state with new AI message and pending tool calls
+    3. Extracts thinking content if present
+    4. Checks for tool calls in response
+    5. Returns updated state with new AI message, thinking, and pending tool calls
     """
     def agent_node(state: AgentState) -> Dict[str, Any]:
         """Process messages through the LLM and return response."""
         messages = state["messages"]
         iteration = state.get("iteration", 0)
         max_iterations = state.get("max_iterations", 10)
+        existing_thinking = state.get("thinking_content") or ""
 
         logger.debug(f"[LangGraph] Agent node invoked, iteration={iteration}, messages={len(messages)}")
 
@@ -326,6 +453,18 @@ def create_agent_node(chat_model):
         response = chat_model.invoke(filtered_messages)
 
         logger.debug(f"[LangGraph] LLM response type: {type(response).__name__}")
+
+        # Extract thinking content from response
+        _, new_thinking = extract_thinking_from_response(response)
+
+        # Accumulate thinking across iterations (for multi-step tool usage)
+        accumulated_thinking = existing_thinking
+        if new_thinking:
+            if accumulated_thinking:
+                accumulated_thinking = f"{accumulated_thinking}\n\n--- Iteration {iteration + 1} ---\n{new_thinking}"
+            else:
+                accumulated_thinking = new_thinking
+            logger.debug(f"[LangGraph] Extracted thinking content ({len(new_thinking)} chars)")
 
         # Check for Gemini-specific response attributes (safety ratings, block reason)
         if hasattr(response, 'response_metadata'):
@@ -351,7 +490,8 @@ def create_agent_node(chat_model):
             "pending_tool_calls": pending_tool_calls,
             "iteration": iteration + 1,
             "max_iterations": max_iterations,
-            "should_continue": should_continue
+            "should_continue": should_continue,
+            "thinking_content": accumulated_thinking or None
         }
 
     return agent_node
@@ -571,9 +711,33 @@ class AIService:
         logger.warning(f"[LangGraph] Empty response with no error details. Content type: {type(content)}, value: {content}")
         raise ValueError("AI generated empty response. Try rephrasing your prompt or using a different model.")
 
+    def _is_reasoning_model(self, model: str) -> bool:
+        """Check if model supports reasoning (OpenAI o-series).
+
+        O-series models: o1, o1-mini, o1-preview, o3, o3-mini, o4-mini, etc.
+        NOT gpt-4o (which contains 'o' but is not a reasoning model).
+        """
+        model_lower = model.lower()
+        # Check for o-series pattern: starts with 'o' followed by digit
+        # e.g., o1, o1-mini, o3, o3-mini, o4-mini
+        return bool(re.match(r'^o[134](-|$)', model_lower))
+
     def create_model(self, provider: str, api_key: str, model: str,
-                    temperature: float, max_tokens: int):
-        """Create LangChain model instance using provider registry."""
+                    temperature: float, max_tokens: int,
+                    thinking: Optional[ThinkingConfig] = None):
+        """Create LangChain model instance using provider registry.
+
+        Args:
+            provider: AI provider name (openai, anthropic, gemini, groq, openrouter)
+            api_key: Provider API key
+            model: Model name/ID
+            temperature: Sampling temperature
+            max_tokens: Maximum response tokens
+            thinking: Optional thinking/reasoning configuration
+
+        Returns:
+            Configured LangChain chat model instance
+        """
         config = PROVIDER_CONFIGS.get(provider)
         if not config:
             raise ValueError(f"Unsupported provider: {provider}")
@@ -594,6 +758,78 @@ class AIService:
                 'X-Title': 'MachinaOS'
             }
 
+        # OpenAI o-series reasoning models ALWAYS require temperature=1
+        # This applies regardless of whether thinking mode is enabled
+        if provider == 'openai' and self._is_reasoning_model(model):
+            if kwargs.get('temperature', 1) != 1:
+                logger.info(f"[AI] OpenAI o-series model '{model}': forcing temperature to 1 (was {kwargs.get('temperature')})")
+                kwargs['temperature'] = 1
+
+        # Apply thinking/reasoning configuration per provider (per LangChain docs Jan 2026)
+        if thinking and thinking.enabled:
+            if provider == 'anthropic':
+                # Claude extended thinking: thinking={"type": "enabled", "budget_tokens": N}
+                # Requires temperature=1, budget min 1024 tokens
+                # IMPORTANT: max_tokens must be greater than budget_tokens
+                budget = max(1024, thinking.budget)
+                # Ensure max_tokens > budget_tokens (add buffer for response)
+                if max_tokens <= budget:
+                    # Set max_tokens to budget + reasonable response space (at least 1024 more)
+                    kwargs[config.max_tokens_param] = budget + max(1024, max_tokens)
+                    logger.info(f"[AI] Claude thinking: adjusted max_tokens from {max_tokens} to {kwargs[config.max_tokens_param]} (budget={budget})")
+                kwargs['thinking'] = {"type": "enabled", "budget_tokens": budget}
+                kwargs['temperature'] = 1  # Required for Claude thinking mode
+            elif provider == 'openai' and self._is_reasoning_model(model):
+                # OpenAI o-series: Use reasoning_effort parameter
+                # Note: reasoning.summary requires organization verification on OpenAI
+                # So we just use reasoning_effort for now
+                kwargs['reasoning_effort'] = thinking.effort
+                # O-series models only support temperature=1
+                kwargs['temperature'] = 1
+                logger.info(f"[AI] OpenAI o-series: reasoning_effort={thinking.effort}, temperature=1")
+            elif provider == 'gemini':
+                # Gemini thinking support varies by model:
+                # - Gemini 2.5 Flash/Pro: Use thinking_budget (int tokens, 0=off, -1=dynamic)
+                # - Gemini 2.0 Flash Thinking: Built-in thinking, use thinking_budget
+                # - Gemini 3 models: Limited/experimental thinking support
+                model_lower = model.lower()
+
+                # Gemini 2.5 models support thinking_budget
+                if 'gemini-2.5' in model_lower or '2.5' in model_lower:
+                    kwargs['thinking_budget'] = thinking.budget
+                    kwargs['include_thoughts'] = True
+                    logger.info(f"[AI] Gemini 2.5 thinking: budget={thinking.budget}")
+                # Gemini 2.0 Flash Thinking model
+                elif 'gemini-2.0-flash-thinking' in model_lower or 'flash-thinking' in model_lower:
+                    kwargs['thinking_budget'] = thinking.budget
+                    kwargs['include_thoughts'] = True
+                    logger.info(f"[AI] Gemini Flash Thinking: budget={thinking.budget}")
+                # Gemini 3 preview models - thinking support is experimental/limited
+                # Only 'low' and 'high' levels may be supported, not 'medium'
+                elif 'gemini-3' in model_lower:
+                    # For Gemini 3, try thinking_budget instead of thinking_level
+                    # as level support is inconsistent across preview models
+                    kwargs['thinking_budget'] = thinking.budget
+                    kwargs['include_thoughts'] = True
+                    logger.info(f"[AI] Gemini 3 thinking: using budget={thinking.budget} (level support varies)")
+                # Other Gemini 2.x models - try thinking_budget
+                elif 'gemini-2' in model_lower:
+                    kwargs['thinking_budget'] = thinking.budget
+                    kwargs['include_thoughts'] = True
+                    logger.info(f"[AI] Gemini 2.x thinking: budget={thinking.budget}")
+                else:
+                    # For other/older Gemini models, thinking may not be supported
+                    logger.warning(f"[AI] Gemini model '{model}' may not support thinking mode")
+            elif provider == 'groq':
+                # Groq: reasoning_format ('parsed' or 'hidden')
+                # 'parsed' includes reasoning in additional_kwargs, 'hidden' suppresses it
+                format_val = thinking.format if thinking.format in ('parsed', 'hidden') else 'parsed'
+                kwargs['reasoning_format'] = format_val
+            elif provider == 'cerebras':
+                # Cerebras: No official LangChain thinking support yet
+                # Passing through as model_kwargs if supported
+                kwargs['thinking_budget'] = thinking.budget
+
         return config.model_class(**kwargs)
 
     async def fetch_models(self, provider: str, api_key: str) -> List[str]:
@@ -607,17 +843,36 @@ class AIService:
                 response.raise_for_status()
                 data = response.json()
 
-                # Filter for chat models
+                # Filter for chat models including o-series reasoning models
                 models = []
                 for model in data.get('data', []):
                     model_id = model['id'].lower()
-                    if (('gpt' in model_id or 'o1' in model_id) and
-                        'instruct' not in model_id and 'embedding' not in model_id):
+                    # Include GPT models and o-series reasoning models (o1, o3, o4)
+                    is_gpt = 'gpt' in model_id
+                    is_o_series = any(f'o{n}' in model_id for n in ['1', '3', '4'])
+                    is_excluded = 'instruct' in model_id or 'embedding' in model_id or 'realtime' in model_id
+                    if (is_gpt or is_o_series) and not is_excluded:
                         models.append(model['id'])
 
-                # Sort by priority
-                priority = {'gpt-4o': 1, 'gpt-4o-mini': 2, 'gpt-4-turbo': 3, 'gpt-4': 4}
-                return sorted(models, key=lambda x: priority.get(x, 99))
+                # Sort by priority - o-series reasoning models at top
+                def get_priority(model_name: str) -> int:
+                    m = model_name.lower()
+                    # O-series reasoning models first
+                    if 'o4-mini' in m: return 1
+                    if 'o4' in m: return 2
+                    if 'o3-mini' in m: return 3
+                    if 'o3' in m: return 4
+                    if 'o1-mini' in m: return 5
+                    if 'o1' in m: return 6
+                    # Then GPT models
+                    if 'gpt-4o-mini' in m: return 10
+                    if 'gpt-4o' in m: return 11
+                    if 'gpt-4-turbo' in m: return 12
+                    if 'gpt-4' in m: return 13
+                    if 'gpt-3.5' in m: return 20
+                    return 99
+
+                return sorted(models, key=get_priority)
 
             elif provider == 'anthropic':
                 response = await client.get(
@@ -759,7 +1014,19 @@ class AIService:
                 provider = 'cerebras'
             else:
                 provider = self.detect_provider(model)
-            chat_model = self.create_model(provider, api_key, model, temperature, max_tokens)
+
+            # Build thinking config from parameters
+            thinking_config = None
+            if flattened.get('thinkingEnabled'):
+                thinking_config = ThinkingConfig(
+                    enabled=True,
+                    budget=int(flattened.get('thinkingBudget', 2048)),
+                    effort=flattened.get('reasoningEffort', 'medium'),
+                    level=flattened.get('thinkingLevel', 'medium'),
+                    format=flattened.get('reasoningFormat', 'parsed'),
+                )
+
+            chat_model = self.create_model(provider, api_key, model, temperature, max_tokens, thinking_config)
 
             # Prepare messages
             messages = []
@@ -773,8 +1040,34 @@ class AIService:
             # Execute
             response = chat_model.invoke(filtered_messages)
 
+            # Debug: Log response structure for o-series reasoning models
+            if thinking_config and thinking_config.enabled:
+                logger.info(f"[AI Debug] Response type: {type(response).__name__}")
+                logger.info(f"[AI Debug] Response content type: {type(response.content)}")
+                logger.info(f"[AI Debug] Response content: {response.content[:500] if isinstance(response.content, str) else response.content}")
+                if hasattr(response, 'content_blocks'):
+                    logger.info(f"[AI Debug] content_blocks: {response.content_blocks}")
+                if hasattr(response, 'additional_kwargs'):
+                    logger.info(f"[AI Debug] additional_kwargs: {response.additional_kwargs}")
+                if hasattr(response, 'response_metadata'):
+                    logger.info(f"[AI Debug] response_metadata: {response.response_metadata}")
+
+            # Extract text and thinking content from response
+            text_content, thinking_content = extract_thinking_from_response(response)
+
+            # Debug: Log extraction results
+            logger.info(f"[AI Debug] Extracted text_content: {repr(text_content[:200] if text_content else None)}")
+            logger.info(f"[AI Debug] Extracted thinking_content: {repr(thinking_content[:200] if thinking_content else None)}")
+
+            # Use extracted text if available, fall back to raw content
+            response_text = text_content if text_content else response.content
+
+            logger.info(f"[AI Debug] Final response_text: {repr(response_text[:200] if response_text else None)}")
+
             result = {
-                "response": response.content,
+                "response": response_text,
+                "thinking": thinking_content,
+                "thinking_enabled": thinking_config.enabled if thinking_config else False,
                 "model": model,
                 "provider": provider,
                 "finish_reason": "stop",
@@ -788,13 +1081,15 @@ class AIService:
             log_execution_time(logger, "ai_chat", start_time, time.time())
             log_api_call(logger, provider, model, "chat", True)
 
-            return {
+            final_result = {
                 "success": True,
                 "node_id": node_id,
                 "node_type": node_type,
                 "result": result,
                 "execution_time": time.time() - start_time
             }
+            logger.info(f"[AI Debug] Returning final_result: success={final_result['success']}, result.response={repr(result.get('response', 'MISSING')[:100] if result.get('response') else 'None')}")
+            return final_result
 
         except Exception as e:
             logger.error("AI execution failed", node_id=node_id, error=str(e))
@@ -881,6 +1176,18 @@ class AIService:
             if not api_key:
                 raise ValueError("API key is required for AI Agent")
 
+            # Build thinking config from parameters
+            thinking_config = None
+            if flattened.get('thinkingEnabled'):
+                thinking_config = ThinkingConfig(
+                    enabled=True,
+                    budget=int(flattened.get('thinkingBudget', 2048)),
+                    effort=flattened.get('reasoningEffort', 'medium'),
+                    level=flattened.get('thinkingLevel', 'medium'),
+                    format=flattened.get('reasoningFormat', 'parsed'),
+                )
+                logger.info(f"[LangGraph] Thinking enabled: budget={thinking_config.budget}, effort={thinking_config.effort}")
+
             # Broadcast: Initializing model
             await broadcast_status("initializing", {
                 "message": f"Initializing {provider} model...",
@@ -890,7 +1197,7 @@ class AIService:
 
             # Create LLM using the provider from node configuration
             logger.debug(f"[LangGraph] Creating {provider} model: {model}")
-            chat_model = self.create_model(provider, api_key, model, temperature, max_tokens)
+            chat_model = self.create_model(provider, api_key, model, temperature, max_tokens, thinking_config)
 
             # Build initial messages for state
             initial_messages: List[BaseMessage] = []
@@ -1043,14 +1350,15 @@ class AIService:
                 tool_executor=tool_executor if tools else None
             )
 
-            # Create initial state
+            # Create initial state with thinking_content for reasoning models
             initial_state: AgentState = {
                 "messages": initial_messages,
                 "tool_outputs": {},
                 "pending_tool_calls": [],
                 "iteration": 0,
                 "max_iterations": 10,
-                "should_continue": False
+                "should_continue": False,
+                "thinking_content": None
             }
 
             # Broadcast: Executing graph
@@ -1079,7 +1387,10 @@ class AIService:
             response_content = self._extract_text_content(raw_content, ai_response)
             iterations = final_state.get("iteration", 1)
 
-            logger.info(f"[LangGraph] Agent completed in {iterations} iteration(s)")
+            # Get accumulated thinking content from state
+            thinking_content = final_state.get("thinking_content")
+
+            logger.info(f"[LangGraph] Agent completed in {iterations} iteration(s), thinking={'yes' if thinking_content else 'no'}")
 
             # Save to memory if connected (persist to database)
             # Only save non-empty messages using standardized validation
@@ -1098,6 +1409,8 @@ class AIService:
 
             result = {
                 "response": response_content,
+                "thinking": thinking_content,
+                "thinking_enabled": thinking_config.enabled if thinking_config else False,
                 "model": model,
                 "provider": provider,
                 "agent_type": "langgraph",

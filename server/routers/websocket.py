@@ -256,7 +256,7 @@ async def handle_execute_node(data: Dict[str, Any], websocket: WebSocket) -> Dic
         await broadcaster.update_node_status(node_id, "error", {"error": result.get("error")}, workflow_id=workflow_id)
 
     # Explicitly pass through success status (don't let decorator default to True)
-    return {
+    ws_result = {
         "success": result.get("success", False),
         "node_id": node_id,
         "result": result.get("result"),
@@ -264,6 +264,10 @@ async def handle_execute_node(data: Dict[str, Any], websocket: WebSocket) -> Dic
         "execution_time": result.get("execution_time"),
         "timestamp": time.time()
     }
+    # Debug: Log what we're returning to WebSocket
+    result_data = result.get("result")
+    logger.debug(f"[WS execute_node] Returning: success={ws_result['success']}, result.response={repr(result_data.get('response', 'MISSING')[:100] if result_data and result_data.get('response') else 'None')}")
+    return ws_result
 
 
 @ws_handler("node_id")

@@ -152,7 +152,7 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
           } else {
             const sampleSchemas: Record<string, Record<string, any>> = {
               location: { latitude: 'number', longitude: 'number', accuracy: 'number', provider: 'string', altitude: 'number' },
-              ai: { response: 'string', model: 'string', provider: 'string', finish_reason: 'string', timestamp: 'string' },
+              ai: { response: 'string', thinking: 'string', model: 'string', provider: 'string', finish_reason: 'string', timestamp: 'string' },
               file: { fileName: 'string', fileSize: 'number' },
               whatsapp: {
                 message_id: 'string',
