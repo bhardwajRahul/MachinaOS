@@ -232,6 +232,14 @@ class WorkflowService:
         if use_temporal and self._temporal_executor is not None:
             return await self._execute_temporal(nodes, edges, session_id, status_callback, start_time, workflow_id)
 
+        # Log warning if Temporal was requested but not available
+        if use_temporal and self._temporal_executor is None:
+            logger.warning(
+                "Temporal execution requested but executor not configured. "
+                "Falling back to parallel/sequential execution. "
+                "Check TEMPORAL_ENABLED and Temporal server connection."
+            )
+
         # Use parallel executor if enabled and Redis available
         if use_parallel and self.settings.redis_enabled:
             return await self._execute_parallel(nodes, edges, session_id, status_callback, start_time, workflow_id)

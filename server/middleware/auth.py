@@ -19,6 +19,7 @@ PUBLIC_PATHS = frozenset([
     "/api/auth/login",
     "/api/auth/register",
     "/api/auth/logout",
+    "/ws/internal",  # Internal WebSocket for Temporal workers
 ])
 
 # Path prefixes that are public

@@ -1720,6 +1720,90 @@ async def websocket_status_endpoint(websocket: WebSocket):
         await broadcaster.disconnect(websocket)
 
 
+@router.websocket("/ws/internal")
+async def websocket_internal_endpoint(websocket: WebSocket):
+    """Internal WebSocket endpoint for Temporal workers.
+
+    This endpoint bypasses authentication and is intended for internal
+    service-to-service communication (e.g., Temporal activity -> MachinaOs).
+
+    Security: Should only be exposed on localhost/internal network.
+    """
+    broadcaster = get_status_broadcaster()
+    await websocket.accept()
+
+    logger.info("[WebSocket Internal] Temporal worker connected")
+
+    # Message queue for decoupling receive from processing
+    message_queue: asyncio.Queue = asyncio.Queue()
+
+    # Track handler tasks for this WebSocket
+    handler_tasks: Set[asyncio.Task] = set()
+
+    async def receive_loop():
+        """Receives messages and puts them in queue."""
+        try:
+            while True:
+                data = await websocket.receive_json()
+                await message_queue.put(data)
+        except WebSocketDisconnect:
+            logger.info("[WebSocket Internal] Client disconnected")
+            await message_queue.put(None)
+        except Exception as e:
+            logger.error(f"[WebSocket Internal] Receive error: {e}")
+            await message_queue.put(None)
+
+    async def process_loop():
+        """Processes messages from queue."""
+        while True:
+            data = await message_queue.get()
+
+            if data is None:
+                break
+
+            msg_type = data.get("type", "")
+            request_id = data.get("request_id")
+
+            handler = MESSAGE_HANDLERS.get(msg_type)
+
+            if handler:
+                task = asyncio.create_task(
+                    _execute_handler(handler, data, websocket, msg_type, request_id)
+                )
+                handler_tasks.add(task)
+                task.add_done_callback(handler_tasks.discard)
+            else:
+                logger.warning(f"[WebSocket Internal] Unknown message type: {msg_type}")
+                if request_id:
+                    await _safe_send(websocket, {
+                        "type": "error",
+                        "request_id": request_id,
+                        "code": "UNKNOWN_MESSAGE_TYPE",
+                        "message": f"Unknown message type: {msg_type}"
+                    })
+
+    try:
+        async with asyncio.TaskGroup() as tg:
+            tg.create_task(receive_loop())
+            tg.create_task(process_loop())
+
+    except* WebSocketDisconnect:
+        logger.info("[WebSocket Internal] Client disconnected (TaskGroup)")
+    except* Exception as eg:
+        for exc in eg.exceptions:
+            if not isinstance(exc, WebSocketDisconnect):
+                logger.error(f"[WebSocket Internal] TaskGroup error: {exc}")
+    finally:
+        for task in list(handler_tasks):
+            if not task.done():
+                task.cancel()
+
+        if handler_tasks:
+            await asyncio.gather(*handler_tasks, return_exceptions=True)
+
+        logger.info("[WebSocket Internal] Connection closed")
+
+
 @router.get("/ws/info")
 async def websocket_info():
     """Get WebSocket connection info."""

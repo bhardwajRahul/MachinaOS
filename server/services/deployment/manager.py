@@ -558,6 +558,7 @@ class DeploymentManager:
         logger.debug(f"[Run] filtered_edges: {len(filtered_edges)} edges")
 
         # Execute filtered graph with deployment's workflow_id for scoped status
+        # Use Temporal for proper parallel branch execution
         status_callback = self._status_callbacks.get(workflow_id)
         result = await self._execute_workflow(
             nodes=filtered_nodes,
@@ -566,6 +567,7 @@ class DeploymentManager:
             status_callback=status_callback,
             skip_clear_outputs=True,
             workflow_id=workflow_id,  # Pass deployment's workflow_id for status scoping
+            use_temporal=True,  # Force Temporal for parallel node execution
         )
 
         result["run_id"] = run_id

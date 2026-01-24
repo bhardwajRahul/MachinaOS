@@ -1,16 +1,20 @@
 """Temporal workflow orchestration service.
 
-This module provides Temporal integration for durable workflow execution.
-LangGraph runs inside activities (outside Temporal's sandboxed event loop)
-to use its native asyncio parallel execution.
+This module provides Temporal integration for durable distributed workflow execution.
+
+Architecture:
+- Each workflow node executes as an independent Temporal activity
+- Activities can run on ANY worker in the cluster for horizontal scaling
+- Workflow only orchestrates - schedules activities and routes outputs
+- WebSocket connection to MachinaOs for low-latency node execution
 
 When TEMPORAL_ENABLED=true:
-- Workflows are executed via Temporal for durability
-- LangGraph handles parallel execution inside activities
-- Activities call back to MachinaOs node handlers
+- Workflows are executed via Temporal for durability and distribution
+- Each node is a separate activity with its own retry policy
+- Parallel branches execute concurrently on available workers
 
 When TEMPORAL_ENABLED=false (default):
-- Falls back to the existing Redis-based executor
+- Falls back to the existing parallel/sequential executor
 """
 
 from .executor import TemporalExecutor
