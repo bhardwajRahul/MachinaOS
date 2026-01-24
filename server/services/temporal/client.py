@@ -5,6 +5,7 @@ Manages the Temporal client connection lifecycle.
 
 from typing import Optional
 from temporalio.client import Client
+from temporalio.runtime import Runtime, TelemetryConfig
 
 from core.logging import get_logger
 
@@ -24,6 +25,7 @@ class TemporalClientWrapper:
         self.server_address = server_address
         self.namespace = namespace
         self._client: Optional[Client] = None
+        self._runtime: Optional[Runtime] = None
 
     @property
     def client(self) -> Optional[Client]:
@@ -50,9 +52,16 @@ class TemporalClientWrapper:
             namespace=self.namespace,
         )
 
+        # Create runtime with worker heartbeating disabled to avoid warning on older servers
+        self._runtime = Runtime(
+            telemetry=TelemetryConfig(),
+            worker_heartbeat_interval=None,
+        )
+
         self._client = await Client.connect(
             self.server_address,
             namespace=self.namespace,
+            runtime=self._runtime,
         )
 
         logger.info("Connected to Temporal server")

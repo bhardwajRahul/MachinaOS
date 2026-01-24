@@ -18,18 +18,11 @@ function ensureEnvFile() {
   const envPath = resolve(ROOT, '.env');
   if (existsSync(envPath)) return true;
 
-  // Try root .env.template first, then server/.env.template
-  const templates = [
-    resolve(ROOT, '.env.template'),
-    resolve(ROOT, 'server', '.env.template')
-  ];
-
-  for (const templatePath of templates) {
-    if (existsSync(templatePath)) {
-      console.log(`[Docker] Creating .env from ${templatePath.replace(ROOT, '.')}`);
-      copyFileSync(templatePath, envPath);
-      return true;
-    }
+  const templatePath = resolve(ROOT, '.env.template');
+  if (existsSync(templatePath)) {
+    console.log('[Docker] Creating .env from .env.template');
+    copyFileSync(templatePath, envPath);
+    return true;
   }
 
   console.warn('[Docker] Warning: No .env or .env.template found');

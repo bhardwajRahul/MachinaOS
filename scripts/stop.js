@@ -12,23 +12,32 @@ const isGitBash = process.platform === 'win32' && (process.env.MSYSTEM || proces
 const isWindows = process.platform === 'win32' && !isGitBash;
 const isMac = process.platform === 'darwin';
 
-// Load ports from .env
-function loadPorts() {
+// Load env config
+function loadEnvConfig() {
   const envPath = existsSync(resolve(ROOT, '.env')) ? resolve(ROOT, '.env') : resolve(ROOT, '.env.template');
-  if (!existsSync(envPath)) return [3000, 3010, 9400];
-  const content = readFileSync(envPath, 'utf-8');
   const env = {};
-  for (const line of content.split('\n')) {
-    const match = line.match(/^([^#=]+)=(.*)$/);
-    if (match) {
-      env[match[1].trim()] = match[2].trim();
+  if (existsSync(envPath)) {
+    const content = readFileSync(envPath, 'utf-8');
+    for (const line of content.split('\n')) {
+      const match = line.match(/^([^#=]+)=(.*)$/);
+      if (match) {
+        env[match[1].trim()] = match[2].trim();
+      }
     }
   }
-  return [
-    parseInt(env.VITE_CLIENT_PORT) || 3000,
-    parseInt(env.PYTHON_BACKEND_PORT) || 3010,
-    parseInt(env.WHATSAPP_RPC_PORT) || 9400
-  ];
+  return {
+    ports: [
+      parseInt(env.VITE_CLIENT_PORT) || 3000,
+      parseInt(env.PYTHON_BACKEND_PORT) || 3010,
+      parseInt(env.WHATSAPP_RPC_PORT) || 9400
+    ],
+    temporalEnabled: env.TEMPORAL_ENABLED?.toLowerCase() === 'true'
+  };
+}
+
+// Legacy function for backwards compatibility
+function loadPorts() {
+  return loadEnvConfig().ports;
 }
 
 // Execute command and return output (suppressing errors)
@@ -252,13 +261,43 @@ function killPort(port) {
   };
 }
 
+// Kill Temporal worker processes by command line pattern
+function killTemporalWorkers() {
+  const killedPids = [];
+
+  if (isWindows) {
+    // Find Python processes running temporal worker
+    const wmicOutput = exec('wmic process where "CommandLine like \'%services.temporal.worker%\'" get ProcessId 2>nul');
+    for (const line of wmicOutput.split('\n')) {
+      const pid = line.trim();
+      if (pid && /^\d+$/.test(pid)) {
+        exec(`taskkill /PID ${pid} /F 2>nul`);
+        killedPids.push(pid);
+      }
+    }
+  } else {
+    // Unix: Use pgrep to find temporal worker processes
+    const pgrepOutput = exec('pgrep -f "services.temporal.worker" 2>/dev/null');
+    for (const pid of pgrepOutput.split('\n')) {
+      if (pid.trim() && /^\d+$/.test(pid.trim())) {
+        exec(`kill -9 ${pid.trim()} 2>/dev/null`);
+        killedPids.push(pid.trim());
+      }
+    }
+  }
+
+  return killedPids;
+}
+
 // Main execution
-const PORTS = loadPorts();
+const config = loadEnvConfig();
+const PORTS = config.ports;
 
 console.log('Stopping MachinaOs services...\n');
 const platformName = isWindows ? 'Windows' : isGitBash ? 'Git Bash' : isMac ? 'macOS' : 'Linux';
 console.log(`Platform: ${platformName}`);
-console.log(`Ports: ${PORTS.join(', ')}\n`);
+console.log(`Ports: ${PORTS.join(', ')}`);
+console.log(`Temporal: ${config.temporalEnabled ? 'enabled' : 'disabled'}\n`);
 
 let allStopped = true;
 
@@ -271,6 +310,17 @@ for (const port of PORTS) {
   }
   if (!result.portFree) {
     allStopped = false;
+  }
+}
+
+// Kill Temporal workers if enabled
+if (config.temporalEnabled) {
+  const temporalPids = killTemporalWorkers();
+  if (temporalPids.length > 0) {
+    console.log(`[OK] Temporal worker: Killed ${temporalPids.length} process(es)`);
+    console.log(`    PIDs: ${temporalPids.join(', ')}`);
+  } else {
+    console.log(`[OK] Temporal worker: Not running`);
   }
 }
 

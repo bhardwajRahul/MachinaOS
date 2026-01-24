@@ -17,23 +17,32 @@ const isMac = process.platform === 'darwin';
 const elapsed = () => `${((Date.now() - START) / 1000).toFixed(2)}s`;
 const log = (msg) => console.log(`[${elapsed()}] ${msg}`);
 
-// Load ports from .env
-function loadPorts() {
+// Load env config
+function loadEnvConfig() {
   const envPath = existsSync(resolve(ROOT, '.env')) ? resolve(ROOT, '.env') : resolve(ROOT, '.env.template');
-  if (!existsSync(envPath)) return [3000, 3010, 9400];
-  const content = readFileSync(envPath, 'utf-8');
   const env = {};
-  for (const line of content.split('\n')) {
-    const match = line.match(/^([^#=]+)=(.*)$/);
-    if (match) {
-      env[match[1].trim()] = match[2].trim();
+  if (existsSync(envPath)) {
+    const content = readFileSync(envPath, 'utf-8');
+    for (const line of content.split('\n')) {
+      const match = line.match(/^([^#=]+)=(.*)$/);
+      if (match) {
+        env[match[1].trim()] = match[2].trim();
+      }
     }
   }
-  return [
-    parseInt(env.VITE_CLIENT_PORT) || 3000,
-    parseInt(env.PYTHON_BACKEND_PORT) || 3010,
-    parseInt(env.WHATSAPP_RPC_PORT) || 9400
-  ];
+  return {
+    ports: [
+      parseInt(env.VITE_CLIENT_PORT) || 3000,
+      parseInt(env.PYTHON_BACKEND_PORT) || 3010,
+      parseInt(env.WHATSAPP_RPC_PORT) || 9400
+    ],
+    temporalEnabled: env.TEMPORAL_ENABLED?.toLowerCase() === 'true'
+  };
+}
+
+// Legacy function for backwards compatibility
+function loadPorts() {
+  return loadEnvConfig().ports;
 }
 
 // Execute command and return output (suppressing errors)
@@ -147,13 +156,15 @@ function killPort(port) {
   return remainingPids.length === 0;
 }
 
-const PORTS = loadPorts();
+const config = loadEnvConfig();
+const PORTS = config.ports;
 process.env.PYTHONUTF8 = '1';
 
 console.log('\n=== MachinaOS Starting ===\n');
 const platformName = isWindows ? 'Windows' : isGitBash ? 'Git Bash' : isMac ? 'macOS' : 'Linux';
 log(`Platform: ${platformName}`);
 log(`Ports: ${PORTS.join(', ')}`);
+log(`Temporal: ${config.temporalEnabled ? 'enabled' : 'disabled'}`);
 
 // Step 1: Create .env if not exists
 const envPath = resolve(ROOT, '.env');
@@ -191,6 +202,9 @@ log('Starting services...');
 log('Press Ctrl+C to stop (use npm run stop to kill all services)');
 log('');
 
+// Build the dev command - conditionally include Temporal worker
+const devCommand = config.temporalEnabled ? 'npm run dev:temporal' : 'npm run dev';
+
 // On Git Bash/mintty, Ctrl+C doesn't propagate properly to Node.js child processes
 // due to Cygwin pseudo-terminal limitations. The workaround is to run concurrently
 // directly without a Node.js wrapper.
@@ -204,7 +218,7 @@ if (isGitBash) {
   const { execFileSync } = await import('child_process');
   try {
     // Use bash -c to run npm, replacing this process
-    execFileSync('bash', ['-c', 'exec npm run dev'], {
+    execFileSync('bash', ['-c', `exec ${devCommand}`], {
       cwd: ROOT,
       stdio: 'inherit',
       windowsHide: false
@@ -215,7 +229,7 @@ if (isGitBash) {
 } else {
   // For native Windows cmd or Unix: execSync works fine
   try {
-    execSync('npm run dev', { cwd: ROOT, stdio: 'inherit' });
+    execSync(devCommand, { cwd: ROOT, stdio: 'inherit' });
   } catch {
     // Ctrl+C causes non-zero exit, which is normal
   }

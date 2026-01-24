@@ -20,6 +20,7 @@ from typing import Optional
 
 import aiohttp
 from temporalio.client import Client
+from temporalio.runtime import Runtime, TelemetryConfig
 from temporalio.worker import Worker
 
 from core.logging import get_logger
@@ -32,6 +33,18 @@ from .activities import (
 )
 
 logger = get_logger(__name__)
+
+
+def create_runtime() -> Runtime:
+    """Create a Temporal runtime with worker heartbeating disabled.
+
+    Disables the runtime-level worker heartbeating feature to avoid
+    the warning on older Temporal server versions that don't support it.
+    """
+    return Runtime(
+        telemetry=TelemetryConfig(),
+        worker_heartbeat_interval=None,  # Disable runtime heartbeating
+    )
 
 
 class TemporalWorkerManager:
@@ -173,7 +186,9 @@ async def run_standalone_worker(
     print(f"[Worker] Task Queue: {task_queue}")
     print(f"[Worker] Pool Size: {pool_size}")
 
-    client = await Client.connect(server_address, namespace=namespace)
+    # Use custom runtime with heartbeating disabled to avoid warning on older servers
+    runtime = create_runtime()
+    client = await Client.connect(server_address, namespace=namespace, runtime=runtime)
 
     # Create shared session and activities
     session = await create_shared_session(pool_size)
