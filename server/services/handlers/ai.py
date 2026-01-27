@@ -177,6 +177,7 @@ async def handle_chat_agent(
     workflow_id = context.get('workflow_id')
     memory_data: Optional[Dict[str, Any]] = None
     skill_data: List[Dict[str, Any]] = []
+    input_data: Optional[Dict[str, Any]] = None
 
     logger.info(f"[Chat Agent] Processing node {node_id}, workflow_id={workflow_id}")
 
@@ -221,6 +222,24 @@ async def handle_chat_agent(
                 }
                 skill_data.append(skill_entry)
                 logger.debug(f"Chat Agent connected skill: {skill_type}")
+
+            # Input data detection - nodes connected to input-main
+            elif target_handle == 'input-main' or target_handle is None:
+                source_output = context.get('outputs', {}).get(source_node_id)
+                if source_output:
+                    input_data = source_output
+                    logger.debug(f"Chat Agent input from {source_node.get('type')}: {list(source_output.keys())}")
+
+    # Auto-use input data if prompt is empty (fallback for trigger nodes)
+    if not parameters.get('prompt') and input_data:
+        prompt = (
+            input_data.get('message') or
+            input_data.get('text') or
+            input_data.get('content') or
+            str(input_data)
+        )
+        parameters = {**parameters, 'prompt': prompt}
+        logger.info(f"[Chat Agent] Auto-using input as prompt: {prompt[:100] if len(str(prompt)) > 100 else prompt}...")
 
     # Get broadcaster for real-time status updates
     from services.status_broadcaster import get_status_broadcaster

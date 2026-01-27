@@ -63,15 +63,15 @@ function createSkillNode(config: {
 }
 
 export const skillNodes: Record<string, INodeTypeDescription> = {
-  // Claude Assistant Skill - Default assistant personality
+  // Assistant Personality Skill - Default assistant personality
   claudeSkill: createSkillNode({
     name: 'claudeSkill',
-    displayName: 'Claude Assistant',
-    icon: '🤖',
+    displayName: 'Assistant Personality',
+    icon: '✨',
     color: '#D97706',
     skillName: 'claude-assistant',
     subtitle: 'AI Personality',
-    description: 'Default Claude assistant with helpful, harmless, and honest responses'
+    description: 'Default assistant personality with helpful, harmless, and honest responses'
   }),
 
   // WhatsApp Skill - Send and receive messages

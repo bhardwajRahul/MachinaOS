@@ -231,6 +231,23 @@ export const aiAgentNodes: Record<string, INodeTypeDescription> = {
           dynamicOptions: true,
           dependsOn: ['provider']
         }
+      },
+      {
+        displayName: 'Prompt',
+        name: 'prompt',
+        type: 'string',
+        default: '',
+        typeOptions: { rows: 4 },
+        description: 'The message to send to the AI. Use {{chatTrigger.message}} or leave empty to auto-use connected node output.',
+        placeholder: '{{chatTrigger.message}}'
+      },
+      {
+        displayName: 'System Message',
+        name: 'systemMessage',
+        type: 'string',
+        default: 'You are a helpful assistant.',
+        typeOptions: { rows: 3 },
+        description: 'Define the behavior and personality of the AI agent'
       }
     ]
   },
