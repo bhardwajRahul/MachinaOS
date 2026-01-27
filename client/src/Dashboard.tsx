@@ -29,6 +29,7 @@ import { CODE_NODE_TYPES } from './nodeDefinitions/codeNodes';
 import { UTILITY_NODE_TYPES } from './nodeDefinitions/utilityNodes';
 import { TOOL_NODE_TYPES } from './nodeDefinitions/toolNodes';
 import { SKILL_NODE_TYPES } from './nodeDefinitions/skillNodes';
+import { DOCUMENT_NODE_TYPES } from './nodeDefinitions/documentNodes';
 import ParameterPanel from './ParameterPanel';
 import LocationParameterPanel from './components/LocationParameterPanel';
 import { useAppStore } from './store/useAppStore';
@@ -107,8 +108,11 @@ const createNodeTypes = (): Record<string, React.ComponentType<any>> => {
         types[type] = ModelNode;
       }
     } else if (SKILL_NODE_TYPES.includes(type)) {
-      // Skill nodes use circular ModelNode design (connect to Chat Agent's input-skill handle)
-      types[type] = ModelNode;
+      // Skill nodes use ToolkitNode (vertical handle layout like Android Toolkit)
+      types[type] = ToolkitNode;
+    } else if (DOCUMENT_NODE_TYPES.includes(type)) {
+      // Document processing nodes use SquareNode component
+      types[type] = SquareNode;
     } else if (definition?.group?.includes('model')) {
       // Fallback for other model nodes
       types[type] = ModelNode;

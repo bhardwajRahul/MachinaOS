@@ -14,6 +14,7 @@ import { useAppStore } from '../store/useAppStore';
 import { nodeDefinitions } from '../nodeDefinitions';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { useWebSocket } from '../contexts/WebSocketContext';
+import { SKILL_NODE_TYPES } from '../nodeDefinitions/skillNodes';
 
 const ToolkitNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectable, selected }) => {
   const theme = useAppTheme();
@@ -30,6 +31,9 @@ const ToolkitNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
   const executionStatus = nodeStatus?.status || 'idle';
 
   const definition = nodeDefinitions[type as keyof typeof nodeDefinitions];
+
+  // Check if this is a skill node (skill nodes don't have bottom input handle)
+  const isSkillNode = type ? SKILL_NODE_TYPES.includes(type) : false;
 
   // Execution state
   const isExecuting = executionStatus === 'executing' || executionStatus === 'waiting';
@@ -204,7 +208,7 @@ const ToolkitNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
           title={isExecuting ? 'Executing...' : 'Toolkit ready'}
         />
 
-        {/* TOP Output Handle - connects to AI Agent */}
+        {/* TOP Output Handle - connects to AI Agent/Chat Agent */}
         <Handle
           id="output-main"
           type="source"
@@ -222,29 +226,31 @@ const ToolkitNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
             borderRadius: '50%',
             zIndex: 20
           }}
-          title="Connect to AI Agent's tool input"
+          title={isSkillNode ? "Connect to Chat Agent's skill input" : "Connect to AI Agent's tool input"}
         />
 
-        {/* BOTTOM Input Handle - receives from Android nodes */}
-        <Handle
-          id="input-main"
-          type="target"
-          position={Position.Bottom}
-          isConnectable={isConnectable}
-          style={{
-            position: 'absolute',
-            bottom: '-6px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            width: theme.nodeSize.handle,
-            height: theme.nodeSize.handle,
-            backgroundColor: theme.isDarkMode ? theme.colors.background : '#ffffff',
-            border: `2px solid ${theme.isDarkMode ? theme.colors.textSecondary : '#6b7280'}`,
-            borderRadius: '50%',
-            zIndex: 20
-          }}
-          title="Connect Android service nodes here"
-        />
+        {/* BOTTOM Input Handle - receives from Android nodes (not shown for skill nodes) */}
+        {!isSkillNode && (
+          <Handle
+            id="input-main"
+            type="target"
+            position={Position.Bottom}
+            isConnectable={isConnectable}
+            style={{
+              position: 'absolute',
+              bottom: '-6px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: theme.nodeSize.handle,
+              height: theme.nodeSize.handle,
+              backgroundColor: theme.isDarkMode ? theme.colors.background : '#ffffff',
+              border: `2px solid ${theme.isDarkMode ? theme.colors.textSecondary : '#6b7280'}`,
+              borderRadius: '50%',
+              zIndex: 20
+            }}
+            title="Connect Android service nodes here"
+          />
+        )}
 
         {/* Output Data Indicator */}
         {executionStatus === 'success' && nodeStatus?.data && (

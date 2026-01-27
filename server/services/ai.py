@@ -1457,18 +1457,21 @@ class AIService:
     async def execute_chat_agent(self, node_id: str, parameters: Dict[str, Any],
                                   memory_data: Optional[Dict[str, Any]] = None,
                                   skill_data: Optional[List[Dict[str, Any]]] = None,
+                                  tool_data: Optional[List[Dict[str, Any]]] = None,
                                   broadcaster=None,
                                   workflow_id: Optional[str] = None) -> Dict[str, Any]:
-        """Execute Chat Agent - conversational AI with skill support.
+        """Execute Chat Agent - conversational AI with skill-based tool calling.
 
-        Chat Agent supports conversation with memory and skills. When skills are
-        connected, the agent can use LangGraph for tool calling (like AI Agent).
+        Chat Agent supports:
+        - Skills (input-skill): Provide context/instructions via SKILL.md
+        - Tools (input-tools): Tool nodes (httpRequest, etc.) for LangGraph tool calling
 
         Args:
             node_id: The node identifier
             parameters: Node parameters including prompt, model, etc.
-            memory_data: Optional memory data from connected simpleMemory node
+            memory_data: Optional memory data (deprecated - use skills for memory)
             skill_data: Optional skill configurations from connected skill nodes
+            tool_data: Optional tool configurations from connected tool nodes (httpRequest, etc.)
             broadcaster: Optional StatusBroadcaster for real-time UI updates
             workflow_id: Optional workflow ID for scoped status broadcasts
         """
@@ -1476,7 +1479,7 @@ class AIService:
         provider = 'unknown'
         model = 'unknown'
 
-        logger.info(f"[ChatAgent] execute_chat_agent called: node_id={node_id}, workflow_id={workflow_id}, skill_count={len(skill_data) if skill_data else 0}")
+        logger.info(f"[ChatAgent] execute_chat_agent called: node_id={node_id}, workflow_id={workflow_id}, skill_count={len(skill_data) if skill_data else 0}, tool_count={len(tool_data) if tool_data else 0}")
 
         async def broadcast_status(phase: str, details: Dict[str, Any] = None):
             if broadcaster:
@@ -1491,17 +1494,16 @@ class AIService:
             prompt = parameters.get('prompt', 'Hello')
             system_message = parameters.get('systemMessage', 'You are a helpful assistant')
 
-            # Load skills and enhance system message
-            skill_names = []
-            skill_tools = []
+            # Load skills and enhance system message with SKILL.md context
+            # Skills only provide instructions/context - actual tools come from direct tool nodes
             if skill_data:
                 from services.skill_loader import get_skill_loader
-                from services.skill_executor import get_skill_executor, init_skill_executor
 
                 skill_loader = get_skill_loader()
                 skill_loader.scan_skills()
 
                 # Extract skill names from connected skill nodes
+                skill_names = []
                 for skill_info in skill_data:
                     skill_name = skill_info.get('skill_name') or skill_info.get('node_type', '').replace('Skill', '-skill').lower()
                     # Convert node type to skill name (e.g., 'whatsappSkill' -> 'whatsapp-skill')
@@ -1510,25 +1512,33 @@ class AIService:
                     skill_names.append(skill_name)
                     logger.debug(f"[ChatAgent] Skill detected: {skill_name}")
 
-                # Add skill registry to system message
+                # Add skill SKILL.md content to system message
                 skill_prompt = skill_loader.get_registry_prompt(skill_names)
                 if skill_prompt:
                     system_message = f"{system_message}\n\n{skill_prompt}"
-                    logger.info(f"[ChatAgent] Enhanced system message with {len(skill_names)} skills")
+                    logger.info(f"[ChatAgent] Enhanced system message with {len(skill_names)} skill contexts")
 
-                # Build tools from skills
-                skill_executor = get_skill_executor()
-                if not skill_executor:
-                    # Initialize skill executor with node executor callback
-                    async def node_executor_callback(node_id, node_type, parameters, context):
-                        from services.node_executor import NodeExecutor
-                        executor = NodeExecutor(self, self.database)
-                        return await executor.execute_node(node_id, node_type, parameters, context)
+            # Build tools from tool_data using same method as AI Agent
+            # This supports ALL tool types: calculatorTool, currentTimeTool, webSearchTool, androidTool, httpRequest
+            all_tools = []
+            tool_node_configs = {}  # Map tool name to node config (same as AI Agent's tool_configs)
+            if tool_data:
+                await broadcast_status("building_tools", {
+                    "message": f"Building {len(tool_data)} tool(s)...",
+                    "tool_count": len(tool_data)
+                })
 
-                    skill_executor = init_skill_executor(skill_loader, node_executor_callback, self.database)
+                for tool_info in tool_data:
+                    # Use AI Agent's _build_tool_from_node for all tool types
+                    tool, config = await self._build_tool_from_node(tool_info)
+                    if tool:
+                        all_tools.append(tool)
+                        tool_node_configs[tool.name] = config
+                        logger.info(f"[ChatAgent] Built tool: {tool.name} (type={config.get('node_type')}, node_id={config.get('node_id')})")
 
-                skill_tools = skill_executor.build_tools_for_skills(skill_names)
-                logger.info(f"[ChatAgent] Built {len(skill_tools)} tools from skills")
+                logger.info(f"[ChatAgent] Built {len(all_tools)} tools from tool_data")
+
+            logger.info(f"[ChatAgent] Total tools available: {len(all_tools)}")
 
             # Flatten options collection from frontend
             options = parameters.get('options', {})
@@ -1621,41 +1631,70 @@ class AIService:
                 "message": "Generating response...",
                 "has_memory": session_id is not None,
                 "history_count": history_count,
-                "skill_count": len(skill_names) if skill_data else 0
+                "skill_count": len(skill_data) if skill_data else 0
             })
 
-            # Execute with or without skill tools
+            # Execute with or without tools
             thinking_content = None
             iterations = 1
 
-            if skill_tools:
-                # Use LangGraph for skill tool execution (like AI Agent)
-                logger.info(f"[ChatAgent] Using LangGraph with {len(skill_tools)} skill tools")
+            if all_tools:
+                # Use LangGraph for tool execution (like AI Agent)
+                logger.info(f"[ChatAgent] Using LangGraph with {len(all_tools)} tools")
 
-                # Create skill tool executor callback
-                async def skill_tool_executor(tool_name: str, tool_args: Dict) -> Any:
-                    """Execute a skill tool by name."""
-                    from services.skill_executor import get_skill_executor
+                # Create tool executor callback - same pattern as AI Agent
+                # Uses handlers/tools.py execute_tool() for actual execution
+                async def chat_tool_executor(tool_name: str, tool_args: Dict) -> Any:
+                    """Execute a tool by name using handlers/tools.py (same as AI Agent)."""
+                    from services.handlers.tools import execute_tool
 
-                    # Convert tool name back to skill tool format (underscores to hyphens)
-                    skill_tool_name = tool_name.replace('_', '-')
-                    logger.info(f"[ChatAgent] Executing skill tool: {skill_tool_name}")
+                    logger.info(f"[ChatAgent] Executing tool: {tool_name}, args={tool_args}")
 
-                    executor = get_skill_executor()
-                    if executor:
-                        try:
-                            result = await executor.execute_tool(skill_tool_name, tool_args)
-                            return result
-                        except Exception as e:
-                            logger.error(f"[ChatAgent] Skill tool execution failed: {skill_tool_name}", error=str(e))
-                            return {"error": str(e)}
-                    return {"error": "Skill executor not initialized"}
+                    # Get tool node config (contains node_id, node_type, parameters)
+                    config = tool_node_configs.get(tool_name, {})
+                    tool_node_id = config.get('node_id')
 
-                # Build LangGraph agent
+                    # Broadcast executing status to tool node for glow effect
+                    if tool_node_id and broadcaster:
+                        await broadcaster.update_node_status(
+                            tool_node_id,
+                            "executing",
+                            {"message": f"Executing {tool_name}"},
+                            workflow_id=workflow_id
+                        )
+
+                    try:
+                        # Execute via handlers/tools.py - same pattern as AI Agent
+                        result = await execute_tool(tool_name, tool_args, config)
+                        logger.info(f"[ChatAgent] Tool executed successfully: {tool_name}")
+
+                        # Broadcast success to tool node
+                        if tool_node_id and broadcaster:
+                            await broadcaster.update_node_status(
+                                tool_node_id,
+                                "success",
+                                {"message": f"{tool_name} completed", "result": result},
+                                workflow_id=workflow_id
+                            )
+                        return result
+
+                    except Exception as e:
+                        logger.error(f"[ChatAgent] Tool execution failed: {tool_name}", error=str(e))
+                        # Broadcast error to tool node
+                        if tool_node_id and broadcaster:
+                            await broadcaster.update_node_status(
+                                tool_node_id,
+                                "error",
+                                {"message": f"{tool_name} failed", "error": str(e)},
+                                workflow_id=workflow_id
+                            )
+                        return {"error": str(e)}
+
+                # Build LangGraph agent with all tools
                 agent_graph = build_agent_graph(
                     chat_model,
-                    tools=skill_tools,
-                    tool_executor=skill_tool_executor
+                    tools=all_tools,
+                    tool_executor=chat_tool_executor
                 )
 
                 # Create initial state
@@ -1708,13 +1747,22 @@ class AIService:
                 await self.database.add_conversation_message(session_id, 'ai', response_content)
                 logger.info(f"[ChatAgent] Saved exchange to session '{session_id}'")
 
+            # Determine agent type based on configuration
+            agent_type = "chat"
+            if skill_data and all_tools:
+                agent_type = "chat_with_skills_and_tools"
+            elif skill_data:
+                agent_type = "chat_with_skills"
+            elif all_tools:
+                agent_type = "chat_with_tools"
+
             result = {
                 "response": response_content,
                 "thinking": thinking_content,
                 "thinking_enabled": thinking_config.enabled if thinking_config else False,
                 "model": model,
                 "provider": provider,
-                "agent_type": "chat_with_skills" if skill_tools else "chat",
+                "agent_type": agent_type,
                 "iterations": iterations,
                 "finish_reason": "stop",
                 "timestamp": datetime.now().isoformat(),
@@ -1730,10 +1778,16 @@ class AIService:
                     "history_loaded": history_count
                 }
 
-            if skill_names:
+            if skill_data:
                 result["skills"] = {
-                    "connected": skill_names,
-                    "tools_available": len(skill_tools) if skill_tools else 0
+                    "connected": [s.get('skill_name', s.get('node_type', '')) for s in skill_data],
+                    "count": len(skill_data)
+                }
+
+            if all_tools:
+                result["tools"] = {
+                    "connected": [t.name for t in all_tools],
+                    "count": len(all_tools)
                 }
 
             log_execution_time(logger, "chat_agent", start_time, time.time())
@@ -1932,11 +1986,68 @@ class AIService:
         # WhatsApp send schema (existing node used as tool)
         if node_type == 'whatsappSend':
             class WhatsAppSendSchema(BaseModel):
-                """Schema for WhatsApp send tool arguments."""
-                phone_number: str = Field(description="Phone number to send message to (e.g., +1234567890)")
-                message: str = Field(description="Message text to send")
+                """Send WhatsApp messages to contacts or groups."""
+                recipient_type: str = Field(
+                    default="phone",
+                    description="Send to: 'phone' for individual or 'group' for group chat"
+                )
+                phone: Optional[str] = Field(
+                    default=None,
+                    description="Phone number without + prefix (e.g., 1234567890). Required for recipient_type='phone'"
+                )
+                group_id: Optional[str] = Field(
+                    default=None,
+                    description="Group JID (e.g., 123456789@g.us). Required for recipient_type='group'"
+                )
+                message_type: str = Field(
+                    default="text",
+                    description="Message type: 'text', 'image', 'video', 'audio', 'document', 'sticker', 'location', 'contact'"
+                )
+                message: Optional[str] = Field(
+                    default=None,
+                    description="Text message content. Required for message_type='text'"
+                )
+                media_url: Optional[str] = Field(
+                    default=None,
+                    description="URL for media (image/video/audio/document/sticker)"
+                )
+                caption: Optional[str] = Field(
+                    default=None,
+                    description="Caption for media messages (image, video, document)"
+                )
+                latitude: Optional[float] = Field(default=None, description="Latitude for location message")
+                longitude: Optional[float] = Field(default=None, description="Longitude for location message")
+                location_name: Optional[str] = Field(default=None, description="Display name for location")
+                address: Optional[str] = Field(default=None, description="Address text for location")
+                contact_name: Optional[str] = Field(default=None, description="Contact card display name")
+                vcard: Optional[str] = Field(default=None, description="vCard 3.0 format string for contact")
 
             return WhatsAppSendSchema
+
+        # WhatsApp chat history schema (existing node used as tool)
+        if node_type == 'whatsappChatHistory':
+            class WhatsAppChatHistorySchema(BaseModel):
+                """Retrieve WhatsApp chat history."""
+                chat_type: str = Field(
+                    default="individual",
+                    description="Chat type: 'individual' or 'group'"
+                )
+                phone: Optional[str] = Field(
+                    default=None,
+                    description="Phone number without + prefix. Required for chat_type='individual'"
+                )
+                group_id: Optional[str] = Field(
+                    default=None,
+                    description="Group JID. Required for chat_type='group'"
+                )
+                message_filter: str = Field(
+                    default="all",
+                    description="Filter: 'all' or 'text_only'"
+                )
+                limit: int = Field(default=50, description="Max messages to retrieve (1-500)")
+                offset: int = Field(default=0, description="Messages to skip for pagination")
+
+            return WhatsAppChatHistorySchema
 
         # Android toolkit schema - dynamic based on connected services
         # Follows LangChain dynamic tool binding pattern

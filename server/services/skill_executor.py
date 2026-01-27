@@ -4,6 +4,7 @@ Maps skill tool names to existing node handlers, enabling Chat Agent
 to use skills that leverage the existing workflow node infrastructure.
 """
 
+import json
 from typing import Dict, Any, List, Optional, Callable, Type, TYPE_CHECKING
 from dataclasses import dataclass
 from pydantic import BaseModel, Field
@@ -411,14 +412,16 @@ class SkillExecutor:
                 'message': args.get('message')
             }
 
-        # HTTP request
+        # HTTP request - serialize headers and body to JSON strings (handler expects JSON strings)
         if tool_name == 'http-request':
+            headers = args.get('headers')
+            body = args.get('body')
             return {
                 'url': args.get('url'),
                 'method': args.get('method', 'GET'),
-                'body': args.get('body'),
-                'headers': args.get('headers'),
-                'timeout': 30000
+                'body': json.dumps(body) if isinstance(body, dict) else (body or ''),
+                'headers': json.dumps(headers) if isinstance(headers, dict) else (headers or '{}'),
+                'timeout': 30
             }
 
         # Maps geocode

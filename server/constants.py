@@ -36,6 +36,20 @@ AI_TOOL_TYPES: FrozenSet[str] = frozenset([
     'androidTool',
 ])
 
+# Skill node types (connect to Chat Agent's input-skill handle)
+# Skills provide SKILL.md context/instructions, not executed as workflow nodes
+SKILL_NODE_TYPES: FrozenSet[str] = frozenset([
+    'assistantPersonality',
+    'whatsappSkill',
+    'memorySkill',
+    'mapsSkill',
+    'httpSkill',
+    'schedulerSkill',
+    'androidSkill',
+    'codeSkill',
+    'customSkill',
+])
+
 # Toolkit node types (aggregate sub-nodes, n8n Sub-Node pattern)
 # Sub-nodes connected to toolkits should not execute independently -
 # they only execute when called via the toolkit's tool interface
@@ -51,11 +65,13 @@ AI_MODEL_TYPES: FrozenSet[str] = AI_AGENT_TYPES | AI_CHAT_MODEL_TYPES
 # =============================================================================
 
 # Config nodes provide configuration to other nodes via special handles
-# (input-memory, input-tools, input-model). They don't execute independently.
+# (input-memory, input-tools, input-model, input-skill).
+# They don't execute independently - they're used by their parent nodes.
 CONFIG_NODE_TYPES: FrozenSet[str] = (
-    AI_MEMORY_TYPES |  # Memory nodes (connect to input-memory)
-    AI_TOOL_TYPES |     # Tool nodes (connect to input-tools)
-    AI_CHAT_MODEL_TYPES  # Model config nodes (connect to input-model)
+    AI_MEMORY_TYPES |    # Memory nodes (connect to input-memory)
+    AI_TOOL_TYPES |      # Tool nodes (connect to AI Agent's input-tools)
+    AI_CHAT_MODEL_TYPES |  # Model config nodes (connect to input-model)
+    SKILL_NODE_TYPES     # Skill nodes (connect to Chat Agent's input-skill)
 )
 
 # =============================================================================

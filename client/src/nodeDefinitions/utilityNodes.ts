@@ -9,7 +9,7 @@ export const utilityNodes: Record<string, INodeTypeDescription> = {
     displayName: 'HTTP Request',
     name: 'httpRequest',
     icon: '🌐',
-    group: ['utility'],
+    group: ['utility', 'tool'],
     version: 1,
     description: 'Make HTTP requests to external APIs',
     defaults: { name: 'HTTP Request', color: '#6366f1' },

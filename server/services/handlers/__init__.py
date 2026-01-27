@@ -4,11 +4,13 @@ This package contains all node execution handlers organized by category:
 - ai.py: AI Agent, AI Chat Model, Simple Memory
 - android.py: Android Device Setup, Android Services
 - code.py: Python Executor, JavaScript Executor
+- document.py: HTTP Scraper, File Downloader, Document Parser, Text Chunker, Embedding Generator, Vector Store
 - http.py: HTTP Request, Webhook Response
 - tools.py: Tool execution handlers for AI Agent tool calling
 - triggers.py: Generic trigger node handler
 - utility.py: Maps, Text, Chat, Cron, Start
 - whatsapp.py: WhatsApp Send, WhatsApp Connect
+- polyglot.py: Polyglot server integration (standalone, not auto-imported)
 """
 
 # AI handlers
@@ -64,6 +66,16 @@ from .whatsapp import (
     handle_whatsapp_chat_history,
 )
 
+# Document processing handlers
+from .document import (
+    handle_http_scraper,
+    handle_file_downloader,
+    handle_document_parser,
+    handle_text_chunker,
+    handle_embedding_generator,
+    handle_vector_store,
+)
+
 # Tool execution handlers (for AI Agent tool calling)
 from .tools import (
     execute_tool,
@@ -102,6 +114,13 @@ __all__ = [
     'handle_whatsapp_send',
     'handle_whatsapp_connect',
     'handle_whatsapp_chat_history',
+    # Document processing
+    'handle_http_scraper',
+    'handle_file_downloader',
+    'handle_document_parser',
+    'handle_text_chunker',
+    'handle_embedding_generator',
+    'handle_vector_store',
     # Tools
     'execute_tool',
 ]

@@ -56,6 +56,10 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
     if node_type == 'whatsappSend':
         return await _execute_whatsapp_send(tool_args, config.get('parameters', {}))
 
+    # WhatsApp chat history (existing node used as tool)
+    if node_type == 'whatsappChatHistory':
+        return await _execute_whatsapp_chat_history(tool_args, config.get('parameters', {}))
+
     # Android toolkit - routes to connected service nodes
     if node_type == 'androidTool':
         return await _execute_android_toolkit(tool_args, config)
@@ -409,52 +413,157 @@ async def _execute_web_search(args: Dict[str, Any],
 
 async def _execute_whatsapp_send(args: Dict[str, Any],
                                   node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Send WhatsApp message.
+    """Send WhatsApp message with full message type support.
+
+    Supports all message types: text, image, video, audio, document, sticker, location, contact
+    Recipients: phone number or group_id
+    Media sources: URL
 
     Args:
-        args: Dict with 'phone_number' and 'message'
-        node_params: Node parameters containing defaultPhone, etc.
+        args: LLM-provided arguments matching WhatsAppSendSchema
+        node_params: Node parameters (used as fallback)
 
     Returns:
-        Dict with success status, phone, message_sent
+        Dict with success status and message details
     """
-    import httpx
+    from services.handlers.whatsapp import handle_whatsapp_send
 
-    phone = args.get('phone_number') or node_params.get('phoneNumber', '') or node_params.get('to', '')
-    message = args.get('message') or node_params.get('message', '')
+    # Map LLM args to node parameter format (camelCase for handler)
+    parameters = {
+        'recipientType': args.get('recipient_type', 'phone'),
+        'phone': args.get('phone', ''),
+        'group_id': args.get('group_id', ''),
+        'messageType': args.get('message_type', 'text'),
+        'message': args.get('message', ''),
+        'mediaSource': 'url' if args.get('media_url') else 'none',
+        'mediaUrl': args.get('media_url', ''),
+        'caption': args.get('caption', ''),
+        'latitude': args.get('latitude'),
+        'longitude': args.get('longitude'),
+        'locationName': args.get('location_name', ''),
+        'address': args.get('address', ''),
+        'contactName': args.get('contact_name', ''),
+        'vcard': args.get('vcard', ''),
+    }
 
-    if not phone:
-        return {"error": "No phone number provided"}
-    if not message:
-        return {"error": "No message provided"}
+    # Validate required fields based on message type
+    recipient_type = parameters['recipientType']
+    message_type = parameters['messageType']
 
-    # Clean phone number
-    phone = phone.replace('+', '').replace(' ', '').replace('-', '')
-    if not phone.endswith('@s.whatsapp.net'):
-        phone = f"{phone}@s.whatsapp.net"
+    if recipient_type == 'phone' and not parameters['phone']:
+        return {"error": "Phone number is required for recipient_type='phone'"}
+    if recipient_type == 'group' and not parameters['group_id']:
+        return {"error": "Group ID is required for recipient_type='group'"}
+    if message_type == 'text' and not parameters['message']:
+        return {"error": "Message content is required for message_type='text'"}
+    if message_type in ('image', 'video', 'audio', 'document', 'sticker') and not parameters['mediaUrl']:
+        return {"error": f"media_url is required for message_type='{message_type}'"}
+    if message_type == 'location' and (parameters['latitude'] is None or parameters['longitude'] is None):
+        return {"error": "latitude and longitude are required for message_type='location'"}
+    if message_type == 'contact' and not parameters['vcard']:
+        return {"error": "vcard is required for message_type='contact'"}
 
-    logger.info(f"[WhatsApp] Sending message to {phone[:10]}...")
+    recipient = parameters['phone'] if recipient_type == 'phone' else parameters['group_id']
+    logger.info(f"[WhatsApp Tool] Sending {message_type} to {recipient[:15]}...")
 
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                "http://localhost:5000/send",
-                json={"to": phone, "message": message}
-            )
+        result = await handle_whatsapp_send(
+            node_id="tool_whatsapp_send",
+            node_type="whatsappSend",
+            parameters=parameters,
+            context={}
+        )
 
-            if response.status_code == 200:
-                logger.info(f"[WhatsApp] Message sent successfully")
-                return {
-                    "success": True,
-                    "phone": phone,
-                    "message_sent": message[:100] + "..." if len(message) > 100 else message
-                }
-            else:
-                return {"error": f"Failed to send: {response.text}"}
+        if result.get('success'):
+            return {
+                "success": True,
+                "recipient": recipient,
+                "recipient_type": recipient_type,
+                "message_type": message_type,
+                "details": result.get('result', {})
+            }
+        else:
+            return {"error": result.get('error', 'Unknown error')}
 
     except Exception as e:
-        logger.error(f"[WhatsApp] Error: {e}")
+        logger.error(f"[WhatsApp Tool] Error: {e}")
         return {"error": f"WhatsApp send failed: {str(e)}"}
+
+
+async def _execute_whatsapp_chat_history(args: Dict[str, Any],
+                                          node_params: Dict[str, Any]) -> Dict[str, Any]:
+    """Retrieve WhatsApp chat history.
+
+    Args:
+        args: LLM-provided arguments matching WhatsAppChatHistorySchema
+        node_params: Node parameters (used as fallback)
+
+    Returns:
+        Dict with messages array and metadata
+    """
+    from services.handlers.whatsapp import handle_whatsapp_chat_history
+
+    # Map LLM args to node parameter format (camelCase for handler)
+    parameters = {
+        'chatType': args.get('chat_type', 'individual'),
+        'phone': args.get('phone', ''),
+        'group_id': args.get('group_id', ''),
+        'messageFilter': args.get('message_filter', 'all'),
+        'limit': args.get('limit', 50),
+        'offset': args.get('offset', 0),
+        'resultMode': 'multiple',  # Always return multiple messages for tool use
+    }
+
+    # Validate required fields based on chat type
+    chat_type = parameters['chatType']
+
+    if chat_type == 'individual' and not parameters['phone']:
+        return {"error": "Phone number is required for chat_type='individual'"}
+    if chat_type == 'group' and not parameters['group_id']:
+        return {"error": "Group ID is required for chat_type='group'"}
+
+    identifier = parameters['phone'] if chat_type == 'individual' else parameters['group_id']
+    logger.info(f"[WhatsApp Tool] Getting chat history for {identifier[:15]}...")
+
+    try:
+        result = await handle_whatsapp_chat_history(
+            node_id="tool_whatsapp_history",
+            node_type="whatsappChatHistory",
+            parameters=parameters,
+            context={}
+        )
+
+        if result.get('success'):
+            messages = result.get('result', {}).get('messages', [])
+            total = result.get('result', {}).get('total', 0)
+            has_more = result.get('result', {}).get('has_more', False)
+
+            # Format messages for LLM consumption
+            formatted_messages = []
+            for msg in messages:
+                formatted_messages.append({
+                    "sender": msg.get('sender', ''),
+                    "text": msg.get('text', ''),
+                    "timestamp": msg.get('timestamp', ''),
+                    "type": msg.get('type', 'text'),
+                    "is_from_me": msg.get('is_from_me', False),
+                })
+
+            return {
+                "success": True,
+                "chat_type": chat_type,
+                "identifier": identifier,
+                "messages": formatted_messages,
+                "total": total,
+                "has_more": has_more,
+                "count": len(formatted_messages)
+            }
+        else:
+            return {"error": result.get('error', 'Unknown error')}
+
+    except Exception as e:
+        logger.error(f"[WhatsApp Tool] Error: {e}")
+        return {"error": f"WhatsApp chat history failed: {str(e)}"}
 
 
 async def _execute_android_toolkit(args: Dict[str, Any],

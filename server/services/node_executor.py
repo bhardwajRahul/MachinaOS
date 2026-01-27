@@ -32,6 +32,8 @@ from services.handlers import (
     handle_chat_send, handle_chat_history,
     handle_start, handle_cron_scheduler, handle_timer, handle_console,
     handle_whatsapp_send, handle_whatsapp_connect, handle_whatsapp_chat_history,
+    handle_http_scraper, handle_file_downloader, handle_document_parser,
+    handle_text_chunker, handle_embedding_generator, handle_vector_store,
 )
 
 if TYPE_CHECKING:
@@ -124,6 +126,13 @@ class NodeExecutor:
             'httpRequest': handle_http_request,
             # Android setup
             'androidDeviceSetup': partial(handle_android_device_setup, settings=self.settings),
+            # Document processing
+            'httpScraper': handle_http_scraper,
+            'fileDownloader': handle_file_downloader,
+            'documentParser': handle_document_parser,
+            'textChunker': handle_text_chunker,
+            'embeddingGenerator': handle_embedding_generator,
+            'vectorStore': handle_vector_store,
             # Note: 'console' handled in _dispatch with connected_outputs
         }
 

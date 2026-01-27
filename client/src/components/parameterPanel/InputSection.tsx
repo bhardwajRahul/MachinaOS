@@ -331,6 +331,40 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                 message: 'string',
                 timestamp: 'string',
                 session_id: 'string'
+              },
+              // Document processing schemas
+              httpScraper: {
+                items: 'array',
+                item_count: 'number',
+                errors: 'array'
+              },
+              fileDownloader: {
+                downloaded: 'number',
+                skipped: 'number',
+                failed: 'number',
+                files: 'array',
+                output_dir: 'string'
+              },
+              documentParser: {
+                documents: 'array',
+                parsed_count: 'number',
+                failed: 'array'
+              },
+              textChunker: {
+                chunks: 'array',
+                chunk_count: 'number'
+              },
+              embeddingGenerator: {
+                embeddings: 'array',
+                embedding_count: 'number',
+                dimensions: 'number',
+                chunks: 'array'
+              },
+              vectorStore: {
+                stored_count: 'number',
+                matches: 'array',
+                collection_name: 'string',
+                backend: 'string'
               }
             };
 
@@ -348,6 +382,10 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
             const isCodeExecutor = isPython || isJavaScript;
             const isCronScheduler = nodeType === 'cronScheduler';
             const isChatTrigger = nodeType === 'chatTrigger';
+
+            // Document processing node detection
+            const documentNodeTypes = ['httpScraper', 'fileDownloader', 'documentParser', 'textChunker', 'embeddingGenerator', 'vectorStore'];
+            const isDocumentNode = documentNodeTypes.includes(nodeType);
 
             // Android service node detection - check for specific Android node types
             const androidNodeTypes = [
@@ -368,6 +406,8 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
             if (isAndroidLocation) {
               outputSchema = sampleSchemas.androidLocation;
             } else if (isAndroidNode && sampleSchemas[nodeType as keyof typeof sampleSchemas]) {
+              outputSchema = sampleSchemas[nodeType as keyof typeof sampleSchemas];
+            } else if (isDocumentNode && sampleSchemas[nodeType as keyof typeof sampleSchemas]) {
               outputSchema = sampleSchemas[nodeType as keyof typeof sampleSchemas];
             } else {
               outputSchema = isLocationNode || isGoogleMaps ? sampleSchemas.location :

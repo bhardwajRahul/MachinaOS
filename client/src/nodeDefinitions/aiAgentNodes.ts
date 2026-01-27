@@ -153,7 +153,7 @@ export const aiAgentNodes: Record<string, INodeTypeDescription> = {
     ]
   },
 
-  // Chat Agent Node - Conversational AI agent with memory and skill support (no tools)
+  // Chat Agent Node - Conversational AI agent with skill-based tool calling
   chatAgent: {
     displayName: 'Chat Agent',
     name: 'chatAgent',
@@ -161,7 +161,7 @@ export const aiAgentNodes: Record<string, INodeTypeDescription> = {
     group: ['agent'],
     version: 1,
     subtitle: 'Conversational Agent',
-    description: 'Conversational AI agent with memory and skill support for multi-turn chat interactions',
+    description: 'Conversational AI agent with skill-based tool calling for multi-turn chat interactions',
     defaults: { name: 'Chat Agent', color: '#3B82F6' },
     inputs: [
       {
@@ -171,16 +171,16 @@ export const aiAgentNodes: Record<string, INodeTypeDescription> = {
         description: 'Chat input'
       },
       {
-        name: 'memory',
-        displayName: 'Memory',
-        type: 'main' as NodeConnectionType,
-        description: 'Memory node connection for conversation history'
-      },
-      {
         name: 'skill',
         displayName: 'Skill',
         type: 'main' as NodeConnectionType,
-        description: 'AI Skill node connection'
+        description: 'Skill nodes that provide context and instructions via SKILL.md'
+      },
+      {
+        name: 'tools',
+        displayName: 'Tool',
+        type: 'main' as NodeConnectionType,
+        description: 'Tool nodes (httpRequest, etc.) for LangGraph tool calling'
       }
     ],
     outputs: [{

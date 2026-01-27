@@ -64,12 +64,12 @@ function createSkillNode(config: {
 
 export const skillNodes: Record<string, INodeTypeDescription> = {
   // Assistant Personality Skill - Default assistant personality
-  claudeSkill: createSkillNode({
-    name: 'claudeSkill',
+  assistantPersonality: createSkillNode({
+    name: 'assistantPersonality',
     displayName: 'Assistant Personality',
     icon: '✨',
     color: '#D97706',
-    skillName: 'claude-assistant',
+    skillName: 'assistant-personality',
     subtitle: 'AI Personality',
     description: 'Default assistant personality with helpful, harmless, and honest responses'
   }),
@@ -195,7 +195,7 @@ export const skillNodes: Record<string, INodeTypeDescription> = {
 
 // List of skill node types for easy identification
 export const SKILL_NODE_TYPES = [
-  'claudeSkill',
+  'assistantPersonality',
   'whatsappSkill',
   'memorySkill',
   'mapsSkill',

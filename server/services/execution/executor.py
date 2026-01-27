@@ -896,12 +896,25 @@ class WorkflowExecutor:
 
         # Find toolkit sub-nodes (nodes that connect TO a toolkit)
         toolkit_node_ids = {n.get("id") for n in nodes if n.get("type") in TOOLKIT_NODE_TYPES}
+
+        # Find AI Agent nodes (both aiAgent and chatAgent have config handles)
+        ai_agent_node_ids = {n.get("id") for n in nodes if n.get("type") in ('aiAgent', 'chatAgent')}
+
         subnode_ids: set = set()
         for edge in edges:
             source = edge.get("source")
             target = edge.get("target")
+            target_handle = edge.get("targetHandle")
+
+            # Any node that connects TO a toolkit is a sub-node
             if target in toolkit_node_ids and source:
                 subnode_ids.add(source)
+
+            # Nodes connected to AI Agent/Chat Agent config handles are sub-nodes
+            # These handles: input-memory, input-tools, input-skill
+            if target in ai_agent_node_ids and source and target_handle:
+                if target_handle in ('input-memory', 'input-tools', 'input-skill'):
+                    subnode_ids.add(source)
 
         # Filter out config nodes and sub-nodes from execution
         excluded_ids = set()

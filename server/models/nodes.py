@@ -65,6 +65,14 @@ class AIAgentParams(BaseNodeParams):
     api_key: Optional[str] = Field(default=None, alias="apiKey")
 
 
+class ChatAgentParams(BaseNodeParams):
+    """Parameters for chat agent node (skill-based)."""
+    type: Literal["chatAgent"]
+    provider: Literal["openai", "anthropic", "gemini", "groq", "openrouter", "cerebras"] = "openai"
+    model: str = ""
+    api_key: Optional[str] = Field(default=None, alias="apiKey")
+
+
 class SimpleMemoryParams(BaseNodeParams):
     """Parameters for simple memory node."""
     type: Literal["simpleMemory"]
@@ -273,7 +281,7 @@ class ChatHistoryParams(BaseNodeParams):
 
 # AI Nodes
 AINodeParams = Annotated[
-    Union[AIChatModelParams, AIAgentParams, SimpleMemoryParams],
+    Union[AIChatModelParams, AIAgentParams, ChatAgentParams, SimpleMemoryParams],
     Field(discriminator="type")
 ]
 
@@ -323,7 +331,7 @@ ChatNodeParams = Annotated[
 KnownNodeParams = Annotated[
     Union[
         # AI
-        AIChatModelParams, AIAgentParams, SimpleMemoryParams,
+        AIChatModelParams, AIAgentParams, ChatAgentParams, SimpleMemoryParams,
         # Maps
         CreateMapParams, AddLocationsParams, ShowNearbyPlacesParams,
         # Android Setup

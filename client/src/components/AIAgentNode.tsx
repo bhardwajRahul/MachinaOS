@@ -62,11 +62,11 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
   chatAgent: {
     icon: <ChatAgentIcon />,
     title: 'Chat Agent',
-    subtitle: 'Conversational Agent',
+    subtitle: 'Skill-based Agent',
     accentColor: '#3B82F6',
     bottomHandles: [
-      { id: 'input-memory', label: 'Memory', position: '35%' },
-      { id: 'input-skill', label: 'Skill', position: '65%' },
+      { id: 'input-skill', label: 'Skill', position: '35%' },
+      { id: 'input-tools', label: 'Tool', position: '65%' },
     ],
   },
 };

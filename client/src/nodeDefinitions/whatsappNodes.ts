@@ -80,7 +80,7 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
     displayName: 'WhatsApp Send',
     name: 'whatsappSend',
     icon: WHATSAPP_SEND_ICON,
-    group: ['whatsapp'],
+    group: ['whatsapp', 'tool'],
     version: 1,
     subtitle: 'Send WhatsApp Message',
     description: 'Send text, media, location, or contact messages via WhatsApp',
@@ -91,12 +91,20 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
       type: 'main' as NodeConnectionType,
       description: 'Message input'
     }],
-    outputs: [{
-      name: 'main',
-      displayName: 'Output',
-      type: 'main' as NodeConnectionType,
-      description: 'Message output'
-    }],
+    outputs: [
+      {
+        name: 'main',
+        displayName: 'Output',
+        type: 'main' as NodeConnectionType,
+        description: 'Message output'
+      },
+      {
+        name: 'tool',
+        displayName: 'Tool',
+        type: 'main' as NodeConnectionType,
+        description: 'Connect to AI Agent tool handle'
+      }
+    ],
     properties: [
       // ===== RECIPIENT =====
       {
@@ -618,11 +626,12 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
   },
 
   // WhatsApp Chat History Node - Retrieve stored messages
+  // Can be used as workflow node OR as AI Agent tool (group includes 'tool')
   whatsappChatHistory: {
     displayName: 'WhatsApp Chat History',
     name: 'whatsappChatHistory',
     icon: WHATSAPP_HISTORY_ICON,
-    group: ['whatsapp'],
+    group: ['whatsapp', 'tool'],
     version: 1,
     subtitle: 'Get Messages',
     description: 'Retrieve chat history from WhatsApp conversations. Messages are synced on first login and stored for later retrieval.',
@@ -633,12 +642,20 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
       type: 'main' as NodeConnectionType,
       description: 'Trigger input'
     }],
-    outputs: [{
-      name: 'main',
-      displayName: 'Messages',
-      type: 'main' as NodeConnectionType,
-      description: 'Chat history messages (messages, total, has_more)'
-    }],
+    outputs: [
+      {
+        name: 'main',
+        displayName: 'Messages',
+        type: 'main' as NodeConnectionType,
+        description: 'Chat history messages (messages, total, has_more)'
+      },
+      {
+        name: 'tool',
+        displayName: 'Tool',
+        type: 'main' as NodeConnectionType,
+        description: 'Connect to AI Agent tool handle'
+      }
+    ],
     properties: [
       // ===== CHAT TYPE =====
       {

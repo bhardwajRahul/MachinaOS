@@ -156,10 +156,11 @@ async def handle_chat_agent(
     ai_service: "AIService",
     database: "Database"
 ) -> Dict[str, Any]:
-    """Handle Chat Agent node execution with memory and skill support.
+    """Handle Chat Agent node execution with skill-based tool calling.
 
-    Chat Agent is a conversational AI agent without tool calling capabilities.
-    It supports memory for conversation history and skills for extended capabilities.
+    Chat Agent supports:
+    - Skills (input-skill): Provide context/instructions via SKILL.md
+    - Tools (input-tool): Tool nodes (httpRequest, etc.) for LangGraph tool calling
 
     Args:
         node_id: The node ID
@@ -175,8 +176,8 @@ async def handle_chat_agent(
     nodes = context.get('nodes')
     edges = context.get('edges')
     workflow_id = context.get('workflow_id')
-    memory_data: Optional[Dict[str, Any]] = None
     skill_data: List[Dict[str, Any]] = []
+    tool_data: List[Dict[str, Any]] = []  # Tools for LangGraph
     input_data: Optional[Dict[str, Any]] = None
 
     logger.info(f"[Chat Agent] Processing node {node_id}, workflow_id={workflow_id}")
@@ -196,39 +197,44 @@ async def handle_chat_agent(
             if not source_node:
                 continue
 
-            # Memory detection
-            if target_handle == 'input-memory':
-                if source_node.get('type') == 'simpleMemory':
-                    memory_params = await database.get_node_parameters(source_node_id) or {}
-                    memory_session_id = memory_params.get('sessionId', 'default')
-                    memory_type = memory_params.get('memoryType', 'buffer')
-                    window_size = int(memory_params.get('windowSize', 10)) if memory_type == 'window' else None
-                    memory_data = {
-                        'session_id': memory_session_id,
-                        'memory_type': memory_type,
-                        'window_size': window_size
-                    }
-                    logger.debug(f"Chat Agent connected memory node, session={memory_session_id}")
-
             # Skill detection - nodes connected to input-skill handle
-            elif target_handle == 'input-skill':
+            if target_handle == 'input-skill':
                 skill_type = source_node.get('type')
                 skill_params = await database.get_node_parameters(source_node_id) or {}
                 skill_entry = {
                     'node_id': source_node_id,
                     'node_type': skill_type,
+                    'skill_name': skill_params.get('skillName', skill_type),
                     'parameters': skill_params,
                     'label': source_node.get('data', {}).get('label', skill_type)
                 }
                 skill_data.append(skill_entry)
-                logger.debug(f"Chat Agent connected skill: {skill_type}")
+                logger.debug(f"[Chat Agent] Connected skill: {skill_type}")
+
+            # Tool detection - nodes connected to input-tools handle (for LangGraph)
+            elif target_handle == 'input-tools':
+                tool_type = source_node.get('type')
+                tool_params = await database.get_node_parameters(source_node_id) or {}
+                tool_entry = {
+                    'node_id': source_node_id,
+                    'node_type': tool_type,
+                    'parameters': tool_params,
+                    'label': source_node.get('data', {}).get('label', tool_type)
+                }
+                tool_data.append(tool_entry)
+                logger.info(f"[Chat Agent] Connected tool: {tool_type} ({tool_entry['label']})")
 
             # Input data detection - nodes connected to input-main
             elif target_handle == 'input-main' or target_handle is None:
                 source_output = context.get('outputs', {}).get(source_node_id)
                 if source_output:
                     input_data = source_output
-                    logger.debug(f"Chat Agent input from {source_node.get('type')}: {list(source_output.keys())}")
+                    logger.debug(f"[Chat Agent] Input from {source_node.get('type')}: {list(source_output.keys())}")
+
+    # Log discovered skills and tools
+    logger.info(f"[Chat Agent] Discovered: {len(skill_data)} skills, {len(tool_data)} tools")
+    for td in tool_data:
+        logger.debug(f"[Chat Agent] Tool: type={td.get('node_type')}, label={td.get('label')}")
 
     # Auto-use input data if prompt is empty (fallback for trigger nodes)
     if not parameters.get('prompt') and input_data:
@@ -245,12 +251,13 @@ async def handle_chat_agent(
     from services.status_broadcaster import get_status_broadcaster
     broadcaster = get_status_broadcaster()
 
-    # Execute as chat (no tool calling) with memory support
+    # Execute Chat Agent with skills and tools
     return await ai_service.execute_chat_agent(
         node_id,
         parameters,
-        memory_data=memory_data,
+        memory_data=None,  # Memory removed - use skill-based conversation management
         skill_data=skill_data if skill_data else None,
+        tool_data=tool_data if tool_data else None,
         broadcaster=broadcaster,
         workflow_id=workflow_id
     )

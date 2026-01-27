@@ -4,6 +4,7 @@ import { ANDROID_DEVICE_NODE_TYPES } from '../nodeDefinitions/androidDeviceNodes
 import { SCHEDULER_NODE_TYPES } from '../nodeDefinitions/schedulerNodes';
 import { CODE_NODE_TYPES } from '../nodeDefinitions/codeNodes';
 import { UTILITY_NODE_TYPES } from '../nodeDefinitions/utilityNodes';
+import { DOCUMENT_NODE_TYPES } from '../nodeDefinitions/documentNodes';
 import { Node, Edge } from 'reactflow';
 import { INodeExecutionData } from '../types/INodeProperties';
 import { API_CONFIG } from '../config/api';
@@ -221,7 +222,9 @@ export class ExecutionService {
       // Code Execution Nodes
       ...CODE_NODE_TYPES,
       // Utility Nodes (HTTP, Webhooks)
-      ...UTILITY_NODE_TYPES
+      ...UTILITY_NODE_TYPES,
+      // Document Processing Nodes
+      ...DOCUMENT_NODE_TYPES
     ];
 
     return supportedTypes.includes(nodeType);

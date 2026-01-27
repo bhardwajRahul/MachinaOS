@@ -17,6 +17,12 @@ const ALL_ANDROID_NODE_TYPES = [...ANDROID_SERVICE_NODE_TYPES, ...ANDROID_DEVICE
 // Android service nodes that can connect to Android Toolkit as tools
 const ANDROID_TOOL_CAPABLE_NODES = ANDROID_SERVICE_NODE_TYPES;
 
+// Nodes with 'tool' in their group can connect to AI Agent/Chat Agent tool handles
+const hasToolGroup = (definition: any): boolean => {
+  const groups = definition?.group || [];
+  return groups.includes('tool');
+};
+
 // Google Maps node types
 const GOOGLE_MAPS_NODE_TYPES = ['createMap', 'addLocations', 'showNearbyPlaces'];
 
@@ -68,8 +74,8 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
   // Check if this is an Android node
   const isAndroidNode = type ? ALL_ANDROID_NODE_TYPES.includes(type) : false;
 
-  // Check if this node can be used as a tool (connects to Android Toolkit)
-  const isToolCapable = type ? ANDROID_TOOL_CAPABLE_NODES.includes(type) : false;
+  // Check if this node can be used as a tool (connects to Android Toolkit or AI Agent/Chat Agent tool handle)
+  const isToolCapable = type ? (ANDROID_TOOL_CAPABLE_NODES.includes(type) || hasToolGroup(definition)) : false;
 
   // Android connection status from WebSocket (real-time updates)
   // Service nodes need a paired device to execute, not just relay connection
@@ -680,7 +686,7 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
           />
         )}
 
-        {/* Top Tool Output Handle - only for Android service nodes that can connect to Toolkit */}
+        {/* Top Tool Output Handle - for nodes that can connect to AI Agent/Chat Agent tool handle */}
         {isToolCapable && (
           <Handle
             id="output-tool"
@@ -694,12 +700,12 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
               transform: 'translateX(-50%)',
               width: theme.nodeSize.handle,
               height: theme.nodeSize.handle,
-              backgroundColor: '#3DDC84', // Android green to match Toolkit
+              backgroundColor: ANDROID_TOOL_CAPABLE_NODES.includes(type || '') ? '#3DDC84' : nodeColor, // Android green for Android nodes, node color for others
               border: `2px solid ${theme.isDarkMode ? theme.colors.background : '#ffffff'}`,
               borderRadius: '50%',
               zIndex: 20
             }}
-            title="Connect to Android Toolkit"
+            title={ANDROID_TOOL_CAPABLE_NODES.includes(type || '') ? 'Connect to Android Toolkit' : 'Connect to AI Agent/Chat Agent tool handle'}
           />
         )}
 

@@ -15,6 +15,7 @@ import { chatNodes, CHAT_NODE_TYPES } from './nodeDefinitions/chatNodes';
 import { codeNodes, CODE_NODE_TYPES } from './nodeDefinitions/codeNodes';
 import { utilityNodes, UTILITY_NODE_TYPES } from './nodeDefinitions/utilityNodes';
 import { skillNodes, SKILL_NODE_TYPES } from './nodeDefinitions/skillNodes';
+import { documentNodes, DOCUMENT_NODE_TYPES } from './nodeDefinitions/documentNodes';
 
 // ============================================================================
 // MAIN NODE REGISTRY - Combining all modular definitions
@@ -34,7 +35,8 @@ export const nodeDefinitions: Record<string, INodeTypeDescription> = {
   ...chatNodes,
   ...codeNodes,
   ...utilityNodes,
-  ...skillNodes
+  ...skillNodes,
+  ...documentNodes
 };
 
 // ============================================================================
@@ -92,6 +94,10 @@ export const TOOL_NODES = [
 
 export const SKILL_NODES = [
   ...SKILL_NODE_TYPES
+];
+
+export const DOCUMENT_NODES = [
+  ...DOCUMENT_NODE_TYPES
 ];
 
 // Re-export types and utilities from modular files for external access
