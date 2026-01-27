@@ -33,7 +33,7 @@ export function createBaseChatModel(config: ChatModelConfig): INodeTypeDescripti
     displayName: `${config.displayName} Chat Model`,
     name: config.nodeName || `${config.providerId}ChatModel`,
     icon: config.icon,
-    group: ['ai', 'model'],
+    group: ['model'],
     version: 1,
     subtitle: '={{$parameter["model"]}}',
     description: config.description,

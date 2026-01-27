@@ -13,6 +13,7 @@ export interface ComponentPaletteActions {
 
 export interface ComponentPaletteProps extends ComponentPaletteState, ComponentPaletteActions {
   nodeDefinitions: Record<string, INodeTypeDescription>;
+  proMode?: boolean;  // false = simple mode (only AI categories), true = pro mode (all categories)
 }
 
 export interface WorkflowHandlers {

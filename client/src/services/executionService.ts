@@ -188,6 +188,7 @@ export class ExecutionService {
     const supportedTypes = [
       // AI Nodes
       'aiAgent',
+      'chatAgent',
       // Note: simpleMemory is passive - accessed by AI Agent automatically, not executed directly
       'openaiChatModel',
       'anthropicChatModel',

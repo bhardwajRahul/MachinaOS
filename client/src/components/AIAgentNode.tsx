@@ -19,11 +19,66 @@ const PHASE_CONFIG: Record<string, { icon: string; label: string; color: string 
   saving_memory: { icon: '💾', label: 'Saving Memory', color: '#bd93f9' },
 };
 
+// Configuration for different agent types
+interface AgentConfig {
+  icon: React.ReactNode;
+  title: string;
+  subtitle: string;
+  accentColor: string;
+  bottomHandles: Array<{ id: string; label: string; position: string }>;
+}
+
+// Lucide-style SVG icons
+const RobotIcon = ({ size = 32, color = 'currentColor' }: { size?: number; color?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="11" width="18" height="10" rx="2" />
+    <circle cx="12" cy="5" r="2" />
+    <path d="M12 7v4" />
+    <line x1="8" y1="16" x2="8" y2="16" />
+    <line x1="16" y1="16" x2="16" y2="16" />
+    <circle cx="8" cy="16" r="1" fill={color} />
+    <circle cx="16" cy="16" r="1" fill={color} />
+  </svg>
+);
+
+// Lucide MessageSquare icon - clean chat bubble
+const ChatAgentIcon = ({ size = 32, color = 'currentColor' }: { size?: number; color?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+  </svg>
+);
+
+const AGENT_CONFIGS: Record<string, AgentConfig> = {
+  aiAgent: {
+    icon: <RobotIcon />,
+    title: 'AI Agent',
+    subtitle: 'LangGraph Agent',
+    accentColor: '#9333EA',
+    bottomHandles: [
+      { id: 'input-memory', label: 'Memory', position: '35%' },
+      { id: 'input-tools', label: 'Tool', position: '65%' },
+    ],
+  },
+  chatAgent: {
+    icon: <ChatAgentIcon />,
+    title: 'Chat Agent',
+    subtitle: 'Conversational Agent',
+    accentColor: '#3B82F6',
+    bottomHandles: [
+      { id: 'input-memory', label: 'Memory', position: '35%' },
+      { id: 'input-skill', label: 'Skill', position: '65%' },
+    ],
+  },
+};
+
 const AIAgentNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectable, selected }) => {
   const theme = useAppTheme();
   const { setSelectedNode } = useAppStore();
   const [_configValid, setConfigValid] = useState(true);
   const [_configErrors, setConfigErrors] = useState<string[]>([]);
+
+  // Get config based on node type
+  const config = AGENT_CONFIGS[type || 'aiAgent'] || AGENT_CONFIGS.aiAgent;
 
   // Get real-time node status from WebSocket
   const nodeStatus = useNodeStatus(id);
@@ -31,7 +86,7 @@ const AIAgentNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
   const currentPhase = nodeStatus?.data?.phase as string | undefined;
   const phaseConfig = currentPhase ? PHASE_CONFIG[currentPhase] : null;
 
-  // Validate AI Agent configuration whenever data changes
+  // Validate configuration whenever data changes
   useEffect(() => {
     try {
       const validation = AIAgentExecutionService.validateConfiguration(data || {});
@@ -39,26 +94,24 @@ const AIAgentNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
       setConfigErrors(validation.errors);
 
       if (!validation.valid) {
-        console.warn(`AI Agent ${id} configuration issues:`, validation.errors);
+        console.warn(`${config.title} ${id} configuration issues:`, validation.errors);
       }
     } catch (error) {
       console.error('Configuration validation error:', error);
       setConfigValid(false);
       setConfigErrors(['Configuration validation failed']);
     }
-  }, [data, id]);
+  }, [data, id, config.title]);
 
   const handleParametersClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     setSelectedNode({ id, type, data, position: { x: 0, y: 0 } });
   };
 
-  // Determine border and glow based on execution state
   const getBorderColor = () => {
     if (isExecuting) {
       if (theme.isDarkMode && phaseConfig) return phaseConfig.color;
-      // Light mode - use consistent blue
-      return '#2563eb';
+      return config.accentColor;
     }
     if (selected) return theme.colors.focus;
     return theme.colors.border;
@@ -69,8 +122,7 @@ const AIAgentNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
       if (theme.isDarkMode && phaseConfig) {
         return `0 0 20px ${phaseConfig.color}80, 0 0 40px ${phaseConfig.color}40`;
       }
-      // Light mode - use consistent blue
-      return `0 0 0 3px rgba(37, 99, 235, 0.5), 0 4px 16px rgba(37, 99, 235, 0.35)`;
+      return `0 0 0 3px ${config.accentColor}80, 0 4px 16px ${config.accentColor}60`;
     }
     if (selected) {
       return `0 4px 12px ${theme.colors.focusRing}, 0 0 0 1px ${theme.colors.focusRing}`;
@@ -104,7 +156,6 @@ const AIAgentNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
         animation: isExecuting ? 'pulse 1.5s ease-in-out infinite' : 'none'
       }}
     >
-
       {/* Input Handle */}
       <Handle
         id="input-main"
@@ -152,7 +203,7 @@ const AIAgentNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
         ⚙️
       </button>
 
-      {/* Status Indicator - Top Left */}
+      {/* Status Indicator */}
       <div
         style={{
           position: 'absolute',
@@ -169,7 +220,7 @@ const AIAgentNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
           boxShadow: isExecuting
             ? (theme.isDarkMode
               ? `0 0 8px ${phaseConfig?.color || theme.dracula.cyan}`
-              : '0 0 4px rgba(37, 99, 235, 0.5)')
+              : `0 0 4px ${config.accentColor}80`)
             : 'none',
           animation: isExecuting ? 'pulse 1s ease-in-out infinite' : 'none',
           zIndex: 20
@@ -177,16 +228,12 @@ const AIAgentNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
         title={isExecuting ? (phaseConfig?.label || 'Executing') : (nodeStatus?.status || 'Idle')}
       />
 
-      {/* Robot Icon */}
-      <div style={{
-        fontSize: theme.iconSize.xl,
-        lineHeight: '1',
-        marginBottom: theme.spacing.xs
-      }}>
-        🤖
+      {/* Icon */}
+      <div style={{ lineHeight: '1', marginBottom: theme.spacing.xs, color: config.accentColor }}>
+        {config.icon}
       </div>
 
-      {/* AI Agent Text */}
+      {/* Title */}
       <div style={{
         fontSize: theme.fontSize.base,
         fontWeight: theme.fontWeight.semibold,
@@ -194,10 +241,10 @@ const AIAgentNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
         lineHeight: '1.2',
         marginBottom: theme.spacing.xs
       }}>
-        AI Agent
+        {config.title}
       </div>
 
-      {/* Subtitle - shows execution phase or default */}
+      {/* Subtitle */}
       <div style={{
         fontSize: theme.fontSize.xs,
         fontWeight: theme.fontWeight.normal,
@@ -206,10 +253,10 @@ const AIAgentNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
         marginBottom: theme.spacing.lg,
         transition: 'color 0.3s ease'
       }}>
-        {isExecuting && phaseConfig ? phaseConfig.label : 'LangGraph Agent'}
+        {isExecuting && phaseConfig ? phaseConfig.label : config.subtitle}
       </div>
 
-      {/* Parameter Labels */}
+      {/* Bottom Handle Labels */}
       <div style={{
         position: 'absolute',
         bottom: theme.spacing.lg,
@@ -221,50 +268,33 @@ const AIAgentNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
         color: theme.colors.textSecondary,
         fontWeight: theme.fontWeight.normal
       }}>
-        <span>Memory</span>
-        <span>Tool</span>
+        {config.bottomHandles.map(h => <span key={h.id}>{h.label}</span>)}
       </div>
 
-      {/* Parameter Handles */}
-      <Handle
-        id="input-memory"
-        type="target"
-        position={Position.Bottom}
-        isConnectable={isConnectable}
-        style={{
-          position: 'absolute',
-          bottom: '-6px',
-          left: '35%',
-          width: theme.nodeSize.handle,
-          height: theme.nodeSize.handle,
-          backgroundColor: theme.colors.background,
-          border: `2px solid ${theme.colors.textSecondary}`,
-          borderRadius: '0',
-          transform: 'translateX(-50%) rotate(45deg)'
-        }}
-        title="Memory"
-      />
+      {/* Bottom Handles */}
+      {config.bottomHandles.map(h => (
+        <Handle
+          key={h.id}
+          id={h.id}
+          type="target"
+          position={Position.Bottom}
+          isConnectable={isConnectable}
+          style={{
+            position: 'absolute',
+            bottom: '-6px',
+            left: h.position,
+            width: theme.nodeSize.handle,
+            height: theme.nodeSize.handle,
+            backgroundColor: theme.colors.background,
+            border: `2px solid ${theme.colors.textSecondary}`,
+            borderRadius: '0',
+            transform: 'translateX(-50%) rotate(45deg)'
+          }}
+          title={h.label}
+        />
+      ))}
 
-      <Handle
-        id="input-tools"
-        type="target"
-        position={Position.Bottom}
-        isConnectable={isConnectable}
-        style={{
-          position: 'absolute',
-          bottom: '-6px',
-          left: '65%',
-          width: theme.nodeSize.handle,
-          height: theme.nodeSize.handle,
-          backgroundColor: theme.colors.background,
-          border: `2px solid ${theme.colors.textSecondary}`,
-          borderRadius: '0',
-          transform: 'translateX(-50%) rotate(45deg)'
-        }}
-        title="Tools"
-      />
-
-      {/* Output Handles */}
+      {/* Output Handle */}
       <Handle
         id="output-main"
         type="source"
@@ -283,7 +313,6 @@ const AIAgentNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
         }}
         title="Main Output"
       />
-
     </div>
   );
 };

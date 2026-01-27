@@ -159,3 +159,34 @@ class ToolSchema(SQLModel, table=True):
         default_factory=lambda: datetime.now(timezone.utc),
         sa_column=Column(DateTime(timezone=True), onupdate=func.now())
     )
+
+
+class UserSkill(SQLModel, table=True):
+    """User-created custom skills for Chat Agent.
+
+    Skills are defined using the Agent Skills specification format with YAML frontmatter.
+    This allows non-technical users to create and manage skills via the UI editor.
+    """
+
+    __tablename__ = "user_skills"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str = Field(unique=True, index=True, max_length=100)  # Unique skill identifier
+    display_name: str = Field(max_length=200)  # Human-readable name
+    description: str = Field(max_length=1000)  # Short description for skill registry
+    instructions: str = Field(max_length=50000)  # Full markdown instructions
+    allowed_tools: Optional[str] = Field(default=None, max_length=1000)  # Comma-separated tool names
+    category: str = Field(default="custom", max_length=50)  # Skill category
+    icon: str = Field(default="star", max_length=50)  # Icon identifier
+    color: str = Field(default="#6366F1", max_length=20)  # Color hex code
+    metadata_json: Optional[Dict[str, Any]] = Field(default=None, sa_column=Column(JSON))  # Additional metadata
+    is_active: bool = Field(default=True)  # Whether skill is available
+    created_by: Optional[int] = Field(default=None)  # User ID who created it
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(DateTime(timezone=True), server_default=func.now())
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(DateTime(timezone=True), onupdate=func.now())
+    )

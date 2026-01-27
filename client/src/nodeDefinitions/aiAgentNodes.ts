@@ -9,12 +9,12 @@ import {
 // ============================================================================
 
 export const aiAgentNodes: Record<string, INodeTypeDescription> = {
-  // AI Agent Node - n8n official style implementation (first for top position in AI category)
+  // AI Agent Node - n8n official style implementation (first for top position in Agents category)
   aiAgent: {
     displayName: 'AI Agent',
     name: 'aiAgent',
     icon: '🤖',
-    group: ['ai'],
+    group: ['agent'],
     version: 1,
     subtitle: 'Tools Agent',
     description: 'Advanced AI agent with tool calling capabilities, memory, and iterative reasoning',
@@ -153,13 +153,95 @@ export const aiAgentNodes: Record<string, INodeTypeDescription> = {
     ]
   },
 
+  // Chat Agent Node - Conversational AI agent with memory and skill support (no tools)
+  chatAgent: {
+    displayName: 'Chat Agent',
+    name: 'chatAgent',
+    icon: '💬',
+    group: ['agent'],
+    version: 1,
+    subtitle: 'Conversational Agent',
+    description: 'Conversational AI agent with memory and skill support for multi-turn chat interactions',
+    defaults: { name: 'Chat Agent', color: '#3B82F6' },
+    inputs: [
+      {
+        name: 'main',
+        displayName: 'Input',
+        type: 'main' as NodeConnectionType,
+        description: 'Chat input'
+      },
+      {
+        name: 'memory',
+        displayName: 'Memory',
+        type: 'main' as NodeConnectionType,
+        description: 'Memory node connection for conversation history'
+      },
+      {
+        name: 'skill',
+        displayName: 'Skill',
+        type: 'main' as NodeConnectionType,
+        description: 'AI Skill node connection'
+      }
+    ],
+    outputs: [{
+      name: 'main',
+      displayName: 'Output',
+      type: 'main' as NodeConnectionType,
+      description: 'response, model, provider, timestamp'
+    }],
+    properties: [
+      {
+        displayName: 'AI Provider',
+        name: 'provider',
+        type: 'options',
+        options: [
+          {
+            name: 'OpenAI',
+            value: 'openai'
+          },
+          {
+            name: 'Anthropic (Claude)',
+            value: 'anthropic'
+          },
+          {
+            name: 'Google (Gemini)',
+            value: 'gemini'
+          },
+          {
+            name: 'Groq',
+            value: 'groq'
+          },
+          {
+            name: 'OpenRouter',
+            value: 'openrouter'
+          }
+        ],
+        default: 'openai',
+        description: 'The AI provider to use (configure API keys in Credentials)'
+      },
+      {
+        displayName: 'Model',
+        name: 'model',
+        type: 'string',
+        default: '',
+        required: true,
+        placeholder: 'Select a model...',
+        description: 'AI model to use for the chat',
+        typeOptions: {
+          dynamicOptions: true,
+          dependsOn: ['provider']
+        }
+      }
+    ]
+  },
+
   // Simple Memory Node - conversation history storage for AI agents
   // No run button - memory is accessed automatically when AI Agent runs
   simpleMemory: {
     displayName: 'Simple Memory',
     name: 'simpleMemory',
     icon: '🧠',
-    group: ['tool', 'memory'],  // 'tool' = appears in AI Tools category
+    group: ['skill', 'memory'],  // 'skill' = appears in AI Skills category
     version: 1,
     description: 'Store conversation history for AI agents',
     defaults: { name: 'Memory', color: '#8b5cf6' },
@@ -212,4 +294,4 @@ export const aiAgentNodes: Record<string, INodeTypeDescription> = {
 // ============================================================================
 
 // List of AI-related node types for easy identification (chat models removed - now in aiModelNodes.ts)
-export const AI_NODE_TYPES = ['aiAgent', 'simpleMemory'];
+export const AI_NODE_TYPES = ['aiAgent', 'chatAgent', 'simpleMemory'];

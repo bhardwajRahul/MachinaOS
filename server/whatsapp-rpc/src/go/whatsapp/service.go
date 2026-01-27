@@ -14,6 +14,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/skip2/go-qrcode"
 	"go.mau.fi/whatsmeow"
+	"go.mau.fi/whatsmeow/proto/waCompanionReg"
 	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/store"
 	"go.mau.fi/whatsmeow/store/sqlstore"
@@ -54,8 +55,10 @@ type Service struct {
 
 
 func NewService(dbConfig config.DatabaseConfig, logger *logrus.Logger) (*Service, error) {
-	// Set device name (shows in WhatsApp linked devices)
-	store.SetOSInfo("MachinaOs", [3]uint32{1, 0, 0})
+	// Configure device to appear as legitimate WhatsApp Web on Chrome
+	// Uses default WhatsApp Web version and Chrome platform type for natural appearance
+	store.DeviceProps.PlatformType = waCompanionReg.DeviceProps_CHROME.Enum()
+	store.SetOSInfo("Windows - Zeenie", store.GetWAVersion())
 
 	// Ensure database directory exists
 	dbDir := filepath.Dir(dbConfig.Path)

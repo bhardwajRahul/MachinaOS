@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { nodeDefinitions } from '../nodeDefinitions';
 import { useWebSocket } from '../contexts/WebSocketContext';
+import { SKILL_NODE_TYPES } from '../nodeDefinitions/skillNodes';
 
 export const useParameterPanel = () => {
   const { selectedNode, setSelectedNode, updateNodeData } = useAppStore();
@@ -12,7 +13,7 @@ export const useParameterPanel = () => {
   const [error, setError] = useState<string | null>(null);
 
   // Use WebSocket for parameter operations
-  const { getNodeParameters, saveNodeParameters, isConnected } = useWebSocket();
+  const { getNodeParameters, saveNodeParameters, sendRequest, isConnected } = useWebSocket();
 
   // Use stable references to prevent multiple effect runs
   const nodeId = selectedNode?.id;
@@ -47,11 +48,32 @@ export const useParameterPanel = () => {
         const result = await getNodeParameters(nodeId);
         // Extract parameters from NodeParameters response
         const savedParams = result?.parameters || {};
-        const initialParams = { ...defaults, ...savedParams };
+        let initialParams = { ...defaults, ...savedParams };
 
         console.log('[useParameterPanel] Loading params for node:', nodeId, nodeType);
         console.log('[useParameterPanel] Defaults:', defaults);
         console.log('[useParameterPanel] Saved from backend:', savedParams);
+
+        // For skill nodes, load skill content (instructions) from SKILL.md files
+        if (SKILL_NODE_TYPES.includes(nodeType) && nodeType !== 'customSkill') {
+          const skillName = initialParams.skillName;
+          if (skillName) {
+            try {
+              console.log('[useParameterPanel] Loading skill content for:', skillName);
+              const skillResult = await sendRequest('get_skill_content', { skill_name: skillName });
+              if (skillResult?.success && skillResult?.instructions) {
+                initialParams = {
+                  ...initialParams,
+                  instructions: skillResult.instructions
+                };
+                console.log('[useParameterPanel] Loaded skill instructions:', skillResult.instructions.substring(0, 100) + '...');
+              }
+            } catch (skillErr) {
+              console.error('[useParameterPanel] Failed to load skill content:', skillErr);
+            }
+          }
+        }
+
         console.log('[useParameterPanel] Merged initial:', initialParams);
 
         setParameters(initialParams);
@@ -68,7 +90,7 @@ export const useParameterPanel = () => {
     };
 
     loadParameters();
-  }, [nodeId, nodeType, getNodeParameters]);
+  }, [nodeId, nodeType, getNodeParameters, sendRequest]);
 
   const hasUnsavedChanges = useMemo(() => {
     return JSON.stringify(parameters) !== JSON.stringify(originalParameters);
@@ -91,6 +113,30 @@ export const useParameterPanel = () => {
         const success = await saveNodeParameters(selectedNode.id, parameters);
 
         if (success) {
+          // For skill nodes, also save skill content (instructions) to SKILL.md files
+          if (selectedNode.type && SKILL_NODE_TYPES.includes(selectedNode.type) && selectedNode.type !== 'customSkill') {
+            const skillName = parameters.skillName;
+            const instructions = parameters.instructions;
+            if (skillName && instructions !== undefined) {
+              try {
+                console.log('[useParameterPanel] Saving skill content for:', skillName);
+                const skillResult = await sendRequest('save_skill_content', {
+                  skill_name: skillName,
+                  instructions: instructions
+                });
+                if (!skillResult?.success) {
+                  console.error('[useParameterPanel] Failed to save skill content:', skillResult?.error);
+                  setError(skillResult?.error || 'Failed to save skill content');
+                } else {
+                  console.log('[useParameterPanel] Skill content saved successfully');
+                }
+              } catch (skillErr) {
+                console.error('[useParameterPanel] Failed to save skill content:', skillErr);
+                setError('Failed to save skill content');
+              }
+            }
+          }
+
           // Also update the node data in store for faster loading
           updateNodeData(selectedNode.id, parameters);
           setOriginalParameters({ ...parameters });
@@ -104,7 +150,7 @@ export const useParameterPanel = () => {
         setIsSaving(false);
       }
     }
-  }, [selectedNode, parameters, updateNodeData, saveNodeParameters]);
+  }, [selectedNode, parameters, updateNodeData, saveNodeParameters, sendRequest]);
 
   const handleCancel = useCallback(() => {
     setParameters({ ...originalParameters });

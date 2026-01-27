@@ -92,6 +92,9 @@ class NodeExecutionActivities:
         )
         print(f"[Activity] Starting node: {node_id} (type={node_type})")
 
+        # Heartbeat at start to signal activity is alive
+        activity.heartbeat(f"Starting {node_type}: {node_id}")
+
         # Handle pre-executed trigger nodes (already have their output)
         if context.get("pre_executed"):
             print(f"[Activity] Node {node_id} is pre-executed, returning cached result")
@@ -129,6 +132,9 @@ class NodeExecutionActivities:
         )
 
         try:
+            # Heartbeat before potentially long WebSocket operation
+            activity.heartbeat(f"Executing via WebSocket: {node_id}")
+
             # Execute node via WebSocket (each call gets own connection from pool)
             result = await self._execute_via_websocket(context)
 

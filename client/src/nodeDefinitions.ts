@@ -14,6 +14,7 @@ import { androidDeviceNodes } from './nodeDefinitions/androidDeviceNodes';
 import { chatNodes, CHAT_NODE_TYPES } from './nodeDefinitions/chatNodes';
 import { codeNodes, CODE_NODE_TYPES } from './nodeDefinitions/codeNodes';
 import { utilityNodes, UTILITY_NODE_TYPES } from './nodeDefinitions/utilityNodes';
+import { skillNodes, SKILL_NODE_TYPES } from './nodeDefinitions/skillNodes';
 
 // ============================================================================
 // MAIN NODE REGISTRY - Combining all modular definitions
@@ -32,7 +33,8 @@ export const nodeDefinitions: Record<string, INodeTypeDescription> = {
   ...androidDeviceNodes,
   ...chatNodes,
   ...codeNodes,
-  ...utilityNodes
+  ...utilityNodes,
+  ...skillNodes
 };
 
 // ============================================================================
@@ -86,6 +88,10 @@ export const UTILITY_NODES = [
 
 export const TOOL_NODES = [
   ...TOOL_NODE_TYPES
+];
+
+export const SKILL_NODES = [
+  ...SKILL_NODE_TYPES
 ];
 
 // Re-export types and utilities from modular files for external access

@@ -10,6 +10,9 @@ const CATEGORY_EMOJIS: Record<string, string> = {
   workflow: '⚡',
   trigger: '🕐',
   ai: '🤖',
+  agent: '🤖',
+  model: '🧬',
+  skill: '🎯',
   tool: '🛠️',
   location: '📍',
   whatsapp: '💬',
@@ -20,6 +23,9 @@ const CATEGORY_EMOJIS: Record<string, string> = {
   util: '🔧',
 };
 
+// Categories shown in simple (noob) mode - only AI related
+const SIMPLE_MODE_CATEGORIES = ['agent', 'model', 'skill'];
+
 const ComponentPalette: React.FC<ComponentPaletteProps> = ({
   nodeDefinitions,
   searchQuery,
@@ -27,6 +33,7 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
   collapsedSections,
   onToggleSection,
   onDragStart,
+  proMode = false,  // Default to simple mode
 }) => {
   const theme = useAppTheme();
 
@@ -38,6 +45,9 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
       workflow: colors.categoryWorkflow || theme.dracula.orange,
       trigger: colors.categoryTrigger || theme.dracula.pink,
       ai: colors.categoryAI || theme.dracula.purple,
+      agent: colors.categoryAgent || theme.dracula.purple,
+      model: colors.categoryModel || theme.dracula.cyan,
+      skill: colors.categorySkill || theme.dracula.green,
       tool: colors.categoryTool || theme.dracula.green,
       location: colors.categoryLocation || theme.dracula.red,
       whatsapp: colors.categoryWhatsapp || theme.dracula.green,
@@ -51,6 +61,9 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
       workflow: 'Workflow',
       trigger: 'Triggers',
       ai: 'AI',
+      agent: 'AI Agents',
+      model: 'AI Models',
+      skill: 'AI Skills',
       tool: 'AI Tools',
       location: 'Google Maps',
       whatsapp: 'WhatsApp',
@@ -69,22 +82,34 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
 
   const categorizedComponents = React.useMemo(() => {
     const categories: Record<string, INodeTypeDescription[]> = {};
-    
+
     const filteredDefinitions = Object.values(nodeDefinitions).filter((definition) => {
-      if (!searchQuery.trim()) return true;
-      
-      try {
-        const query = searchQuery.toLowerCase();
-        return (
-          (definition.displayName || '').toLowerCase().includes(query) ||
-          (definition.description || '').toLowerCase().includes(query) ||
-          (definition.group?.[0] || '').toLowerCase().includes(query)
-        );
-      } catch (error) {
-        return false;
+      // Filter by search query
+      if (searchQuery.trim()) {
+        try {
+          const query = searchQuery.toLowerCase();
+          const matchesQuery = (
+            (definition.displayName || '').toLowerCase().includes(query) ||
+            (definition.description || '').toLowerCase().includes(query) ||
+            (definition.group?.[0] || '').toLowerCase().includes(query)
+          );
+          if (!matchesQuery) return false;
+        } catch (error) {
+          return false;
+        }
       }
+
+      // Filter by proMode - in simple mode, only show AI-related categories
+      if (!proMode) {
+        const categoryKey = (definition.group?.[0] || '').toLowerCase();
+        if (!SIMPLE_MODE_CATEGORIES.includes(categoryKey)) {
+          return false;
+        }
+      }
+
+      return true;
     });
-    
+
     filteredDefinitions.forEach((definition) => {
       try {
         const categoryKey = definition.group?.[0] || 'Uncategorized';
@@ -98,7 +123,7 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
     });
 
     return categories;
-  }, [nodeDefinitions, searchQuery]);
+  }, [nodeDefinitions, searchQuery, proMode]);
 
   const totalComponents = Object.values(categorizedComponents).reduce(
     (acc, components) => acc + components.length, 

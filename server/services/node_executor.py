@@ -23,7 +23,7 @@ from models.nodes import validate_node_params
 from pydantic import ValidationError
 from services import event_waiter
 from services.handlers import (
-    handle_ai_agent, handle_ai_chat_model, handle_simple_memory,
+    handle_ai_agent, handle_chat_agent, handle_ai_chat_model, handle_simple_memory,
     handle_android_device_setup, handle_android_service,
     handle_python_executor, handle_javascript_executor,
     handle_http_request, handle_webhook_response, handle_trigger_node,
@@ -104,6 +104,7 @@ class NodeExecutor:
             'timer': handle_timer,
             # AI
             'aiAgent': partial(handle_ai_agent, ai_service=self.ai_service, database=self.database),
+            'chatAgent': partial(handle_chat_agent, ai_service=self.ai_service, database=self.database),
             'simpleMemory': handle_simple_memory,
             # Maps
             'createMap': partial(handle_create_map, maps_service=self.maps_service),

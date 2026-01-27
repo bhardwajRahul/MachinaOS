@@ -337,7 +337,7 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
             // Node type detection
             const isMemory = nodeType === 'simpleMemory';
             const nodeTypeLower = nodeType.toLowerCase();
-            const isAI = !isMemory && (nodeTypeLower.includes('chatmodel') || nodeTypeLower.includes('aiagent'));
+            const isAI = !isMemory && (nodeTypeLower.includes('chatmodel') || nodeTypeLower.includes('aiagent') || nodeTypeLower.includes('chatagent'));
             const isFile = nodeType.includes('file');
             const isWhatsAppChatHistory = nodeType === 'whatsappChatHistory';
             const isWhatsApp = !isWhatsAppChatHistory && (nodeType.includes('whatsapp') || nodeType.includes('Whatsapp'));

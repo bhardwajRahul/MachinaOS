@@ -1454,6 +1454,312 @@ class AIService:
                 "timestamp": datetime.now().isoformat()
             }
 
+    async def execute_chat_agent(self, node_id: str, parameters: Dict[str, Any],
+                                  memory_data: Optional[Dict[str, Any]] = None,
+                                  skill_data: Optional[List[Dict[str, Any]]] = None,
+                                  broadcaster=None,
+                                  workflow_id: Optional[str] = None) -> Dict[str, Any]:
+        """Execute Chat Agent - conversational AI with skill support.
+
+        Chat Agent supports conversation with memory and skills. When skills are
+        connected, the agent can use LangGraph for tool calling (like AI Agent).
+
+        Args:
+            node_id: The node identifier
+            parameters: Node parameters including prompt, model, etc.
+            memory_data: Optional memory data from connected simpleMemory node
+            skill_data: Optional skill configurations from connected skill nodes
+            broadcaster: Optional StatusBroadcaster for real-time UI updates
+            workflow_id: Optional workflow ID for scoped status broadcasts
+        """
+        start_time = time.time()
+        provider = 'unknown'
+        model = 'unknown'
+
+        logger.info(f"[ChatAgent] execute_chat_agent called: node_id={node_id}, workflow_id={workflow_id}, skill_count={len(skill_data) if skill_data else 0}")
+
+        async def broadcast_status(phase: str, details: Dict[str, Any] = None):
+            if broadcaster:
+                await broadcaster.update_node_status(node_id, "executing", {
+                    "phase": phase,
+                    "agent_type": "chat_with_skills" if skill_data else "chat",
+                    **(details or {})
+                }, workflow_id=workflow_id)
+
+        try:
+            # Extract parameters
+            prompt = parameters.get('prompt', 'Hello')
+            system_message = parameters.get('systemMessage', 'You are a helpful assistant')
+
+            # Load skills and enhance system message
+            skill_names = []
+            skill_tools = []
+            if skill_data:
+                from services.skill_loader import get_skill_loader
+                from services.skill_executor import get_skill_executor, init_skill_executor
+
+                skill_loader = get_skill_loader()
+                skill_loader.scan_skills()
+
+                # Extract skill names from connected skill nodes
+                for skill_info in skill_data:
+                    skill_name = skill_info.get('skill_name') or skill_info.get('node_type', '').replace('Skill', '-skill').lower()
+                    # Convert node type to skill name (e.g., 'whatsappSkill' -> 'whatsapp-skill')
+                    if skill_name.endswith('skill') and not '-' in skill_name:
+                        skill_name = skill_name[:-5] + '-skill'  # whatsappskill -> whatsapp-skill
+                    skill_names.append(skill_name)
+                    logger.debug(f"[ChatAgent] Skill detected: {skill_name}")
+
+                # Add skill registry to system message
+                skill_prompt = skill_loader.get_registry_prompt(skill_names)
+                if skill_prompt:
+                    system_message = f"{system_message}\n\n{skill_prompt}"
+                    logger.info(f"[ChatAgent] Enhanced system message with {len(skill_names)} skills")
+
+                # Build tools from skills
+                skill_executor = get_skill_executor()
+                if not skill_executor:
+                    # Initialize skill executor with node executor callback
+                    async def node_executor_callback(node_id, node_type, parameters, context):
+                        from services.node_executor import NodeExecutor
+                        executor = NodeExecutor(self, self.database)
+                        return await executor.execute_node(node_id, node_type, parameters, context)
+
+                    skill_executor = init_skill_executor(skill_loader, node_executor_callback, self.database)
+
+                skill_tools = skill_executor.build_tools_for_skills(skill_names)
+                logger.info(f"[ChatAgent] Built {len(skill_tools)} tools from skills")
+
+            # Flatten options collection from frontend
+            options = parameters.get('options', {})
+            flattened = {**parameters, **options}
+
+            api_key = flattened.get('api_key') or flattened.get('apiKey')
+            provider = parameters.get('provider', 'openai')
+            model = parameters.get('model', '')
+            temperature = float(flattened.get('temperature', 0.7))
+            max_tokens = int(flattened.get('max_tokens') or flattened.get('maxTokens') or 1000)
+
+            logger.info(f"[ChatAgent] Provider: {provider}, Model: {model}")
+
+            # Validate model for provider
+            if not model or not is_model_valid_for_provider(model, provider):
+                old_model = model
+                model = get_default_model(provider)
+                if old_model:
+                    logger.warning(f"Model '{old_model}' invalid for provider '{provider}', using default: {model}")
+                else:
+                    logger.info(f"No model specified, using default: {model}")
+
+            if not api_key:
+                raise ValueError("API key is required for Chat Agent")
+
+            # Build thinking config from parameters
+            thinking_config = None
+            if flattened.get('thinkingEnabled'):
+                thinking_config = ThinkingConfig(
+                    enabled=True,
+                    budget=int(flattened.get('thinkingBudget', 2048)),
+                    effort=flattened.get('reasoningEffort', 'medium'),
+                    level=flattened.get('thinkingLevel', 'medium'),
+                    format=flattened.get('reasoningFormat', 'parsed'),
+                )
+
+            # Broadcast: Initializing
+            await broadcast_status("initializing", {
+                "message": f"Initializing {provider} model...",
+                "provider": provider,
+                "model": model
+            })
+
+            # Create chat model
+            chat_model = self.create_model(provider, api_key, model, temperature, max_tokens, thinking_config)
+
+            # Build messages
+            messages: List[BaseMessage] = []
+            if system_message:
+                messages.append(SystemMessage(content=system_message))
+
+            # Load memory history if connected
+            session_id = None
+            history_count = 0
+            if memory_data and memory_data.get('session_id'):
+                session_id = memory_data['session_id']
+                window_size = memory_data.get('window_size')
+
+                await broadcast_status("loading_memory", {
+                    "message": "Loading conversation history...",
+                    "session_id": session_id,
+                    "has_memory": True
+                })
+
+                history_data = await self.database.get_conversation_messages(session_id, window_size)
+                history_count = len(history_data)
+
+                for m in history_data:
+                    content = m.get('content', '')
+                    if not is_valid_message_content(content):
+                        continue
+                    if m['role'] == 'human':
+                        messages.append(HumanMessage(content=content))
+                    elif m['role'] == 'ai':
+                        messages.append(AIMessage(content=content))
+
+                logger.info(f"[ChatAgent] Loaded {history_count} messages from session '{session_id}'")
+
+                await broadcast_status("memory_loaded", {
+                    "message": f"Loaded {history_count} messages from memory",
+                    "session_id": session_id,
+                    "history_count": history_count
+                })
+
+            # Add current prompt
+            messages.append(HumanMessage(content=prompt))
+
+            # Broadcast: Invoking LLM
+            await broadcast_status("invoking_llm", {
+                "message": "Generating response...",
+                "has_memory": session_id is not None,
+                "history_count": history_count,
+                "skill_count": len(skill_names) if skill_data else 0
+            })
+
+            # Execute with or without skill tools
+            thinking_content = None
+            iterations = 1
+
+            if skill_tools:
+                # Use LangGraph for skill tool execution (like AI Agent)
+                logger.info(f"[ChatAgent] Using LangGraph with {len(skill_tools)} skill tools")
+
+                # Create skill tool executor callback
+                async def skill_tool_executor(tool_name: str, tool_args: Dict) -> Any:
+                    """Execute a skill tool by name."""
+                    from services.skill_executor import get_skill_executor
+
+                    # Convert tool name back to skill tool format (underscores to hyphens)
+                    skill_tool_name = tool_name.replace('_', '-')
+                    logger.info(f"[ChatAgent] Executing skill tool: {skill_tool_name}")
+
+                    executor = get_skill_executor()
+                    if executor:
+                        try:
+                            result = await executor.execute_tool(skill_tool_name, tool_args)
+                            return result
+                        except Exception as e:
+                            logger.error(f"[ChatAgent] Skill tool execution failed: {skill_tool_name}", error=str(e))
+                            return {"error": str(e)}
+                    return {"error": "Skill executor not initialized"}
+
+                # Build LangGraph agent
+                agent_graph = build_agent_graph(
+                    chat_model,
+                    tools=skill_tools,
+                    tool_executor=skill_tool_executor
+                )
+
+                # Create initial state
+                initial_state: AgentState = {
+                    "messages": messages,
+                    "tool_outputs": {},
+                    "pending_tool_calls": [],
+                    "iteration": 0,
+                    "max_iterations": 10,
+                    "should_continue": False,
+                    "thinking_content": None
+                }
+
+                # Execute the graph
+                final_state = await agent_graph.ainvoke(initial_state)
+
+                # Extract response
+                all_messages = final_state["messages"]
+                ai_response = all_messages[-1] if all_messages else None
+
+                if not ai_response or not hasattr(ai_response, 'content'):
+                    raise ValueError("No response generated from agent")
+
+                raw_content = ai_response.content
+                response_content = self._extract_text_content(raw_content, ai_response)
+                iterations = final_state.get("iteration", 1)
+                thinking_content = final_state.get("thinking_content")
+            else:
+                # Simple invoke without tools
+                response = await chat_model.ainvoke(messages)
+
+                # Extract response content
+                raw_content = response.content
+                response_content = self._extract_text_content(raw_content, response)
+
+                # Extract thinking content if available
+                _, thinking_content = extract_thinking_from_response(response)
+
+            logger.info(f"[ChatAgent] Response generated, thinking={'yes' if thinking_content else 'no'}, iterations={iterations}")
+
+            # Save to memory if connected
+            if session_id and is_valid_message_content(prompt) and is_valid_message_content(response_content):
+                await broadcast_status("saving_memory", {
+                    "message": "Saving to conversation memory...",
+                    "session_id": session_id,
+                    "has_memory": True
+                })
+
+                await self.database.add_conversation_message(session_id, 'human', prompt)
+                await self.database.add_conversation_message(session_id, 'ai', response_content)
+                logger.info(f"[ChatAgent] Saved exchange to session '{session_id}'")
+
+            result = {
+                "response": response_content,
+                "thinking": thinking_content,
+                "thinking_enabled": thinking_config.enabled if thinking_config else False,
+                "model": model,
+                "provider": provider,
+                "agent_type": "chat_with_skills" if skill_tools else "chat",
+                "iterations": iterations,
+                "finish_reason": "stop",
+                "timestamp": datetime.now().isoformat(),
+                "input": {
+                    "prompt": prompt,
+                    "system_message": system_message,
+                }
+            }
+
+            if session_id:
+                result["memory"] = {
+                    "session_id": session_id,
+                    "history_loaded": history_count
+                }
+
+            if skill_names:
+                result["skills"] = {
+                    "connected": skill_names,
+                    "tools_available": len(skill_tools) if skill_tools else 0
+                }
+
+            log_execution_time(logger, "chat_agent", start_time, time.time())
+            log_api_call(logger, provider, model, "chat_agent", True)
+
+            return {
+                "success": True,
+                "node_id": node_id,
+                "node_type": "chatAgent",
+                "result": result,
+                "execution_time": time.time() - start_time
+            }
+
+        except Exception as e:
+            logger.error("[ChatAgent] Execution failed", node_id=node_id, error=str(e))
+            log_api_call(logger, provider, model, "chat_agent", False, error=str(e))
+
+            return {
+                "success": False,
+                "node_id": node_id,
+                "node_type": "chatAgent",
+                "error": str(e),
+                "execution_time": time.time() - start_time,
+                "timestamp": datetime.now().isoformat()
+            }
+
     async def _build_tool_from_node(self, tool_info: Dict[str, Any]) -> tuple:
         """Convert a node configuration into a LangChain StructuredTool.
 

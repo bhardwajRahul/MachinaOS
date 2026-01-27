@@ -40,6 +40,7 @@ interface AppStore {
   selectedNode: Node | null;  // Kept for backward compatibility, derived from workflowUIStates
   sidebarVisible: boolean;
   componentPaletteVisible: boolean;
+  proMode: boolean;  // false = noob mode (only AI categories), true = pro mode (all categories)
   whatsappSettingsOpen: boolean;
   androidSettingsOpen: boolean;
   renamingNodeId: string | null;
@@ -61,6 +62,7 @@ interface AppStore {
   setSelectedNode: (node: Node | null) => void;
   toggleSidebar: () => void;
   toggleComponentPalette: () => void;
+  toggleProMode: () => void;
   setWhatsAppSettingsOpen: (open: boolean) => void;
   setAndroidSettingsOpen: (open: boolean) => void;
   setRenamingNodeId: (nodeId: string | null) => void;
@@ -119,6 +121,7 @@ const migrateNodes = (nodes: Node[]): Node[] => {
 const STORAGE_KEYS = {
   sidebarVisible: 'ui_sidebar_visible',
   componentPaletteVisible: 'ui_component_palette_visible',
+  proMode: 'ui_pro_mode',
 };
 
 // Helper to load boolean from localStorage
@@ -150,6 +153,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   selectedNode: null,
   sidebarVisible: loadBooleanFromStorage(STORAGE_KEYS.sidebarVisible, true),
   componentPaletteVisible: loadBooleanFromStorage(STORAGE_KEYS.componentPaletteVisible, true),
+  proMode: loadBooleanFromStorage(STORAGE_KEYS.proMode, false),  // Default to noob mode
   whatsappSettingsOpen: false,
   androidSettingsOpen: false,
   renamingNodeId: null,
@@ -344,6 +348,14 @@ export const useAppStore = create<AppStore>((set, get) => ({
       const newValue = !state.componentPaletteVisible;
       saveBooleanToStorage(STORAGE_KEYS.componentPaletteVisible, newValue);
       return { componentPaletteVisible: newValue };
+    });
+  },
+
+  toggleProMode: () => {
+    set((state) => {
+      const newValue = !state.proMode;
+      saveBooleanToStorage(STORAGE_KEYS.proMode, newValue);
+      return { proMode: newValue };
     });
   },
 

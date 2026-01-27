@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from contextlib import asynccontextmanager
 
 from core.config import Settings
-from models.database import NodeParameter, Workflow, Execution, APIKey, APIKeyValidation, NodeOutput, ConversationMessage, ToolSchema
+from models.database import NodeParameter, Workflow, Execution, APIKey, APIKeyValidation, NodeOutput, ConversationMessage, ToolSchema, UserSkill
 from models.cache import CacheEntry  # SQLite-backed cache for Redis alternative
 from models.auth import User  # Import User model to ensure table creation
 from core.logging import get_logger
@@ -925,3 +925,188 @@ class Database:
         except Exception as e:
             logger.error("Failed to clear Android relay session", error=str(e))
             return False
+
+    # ============================================================================
+    # User Skills (Custom skills for Chat Agent)
+    # ============================================================================
+
+    async def create_user_skill(
+        self,
+        name: str,
+        display_name: str,
+        description: str,
+        instructions: str,
+        allowed_tools: Optional[str] = None,
+        category: str = "custom",
+        icon: str = "star",
+        color: str = "#6366F1",
+        metadata_json: Optional[Dict[str, Any]] = None,
+        created_by: Optional[int] = None
+    ) -> Optional[Dict[str, Any]]:
+        """Create a new user skill."""
+        try:
+            async with self.get_session() as session:
+                skill = UserSkill(
+                    name=name,
+                    display_name=display_name,
+                    description=description,
+                    instructions=instructions,
+                    allowed_tools=allowed_tools,
+                    category=category,
+                    icon=icon,
+                    color=color,
+                    metadata_json=metadata_json,
+                    created_by=created_by
+                )
+                session.add(skill)
+                await session.commit()
+                await session.refresh(skill)
+
+                logger.info(f"[DB] Created user skill: {name}")
+                return self._skill_to_dict(skill)
+
+        except IntegrityError:
+            logger.error(f"User skill with name '{name}' already exists")
+            return None
+        except Exception as e:
+            logger.error("Failed to create user skill", name=name, error=str(e))
+            return None
+
+    async def get_user_skill(self, name: str) -> Optional[Dict[str, Any]]:
+        """Get user skill by name."""
+        try:
+            async with self.get_session() as session:
+                stmt = select(UserSkill).where(UserSkill.name == name)
+                result = await session.execute(stmt)
+                skill = result.scalar_one_or_none()
+
+                return self._skill_to_dict(skill) if skill else None
+
+        except Exception as e:
+            logger.error("Failed to get user skill", name=name, error=str(e))
+            return None
+
+    async def get_user_skill_by_id(self, skill_id: int) -> Optional[Dict[str, Any]]:
+        """Get user skill by ID."""
+        try:
+            async with self.get_session() as session:
+                stmt = select(UserSkill).where(UserSkill.id == skill_id)
+                result = await session.execute(stmt)
+                skill = result.scalar_one_or_none()
+
+                return self._skill_to_dict(skill) if skill else None
+
+        except Exception as e:
+            logger.error("Failed to get user skill by id", skill_id=skill_id, error=str(e))
+            return None
+
+    async def get_all_user_skills(self, active_only: bool = True) -> List[Dict[str, Any]]:
+        """Get all user skills, optionally filtered by active status."""
+        try:
+            async with self.get_session() as session:
+                if active_only:
+                    stmt = select(UserSkill).where(UserSkill.is_active == True).order_by(UserSkill.display_name)
+                else:
+                    stmt = select(UserSkill).order_by(UserSkill.display_name)
+
+                result = await session.execute(stmt)
+                skills = result.scalars().all()
+
+                return [self._skill_to_dict(s) for s in skills]
+
+        except Exception as e:
+            logger.error("Failed to get all user skills", error=str(e))
+            return []
+
+    async def update_user_skill(
+        self,
+        name: str,
+        display_name: Optional[str] = None,
+        description: Optional[str] = None,
+        instructions: Optional[str] = None,
+        allowed_tools: Optional[str] = None,
+        category: Optional[str] = None,
+        icon: Optional[str] = None,
+        color: Optional[str] = None,
+        metadata_json: Optional[Dict[str, Any]] = None,
+        is_active: Optional[bool] = None
+    ) -> Optional[Dict[str, Any]]:
+        """Update an existing user skill."""
+        try:
+            async with self.get_session() as session:
+                stmt = select(UserSkill).where(UserSkill.name == name)
+                result = await session.execute(stmt)
+                skill = result.scalar_one_or_none()
+
+                if not skill:
+                    logger.error(f"User skill '{name}' not found for update")
+                    return None
+
+                # Update only provided fields
+                if display_name is not None:
+                    skill.display_name = display_name
+                if description is not None:
+                    skill.description = description
+                if instructions is not None:
+                    skill.instructions = instructions
+                if allowed_tools is not None:
+                    skill.allowed_tools = allowed_tools
+                if category is not None:
+                    skill.category = category
+                if icon is not None:
+                    skill.icon = icon
+                if color is not None:
+                    skill.color = color
+                if metadata_json is not None:
+                    skill.metadata_json = metadata_json
+                if is_active is not None:
+                    skill.is_active = is_active
+
+                await session.commit()
+                await session.refresh(skill)
+
+                logger.info(f"[DB] Updated user skill: {name}")
+                return self._skill_to_dict(skill)
+
+        except Exception as e:
+            logger.error("Failed to update user skill", name=name, error=str(e))
+            return None
+
+    async def delete_user_skill(self, name: str) -> bool:
+        """Delete a user skill by name."""
+        try:
+            async with self.get_session() as session:
+                stmt = select(UserSkill).where(UserSkill.name == name)
+                result = await session.execute(stmt)
+                skill = result.scalar_one_or_none()
+
+                if skill:
+                    await session.delete(skill)
+                    await session.commit()
+                    logger.info(f"[DB] Deleted user skill: {name}")
+                    return True
+
+                return False
+
+        except Exception as e:
+            logger.error("Failed to delete user skill", name=name, error=str(e))
+            return False
+
+    def _skill_to_dict(self, skill: UserSkill) -> Dict[str, Any]:
+        """Convert UserSkill model to dictionary."""
+        return {
+            "id": skill.id,
+            "name": skill.name,
+            "display_name": skill.display_name,
+            "description": skill.description,
+            "instructions": skill.instructions,
+            "allowed_tools": skill.allowed_tools.split(",") if skill.allowed_tools else [],
+            "category": skill.category,
+            "icon": skill.icon,
+            "color": skill.color,
+            "metadata": skill.metadata_json,
+            "is_active": skill.is_active,
+            "created_by": skill.created_by,
+            "created_at": skill.created_at.isoformat() if skill.created_at else None,
+            "updated_at": skill.updated_at.isoformat() if skill.updated_at else None
+        }

@@ -28,6 +28,7 @@ import { CHAT_NODE_TYPES } from './nodeDefinitions/chatNodes';
 import { CODE_NODE_TYPES } from './nodeDefinitions/codeNodes';
 import { UTILITY_NODE_TYPES } from './nodeDefinitions/utilityNodes';
 import { TOOL_NODE_TYPES } from './nodeDefinitions/toolNodes';
+import { SKILL_NODE_TYPES } from './nodeDefinitions/skillNodes';
 import ParameterPanel from './ParameterPanel';
 import LocationParameterPanel from './components/LocationParameterPanel';
 import { useAppStore } from './store/useAppStore';
@@ -73,7 +74,7 @@ const createNodeTypes = (): Record<string, React.ComponentType<any>> => {
     } else if (type === 'openaiChatModel' || type === 'anthropicChatModel' || type === 'geminiChatModel' || type === 'openrouterChatModel' || type === 'groqChatModel' || type === 'cerebrasChatModel') {
       // AI chat model nodes use square design
       types[type] = SquareNode;
-    } else if (type === 'aiAgent') {
+    } else if (type === 'aiAgent' || type === 'chatAgent') {
       types[type] = AIAgentNode;
     } else if (type === 'simpleMemory') {
       // Simple Memory node for AI conversation history - uses circular ModelNode design
@@ -105,6 +106,9 @@ const createNodeTypes = (): Record<string, React.ComponentType<any>> => {
       } else {
         types[type] = ModelNode;
       }
+    } else if (SKILL_NODE_TYPES.includes(type)) {
+      // Skill nodes use circular ModelNode design (connect to Chat Agent's input-skill handle)
+      types[type] = ModelNode;
     } else if (definition?.group?.includes('model')) {
       // Fallback for other model nodes
       types[type] = ModelNode;
@@ -238,6 +242,8 @@ const DashboardContent: React.FC = () => {
     migrateCurrentWorkflow,
     toggleSidebar,
     toggleComponentPalette,
+    proMode,
+    toggleProMode,
     exportWorkflowToJSON,
     exportWorkflowToFile,
     setCurrentWorkflow,
@@ -374,10 +380,11 @@ const DashboardContent: React.FC = () => {
 
       let className = '';
 
-      // Check if this edge connects to an AI Agent's memory or tools handle
+      // Check if this edge connects to an AI Agent's memory or tools/skill handle
       const isMemoryConnection = edge.targetHandle === 'input-memory';
       const isToolConnection = edge.targetHandle === 'input-tools';
-      const isAIAgentTarget = targetNode?.type === 'aiAgent';
+      const isSkillConnection = edge.targetHandle === 'input-skill';
+      const isAIAgentTarget = targetNode?.type === 'aiAgent' || targetNode?.type === 'chatAgent';
 
       // Highlight memory/tool connections when AI Agent is executing and using them
       if (isAIAgentTarget && targetStatus?.status === 'executing') {
@@ -397,6 +404,12 @@ const DashboardContent: React.FC = () => {
         else if (isToolConnection) {
           if (phase === 'invoking_llm' || phase === 'building_graph') {
             className = 'tool-active';
+          }
+        }
+        // Skill connection highlights during skill-related phases (Chat Agent)
+        else if (isSkillConnection) {
+          if (phase === 'invoking_llm' || phase === 'loading_skills') {
+            className = 'skill-active';
           }
         }
       }
@@ -963,6 +976,8 @@ const DashboardContent: React.FC = () => {
           onToggleSidebar={toggleSidebar}
           componentPaletteVisible={componentPaletteVisible}
           onToggleComponentPalette={toggleComponentPalette}
+          proMode={proMode}
+          onToggleProMode={toggleProMode}
           onOpenSettings={() => setSettingsOpen(true)}
           onOpenCredentials={() => setCredentialsOpen(true)}
           onExportJSON={handleExportJSON}
@@ -1065,6 +1080,7 @@ const DashboardContent: React.FC = () => {
                   collapsedSections={collapsedSections}
                   onToggleSection={toggleSection}
                   onDragStart={handleComponentDragStart}
+                  proMode={proMode}
                 />
               )}
             </div>

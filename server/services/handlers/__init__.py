@@ -14,6 +14,7 @@ This package contains all node execution handlers organized by category:
 # AI handlers
 from .ai import (
     handle_ai_agent,
+    handle_chat_agent,
     handle_ai_chat_model,
     handle_simple_memory,
 )
@@ -71,6 +72,7 @@ from .tools import (
 __all__ = [
     # AI
     'handle_ai_agent',
+    'handle_chat_agent',
     'handle_ai_chat_model',
     'handle_simple_memory',
     # Android

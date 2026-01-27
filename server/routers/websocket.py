@@ -1471,6 +1471,222 @@ async def handle_clear_terminal_logs(data: Dict[str, Any], websocket: WebSocket)
 
 
 # ============================================================================
+# User Skills Handlers
+# ============================================================================
+
+@ws_handler("skill_name")
+async def handle_get_skill_content(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Get skill content (instructions) by skill name.
+
+    Works for both built-in skills (from SKILL.md files) and user skills (from database).
+    """
+    from services.skill_loader import get_skill_loader
+
+    skill_name = data["skill_name"]
+    skill_loader = get_skill_loader()
+
+    # Try to load the skill
+    skill = skill_loader.load_skill(skill_name)
+    if skill:
+        return {
+            "success": True,
+            "skill_name": skill_name,
+            "instructions": skill.instructions,
+            "description": skill.metadata.description,
+            "allowed_tools": skill.metadata.allowed_tools,
+            "is_builtin": skill.metadata.path is not None,
+            "timestamp": time.time()
+        }
+
+    # Try loading from database for user skills
+    database = container.database()
+    user_skill = await database.get_user_skill(skill_name)
+    if user_skill:
+        return {
+            "success": True,
+            "skill_name": skill_name,
+            "instructions": user_skill.instructions,
+            "description": user_skill.description,
+            "allowed_tools": user_skill.allowed_tools.split(',') if user_skill.allowed_tools else [],
+            "is_builtin": False,
+            "timestamp": time.time()
+        }
+
+    return {"success": False, "error": f"Skill '{skill_name}' not found"}
+
+
+@ws_handler("skill_name", "instructions")
+async def handle_save_skill_content(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Save skill content (instructions) by skill name.
+
+    For built-in skills, writes to the SKILL.md file.
+    For user skills, updates the database.
+    """
+    import re
+    from pathlib import Path
+    from services.skill_loader import get_skill_loader
+
+    skill_name = data["skill_name"]
+    new_instructions = data["instructions"]
+    skill_loader = get_skill_loader()
+
+    # Check if it's a built-in skill
+    if skill_name in skill_loader._registry:
+        metadata = skill_loader._registry[skill_name]
+        if metadata.path is not None:
+            # It's a built-in skill - update SKILL.md file
+            skill_md_path = metadata.path / "SKILL.md"
+
+            if not skill_md_path.exists():
+                return {"success": False, "error": f"SKILL.md not found for '{skill_name}'"}
+
+            # Read existing file to preserve frontmatter
+            content = skill_md_path.read_text(encoding='utf-8')
+
+            # Parse frontmatter
+            frontmatter_match = re.match(r'^(---\s*\n.*?\n---\s*\n)', content, re.DOTALL)
+            if frontmatter_match:
+                # Keep frontmatter, replace body
+                new_content = frontmatter_match.group(1) + new_instructions
+            else:
+                # No frontmatter, just write instructions
+                new_content = new_instructions
+
+            # Write back to file
+            skill_md_path.write_text(new_content, encoding='utf-8')
+
+            # Clear cache so next load gets fresh content
+            skill_loader.clear_cache()
+
+            logger.info(f"[Skills] Updated built-in skill: {skill_name}")
+            return {
+                "success": True,
+                "skill_name": skill_name,
+                "is_builtin": True,
+                "message": f"Skill '{skill_name}' saved to SKILL.md",
+                "timestamp": time.time()
+            }
+
+    # It's a user skill - update in database
+    database = container.database()
+    user_skill = await database.get_user_skill(skill_name)
+    if user_skill:
+        updated = await database.update_user_skill(
+            name=skill_name,
+            instructions=new_instructions
+        )
+        if updated:
+            logger.info(f"[Skills] Updated user skill: {skill_name}")
+            return {
+                "success": True,
+                "skill_name": skill_name,
+                "is_builtin": False,
+                "message": f"Skill '{skill_name}' saved to database",
+                "timestamp": time.time()
+            }
+
+    return {"success": False, "error": f"Skill '{skill_name}' not found"}
+
+
+@ws_handler()
+async def handle_get_user_skills(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Get all user-created skills."""
+    database = container.database()
+    active_only = data.get("active_only", True)
+    skills = await database.get_all_user_skills(active_only=active_only)
+    return {"skills": skills, "count": len(skills), "timestamp": time.time()}
+
+
+@ws_handler("name")
+async def handle_get_user_skill(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Get a specific user skill by name."""
+    database = container.database()
+    skill = await database.get_user_skill(data["name"])
+    if skill:
+        return {"skill": skill, "timestamp": time.time()}
+    return {"success": False, "error": f"Skill '{data['name']}' not found"}
+
+
+@ws_handler("name", "display_name", "description", "instructions")
+async def handle_create_user_skill(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Create a new user skill."""
+    database = container.database()
+    broadcaster = get_status_broadcaster()
+
+    skill = await database.create_user_skill(
+        name=data["name"],
+        display_name=data["display_name"],
+        description=data["description"],
+        instructions=data["instructions"],
+        allowed_tools=data.get("allowed_tools"),
+        category=data.get("category", "custom"),
+        icon=data.get("icon", "star"),
+        color=data.get("color", "#6366F1"),
+        metadata_json=data.get("metadata"),
+        created_by=data.get("created_by")
+    )
+
+    if skill:
+        # Broadcast skill created to all clients
+        await broadcaster.broadcast({
+            "type": "user_skill_created",
+            "skill": skill,
+            "timestamp": time.time()
+        })
+        return {"skill": skill, "timestamp": time.time()}
+    return {"success": False, "error": f"Failed to create skill. Name '{data['name']}' may already exist."}
+
+
+@ws_handler("name")
+async def handle_update_user_skill(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Update an existing user skill."""
+    database = container.database()
+    broadcaster = get_status_broadcaster()
+
+    skill = await database.update_user_skill(
+        name=data["name"],
+        display_name=data.get("display_name"),
+        description=data.get("description"),
+        instructions=data.get("instructions"),
+        allowed_tools=data.get("allowed_tools"),
+        category=data.get("category"),
+        icon=data.get("icon"),
+        color=data.get("color"),
+        metadata_json=data.get("metadata"),
+        is_active=data.get("is_active")
+    )
+
+    if skill:
+        # Broadcast skill updated to all clients
+        await broadcaster.broadcast({
+            "type": "user_skill_updated",
+            "skill": skill,
+            "timestamp": time.time()
+        })
+        return {"skill": skill, "timestamp": time.time()}
+    return {"success": False, "error": f"Skill '{data['name']}' not found"}
+
+
+@ws_handler("name")
+async def handle_delete_user_skill(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Delete a user skill."""
+    database = container.database()
+    broadcaster = get_status_broadcaster()
+
+    deleted = await database.delete_user_skill(data["name"])
+
+    if deleted:
+        # Broadcast skill deleted to all clients
+        await broadcaster.broadcast({
+            "type": "user_skill_deleted",
+            "name": data["name"],
+            "timestamp": time.time()
+        })
+        return {"deleted": True, "name": data["name"], "timestamp": time.time()}
+    return {"success": False, "error": f"Skill '{data['name']}' not found"}
+
+
+# ============================================================================
 # Message Router
 # ============================================================================
 
@@ -1563,6 +1779,17 @@ MESSAGE_HANDLERS: Dict[str, MessageHandler] = {
     # Terminal logs
     "get_terminal_logs": handle_get_terminal_logs,
     "clear_terminal_logs": handle_clear_terminal_logs,
+
+    # User Skills
+    "get_user_skills": handle_get_user_skills,
+    "get_user_skill": handle_get_user_skill,
+    "create_user_skill": handle_create_user_skill,
+    "update_user_skill": handle_update_user_skill,
+    "delete_user_skill": handle_delete_user_skill,
+
+    # Skill Content (built-in and user skills)
+    "get_skill_content": handle_get_skill_content,
+    "save_skill_content": handle_save_skill_content,
 }
 
 

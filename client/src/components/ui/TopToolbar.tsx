@@ -19,6 +19,8 @@ interface TopToolbarProps {
   onToggleSidebar: () => void;
   componentPaletteVisible: boolean;
   onToggleComponentPalette: () => void;
+  proMode: boolean;
+  onToggleProMode: () => void;
   onOpenSettings: () => void;
   onOpenCredentials: () => void;
   onExportJSON: () => void;
@@ -42,6 +44,8 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
   onToggleSidebar,
   componentPaletteVisible,
   onToggleComponentPalette,
+  proMode,
+  onToggleProMode,
   onOpenSettings,
   onOpenCredentials,
   onExportJSON,
@@ -379,6 +383,80 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
 
       {/* Right Section */}
       <div style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.sm }}>
+        {/* Mode Toggle - Segmented control style */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.sm }}>
+          <span style={{
+            fontSize: theme.fontSize.sm,
+            color: theme.accent.cyan,
+            fontWeight: theme.fontWeight.semibold,
+            fontFamily: 'system-ui, sans-serif',
+          }}>
+            Mode:
+          </span>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              backgroundColor: theme.colors.backgroundAlt,
+              borderRadius: theme.borderRadius.md,
+              padding: '2px',
+              border: `1px solid ${theme.colors.border}`,
+            }}
+            title={proMode ? 'Pro mode: All components visible' : 'Simple mode: Only AI components'}
+          >
+          <button
+            onClick={() => !proMode ? undefined : onToggleProMode()}
+            style={{
+              padding: '4px 10px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              backgroundColor: !proMode ? `${theme.dracula.green}25` : 'transparent',
+              color: !proMode ? theme.dracula.green : theme.accent.base0,
+              border: !proMode ? `1px solid ${theme.dracula.green}60` : '1px solid transparent',
+              borderRadius: theme.borderRadius.sm,
+              fontSize: theme.fontSize.xs,
+              fontWeight: theme.fontWeight.semibold,
+              cursor: proMode ? 'pointer' : 'default',
+              transition: `all ${theme.transitions.fast}`,
+              fontFamily: 'system-ui, sans-serif',
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M12 6v6l4 2"/>
+            </svg>
+            Simple
+          </button>
+          <button
+            onClick={() => proMode ? undefined : onToggleProMode()}
+            style={{
+              padding: '4px 10px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              backgroundColor: proMode ? `${theme.dracula.purple}25` : 'transparent',
+              color: proMode ? theme.dracula.purple : theme.accent.base0,
+              border: proMode ? `1px solid ${theme.dracula.purple}60` : '1px solid transparent',
+              borderRadius: theme.borderRadius.sm,
+              fontSize: theme.fontSize.xs,
+              fontWeight: theme.fontWeight.semibold,
+              cursor: !proMode ? 'pointer' : 'default',
+              transition: `all ${theme.transitions.fast}`,
+              fontFamily: 'system-ui, sans-serif',
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+            </svg>
+            Pro
+          </button>
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div style={{ width: '1px', height: theme.spacing.xl, backgroundColor: theme.colors.border, margin: `0 ${theme.spacing.xs}` }} />
+
         {/* Settings Button */}
         <button
           onClick={onOpenSettings}

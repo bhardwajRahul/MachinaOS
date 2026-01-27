@@ -1,6 +1,6 @@
-"""AI node handlers - AI Agent, AI Chat Model, Simple Memory."""
+"""AI node handlers - AI Agent, Chat Agent, AI Chat Model, Simple Memory."""
 
-from typing import Dict, Any, List, TYPE_CHECKING
+from typing import Dict, Any, List, Optional, TYPE_CHECKING
 from core.logging import get_logger
 from constants import ANDROID_SERVICE_NODE_TYPES
 
@@ -143,6 +143,95 @@ async def handle_ai_agent(
         parameters,
         memory_data=memory_data,
         tool_data=tool_data if tool_data else None,
+        broadcaster=broadcaster,
+        workflow_id=workflow_id
+    )
+
+
+async def handle_chat_agent(
+    node_id: str,
+    node_type: str,
+    parameters: Dict[str, Any],
+    context: Dict[str, Any],
+    ai_service: "AIService",
+    database: "Database"
+) -> Dict[str, Any]:
+    """Handle Chat Agent node execution with memory and skill support.
+
+    Chat Agent is a conversational AI agent without tool calling capabilities.
+    It supports memory for conversation history and skills for extended capabilities.
+
+    Args:
+        node_id: The node ID
+        node_type: The node type (chatAgent)
+        parameters: Resolved parameters
+        context: Execution context with nodes, edges, session_id, start_time, execution_id
+        ai_service: The AI service instance
+        database: The database instance
+
+    Returns:
+        Execution result dict
+    """
+    nodes = context.get('nodes')
+    edges = context.get('edges')
+    workflow_id = context.get('workflow_id')
+    memory_data: Optional[Dict[str, Any]] = None
+    skill_data: List[Dict[str, Any]] = []
+
+    logger.info(f"[Chat Agent] Processing node {node_id}, workflow_id={workflow_id}")
+
+    if edges and nodes:
+        incoming_edges = [e for e in edges if e.get('target') == node_id]
+        logger.debug(f"[Chat Agent] Incoming edges: {len(incoming_edges)}")
+
+        for edge in edges:
+            if edge.get('target') != node_id:
+                continue
+
+            target_handle = edge.get('targetHandle')
+            source_node_id = edge.get('source')
+            source_node = next((n for n in nodes if n.get('id') == source_node_id), None)
+
+            if not source_node:
+                continue
+
+            # Memory detection
+            if target_handle == 'input-memory':
+                if source_node.get('type') == 'simpleMemory':
+                    memory_params = await database.get_node_parameters(source_node_id) or {}
+                    memory_session_id = memory_params.get('sessionId', 'default')
+                    memory_type = memory_params.get('memoryType', 'buffer')
+                    window_size = int(memory_params.get('windowSize', 10)) if memory_type == 'window' else None
+                    memory_data = {
+                        'session_id': memory_session_id,
+                        'memory_type': memory_type,
+                        'window_size': window_size
+                    }
+                    logger.debug(f"Chat Agent connected memory node, session={memory_session_id}")
+
+            # Skill detection - nodes connected to input-skill handle
+            elif target_handle == 'input-skill':
+                skill_type = source_node.get('type')
+                skill_params = await database.get_node_parameters(source_node_id) or {}
+                skill_entry = {
+                    'node_id': source_node_id,
+                    'node_type': skill_type,
+                    'parameters': skill_params,
+                    'label': source_node.get('data', {}).get('label', skill_type)
+                }
+                skill_data.append(skill_entry)
+                logger.debug(f"Chat Agent connected skill: {skill_type}")
+
+    # Get broadcaster for real-time status updates
+    from services.status_broadcaster import get_status_broadcaster
+    broadcaster = get_status_broadcaster()
+
+    # Execute as chat (no tool calling) with memory support
+    return await ai_service.execute_chat_agent(
+        node_id,
+        parameters,
+        memory_data=memory_data,
+        skill_data=skill_data if skill_data else None,
         broadcaster=broadcaster,
         workflow_id=workflow_id
     )
