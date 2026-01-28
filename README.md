@@ -1,6 +1,7 @@
 # MachinaOs
 
-Visual workflow automation platform. Build workflows by connecting nodes - like n8n or Zapier.
+ Platform to Build Personal AI Assistants for Yourself that Perform Human Like Tasks.
+ mashup of N8N + Clawdbot 
 
 ## Quick Start
 
