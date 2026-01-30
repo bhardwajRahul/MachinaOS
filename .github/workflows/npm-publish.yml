@@ -1,27 +1,23 @@
-# Publish to npm registry when a version tag is pushed
+# Publish to npm registry using OIDC Trusted Publishing
+# No npm token required - uses GitHub OIDC authentication
 #
-# NOTE: npm now requires Granular Access Tokens (classic tokens revoked)
-# - Granular tokens require 2FA and expire after 90 days max
-# - Create token at: https://www.npmjs.com/settings/YOUR_USERNAME/tokens
-# - Select "Granular Access Token" with publish permissions for this package
-# - Add as NPM_TOKEN secret in GitHub repo settings
-# - Remember to rotate before expiry (max 90 days)
+# Setup: Go to npmjs.com → Package Settings → Trusted Publishers
+# Add: Owner: trohitg, Repo: MachinaOS, Workflow: npm-publish.yml
+#
+# Reference: https://docs.npmjs.com/trusted-publishers/
 
 name: Publish to npm
 
 on:
-  # Trigger on version tags (e.g., v0.0.1, v1.2.3)
   push:
     tags:
       - 'v*.*.*'
-  # Also trigger on published releases
   release:
     types: [published]
-  # Allow manual trigger
   workflow_dispatch:
 
 jobs:
-  publish-npm:
+  publish:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -36,16 +32,21 @@ jobs:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Install root dependencies
-        run: npm ci
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
-      - name: Install client dependencies
-        run: cd client && npm ci
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
 
-      - name: Build client
-        run: cd client && npm run build
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh && echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Build all services
+        run: npm run build
 
       - name: Publish to npm
-        run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public --provenance

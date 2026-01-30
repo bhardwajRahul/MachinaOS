@@ -29,15 +29,6 @@
   "bin": {
     "machinaos": "./bin/cli.js"
   },
-  "files": [
-    "bin/",
-    "client/",
-    "server/",
-    "scripts/",
-    "docker-compose.yml",
-    "docker-compose.prod.yml",
-    ".env.template"
-  ],
   "engines": {
     "node": ">=18.0.0"
   },

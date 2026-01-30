@@ -1,3 +1,7 @@
+# ===========================================
+# npmignore - Files to exclude from npm package
+# ===========================================
+
 # Git
 .git/
 .gitignore
@@ -7,30 +11,40 @@
 .env
 .env.*
 !.env.template
+
+# Database files
 *.db
 *.sqlite
 *.db-journal
 *.db-shm
 *.db-wal
-data/
 
-# Python virtual environment
+# Python cache and virtual env (all locations)
+__pycache__/
+**/__pycache__/
+*.pyc
+**/*.pyc
+*.pyo
+**/*.pyo
 .venv/
 venv/
-__pycache__/
-*.pyc
-*.pyo
+**/.venv/
+**/venv/
 *.egg-info/
 
-# Node modules (installed on user's machine)
+# Server data directories
+server/data/
+
+# Node modules (all locations)
 node_modules/
 **/node_modules/
-client/node_modules/
-server/whatsapp-rpc/node_modules/
 
 # Vite cache
+.vite/
 **/.vite/
-client/.vite/
+
+# Client build output (users build locally)
+client/dist/
 
 # IDE & editors
 .vscode/
@@ -45,12 +59,9 @@ client/.vite/
 .DS_Store
 Thumbs.db
 
-# Build artifacts & logs
+# Logs
 *.log
-*.tmp
-*.temp
 logs/
-build/
 
 # Test files
 __tests__/
@@ -68,22 +79,23 @@ CLAUDE.md
 # Duplicate folder
 MachinaOS/
 
-# WhatsApp session data
+# WhatsApp session/temp data
 server/whatsapp-rpc/.wwebjs_*/
 server/whatsapp-rpc/session/
 server/whatsapp-rpc/qr_*.png
-server/whatsapp-rpc/*.db
 server/whatsapp-rpc/data/
 server/whatsapp-rpc/bin/
 
-# Server data directories
-server/data/
-server/*.db
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+*~
 
-# Credentials (should never be committed anyway)
-**/credentials.json
-**/secrets.json
-**/apikeys.json
-**/*.pem
-**/*.key
-**/*.crt
+# Package lock files
+package-lock.json
+**/package-lock.json
+
+# Build/deploy scripts not needed for users
+deploy.sh
