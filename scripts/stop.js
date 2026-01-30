@@ -266,7 +266,7 @@ function killTemporalWorkers() {
   const killedPids = [];
 
   if (isWindows) {
-    // Find Python processes running temporal worker
+    // Find Python processes running temporal worker (matches both python and uv run)
     const wmicOutput = exec('wmic process where "CommandLine like \'%services.temporal.worker%\'" get ProcessId 2>nul');
     for (const line of wmicOutput.split('\n')) {
       const pid = line.trim();
@@ -276,8 +276,36 @@ function killTemporalWorkers() {
       }
     }
   } else {
-    // Unix: Use pgrep to find temporal worker processes
+    // Unix: Use pgrep to find temporal worker processes (matches both python and uv run)
     const pgrepOutput = exec('pgrep -f "services.temporal.worker" 2>/dev/null');
+    for (const pid of pgrepOutput.split('\n')) {
+      if (pid.trim() && /^\d+$/.test(pid.trim())) {
+        exec(`kill -9 ${pid.trim()} 2>/dev/null`);
+        killedPids.push(pid.trim());
+      }
+    }
+  }
+
+  return killedPids;
+}
+
+// Kill uv/uvicorn processes
+function killUvProcesses() {
+  const killedPids = [];
+
+  if (isWindows) {
+    // Find uv/uvicorn processes
+    const wmicOutput = exec('wmic process where "CommandLine like \'%uvicorn%main:app%\'" get ProcessId 2>nul');
+    for (const line of wmicOutput.split('\n')) {
+      const pid = line.trim();
+      if (pid && /^\d+$/.test(pid)) {
+        exec(`taskkill /PID ${pid} /F 2>nul`);
+        killedPids.push(pid);
+      }
+    }
+  } else {
+    // Unix: Kill uv/uvicorn processes
+    const pgrepOutput = exec('pgrep -f "uvicorn.*main:app" 2>/dev/null');
     for (const pid of pgrepOutput.split('\n')) {
       if (pid.trim() && /^\d+$/.test(pid.trim())) {
         exec(`kill -9 ${pid.trim()} 2>/dev/null`);
@@ -311,6 +339,13 @@ for (const port of PORTS) {
   if (!result.portFree) {
     allStopped = false;
   }
+}
+
+// Kill uv/uvicorn processes that might not be on a specific port
+const uvPids = killUvProcesses();
+if (uvPids.length > 0) {
+  console.log(`[OK] uv/uvicorn: Killed ${uvPids.length} process(es)`);
+  console.log(`    PIDs: ${uvPids.join(', ')}`);
 }
 
 // Kill Temporal workers if enabled

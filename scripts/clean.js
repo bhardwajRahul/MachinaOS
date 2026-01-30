@@ -1,8 +1,13 @@
-import { rm } from 'fs/promises';
-import { existsSync, readdirSync, statSync } from 'fs';
-import { join } from 'path';
+#!/usr/bin/env node
+import { execSync } from 'child_process';
+import { existsSync } from 'fs';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
-const dirsToRemove = [
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const ROOT = resolve(__dirname, '..');
+
+const targets = [
   'node_modules',
   'client/node_modules',
   'client/dist',
@@ -10,79 +15,31 @@ const dirsToRemove = [
   'server/whatsapp-rpc/node_modules',
   'server/whatsapp-rpc/dist',
   'server/data',
-  '.eslintcache'
+  'server/.venv',
 ];
 
-const filesToRemove = [
-  '.env'
-];
+process.chdir(ROOT);
+console.log('Cleaning...');
 
-const filePatternsToRemove = [
-  '.db',
-  '.sqlite',
-  '.sqlite3'
-];
+// Detect if running in WSL on Windows filesystem
+const isWSL = process.platform === 'linux' && ROOT.startsWith('/mnt/');
+const isWindows = process.platform === 'win32';
 
-// Find all __pycache__ directories and db files recursively
-function findCleanTargets(dir, dirs = [], files = []) {
-  if (!existsSync(dir)) return { dirs, files };
-
-  try {
-    const entries = readdirSync(dir);
-    for (const entry of entries) {
-      const fullPath = join(dir, entry);
-      try {
-        const stat = statSync(fullPath);
-        if (stat.isDirectory()) {
-          if (entry === '__pycache__' || entry === '.pytest_cache') {
-            dirs.push(fullPath);
-          } else if (entry !== 'node_modules' && entry !== '.git') {
-            findCleanTargets(fullPath, dirs, files);
-          }
-        } else if (stat.isFile()) {
-          if (filePatternsToRemove.some(ext => entry.endsWith(ext))) {
-            files.push(fullPath);
-          }
-        }
-      } catch {}
-    }
-  } catch {}
-
-  return { dirs, files };
+for (const target of targets) {
+  if (existsSync(target)) {
+    console.log(`  Removing: ${target}`);
+    try {
+      if (isWSL) {
+        // Use cmd.exe for WSL on /mnt/ - much faster
+        const winPath = target.replace(/\//g, '\\\\');
+        execSync(`cmd.exe /c "rmdir /s /q ${winPath}"`, { stdio: 'ignore' });
+      } else if (isWindows) {
+        execSync(`rmdir /s /q "${target}"`, { stdio: 'ignore' });
+      } else {
+        execSync(`rm -rf "${target}"`, { stdio: 'ignore' });
+      }
+    } catch {}
+  }
 }
 
-async function clean() {
-  const serverTargets = findCleanTargets('server');
-  const rootTargets = findCleanTargets('.');
-
-  const allDirs = [...dirsToRemove, ...serverTargets.dirs];
-  const allFiles = [...filesToRemove, ...serverTargets.files, ...rootTargets.files.filter(f => !f.includes('node_modules'))];
-
-  console.log('Cleaning build artifacts...');
-
-  for (const dir of allDirs) {
-    if (existsSync(dir)) {
-      try {
-        await rm(dir, { recursive: true, force: true });
-        console.log(`  Removed dir: ${dir}`);
-      } catch (err) {
-        console.error(`  Failed to remove ${dir}: ${err.message}`);
-      }
-    }
-  }
-
-  for (const file of allFiles) {
-    if (existsSync(file)) {
-      try {
-        await rm(file, { force: true });
-        console.log(`  Removed file: ${file}`);
-      } catch (err) {
-        console.error(`  Failed to remove ${file}: ${err.message}`);
-      }
-    }
-  }
-
-  console.log('Done.');
-}
-
-clean();
+console.log('Done.');
