@@ -1,6 +1,9 @@
 #!/usr/bin/env node
-import { execSync } from 'child_process';
-import { existsSync } from 'fs';
+/**
+ * Cross-platform clean script using Node.js native APIs.
+ * Works on: Windows, macOS, Linux, WSL, Git Bash
+ */
+import { rmSync, existsSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -13,33 +16,24 @@ const targets = [
   'client/dist',
   'client/.vite',
   'server/whatsapp-rpc/node_modules',
-  'server/whatsapp-rpc/dist',
+  'server/whatsapp-rpc/bin',
   'server/whatsapp-rpc/data',
   'server/data',
   'server/.venv',
 ];
 
-process.chdir(ROOT);
 console.log('Cleaning...');
 
-// Detect if running in WSL on Windows filesystem
-const isWSL = process.platform === 'linux' && ROOT.startsWith('/mnt/');
-const isWindows = process.platform === 'win32';
-
 for (const target of targets) {
-  if (existsSync(target)) {
+  const fullPath = resolve(ROOT, target);
+  if (existsSync(fullPath)) {
     console.log(`  Removing: ${target}`);
     try {
-      if (isWSL) {
-        // Use cmd.exe for WSL on /mnt/ - much faster
-        const winPath = target.replace(/\//g, '\\\\');
-        execSync(`cmd.exe /c "rmdir /s /q ${winPath}"`, { stdio: 'ignore' });
-      } else if (isWindows) {
-        execSync(`rmdir /s /q "${target}"`, { stdio: 'ignore' });
-      } else {
-        execSync(`rm -rf "${target}"`, { stdio: 'ignore' });
-      }
-    } catch {}
+      // Node.js native rmSync - works cross-platform
+      rmSync(fullPath, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+    } catch (err) {
+      console.log(`  Warning: Could not remove ${target}: ${err.message}`);
+    }
   }
 }
 

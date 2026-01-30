@@ -1,123 +1,71 @@
 ---
 name: android-skill
 description: Control Android devices - battery, wifi, bluetooth, apps, location, camera, and sensors. Use when user wants to interact with their Android phone or tablet.
-allowed-tools: android-battery android-wifi android-bluetooth android-apps android-location android-audio android-screen android-camera android-sensors
 metadata:
   author: machina
-  version: "1.0"
+  version: "2.0"
   category: device
 ---
 
 # Android Device Control
 
-This skill enables you to monitor and control Android devices connected via ADB or remote WebSocket.
+This skill provides context for monitoring and controlling Android devices.
 
-## Capabilities
+## How It Works
 
-- Monitor battery status and health
-- Control WiFi and Bluetooth
-- Launch and list applications
-- Get device location
-- Control audio and screen
-- Access camera and sensors
+This skill provides instructions and context. To execute Android actions, connect the **Android Toolkit** node to the Chat Agent's `input-tools` handle, then connect Android service nodes to the toolkit:
 
-## Tool Reference
+```
+[Battery Monitor] --+
+                    |
+[WiFi Automation] --+--> [Android Toolkit] --> [Chat Agent]
+                    |
+[Location]       ---+
+```
 
-### android-battery
-Get battery information.
+## Available Android Service Nodes
 
-Parameters:
-- `action`: "status" (default)
+Connect these to the Android Toolkit:
 
-Returns: level, charging, health, temperature
+| Node | Capabilities |
+|------|-------------|
+| **Battery Monitor** | Battery level, charging status, health, temperature |
+| **WiFi Automation** | Enable/disable WiFi, scan networks, get status |
+| **Bluetooth Automation** | Enable/disable Bluetooth, paired devices |
+| **App Launcher** | Launch applications by package name |
+| **App List** | List installed applications |
+| **Location** | Get current GPS coordinates |
+| **Audio Automation** | Volume control, mute/unmute |
+| **Screen Control** | Brightness, wake/sleep screen |
+| **Camera Control** | Camera info, capture photos |
+| **Motion Detection** | Accelerometer, gyroscope data |
+| **Environmental Sensors** | Temperature, humidity, pressure |
 
-### android-wifi
-Control WiFi settings.
-
-Parameters:
-- `action`: "status", "enable", "disable", "scan"
-
-### android-bluetooth
-Control Bluetooth settings.
-
-Parameters:
-- `action`: "status", "enable", "disable", "paired_devices"
-
-### android-apps
-Manage applications.
-
-Parameters:
-- `action`: "list", "launch"
-- `package_name` (for launch): App package name
-
-### android-location
-Get device location.
-
-Parameters:
-- `action`: "current"
-
-Returns: latitude, longitude, accuracy, provider
-
-### android-audio
-Control audio settings.
-
-Parameters:
-- `action`: "get_volume", "set_volume", "mute", "unmute"
-- `volume` (for set_volume): 0-100
-
-### android-screen
-Control screen settings.
-
-Parameters:
-- `action`: "brightness", "set_brightness", "wake", "sleep"
-- `level` (for set_brightness): 0-255
-
-### android-camera
-Access camera.
-
-Parameters:
-- `action`: "info", "capture"
-- `camera` (optional): "front" or "back" (default: back)
-
-### android-sensors
-Read sensor data.
-
-Parameters:
-- `action`: "motion", "environment"
-
-## Examples
+## Example Interactions
 
 **User**: "What's my phone's battery level?"
-**Action**: Use android-battery with:
-- action: "status"
+- Use the Battery Monitor service with action "status"
 
 **User**: "Turn off WiFi"
-**Action**: Use android-wifi with:
-- action: "disable"
+- Use the WiFi Automation service with action "disable"
 
 **User**: "What apps are installed?"
-**Action**: Use android-apps with:
-- action: "list"
+- Use the App List service with action "list"
 
 **User**: "Open Chrome"
-**Action**: Use android-apps with:
-- action: "launch"
-- package_name: "com.android.chrome"
+- Use the App Launcher service with action "launch", package_name "com.android.chrome"
 
 **User**: "Where is my phone?"
-**Action**: Use android-location with:
-- action: "current"
+- Use the Location service with action "current"
 
 **User**: "Set volume to 50%"
-**Action**: Use android-audio with:
-- action: "set_volume"
-- volume: 50
+- Use the Audio Automation service with action "set_volume", volume 50
 
 ## Device Connection
 
 Before using Android tools, ensure:
 1. Device is connected via ADB (USB) or remote WebSocket
-2. Android Device Setup node shows connected status
+2. Android Device Setup node shows connected status (green indicator)
 3. Required permissions are granted on the device
 
 ## Error Handling
@@ -125,3 +73,10 @@ Before using Android tools, ensure:
 - If device is not connected, inform user to check connection
 - If permission is denied, suggest enabling it in device settings
 - If action fails, provide the error message and suggest alternatives
+
+## Setup Requirements
+
+1. Connect this skill to Chat Agent's `input-skill` handle
+2. Add **Android Toolkit** node and connect to Chat Agent's `input-tools` handle
+3. Connect desired Android service nodes to the Android Toolkit
+4. Ensure Android device is paired (green status indicator)

@@ -27,5 +27,9 @@ export default defineConfig(({ mode }) => {
       strictPort: false,
       host: true
     },
+    build: {
+      // antd + reactflow are large libraries - this is expected
+      chunkSizeWarningLimit: 1500,
+    },
   }
 })

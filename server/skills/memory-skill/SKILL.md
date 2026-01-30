@@ -1,91 +1,154 @@
 ---
 name: memory-skill
-description: Remember information across conversations. Use when user asks you to remember something, recall previous information, or manage conversation history.
-allowed-tools: memory-save memory-get memory-clear
+description: Manage conversation memory. Use when user asks to remember something, recall information, view/edit conversation history, or manage short/long-term memory.
+allowed-tools: memory-save memory-get memory-clear memory-view memory-search
 metadata:
   author: machina
-  version: "1.0"
+  version: "2.0"
   category: memory
 ---
 
-# Memory Management
+# Memory Management Skill
 
-This skill enables you to save and recall information across conversations using short-term and long-term memory.
+This skill enables you to manage conversation memory using the SimpleMemory node's markdown-based storage system.
 
-## Memory Types
+## Memory Architecture
 
-### Short-term Memory (Buffer)
-- Keeps recent conversation context
-- Automatically managed by the system
-- Limited to recent messages
+### Short-Term Memory (Markdown)
+- Visible and editable in the SimpleMemory node's UI
+- Stored as markdown with timestamped entries
+- Window-based: keeps last N message pairs (configurable)
+- Format: `### **Human** (timestamp)` and `### **Assistant** (timestamp)`
 
-### Long-term Memory (Session)
-- Persists information across conversations
-- Explicitly saved by you or the user
-- Organized by session ID
+### Long-Term Memory (Vector DB)
+- Automatically archives messages that exceed the window
+- Semantic search for relevant past conversations
+- Enabled via `longTermEnabled` in SimpleMemory node
 
 ## Capabilities
 
-- Save important information for later recall
-- Retrieve previously saved information
-- Clear memory when no longer needed
-- Track conversation topics and preferences
+1. **View History**: See recent conversation in markdown format
+2. **Save Notes**: Add explicit notes/memories to the conversation
+3. **Search Memory**: Find relevant past conversations semantically
+4. **Clear Memory**: Reset conversation history
 
-## When to Use Memory
+## When to Use
 
-Save information when the user:
-- Says "remember this" or "don't forget"
-- Shares personal preferences
-- Provides important context for future use
-- Asks you to track something
+**Save information when:**
+- User says "remember this" or "don't forget"
+- Important context is shared for future use
+- User wants to note something specific
 
-Recall information when the user:
-- Asks "do you remember..."
-- References previous conversations
-- Needs context from earlier discussions
+**Recall information when:**
+- User asks "do you remember..."
+- Context from earlier is needed
+- User references previous discussions
+
+**View history when:**
+- User wants to see conversation log
+- Debugging or reviewing past exchanges
 
 ## Tool Reference
 
 ### memory-save
-Save information to long-term memory.
+Add a note or memory entry to the conversation history.
 
 Parameters:
-- `key` (required): Identifier for the memory
-- `value` (required): Information to remember
-- `session_id` (optional): Session for organization
+- `content` (required): Information to remember
+- `role` (optional): "note" (default) or "context"
+
+Example:
+```json
+{
+  "content": "User's favorite color is blue",
+  "role": "note"
+}
+```
 
 ### memory-get
-Retrieve saved information.
+Get recent conversation history or search for specific content.
 
 Parameters:
-- `key` (required): Identifier to look up
-- `session_id` (optional): Specific session to search
+- `count` (optional): Number of recent messages (default: 10)
+- `search` (optional): Search term to find specific memories
+
+Example - Recent history:
+```json
+{
+  "count": 5
+}
+```
+
+Example - Search:
+```json
+{
+  "search": "favorite color"
+}
+```
 
 ### memory-clear
-Clear memory entries.
+Clear conversation history.
 
 Parameters:
-- `key` (optional): Specific key to clear, or all if not specified
-- `session_id` (optional): Specific session to clear
+- `confirm` (required): Must be true to clear
 
-## Examples
+Example:
+```json
+{
+  "confirm": true
+}
+```
 
-**User**: "Remember that my favorite color is blue"
-**Action**: Use memory-save with:
-- key: "user_preference_color"
-- value: "blue"
+### memory-view
+View the current conversation history in markdown format.
 
-**User**: "What's my favorite color?"
-**Action**: Use memory-get with:
-- key: "user_preference_color"
+Parameters: None
 
-**User**: "Forget everything about my preferences"
-**Action**: Use memory-clear with:
-- key: "user_preference_*" (wildcard pattern)
+Returns the full markdown content of the conversation history.
+
+### memory-search
+Semantic search in long-term memory (if enabled).
+
+Parameters:
+- `query` (required): Search query
+- `count` (optional): Number of results (default: 3)
+
+Example:
+```json
+{
+  "query": "what did we discuss about the project",
+  "count": 5
+}
+```
+
+## Markdown Format
+
+The conversation history uses this format:
+
+```markdown
+# Conversation History
+
+### **Human** (2025-01-30 10:15:32)
+Hello, how are you?
+
+### **Assistant** (2025-01-30 10:15:35)
+I'm doing well! How can I help you today?
+
+### **Note** (2025-01-30 10:16:00)
+User prefers formal language.
+```
+
+## Integration with SimpleMemory Node
+
+When connected to a Chat Agent:
+1. Conversation is automatically logged to markdown
+2. Window size limits short-term memory
+3. Overflow archives to vector DB (if long-term enabled)
+4. You can view/edit the markdown in the node's parameter panel
 
 ## Best Practices
 
-1. Use descriptive keys for easy retrieval
-2. Group related information under session IDs
-3. Don't store sensitive information without consent
-4. Periodically review and clean up old memories
+1. Use memory-save for explicit user requests to remember
+2. Use memory-search for semantic recall of past discussions
+3. Don't save sensitive information without user consent
+4. The markdown is editable - users can manually curate their history

@@ -198,7 +198,7 @@ interface WebSocketContextValue {
   clearConsoleLogs: () => void;
   clearTerminalLogs: () => void;
   clearChatMessages: () => void;
-  sendChatMessage: (message: string, sessionId?: string) => Promise<void>;
+  sendChatMessage: (message: string, nodeId?: string) => Promise<void>;
 
   // Generic request method
   sendRequest: <T = any>(type: string, data?: Record<string, any>) => Promise<T>;
@@ -917,6 +917,39 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         } catch {
           // Ignore errors loading terminal logs
         }
+
+        // Load chat message history from database
+        try {
+          const chatResponse = await new Promise<any>((resolve, reject) => {
+            const requestId = `chat_messages_${Date.now()}`;
+            const timeout = setTimeout(() => reject(new Error('Timeout')), 5000);
+
+            const handler = (event: MessageEvent) => {
+              try {
+                const msg = JSON.parse(event.data);
+                if (msg.request_id === requestId) {
+                  clearTimeout(timeout);
+                  ws.removeEventListener('message', handler);
+                  resolve(msg);
+                }
+              } catch {}
+            };
+
+            ws.addEventListener('message', handler);
+            ws.send(JSON.stringify({ type: 'get_chat_messages', session_id: 'default', request_id: requestId }));
+          });
+
+          if (chatResponse.success && chatResponse.messages) {
+            const messages: ChatMessage[] = chatResponse.messages.map((msg: any) => ({
+              role: msg.role as 'user' | 'assistant',
+              message: msg.message,
+              timestamp: msg.timestamp
+            }));
+            setChatMessages(messages);
+          }
+        } catch {
+          // Ignore errors loading chat messages
+        }
       };
 
       ws.onmessage = handleMessage;
@@ -1026,9 +1059,14 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, []);
 
-  // Clear chat messages
+  // Clear chat messages (both local state and database)
+  // Uses direct WebSocket send to avoid dependency on sendRequest (which is defined later)
   const clearChatMessages = useCallback(() => {
     setChatMessages([]);
+    // Also clear from database via direct WebSocket send
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'clear_chat_messages', session_id: 'default' }));
+    }
   }, []);
 
   // Derive current workflow's node statuses (n8n pattern)
@@ -1090,24 +1128,26 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   // Chat Message Operations
   // =========================================================================
 
-  // Send chat message (triggers chatTrigger nodes)
-  const sendChatMessageAsync = useCallback(async (message: string, sessionId?: string): Promise<void> => {
+  // Send chat message (triggers chatTrigger nodes and saves to database)
+  // nodeId: optional specific chatTrigger node to target
+  const sendChatMessageAsync = useCallback(async (message: string, nodeId?: string): Promise<void> => {
     const timestamp = new Date().toISOString();
     const chatMessage: ChatMessage = {
       role: 'user',
       message,
-      timestamp,
-      session_id: sessionId || 'default'
+      timestamp
     };
 
     // Add to local messages immediately for UI feedback
     setChatMessages(prev => [...prev, chatMessage]);
 
-    // Send to backend to dispatch to chatTrigger nodes
+    // Send to backend to dispatch to chatTrigger nodes (also saves to database)
     try {
       await sendRequest('send_chat_message', {
         message,
-        session_id: sessionId || 'default',
+        role: 'user',
+        node_id: nodeId,  // Target specific chatTrigger node if specified
+        session_id: 'default',
         timestamp
       });
     } catch (error) {

@@ -64,6 +64,14 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
     if node_type == 'androidTool':
         return await _execute_android_toolkit(tool_args, config)
 
+    # Google Maps Geocoding (addLocations node as tool)
+    if node_type == 'addLocations':
+        return await _execute_geocoding(tool_args, config.get('parameters', {}))
+
+    # Google Maps Nearby Places (showNearbyPlaces node as tool)
+    if node_type == 'showNearbyPlaces':
+        return await _execute_nearby_places(tool_args, config.get('parameters', {}))
+
     # Generic fallback for unknown node types
     logger.warning(f"[Tool] Unknown tool type: {node_type}, using generic handler")
     return await _execute_generic(tool_args, config)
@@ -420,7 +428,7 @@ async def _execute_whatsapp_send(args: Dict[str, Any],
     Media sources: URL
 
     Args:
-        args: LLM-provided arguments matching WhatsAppSendSchema
+        args: LLM-provided arguments matching WhatsAppSendSchema (snake_case)
         node_params: Node parameters (used as fallback)
 
     Returns:
@@ -428,27 +436,27 @@ async def _execute_whatsapp_send(args: Dict[str, Any],
     """
     from services.handlers.whatsapp import handle_whatsapp_send
 
-    # Map LLM args to node parameter format (camelCase for handler)
+    # Args are snake_case matching Pydantic schema and frontend node params
     parameters = {
-        'recipientType': args.get('recipient_type', 'phone'),
+        'recipient_type': args.get('recipient_type', 'phone'),
         'phone': args.get('phone', ''),
         'group_id': args.get('group_id', ''),
-        'messageType': args.get('message_type', 'text'),
+        'message_type': args.get('message_type', 'text'),
         'message': args.get('message', ''),
-        'mediaSource': 'url' if args.get('media_url') else 'none',
-        'mediaUrl': args.get('media_url', ''),
+        'media_source': 'url' if args.get('media_url') else 'none',
+        'media_url': args.get('media_url', ''),
         'caption': args.get('caption', ''),
         'latitude': args.get('latitude'),
         'longitude': args.get('longitude'),
-        'locationName': args.get('location_name', ''),
+        'location_name': args.get('location_name', ''),
         'address': args.get('address', ''),
-        'contactName': args.get('contact_name', ''),
+        'contact_name': args.get('contact_name', ''),
         'vcard': args.get('vcard', ''),
     }
 
     # Validate required fields based on message type
-    recipient_type = parameters['recipientType']
-    message_type = parameters['messageType']
+    recipient_type = parameters['recipient_type']
+    message_type = parameters['message_type']
 
     if recipient_type == 'phone' and not parameters['phone']:
         return {"error": "Phone number is required for recipient_type='phone'"}
@@ -456,7 +464,7 @@ async def _execute_whatsapp_send(args: Dict[str, Any],
         return {"error": "Group ID is required for recipient_type='group'"}
     if message_type == 'text' and not parameters['message']:
         return {"error": "Message content is required for message_type='text'"}
-    if message_type in ('image', 'video', 'audio', 'document', 'sticker') and not parameters['mediaUrl']:
+    if message_type in ('image', 'video', 'audio', 'document', 'sticker') and not parameters['media_url']:
         return {"error": f"media_url is required for message_type='{message_type}'"}
     if message_type == 'location' and (parameters['latitude'] is None or parameters['longitude'] is None):
         return {"error": "latitude and longitude are required for message_type='location'"}
@@ -503,7 +511,7 @@ async def _execute_whatsapp_db(args: Dict[str, Any],
     - check_contacts: Check WhatsApp registration status
 
     Args:
-        args: LLM-provided arguments matching WhatsAppDbSchema
+        args: LLM-provided arguments matching WhatsAppDbSchema (snake_case)
         node_params: Node parameters (used as fallback)
 
     Returns:
@@ -514,22 +522,22 @@ async def _execute_whatsapp_db(args: Dict[str, Any],
     operation = args.get('operation', 'chat_history')
     logger.info(f"[WhatsApp DB Tool] Executing operation: {operation}")
 
-    # Build parameters for handler
+    # Build parameters for handler (snake_case matching frontend nodes)
     parameters = {'operation': operation}
 
     if operation == 'chat_history':
         parameters.update({
-            'chatType': args.get('chat_type', 'individual'),
+            'chat_type': args.get('chat_type', 'individual'),
             'phone': args.get('phone', ''),
             'group_id': args.get('group_id', ''),
-            'messageFilter': args.get('message_filter', 'all'),
-            'groupFilter': args.get('group_filter', 'all'),
-            'senderPhone': args.get('sender_phone', ''),
+            'message_filter': args.get('message_filter', 'all'),
+            'group_filter': args.get('group_filter', 'all'),
+            'sender_phone': args.get('sender_phone', ''),
             'limit': args.get('limit', 50),
             'offset': args.get('offset', 0),
         })
         # Validate required fields
-        chat_type = parameters['chatType']
+        chat_type = parameters['chat_type']
         if chat_type == 'individual' and not parameters['phone']:
             return {"error": "Phone number is required for chat_type='individual'"}
         if chat_type == 'group' and not parameters['group_id']:
@@ -537,21 +545,24 @@ async def _execute_whatsapp_db(args: Dict[str, Any],
 
     elif operation == 'search_groups':
         parameters['query'] = args.get('query', '')
+        parameters['limit'] = min(args.get('limit', 20), 50)  # Cap at 50 to prevent overflow
 
     elif operation == 'get_group_info':
         group_id = args.get('group_id', '')
         if not group_id:
             return {"error": "group_id is required for get_group_info"}
-        parameters['groupIdForInfo'] = group_id
+        parameters['group_id_for_info'] = group_id
+        parameters['participant_limit'] = min(args.get('participant_limit', 50), 100)  # Cap at 100
 
     elif operation == 'get_contact_info':
         phone = args.get('phone', '')
         if not phone:
             return {"error": "phone is required for get_contact_info"}
-        parameters['contactPhone'] = phone
+        parameters['contact_phone'] = phone
 
     elif operation == 'list_contacts':
         parameters['query'] = args.get('query', '')
+        parameters['limit'] = min(args.get('limit', 50), 100)  # Cap at 100 to prevent overflow
 
     elif operation == 'check_contacts':
         phones = args.get('phones', '')
@@ -716,6 +727,100 @@ async def _execute_android_toolkit(args: Dict[str, Any],
                 workflow_id=workflow_id
             )
         return {"error": str(e)}
+
+
+async def _execute_geocoding(args: Dict[str, Any],
+                              node_params: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute Google Maps geocoding (addLocations node as tool).
+
+    Args:
+        args: LLM-provided arguments (snake_case: service_type, address, lat, lng)
+        node_params: Node parameters (may contain api_key)
+
+    Returns:
+        Geocoding result with coordinates or address
+    """
+    from services.handlers.utility import handle_add_locations
+    from core.container import container
+
+    # Args use snake_case matching Pydantic schema and node params
+    parameters = {**args, 'api_key': node_params.get('api_key', '')}
+
+    service_type = parameters.get('service_type', 'geocode')
+
+    # Validate required fields
+    if service_type == 'geocode' and not parameters.get('address'):
+        return {"error": "address is required for geocoding"}
+    if service_type == 'reverse_geocode':
+        if parameters.get('lat') is None or parameters.get('lng') is None:
+            return {"error": "lat and lng are required for reverse geocoding"}
+
+    lat, lng = parameters.get('lat'), parameters.get('lng')
+    location_str = parameters.get('address') or f"({lat}, {lng})"
+    logger.info(f"[Geocoding Tool] {service_type}: {location_str}")
+
+    try:
+        maps_service = container.maps_service()
+        result = await handle_add_locations(
+            node_id="tool_geocoding",
+            node_type="addLocations",
+            parameters=parameters,
+            context={},
+            maps_service=maps_service
+        )
+
+        if result.get('success'):
+            return {"success": True, "service_type": service_type, **result.get('result', {})}
+        else:
+            return {"error": result.get('error', 'Geocoding failed')}
+
+    except Exception as e:
+        logger.error(f"[Geocoding Tool] Error: {e}")
+        return {"error": f"Geocoding failed: {str(e)}"}
+
+
+async def _execute_nearby_places(args: Dict[str, Any],
+                                  node_params: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute Google Maps nearby places search (showNearbyPlaces node as tool).
+
+    Args:
+        args: LLM-provided arguments (snake_case: lat, lng, radius, type, keyword)
+        node_params: Node parameters (may contain api_key)
+
+    Returns:
+        Nearby places search results
+    """
+    from services.handlers.utility import handle_nearby_places
+    from core.container import container
+
+    # Args use snake_case matching Pydantic schema and node params
+    parameters = {**args, 'api_key': node_params.get('api_key', '')}
+
+    # Validate required fields
+    if parameters.get('lat') is None or parameters.get('lng') is None:
+        return {"error": "lat and lng are required for nearby places search"}
+
+    place_type = parameters.get('type', 'restaurant')
+    logger.info(f"[Nearby Places Tool] Searching {place_type} near ({parameters['lat']}, {parameters['lng']})")
+
+    try:
+        maps_service = container.maps_service()
+        result = await handle_nearby_places(
+            node_id="tool_nearby_places",
+            node_type="showNearbyPlaces",
+            parameters=parameters,
+            context={},
+            maps_service=maps_service
+        )
+
+        if result.get('success'):
+            return {"success": True, "type": place_type, **result.get('result', {})}
+        else:
+            return {"error": result.get('error', 'Nearby places search failed')}
+
+    except Exception as e:
+        logger.error(f"[Nearby Places Tool] Error: {e}")
+        return {"error": f"Nearby places search failed: {str(e)}"}
 
 
 async def _execute_generic(args: Dict[str, Any],

@@ -1,88 +1,170 @@
 ---
 name: maps-skill
 description: Location services including geocoding, nearby places, and maps. Use when user asks about addresses, locations, places nearby, or wants to see a map.
-allowed-tools: maps-geocode maps-nearby maps-create
 metadata:
   author: machina
-  version: "1.0"
+  version: "3.0"
   category: location
 ---
 
 # Location Services
 
-This skill provides location-based capabilities using Google Maps services.
+This skill provides context for location-based capabilities using Google Maps services.
 
-## Capabilities
+## How It Works
 
-- Convert addresses to coordinates (geocoding)
-- Find nearby places (restaurants, stores, etc.)
-- Create and display maps
-- Get place details and information
+This skill provides instructions and context. To execute location actions, connect the appropriate **tool nodes** to the Chat Agent's `input-tools` handle:
 
-## Tool Reference
+- **Add Locations** node - Geocode addresses to coordinates or reverse geocode
+- **Show Nearby Places** node - Search for nearby places
 
-### maps-geocode
-Convert an address to geographic coordinates.
+## add_locations Tool (Geocoding)
 
-Parameters:
-- `address` (required): Address or location name to geocode
+Convert addresses to coordinates or coordinates to addresses.
 
-Returns:
-- latitude, longitude
-- formatted address
-- place ID
+### Schema Fields
 
-### maps-nearby
-Search for nearby places.
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| service_type | string | Yes | "geocode" (address to coordinates) or "reverse_geocode" (coordinates to address) |
+| address | string | If geocode | Address to geocode (e.g., "1600 Amphitheatre Parkway, Mountain View, CA") |
+| lat | float | If reverse_geocode | Latitude coordinate |
+| lng | float | If reverse_geocode | Longitude coordinate |
 
-Parameters:
-- `location` (required): Center point (address or "lat,lng")
-- `type` (required): Place type (restaurant, cafe, hospital, etc.)
-- `radius` (optional): Search radius in meters (default: 1000)
+### Examples
 
-Returns:
-- List of places with name, address, rating
-- Distance from center point
+**Geocode address:**
+```json
+{
+  "service_type": "geocode",
+  "address": "Eiffel Tower, Paris"
+}
+```
 
-### maps-create
-Create an interactive map.
+**Reverse geocode:**
+```json
+{
+  "service_type": "reverse_geocode",
+  "lat": 48.8584,
+  "lng": 2.2945
+}
+```
 
-Parameters:
-- `center` (required): Map center (address or "lat,lng")
-- `zoom` (optional): Zoom level 1-20 (default: 14)
-- `markers` (optional): List of markers to add
+### Response Format
+
+```json
+{
+  "success": true,
+  "service_type": "geocoding",
+  "input": {"address": "Eiffel Tower, Paris"},
+  "results": [
+    {
+      "formatted_address": "Champ de Mars, 5 Av. Anatole France, 75007 Paris, France",
+      "geometry": {
+        "location": {"lat": 48.8583701, "lng": 2.2944813}
+      },
+      "address_components": [...]
+    }
+  ],
+  "status": "OK"
+}
+```
+
+## show_nearby_places Tool
+
+Search for places near a location.
+
+### Schema Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| lat | float | Yes | Center latitude for search |
+| lng | float | Yes | Center longitude for search |
+| radius | int | No | Search radius in meters (default: 500, max: 50000) |
+| type | string | No | Place type (default: "restaurant") |
+| keyword | string | No | Optional keyword to filter results |
+
+### Examples
+
+**Find nearby restaurants:**
+```json
+{
+  "lat": 40.7484,
+  "lng": -73.9857,
+  "radius": 500,
+  "type": "restaurant"
+}
+```
+
+**Find coffee shops near a location:**
+```json
+{
+  "lat": 37.7749,
+  "lng": -122.4194,
+  "type": "cafe",
+  "keyword": "starbucks"
+}
+```
+
+### Response Format
+
+```json
+{
+  "success": true,
+  "type": "restaurant",
+  "search_parameters": {
+    "location": {"lat": 40.7484, "lng": -73.9857},
+    "radius": 500,
+    "type": "restaurant"
+  },
+  "results": [
+    {
+      "name": "Example Restaurant",
+      "vicinity": "123 Main St",
+      "rating": 4.5,
+      "user_ratings_total": 150,
+      "price_level": 2,
+      "geometry": {
+        "location": {"lat": 40.7485, "lng": -73.9860}
+      },
+      "types": ["restaurant", "food"],
+      "opening_hours": {"open_now": true}
+    }
+  ],
+  "total_results": 10,
+  "status": "OK"
+}
+```
 
 ## Place Types
 
 Common place types for nearby search:
-- Food: restaurant, cafe, bakery, bar
-- Shopping: store, supermarket, shopping_mall
-- Services: bank, atm, gas_station, pharmacy
-- Health: hospital, doctor, dentist
-- Transport: bus_station, train_station, airport
-- Entertainment: movie_theater, gym, park
+- Food: restaurant, cafe, bakery, bar, meal_takeaway
+- Shopping: store, supermarket, shopping_mall, clothing_store
+- Services: bank, atm, gas_station, pharmacy, post_office
+- Health: hospital, doctor, dentist, pharmacy
+- Transport: bus_station, train_station, airport, taxi_stand
+- Entertainment: movie_theater, gym, park, museum, zoo
 
-## Examples
+## Common Workflows
 
-**User**: "What restaurants are near Times Square?"
-**Action**: Use maps-nearby with:
-- location: "Times Square, New York"
-- type: "restaurant"
-- radius: 500
+### Find nearby places by address
+1. Use `add_locations` with service_type="geocode" to get coordinates
+2. Use `show_nearby_places` with the returned lat/lng
 
-**User**: "What's the address of the Eiffel Tower?"
-**Action**: Use maps-geocode with:
-- address: "Eiffel Tower, Paris"
+### Get address from coordinates
+1. Use `add_locations` with service_type="reverse_geocode"
 
-**User**: "Show me a map of downtown Seattle"
-**Action**: Use maps-create with:
-- center: "Downtown Seattle, WA"
-- zoom: 15
-
-## Response Format
+## Response Guidelines
 
 When presenting location results:
-1. List the top results with key details
-2. Include ratings and distances when available
-3. Offer to show more details or refine the search
-4. Suggest related searches if appropriate
+1. List the top results with name, rating, and address
+2. Include distance if available
+3. Mention if places are currently open
+4. Offer to search for different types or expand radius
+
+## Setup Requirements
+
+1. Connect this skill to Chat Agent's `input-skill` handle
+2. Connect location tool nodes to Chat Agent's `input-tools` handle
+3. Ensure Google Maps API key is configured in credentials

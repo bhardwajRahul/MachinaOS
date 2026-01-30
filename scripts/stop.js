@@ -1,4 +1,11 @@
 #!/usr/bin/env node
+/**
+ * Cross-platform stop script for MachinaOS services.
+ * Works on: Windows, macOS, Linux, WSL, Git Bash
+ *
+ * Uses Node.js native APIs where possible, with platform-specific
+ * fallbacks for process management (no cross-platform alternative exists).
+ */
 import { execSync } from 'child_process';
 import { readFileSync, existsSync } from 'fs';
 import { resolve, dirname } from 'path';
@@ -7,24 +14,69 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 
-// Detect environment: Git Bash on Windows reports win32 but uses Unix commands
-const isGitBash = process.platform === 'win32' && (process.env.MSYSTEM || process.env.SHELL?.includes('bash'));
-const isWindows = process.platform === 'win32' && !isGitBash;
+// ============================================================================
+// Platform Detection
+// ============================================================================
+const isWindows = process.platform === 'win32';
+const isGitBash = isWindows && (process.env.MSYSTEM || process.env.SHELL?.includes('bash'));
 const isMac = process.platform === 'darwin';
 
-// Load env config
-function loadEnvConfig() {
-  const envPath = existsSync(resolve(ROOT, '.env')) ? resolve(ROOT, '.env') : resolve(ROOT, '.env.template');
+// Git Bash on Windows uses Unix commands
+const useUnixCommands = !isWindows || isGitBash;
+
+function getPlatformName() {
+  if (isGitBash) return 'Git Bash';
+  if (isWindows) return 'Windows';
+  if (isMac) return 'macOS';
+  return 'Linux';
+}
+
+// ============================================================================
+// Utilities
+// ============================================================================
+
+/** Execute command silently, return output or empty string */
+function exec(cmd, options = {}) {
+  try {
+    return execSync(cmd, {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: options.timeout || 10000,
+      cwd: ROOT,
+      ...options
+    }).trim();
+  } catch {
+    return '';
+  }
+}
+
+/** Cross-platform sleep using Atomics (efficient, no busy wait) */
+function sleep(ms) {
+  try {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+  } catch {
+    // Fallback for older Node.js
+    const end = Date.now() + ms;
+    while (Date.now() < end) { /* spin */ }
+  }
+}
+
+/** Load config from .env file */
+function loadConfig() {
+  const envPath = existsSync(resolve(ROOT, '.env'))
+    ? resolve(ROOT, '.env')
+    : resolve(ROOT, '.env.template');
+
   const env = {};
   if (existsSync(envPath)) {
-    const content = readFileSync(envPath, 'utf-8');
-    for (const line of content.split('\n')) {
+    for (const line of readFileSync(envPath, 'utf-8').split('\n')) {
       const match = line.match(/^([^#=]+)=(.*)$/);
       if (match) {
-        env[match[1].trim()] = match[2].trim();
+        env[match[1].trim()] = match[2].trim().replace(/^["']|["']$/g, '');
       }
     }
   }
+
   return {
     ports: [
       parseInt(env.VITE_CLIENT_PORT) || 3000,
@@ -35,333 +87,237 @@ function loadEnvConfig() {
   };
 }
 
-// Legacy function for backwards compatibility
-function loadPorts() {
-  return loadEnvConfig().ports;
-}
+// ============================================================================
+// Process Management (platform-specific - no cross-platform alternative)
+// ============================================================================
 
-// Execute command and return output (suppressing errors)
-// Added timeout to prevent hanging
-function exec(cmd, options = {}) {
-  try {
-    return execSync(cmd, {
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-      timeout: 10000,  // 10 second timeout to prevent hanging
-      ...options
-    }).trim();
-  } catch {
-    return '';
-  }
-}
-
-// Get PIDs using a port - Windows
-function getPidsWindows(port) {
+/** Get PIDs listening on a port */
+function getPidsOnPort(port) {
   const pids = new Set();
 
-  // Method 1: netstat (most reliable)
-  const netstatOutput = exec(`netstat -ano | findstr :${port} | findstr LISTENING`);
-  for (const line of netstatOutput.split('\n')) {
-    const parts = line.trim().split(/\s+/);
-    const pid = parts[parts.length - 1];
-    if (pid && /^\d+$/.test(pid) && pid !== '0') {
-      pids.add(pid);
-    }
-  }
-
-  // Method 2: PowerShell Get-NetTCPConnection (backup)
-  if (pids.size === 0) {
-    const psOutput = exec(`powershell -Command "Get-NetTCPConnection -LocalPort ${port} -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess"`);
-    for (const pid of psOutput.split('\n')) {
-      if (pid.trim() && /^\d+$/.test(pid.trim()) && pid.trim() !== '0') {
-        pids.add(pid.trim());
-      }
-    }
-  }
-
-  return Array.from(pids);
-}
-
-// Get PIDs using a port - Unix (Linux/macOS)
-function getPidsUnix(port) {
-  const pids = new Set();
-
-  // Method 1: lsof (most common)
-  const lsofOutput = exec(`lsof -ti:${port} -sTCP:LISTEN 2>/dev/null`);
-  for (const pid of lsofOutput.split('\n')) {
-    if (pid.trim() && /^\d+$/.test(pid.trim())) {
-      pids.add(pid.trim());
-    }
-  }
-
-  // Method 2: ss (Linux, if lsof not available)
-  if (pids.size === 0 && !isMac) {
-    const ssOutput = exec(`ss -tlnp 2>/dev/null | grep :${port}`);
-    const matches = ssOutput.matchAll(/pid=(\d+)/g);
-    for (const match of matches) {
-      pids.add(match[1]);
-    }
-  }
-
-  // Method 3: fuser (Linux fallback)
-  if (pids.size === 0 && !isMac) {
-    const fuserOutput = exec(`fuser ${port}/tcp 2>/dev/null`);
-    for (const pid of fuserOutput.split(/\s+/)) {
+  if (useUnixCommands) {
+    // lsof (macOS/Linux/Git Bash)
+    const lsofOutput = exec(`lsof -ti:${port} -sTCP:LISTEN 2>/dev/null`);
+    for (const pid of lsofOutput.split('\n')) {
       if (pid.trim() && /^\d+$/.test(pid.trim())) {
         pids.add(pid.trim());
       }
     }
+    // ss fallback (Linux)
+    if (pids.size === 0 && !isMac && !isGitBash) {
+      const ssOutput = exec(`ss -tlnp 2>/dev/null | grep :${port}`);
+      for (const match of ssOutput.matchAll(/pid=(\d+)/g)) {
+        pids.add(match[1]);
+      }
+    }
+  } else {
+    // netstat (Windows native)
+    const output = exec(`netstat -ano | findstr :${port} | findstr LISTENING`);
+    for (const line of output.split('\n')) {
+      const parts = line.trim().split(/\s+/);
+      const pid = parts[parts.length - 1];
+      if (pid && /^\d+$/.test(pid) && pid !== '0') {
+        pids.add(pid);
+      }
+    }
   }
 
   return Array.from(pids);
 }
 
-// Get child process PIDs - Windows
-function getChildPidsWindows(parentPid) {
+/** Get child PIDs recursively */
+function getChildPids(parentPid) {
   const children = new Set();
-  const wmicOutput = exec(`wmic process where (ParentProcessId=${parentPid}) get ProcessId 2>nul`);
-  for (const line of wmicOutput.split('\n')) {
-    const pid = line.trim();
-    if (pid && /^\d+$/.test(pid)) {
-      children.add(pid);
-      // Recursively get grandchildren
-      for (const grandchild of getChildPidsWindows(pid)) {
-        children.add(grandchild);
+
+  if (useUnixCommands) {
+    const output = exec(`pgrep -P ${parentPid} 2>/dev/null`);
+    for (const pid of output.split('\n')) {
+      if (pid.trim() && /^\d+$/.test(pid.trim())) {
+        children.add(pid.trim());
+        for (const grandchild of getChildPids(pid.trim())) {
+          children.add(grandchild);
+        }
       }
     }
-  }
-  return Array.from(children);
-}
-
-// Get child process PIDs - Unix
-function getChildPidsUnix(parentPid) {
-  const children = new Set();
-  // pgrep -P gets direct children
-  const pgrepOutput = exec(`pgrep -P ${parentPid} 2>/dev/null`);
-  for (const pid of pgrepOutput.split('\n')) {
-    if (pid.trim() && /^\d+$/.test(pid.trim())) {
-      children.add(pid.trim());
-      // Recursively get grandchildren
-      for (const grandchild of getChildPidsUnix(pid.trim())) {
-        children.add(grandchild);
-      }
-    }
-  }
-  return Array.from(children);
-}
-
-// Kill a single PID - Windows
-// NOTE: Removed /T flag (tree kill) as it can kill the parent PowerShell terminal
-// Child processes are killed explicitly via getChildPidsWindows() instead
-function killPidWindows(pid) {
-  // First try graceful termination (no /T)
-  exec(`taskkill /PID ${pid} 2>nul`);
-  // Then force kill (no /T)
-  exec(`taskkill /PID ${pid} /F 2>nul`);
-}
-
-// Cross-platform sleep using Atomics (efficient, no busy wait)
-function sleepMs(ms) {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
-}
-
-// Kill a single PID - Unix
-function killPidUnix(pid) {
-  // First try SIGTERM (graceful)
-  exec(`kill -15 ${pid} 2>/dev/null`);
-  // Give it a moment
-  sleepMs(100);
-  // Then SIGKILL (force)
-  exec(`kill -9 ${pid} 2>/dev/null`);
-}
-
-// Check if process is still running
-function isProcessRunning(pid) {
-  if (isWindows) {
-    const output = exec(`tasklist /FI "PID eq ${pid}" 2>nul`);
-    return output.includes(pid);
   } else {
-    // Use kill -0 via exec (returns empty string on error = process dead)
-    const output = exec(`kill -0 ${pid} 2>&1 && echo "running"`);
-    return output.includes('running');
+    const output = exec(`wmic process where (ParentProcessId=${parentPid}) get ProcessId 2>nul`);
+    for (const line of output.split('\n')) {
+      const pid = line.trim();
+      if (pid && /^\d+$/.test(pid)) {
+        children.add(pid);
+        for (const grandchild of getChildPids(pid)) {
+          children.add(grandchild);
+        }
+      }
+    }
+  }
+
+  return Array.from(children);
+}
+
+/** Check if process is running */
+function isRunning(pid) {
+  if (useUnixCommands) {
+    return exec(`kill -0 ${pid} 2>&1 && echo running`).includes('running');
+  } else {
+    return exec(`tasklist /FI "PID eq ${pid}" 2>nul`).includes(pid);
   }
 }
 
-// Kill all processes on a port with verification
-function killPort(port) {
-  const getPids = isWindows ? getPidsWindows : getPidsUnix;
-  const getChildPids = isWindows ? getChildPidsWindows : getChildPidsUnix;
-  const killPid = isWindows ? killPidWindows : killPidUnix;
+/** Kill a single process */
+function killPid(pid) {
+  if (useUnixCommands) {
+    exec(`kill -15 ${pid} 2>/dev/null`);
+    sleep(100);
+    exec(`kill -9 ${pid} 2>/dev/null`);
+  } else {
+    exec(`taskkill /PID ${pid} 2>nul`);
+    exec(`taskkill /PID ${pid} /F 2>nul`);
+  }
+}
 
-  // Get all PIDs on this port
-  let pids = getPids(port);
+/** Kill all processes on a port */
+function killPort(port) {
+  const pids = getPidsOnPort(port);
   if (pids.length === 0) {
-    return { killed: false, pids: [], portFree: true, message: 'Free' };
+    return { killed: [], portFree: true };
   }
 
   // Collect all PIDs including children
   const allPids = new Set(pids);
   for (const pid of pids) {
-    for (const childPid of getChildPids(pid)) {
-      allPids.add(childPid);
+    for (const child of getChildPids(pid)) {
+      allPids.add(child);
     }
   }
 
-  const pidsToKill = Array.from(allPids);
-  const killedPids = [];
-
-  // Kill all processes
-  for (const pid of pidsToKill) {
+  // Kill all
+  for (const pid of allPids) {
     killPid(pid);
   }
 
-  // Wait a bit for processes to die
-  sleepMs(500);
+  sleep(500);
 
-  // Verify which ones are actually dead
-  for (const pid of pidsToKill) {
-    if (!isProcessRunning(pid)) {
-      killedPids.push(pid);
+  // Verify
+  const killed = [];
+  for (const pid of allPids) {
+    if (!isRunning(pid)) {
+      killed.push(pid);
     }
   }
 
-  // Retry for stubborn processes
-  const stillRunning = pidsToKill.filter(pid => isProcessRunning(pid));
+  // Retry stubborn ones
+  const stillRunning = Array.from(allPids).filter(pid => isRunning(pid));
   if (stillRunning.length > 0) {
     for (const pid of stillRunning) {
-      // Force kill again (no /T flag to avoid killing parent shell)
-      if (isWindows) {
-        exec(`taskkill /PID ${pid} /F 2>nul`);
-      } else {
+      if (useUnixCommands) {
         exec(`kill -9 ${pid} 2>/dev/null`);
+      } else {
+        exec(`taskkill /PID ${pid} /F 2>nul`);
       }
     }
-
-    // Final check
-    sleepMs(500);
-
+    sleep(500);
     for (const pid of stillRunning) {
-      if (!isProcessRunning(pid)) {
-        killedPids.push(pid);
+      if (!isRunning(pid)) {
+        killed.push(pid);
       }
     }
   }
 
-  // Final verification - check if port is actually free
-  const remainingPids = getPids(port);
-  const portFree = remainingPids.length === 0;
-
   return {
-    killed: killedPids.length > 0,
-    pids: killedPids,
-    portFree,
-    message: portFree
-      ? (killedPids.length > 0 ? `Killed ${killedPids.length} process(es)` : 'Free')
-      : `Warning: Port still in use by PID(s): ${remainingPids.join(', ')}`
+    killed,
+    portFree: getPidsOnPort(port).length === 0
   };
 }
 
-// Kill Temporal worker processes by command line pattern
-function killTemporalWorkers() {
-  const killedPids = [];
+/** Kill processes by command pattern */
+function killByPattern(pattern, debug = false) {
+  const killed = [];
 
-  if (isWindows) {
-    // Find Python processes running temporal worker (matches both python and uv run)
-    const wmicOutput = exec('wmic process where "CommandLine like \'%services.temporal.worker%\'" get ProcessId 2>nul');
-    for (const line of wmicOutput.split('\n')) {
-      const pid = line.trim();
-      if (pid && /^\d+$/.test(pid)) {
-        exec(`taskkill /PID ${pid} /F 2>nul`);
-        killedPids.push(pid);
+  if (useUnixCommands) {
+    const output = exec(`pgrep -f "${pattern}" 2>/dev/null`);
+    if (debug && output) console.log(`  [DEBUG] pgrep output: ${output}`);
+    for (const pid of output.split('\n')) {
+      if (pid.trim() && /^\d+$/.test(pid.trim())) {
+        exec(`kill -9 ${pid.trim()} 2>/dev/null`);
+        killed.push(pid.trim());
       }
     }
   } else {
-    // Unix: Use pgrep to find temporal worker processes (matches both python and uv run)
-    const pgrepOutput = exec('pgrep -f "services.temporal.worker" 2>/dev/null');
-    for (const pid of pgrepOutput.split('\n')) {
-      if (pid.trim() && /^\d+$/.test(pid.trim())) {
-        exec(`kill -9 ${pid.trim()} 2>/dev/null`);
-        killedPids.push(pid.trim());
+    // Use tasklist with image name filter first for Python processes
+    if (pattern.includes('uvicorn') || pattern.includes('python')) {
+      const pythonPids = exec(`wmic process where "name='python.exe'" get ProcessId,CommandLine 2>nul`);
+      if (debug && pythonPids) console.log(`  [DEBUG] Python processes:\n${pythonPids}`);
+
+      for (const line of pythonPids.split('\n')) {
+        if (line.toLowerCase().includes(pattern.toLowerCase().replace('.*', ''))) {
+          const pidMatch = line.match(/(\d+)\s*$/);
+          if (pidMatch) {
+            const pid = pidMatch[1];
+            exec(`taskkill /PID ${pid} /F 2>nul`);
+            killed.push(pid);
+          }
+        }
+      }
+    }
+
+    // Also try the original pattern match
+    const output = exec(`wmic process where "CommandLine like '%${pattern.replace('.*', '%')}%'" get ProcessId 2>nul`);
+    if (debug && output) console.log(`  [DEBUG] wmic pattern output: ${output}`);
+    for (const line of output.split('\n')) {
+      const pid = line.trim();
+      if (pid && /^\d+$/.test(pid) && !killed.includes(pid)) {
+        exec(`taskkill /PID ${pid} /F 2>nul`);
+        killed.push(pid);
       }
     }
   }
 
-  return killedPids;
+  return killed;
 }
 
-// Kill uv/uvicorn processes
-function killUvProcesses() {
-  const killedPids = [];
+// ============================================================================
+// Main
+// ============================================================================
 
-  if (isWindows) {
-    // Find uv/uvicorn processes
-    const wmicOutput = exec('wmic process where "CommandLine like \'%uvicorn%main:app%\'" get ProcessId 2>nul');
-    for (const line of wmicOutput.split('\n')) {
-      const pid = line.trim();
-      if (pid && /^\d+$/.test(pid)) {
-        exec(`taskkill /PID ${pid} /F 2>nul`);
-        killedPids.push(pid);
-      }
-    }
-  } else {
-    // Unix: Kill uv/uvicorn processes
-    const pgrepOutput = exec('pgrep -f "uvicorn.*main:app" 2>/dev/null');
-    for (const pid of pgrepOutput.split('\n')) {
-      if (pid.trim() && /^\d+$/.test(pid.trim())) {
-        exec(`kill -9 ${pid.trim()} 2>/dev/null`);
-        killedPids.push(pid.trim());
-      }
-    }
-  }
+const config = loadConfig();
 
-  return killedPids;
-}
-
-// Main execution
-const config = loadEnvConfig();
-const PORTS = config.ports;
-
-console.log('Stopping MachinaOs services...\n');
-const platformName = isWindows ? 'Windows' : isGitBash ? 'Git Bash' : isMac ? 'macOS' : 'Linux';
-console.log(`Platform: ${platformName}`);
-console.log(`Ports: ${PORTS.join(', ')}`);
+console.log('Stopping MachinaOS services...\n');
+console.log(`Platform: ${getPlatformName()}`);
+console.log(`Ports: ${config.ports.join(', ')}`);
 console.log(`Temporal: ${config.temporalEnabled ? 'enabled' : 'disabled'}\n`);
 
 let allStopped = true;
 
-for (const port of PORTS) {
+// Stop services on ports
+for (const port of config.ports) {
   const result = killPort(port);
   const status = result.portFree ? '[OK]' : '[!!]';
-  console.log(`${status} Port ${port}: ${result.message}`);
-  if (result.pids.length > 0) {
-    console.log(`    PIDs: ${result.pids.join(', ')}`);
+  const message = result.portFree
+    ? (result.killed.length > 0 ? `Killed ${result.killed.length} process(es)` : 'Free')
+    : 'Warning: Port still in use';
+
+  console.log(`${status} Port ${port}: ${message}`);
+  if (result.killed.length > 0) {
+    console.log(`    PIDs: ${result.killed.join(', ')}`);
   }
   if (!result.portFree) {
     allStopped = false;
   }
 }
 
-// Kill uv/uvicorn processes that might not be on a specific port
-const uvPids = killUvProcesses();
-if (uvPids.length > 0) {
-  console.log(`[OK] uv/uvicorn: Killed ${uvPids.length} process(es)`);
-  console.log(`    PIDs: ${uvPids.join(', ')}`);
-}
-
-// Kill Temporal workers if enabled
+// Kill Temporal workers if enabled (must include project path)
 if (config.temporalEnabled) {
-  const temporalPids = killTemporalWorkers();
+  const temporalPids = killByPattern(`${ROOT}.*temporal`);
   if (temporalPids.length > 0) {
-    console.log(`[OK] Temporal worker: Killed ${temporalPids.length} process(es)`);
+    console.log(`[OK] Temporal: Killed ${temporalPids.length} process(es)`);
     console.log(`    PIDs: ${temporalPids.join(', ')}`);
-  } else {
-    console.log(`[OK] Temporal worker: Not running`);
   }
 }
 
 console.log('');
 if (allStopped) {
-  console.log('All services stopped successfully.');
+  console.log('All services stopped.');
 } else {
   console.log('Warning: Some ports may still be in use.');
   console.log('Try running the script again or manually kill the processes.');

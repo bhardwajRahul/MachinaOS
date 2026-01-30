@@ -1,4 +1,5 @@
 // Common utility functions for formatting and clipboard operations
+import { message } from 'antd';
 
 /**
  * Copy text to clipboard with error handling
@@ -8,8 +9,6 @@ export const copyToClipboard = async (data: any, successMessage?: string): Promi
     const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
     await navigator.clipboard.writeText(text);
     if (successMessage) {
-      // Import message from antd dynamically to avoid circular dependencies
-      const { message } = await import('antd');
       message.success(successMessage);
     }
     return true;

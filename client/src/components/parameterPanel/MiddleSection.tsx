@@ -77,8 +77,11 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
   // Check if this is a skill node with code editor (needs similar flex layout)
   const isSkillNode = SKILL_NODE_TYPES.includes(nodeDefinition.name) && nodeDefinition.name !== 'customSkill';
 
+  // Check if this is a memory node with markdown editor
+  const isMemoryNode = nodeDefinition.name === 'simpleMemory';
+
   // Nodes that need flexible code editor layout
-  const needsCodeEditorLayout = isCodeExecutorNode || isSkillNode;
+  const needsCodeEditorLayout = isCodeExecutorNode || isSkillNode || isMemoryNode;
 
   // Check if this is a tool node that supports schema editing
   const isToolNode = TOOL_NODE_TYPES.includes(nodeDefinition.name);

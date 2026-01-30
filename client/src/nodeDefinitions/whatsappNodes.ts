@@ -61,8 +61,8 @@ async function wsRequest(type: string, data: Record<string, unknown> = {}): Prom
 // WhatsApp Send - Paper plane (send message)
 const WHATSAPP_SEND_ICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2325D366'%3E%3Cpath d='M2.01 21L23 12 2.01 3 2 10l15 2-15 2z'/%3E%3C/svg%3E";
 
-// WhatsApp Connect - Official WhatsApp logo
-const WHATSAPP_CONNECT_ICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2325D366'%3E%3Cpath d='M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z'/%3E%3C/svg%3E";
+// WhatsApp Connect - Official WhatsApp logo (exported for use in skill nodes)
+export const WHATSAPP_CONNECT_ICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2325D366'%3E%3Cpath d='M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z'/%3E%3C/svg%3E";
 
 // WhatsApp Receive - Notification bell with dot (trigger node)
 const WHATSAPP_RECEIVE_ICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2325D366'%3E%3Cpath d='M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v6z'/%3E%3Ccircle cx='18' cy='6' r='4'/%3E%3C/svg%3E";
@@ -109,7 +109,7 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
       // ===== RECIPIENT =====
       {
         displayName: 'Send To',
-        name: 'recipientType',
+        name: 'recipient_type',
         type: 'options',
         options: [
           { name: 'Phone Number', value: 'phone' },
@@ -127,7 +127,7 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         placeholder: '1234567890',
         description: 'Recipient phone number (without + prefix)',
         displayOptions: {
-          show: { recipientType: ['phone'] }
+          show: { recipient_type: ['phone'] }
         }
       },
       {
@@ -139,14 +139,14 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         placeholder: '123456789@g.us',
         description: 'Group JID to send message to (use Load button to select)',
         displayOptions: {
-          show: { recipientType: ['group'] }
+          show: { recipient_type: ['group'] }
         }
       },
 
       // ===== MESSAGE TYPE =====
       {
         displayName: 'Message Type',
-        name: 'messageType',
+        name: 'message_type',
         type: 'options',
         options: [
           { name: 'Text', value: 'text' },
@@ -173,14 +173,14 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         description: 'Text message content',
         placeholder: 'Enter your message...',
         displayOptions: {
-          show: { messageType: ['text'] }
+          show: { message_type: ['text'] }
         }
       },
 
       // ===== MEDIA MESSAGES (image, video, audio, document, sticker) =====
       {
         displayName: 'Media Source',
-        name: 'mediaSource',
+        name: 'media_source',
         type: 'options',
         options: [
           { name: 'Base64 Data', value: 'base64' },
@@ -190,24 +190,24 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         default: 'base64',
         description: 'Source of media data',
         displayOptions: {
-          show: { messageType: ['image', 'video', 'audio', 'document', 'sticker'] }
+          show: { message_type: ['image', 'video', 'audio', 'document', 'sticker'] }
         }
       },
       {
         displayName: 'Media Data (Base64)',
-        name: 'mediaData',
+        name: 'media_data',
         type: 'string',
         default: '',
         required: true,
         typeOptions: { rows: 3 },
         description: 'Base64-encoded media data',
         displayOptions: {
-          show: { messageType: ['image', 'video', 'audio', 'document', 'sticker'], mediaSource: ['base64'] }
+          show: { message_type: ['image', 'video', 'audio', 'document', 'sticker'], media_source: ['base64'] }
         }
       },
       {
         displayName: 'File',
-        name: 'filePath',
+        name: 'file_path',
         type: 'file',
         default: '',
         required: true,
@@ -217,30 +217,30 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
           accept: '*/*'
         },
         displayOptions: {
-          show: { messageType: ['image', 'video', 'audio', 'document', 'sticker'], mediaSource: ['file'] }
+          show: { message_type: ['image', 'video', 'audio', 'document', 'sticker'], media_source: ['file'] }
         }
       },
       {
         displayName: 'Media URL',
-        name: 'mediaUrl',
+        name: 'media_url',
         type: 'string',
         default: '',
         required: true,
         placeholder: 'https://example.com/image.jpg',
         description: 'URL to download media from',
         displayOptions: {
-          show: { messageType: ['image', 'video', 'audio', 'document', 'sticker'], mediaSource: ['url'] }
+          show: { message_type: ['image', 'video', 'audio', 'document', 'sticker'], media_source: ['url'] }
         }
       },
       {
         displayName: 'MIME Type',
-        name: 'mimeType',
+        name: 'mime_type',
         type: 'string',
         default: '',
         placeholder: 'image/jpeg, video/mp4, audio/ogg',
         description: 'MIME type of the media (auto-detected if empty)',
         displayOptions: {
-          show: { messageType: ['image', 'video', 'audio', 'document', 'sticker'] }
+          show: { message_type: ['image', 'video', 'audio', 'document', 'sticker'] }
         }
       },
       {
@@ -251,7 +251,7 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         typeOptions: { rows: 2 },
         description: 'Optional caption for media',
         displayOptions: {
-          show: { messageType: ['image', 'video', 'document'] }
+          show: { message_type: ['image', 'video', 'document'] }
         }
       },
       {
@@ -262,7 +262,7 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         placeholder: 'document.pdf',
         description: 'Filename for document',
         displayOptions: {
-          show: { messageType: ['document'] }
+          show: { message_type: ['document'] }
         }
       },
 
@@ -275,7 +275,7 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         required: true,
         description: 'Location latitude',
         displayOptions: {
-          show: { messageType: ['location'] }
+          show: { message_type: ['location'] }
         }
       },
       {
@@ -286,18 +286,18 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         required: true,
         description: 'Location longitude',
         displayOptions: {
-          show: { messageType: ['location'] }
+          show: { message_type: ['location'] }
         }
       },
       {
         displayName: 'Location Name',
-        name: 'locationName',
+        name: 'location_name',
         type: 'string',
         default: '',
         placeholder: 'San Francisco',
         description: 'Display name for location',
         displayOptions: {
-          show: { messageType: ['location'] }
+          show: { message_type: ['location'] }
         }
       },
       {
@@ -308,21 +308,21 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         placeholder: 'California, USA',
         description: 'Address text',
         displayOptions: {
-          show: { messageType: ['location'] }
+          show: { message_type: ['location'] }
         }
       },
 
       // ===== CONTACT MESSAGE =====
       {
         displayName: 'Contact Name',
-        name: 'contactName',
+        name: 'contact_name',
         type: 'string',
         default: '',
         required: true,
         placeholder: 'John Doe',
         description: 'Display name for contact',
         displayOptions: {
-          show: { messageType: ['contact'] }
+          show: { message_type: ['contact'] }
         }
       },
       {
@@ -335,51 +335,51 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         placeholder: 'BEGIN:VCARD\nVERSION:3.0\nFN:John Doe\nTEL:+1234567890\nEND:VCARD',
         description: 'vCard 3.0 format string',
         displayOptions: {
-          show: { messageType: ['contact'] }
+          show: { message_type: ['contact'] }
         }
       },
 
       // ===== REPLY (QUOTE) =====
       {
         displayName: 'Reply To Message',
-        name: 'isReply',
+        name: 'is_reply',
         type: 'boolean',
         default: false,
         description: 'Quote an existing message'
       },
       {
         displayName: 'Reply Message ID',
-        name: 'replyMessageId',
+        name: 'reply_message_id',
         type: 'string',
         default: '',
         required: true,
         placeholder: 'ABC123DEF456',
         description: 'ID of message to reply to',
         displayOptions: {
-          show: { isReply: [true] }
+          show: { is_reply: [true] }
         }
       },
       {
         displayName: 'Reply Sender',
-        name: 'replySender',
+        name: 'reply_sender',
         type: 'string',
         default: '',
         required: true,
         placeholder: '1234567890@s.whatsapp.net',
         description: 'Sender JID of quoted message',
         displayOptions: {
-          show: { isReply: [true] }
+          show: { is_reply: [true] }
         }
       },
       {
         displayName: 'Reply Preview',
-        name: 'replyContent',
+        name: 'reply_content',
         type: 'string',
         default: '',
         placeholder: 'Original message text...',
         description: 'Text preview of quoted message',
         displayOptions: {
-          show: { isReply: [true] }
+          show: { is_reply: [true] }
         }
       }
     ]
@@ -677,7 +677,7 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
       // ===== CHAT HISTORY PARAMETERS =====
       {
         displayName: 'Chat Type',
-        name: 'chatType',
+        name: 'chat_type',
         type: 'options',
         options: [
           { name: 'Individual Chat', value: 'individual' },
@@ -698,7 +698,7 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         placeholder: '1234567890',
         description: 'Phone number of the contact (without + prefix)',
         displayOptions: {
-          show: { operation: ['chat_history'], chatType: ['individual'] }
+          show: { operation: ['chat_history'], chat_type: ['individual'] }
         }
       },
       {
@@ -710,12 +710,12 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         placeholder: '123456789@g.us',
         description: 'Group JID',
         displayOptions: {
-          show: { operation: ['chat_history', 'get_group_info'], chatType: ['group'] }
+          show: { operation: ['chat_history', 'get_group_info'], chat_type: ['group'] }
         }
       },
       {
         displayName: 'Message Filter',
-        name: 'groupFilter',
+        name: 'group_filter',
         type: 'options',
         options: [
           { name: 'All Messages', value: 'all' },
@@ -724,23 +724,23 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         default: 'all',
         description: 'Filter messages in group',
         displayOptions: {
-          show: { operation: ['chat_history'], chatType: ['group'] }
+          show: { operation: ['chat_history'], chat_type: ['group'] }
         }
       },
       {
         displayName: 'Sender Phone',
-        name: 'senderPhone',
+        name: 'sender_phone',
         type: 'string',
         default: '',
         placeholder: '1234567890',
         description: 'Filter messages from specific group member',
         displayOptions: {
-          show: { operation: ['chat_history'], chatType: ['group'], groupFilter: ['contact'] }
+          show: { operation: ['chat_history'], chat_type: ['group'], group_filter: ['contact'] }
         }
       },
       {
         displayName: 'Message Type',
-        name: 'messageFilter',
+        name: 'message_filter',
         type: 'options',
         options: [
           { name: 'All Types', value: 'all' },
@@ -791,7 +791,7 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
       // ===== GET GROUP INFO PARAMETERS =====
       {
         displayName: 'Group',
-        name: 'groupIdForInfo',
+        name: 'group_id_for_info',
         type: 'string',
         default: '',
         required: true,
@@ -805,7 +805,7 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
       // ===== GET CONTACT INFO PARAMETERS =====
       {
         displayName: 'Phone Number',
-        name: 'contactPhone',
+        name: 'contact_phone',
         type: 'string',
         default: '',
         required: true,

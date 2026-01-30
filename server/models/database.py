@@ -161,6 +161,25 @@ class ToolSchema(SQLModel, table=True):
     )
 
 
+class ChatMessage(SQLModel, table=True):
+    """Chat panel messages - persisted across server restarts.
+
+    Stores user and assistant messages from the chat panel (Console Panel chat section).
+    These are separate from ConversationMessage which stores AI agent memory.
+    """
+
+    __tablename__ = "chat_messages"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    session_id: str = Field(default="default", index=True, max_length=255)
+    role: str = Field(max_length=20)  # 'user' or 'assistant'
+    message: str = Field(max_length=50000)  # Large content support
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(DateTime(timezone=True), server_default=func.now())
+    )
+
+
 class UserSkill(SQLModel, table=True):
     """User-created custom skills for Chat Agent.
 

@@ -386,26 +386,26 @@ async def handle_whatsapp_send(params: dict) -> dict:
 
     Uses _send_lock to serialize sends - Go service processes sequentially.
 
-    Params from frontend node:
-    - recipientType: 'phone' or 'group'
-    - phone: recipient phone number (if recipientType='phone')
-    - group_id: group JID (if recipientType='group')
-    - messageType: text, image, video, audio, document, sticker, location, contact
+    Params from frontend node (snake_case):
+    - recipient_type: 'phone' or 'group'
+    - phone: recipient phone number (if recipient_type='phone')
+    - group_id: group JID (if recipient_type='group')
+    - message_type: text, image, video, audio, document, sticker, location, contact
     - message: text content (for text type)
-    - mediaSource: base64, file, url (for media types)
-    - mediaData/filePath/mediaUrl: media content based on source
-    - mimeType, caption, filename: media options
-    - latitude, longitude, locationName, address: location data
-    - contactName, vcard: contact data
-    - isReply, replyMessageId, replySender, replyContent: reply context
+    - media_source: base64, file, url (for media types)
+    - media_data/file_path/media_url: media content based on source
+    - mime_type, caption, filename: media options
+    - latitude, longitude, location_name, address: location data
+    - contact_name, vcard: contact data
+    - is_reply, reply_message_id, reply_sender, reply_content: reply context
     """
     async with _send_lock:
         try:
             # Build RPC params matching schema.json
             rpc_params: dict[str, Any] = {}
 
-            # Recipient
-            recipient_type = params.get("recipientType", "phone")
+            # Recipient (snake_case)
+            recipient_type = params.get("recipient_type", "phone")
             if recipient_type == "group":
                 group_id = params.get("group_id")
                 if not group_id:
@@ -417,8 +417,8 @@ async def handle_whatsapp_send(params: dict) -> dict:
                     return {"success": False, "error": "phone is required"}
                 rpc_params["phone"] = phone
 
-            # Message type
-            msg_type = params.get("messageType", "text")
+            # Message type (snake_case)
+            msg_type = params.get("message_type", "text")
             rpc_params["type"] = msg_type
 
             # Content based on type
@@ -429,15 +429,15 @@ async def handle_whatsapp_send(params: dict) -> dict:
                 rpc_params["message"] = message
 
             elif msg_type in ["image", "video", "audio", "document", "sticker"]:
-                media_source = params.get("mediaSource", "base64")
+                media_source = params.get("media_source", "base64")
                 media_data = None
-                mime_type = params.get("mimeType")
+                mime_type = params.get("mime_type")
                 filename = params.get("filename")
 
                 if media_source == "base64":
-                    media_data = params.get("mediaData")
+                    media_data = params.get("media_data")
                 elif media_source == "file":
-                    file_param = params.get("filePath")
+                    file_param = params.get("file_path")
                     if isinstance(file_param, dict) and file_param.get("type") == "upload":
                         media_data = file_param.get("data")
                         mime_type = mime_type or file_param.get("mimeType")
@@ -450,7 +450,7 @@ async def handle_whatsapp_send(params: dict) -> dict:
                         except Exception as e:
                             return {"success": False, "error": f"Failed to read file: {e}"}
                 elif media_source == "url":
-                    media_url = params.get("mediaUrl")
+                    media_url = params.get("media_url")
                     if media_url:
                         import httpx
                         import base64 as b64
@@ -480,27 +480,27 @@ async def handle_whatsapp_send(params: dict) -> dict:
                 if lat is None or lng is None:
                     return {"success": False, "error": "latitude and longitude are required"}
                 rpc_params["location"] = {"latitude": float(lat), "longitude": float(lng)}
-                if params.get("locationName"):
-                    rpc_params["location"]["name"] = params["locationName"]
+                if params.get("location_name"):
+                    rpc_params["location"]["name"] = params["location_name"]
                 if params.get("address"):
                     rpc_params["location"]["address"] = params["address"]
 
             elif msg_type == "contact":
-                contact_name = params.get("contactName")
+                contact_name = params.get("contact_name")
                 vcard = params.get("vcard")
                 if not contact_name or not vcard:
-                    return {"success": False, "error": "contactName and vcard are required"}
+                    return {"success": False, "error": "contact_name and vcard are required"}
                 rpc_params["contact"] = {"display_name": contact_name, "vcard": vcard}
 
-            # Reply context
-            if params.get("isReply"):
-                reply_id = params.get("replyMessageId")
-                reply_sender = params.get("replySender")
+            # Reply context (snake_case)
+            if params.get("is_reply"):
+                reply_id = params.get("reply_message_id")
+                reply_sender = params.get("reply_sender")
                 if reply_id and reply_sender:
                     rpc_params["reply"] = {
                         "message_id": reply_id,
                         "sender": reply_sender,
-                        "content": params.get("replyContent", "")
+                        "content": params.get("reply_content", "")
                     }
 
             if params.get("metadata"):
@@ -510,8 +510,8 @@ async def handle_whatsapp_send(params: dict) -> dict:
             result = await client.call("send", rpc_params)
             return {
                 "success": True,
-                "messageId": result.get("message_id"),
-                "messageType": msg_type,
+                "message_id": result.get("message_id"),
+                "message_type": msg_type,
                 "timestamp": time.time()
             }
         except Exception as e:

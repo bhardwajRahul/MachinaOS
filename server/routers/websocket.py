@@ -1424,12 +1424,18 @@ async def handle_send_chat_message(data: Dict[str, Any], websocket: WebSocket) -
 
     This handler receives messages from the frontend chat panel and dispatches
     them as 'chat_message_received' events to any waiting chatTrigger nodes.
+    Also saves the message to database for persistence across restarts.
     """
     from services import event_waiter
 
     message = data["message"]
+    role = data.get("role", "user")
     session_id = data.get("session_id", "default")
     timestamp = data.get("timestamp") or datetime.now().isoformat()
+
+    # Save to database for persistence
+    database = container.database()
+    await database.add_chat_message(session_id, role, message)
 
     # Build event data matching chatTrigger output schema
     event_data = {
@@ -1446,7 +1452,67 @@ async def handle_send_chat_message(data: Dict[str, Any], websocket: WebSocket) -
     return {
         "success": True,
         "message": "Chat message sent",
-        "resolved_count": resolved
+        "resolved_count": resolved,
+        "timestamp": timestamp
+    }
+
+
+@ws_handler()
+async def handle_get_chat_messages(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Get chat messages from database for a session."""
+    session_id = data.get("session_id", "default")
+    limit = data.get("limit")  # Optional limit
+
+    database = container.database()
+    messages = await database.get_chat_messages(session_id, limit)
+
+    return {
+        "success": True,
+        "messages": messages,
+        "session_id": session_id
+    }
+
+
+@ws_handler()
+async def handle_clear_chat_messages(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Clear all chat messages for a session."""
+    session_id = data.get("session_id", "default")
+
+    database = container.database()
+    count = await database.clear_chat_messages(session_id)
+
+    return {
+        "success": True,
+        "message": f"Cleared {count} chat messages",
+        "cleared_count": count
+    }
+
+
+@ws_handler("message", "role")
+async def handle_save_chat_message(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Save a single chat message (used for assistant responses)."""
+    message = data["message"]
+    role = data["role"]
+    session_id = data.get("session_id", "default")
+
+    database = container.database()
+    success = await database.add_chat_message(session_id, role, message)
+
+    return {
+        "success": success,
+        "message": "Chat message saved" if success else "Failed to save chat message"
+    }
+
+
+@ws_handler()
+async def handle_get_chat_sessions(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Get list of all chat sessions."""
+    database = container.database()
+    sessions = await database.get_chat_sessions()
+
+    return {
+        "success": True,
+        "sessions": sessions
     }
 
 
@@ -1775,6 +1841,9 @@ MESSAGE_HANDLERS: Dict[str, MessageHandler] = {
 
     # Chat message (for chatTrigger nodes)
     "send_chat_message": handle_send_chat_message,
+    "get_chat_messages": handle_get_chat_messages,
+    "clear_chat_messages": handle_clear_chat_messages,
+    "save_chat_message": handle_save_chat_message,
 
     # Terminal logs
     "get_terminal_logs": handle_get_terminal_logs,

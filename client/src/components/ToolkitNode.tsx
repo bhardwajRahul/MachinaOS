@@ -89,10 +89,43 @@ const ToolkitNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
   // Get the node color from definition or use Android green
   const nodeColor = definition?.defaults?.color || '#3DDC84';
 
+  // Helper to check if string is emoji
+  const isEmoji = (str: string): boolean => {
+    const emojiRegex = /^(?:\p{Emoji_Presentation}|\p{Emoji}\uFE0F)(?:\u200D(?:\p{Emoji_Presentation}|\p{Emoji}\uFE0F))*$/u;
+    return emojiRegex.test(str);
+  };
+
+  // Helper to render icon (handles URLs, emojis, and icon names)
+  const renderIcon = (icon: string) => {
+    // Handle image URLs and data URIs
+    if (icon.startsWith('http') || icon.startsWith('data:') || icon.startsWith('/')) {
+      return (
+        <img
+          src={icon}
+          alt="icon"
+          style={{
+            width: '28px',
+            height: '28px',
+            objectFit: 'contain',
+            borderRadius: '4px'
+          }}
+        />
+      );
+    }
+
+    // If it's already an emoji, return it directly
+    if (isEmoji(icon)) {
+      return icon;
+    }
+
+    // Fallback
+    return icon;
+  };
+
   // Get icon from definition
   const getIcon = () => {
     if (definition?.icon) {
-      return definition.icon;
+      return renderIcon(definition.icon);
     }
     return '📱'; // Default Android icon
   };

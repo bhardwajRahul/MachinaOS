@@ -1,53 +1,30 @@
 ---
 name: scheduler-skill
 description: Schedule tasks and set timers. Use when user wants to schedule something, set a reminder, create a recurring task, or use cron expressions.
-allowed-tools: scheduler-cron scheduler-timer scheduler-list scheduler-cancel
 metadata:
   author: machina
-  version: "1.0"
+  version: "2.0"
   category: automation
 ---
 
 # Task Scheduling
 
-This skill enables you to schedule tasks, set timers, and create recurring jobs.
+This skill provides context for scheduling tasks, setting timers, and creating recurring jobs.
+
+## How It Works
+
+This skill provides instructions and context. Scheduling is handled through workflow deployment:
+
+- **Cron Scheduler** trigger node - Recurring schedules using cron expressions
+- **Timer** trigger node - One-time delayed execution
+- **Workflow Trigger** node - Manual workflow execution
 
 ## Capabilities
 
+When used with workflow triggers:
 - Create one-time timers
 - Set up recurring schedules with cron expressions
-- List active schedules
-- Cancel scheduled tasks
-
-## Tool Reference
-
-### scheduler-timer
-Set a one-time timer.
-
-Parameters:
-- `duration` (required): Time until execution (e.g., "5m", "1h", "30s")
-- `action` (required): What to do when timer fires
-- `name` (optional): Timer identifier
-
-### scheduler-cron
-Create a recurring schedule using cron expression.
-
-Parameters:
-- `expression` (required): Cron expression (e.g., "0 9 * * *")
-- `action` (required): What to do on each trigger
-- `name` (optional): Schedule identifier
-- `timezone` (optional): Timezone for schedule (default: UTC)
-
-### scheduler-list
-List all active schedules and timers.
-
-Parameters: None
-
-### scheduler-cancel
-Cancel a scheduled task.
-
-Parameters:
-- `name` (required): Name of schedule to cancel
+- Deploy workflows that run on schedule
 
 ## Cron Expression Format
 
@@ -71,36 +48,37 @@ Parameters:
 | `0 0 1 * *` | First day of each month |
 | `0 8,12,18 * * *` | At 8am, noon, and 6pm |
 
-## Examples
+## Example Interactions
 
 **User**: "Remind me in 30 minutes"
-**Action**: Use scheduler-timer with:
-- duration: "30m"
-- action: "Send reminder notification"
-- name: "user_reminder"
+- This requires setting up a Timer trigger workflow
+- Inform user: "I can help you create a scheduled workflow. Set up a Timer trigger node with 30 minute delay."
 
 **User**: "Send a daily report at 9am"
-**Action**: Use scheduler-cron with:
-- expression: "0 9 * * *"
-- action: "Generate and send daily report"
-- name: "daily_report"
+- This requires a Cron Scheduler workflow
+- Inform user: "Create a workflow with Cron Scheduler trigger using expression '0 9 * * *'"
 
 **User**: "Check for updates every hour"
-**Action**: Use scheduler-cron with:
-- expression: "0 * * * *"
-- action: "Check for system updates"
-- name: "hourly_update_check"
+- This requires a Cron Scheduler workflow
+- Inform user: "Create a workflow with Cron Scheduler trigger using expression '0 * * * *'"
 
-**User**: "What schedules are active?"
-**Action**: Use scheduler-list
+## Workflow-Based Scheduling
 
-**User**: "Cancel the daily report"
-**Action**: Use scheduler-cancel with:
-- name: "daily_report"
+In this system, scheduling is achieved through:
+
+1. **Trigger Nodes**: Cron Scheduler or Timer nodes start workflows
+2. **Workflow Deployment**: Deploy the workflow to activate the schedule
+3. **Cancel**: Undeploy the workflow to cancel the schedule
 
 ## Best Practices
 
-1. Always give schedules descriptive names
-2. Confirm timezone with user for time-sensitive tasks
-3. List active schedules before creating duplicates
-4. Provide feedback when schedules are created/cancelled
+1. Explain that schedules require workflow deployment
+2. Provide the cron expression for the user's request
+3. Confirm timezone considerations for time-sensitive tasks
+4. Help users understand workflow-based scheduling model
+
+## Limitations
+
+- This skill provides guidance only
+- Actual scheduling requires workflow creation and deployment
+- Cannot directly create/cancel schedules via chat commands

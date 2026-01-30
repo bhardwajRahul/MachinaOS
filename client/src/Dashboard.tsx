@@ -53,8 +53,10 @@ import { useWebSocket } from './contexts/WebSocketContext';
 import { useTheme } from './contexts/ThemeContext';
 import {
   sanitizeNodesForComparison,
-  sanitizeEdgesForComparison
+  sanitizeEdgesForComparison,
+  generateWorkflowId
 } from './utils/workflow';
+import { importWorkflowFromFile } from './utils/workflowExport';
 
 import 'reactflow/dist/style.css';
 
@@ -404,15 +406,22 @@ const DashboardContent: React.FC = () => {
             className = 'memory-active';
           }
         }
-        // Tool connection highlights during tool-related phases
+        // Tool connection highlights when the specific tool node is executing
+        // Only highlight the edge whose source (tool node) is actually being used
         else if (isToolConnection) {
-          if (phase === 'invoking_llm' || phase === 'building_graph') {
+          const toolNodeStatus = sourceStatus?.status;
+          if (toolNodeStatus === 'executing') {
+            // This specific tool is being executed - highlight its edge
             className = 'tool-active';
+          } else if ((phase === 'invoking_llm' || phase === 'building_graph') && toolNodeStatus === 'success') {
+            // Tool completed successfully - keep edge showing success
+            className = 'completed';
           }
         }
-        // Skill connection highlights during skill-related phases (Chat Agent)
+        // Skill connection highlights during skill loading phase (Chat Agent)
+        // Skills provide context to LLM, so highlight only when loading skills
         else if (isSkillConnection) {
-          if (phase === 'invoking_llm' || phase === 'loading_skills') {
+          if (phase === 'loading_skills') {
             className = 'skill-active';
           }
         }
@@ -688,8 +697,6 @@ const DashboardContent: React.FC = () => {
         const file = (e.target as HTMLInputElement).files?.[0];
         if (!file) return;
 
-        const { importWorkflowFromFile } = await import('./utils/workflowExport');
-        const { generateWorkflowId } = await import('./utils/workflow');
         const importedWorkflow = await importWorkflowFromFile(file);
 
         const workflow = {
@@ -1095,6 +1102,7 @@ const DashboardContent: React.FC = () => {
         <ConsolePanel
           isOpen={consolePanelOpen}
           onToggle={() => setConsolePanelOpen(prev => !prev)}
+          nodes={nodes}
         />
 
         {/* Parameter Panels */}

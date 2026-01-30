@@ -33,12 +33,11 @@ async def handle_whatsapp_send(
     start_time = time.time()
 
     try:
-        # Determine recipient
-        recipient_type = parameters.get('recipientType', 'phone')
-        # Support both group_id (node definition) and groupId (legacy)
-        group_id = parameters.get('group_id') or parameters.get('groupId')
+        # Determine recipient (snake_case parameters)
+        recipient_type = parameters.get('recipient_type', 'phone')
+        group_id = parameters.get('group_id')
         recipient = parameters.get('phone') if recipient_type == 'phone' else group_id
-        message_type = parameters.get('messageType', 'text')
+        message_type = parameters.get('message_type', 'text')
 
         if not recipient:
             raise ValueError(f"{'Phone number' if recipient_type == 'phone' else 'Group ID'} is required")
@@ -54,12 +53,12 @@ async def handle_whatsapp_send(
         if not success:
             raise Exception(data.get('error', 'Send failed'))
 
-        # Build informative result based on message type
+        # Build informative result based on message type (snake_case output)
         result = {
             "status": "sent",
             "recipient": recipient,
-            "recipientType": recipient_type,
-            "messageType": message_type,
+            "recipient_type": recipient_type,
+            "message_type": message_type,
             "timestamp": datetime.now().isoformat()
         }
 
@@ -69,28 +68,28 @@ async def handle_whatsapp_send(
                 msg_content = parameters.get('message', '')
                 result["preview"] = msg_content[:100] + "..." if len(msg_content) > 100 else msg_content
             case 'image' | 'video' | 'audio' | 'document' | 'sticker':
-                media_source = parameters.get('mediaSource', 'base64')
-                result["mediaSource"] = media_source
+                media_source = parameters.get('media_source', 'base64')
+                result["media_source"] = media_source
                 if parameters.get('caption'):
                     result["caption"] = parameters.get('caption')
                 if parameters.get('filename'):
                     result["filename"] = parameters.get('filename')
-                if parameters.get('mimeType'):
-                    result["mimeType"] = parameters.get('mimeType')
+                if parameters.get('mime_type'):
+                    result["mime_type"] = parameters.get('mime_type')
                 # For file uploads, include the uploaded filename
-                file_param = parameters.get('filePath')
+                file_param = parameters.get('file_path')
                 if isinstance(file_param, dict) and file_param.get('type') == 'upload':
-                    result["uploadedFile"] = file_param.get('filename')
-                    result["mimeType"] = file_param.get('mimeType')
+                    result["uploaded_file"] = file_param.get('filename')
+                    result["mime_type"] = file_param.get('mimeType')
             case 'location':
                 result["location"] = {
                     "latitude": parameters.get('latitude'),
                     "longitude": parameters.get('longitude'),
-                    "name": parameters.get('locationName'),
+                    "name": parameters.get('location_name'),
                     "address": parameters.get('address')
                 }
             case 'contact':
-                result["contactName"] = parameters.get('contactName')
+                result["contact_name"] = parameters.get('contact_name')
 
         return {
             "success": success,
@@ -229,7 +228,7 @@ async def handle_whatsapp_db(
 
 async def _handle_chat_history(node_id: str, parameters: Dict[str, Any], start_time: float, handler) -> Dict[str, Any]:
     """Handle chat_history operation."""
-    chat_type = parameters.get('chatType', 'individual')
+    chat_type = parameters.get('chat_type', 'individual')
     rpc_params: Dict[str, Any] = {}
 
     if chat_type == 'individual':
@@ -243,13 +242,13 @@ async def _handle_chat_history(node_id: str, parameters: Dict[str, Any], start_t
             raise ValueError("Group ID is required for group chats")
         rpc_params['group_id'] = group_id
 
-        group_filter = parameters.get('groupFilter', 'all')
+        group_filter = parameters.get('group_filter', 'all')
         if group_filter == 'contact':
-            sender_phone = parameters.get('senderPhone')
+            sender_phone = parameters.get('sender_phone')
             if sender_phone:
                 rpc_params['sender_phone'] = sender_phone
 
-    message_filter = parameters.get('messageFilter', 'all')
+    message_filter = parameters.get('message_filter', 'all')
     rpc_params['text_only'] = message_filter == 'text_only'
     rpc_params['limit'] = parameters.get('limit', 50)
     rpc_params['offset'] = parameters.get('offset', 0)
@@ -285,6 +284,7 @@ async def _handle_chat_history(node_id: str, parameters: Dict[str, Any], start_t
 async def _handle_search_groups(node_id: str, parameters: Dict[str, Any], start_time: float, rpc_call) -> Dict[str, Any]:
     """Handle search_groups operation."""
     query = parameters.get('query', '')
+    limit = parameters.get('limit', 20)  # Default limit to prevent context overflow
     data = await rpc_call('groups', {})
 
     if not data.get('success', True):
@@ -297,15 +297,27 @@ async def _handle_search_groups(node_id: str, parameters: Dict[str, Any], start_
         query_lower = query.lower()
         groups = [g for g in groups if query_lower in g.get('name', '').lower()]
 
+    total_found = len(groups)
+
+    # Apply limit to prevent context overflow (51 groups * ~4KB = 200KB+ tokens)
+    # Only return essential fields: jid and name
+    groups_limited = [
+        {"jid": g.get("jid", ""), "name": g.get("name", "")}
+        for g in groups[:limit]
+    ]
+
     return {
         "success": True,
         "node_id": node_id,
         "node_type": "whatsappDb",
         "result": {
             "operation": "search_groups",
-            "groups": groups,
-            "total": len(groups),
+            "groups": groups_limited,
+            "total": total_found,
+            "returned": len(groups_limited),
+            "has_more": total_found > limit,
             "query": query,
+            "hint": f"Showing {len(groups_limited)} of {total_found} groups. Use a more specific query or get_group_info for details." if total_found > limit else None,
             "timestamp": datetime.now().isoformat()
         },
         "execution_time": time.time() - start_time,
@@ -315,9 +327,11 @@ async def _handle_search_groups(node_id: str, parameters: Dict[str, Any], start_
 
 async def _handle_get_group_info(node_id: str, parameters: Dict[str, Any], start_time: float, rpc_call) -> Dict[str, Any]:
     """Handle get_group_info operation."""
-    group_id = parameters.get('groupIdForInfo') or parameters.get('group_id')
+    group_id = parameters.get('group_id_for_info') or parameters.get('group_id')
     if not group_id:
         raise ValueError("Group ID is required")
+
+    participant_limit = parameters.get('participant_limit', 50)  # Limit participants to prevent overflow
 
     data = await rpc_call('group_info', {'group_id': group_id})
 
@@ -326,13 +340,33 @@ async def _handle_get_group_info(node_id: str, parameters: Dict[str, Any], start
 
     result = data if not isinstance(data, dict) or 'result' not in data else data.get('result', data)
 
+    # Limit participants and return only essential fields
+    participants = result.get('participants', [])
+    total_participants = len(participants)
+    participants_limited = [
+        {"phone": p.get("phone", ""), "name": p.get("name", ""), "is_admin": p.get("is_admin", False)}
+        for p in participants[:participant_limit]
+    ]
+
+    # Build limited result
+    limited_result = {
+        "name": result.get("name", ""),
+        "jid": result.get("jid", group_id),
+        "participants": participants_limited,
+        "total_participants": total_participants,
+        "participants_shown": len(participants_limited),
+    }
+
+    if total_participants > participant_limit:
+        limited_result["hint"] = f"Showing {participant_limit} of {total_participants} participants."
+
     return {
         "success": True,
         "node_id": node_id,
         "node_type": "whatsappDb",
         "result": {
             "operation": "get_group_info",
-            **result,
+            **limited_result,
             "timestamp": datetime.now().isoformat()
         },
         "execution_time": time.time() - start_time,
@@ -342,7 +376,7 @@ async def _handle_get_group_info(node_id: str, parameters: Dict[str, Any], start
 
 async def _handle_get_contact_info(node_id: str, parameters: Dict[str, Any], start_time: float, rpc_call) -> Dict[str, Any]:
     """Handle get_contact_info operation."""
-    phone = parameters.get('contactPhone') or parameters.get('phone')
+    phone = parameters.get('contact_phone') or parameters.get('phone')
     if not phone:
         raise ValueError("Phone number is required")
 
@@ -370,6 +404,7 @@ async def _handle_get_contact_info(node_id: str, parameters: Dict[str, Any], sta
 async def _handle_list_contacts(node_id: str, parameters: Dict[str, Any], start_time: float, rpc_call) -> Dict[str, Any]:
     """Handle list_contacts operation."""
     query = parameters.get('query', '')
+    limit = parameters.get('limit', 50)  # Default limit to prevent context overflow
 
     data = await rpc_call('contacts', {'query': query})
 
@@ -379,15 +414,26 @@ async def _handle_list_contacts(node_id: str, parameters: Dict[str, Any], start_
     result = data if not isinstance(data, dict) or 'result' not in data else data.get('result', data)
     contacts = result.get('contacts', []) if isinstance(result, dict) else result
 
+    total_found = len(contacts)
+
+    # Apply limit and return only essential fields: phone, name, jid
+    contacts_limited = [
+        {"phone": c.get("phone", ""), "name": c.get("name", ""), "jid": c.get("jid", "")}
+        for c in contacts[:limit]
+    ]
+
     return {
         "success": True,
         "node_id": node_id,
         "node_type": "whatsappDb",
         "result": {
             "operation": "list_contacts",
-            "contacts": contacts,
-            "total": len(contacts),
+            "contacts": contacts_limited,
+            "total": total_found,
+            "returned": len(contacts_limited),
+            "has_more": total_found > limit,
             "query": query,
+            "hint": f"Showing {len(contacts_limited)} of {total_found} contacts. Use a more specific query to narrow results." if total_found > limit else None,
             "timestamp": datetime.now().isoformat()
         },
         "execution_time": time.time() - start_time,

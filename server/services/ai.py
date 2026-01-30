@@ -34,6 +34,88 @@ logger = get_logger(__name__)
 
 
 # =============================================================================
+# MARKDOWN MEMORY HELPERS - Parse/append/trim conversation markdown
+# =============================================================================
+
+def _parse_memory_markdown(content: str) -> List[BaseMessage]:
+    """Parse markdown memory content into LangChain messages.
+
+    Markdown format:
+    ### **Human** (timestamp)
+    message content
+
+    ### **Assistant** (timestamp)
+    response content
+    """
+    messages = []
+    pattern = r'### \*\*(Human|Assistant)\*\*[^\n]*\n(.*?)(?=\n### \*\*|$)'
+    for role, text in re.findall(pattern, content, re.DOTALL):
+        text = text.strip()
+        if text:
+            msg_class = HumanMessage if role == 'Human' else AIMessage
+            messages.append(msg_class(content=text))
+    return messages
+
+
+def _append_to_memory_markdown(content: str, role: str, message: str) -> str:
+    """Append a message to markdown memory content."""
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    label = "Human" if role == "human" else "Assistant"
+    entry = f"\n### **{label}** ({ts})\n{message}\n"
+    # Remove empty state message if present
+    return content.replace("*No messages yet.*\n", "") + entry
+
+
+def _trim_markdown_window(content: str, window_size: int) -> tuple:
+    """Keep last N message pairs, return (trimmed_content, removed_texts).
+
+    Args:
+        content: Full markdown content
+        window_size: Number of message PAIRS to keep (human+assistant)
+
+    Returns:
+        Tuple of (trimmed markdown, list of removed message texts for archival)
+    """
+    pattern = r'(### \*\*(Human|Assistant)\*\*[^\n]*\n.*?)(?=\n### \*\*|$)'
+    blocks = [m[0] for m in re.findall(pattern, content, re.DOTALL)]
+
+    if len(blocks) <= window_size * 2:
+        return content, []
+
+    keep = blocks[-(window_size * 2):]
+    removed = blocks[:-(window_size * 2)]
+
+    # Extract text from removed blocks for vector storage
+    removed_texts = []
+    for block in removed:
+        match = re.search(r'\n(.*)$', block, re.DOTALL)
+        if match:
+            removed_texts.append(match.group(1).strip())
+
+    return "# Conversation History\n" + "\n".join(keep), removed_texts
+
+
+# Global cache for vector stores per session (InMemoryVectorStore)
+_memory_vector_stores: Dict[str, Any] = {}
+
+
+def _get_memory_vector_store(session_id: str):
+    """Get or create InMemoryVectorStore for a session."""
+    if session_id not in _memory_vector_stores:
+        try:
+            from langchain_core.vectorstores import InMemoryVectorStore
+            from langchain_huggingface import HuggingFaceEmbeddings
+
+            embeddings = HuggingFaceEmbeddings(model_name="BAAI/bge-small-en-v1.5")
+            _memory_vector_stores[session_id] = InMemoryVectorStore(embeddings)
+            logger.debug(f"[Memory] Created vector store for session '{session_id}'")
+        except ImportError as e:
+            logger.warning(f"[Memory] Vector store not available: {e}")
+            return None
+    return _memory_vector_stores[session_id]
+
+
+# =============================================================================
 # AI PROVIDER REGISTRY - Single source of truth for provider configurations
 # =============================================================================
 
@@ -1204,12 +1286,12 @@ class AIService:
             if system_message:
                 initial_messages.append(SystemMessage(content=system_message))
 
-            # Add memory history if connected simpleMemory node provided data
+            # Add memory history from connected simpleMemory node (markdown-based)
             session_id = None
             history_count = 0
             if memory_data and memory_data.get('session_id'):
                 session_id = memory_data['session_id']
-                window_size = memory_data.get('window_size')
+                memory_content = memory_data.get('memory_content', '')
 
                 # Broadcast: Loading memory
                 await broadcast_status("loading_memory", {
@@ -1218,22 +1300,28 @@ class AIService:
                     "has_memory": True
                 })
 
-                # Get conversation history from database
-                history_data = await self.database.get_conversation_messages(session_id, window_size)
-                history_count = len(history_data)
+                # Parse short-term memory from markdown
+                history_messages = _parse_memory_markdown(memory_content)
+                history_count = len(history_messages)
 
-                # Convert to LangChain messages using standardized content validation
-                for m in history_data:
-                    content = m.get('content', '')
-                    if not is_valid_message_content(content):
-                        logger.debug(f"[LangGraph Memory] Skipping empty {m['role']} message")
-                        continue
-                    if m['role'] == 'human':
-                        initial_messages.append(HumanMessage(content=content))
-                    elif m['role'] == 'ai':
-                        initial_messages.append(AIMessage(content=content))
+                # If long-term memory enabled, retrieve relevant context
+                if memory_data.get('long_term_enabled'):
+                    store = _get_memory_vector_store(session_id)
+                    if store:
+                        try:
+                            k = memory_data.get('retrieval_count', 3)
+                            docs = store.similarity_search(prompt, k=k)
+                            if docs:
+                                context = "\n---\n".join(d.page_content for d in docs)
+                                initial_messages.append(SystemMessage(content=f"Relevant past context:\n{context}"))
+                                logger.info(f"[LangGraph Memory] Retrieved {len(docs)} relevant memories from long-term store")
+                        except Exception as e:
+                            logger.debug(f"[LangGraph Memory] Long-term retrieval skipped: {e}")
 
-                logger.info(f"[LangGraph Memory] Loaded {history_count} messages from session '{session_id}'")
+                # Add parsed history messages
+                initial_messages.extend(history_messages)
+
+                logger.info(f"[LangGraph Memory] Loaded {history_count} messages from markdown")
 
                 # Broadcast: Memory loaded
                 await broadcast_status("memory_loaded", {
@@ -1392,9 +1480,9 @@ class AIService:
 
             logger.info(f"[LangGraph] Agent completed in {iterations} iteration(s), thinking={'yes' if thinking_content else 'no'}")
 
-            # Save to memory if connected (persist to database)
+            # Save to memory if connected (markdown-based with optional vector DB)
             # Only save non-empty messages using standardized validation
-            if session_id and is_valid_message_content(prompt) and is_valid_message_content(response_content):
+            if memory_data and memory_data.get('node_id') and is_valid_message_content(prompt) and is_valid_message_content(response_content):
                 # Broadcast: Saving to memory
                 await broadcast_status("saving_memory", {
                     "message": "Saving to conversation memory...",
@@ -1403,9 +1491,31 @@ class AIService:
                     "history_count": history_count
                 })
 
-                await self.database.add_conversation_message(session_id, 'human', prompt)
-                await self.database.add_conversation_message(session_id, 'ai', response_content)
-                logger.info(f"[LangGraph Memory] Saved exchange to session '{session_id}'")
+                # Update markdown content
+                updated_content = memory_data.get('memory_content', '# Conversation History\n\n*No messages yet.*\n')
+                updated_content = _append_to_memory_markdown(updated_content, 'human', prompt)
+                updated_content = _append_to_memory_markdown(updated_content, 'ai', response_content)
+
+                # Trim to window size, archive removed to vector DB
+                window_size = memory_data.get('window_size', 10)
+                updated_content, removed_texts = _trim_markdown_window(updated_content, window_size)
+
+                # Store removed messages in long-term vector DB
+                if removed_texts and memory_data.get('long_term_enabled'):
+                    store = _get_memory_vector_store(session_id)
+                    if store:
+                        try:
+                            store.add_texts(removed_texts)
+                            logger.info(f"[LangGraph Memory] Archived {len(removed_texts)} messages to long-term store")
+                        except Exception as e:
+                            logger.warning(f"[LangGraph Memory] Failed to archive to vector store: {e}")
+
+                # Save updated markdown to node parameters
+                memory_node_id = memory_data['node_id']
+                current_params = await self.database.get_node_parameters(memory_node_id) or {}
+                current_params['memoryContent'] = updated_content
+                await self.database.save_node_parameters(memory_node_id, current_params)
+                logger.info(f"[LangGraph Memory] Saved markdown to memory node '{memory_node_id}'")
 
             result = {
                 "response": response_content,
@@ -1460,16 +1570,17 @@ class AIService:
                                   tool_data: Optional[List[Dict[str, Any]]] = None,
                                   broadcaster=None,
                                   workflow_id: Optional[str] = None) -> Dict[str, Any]:
-        """Execute Chat Agent - conversational AI with skill-based tool calling.
+        """Execute Chat Agent - conversational AI with memory, skills, and tool calling.
 
         Chat Agent supports:
+        - Memory (input-memory): Markdown-based conversation history (same as AI Agent)
         - Skills (input-skill): Provide context/instructions via SKILL.md
         - Tools (input-tools): Tool nodes (httpRequest, etc.) for LangGraph tool calling
 
         Args:
             node_id: The node identifier
             parameters: Node parameters including prompt, model, etc.
-            memory_data: Optional memory data (deprecated - use skills for memory)
+            memory_data: Optional memory data from connected SimpleMemory node (markdown-based)
             skill_data: Optional skill configurations from connected skill nodes
             tool_data: Optional tool configurations from connected tool nodes (httpRequest, etc.)
             broadcaster: Optional StatusBroadcaster for real-time UI updates
@@ -1590,12 +1701,13 @@ class AIService:
             if system_message:
                 messages.append(SystemMessage(content=system_message))
 
-            # Load memory history if connected
+            # Load memory history if connected (markdown-based like AI Agent)
             session_id = None
             history_count = 0
-            if memory_data and memory_data.get('session_id'):
-                session_id = memory_data['session_id']
-                window_size = memory_data.get('window_size')
+            memory_content = None
+            if memory_data and memory_data.get('node_id'):
+                session_id = memory_data.get('session_id', 'default')
+                memory_content = memory_data.get('memory_content', '# Conversation History\n\n*No messages yet.*\n')
 
                 await broadcast_status("loading_memory", {
                     "message": "Loading conversation history...",
@@ -1603,19 +1715,28 @@ class AIService:
                     "has_memory": True
                 })
 
-                history_data = await self.database.get_conversation_messages(session_id, window_size)
-                history_count = len(history_data)
+                # Parse short-term memory from markdown
+                history_messages = _parse_memory_markdown(memory_content)
+                history_count = len(history_messages)
 
-                for m in history_data:
-                    content = m.get('content', '')
-                    if not is_valid_message_content(content):
-                        continue
-                    if m['role'] == 'human':
-                        messages.append(HumanMessage(content=content))
-                    elif m['role'] == 'ai':
-                        messages.append(AIMessage(content=content))
+                # If long-term memory enabled, retrieve relevant context
+                if memory_data.get('long_term_enabled'):
+                    store = _get_memory_vector_store(session_id)
+                    if store:
+                        try:
+                            k = memory_data.get('retrieval_count', 3)
+                            docs = store.similarity_search(prompt, k=k)
+                            if docs:
+                                context = "\n---\n".join(d.page_content for d in docs)
+                                messages.append(SystemMessage(content=f"Relevant past context:\n{context}"))
+                                logger.info(f"[ChatAgent Memory] Retrieved {len(docs)} relevant memories from long-term store")
+                        except Exception as e:
+                            logger.debug(f"[ChatAgent Memory] Long-term retrieval skipped: {e}")
 
-                logger.info(f"[ChatAgent] Loaded {history_count} messages from session '{session_id}'")
+                # Add parsed history messages
+                messages.extend(history_messages)
+
+                logger.info(f"[ChatAgent Memory] Loaded {history_count} messages from markdown")
 
                 await broadcast_status("memory_loaded", {
                     "message": f"Loaded {history_count} messages from memory",
@@ -1735,17 +1856,39 @@ class AIService:
 
             logger.info(f"[ChatAgent] Response generated, thinking={'yes' if thinking_content else 'no'}, iterations={iterations}")
 
-            # Save to memory if connected
-            if session_id and is_valid_message_content(prompt) and is_valid_message_content(response_content):
+            # Save to memory if connected (markdown-based like AI Agent)
+            if memory_data and memory_data.get('node_id') and is_valid_message_content(prompt) and is_valid_message_content(response_content):
                 await broadcast_status("saving_memory", {
                     "message": "Saving to conversation memory...",
                     "session_id": session_id,
                     "has_memory": True
                 })
 
-                await self.database.add_conversation_message(session_id, 'human', prompt)
-                await self.database.add_conversation_message(session_id, 'ai', response_content)
-                logger.info(f"[ChatAgent] Saved exchange to session '{session_id}'")
+                # Update markdown content
+                updated_content = memory_content or '# Conversation History\n\n*No messages yet.*\n'
+                updated_content = _append_to_memory_markdown(updated_content, 'human', prompt)
+                updated_content = _append_to_memory_markdown(updated_content, 'ai', response_content)
+
+                # Trim to window size, archive removed to vector DB
+                window_size = memory_data.get('window_size', 10)
+                updated_content, removed_texts = _trim_markdown_window(updated_content, window_size)
+
+                # Store removed messages in long-term vector DB
+                if removed_texts and memory_data.get('long_term_enabled'):
+                    store = _get_memory_vector_store(session_id)
+                    if store:
+                        try:
+                            store.add_texts(removed_texts)
+                            logger.info(f"[ChatAgent Memory] Archived {len(removed_texts)} messages to long-term store")
+                        except Exception as e:
+                            logger.warning(f"[ChatAgent Memory] Failed to archive to vector store: {e}")
+
+                # Save updated markdown to node parameters
+                memory_node_id = memory_data['node_id']
+                current_params = await self.database.get_node_parameters(memory_node_id) or {}
+                current_params['memoryContent'] = updated_content
+                await self.database.save_node_parameters(memory_node_id, current_params)
+                logger.info(f"[ChatAgent Memory] Saved markdown to memory node '{memory_node_id}'")
 
             # Determine agent type based on configuration
             agent_type = "chat"
@@ -1793,6 +1936,12 @@ class AIService:
             log_execution_time(logger, "chat_agent", start_time, time.time())
             log_api_call(logger, provider, model, "chat_agent", True)
 
+            # Save assistant response to chat messages database for console panel persistence
+            try:
+                await self.database.add_chat_message("default", "assistant", response_content)
+            except Exception as e:
+                logger.warning(f"[ChatAgent] Failed to save chat response to database: {e}")
+
             return {
                 "success": True,
                 "node_id": node_id,
@@ -1834,6 +1983,8 @@ class AIService:
             'androidTool': 'android_device',
             'whatsappSend': 'whatsapp_send',
             'whatsappDb': 'whatsapp_db',
+            'addLocations': 'geocode',
+            'showNearbyPlaces': 'nearby_places',
         }
         DEFAULT_TOOL_DESCRIPTIONS = {
             'calculatorTool': 'Perform mathematical calculations. Operations: add, subtract, multiply, divide, power, sqrt, mod, abs',
@@ -1842,6 +1993,8 @@ class AIService:
             'androidTool': 'Control Android device. Available services are determined by connected nodes.',
             'whatsappSend': 'Send WhatsApp messages to contacts or groups. Supports text, media, location, and contact messages.',
             'whatsappDb': 'Query WhatsApp database - list contacts, search groups, get contact/group info, retrieve chat history.',
+            'addLocations': 'Geocode addresses to coordinates or reverse geocode coordinates to addresses using Google Maps.',
+            'showNearbyPlaces': 'Search for nearby places (restaurants, hospitals, banks, etc.) using Google Maps Places API.',
         }
 
         try:
@@ -2070,17 +2223,25 @@ class AIService:
                     default=None,
                     description="For chat_history (group with group_filter='contact'): filter messages from this phone"
                 )
-                limit: Optional[int] = Field(default=None, description="For chat_history: max messages (1-500)")
+                limit: Optional[int] = Field(
+                    default=None,
+                    description="Max results to return. chat_history: 1-500 (default 50), search_groups: 1-50 (default 20), list_contacts: 1-100 (default 50). Use smaller limits to avoid context overflow."
+                )
                 offset: Optional[int] = Field(default=None, description="For chat_history: pagination offset")
                 # For search_groups, list_contacts
                 query: Optional[str] = Field(
                     default=None,
-                    description="Search query for search_groups or list_contacts"
+                    description="Search query for search_groups or list_contacts. Use specific queries to narrow results."
                 )
                 # For check_contacts
                 phones: Optional[str] = Field(
                     default=None,
                     description="For check_contacts: comma-separated phone numbers"
+                )
+                # For get_group_info
+                participant_limit: Optional[int] = Field(
+                    default=None,
+                    description="For get_group_info: max participants to return (1-100, default 50). Large groups may have hundreds of members."
                 )
 
             return WhatsAppDbSchema
@@ -2126,6 +2287,56 @@ class AIService:
                 )
 
             return AndroidToolSchema
+
+        # Google Maps Geocoding schema (addLocations node as tool)
+        # camelCase to match JSON/frontend convention
+        if node_type == 'addLocations':
+            class GeocodingSchema(BaseModel):
+                """Geocode addresses to coordinates or reverse geocode coordinates to addresses."""
+                service_type: str = Field(
+                    default="geocode",
+                    description="Operation: 'geocode' (address to coordinates) or 'reverse_geocode' (coordinates to address)"
+                )
+                address: Optional[str] = Field(
+                    default=None,
+                    description="Address to geocode (e.g., '1600 Amphitheatre Parkway, Mountain View, CA'). Required for service_type='geocode'"
+                )
+                lat: Optional[float] = Field(
+                    default=None,
+                    description="Latitude for reverse geocoding. Required for service_type='reverse_geocode'"
+                )
+                lng: Optional[float] = Field(
+                    default=None,
+                    description="Longitude for reverse geocoding. Required for service_type='reverse_geocode'"
+                )
+
+            return GeocodingSchema
+
+        # Google Maps Nearby Places schema (showNearbyPlaces node as tool)
+        # snake_case to match Python convention
+        if node_type == 'showNearbyPlaces':
+            class NearbyPlacesSchema(BaseModel):
+                """Search for nearby places using Google Maps Places API."""
+                lat: float = Field(
+                    description="Center latitude for search (e.g., 40.7484)"
+                )
+                lng: float = Field(
+                    description="Center longitude for search (e.g., -73.9857)"
+                )
+                radius: int = Field(
+                    default=500,
+                    description="Search radius in meters (max 50000)"
+                )
+                type: str = Field(
+                    default="restaurant",
+                    description="Place type: restaurant, cafe, bar, hospital, pharmacy, bank, atm, gas_station, supermarket, park, gym, etc."
+                )
+                keyword: Optional[str] = Field(
+                    default=None,
+                    description="Optional keyword to filter results (e.g., 'pizza', 'italian', '24 hour')"
+                )
+
+            return NearbyPlacesSchema
 
         # Generic schema for other nodes
         class GenericToolSchema(BaseModel):

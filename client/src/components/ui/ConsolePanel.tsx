@@ -9,11 +9,17 @@
  */
 
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import { Node } from 'reactflow';
 import { useWebSocket, ConsoleLogEntry } from '../../contexts/WebSocketContext';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { useTheme } from '../../contexts/ThemeContext';
 import Prism from 'prismjs';
 import 'prismjs/components/prism-json';
+
+// Node types that can be targeted by chat messages
+const CHAT_TRIGGER_TYPES = ['chatTrigger'];
+// Node types that produce console output
+const CONSOLE_NODE_TYPES = ['console'];
 
 interface ConsolePanelProps {
   isOpen: boolean;
@@ -21,6 +27,7 @@ interface ConsolePanelProps {
   defaultHeight?: number;
   minHeight?: number;
   maxHeight?: number;
+  nodes?: Node[];  // Workflow nodes for dropdown selection
 }
 
 // Storage keys for persisting state
@@ -32,11 +39,26 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
   onToggle,
   defaultHeight = 250,
   minHeight = 100,
-  maxHeight = 600
+  maxHeight = 600,
+  nodes = []
 }) => {
   const theme = useAppTheme();
   const { isDarkMode } = useTheme();
   const { consoleLogs, clearConsoleLogs, terminalLogs, clearTerminalLogs, sendChatMessage, chatMessages, clearChatMessages } = useWebSocket();
+
+  // Filter nodes to get chatTrigger and console nodes
+  const chatTriggerNodes = useMemo(() =>
+    nodes.filter(n => CHAT_TRIGGER_TYPES.includes(n.type || '')),
+    [nodes]
+  );
+  const consoleNodes = useMemo(() =>
+    nodes.filter(n => CONSOLE_NODE_TYPES.includes(n.type || '')),
+    [nodes]
+  );
+
+  // Selected node states (stored as node ID, empty string means "all")
+  const [selectedChatTriggerId, setSelectedChatTriggerId] = useState<string>('');
+  const [selectedConsoleId, setSelectedConsoleId] = useState<string>('');
   const [filter, setFilter] = useState('');
   const [terminalFilter, setTerminalFilter] = useState('');
   const [terminalLogLevel, setTerminalLogLevel] = useState<'all' | 'error' | 'warning' | 'info' | 'debug'>('all');
@@ -191,16 +213,27 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
     };
   }, [isHorizontalResizing]);
 
-  // Filter console logs based on search input
+  // Filter console logs based on search input and selected console node
   const filteredLogs = useMemo(() => {
-    if (!filter) return consoleLogs;
-    const lowerFilter = filter.toLowerCase();
-    return consoleLogs.filter(log =>
-      log.label.toLowerCase().includes(lowerFilter) ||
-      log.formatted.toLowerCase().includes(lowerFilter) ||
-      log.node_id.toLowerCase().includes(lowerFilter)
-    );
-  }, [consoleLogs, filter]);
+    let logs = consoleLogs;
+
+    // Filter by selected console node (if one is selected)
+    if (selectedConsoleId) {
+      logs = logs.filter(log => log.node_id === selectedConsoleId);
+    }
+
+    // Filter by search text
+    if (filter) {
+      const lowerFilter = filter.toLowerCase();
+      logs = logs.filter(log =>
+        log.label.toLowerCase().includes(lowerFilter) ||
+        log.formatted.toLowerCase().includes(lowerFilter) ||
+        log.node_id.toLowerCase().includes(lowerFilter)
+      );
+    }
+
+    return logs;
+  }, [consoleLogs, filter, selectedConsoleId]);
 
   // Filter terminal logs based on search input and log level
   const filteredTerminalLogs = useMemo(() => {
@@ -254,14 +287,15 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
 
     setIsSending(true);
     try {
-      await sendChatMessage(message);
+      // Pass selected chatTrigger node ID if one is selected (empty string means broadcast to all)
+      await sendChatMessage(message, selectedChatTriggerId || undefined);
       setChatInput('');
     } catch (error) {
       console.error('Failed to send chat message:', error);
     } finally {
       setIsSending(false);
     }
-  }, [chatInput, isSending, sendChatMessage]);
+  }, [chatInput, isSending, sendChatMessage, selectedChatTriggerId]);
 
   // Handle Enter key in chat input
   const handleChatKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -450,10 +484,10 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
     border: 'none',
     cursor: 'pointer',
     padding: '2px 6px',
-    borderRadius: '4px',
-    fontSize: '10px',
+    borderRadius: theme.borderRadius.sm,
+    fontSize: theme.fontSize.xs,
     color: theme.colors.textSecondary,
-    transition: 'background-color 0.15s ease'
+    transition: theme.transitions.fast
   };
 
   const clearButtonStyle: React.CSSProperties = {
@@ -464,13 +498,26 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
 
   const filterInputStyle: React.CSSProperties = {
     padding: '2px 6px',
-    fontSize: '10px',
+    fontSize: theme.fontSize.xs,
     backgroundColor: isDarkMode ? theme.dracula.background : theme.colors.background,
     border: `1px solid ${theme.colors.border}`,
-    borderRadius: '4px',
+    borderRadius: theme.borderRadius.sm,
     color: theme.colors.text,
     width: '100px',
     outline: 'none'
+  };
+
+  // Shared select/dropdown style using theme
+  const selectStyle: React.CSSProperties = {
+    padding: '2px 4px',
+    fontSize: theme.fontSize.xs,
+    backgroundColor: isDarkMode ? theme.dracula.currentLine : theme.colors.background,
+    color: theme.colors.text,
+    border: `1px solid ${isDarkMode ? theme.dracula.selection : theme.colors.border}`,
+    borderRadius: theme.borderRadius.sm,
+    cursor: 'pointer',
+    outline: 'none',
+    maxWidth: '120px'
   };
 
   const logEntryStyle: React.CSSProperties = {
@@ -483,14 +530,14 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
 
   const timestampStyle: React.CSSProperties = {
     color: isDarkMode ? theme.dracula.comment : theme.colors.textMuted,
-    fontSize: '11px',
+    fontSize: theme.fontSize.xs,
     whiteSpace: 'nowrap',
     minWidth: '90px'
   };
 
   const labelStyle: React.CSSProperties = {
     color: isDarkMode ? theme.dracula.yellow : theme.colors.warning,
-    fontSize: '12px',
+    fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.medium,
     minWidth: '80px',
     maxWidth: '120px',
@@ -500,8 +547,8 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
   };
 
   const nodeInfoStyle: React.CSSProperties = {
-    color: isDarkMode ? theme.dracula.pink : '#db2777',
-    fontSize: '11px',
+    color: isDarkMode ? theme.dracula.pink : theme.colors.categoryTrigger,
+    fontSize: theme.fontSize.xs,
     fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, monospace',
     minWidth: '80px',
     maxWidth: '120px',
@@ -584,8 +631,7 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
   const chatMessageTextStyle: React.CSSProperties = {
     fontSize: theme.fontSize.xs,
     color: theme.colors.text,
-    margin: 0,
-    whiteSpace: 'pre-wrap'
+    margin: 0
   };
 
   const chatMessageTimeStyle: React.CSSProperties = {
@@ -646,18 +692,37 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
         {/* Chat Section - Left */}
         <div style={chatSectionStyle}>
           <div style={sectionHeaderStyle}>
-            <span style={sectionTitleStyle}>
-              Chat
-              {chatMessages && chatMessages.length > 0 && (
-                <span style={{
-                  ...badgeStyle,
-                  backgroundColor: isDarkMode ? `${theme.dracula.green}40` : `${theme.colors.success}20`,
-                  color: isDarkMode ? theme.dracula.green : theme.colors.success
-                }}>
-                  {chatMessages.length}
-                </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={sectionTitleStyle}>
+                Chat
+                {chatMessages && chatMessages.length > 0 && (
+                  <span style={{
+                    ...badgeStyle,
+                    backgroundColor: isDarkMode ? `${theme.dracula.green}40` : `${theme.colors.success}20`,
+                    color: isDarkMode ? theme.dracula.green : theme.colors.success
+                  }}>
+                    {chatMessages.length}
+                  </span>
+                )}
+              </span>
+              {/* ChatTrigger node selector dropdown */}
+              {chatTriggerNodes.length > 0 && (
+                <select
+                  value={selectedChatTriggerId}
+                  onChange={e => setSelectedChatTriggerId(e.target.value)}
+                  onClick={e => e.stopPropagation()}
+                  style={selectStyle}
+                  title="Select chatTrigger node to target"
+                >
+                  <option value="">All Triggers</option>
+                  {chatTriggerNodes.map(node => (
+                    <option key={node.id} value={node.id}>
+                      {node.data?.label || node.id}
+                    </option>
+                  ))}
+                </select>
               )}
-            </span>
+            </div>
             {chatMessages && chatMessages.length > 0 && (
               <button
                 style={clearButtonStyle}
@@ -682,7 +747,17 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 {chatMessages.map((msg, index) => (
                   <div key={`${msg.timestamp}-${index}`} style={chatMessageStyle(msg.role === 'user')}>
-                    <p style={chatMessageTextStyle}>{msg.message}</p>
+                    <pre style={{
+                      ...chatMessageTextStyle,
+                      margin: 0,
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                      lineHeight: 1.15,
+                      fontFamily: 'inherit',
+                      fontSize: 'inherit'
+                    }}>
+                      {msg.message}
+                    </pre>
                     <div style={chatMessageTimeStyle}>
                       {formatTimestamp(msg.timestamp)}
                     </div>
@@ -791,22 +866,30 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
                   value={terminalLogLevel}
                   onChange={e => setTerminalLogLevel(e.target.value as 'all' | 'error' | 'warning' | 'info' | 'debug')}
                   onClick={e => e.stopPropagation()}
-                  style={{
-                    padding: '2px 4px',
-                    fontSize: '10px',
-                    backgroundColor: isDarkMode ? theme.dracula.currentLine : theme.colors.background,
-                    color: theme.colors.text,
-                    border: `1px solid ${isDarkMode ? theme.dracula.selection : theme.colors.border}`,
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    outline: 'none'
-                  }}
+                  style={selectStyle}
                 >
                   <option value="all">All Levels</option>
                   <option value="error">Error</option>
                   <option value="warning">Warning+</option>
                   <option value="info">Info+</option>
                   <option value="debug">Debug+</option>
+                </select>
+              )}
+              {/* Console node selector dropdown */}
+              {consoleTab === 'console' && consoleNodes.length > 0 && (
+                <select
+                  value={selectedConsoleId}
+                  onChange={e => setSelectedConsoleId(e.target.value)}
+                  onClick={e => e.stopPropagation()}
+                  style={selectStyle}
+                  title="Filter logs by Console node"
+                >
+                  <option value="">All Consoles</option>
+                  {consoleNodes.map(node => (
+                    <option key={node.id} value={node.id}>
+                      {node.data?.label || node.id}
+                    </option>
+                  ))}
                 </select>
               )}
               <input
@@ -823,8 +906,7 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
                   display: 'flex',
                   alignItems: 'center',
                   gap: '3px',
-                  cursor: 'pointer',
-                  fontSize: '10px'
+                  cursor: 'pointer'
                 }}
               >
                 <input
@@ -843,12 +925,9 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
                     alignItems: 'center',
                     gap: '3px',
                     cursor: 'pointer',
-                    fontSize: '10px',
                     backgroundColor: prettyPrint
                       ? (isDarkMode ? `${theme.dracula.cyan}30` : `${theme.colors.info}20`)
-                      : 'transparent',
-                    padding: '2px 6px',
-                    borderRadius: '4px'
+                      : 'transparent'
                   }}
                   title="Format JSON and convert escaped newlines"
                 >
@@ -877,7 +956,7 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
               )}
             </div>
           </div>
-          <div style={{ flex: 1, overflow: 'auto', fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, monospace', fontSize: '12px' }}>
+          <div style={{ flex: 1, overflow: 'auto', fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, monospace', fontSize: theme.fontSize.sm }}>
             {consoleTab === 'console' ? (
               // Console Logs Tab
               filteredLogs.length === 0 ? (
@@ -920,7 +999,10 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
                             overflow: 'auto',
                             color: getFormatColor(log.format),
                             whiteSpace: 'pre-wrap',
-                            wordBreak: 'break-word'
+                            wordBreak: 'break-word',
+                            lineHeight: 1.15,
+                            fontFamily: 'inherit',
+                            fontSize: 'inherit'
                           }}
                         >
                           {formatted}
@@ -953,25 +1035,25 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
                     }}>
                       <span style={{
                         color: isDarkMode ? theme.dracula.comment : theme.colors.textMuted,
-                        fontSize: '11px'
+                        fontSize: theme.fontSize.xs
                       }}>{formatTimestamp(log.timestamp)}</span>
                       {log.source && (
                         <span style={{
                           color: isDarkMode ? theme.dracula.cyan : theme.colors.info,
-                          fontSize: '11px',
-                          marginLeft: '8px'
+                          fontSize: theme.fontSize.xs,
+                          marginLeft: theme.spacing.sm
                         }}>
                           [{log.source}]
                         </span>
                       )}
                       <span style={{
                         color: theme.colors.text,
-                        fontSize: '12px',
-                        marginLeft: '8px'
+                        fontSize: theme.fontSize.sm,
+                        marginLeft: theme.spacing.sm
                       }}>
                         {log.message}
                         {log.details && (
-                          <span style={{ color: isDarkMode ? theme.dracula.comment : theme.colors.textMuted, marginLeft: '8px' }}>
+                          <span style={{ color: isDarkMode ? theme.dracula.comment : theme.colors.textMuted, marginLeft: theme.spacing.sm }}>
                             {typeof log.details === 'string' ? log.details : JSON.stringify(log.details)}
                           </span>
                         )}

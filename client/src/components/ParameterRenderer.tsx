@@ -6,6 +6,7 @@ import CodeEditor from './ui/CodeEditor';
 import DynamicParameterService from '../services/dynamicParameterService';
 import { useAppStore } from '../store/useAppStore';
 import { ANDROID_SERVICE_NODE_TYPES } from '../nodeDefinitions/androidServiceNodes';
+import { nodeDefinitions } from '../nodeDefinitions';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { API_CONFIG } from '../config/api';
 import { useWebSocket } from '../contexts/WebSocketContext';
@@ -932,7 +933,6 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
 
       try {
         // Get the node definition to access methods
-        const { nodeDefinitions } = await import('../nodeDefinitions');
         const nodeType = selectedNode.data?.nodeType || selectedNode.type;
         const nodeDef = nodeType ? nodeDefinitions[nodeType] : null;
 

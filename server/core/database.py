@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from contextlib import asynccontextmanager
 
 from core.config import Settings
-from models.database import NodeParameter, Workflow, Execution, APIKey, APIKeyValidation, NodeOutput, ConversationMessage, ToolSchema, UserSkill
+from models.database import NodeParameter, Workflow, Execution, APIKey, APIKeyValidation, NodeOutput, ConversationMessage, ToolSchema, UserSkill, ChatMessage
 from models.cache import CacheEntry  # SQLite-backed cache for Redis alternative
 from models.auth import User  # Import User model to ensure table creation
 from core.logging import get_logger
@@ -607,6 +607,105 @@ class Database:
 
         except Exception as e:
             logger.error("Failed to get conversation sessions", error=str(e))
+            return []
+
+    # ============================================================================
+    # Chat Messages (Console Panel persistence)
+    # ============================================================================
+
+    async def add_chat_message(self, session_id: str, role: str, message: str) -> bool:
+        """Add a chat message to the console panel history."""
+        try:
+            async with self.get_session() as session:
+                chat_msg = ChatMessage(
+                    session_id=session_id,
+                    role=role,
+                    message=message
+                )
+                session.add(chat_msg)
+                await session.commit()
+                logger.debug(f"[Chat] Added {role} message to session '{session_id}'")
+                return True
+
+        except Exception as e:
+            logger.error("Failed to add chat message", session_id=session_id, error=str(e))
+            return False
+
+    async def get_chat_messages(self, session_id: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Get chat messages for a session, optionally limited to last N."""
+        try:
+            async with self.get_session() as session:
+                stmt = select(ChatMessage).where(
+                    ChatMessage.session_id == session_id
+                ).order_by(ChatMessage.created_at.asc())
+
+                result = await session.execute(stmt)
+                messages = result.scalars().all()
+
+                # Apply limit if specified
+                if limit and limit > 0:
+                    messages = messages[-limit:]
+
+                return [
+                    {
+                        "role": m.role,
+                        "message": m.message,
+                        "timestamp": m.created_at.isoformat()
+                    }
+                    for m in messages
+                ]
+
+        except Exception as e:
+            logger.error("Failed to get chat messages", session_id=session_id, error=str(e))
+            return []
+
+    async def clear_chat_messages(self, session_id: str) -> int:
+        """Clear all chat messages for a session. Returns count deleted."""
+        try:
+            async with self.get_session() as session:
+                stmt = select(ChatMessage).where(
+                    ChatMessage.session_id == session_id
+                )
+                result = await session.execute(stmt)
+                messages = result.scalars().all()
+
+                count = len(messages)
+                for message in messages:
+                    await session.delete(message)
+
+                await session.commit()
+                logger.info(f"[Chat] Cleared {count} messages from session '{session_id}'")
+                return count
+
+        except Exception as e:
+            logger.error("Failed to clear chat messages", session_id=session_id, error=str(e))
+            return 0
+
+    async def get_chat_sessions(self) -> List[Dict[str, Any]]:
+        """Get list of all chat sessions with message counts."""
+        try:
+            async with self.get_session() as session:
+                from sqlalchemy import func as sa_func
+                stmt = select(
+                    ChatMessage.session_id,
+                    sa_func.count(ChatMessage.id).label('message_count'),
+                    sa_func.max(ChatMessage.created_at).label('last_message_at')
+                ).group_by(ChatMessage.session_id).order_by(sa_func.max(ChatMessage.created_at).desc())
+
+                result = await session.execute(stmt)
+                rows = result.all()
+
+                return [
+                    {
+                        "session_id": row.session_id,
+                        "message_count": row.message_count,
+                        "last_message_at": row.last_message_at.isoformat() if row.last_message_at else None
+                    }
+                    for row in rows
+                ]
+
+        except Exception as e:
+            logger.error("Failed to get chat sessions", error=str(e))
             return []
 
     # ============================================================================

@@ -63,19 +63,25 @@ async def handle_ai_agent(
             if not source_node:
                 continue
 
-            # Memory detection (existing)
+            # Memory detection - load markdown content for editing
             if target_handle == 'input-memory':
                 if source_node.get('type') == 'simpleMemory':
                     memory_params = await database.get_node_parameters(source_node_id) or {}
                     memory_session_id = memory_params.get('sessionId', 'default')
-                    memory_type = memory_params.get('memoryType', 'buffer')
-                    window_size = int(memory_params.get('windowSize', 10)) if memory_type == 'window' else None
+                    window_size = int(memory_params.get('windowSize', 10))
+                    memory_content = memory_params.get('memoryContent', '# Conversation History\n\n*No messages yet.*\n')
+                    long_term_enabled = memory_params.get('longTermEnabled', False)
+                    retrieval_count = int(memory_params.get('retrievalCount', 3))
+
                     memory_data = {
+                        'node_id': source_node_id,  # For saving updated content
                         'session_id': memory_session_id,
-                        'memory_type': memory_type,
-                        'window_size': window_size
+                        'window_size': window_size,
+                        'memory_content': memory_content,
+                        'long_term_enabled': long_term_enabled,
+                        'retrieval_count': retrieval_count
                     }
-                    logger.debug("AI Agent connected memory node", memory_session=memory_session_id)
+                    logger.debug("AI Agent connected memory node", memory_session=memory_session_id, content_length=len(memory_content))
 
             # Tool detection (new) - any node connected to input-tools becomes a tool
             elif target_handle == 'input-tools':
@@ -159,8 +165,9 @@ async def handle_chat_agent(
     """Handle Chat Agent node execution with skill-based tool calling.
 
     Chat Agent supports:
+    - Memory (input-memory): SimpleMemory node for conversation history
     - Skills (input-skill): Provide context/instructions via SKILL.md
-    - Tools (input-tool): Tool nodes (httpRequest, etc.) for LangGraph tool calling
+    - Tools (input-tools): Tool nodes (httpRequest, etc.) for LangGraph tool calling
 
     Args:
         node_id: The node ID
@@ -176,6 +183,7 @@ async def handle_chat_agent(
     nodes = context.get('nodes')
     edges = context.get('edges')
     workflow_id = context.get('workflow_id')
+    memory_data = None
     skill_data: List[Dict[str, Any]] = []
     tool_data: List[Dict[str, Any]] = []  # Tools for LangGraph
     input_data: Optional[Dict[str, Any]] = None
@@ -197,8 +205,28 @@ async def handle_chat_agent(
             if not source_node:
                 continue
 
+            # Memory detection - load markdown content (same as AI Agent)
+            if target_handle == 'input-memory':
+                if source_node.get('type') == 'simpleMemory':
+                    memory_params = await database.get_node_parameters(source_node_id) or {}
+                    memory_session_id = memory_params.get('sessionId', 'default')
+                    window_size = int(memory_params.get('windowSize', 10))
+                    memory_content = memory_params.get('memoryContent', '# Conversation History\n\n*No messages yet.*\n')
+                    long_term_enabled = memory_params.get('longTermEnabled', False)
+                    retrieval_count = int(memory_params.get('retrievalCount', 3))
+
+                    memory_data = {
+                        'node_id': source_node_id,
+                        'session_id': memory_session_id,
+                        'window_size': window_size,
+                        'memory_content': memory_content,
+                        'long_term_enabled': long_term_enabled,
+                        'retrieval_count': retrieval_count
+                    }
+                    logger.info(f"[Chat Agent] Connected memory node: session={memory_session_id}, content_length={len(memory_content)}")
+
             # Skill detection - nodes connected to input-skill handle
-            if target_handle == 'input-skill':
+            elif target_handle == 'input-skill':
                 skill_type = source_node.get('type')
                 skill_params = await database.get_node_parameters(source_node_id) or {}
                 skill_entry = {
@@ -231,8 +259,8 @@ async def handle_chat_agent(
                     input_data = source_output
                     logger.debug(f"[Chat Agent] Input from {source_node.get('type')}: {list(source_output.keys())}")
 
-    # Log discovered skills and tools
-    logger.info(f"[Chat Agent] Discovered: {len(skill_data)} skills, {len(tool_data)} tools")
+    # Log discovered connections
+    logger.info(f"[Chat Agent] Discovered: memory={'yes' if memory_data else 'no'}, {len(skill_data)} skills, {len(tool_data)} tools")
     for td in tool_data:
         logger.debug(f"[Chat Agent] Tool: type={td.get('node_type')}, label={td.get('label')}")
 
@@ -251,11 +279,11 @@ async def handle_chat_agent(
     from services.status_broadcaster import get_status_broadcaster
     broadcaster = get_status_broadcaster()
 
-    # Execute Chat Agent with skills and tools
+    # Execute Chat Agent with memory, skills and tools
     return await ai_service.execute_chat_agent(
         node_id,
         parameters,
-        memory_data=None,  # Memory removed - use skill-based conversation management
+        memory_data=memory_data,
         skill_data=skill_data if skill_data else None,
         tool_data=tool_data if tool_data else None,
         broadcaster=broadcaster,

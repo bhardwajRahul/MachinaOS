@@ -65,8 +65,9 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
     subtitle: 'Skill-based Agent',
     accentColor: '#3B82F6',
     bottomHandles: [
-      { id: 'input-skill', label: 'Skill', position: '35%' },
-      { id: 'input-tools', label: 'Tool', position: '65%' },
+      { id: 'input-memory', label: 'Memory', position: '25%' },
+      { id: 'input-skill', label: 'Skill', position: '50%' },
+      { id: 'input-tools', label: 'Tool', position: '75%' },
     ],
   },
 };

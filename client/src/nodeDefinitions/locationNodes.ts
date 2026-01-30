@@ -45,7 +45,7 @@ export const locationNodes: Record<string, INodeTypeDescription> = {
       { displayName: 'Center Latitude', name: 'lat', type: 'number', typeOptions: { minValue: -90, maxValue: 90, numberStepSize: 0.000001 }, default: 40.7128, required: true, description: 'Latitude for map center (decimal degrees)' },
       { displayName: 'Center Longitude', name: 'lng', type: 'number', typeOptions: { minValue: -180, maxValue: 180, numberStepSize: 0.000001 }, default: -74.0060, required: true, description: 'Longitude for map center (decimal degrees)' },
       { displayName: 'Zoom Level', name: 'zoom', type: 'number', typeOptions: { minValue: 0, maxValue: 21 }, default: 13, description: 'Map zoom level (0-21, where 21 is building level)' },
-      { displayName: 'Map Type', name: 'mapTypeId', type: 'options', options: [
+      { displayName: 'Map Type', name: 'map_type_id', type: 'options', options: [
         { name: 'Roadmap', value: 'ROADMAP' },
         { name: 'Satellite', value: 'SATELLITE' },
         { name: 'Hybrid', value: 'HYBRID' },
@@ -60,35 +60,35 @@ export const locationNodes: Record<string, INodeTypeDescription> = {
         options: [
           {
             displayName: 'Disable Default UI',
-            name: 'disableDefaultUI',
+            name: 'disable_default_ui',
             type: 'boolean',
             default: false,
             description: 'Disable default Google Maps UI controls'
           },
           {
             displayName: 'Zoom Control',
-            name: 'zoomControl',
+            name: 'zoom_control',
             type: 'boolean',
             default: true,
             description: 'Enable zoom control buttons'
           },
           {
             displayName: 'Map Type Control',
-            name: 'mapTypeControl',
+            name: 'map_type_control',
             type: 'boolean',
             default: true,
             description: 'Enable map type selection control'
           },
           {
             displayName: 'Street View Control',
-            name: 'streetViewControl',
+            name: 'street_view_control',
             type: 'boolean',
             default: true,
             description: 'Enable street view control'
           },
           {
             displayName: 'Fullscreen Control',
-            name: 'fullscreenControl',
+            name: 'fullscreen_control',
             type: 'boolean',
             default: true,
             description: 'Enable fullscreen control'
@@ -98,12 +98,12 @@ export const locationNodes: Record<string, INodeTypeDescription> = {
     ]
   },
 
-  // Add Locations - Google Maps Geocoding Service
+  // Add Locations - Google Maps Geocoding Service (Dual-purpose: workflow node + AI tool)
   addLocations: {
     displayName: 'Add Locations',
     name: 'addLocations',
     icon: '🌍',
-    group: ['location', 'service'],
+    group: ['location', 'service', 'tool'],  // 'tool' enables AI Agent tool calling
     version: 1,
     subtitle: 'Geocoding Service',
     description: 'Use Google Maps Geocoding Service for address-to-coordinates conversion and reverse geocoding with detailed location information',
@@ -127,17 +127,17 @@ export const locationNodes: Record<string, INodeTypeDescription> = {
       displayName: 'Google Maps API Key'
     }],
     properties: [
-      { displayName: 'Service Type', name: 'serviceType', type: 'options', options: [
+      { displayName: 'Service Type', name: 'service_type', type: 'options', options: [
         { name: 'Geocoding (Address → LatLng)', value: 'geocode' },
         { name: 'Reverse Geocoding (LatLng → Address)', value: 'reverse_geocode' }
       ], default: 'geocode', required: true, description: 'Google Maps Geocoding service operation' },
 
       // Geocoding Request Parameters
-      { displayName: 'Address Query', name: 'address', type: 'string', default: '', placeholder: 'e.g., "1600 Amphitheatre Parkway, Mountain View, CA"', required: true, displayOptions: { show: { serviceType: ['geocode'] } }, description: 'The address to geocode' },
+      { displayName: 'Address Query', name: 'address', type: 'string', default: '', placeholder: 'e.g., "1600 Amphitheatre Parkway, Mountain View, CA"', required: true, displayOptions: { show: { service_type: ['geocode'] } }, description: 'The address to geocode' },
 
       // Reverse Geocoding Parameters
-      { displayName: 'Location Latitude', name: 'lat', type: 'number', typeOptions: { minValue: -90, maxValue: 90, numberStepSize: 0.000001 }, default: 37.4224, required: true, displayOptions: { show: { serviceType: ['reverse_geocode'] } }, description: 'Latitude for reverse geocoding' },
-      { displayName: 'Location Longitude', name: 'lng', type: 'number', typeOptions: { minValue: -180, maxValue: 180, numberStepSize: 0.000001 }, default: -122.0842, required: true, displayOptions: { show: { serviceType: ['reverse_geocode'] } }, description: 'Longitude for reverse geocoding' },
+      { displayName: 'Location Latitude', name: 'lat', type: 'number', typeOptions: { minValue: -90, maxValue: 90, numberStepSize: 0.000001 }, default: 37.4224, required: true, displayOptions: { show: { service_type: ['reverse_geocode'] } }, description: 'Latitude for reverse geocoding' },
+      { displayName: 'Location Longitude', name: 'lng', type: 'number', typeOptions: { minValue: -180, maxValue: 180, numberStepSize: 0.000001 }, default: -122.0842, required: true, displayOptions: { show: { service_type: ['reverse_geocode'] } }, description: 'Longitude for reverse geocoding' },
 
       {
         displayName: 'Options',
@@ -148,7 +148,7 @@ export const locationNodes: Record<string, INodeTypeDescription> = {
         options: [
           {
             displayName: 'Result Types',
-            name: 'resultTypes',
+            name: 'result_types',
             type: 'multiOptions',
             options: [
               { name: 'Street Address', value: 'street_address' },
@@ -167,7 +167,7 @@ export const locationNodes: Record<string, INodeTypeDescription> = {
           },
           {
             displayName: 'Location Types',
-            name: 'locationTypes',
+            name: 'location_types',
             type: 'multiOptions',
             options: [
               { name: 'Rooftop', value: 'ROOFTOP' },
@@ -208,7 +208,7 @@ export const locationNodes: Record<string, INodeTypeDescription> = {
           },
           {
             displayName: 'Component Restrictions',
-            name: 'componentRestrictions',
+            name: 'component_restrictions',
             type: 'string',
             default: '',
             placeholder: 'e.g., "country:US|administrative_area:CA"',
@@ -219,12 +219,12 @@ export const locationNodes: Record<string, INodeTypeDescription> = {
     ]
   },
 
-  // Show Nearby Places - Google Maps Places API nearbySearch
+  // Show Nearby Places - Google Maps Places API nearbySearch (Dual-purpose: workflow node + AI tool)
   showNearbyPlaces: {
     displayName: 'Show Nearby Places',
     name: 'showNearbyPlaces',
     icon: '🔍',
-    group: ['location', 'service'],
+    group: ['location', 'service', 'tool'],  // 'tool' enables AI Agent tool calling
     version: 1,
     subtitle: 'Places API nearbySearch',
     description: 'Search for places near a location using Google Maps Places API nearbySearch with detailed place information in JSON format',
@@ -378,7 +378,7 @@ export const locationNodes: Record<string, INodeTypeDescription> = {
           },
           {
             displayName: 'Min Price Level',
-            name: 'minPrice',
+            name: 'min_price',
             type: 'options',
             options: [
               { name: 'Any', value: '' },
@@ -393,7 +393,7 @@ export const locationNodes: Record<string, INodeTypeDescription> = {
           },
           {
             displayName: 'Max Price Level',
-            name: 'maxPrice',
+            name: 'max_price',
             type: 'options',
             options: [
               { name: 'Any', value: '' },
@@ -408,7 +408,7 @@ export const locationNodes: Record<string, INodeTypeDescription> = {
           },
           {
             displayName: 'Open Now',
-            name: 'openNow',
+            name: 'open_now',
             type: 'boolean',
             default: false,
             description: 'Only return places open at query time'
@@ -436,7 +436,7 @@ export const locationNodes: Record<string, INodeTypeDescription> = {
           },
           {
             displayName: 'Rank By',
-            name: 'rankBy',
+            name: 'rank_by',
             type: 'options',
             options: [
               { name: 'Prominence (Default)', value: 'prominence' },
@@ -447,7 +447,7 @@ export const locationNodes: Record<string, INodeTypeDescription> = {
           },
           {
             displayName: 'Page Size',
-            name: 'pageSize',
+            name: 'page_size',
             type: 'number',
             typeOptions: { minValue: 1, maxValue: 20 },
             default: 20,

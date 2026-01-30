@@ -1,8 +1,46 @@
 {
-  "name": "react-flow-project",
-  "private": true,
-  "version": "0.0.0",
+  "name": "machinaos",
+  "version": "0.0.1",
+  "description": "Open source workflow automation platform with AI agents, React Flow, and n8n-inspired architecture",
   "type": "module",
+  "keywords": [
+    "workflow",
+    "automation",
+    "react-flow",
+    "ai-agent",
+    "langchain",
+    "langgraph",
+    "n8n",
+    "whatsapp",
+    "android",
+    "low-code",
+    "no-code"
+  ],
+  "author": "Rohit G <trohitg@gmail.com>",
+  "license": "MIT",
+  "homepage": "https://github.com/trohitg/MachinaOS#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/trohitg/MachinaOS.git"
+  },
+  "bugs": {
+    "url": "https://github.com/trohitg/MachinaOS/issues"
+  },
+  "bin": {
+    "machinaos": "./bin/cli.js"
+  },
+  "files": [
+    "bin/",
+    "client/",
+    "server/",
+    "scripts/",
+    "docker-compose.yml",
+    "docker-compose.prod.yml",
+    ".env.template"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "workspaces": [
     "client"
   ],
@@ -10,19 +48,17 @@
     "dev": "concurrently --raw --kill-others-on-fail \"npm:client:dev\" \"npm:python:dev\" \"npm:whatsapp:api\"",
     "dev:temporal": "concurrently --raw --kill-others-on-fail \"npm:client:dev\" \"npm:python:dev\" \"npm:whatsapp:api\" \"npm:temporal:worker\"",
     "temporal:worker": "cd server && uv run python -m services.temporal.worker",
-    "client:dev": "cd client && set NO_COLOR=1&& npm run dev",
+    "client:dev": "cd client && npm run dev",
     "python:dev": "cd server && uv run uvicorn main:app --host 127.0.0.1 --port 3010 --reload --reload-dir . --reload-exclude \"*.pyc\" --reload-exclude \"__pycache__\" --log-level warning",
     "whatsapp:start": "cd server/whatsapp-rpc && npm start",
     "whatsapp:stop": "cd server/whatsapp-rpc && npm stop",
     "whatsapp:status": "cd server/whatsapp-rpc && npm run status",
     "whatsapp:api": "cd server/whatsapp-rpc && npm run api",
     "whatsapp:build": "cd server/whatsapp-rpc && npm run build",
-    "build": "node -e \"const fs=require('fs'),p='.env';if(!fs.existsSync(p))fs.copyFileSync('.env.template',p)\" && echo '[1/5] Installing root deps...' && npm ci && echo '[2/5] Building client...' && cd client && npm run build && echo '[3/5] Installing Python deps...' && cd ../server && uv venv && uv sync && echo '[4/5] Installing WhatsApp deps...' && cd whatsapp-rpc && npm ci && echo '[5/5] Building WhatsApp server...' && npm run build && echo 'Build complete.'",
+    "build": "node scripts/build.js",
     "clean": "node scripts/clean.js",
     "start": "node scripts/start.js",
     "stop": "node scripts/stop.js",
-    "restart": "node scripts/restart.js",
-    "status": "node scripts/status.js",
     "docker:up": "node scripts/docker.js up",
     "docker:down": "node scripts/docker.js down",
     "docker:logs": "node scripts/docker.js logs",
@@ -36,6 +72,8 @@
     "deploy:gcp": "bash deploy.sh"
   },
   "devDependencies": {
-    "concurrently": "^9.2.1"
+    "concurrently": "^9.2.1",
+    "cross-env": "^7.0.3",
+    "rimraf": "^6.0.1"
   }
 }

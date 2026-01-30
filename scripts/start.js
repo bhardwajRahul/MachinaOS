@@ -1,35 +1,77 @@
 #!/usr/bin/env node
-import { execSync, spawn, spawnSync } from 'child_process';
-import { fileURLToPath } from 'url';
-import { dirname, resolve } from 'path';
+/**
+ * Cross-platform start script for MachinaOS services.
+ * Works on: Windows, macOS, Linux, WSL, Git Bash
+ */
+import { execSync, spawn } from 'child_process';
 import { readFileSync, existsSync, copyFileSync } from 'fs';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
-const START = Date.now();
+const START_TIME = Date.now();
 
-// Detect environment: Git Bash on Windows reports win32 but uses Unix commands
-const isGitBash = process.platform === 'win32' && (process.env.MSYSTEM || process.env.SHELL?.includes('bash'));
-const isWindows = process.platform === 'win32' && !isGitBash;
+// ============================================================================
+// Platform Detection
+// ============================================================================
+const isWindows = process.platform === 'win32';
+const isGitBash = isWindows && (process.env.MSYSTEM || process.env.SHELL?.includes('bash'));
 const isMac = process.platform === 'darwin';
+const useUnixCommands = !isWindows || isGitBash;
 
-// Timing helper
-const elapsed = () => `${((Date.now() - START) / 1000).toFixed(2)}s`;
+function getPlatformName() {
+  if (isGitBash) return 'Git Bash';
+  if (isWindows) return 'Windows';
+  if (isMac) return 'macOS';
+  return 'Linux';
+}
+
+// ============================================================================
+// Utilities
+// ============================================================================
+
+const elapsed = () => `${((Date.now() - START_TIME) / 1000).toFixed(2)}s`;
 const log = (msg) => console.log(`[${elapsed()}] ${msg}`);
 
-// Load env config
-function loadEnvConfig() {
-  const envPath = existsSync(resolve(ROOT, '.env')) ? resolve(ROOT, '.env') : resolve(ROOT, '.env.template');
+function exec(cmd, options = {}) {
+  try {
+    return execSync(cmd, {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: options.timeout || 10000,
+      cwd: ROOT,
+      ...options
+    }).trim();
+  } catch {
+    return '';
+  }
+}
+
+function sleep(ms) {
+  try {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+  } catch {
+    const end = Date.now() + ms;
+    while (Date.now() < end) { /* spin */ }
+  }
+}
+
+function loadConfig() {
+  const envPath = existsSync(resolve(ROOT, '.env'))
+    ? resolve(ROOT, '.env')
+    : resolve(ROOT, '.env.template');
+
   const env = {};
   if (existsSync(envPath)) {
-    const content = readFileSync(envPath, 'utf-8');
-    for (const line of content.split('\n')) {
+    for (const line of readFileSync(envPath, 'utf-8').split('\n')) {
       const match = line.match(/^([^#=]+)=(.*)$/);
       if (match) {
-        env[match[1].trim()] = match[2].trim();
+        env[match[1].trim()] = match[2].trim().replace(/^["']|["']$/g, '');
       }
     }
   }
+
   return {
     ports: [
       parseInt(env.VITE_CLIENT_PORT) || 3000,
@@ -40,133 +82,77 @@ function loadEnvConfig() {
   };
 }
 
-// Legacy function for backwards compatibility
-function loadPorts() {
-  return loadEnvConfig().ports;
-}
+// ============================================================================
+// Port Management
+// ============================================================================
 
-// Execute command and return output (suppressing errors)
-function exec(cmd) {
-  try {
-    return execSync(cmd, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
-  } catch {
-    return '';
-  }
-}
-
-// Get PIDs using a port - Windows
-function getPidsWindows(port) {
+function getPidsOnPort(port) {
   const pids = new Set();
-  const netstatOutput = exec(`netstat -ano | findstr :${port} | findstr LISTENING`);
-  for (const line of netstatOutput.split('\n')) {
-    const parts = line.trim().split(/\s+/);
-    const pid = parts[parts.length - 1];
-    if (pid && /^\d+$/.test(pid) && pid !== '0') {
-      pids.add(pid);
-    }
-  }
-  return Array.from(pids);
-}
 
-// Get PIDs using a port - Unix
-function getPidsUnix(port) {
-  const pids = new Set();
-  const lsofOutput = exec(`lsof -ti:${port} -sTCP:LISTEN 2>/dev/null`);
-  for (const pid of lsofOutput.split('\n')) {
-    if (pid.trim() && /^\d+$/.test(pid.trim())) {
-      pids.add(pid.trim());
-    }
-  }
-  // Fallback to ss on Linux
-  if (pids.size === 0 && !isMac) {
-    const ssOutput = exec(`ss -tlnp 2>/dev/null | grep :${port}`);
-    const matches = ssOutput.matchAll(/pid=(\d+)/g);
-    for (const match of matches) {
-      pids.add(match[1]);
-    }
-  }
-  return Array.from(pids);
-}
-
-// Get child process PIDs - Windows
-function getChildPidsWindows(parentPid) {
-  const children = new Set();
-  const wmicOutput = exec(`wmic process where (ParentProcessId=${parentPid}) get ProcessId 2>nul`);
-  for (const line of wmicOutput.split('\n')) {
-    const pid = line.trim();
-    if (pid && /^\d+$/.test(pid)) {
-      children.add(pid);
-      for (const grandchild of getChildPidsWindows(pid)) {
-        children.add(grandchild);
+  if (useUnixCommands) {
+    const output = exec(`lsof -ti:${port} -sTCP:LISTEN 2>/dev/null`);
+    for (const pid of output.split('\n')) {
+      if (pid.trim() && /^\d+$/.test(pid.trim())) {
+        pids.add(pid.trim());
       }
     }
-  }
-  return Array.from(children);
-}
-
-// Get child process PIDs - Unix
-function getChildPidsUnix(parentPid) {
-  const children = new Set();
-  const pgrepOutput = exec(`pgrep -P ${parentPid} 2>/dev/null`);
-  for (const pid of pgrepOutput.split('\n')) {
-    if (pid.trim() && /^\d+$/.test(pid.trim())) {
-      children.add(pid.trim());
-      for (const grandchild of getChildPidsUnix(pid.trim())) {
-        children.add(grandchild);
+    if (pids.size === 0 && !isMac && !isGitBash) {
+      const ssOutput = exec(`ss -tlnp 2>/dev/null | grep :${port}`);
+      for (const match of ssOutput.matchAll(/pid=(\d+)/g)) {
+        pids.add(match[1]);
       }
     }
-  }
-  return Array.from(children);
-}
-
-// Kill process by port thoroughly
-function killPort(port) {
-  const getPids = isWindows ? getPidsWindows : getPidsUnix;
-  const getChildPids = isWindows ? getChildPidsWindows : getChildPidsUnix;
-
-  let pids = getPids(port);
-  if (pids.length === 0) return false;
-
-  // Collect all PIDs including children
-  const allPids = new Set(pids);
-  for (const pid of pids) {
-    for (const childPid of getChildPids(pid)) {
-      allPids.add(childPid);
-    }
-  }
-
-  // Kill all processes (no /T flag to avoid killing parent shell)
-  for (const pid of allPids) {
-    if (isWindows) {
-      exec(`taskkill /PID ${pid} /F 2>nul`);
-    } else {
-      exec(`kill -9 ${pid} 2>/dev/null`);
-    }
-  }
-
-  // Wait for processes to die
-  if (isWindows) {
-    exec('ping -n 2 127.0.0.1 >nul');
   } else {
-    spawnSync('sleep', ['0.5'], { stdio: 'pipe' });
+    const output = exec(`netstat -ano | findstr :${port} | findstr LISTENING`);
+    for (const line of output.split('\n')) {
+      const parts = line.trim().split(/\s+/);
+      const pid = parts[parts.length - 1];
+      if (pid && /^\d+$/.test(pid) && pid !== '0') {
+        pids.add(pid);
+      }
+    }
   }
 
-  // Verify port is free
-  const remainingPids = getPids(port);
-  return remainingPids.length === 0;
+  return Array.from(pids);
 }
 
-const config = loadEnvConfig();
-const PORTS = config.ports;
+function killPid(pid) {
+  if (useUnixCommands) {
+    exec(`kill -15 ${pid} 2>/dev/null`);
+    sleep(100);
+    exec(`kill -9 ${pid} 2>/dev/null`);
+  } else {
+    exec(`taskkill /PID ${pid} /F 2>nul`);
+  }
+}
+
+function freePort(port) {
+  const pids = getPidsOnPort(port);
+  if (pids.length === 0) return true;
+
+  for (const pid of pids) {
+    killPid(pid);
+  }
+  sleep(500);
+
+  return getPidsOnPort(port).length === 0;
+}
+
+// ============================================================================
+// Main
+// ============================================================================
+
+const config = loadConfig();
+
+// Ensure Python UTF-8 encoding
 process.env.PYTHONUTF8 = '1';
 
 console.log('\n=== MachinaOS Starting ===\n');
-const platformName = isWindows ? 'Windows' : isGitBash ? 'Git Bash' : isMac ? 'macOS' : 'Linux';
-log(`Platform: ${platformName}`);
-log(`Ports: ${PORTS.join(', ')}`);
+log(`Platform: ${getPlatformName()}`);
+log(`Ports: ${config.ports.join(', ')}`);
 log(`Temporal: ${config.temporalEnabled ? 'enabled' : 'disabled'}`);
 
-// Step 1: Create .env if not exists
+// Create .env if not exists
 const envPath = resolve(ROOT, '.env');
 const templatePath = resolve(ROOT, '.env.template');
 if (!existsSync(envPath) && existsSync(templatePath)) {
@@ -174,14 +160,13 @@ if (!existsSync(envPath) && existsSync(templatePath)) {
   log('Created .env from template');
 }
 
-// Step 2: Free ports
+// Free ports
 log('Freeing ports...');
 let allFree = true;
-for (const port of PORTS) {
-  const getPids = isWindows ? getPidsWindows : getPidsUnix;
-  const pids = getPids(port);
+for (const port of config.ports) {
+  const pids = getPidsOnPort(port);
   if (pids.length > 0) {
-    const freed = killPort(port);
+    const freed = freePort(port);
     if (freed) {
       log(`  Port ${port}: Freed (killed PIDs: ${pids.join(', ')})`);
     } else {
@@ -197,42 +182,29 @@ if (!allFree) {
   log('Warning: Some ports could not be freed. Services may fail to start.');
 }
 
-// Step 3: Start dev server
+// Start dev server
 log('Starting services...');
-log('Press Ctrl+C to stop (use npm run stop to kill all services)');
-log('');
+log('Press Ctrl+C to stop (use npm run stop to kill all services)\n');
 
-// Build the dev command - conditionally include Temporal worker
-const devCommand = config.temporalEnabled ? 'npm run dev:temporal' : 'npm run dev';
+const devCommand = config.temporalEnabled ? 'dev:temporal' : 'dev';
 
-// On Git Bash/mintty, Ctrl+C doesn't propagate properly to Node.js child processes
-// due to Cygwin pseudo-terminal limitations. The workaround is to run concurrently
-// directly without a Node.js wrapper.
-//
-// This script's job is done - it freed ports and set up env.
-// Now exec into npm run dev so the terminal controls it directly.
+// Use spawn with shell:true for cross-platform compatibility
+const proc = spawn('npm', ['run', devCommand], {
+  cwd: ROOT,
+  stdio: 'inherit',
+  shell: true,
+  env: { ...process.env, FORCE_COLOR: '1' }
+});
 
-if (isGitBash) {
-  // For Git Bash: Use exec to replace this process with npm
-  // This way Ctrl+C goes directly to npm/concurrently, not through Node.js
-  const { execFileSync } = await import('child_process');
-  try {
-    // Use bash -c to run npm, replacing this process
-    execFileSync('bash', ['-c', `exec ${devCommand}`], {
-      cwd: ROOT,
-      stdio: 'inherit',
-      windowsHide: false
-    });
-  } catch {
-    // Normal exit from Ctrl+C
-  }
-} else {
-  // For native Windows cmd or Unix: execSync works fine
-  try {
-    execSync(devCommand, { cwd: ROOT, stdio: 'inherit' });
-  } catch {
-    // Ctrl+C causes non-zero exit, which is normal
-  }
-}
+// Handle Ctrl+C gracefully
+process.on('SIGINT', () => {
+  proc.kill('SIGINT');
+});
+process.on('SIGTERM', () => {
+  proc.kill('SIGTERM');
+});
 
-console.log('\nDev server stopped.');
+proc.on('close', (code) => {
+  console.log('\nDev server stopped.');
+  process.exit(code || 0);
+});

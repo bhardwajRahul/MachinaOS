@@ -36,11 +36,11 @@ class MapsService:
             if not api_key:
                 raise ValueError("Google Maps API key is required")
 
-            # Extract and validate parameters
+            # Extract and validate parameters (snake_case)
             lat = float(parameters.get('lat', 40.7128))
             lng = float(parameters.get('lng', -74.0060))
             zoom = int(parameters.get('zoom', 13))
-            map_type = parameters.get('mapTypeId', 'ROADMAP')
+            map_type = parameters.get('map_type_id', 'ROADMAP')
 
             if not self.validate_coordinates(lat, lng):
                 raise ValueError("Invalid coordinates")
@@ -92,7 +92,7 @@ class MapsService:
                 raise ValueError("Google Maps API key is required")
 
             gmaps = googlemaps.Client(key=api_key)
-            service_type = parameters.get('serviceType', 'geocode')
+            service_type = parameters.get('service_type', 'geocode')
 
             if service_type == 'geocode':
                 address = parameters.get('address', '')
@@ -180,21 +180,21 @@ class MapsService:
             if not (1 <= radius <= 50000):
                 raise ValueError("Radius must be between 1 and 50000 meters")
 
-            # Optional parameters
+            # Optional parameters (snake_case)
             place_type = parameters.get('type', 'restaurant')
-            page_size = min(int(parameters.get('pageSize', 20)), 20)
+            page_size = min(int(parameters.get('page_size', 20)), 20)
 
-            # Extract options (may contain keyword, name, minPrice, maxPrice, openNow, language, rankBy)
+            # Extract options (may contain keyword, name, min_price, max_price, open_now, language, rank_by)
             options = parameters.get('options', {})
 
-            # Support both nested options and top-level parameters
+            # Support both nested options and top-level parameters (snake_case)
             keyword = options.get('keyword', '') if isinstance(options, dict) else parameters.get('keyword', '')
             name_filter = options.get('name', '') if isinstance(options, dict) else parameters.get('name', '')
-            min_price = options.get('minPrice') if isinstance(options, dict) else parameters.get('minPrice')
-            max_price = options.get('maxPrice') if isinstance(options, dict) else parameters.get('maxPrice')
-            open_now = options.get('openNow', False) if isinstance(options, dict) else parameters.get('openNow', False)
+            min_price = options.get('min_price') if isinstance(options, dict) else parameters.get('min_price')
+            max_price = options.get('max_price') if isinstance(options, dict) else parameters.get('max_price')
+            open_now = options.get('open_now', False) if isinstance(options, dict) else parameters.get('open_now', False)
             language = options.get('language', 'en') if isinstance(options, dict) else parameters.get('language', 'en')
-            rank_by = options.get('rankBy', 'prominence') if isinstance(options, dict) else parameters.get('rankBy', 'prominence')
+            rank_by = options.get('rank_by', 'prominence') if isinstance(options, dict) else parameters.get('rank_by', 'prominence')
 
             logger.debug("[Nearby Places] Extracted parameters",
                         keyword=keyword,

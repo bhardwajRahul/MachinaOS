@@ -3,6 +3,7 @@ import {
   INodeTypeDescription,
   NodeConnectionType
 } from '../types/INodeProperties';
+import { WHATSAPP_CONNECT_ICON } from './whatsappNodes';
 
 // ============================================================================
 // SKILL NODES - Connect to Chat Agent's input-skill handle
@@ -78,7 +79,7 @@ export const skillNodes: Record<string, INodeTypeDescription> = {
   whatsappSkill: createSkillNode({
     name: 'whatsappSkill',
     displayName: 'WhatsApp Skill',
-    icon: '💬',
+    icon: WHATSAPP_CONNECT_ICON,
     color: '#25D366',
     skillName: 'whatsapp-skill',
     subtitle: 'Messaging',

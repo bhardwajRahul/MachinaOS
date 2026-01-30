@@ -171,6 +171,12 @@ export const aiAgentNodes: Record<string, INodeTypeDescription> = {
         description: 'Chat input'
       },
       {
+        name: 'memory',
+        displayName: 'Memory',
+        type: 'main' as NodeConnectionType,
+        description: 'Memory node for conversation history'
+      },
+      {
         name: 'skill',
         displayName: 'Skill',
         type: 'main' as NodeConnectionType,
@@ -253,21 +259,21 @@ export const aiAgentNodes: Record<string, INodeTypeDescription> = {
   },
 
   // Simple Memory Node - conversation history storage for AI agents
-  // No run button - memory is accessed automatically when AI Agent runs
+  // Markdown-based memory visible and editable in UI
   simpleMemory: {
     displayName: 'Simple Memory',
     name: 'simpleMemory',
     icon: '🧠',
     group: ['skill', 'memory'],  // 'skill' = appears in AI Skills category
     version: 1,
-    description: 'Store conversation history for AI agents',
+    description: 'Markdown-based conversation memory with optional vector DB for long-term retrieval',
     defaults: { name: 'Memory', color: '#8b5cf6' },
     inputs: [],  // No input - memory node is passive
     outputs: [{
       name: 'memory',
       displayName: 'Memory',
       type: 'main' as NodeConnectionType,
-      description: 'session_id, messages, message_count, memory_type'
+      description: 'session_id, messages, message_count'
     }],
     properties: [
       {
@@ -276,18 +282,7 @@ export const aiAgentNodes: Record<string, INodeTypeDescription> = {
         type: 'string',
         default: 'default',
         required: true,
-        description: 'Unique identifier for conversation session. Use different IDs for separate conversations.'
-      },
-      {
-        displayName: 'Memory Type',
-        name: 'memoryType',
-        type: 'options',
-        default: 'buffer',
-        options: [
-          { name: 'Buffer (All Messages)', value: 'buffer' },
-          { name: 'Window (Last N)', value: 'window' }
-        ],
-        description: 'Buffer keeps all messages, Window keeps only the last N messages'
+        description: 'Unique identifier for conversation session'
       },
       {
         displayName: 'Window Size',
@@ -295,10 +290,37 @@ export const aiAgentNodes: Record<string, INodeTypeDescription> = {
         type: 'number',
         default: 10,
         typeOptions: { minValue: 1, maxValue: 100 },
-        description: 'Number of recent messages to keep (for Window type)',
+        description: 'Number of message pairs to keep in short-term memory'
+      },
+      {
+        displayName: 'Conversation History',
+        name: 'memoryContent',
+        type: 'string',
+        default: '# Conversation History\n\n*No messages yet.*\n',
+        typeOptions: {
+          rows: 15,
+          editor: 'code',
+          editorLanguage: 'markdown'
+        },
+        description: 'Recent conversation history (editable)'
+      },
+      {
+        displayName: 'Enable Long-Term Memory',
+        name: 'longTermEnabled',
+        type: 'boolean',
+        default: false,
+        description: 'Archive old messages to vector DB for semantic retrieval'
+      },
+      {
+        displayName: 'Retrieval Count',
+        name: 'retrievalCount',
+        type: 'number',
+        default: 3,
+        typeOptions: { minValue: 1, maxValue: 10 },
+        description: 'Number of relevant memories to retrieve from long-term storage',
         displayOptions: {
           show: {
-            memoryType: ['window']
+            longTermEnabled: [true]
           }
         }
       }
