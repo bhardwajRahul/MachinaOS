@@ -733,3 +733,29 @@ async def handle_whatsapp_chat_history(params: dict) -> dict:
     except Exception as e:
         logger.error(f"WhatsApp chat_history fetch failed: {e}")
         return {"success": False, "error": str(e), "messages": [], "total": 0, "has_more": False}
+
+
+async def whatsapp_rpc_call(method: str, params: dict = None) -> dict:
+    """Generic RPC call to WhatsApp Go service.
+
+    Used by handlers/whatsapp.py for operations like:
+    - groups: List all groups
+    - group_info: Get group details with participants
+    - contacts: List contacts with saved names
+    - contact_info: Get full contact info (for send/reply)
+    - contact_check: Check WhatsApp registration status
+
+    Args:
+        method: RPC method name (e.g., 'groups', 'contact_info')
+        params: Method parameters dict
+
+    Returns:
+        RPC result dict or error dict
+    """
+    try:
+        client = await get_client()
+        result = await client.call(method, params or {})
+        return result if isinstance(result, dict) else {"result": result, "success": True}
+    except Exception as e:
+        logger.error(f"WhatsApp RPC call '{method}' failed: {e}")
+        return {"success": False, "error": str(e)}

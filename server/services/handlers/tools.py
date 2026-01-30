@@ -56,9 +56,9 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
     if node_type == 'whatsappSend':
         return await _execute_whatsapp_send(tool_args, config.get('parameters', {}))
 
-    # WhatsApp chat history (existing node used as tool)
-    if node_type == 'whatsappChatHistory':
-        return await _execute_whatsapp_chat_history(tool_args, config.get('parameters', {}))
+    # WhatsApp DB (existing node used as tool) - query contacts, groups, messages
+    if node_type == 'whatsappDb':
+        return await _execute_whatsapp_db(tool_args, config.get('parameters', {}))
 
     # Android toolkit - routes to connected service nodes
     if node_type == 'androidTool':
@@ -490,80 +490,99 @@ async def _execute_whatsapp_send(args: Dict[str, Any],
         return {"error": f"WhatsApp send failed: {str(e)}"}
 
 
-async def _execute_whatsapp_chat_history(args: Dict[str, Any],
-                                          node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Retrieve WhatsApp chat history.
+async def _execute_whatsapp_db(args: Dict[str, Any],
+                               node_params: Dict[str, Any]) -> Dict[str, Any]:
+    """Query WhatsApp database - contacts, groups, messages.
+
+    Supports 6 operations:
+    - chat_history: Retrieve messages from a chat
+    - search_groups: Search groups by name
+    - get_group_info: Get group details with participant names
+    - get_contact_info: Get full contact info (for send/reply)
+    - list_contacts: List contacts with saved names
+    - check_contacts: Check WhatsApp registration status
 
     Args:
-        args: LLM-provided arguments matching WhatsAppChatHistorySchema
+        args: LLM-provided arguments matching WhatsAppDbSchema
         node_params: Node parameters (used as fallback)
 
     Returns:
-        Dict with messages array and metadata
+        Dict with operation-specific results
     """
-    from services.handlers.whatsapp import handle_whatsapp_chat_history
+    from services.handlers.whatsapp import handle_whatsapp_db
 
-    # Map LLM args to node parameter format (camelCase for handler)
-    parameters = {
-        'chatType': args.get('chat_type', 'individual'),
-        'phone': args.get('phone', ''),
-        'group_id': args.get('group_id', ''),
-        'messageFilter': args.get('message_filter', 'all'),
-        'limit': args.get('limit', 50),
-        'offset': args.get('offset', 0),
-        'resultMode': 'multiple',  # Always return multiple messages for tool use
-    }
+    operation = args.get('operation', 'chat_history')
+    logger.info(f"[WhatsApp DB Tool] Executing operation: {operation}")
 
-    # Validate required fields based on chat type
-    chat_type = parameters['chatType']
+    # Build parameters for handler
+    parameters = {'operation': operation}
 
-    if chat_type == 'individual' and not parameters['phone']:
-        return {"error": "Phone number is required for chat_type='individual'"}
-    if chat_type == 'group' and not parameters['group_id']:
-        return {"error": "Group ID is required for chat_type='group'"}
+    if operation == 'chat_history':
+        parameters.update({
+            'chatType': args.get('chat_type', 'individual'),
+            'phone': args.get('phone', ''),
+            'group_id': args.get('group_id', ''),
+            'messageFilter': args.get('message_filter', 'all'),
+            'groupFilter': args.get('group_filter', 'all'),
+            'senderPhone': args.get('sender_phone', ''),
+            'limit': args.get('limit', 50),
+            'offset': args.get('offset', 0),
+        })
+        # Validate required fields
+        chat_type = parameters['chatType']
+        if chat_type == 'individual' and not parameters['phone']:
+            return {"error": "Phone number is required for chat_type='individual'"}
+        if chat_type == 'group' and not parameters['group_id']:
+            return {"error": "Group ID is required for chat_type='group'"}
 
-    identifier = parameters['phone'] if chat_type == 'individual' else parameters['group_id']
-    logger.info(f"[WhatsApp Tool] Getting chat history for {identifier[:15]}...")
+    elif operation == 'search_groups':
+        parameters['query'] = args.get('query', '')
+
+    elif operation == 'get_group_info':
+        group_id = args.get('group_id', '')
+        if not group_id:
+            return {"error": "group_id is required for get_group_info"}
+        parameters['groupIdForInfo'] = group_id
+
+    elif operation == 'get_contact_info':
+        phone = args.get('phone', '')
+        if not phone:
+            return {"error": "phone is required for get_contact_info"}
+        parameters['contactPhone'] = phone
+
+    elif operation == 'list_contacts':
+        parameters['query'] = args.get('query', '')
+
+    elif operation == 'check_contacts':
+        phones = args.get('phones', '')
+        if not phones:
+            return {"error": "phones (comma-separated) is required for check_contacts"}
+        parameters['phones'] = phones
+
+    else:
+        return {"error": f"Unknown operation: {operation}"}
 
     try:
-        result = await handle_whatsapp_chat_history(
-            node_id="tool_whatsapp_history",
-            node_type="whatsappChatHistory",
+        result = await handle_whatsapp_db(
+            node_id="tool_whatsapp_db",
+            node_type="whatsappDb",
             parameters=parameters,
             context={}
         )
 
         if result.get('success'):
-            messages = result.get('result', {}).get('messages', [])
-            total = result.get('result', {}).get('total', 0)
-            has_more = result.get('result', {}).get('has_more', False)
-
-            # Format messages for LLM consumption
-            formatted_messages = []
-            for msg in messages:
-                formatted_messages.append({
-                    "sender": msg.get('sender', ''),
-                    "text": msg.get('text', ''),
-                    "timestamp": msg.get('timestamp', ''),
-                    "type": msg.get('type', 'text'),
-                    "is_from_me": msg.get('is_from_me', False),
-                })
-
+            # Return the result section for LLM consumption
             return {
                 "success": True,
-                "chat_type": chat_type,
-                "identifier": identifier,
-                "messages": formatted_messages,
-                "total": total,
-                "has_more": has_more,
-                "count": len(formatted_messages)
+                "operation": operation,
+                **result.get('result', {})
             }
         else:
             return {"error": result.get('error', 'Unknown error')}
 
     except Exception as e:
-        logger.error(f"[WhatsApp Tool] Error: {e}")
-        return {"error": f"WhatsApp chat history failed: {str(e)}"}
+        logger.error(f"[WhatsApp DB Tool] Error: {e}")
+        return {"error": f"WhatsApp DB operation failed: {str(e)}"}
 
 
 async def _execute_android_toolkit(args: Dict[str, Any],

@@ -67,8 +67,8 @@ const WHATSAPP_CONNECT_ICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.or
 // WhatsApp Receive - Notification bell with dot (trigger node)
 const WHATSAPP_RECEIVE_ICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2325D366'%3E%3Cpath d='M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v6z'/%3E%3Ccircle cx='18' cy='6' r='4'/%3E%3C/svg%3E";
 
-// WhatsApp Chat History - Clock icon (retrieve history)
-const WHATSAPP_HISTORY_ICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2325D366'%3E%3Cpath d='M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z'/%3E%3C/svg%3E";
+// WhatsApp DB - Database icon (query contacts, groups, messages)
+const WHATSAPP_DB_ICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2325D366'%3E%3Cpath d='M12 3C7.58 3 4 4.79 4 7v10c0 2.21 3.58 4 8 4s8-1.79 8-4V7c0-2.21-3.58-4-8-4zm0 2c3.87 0 6 1.5 6 2s-2.13 2-6 2-6-1.5-6-2 2.13-2 6-2zm6 12c0 .5-2.13 2-6 2s-6-1.5-6-2v-2.23c1.61.78 3.72 1.23 6 1.23s4.39-.45 6-1.23V17zm0-4c0 .5-2.13 2-6 2s-6-1.5-6-2v-2.23c1.61.78 3.72 1.23 6 1.23s4.39-.45 6-1.23V13zm0-4c0 .5-2.13 2-6 2s-6-1.5-6-2V6.77C7.61 7.55 9.72 8 12 8s4.39-.45 6-1.23V9z'/%3E%3C/svg%3E";
 
 // ============================================================================
 // WHATSAPP NODES
@@ -625,17 +625,17 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
     }
   },
 
-  // WhatsApp Chat History Node - Retrieve stored messages
+  // WhatsApp DB Node - Query contacts, groups, messages
   // Can be used as workflow node OR as AI Agent tool (group includes 'tool')
-  whatsappChatHistory: {
-    displayName: 'WhatsApp Chat History',
-    name: 'whatsappChatHistory',
-    icon: WHATSAPP_HISTORY_ICON,
+  whatsappDb: {
+    displayName: 'WhatsApp DB',
+    name: 'whatsappDb',
+    icon: WHATSAPP_DB_ICON,
     group: ['whatsapp', 'tool'],
     version: 1,
-    subtitle: 'Get Messages',
-    description: 'Retrieve chat history from WhatsApp conversations. Messages are synced on first login and stored for later retrieval.',
-    defaults: { name: 'Chat History', color: '#25D366' },
+    subtitle: 'Query WhatsApp',
+    description: 'Query WhatsApp database - contacts, groups, messages, contact info',
+    defaults: { name: 'WhatsApp DB', color: '#25D366' },
     inputs: [{
       name: 'main',
       displayName: 'Input',
@@ -645,9 +645,9 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
     outputs: [
       {
         name: 'main',
-        displayName: 'Messages',
+        displayName: 'Output',
         type: 'main' as NodeConnectionType,
-        description: 'Chat history messages (messages, total, has_more)'
+        description: 'Query result'
       },
       {
         name: 'tool',
@@ -657,7 +657,24 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
       }
     ],
     properties: [
-      // ===== CHAT TYPE =====
+      // ===== OPERATION SELECTOR =====
+      {
+        displayName: 'Operation',
+        name: 'operation',
+        type: 'options',
+        options: [
+          { name: 'Chat History', value: 'chat_history' },
+          { name: 'Search Groups', value: 'search_groups' },
+          { name: 'Get Group Info', value: 'get_group_info' },
+          { name: 'Get Contact Info', value: 'get_contact_info' },
+          { name: 'List Contacts', value: 'list_contacts' },
+          { name: 'Check Contacts', value: 'check_contacts' }
+        ],
+        default: 'chat_history',
+        description: 'Operation to perform'
+      },
+
+      // ===== CHAT HISTORY PARAMETERS =====
       {
         displayName: 'Chat Type',
         name: 'chatType',
@@ -667,10 +684,11 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
           { name: 'Group Chat', value: 'group' }
         ],
         default: 'individual',
-        description: 'Type of chat to retrieve history from'
+        description: 'Type of chat to retrieve history from',
+        displayOptions: {
+          show: { operation: ['chat_history'] }
+        }
       },
-
-      // ===== INDIVIDUAL CHAT =====
       {
         displayName: 'Phone Number',
         name: 'phone',
@@ -680,11 +698,9 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         placeholder: '1234567890',
         description: 'Phone number of the contact (without + prefix)',
         displayOptions: {
-          show: { chatType: ['individual'] }
+          show: { operation: ['chat_history'], chatType: ['individual'] }
         }
       },
-
-      // ===== GROUP CHAT =====
       {
         displayName: 'Group',
         name: 'group_id',
@@ -692,9 +708,9 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         default: '',
         required: true,
         placeholder: '123456789@g.us',
-        description: 'Group JID to retrieve messages from',
+        description: 'Group JID',
         displayOptions: {
-          show: { chatType: ['group'] }
+          show: { operation: ['chat_history', 'get_group_info'], chatType: ['group'] }
         }
       },
       {
@@ -708,22 +724,20 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         default: 'all',
         description: 'Filter messages in group',
         displayOptions: {
-          show: { chatType: ['group'] }
+          show: { operation: ['chat_history'], chatType: ['group'] }
         }
       },
       {
-        displayName: 'Contact Phone',
+        displayName: 'Sender Phone',
         name: 'senderPhone',
         type: 'string',
         default: '',
         placeholder: '1234567890',
         description: 'Filter messages from specific group member',
         displayOptions: {
-          show: { chatType: ['group'], groupFilter: ['contact'] }
+          show: { operation: ['chat_history'], chatType: ['group'], groupFilter: ['contact'] }
         }
       },
-
-      // ===== MESSAGE TYPE FILTER =====
       {
         displayName: 'Message Type',
         name: 'messageFilter',
@@ -733,34 +747,11 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
           { name: 'Text Only', value: 'text_only' }
         ],
         default: 'all',
-        description: 'Filter by message type'
-      },
-
-      // ===== RESULT MODE =====
-      {
-        displayName: 'Result Mode',
-        name: 'resultMode',
-        type: 'options',
-        options: [
-          { name: 'Multiple Messages', value: 'multiple' },
-          { name: 'Single Message by Position', value: 'single' }
-        ],
-        default: 'multiple',
-        description: 'Return multiple messages or a single message at specific position'
-      },
-      {
-        displayName: 'Message Position',
-        name: 'position',
-        type: 'string',
-        default: '1',
-        placeholder: '1 or {{node.index}}',
-        description: 'Position: positive from newest (1=most recent), negative from oldest (-1=oldest). Supports template variables.',
+        description: 'Filter by message type',
         displayOptions: {
-          show: { resultMode: ['single'] }
+          show: { operation: ['chat_history'] }
         }
       },
-
-      // ===== PAGINATION =====
       {
         displayName: 'Limit',
         name: 'limit',
@@ -769,7 +760,7 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         typeOptions: { minValue: 1, maxValue: 500 },
         description: 'Maximum number of messages to retrieve (1-500)',
         displayOptions: {
-          show: { resultMode: ['multiple'] }
+          show: { operation: ['chat_history'] }
         }
       },
       {
@@ -780,7 +771,62 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         typeOptions: { minValue: 0 },
         description: 'Number of messages to skip (for pagination)',
         displayOptions: {
-          show: { resultMode: ['multiple'] }
+          show: { operation: ['chat_history'] }
+        }
+      },
+
+      // ===== SEARCH GROUPS PARAMETERS =====
+      {
+        displayName: 'Search Query',
+        name: 'query',
+        type: 'string',
+        default: '',
+        placeholder: 'Family, Work, etc.',
+        description: 'Search groups by name (leave empty for all groups)',
+        displayOptions: {
+          show: { operation: ['search_groups', 'list_contacts'] }
+        }
+      },
+
+      // ===== GET GROUP INFO PARAMETERS =====
+      {
+        displayName: 'Group',
+        name: 'groupIdForInfo',
+        type: 'string',
+        default: '',
+        required: true,
+        placeholder: '123456789@g.us',
+        description: 'Group JID to get info for',
+        displayOptions: {
+          show: { operation: ['get_group_info'] }
+        }
+      },
+
+      // ===== GET CONTACT INFO PARAMETERS =====
+      {
+        displayName: 'Phone Number',
+        name: 'contactPhone',
+        type: 'string',
+        default: '',
+        required: true,
+        placeholder: '1234567890',
+        description: 'Phone number to get contact info for',
+        displayOptions: {
+          show: { operation: ['get_contact_info'] }
+        }
+      },
+
+      // ===== CHECK CONTACTS PARAMETERS =====
+      {
+        displayName: 'Phone Numbers',
+        name: 'phones',
+        type: 'string',
+        default: '',
+        required: true,
+        placeholder: '1234567890, 0987654321',
+        description: 'Comma-separated phone numbers to check WhatsApp registration',
+        displayOptions: {
+          show: { operation: ['check_contacts'] }
         }
       }
     ],
@@ -791,10 +837,9 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
             const response = await wsRequest('whatsapp_groups') as { success: boolean; groups?: Array<{ jid: string; name: string; participant_count?: number; is_community?: boolean }> };
 
             if (response.success && response.groups) {
-              // Filter out communities - they don't have regular chat history
               const regularGroups = response.groups.filter((group) => !group.is_community);
               if (regularGroups.length === 0) {
-                return [{ name: 'No groups found', value: '', description: 'Only communities found (no chat history)' }];
+                return [{ name: 'No groups found', value: '', description: 'Only communities found' }];
               }
               return regularGroups.map((group) => ({
                 name: group.name || group.jid,
@@ -817,4 +862,4 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
 // EXPORTS
 // ============================================================================
 
-export const WHATSAPP_NODE_TYPES = ['whatsappSend', 'whatsappConnect', 'whatsappReceive', 'whatsappChatHistory'];
+export const WHATSAPP_NODE_TYPES = ['whatsappSend', 'whatsappConnect', 'whatsappReceive', 'whatsappDb'];

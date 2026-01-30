@@ -1881,10 +1881,16 @@ async def websocket_status_endpoint(websocket: WebSocket):
                 data = await websocket.receive_json()
                 await message_queue.put(data)
         except WebSocketDisconnect:
-            logger.info("[WebSocket] Client disconnected normally")
+            # Don't log here - logging during shutdown can raise KeyboardInterrupt
             await message_queue.put(None)  # Signal shutdown
+        except asyncio.CancelledError:
+            # Task cancelled during shutdown - this is expected
+            await message_queue.put(None)
+            raise
         except Exception as e:
-            logger.error(f"[WebSocket] Receive error: {e}")
+            # Only log if it's not a shutdown-related error
+            if not isinstance(e, (KeyboardInterrupt, SystemExit)):
+                logger.error(f"[WebSocket] Receive error: {e}")
             await message_queue.put(None)
 
     async def process_loop():
@@ -1927,10 +1933,14 @@ async def websocket_status_endpoint(websocket: WebSocket):
             tg.create_task(process_loop())
 
     except* WebSocketDisconnect:
-        logger.info("[WebSocket] Client disconnected (TaskGroup)")
+        pass  # Normal disconnect - don't log during shutdown
+    except* asyncio.CancelledError:
+        pass  # Task cancelled during shutdown - expected
+    except* (KeyboardInterrupt, SystemExit):
+        pass  # Server shutdown - don't log
     except* Exception as eg:
         for exc in eg.exceptions:
-            if not isinstance(exc, WebSocketDisconnect):
+            if not isinstance(exc, (WebSocketDisconnect, asyncio.CancelledError, KeyboardInterrupt, SystemExit)):
                 logger.error(f"[WebSocket] TaskGroup error: {exc}")
     finally:
         # Cancel any running handler tasks on disconnect
@@ -1974,10 +1984,13 @@ async def websocket_internal_endpoint(websocket: WebSocket):
                 data = await websocket.receive_json()
                 await message_queue.put(data)
         except WebSocketDisconnect:
-            logger.info("[WebSocket Internal] Client disconnected")
             await message_queue.put(None)
+        except asyncio.CancelledError:
+            await message_queue.put(None)
+            raise
         except Exception as e:
-            logger.error(f"[WebSocket Internal] Receive error: {e}")
+            if not isinstance(e, (KeyboardInterrupt, SystemExit)):
+                logger.error(f"[WebSocket Internal] Receive error: {e}")
             await message_queue.put(None)
 
     async def process_loop():
@@ -2015,10 +2028,14 @@ async def websocket_internal_endpoint(websocket: WebSocket):
             tg.create_task(process_loop())
 
     except* WebSocketDisconnect:
-        logger.info("[WebSocket Internal] Client disconnected (TaskGroup)")
+        pass  # Normal disconnect
+    except* asyncio.CancelledError:
+        pass  # Task cancelled during shutdown
+    except* (KeyboardInterrupt, SystemExit):
+        pass  # Server shutdown
     except* Exception as eg:
         for exc in eg.exceptions:
-            if not isinstance(exc, WebSocketDisconnect):
+            if not isinstance(exc, (WebSocketDisconnect, asyncio.CancelledError, KeyboardInterrupt, SystemExit)):
                 logger.error(f"[WebSocket Internal] TaskGroup error: {exc}")
     finally:
         for task in list(handler_tasks):
@@ -2027,8 +2044,6 @@ async def websocket_internal_endpoint(websocket: WebSocket):
 
         if handler_tasks:
             await asyncio.gather(*handler_tasks, return_exceptions=True)
-
-        logger.info("[WebSocket Internal] Connection closed")
 
 
 @router.get("/ws/info")

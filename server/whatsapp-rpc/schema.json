@@ -360,6 +360,72 @@
       }
     },
     {
+      "name": "contacts",
+      "summary": "List all contacts with saved names",
+      "description": "Returns contacts from the whatsmeow_contacts store with user-saved names",
+      "params": [
+        {
+          "name": "query",
+          "description": "Optional search query to filter by name or phone number",
+          "schema": { "type": "string" },
+          "required": false
+        }
+      ],
+      "result": {
+        "name": "ContactsResult",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "contacts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "jid": { "type": "string", "description": "Full JID (e.g., 919876543210@s.whatsapp.net)" },
+                  "phone": { "type": "string", "description": "Phone number without @s.whatsapp.net" },
+                  "name": { "type": "string", "description": "User's saved contact name (e.g., 'Mummy', 'Dad')" },
+                  "push_name": { "type": "string", "description": "WhatsApp profile name set by user" },
+                  "is_contact": { "type": "boolean", "description": "Whether this is a saved contact" }
+                }
+              }
+            },
+            "total": { "type": "integer", "description": "Total number of contacts returned" }
+          },
+          "required": ["contacts", "total"]
+        }
+      }
+    },
+    {
+      "name": "contact_info",
+      "summary": "Get full information for a single contact",
+      "description": "Returns comprehensive contact info including name, business status, and profile picture URL",
+      "params": [
+        {
+          "name": "phone",
+          "description": "Phone number (with or without + prefix)",
+          "schema": { "type": "string" },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "ContactInfoResult",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "jid": { "type": "string", "description": "Full JID for sending messages" },
+            "phone": { "type": "string", "description": "Phone number" },
+            "name": { "type": "string", "description": "User's saved contact name" },
+            "push_name": { "type": "string", "description": "WhatsApp profile name" },
+            "business_name": { "type": "string", "description": "Business account verified name" },
+            "is_business": { "type": "boolean", "description": "Whether this is a business account" },
+            "is_contact": { "type": "boolean", "description": "Whether saved in contacts" },
+            "profile_pic": { "type": "string", "description": "Profile picture URL" }
+          },
+          "required": ["jid", "phone"]
+        }
+      }
+    },
+    {
       "name": "typing",
       "summary": "Send typing indicator to a chat",
       "params": [

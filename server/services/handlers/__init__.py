@@ -63,7 +63,7 @@ from .utility import (
 from .whatsapp import (
     handle_whatsapp_send,
     handle_whatsapp_connect,
-    handle_whatsapp_chat_history,
+    handle_whatsapp_db,
 )
 
 # Document processing handlers
@@ -113,7 +113,7 @@ __all__ = [
     # WhatsApp
     'handle_whatsapp_send',
     'handle_whatsapp_connect',
-    'handle_whatsapp_chat_history',
+    'handle_whatsapp_db',
     # Document processing
     'handle_http_scraper',
     'handle_file_downloader',

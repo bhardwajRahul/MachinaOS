@@ -12,6 +12,8 @@ import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { useWebSocket, ConsoleLogEntry } from '../../contexts/WebSocketContext';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { useTheme } from '../../contexts/ThemeContext';
+import Prism from 'prismjs';
+import 'prismjs/components/prism-json';
 
 interface ConsolePanelProps {
   isOpen: boolean;
@@ -39,6 +41,7 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
   const [terminalFilter, setTerminalFilter] = useState('');
   const [terminalLogLevel, setTerminalLogLevel] = useState<'all' | 'error' | 'warning' | 'info' | 'debug'>('all');
   const [autoScroll, setAutoScroll] = useState(true);
+  const [prettyPrint, setPrettyPrint] = useState(true);
   const [consoleTab, setConsoleTab] = useState<'console' | 'terminal'>('console');
   const logsEndRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -299,6 +302,45 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
     }
   }, [isDarkMode, theme]);
 
+  // Format text for pretty printing - converts escaped newlines and formats JSON
+  const formatForDisplay = useCallback((text: string): { formatted: string; isJson: boolean } => {
+    if (!prettyPrint) return { formatted: text, isJson: false };
+
+    // Convert escaped newlines to actual newlines
+    let formatted = text.replace(/\\n/g, '\n').replace(/\\t/g, '\t');
+
+    // Try to parse and pretty-print JSON
+    const trimmed = formatted.trim();
+    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+        (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        formatted = JSON.stringify(parsed, null, 2);
+        return { formatted, isJson: true };
+      } catch {
+        // Not valid JSON, return with converted newlines
+      }
+    }
+
+    return { formatted, isJson: false };
+  }, [prettyPrint]);
+
+  // Highlight JSON with Prism
+  const highlightJson = useCallback((code: string): string => {
+    return Prism.highlight(code, Prism.languages.json, 'json');
+  }, []);
+
+  // Prism token styles following CodeEditor.tsx convention
+  const prismStyles = `
+    .console-json-output .token.string { color: ${theme.dracula.yellow}; }
+    .console-json-output .token.number { color: ${theme.dracula.purple}; }
+    .console-json-output .token.boolean { color: ${theme.dracula.purple}; }
+    .console-json-output .token.null { color: ${theme.dracula.purple}; }
+    .console-json-output .token.property { color: ${theme.dracula.cyan}; }
+    .console-json-output .token.punctuation { color: ${theme.colors.text}; }
+    .console-json-output .token.operator { color: ${theme.dracula.pink}; }
+  `;
+
   // Resize handle style
   const resizeHandleStyle: React.CSSProperties = {
     position: 'absolute',
@@ -554,6 +596,9 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
 
   return (
     <div style={{ position: 'relative' }}>
+      {/* Prism syntax highlighting styles for JSON */}
+      <style>{prismStyles}</style>
+
       {/* Resize Handle - Only visible when open */}
       {isOpen && (
         <div
@@ -790,6 +835,32 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
                 />
                 Auto
               </label>
+              {consoleTab === 'console' && (
+                <label
+                  style={{
+                    ...buttonStyle,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '3px',
+                    cursor: 'pointer',
+                    fontSize: '10px',
+                    backgroundColor: prettyPrint
+                      ? (isDarkMode ? `${theme.dracula.cyan}30` : `${theme.colors.info}20`)
+                      : 'transparent',
+                    padding: '2px 6px',
+                    borderRadius: '4px'
+                  }}
+                  title="Format JSON and convert escaped newlines"
+                >
+                  <input
+                    type="checkbox"
+                    checked={prettyPrint}
+                    onChange={e => setPrettyPrint(e.target.checked)}
+                    style={{ cursor: 'pointer', width: '12px', height: '12px' }}
+                  />
+                  Pretty
+                </label>
+              )}
               {((consoleTab === 'console' && consoleLogs.length > 0) || (consoleTab === 'terminal' && terminalLogs.length > 0)) && (
                 <button
                   style={clearButtonStyle}
@@ -827,18 +898,35 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
                         {log.source_node_label}
                       </span>
                     )}
-                    <pre
-                      style={{
-                        margin: 0,
-                        flex: 1,
-                        overflow: 'auto',
-                        color: getFormatColor(log.format),
-                        whiteSpace: log.format === 'json' ? 'pre-wrap' : 'pre',
-                        wordBreak: 'break-word'
-                      }}
-                    >
-                      {log.formatted}
-                    </pre>
+                    {(() => {
+                      const { formatted, isJson } = formatForDisplay(log.formatted);
+                      return isJson && prettyPrint ? (
+                        <pre
+                          className="console-json-output"
+                          style={{
+                            margin: 0,
+                            flex: 1,
+                            overflow: 'auto',
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-word'
+                          }}
+                          dangerouslySetInnerHTML={{ __html: highlightJson(formatted) }}
+                        />
+                      ) : (
+                        <pre
+                          style={{
+                            margin: 0,
+                            flex: 1,
+                            overflow: 'auto',
+                            color: getFormatColor(log.format),
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-word'
+                          }}
+                        >
+                          {formatted}
+                        </pre>
+                      );
+                    })()}
                   </div>
                 ))
               )

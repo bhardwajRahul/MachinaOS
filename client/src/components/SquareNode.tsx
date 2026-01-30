@@ -27,7 +27,7 @@ const hasToolGroup = (definition: any): boolean => {
 const GOOGLE_MAPS_NODE_TYPES = ['createMap', 'addLocations', 'showNearbyPlaces'];
 
 // WhatsApp node types
-const WHATSAPP_NODE_TYPES = ['whatsappConnect', 'whatsappSend', 'whatsappReceive', 'whatsappChatHistory'];
+const WHATSAPP_NODE_TYPES = ['whatsappConnect', 'whatsappSend', 'whatsappReceive', 'whatsappDb'];
 
 // Nodes that should not have output handles (input-only nodes)
 const NO_OUTPUT_NODE_TYPES = ['console'];

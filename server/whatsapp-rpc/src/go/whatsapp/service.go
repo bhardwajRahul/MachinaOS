@@ -947,6 +947,117 @@ func (s *Service) resolveParticipantPhone(ctx context.Context, p types.GroupPart
 	return p.JID.User
 }
 
+// GetContactName looks up a contact name by phone number
+// Prefers user's saved name, falls back to push name
+func (s *Service) GetContactName(phone string) string {
+	if s.client == nil || s.client.Store == nil || s.client.Store.Contacts == nil {
+		return ""
+	}
+
+	jid := types.NewJID(phone, types.DefaultUserServer)
+	contact, err := s.client.Store.Contacts.GetContact(context.Background(), jid)
+	if err != nil {
+		return ""
+	}
+
+	// Prefer user's saved name, fall back to push name
+	if contact.FullName != "" {
+		return contact.FullName
+	}
+	return contact.PushName
+}
+
+// GetContacts returns all stored contacts with names
+func (s *Service) GetContacts(query string) ([]ContactInfo, error) {
+	if !s.client.IsConnected() {
+		return nil, fmt.Errorf("WhatsApp not connected")
+	}
+
+	ctx := context.Background()
+	contacts, err := s.client.Store.Contacts.GetAllContacts(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get contacts: %w", err)
+	}
+
+	result := make([]ContactInfo, 0)
+	queryLower := strings.ToLower(query)
+
+	for jid, info := range contacts {
+		// Skip non-user JIDs (groups, etc.)
+		if jid.Server != types.DefaultUserServer {
+			continue
+		}
+
+		// Filter by query if provided
+		if query != "" {
+			nameMatch := strings.Contains(strings.ToLower(info.FullName), queryLower) ||
+				strings.Contains(strings.ToLower(info.PushName), queryLower) ||
+				strings.Contains(jid.User, query)
+			if !nameMatch {
+				continue
+			}
+		}
+
+		result = append(result, ContactInfo{
+			JID:       jid.String(),
+			Phone:     jid.User,
+			Name:      info.FullName,
+			PushName:  info.PushName,
+			IsContact: true,
+		})
+	}
+
+	s.logger.Infof("Retrieved %d contacts (query: %q)", len(result), query)
+	return result, nil
+}
+
+// GetContactInfo returns full info for a single contact (for send/reply use case)
+func (s *Service) GetContactInfo(phone string) (*ContactInfo, error) {
+	if !s.client.IsConnected() {
+		return nil, fmt.Errorf("WhatsApp not connected")
+	}
+
+	// Clean phone number - remove + prefix if present
+	phone = strings.TrimPrefix(phone, "+")
+
+	jid := types.NewJID(phone, types.DefaultUserServer)
+	ctx := context.Background()
+
+	result := &ContactInfo{
+		JID:   jid.String(),
+		Phone: jid.User,
+	}
+
+	// Get contact details from store (saved names)
+	if s.client.Store != nil && s.client.Store.Contacts != nil {
+		contact, err := s.client.Store.Contacts.GetContact(ctx, jid)
+		if err == nil {
+			result.Name = contact.FullName
+			result.PushName = contact.PushName
+			result.BusinessName = contact.BusinessName
+			result.IsContact = true
+		}
+	}
+
+	// Check WhatsApp registration + business info
+	resp, err := s.client.IsOnWhatsApp(ctx, []string{"+" + jid.User})
+	if err == nil && len(resp) > 0 {
+		if resp[0].VerifiedName != nil {
+			result.IsBusiness = true
+			result.BusinessName = resp[0].VerifiedName.Details.GetVerifiedName()
+		}
+	}
+
+	// Get profile photo URL
+	picInfo, err := s.client.GetProfilePictureInfo(ctx, jid, &whatsmeow.GetProfilePictureParams{Preview: false})
+	if err == nil && picInfo != nil && picInfo.URL != "" {
+		result.ProfilePic = picInfo.URL
+	}
+
+	s.logger.Infof("Retrieved contact info for %s: name=%q", phone, result.Name)
+	return result, nil
+}
+
 // generateGroupsJSON fetches all groups and saves to data/groups.json
 // Called automatically on WhatsApp connection for fast offline access
 func (s *Service) generateGroupsJSON() error {
@@ -1039,6 +1150,7 @@ func (s *Service) GetGroups() ([]GroupInfo, error) {
 			participants = append(participants, GroupParticipant{
 				JID:          p.JID.String(),
 				Phone:        phone,
+				Name:         s.GetContactName(phone),
 				IsAdmin:      p.IsAdmin,
 				IsSuperAdmin: p.IsSuperAdmin,
 			})
@@ -1086,6 +1198,7 @@ func (s *Service) GetGroupInfo(groupJID string) (*GroupInfo, error) {
 		participants = append(participants, GroupParticipant{
 			JID:          p.JID.String(),
 			Phone:        phone,
+			Name:         s.GetContactName(phone),
 			IsAdmin:      p.IsAdmin,
 			IsSuperAdmin: p.IsSuperAdmin,
 		})

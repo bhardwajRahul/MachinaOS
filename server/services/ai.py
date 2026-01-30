@@ -1832,12 +1832,16 @@ class AIService:
             'currentTimeTool': 'get_current_time',
             'webSearchTool': 'web_search',
             'androidTool': 'android_device',
+            'whatsappSend': 'whatsapp_send',
+            'whatsappDb': 'whatsapp_db',
         }
         DEFAULT_TOOL_DESCRIPTIONS = {
             'calculatorTool': 'Perform mathematical calculations. Operations: add, subtract, multiply, divide, power, sqrt, mod, abs',
             'currentTimeTool': 'Get the current date and time. Optionally specify timezone.',
             'webSearchTool': 'Search the web for information. Returns relevant search results.',
             'androidTool': 'Control Android device. Available services are determined by connected nodes.',
+            'whatsappSend': 'Send WhatsApp messages to contacts or groups. Supports text, media, location, and contact messages.',
+            'whatsappDb': 'Query WhatsApp database - list contacts, search groups, get contact/group info, retrieve chat history.',
         }
 
         try:
@@ -2024,30 +2028,62 @@ class AIService:
 
             return WhatsAppSendSchema
 
-        # WhatsApp chat history schema (existing node used as tool)
-        if node_type == 'whatsappChatHistory':
-            class WhatsAppChatHistorySchema(BaseModel):
-                """Retrieve WhatsApp chat history."""
-                chat_type: str = Field(
-                    default="individual",
-                    description="Chat type: 'individual' or 'group'"
+        # WhatsApp DB schema (existing node used as tool) - query contacts, groups, messages
+        if node_type == 'whatsappDb':
+            class WhatsAppDbSchema(BaseModel):
+                """Query WhatsApp database - contacts, groups, messages.
+
+                Operations:
+                - chat_history: Get messages from a chat (requires phone or group_id)
+                - search_groups: Search groups by name (optional query)
+                - get_group_info: Get group details with participant names (requires group_id)
+                - get_contact_info: Get full contact info for sending/replying (requires phone)
+                - list_contacts: List contacts with saved names (optional query filter)
+                - check_contacts: Check WhatsApp registration (requires phones comma-separated)
+                """
+                operation: str = Field(
+                    default="chat_history",
+                    description="Operation: 'chat_history', 'search_groups', 'get_group_info', 'get_contact_info', 'list_contacts', 'check_contacts'"
+                )
+                # For chat_history
+                chat_type: Optional[str] = Field(
+                    default=None,
+                    description="For chat_history: 'individual' or 'group'"
                 )
                 phone: Optional[str] = Field(
                     default=None,
-                    description="Phone number without + prefix. Required for chat_type='individual'"
+                    description="Phone number without + prefix. For chat_history (individual), get_contact_info"
                 )
                 group_id: Optional[str] = Field(
                     default=None,
-                    description="Group JID. Required for chat_type='group'"
+                    description="Group JID. For chat_history (group), get_group_info"
                 )
-                message_filter: str = Field(
-                    default="all",
-                    description="Filter: 'all' or 'text_only'"
+                message_filter: Optional[str] = Field(
+                    default=None,
+                    description="For chat_history: 'all' or 'text_only'"
                 )
-                limit: int = Field(default=50, description="Max messages to retrieve (1-500)")
-                offset: int = Field(default=0, description="Messages to skip for pagination")
+                group_filter: Optional[str] = Field(
+                    default=None,
+                    description="For chat_history (group): 'all' or 'contact' to filter by sender"
+                )
+                sender_phone: Optional[str] = Field(
+                    default=None,
+                    description="For chat_history (group with group_filter='contact'): filter messages from this phone"
+                )
+                limit: Optional[int] = Field(default=None, description="For chat_history: max messages (1-500)")
+                offset: Optional[int] = Field(default=None, description="For chat_history: pagination offset")
+                # For search_groups, list_contacts
+                query: Optional[str] = Field(
+                    default=None,
+                    description="Search query for search_groups or list_contacts"
+                )
+                # For check_contacts
+                phones: Optional[str] = Field(
+                    default=None,
+                    description="For check_contacts: comma-separated phone numbers"
+                )
 
-            return WhatsAppChatHistorySchema
+            return WhatsAppDbSchema
 
         # Android toolkit schema - dynamic based on connected services
         # Follows LangChain dynamic tool binding pattern

@@ -173,8 +173,10 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                   sender_name: 'string'
                 }
               },
-              whatsappChatHistory: {
-                // Sample message array structure for schema view
+              whatsappDb: {
+                // Output varies by operation - this shows chat_history output
+                operation: 'string',
+                // chat_history output
                 messages: [
                   {
                     text: 'string',
@@ -193,6 +195,20 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                 has_more: 'boolean',
                 count: 'number',
                 chat_type: 'string',
+                // search_groups / list_contacts output
+                groups: [{ jid: 'string', name: 'string', participant_count: 'number' }],
+                contacts: [{ jid: 'string', phone: 'string', name: 'string', push_name: 'string' }],
+                // get_group_info output
+                participants: [{ jid: 'string', phone: 'string', name: 'string', is_admin: 'boolean' }],
+                // get_contact_info output
+                jid: 'string',
+                phone: 'string',
+                name: 'string',
+                push_name: 'string',
+                business_name: 'string',
+                is_business: 'boolean',
+                is_contact: 'boolean',
+                profile_pic: 'string',
                 timestamp: 'string'
               },
               webhook: {
@@ -373,8 +389,8 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
             const nodeTypeLower = nodeType.toLowerCase();
             const isAI = !isMemory && (nodeTypeLower.includes('chatmodel') || nodeTypeLower.includes('aiagent') || nodeTypeLower.includes('chatagent'));
             const isFile = nodeType.includes('file');
-            const isWhatsAppChatHistory = nodeType === 'whatsappChatHistory';
-            const isWhatsApp = !isWhatsAppChatHistory && (nodeType.includes('whatsapp') || nodeType.includes('Whatsapp'));
+            const isWhatsAppDb = nodeType === 'whatsappDb';
+            const isWhatsApp = !isWhatsAppDb && (nodeType.includes('whatsapp') || nodeType.includes('Whatsapp'));
             const isWebhook = nodeType === 'webhookTrigger';
             const isHttpRequest = nodeType === 'httpRequest';
             const isPython = nodeType.includes('python') || nodeType.includes('Python');
@@ -414,7 +430,7 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                             isMemory ? sampleSchemas.memory :
                             isAI ? sampleSchemas.ai :
                             isFile ? sampleSchemas.file :
-                            isWhatsAppChatHistory ? sampleSchemas.whatsappChatHistory :
+                            isWhatsAppDb ? sampleSchemas.whatsappDb :
                             isWhatsApp ? sampleSchemas.whatsapp :
                             isWebhook ? sampleSchemas.webhook :
                             isHttpRequest ? sampleSchemas.httpRequest :

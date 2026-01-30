@@ -80,7 +80,7 @@ const createNodeTypes = (): Record<string, React.ComponentType<any>> => {
     } else if (type === 'simpleMemory') {
       // Simple Memory node for AI conversation history - uses circular ModelNode design
       types[type] = ModelNode;
-    } else if (type === 'whatsappConnect' || type === 'whatsappSend' || type === 'whatsappChatHistory') {
+    } else if (type === 'whatsappConnect' || type === 'whatsappSend' || type === 'whatsappDb') {
       // WhatsApp action nodes use SquareNode (whatsappReceive is a trigger)
       types[type] = SquareNode;
     } else if (ANDROID_SERVICE_NODE_TYPES.includes(type) || ANDROID_DEVICE_NODE_TYPES.includes(type)) {

@@ -11,44 +11,14 @@ try:
 except ImportError:
     pass  # Windows - uvloop not available, use default asyncio
 
-import signal
-import sys
 import os
 from datetime import datetime
 from contextlib import asynccontextmanager
 
-# Flag to track if shutdown was requested
-_shutdown_requested = False
-
-
-def handle_signal(signum, frame):
-    """Handle SIGTERM/SIGINT for clean shutdown.
-
-    Note: We don't call sys.exit() here because it raises SystemExit
-    in the middle of async operations, causing cascading errors.
-    Instead, we set a flag and let uvicorn handle the graceful shutdown.
-    """
-    global _shutdown_requested
-    if not _shutdown_requested:
-        _shutdown_requested = True
-        print(f"\nReceived signal {signum}, shutting down gracefully...")
-        # Raise KeyboardInterrupt to trigger uvicorn's graceful shutdown
-        # This is the proper way to signal shutdown in async context
-        raise KeyboardInterrupt()
-
-
-# Register signal handlers for clean shutdown
-# Note: uvicorn already handles SIGINT/SIGTERM, but we add our own
-# to provide a cleaner message and avoid the "Terminate batch job" prompt on Windows
-if sys.platform != 'win32':
-    # Unix: handle both SIGTERM (docker stop) and SIGINT (Ctrl+C)
-    signal.signal(signal.SIGTERM, handle_signal)
-    # Don't override SIGINT on Unix - let uvicorn handle it
-else:
-    # Windows: Don't override signal handlers - let uvicorn handle Ctrl+C
-    # The "Terminate batch job" prompt is a Windows cmd.exe behavior
-    # that we can't avoid from Python
-    pass
+# Note: We don't register custom signal handlers.
+# uvicorn already handles SIGINT (Ctrl+C) and SIGTERM (docker stop) gracefully.
+# Adding custom handlers that raise KeyboardInterrupt causes cascading errors
+# during async operations (WebSocket handlers, logging, etc.).
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware

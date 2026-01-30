@@ -209,7 +209,7 @@ export class ExecutionService {
       'whatsappSend',
       'whatsappConnect',
       'whatsappReceive',
-      'whatsappChatHistory',
+      'whatsappDb',
       // Text Processing Nodes
       'textGenerator',
       'fileHandler',

@@ -166,156 +166,265 @@ async def handle_whatsapp_connect(
         }
 
 
-async def handle_whatsapp_chat_history(
+async def handle_whatsapp_db(
     node_id: str,
     node_type: str,
     parameters: Dict[str, Any],
     context: Dict[str, Any]
 ) -> Dict[str, Any]:
-    """Handle WhatsApp chat history - retrieve messages from history store.
+    """Handle WhatsApp DB node - query contacts, groups, messages.
 
-    Messages are automatically captured from:
-    - HistorySync event on first login (all past messages)
-    - Real-time incoming messages
+    Operations:
+    - chat_history: Retrieve messages from history store
+    - search_groups: Search groups by name
+    - get_group_info: Get group details with participant names
+    - get_contact_info: Get full contact info (name, phone, photo)
+    - list_contacts: List contacts with saved names
+    - check_contacts: Check WhatsApp registration
 
     Args:
         node_id: The node ID
-        node_type: The node type (whatsappChatHistory)
-        parameters: Resolved parameters including:
-            - chatType: 'individual' or 'group'
-            - phone: Phone number for individual chats
-            - group_id: Group JID for group chats
-            - groupFilter: 'all' or 'contact' for group message filtering
-            - senderPhone: Filter by sender in groups
-            - messageFilter: 'all' or 'text_only'
-            - limit: Max messages to return
-            - offset: Pagination offset
+        node_type: The node type (whatsappDb)
+        parameters: Resolved parameters including operation and operation-specific params
         context: Execution context
 
     Returns:
-        Execution result dict with messages array
+        Execution result dict
     """
-    from routers.whatsapp import handle_whatsapp_chat_history as whatsapp_chat_history_handler
+    from routers.whatsapp import (
+        handle_whatsapp_chat_history as whatsapp_chat_history_handler,
+        whatsapp_rpc_call
+    )
     start_time = time.time()
 
     try:
-        chat_type = parameters.get('chatType', 'individual')
+        operation = parameters.get('operation', 'chat_history')
 
-        # Build RPC params based on chat type
-        rpc_params: Dict[str, Any] = {}
-
-        if chat_type == 'individual':
-            phone = parameters.get('phone')
-            if not phone:
-                raise ValueError("Phone number is required for individual chats")
-            rpc_params['phone'] = phone
+        if operation == 'chat_history':
+            return await _handle_chat_history(node_id, parameters, start_time, whatsapp_chat_history_handler)
+        elif operation == 'search_groups':
+            return await _handle_search_groups(node_id, parameters, start_time, whatsapp_rpc_call)
+        elif operation == 'get_group_info':
+            return await _handle_get_group_info(node_id, parameters, start_time, whatsapp_rpc_call)
+        elif operation == 'get_contact_info':
+            return await _handle_get_contact_info(node_id, parameters, start_time, whatsapp_rpc_call)
+        elif operation == 'list_contacts':
+            return await _handle_list_contacts(node_id, parameters, start_time, whatsapp_rpc_call)
+        elif operation == 'check_contacts':
+            return await _handle_check_contacts(node_id, parameters, start_time, whatsapp_rpc_call)
         else:
-            group_id = parameters.get('group_id')
-            if not group_id:
-                raise ValueError("Group ID is required for group chats")
-            rpc_params['group_id'] = group_id
-
-            # Optional sender filter for groups
-            group_filter = parameters.get('groupFilter', 'all')
-            if group_filter == 'contact':
-                sender_phone = parameters.get('senderPhone')
-                if sender_phone:
-                    rpc_params['sender_phone'] = sender_phone
-
-        # Message type filter
-        message_filter = parameters.get('messageFilter', 'all')
-        rpc_params['text_only'] = message_filter == 'text_only'
-
-        # Result mode and pagination
-        result_mode = parameters.get('resultMode', 'multiple')
-        position_raw = parameters.get('position', 1)
-        # Convert position to int (may be string from template variable resolution)
-        try:
-            position = int(position_raw) if position_raw else 1
-        except (ValueError, TypeError):
-            position = 1
-
-        if result_mode == 'single':
-            # Single message by position mode
-            if position > 0:
-                # Positive: from newest (1=most recent)
-                rpc_params['limit'] = 1
-                rpc_params['offset'] = position - 1
-            else:
-                # Negative: from oldest (-1=oldest)
-                # First, get total count with limit=1 to minimize data transfer
-                rpc_params['limit'] = 1
-                rpc_params['offset'] = 0
-                count_data = await whatsapp_chat_history_handler(rpc_params)
-                total = count_data.get('total', 0)
-
-                if total == 0:
-                    return {
-                        "success": True,
-                        "node_id": node_id,
-                        "node_type": "whatsappChatHistory",
-                        "result": {
-                            "messages": [],
-                            "total": 0,
-                            "has_more": False,
-                            "count": 0,
-                            "chat_type": chat_type,
-                            "timestamp": datetime.now().isoformat()
-                        },
-                        "execution_time": time.time() - start_time,
-                        "timestamp": datetime.now().isoformat()
-                    }
-
-                # Calculate offset from the end: -1 = last (oldest in desc order = total-1)
-                # Since messages are ordered DESC (newest first), -1 means oldest = offset total-1
-                offset = total + position  # e.g., total=100, pos=-1 -> offset=99
-                if offset < 0:
-                    offset = 0
-                rpc_params['offset'] = offset
-        else:
-            # Multiple messages mode - use standard pagination
-            rpc_params['limit'] = parameters.get('limit', 50)
-            rpc_params['offset'] = parameters.get('offset', 0)
-
-        # Call WhatsApp Go RPC service
-        data = await whatsapp_chat_history_handler(rpc_params)
-
-        success = data.get('success', False)
-        if not success:
-            raise Exception(data.get('error', 'Failed to retrieve chat history'))
-
-        messages = data.get('messages', [])
-        total = data.get('total', 0)
-        has_more = data.get('has_more', False)
-
-        # Add index to each message (1-based, from offset)
-        base_offset = rpc_params.get('offset', 0)
-        for i, msg in enumerate(messages):
-            msg['index'] = base_offset + i + 1
-
-        return {
-            "success": True,
-            "node_id": node_id,
-            "node_type": "whatsappChatHistory",
-            "result": {
-                "messages": messages,
-                "total": total,
-                "has_more": has_more,
-                "count": len(messages),
-                "chat_type": chat_type,
-                "timestamp": datetime.now().isoformat()
-            },
-            "execution_time": time.time() - start_time,
-            "timestamp": datetime.now().isoformat()
-        }
+            raise ValueError(f"Unknown operation: {operation}")
 
     except Exception as e:
-        logger.error("WhatsApp chat history failed", node_id=node_id, error=str(e))
+        logger.error("WhatsApp DB failed", node_id=node_id, operation=parameters.get('operation'), error=str(e))
         return {
             "success": False,
             "node_id": node_id,
-            "node_type": "whatsappChatHistory",
+            "node_type": "whatsappDb",
             "error": str(e),
             "execution_time": time.time() - start_time,
             "timestamp": datetime.now().isoformat()
         }
+
+
+async def _handle_chat_history(node_id: str, parameters: Dict[str, Any], start_time: float, handler) -> Dict[str, Any]:
+    """Handle chat_history operation."""
+    chat_type = parameters.get('chatType', 'individual')
+    rpc_params: Dict[str, Any] = {}
+
+    if chat_type == 'individual':
+        phone = parameters.get('phone')
+        if not phone:
+            raise ValueError("Phone number is required for individual chats")
+        rpc_params['phone'] = phone
+    else:
+        group_id = parameters.get('group_id')
+        if not group_id:
+            raise ValueError("Group ID is required for group chats")
+        rpc_params['group_id'] = group_id
+
+        group_filter = parameters.get('groupFilter', 'all')
+        if group_filter == 'contact':
+            sender_phone = parameters.get('senderPhone')
+            if sender_phone:
+                rpc_params['sender_phone'] = sender_phone
+
+    message_filter = parameters.get('messageFilter', 'all')
+    rpc_params['text_only'] = message_filter == 'text_only'
+    rpc_params['limit'] = parameters.get('limit', 50)
+    rpc_params['offset'] = parameters.get('offset', 0)
+
+    data = await handler(rpc_params)
+
+    if not data.get('success', False):
+        raise Exception(data.get('error', 'Failed to retrieve chat history'))
+
+    messages = data.get('messages', [])
+    base_offset = rpc_params.get('offset', 0)
+    for i, msg in enumerate(messages):
+        msg['index'] = base_offset + i + 1
+
+    return {
+        "success": True,
+        "node_id": node_id,
+        "node_type": "whatsappDb",
+        "result": {
+            "operation": "chat_history",
+            "messages": messages,
+            "total": data.get('total', 0),
+            "has_more": data.get('has_more', False),
+            "count": len(messages),
+            "chat_type": chat_type,
+            "timestamp": datetime.now().isoformat()
+        },
+        "execution_time": time.time() - start_time,
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+async def _handle_search_groups(node_id: str, parameters: Dict[str, Any], start_time: float, rpc_call) -> Dict[str, Any]:
+    """Handle search_groups operation."""
+    query = parameters.get('query', '')
+    data = await rpc_call('groups', {})
+
+    if not data.get('success', True):
+        raise Exception(data.get('error', 'Failed to get groups'))
+
+    groups = data if isinstance(data, list) else data.get('result', [])
+
+    # Filter by query if provided
+    if query:
+        query_lower = query.lower()
+        groups = [g for g in groups if query_lower in g.get('name', '').lower()]
+
+    return {
+        "success": True,
+        "node_id": node_id,
+        "node_type": "whatsappDb",
+        "result": {
+            "operation": "search_groups",
+            "groups": groups,
+            "total": len(groups),
+            "query": query,
+            "timestamp": datetime.now().isoformat()
+        },
+        "execution_time": time.time() - start_time,
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+async def _handle_get_group_info(node_id: str, parameters: Dict[str, Any], start_time: float, rpc_call) -> Dict[str, Any]:
+    """Handle get_group_info operation."""
+    group_id = parameters.get('groupIdForInfo') or parameters.get('group_id')
+    if not group_id:
+        raise ValueError("Group ID is required")
+
+    data = await rpc_call('group_info', {'group_id': group_id})
+
+    if not data.get('success', True) if isinstance(data, dict) else True:
+        raise Exception(data.get('error', 'Failed to get group info') if isinstance(data, dict) else 'Failed')
+
+    result = data if not isinstance(data, dict) or 'result' not in data else data.get('result', data)
+
+    return {
+        "success": True,
+        "node_id": node_id,
+        "node_type": "whatsappDb",
+        "result": {
+            "operation": "get_group_info",
+            **result,
+            "timestamp": datetime.now().isoformat()
+        },
+        "execution_time": time.time() - start_time,
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+async def _handle_get_contact_info(node_id: str, parameters: Dict[str, Any], start_time: float, rpc_call) -> Dict[str, Any]:
+    """Handle get_contact_info operation."""
+    phone = parameters.get('contactPhone') or parameters.get('phone')
+    if not phone:
+        raise ValueError("Phone number is required")
+
+    data = await rpc_call('contact_info', {'phone': phone})
+
+    if isinstance(data, dict) and not data.get('success', True):
+        raise Exception(data.get('error', 'Failed to get contact info'))
+
+    result = data if not isinstance(data, dict) or 'result' not in data else data.get('result', data)
+
+    return {
+        "success": True,
+        "node_id": node_id,
+        "node_type": "whatsappDb",
+        "result": {
+            "operation": "get_contact_info",
+            **result,
+            "timestamp": datetime.now().isoformat()
+        },
+        "execution_time": time.time() - start_time,
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+async def _handle_list_contacts(node_id: str, parameters: Dict[str, Any], start_time: float, rpc_call) -> Dict[str, Any]:
+    """Handle list_contacts operation."""
+    query = parameters.get('query', '')
+
+    data = await rpc_call('contacts', {'query': query})
+
+    if isinstance(data, dict) and not data.get('success', True):
+        raise Exception(data.get('error', 'Failed to list contacts'))
+
+    result = data if not isinstance(data, dict) or 'result' not in data else data.get('result', data)
+    contacts = result.get('contacts', []) if isinstance(result, dict) else result
+
+    return {
+        "success": True,
+        "node_id": node_id,
+        "node_type": "whatsappDb",
+        "result": {
+            "operation": "list_contacts",
+            "contacts": contacts,
+            "total": len(contacts),
+            "query": query,
+            "timestamp": datetime.now().isoformat()
+        },
+        "execution_time": time.time() - start_time,
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+async def _handle_check_contacts(node_id: str, parameters: Dict[str, Any], start_time: float, rpc_call) -> Dict[str, Any]:
+    """Handle check_contacts operation."""
+    phones_str = parameters.get('phones', '')
+    if not phones_str:
+        raise ValueError("Phone numbers are required")
+
+    # Parse comma-separated phones
+    phones = [p.strip() for p in phones_str.split(',') if p.strip()]
+    if not phones:
+        raise ValueError("At least one phone number is required")
+
+    data = await rpc_call('contact_check', {'phones': phones})
+
+    if isinstance(data, dict) and not data.get('success', True):
+        raise Exception(data.get('error', 'Failed to check contacts'))
+
+    results = data if isinstance(data, list) else data.get('result', [])
+
+    return {
+        "success": True,
+        "node_id": node_id,
+        "node_type": "whatsappDb",
+        "result": {
+            "operation": "check_contacts",
+            "results": results,
+            "total": len(results),
+            "timestamp": datetime.now().isoformat()
+        },
+        "execution_time": time.time() - start_time,
+        "timestamp": datetime.now().isoformat()
+    }
+
+
