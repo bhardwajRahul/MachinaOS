@@ -128,26 +128,30 @@ try {
   }
 
   // Step 1: Install root dependencies
-  log('1/5', 'Installing root dependencies...');
+  log('1/6', 'Installing root dependencies...');
   npmInstall(ROOT);
 
-  // Step 2: Build client
-  log('2/5', 'Building client...');
+  // Step 2: Install client dependencies
+  log('2/6', 'Installing client dependencies...');
+  npmInstall(resolve(ROOT, 'client'));
+
+  // Step 3: Build client
+  log('3/6', 'Building client...');
   run('npm run build', resolve(ROOT, 'client'));
 
-  // Step 3: Install Python dependencies
-  log('3/5', 'Installing Python dependencies...');
+  // Step 4: Install Python dependencies
+  log('4/6', 'Installing Python dependencies...');
   const serverDir = resolve(ROOT, 'server');
   run('uv venv', serverDir);
   run('uv sync', serverDir);
 
-  // Step 4: Install WhatsApp dependencies
-  log('4/5', 'Installing WhatsApp dependencies...');
+  // Step 5: Install WhatsApp dependencies
+  log('5/6', 'Installing WhatsApp dependencies...');
   const whatsappDir = resolve(ROOT, 'server/whatsapp-rpc');
   npmInstall(whatsappDir);
 
-  // Step 5: Build WhatsApp server (Go binary)
-  log('5/5', 'Building WhatsApp server...');
+  // Step 6: Build WhatsApp server (Go binary)
+  log('6/6', 'Building WhatsApp server...');
   run('npm run build', whatsappDir);
 
   console.log('\nBuild complete.');

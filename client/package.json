@@ -41,5 +41,14 @@
     "typescript": "^5.9.2",
     "vite": "^7.1.2",
     "zustand": "^5.0.8"
+  },
+  "overrides": {
+    "@emoji-mart/react": {
+      "react": "$react"
+    },
+    "react-avatar-editor": {
+      "react": "$react",
+      "react-dom": "$react-dom"
+    }
   }
 }
