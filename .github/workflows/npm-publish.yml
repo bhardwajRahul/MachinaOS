@@ -11,9 +11,14 @@
 name: Publish to npm
 
 on:
+  # Trigger on version tags (e.g., v0.0.1, v1.2.3)
+  push:
+    tags:
+      - 'v*.*.*'
+  # Also trigger on published releases
   release:
     types: [published]
-  # Allow manual trigger for token rotation testing
+  # Allow manual trigger
   workflow_dispatch:
 
 jobs:
