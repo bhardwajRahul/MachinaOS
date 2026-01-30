@@ -160,6 +160,13 @@ if (!existsSync(envPath) && existsSync(templatePath)) {
   log('Created .env from template');
 }
 
+// Install client dependencies if needed (for npx/global install)
+const clientNodeModules = resolve(ROOT, 'client', 'node_modules');
+if (!existsSync(clientNodeModules)) {
+  log('Installing client dependencies...');
+  execSync('npm install', { cwd: resolve(ROOT, 'client'), stdio: 'inherit', shell: true });
+}
+
 // Free ports
 log('Freeing ports...');
 let allFree = true;
