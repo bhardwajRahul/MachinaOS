@@ -182,14 +182,29 @@ if (!allFree) {
   log('Warning: Some ports could not be freed. Services may fail to start.');
 }
 
-// Start dev server
+// Start services
 log('Starting services...');
 log('Press Ctrl+C to stop (use npm run stop to kill all services)\n');
 
-const devCommand = config.temporalEnabled ? 'dev:temporal' : 'dev';
+// Build concurrently command based on config
+const services = [
+  'npm:client:start',
+  'npm:python:start',
+  'npm:whatsapp:api'
+];
+
+if (config.temporalEnabled) {
+  services.push('npm:temporal:worker');
+}
+
+const concurrentlyArgs = [
+  '--raw',
+  '--kill-others-on-fail',
+  ...services.map(s => `"${s}"`)
+];
 
 // Use spawn with shell:true for cross-platform compatibility
-const proc = spawn('npm', ['run', devCommand], {
+const proc = spawn('npx', ['concurrently', ...concurrentlyArgs], {
   cwd: ROOT,
   stdio: 'inherit',
   shell: true,
@@ -205,6 +220,6 @@ process.on('SIGTERM', () => {
 });
 
 proc.on('close', (code) => {
-  console.log('\nDev server stopped.');
+  console.log('\nServices stopped.');
   process.exit(code || 0);
 });
