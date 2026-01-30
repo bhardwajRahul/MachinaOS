@@ -86,6 +86,11 @@ server/whatsapp-rpc/qr_*.png
 server/whatsapp-rpc/data/
 server/whatsapp-rpc/bin/
 
+# Built binaries (users build locally)
+*.exe
+server/whatsapp-rpc/server
+server/whatsapp-rpc/server.exe
+
 # Temporary files
 *.tmp
 *.temp
