@@ -43,10 +43,25 @@ const py = () => {
   catch { try { execSync('python3 --version', { stdio: 'ignore' }); return 'python3'; } catch { return null; } }
 };
 
+const hasGo = () => {
+  try { execSync('go version', { stdio: 'ignore' }); return true; }
+  catch { return false; }
+};
+
 async function api(foreground = false) {
   if (await portUp(API_PORT)) { log(`API already on ${API_PORT}`, 'yellow'); return; }
   const bin = join(BIN_DIR, BIN);
-  if (!existsSync(bin)) { log('Building...', 'yellow'); await build(); }
+  if (!existsSync(bin)) {
+    if (!hasGo()) {
+      log('Go is not installed. Please either:', 'red');
+      log('  1. Install Go: https://go.dev/dl/', 'yellow');
+      log('  2. Or run "npm run build" on a machine with Go installed', 'yellow');
+      log('  3. Or copy the pre-built binary to: ' + bin, 'yellow');
+      process.exit(1);
+    }
+    log('Building...', 'yellow');
+    await build();
+  }
 
   if (foreground) {
     // Run in foreground - will receive Ctrl+C signals
@@ -82,6 +97,10 @@ async function status() {
 }
 
 async function build() {
+  if (!hasGo()) {
+    log('Go is not installed. Install from: https://go.dev/dl/', 'red');
+    process.exit(1);
+  }
   const bin = join(BIN_DIR, BIN);
   if (!existsSync(BIN_DIR)) { await execa('mkdir', ['-p', BIN_DIR]); }
   if (existsSync(bin)) unlinkSync(bin);

@@ -14,6 +14,7 @@ const targets = [
   'client/.vite',
   'server/whatsapp-rpc/node_modules',
   'server/whatsapp-rpc/dist',
+  'server/whatsapp-rpc/data',
   'server/data',
   'server/.venv',
 ];
