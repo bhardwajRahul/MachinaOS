@@ -198,8 +198,8 @@ async def _execute_python_code(args: Dict[str, Any],
     """Execute Python code (dual-purpose: workflow node + AI tool).
 
     Args:
-        args: Dict with 'code' from LLM
-        node_params: Node parameters containing timeout, etc.
+        args: Dict with 'code' from LLM (when used as AI tool)
+        node_params: Node parameters containing code (when used as workflow node), timeout, etc.
 
     Returns:
         Dict with success, result, output, or error
@@ -208,11 +208,12 @@ async def _execute_python_code(args: Dict[str, Any],
     import tempfile
     import os
 
-    code = args.get('code', '')
+    # Get code from LLM args first (AI tool mode), fall back to node parameters (workflow mode)
+    code = args.get('code', '') or node_params.get('code', '')
     timeout = int(node_params.get('timeout', 30))
 
     if not code:
-        return {"error": "No code provided"}
+        return {"error": "No code provided. When using as AI tool, the LLM must provide the 'code' argument with Python code to execute."}
 
     # Wrap code to capture output and result
     wrapped_code = f'''
@@ -289,8 +290,8 @@ async def _execute_javascript_code(args: Dict[str, Any],
     """Execute JavaScript code (dual-purpose: workflow node + AI tool).
 
     Args:
-        args: Dict with 'code' from LLM
-        node_params: Node parameters containing timeout, etc.
+        args: Dict with 'code' from LLM (when used as AI tool)
+        node_params: Node parameters containing code (when used as workflow node), timeout, etc.
 
     Returns:
         Dict with success, result, output, or error
@@ -299,11 +300,12 @@ async def _execute_javascript_code(args: Dict[str, Any],
     import tempfile
     import os
 
-    code = args.get('code', '')
+    # Get code from LLM args first (AI tool mode), fall back to node parameters (workflow mode)
+    code = args.get('code', '') or node_params.get('code', '')
     timeout = int(node_params.get('timeout', 30))
 
     if not code:
-        return {"error": "No code provided"}
+        return {"error": "No code provided. When using as AI tool, the LLM must provide the 'code' argument with JavaScript code to execute."}
 
     # Wrap code to capture output and result
     wrapped_code = f'''

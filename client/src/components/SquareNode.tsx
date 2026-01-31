@@ -56,6 +56,38 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
   const nodeStatus = getNodeStatus(id);
   const executionStatus = nodeStatus?.status || 'idle';
 
+  // Minimum glow duration state - keeps glow visible for at least 500ms
+  const [isGlowing, setIsGlowing] = useState(false);
+  const glowTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Track when execution starts to ensure minimum glow duration
+  useEffect(() => {
+    if (executionStatus === 'executing' || executionStatus === 'waiting') {
+      // Start glowing immediately
+      setIsGlowing(true);
+      // Clear any existing timeout that would stop the glow
+      if (glowTimeoutRef.current) {
+        clearTimeout(glowTimeoutRef.current);
+        glowTimeoutRef.current = null;
+      }
+    } else if (isGlowing) {
+      // Execution ended but we're still glowing - set timeout to stop after minimum duration
+      if (!glowTimeoutRef.current) {
+        glowTimeoutRef.current = setTimeout(() => {
+          setIsGlowing(false);
+          glowTimeoutRef.current = null;
+        }, 500);
+      }
+    }
+
+    return () => {
+      if (glowTimeoutRef.current) {
+        clearTimeout(glowTimeoutRef.current);
+        glowTimeoutRef.current = null;
+      }
+    };
+  }, [executionStatus, isGlowing]);
+
   // Check if this is a Google Maps node
   const isGoogleMapsNode = type ? GOOGLE_MAPS_NODE_TYPES.includes(type) : false;
   const googleMapsKeyStatus = isGoogleMapsNode ? getApiKeyStatus('google_maps') : undefined;
@@ -84,7 +116,8 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
   const whatsappStatus = useWhatsAppStatus();
 
   // Execution state - waiting is treated identically to executing
-  const isExecuting = executionStatus === 'executing' || executionStatus === 'waiting';
+  // Also respect minimum glow duration for fast-executing tools
+  const isExecuting = executionStatus === 'executing' || executionStatus === 'waiting' || isGlowing;
 
 
   // Sync with global renaming state

@@ -564,7 +564,11 @@ def create_agent_node(chat_model):
             # Model wants to use tools
             pending_tool_calls = response.tool_calls
             should_continue = True
-            logger.debug(f"[LangGraph] Agent requesting {len(pending_tool_calls)} tool call(s)")
+            logger.info(f"[LangGraph] Agent requesting {len(pending_tool_calls)} tool call(s)")
+            # Debug: log raw tool calls to diagnose empty args issue
+            for tc in pending_tool_calls:
+                logger.info(f"[LangGraph] Raw tool_call object: {tc}")
+                logger.info(f"[LangGraph] Tool call type: {type(tc)}, keys: {tc.keys() if hasattr(tc, 'keys') else 'N/A'}")
 
         return {
             "messages": [response],  # Will be appended via operator.add
@@ -1360,6 +1364,11 @@ class AIService:
                 config = tool_configs.get(tool_name, {})
                 tool_node_id = config.get('node_id')
 
+                # Log tool execution details for debugging glow animation
+                logger.info(f"[LangGraph] Executing tool: {tool_name} (args={tool_args})")
+                logger.info(f"[LangGraph] Available tool configs: {list(tool_configs.keys())}")
+                logger.info(f"[LangGraph] Tool node_id={tool_node_id}, workflow_id={workflow_id}, broadcaster={'yes' if broadcaster else 'no'}")
+
                 # Broadcast executing status to the AI Agent node
                 await broadcast_status("executing_tool", {
                     "message": f"Executing tool: {tool_name}",
@@ -1645,6 +1654,10 @@ class AIService:
                 logger.info(f"[ChatAgent] Built {len(all_tools)} tools from tool_data")
 
             logger.info(f"[ChatAgent] Total tools available: {len(all_tools)}")
+            # Debug: log all tool schemas to verify they're correct
+            for t in all_tools:
+                schema = t.get_input_schema().model_json_schema()
+                logger.debug(f"[ChatAgent] Tool '{t.name}' schema: {schema}")
 
             # Flatten options collection from frontend
             options = parameters.get('options', {})
@@ -1769,9 +1782,11 @@ class AIService:
                     # Get tool node config (contains node_id, node_type, parameters)
                     config = tool_node_configs.get(tool_name, {})
                     tool_node_id = config.get('node_id')
+                    logger.info(f"[ChatAgent] Tool config: node_id={tool_node_id}, node_type={config.get('node_type')}, workflow_id={workflow_id}")
 
                     # Broadcast executing status to tool node for glow effect
                     if tool_node_id and broadcaster:
+                        logger.info(f"[ChatAgent] Broadcasting 'executing' status to node {tool_node_id}")
                         await broadcaster.update_node_status(
                             tool_node_id,
                             "executing",
@@ -2113,9 +2128,12 @@ class AIService:
         # Python executor tool schema (dual-purpose: workflow node + AI tool)
         if node_type == 'pythonExecutor':
             class PythonCodeSchema(BaseModel):
-                """Execute Python code for calculations, data processing, and automation."""
+                """Execute Python code for calculations, data processing, and automation.
+
+                Example: {"code": "result = 2 + 2\\noutput = result"}
+                """
                 code: str = Field(
-                    description="Python code to execute. Set 'output' variable with result. Use print() for console output. Available: input_data (dict), math, json, datetime, Counter, defaultdict."
+                    description="REQUIRED: Python code string to execute. Must set 'output' variable with the result. Available: input_data (dict), math, json, datetime, Counter, defaultdict. Example: 'output = 2 + 2'"
                 )
 
             return PythonCodeSchema
@@ -2123,9 +2141,12 @@ class AIService:
         # JavaScript executor tool schema (dual-purpose: workflow node + AI tool)
         if node_type == 'javascriptExecutor':
             class JavaScriptCodeSchema(BaseModel):
-                """Execute JavaScript code for calculations, data processing, and automation."""
+                """Execute JavaScript code for calculations, data processing, and automation.
+
+                Example: {"code": "const result = 2 + 2;\\noutput = result;"}
+                """
                 code: str = Field(
-                    description="JavaScript code to execute. Set 'output' variable with result. Use console.log() for output. Available: input_data (object)."
+                    description="REQUIRED: JavaScript code string to execute. Must set 'output' variable with the result. Available: input_data (object). Example: 'output = 2 + 2;'"
                 )
 
             return JavaScriptCodeSchema
