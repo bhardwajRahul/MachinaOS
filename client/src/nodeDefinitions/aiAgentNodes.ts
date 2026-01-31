@@ -153,16 +153,16 @@ export const aiAgentNodes: Record<string, INodeTypeDescription> = {
     ]
   },
 
-  // Chat Agent Node - Conversational AI agent with skill-based tool calling
+  // Zeenie Agent Node - Conversational AI agent with skill-based tool calling
   chatAgent: {
-    displayName: 'Chat Agent',
+    displayName: 'Zeenie',
     name: 'chatAgent',
-    icon: '💬',
+    icon: '🧞',
     group: ['agent'],
     version: 1,
-    subtitle: 'Conversational Agent',
-    description: 'Conversational AI agent with skill-based tool calling for multi-turn chat interactions',
-    defaults: { name: 'Chat Agent', color: '#3B82F6' },
+    subtitle: 'Your Personal Assistant',
+    description: 'Zeenie - your personal assistant with skill-based tool calling for multi-turn chat interactions',
+    defaults: { name: 'Zeenie', color: '#3B82F6' },
     inputs: [
       {
         name: 'main',

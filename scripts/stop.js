@@ -125,7 +125,7 @@ function getPidsOnPort(port) {
   return Array.from(pids);
 }
 
-/** Get child PIDs recursively */
+/** Get child PIDs recursively (Unix only - Windows uses /T flag in taskkill) */
 function getChildPids(parentPid) {
   const children = new Set();
 
@@ -139,18 +139,8 @@ function getChildPids(parentPid) {
         }
       }
     }
-  } else {
-    const output = exec(`wmic process where (ParentProcessId=${parentPid}) get ProcessId 2>nul`);
-    for (const line of output.split('\n')) {
-      const pid = line.trim();
-      if (pid && /^\d+$/.test(pid)) {
-        children.add(pid);
-        for (const grandchild of getChildPids(pid)) {
-          children.add(grandchild);
-        }
-      }
-    }
   }
+  // Windows: taskkill /T handles children automatically, no need for wmic
 
   return Array.from(children);
 }
@@ -171,8 +161,8 @@ function killPid(pid) {
     sleep(100);
     exec(`kill -9 ${pid} 2>/dev/null`);
   } else {
-    exec(`taskkill /PID ${pid} 2>nul`);
-    exec(`taskkill /PID ${pid} /F 2>nul`);
+    // /T kills process tree (parent + children), needed for uvicorn --reload
+    exec(`taskkill /PID ${pid} /T /F 2>nul`);
   }
 }
 
@@ -213,7 +203,7 @@ function killPort(port) {
       if (useUnixCommands) {
         exec(`kill -9 ${pid} 2>/dev/null`);
       } else {
-        exec(`taskkill /PID ${pid} /F 2>nul`);
+        exec(`taskkill /PID ${pid} /T /F 2>nul`);
       }
     }
     sleep(500);
@@ -244,30 +234,16 @@ function killByPattern(pattern, debug = false) {
       }
     }
   } else {
-    // Use tasklist with image name filter first for Python processes
-    if (pattern.includes('uvicorn') || pattern.includes('python')) {
-      const pythonPids = exec(`wmic process where "name='python.exe'" get ProcessId,CommandLine 2>nul`);
-      if (debug && pythonPids) console.log(`  [DEBUG] Python processes:\n${pythonPids}`);
+    // Use PowerShell to find processes by command line (wmic is deprecated)
+    const searchPattern = pattern.replace('.*', '').replace(/\\/g, '\\\\');
+    const psCmd = `powershell -Command "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*${searchPattern}*' } | Select-Object -ExpandProperty ProcessId"`;
+    const output = exec(psCmd);
+    if (debug && output) console.log(`  [DEBUG] PowerShell output: ${output}`);
 
-      for (const line of pythonPids.split('\n')) {
-        if (line.toLowerCase().includes(pattern.toLowerCase().replace('.*', ''))) {
-          const pidMatch = line.match(/(\d+)\s*$/);
-          if (pidMatch) {
-            const pid = pidMatch[1];
-            exec(`taskkill /PID ${pid} /F 2>nul`);
-            killed.push(pid);
-          }
-        }
-      }
-    }
-
-    // Also try the original pattern match
-    const output = exec(`wmic process where "CommandLine like '%${pattern.replace('.*', '%')}%'" get ProcessId 2>nul`);
-    if (debug && output) console.log(`  [DEBUG] wmic pattern output: ${output}`);
     for (const line of output.split('\n')) {
       const pid = line.trim();
-      if (pid && /^\d+$/.test(pid) && !killed.includes(pid)) {
-        exec(`taskkill /PID ${pid} /F 2>nul`);
+      if (pid && /^\d+$/.test(pid)) {
+        exec(`taskkill /PID ${pid} /T /F 2>nul`);
         killed.push(pid);
       }
     }

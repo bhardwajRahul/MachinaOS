@@ -1,4 +1,4 @@
-// Skill Node Definitions - Skill nodes for Chat Agent capabilities
+// Skill Node Definitions - Skill nodes for Zeenie capabilities
 import {
   INodeTypeDescription,
   NodeConnectionType
@@ -6,7 +6,7 @@ import {
 import { WHATSAPP_CONNECT_ICON } from './whatsappNodes';
 
 // ============================================================================
-// SKILL NODES - Connect to Chat Agent's input-skill handle
+// SKILL NODES - Connect to Zeenie's input-skill handle
 // ============================================================================
 
 // Factory function for creating skill node definitions
@@ -34,7 +34,7 @@ function createSkillNode(config: {
       name: 'skill',
       displayName: 'Skill',
       type: 'main' as NodeConnectionType,
-      description: 'Connect to Chat Agent skill handle'
+      description: 'Connect to Zeenie skill handle'
     }],
     properties: [
       {
@@ -83,7 +83,7 @@ export const skillNodes: Record<string, INodeTypeDescription> = {
     color: '#25D366',
     skillName: 'whatsapp-skill',
     subtitle: 'Messaging',
-    description: 'Send and receive WhatsApp messages via Chat Agent'
+    description: 'Send and receive WhatsApp messages via Zeenie'
   }),
 
   // Memory Skill - Remember and recall information
@@ -161,6 +161,17 @@ export const skillNodes: Record<string, INodeTypeDescription> = {
     description: 'Execute Python or JavaScript code for calculations and data processing'
   }),
 
+  // Web Search Skill - Search the web for information
+  webSearchSkill: createSkillNode({
+    name: 'webSearchSkill',
+    displayName: 'Web Search Skill',
+    icon: '🔍',
+    color: '#bd93f9',
+    skillName: 'web-search-skill',
+    subtitle: 'Web Search',
+    description: 'Search the web for current information, news, facts, and real-time data'
+  }),
+
   // Custom Skill - User-created skill
   customSkill: {
     displayName: 'Custom Skill',
@@ -176,7 +187,7 @@ export const skillNodes: Record<string, INodeTypeDescription> = {
       name: 'skill',
       displayName: 'Skill',
       type: 'main' as NodeConnectionType,
-      description: 'Connect to Chat Agent skill handle'
+      description: 'Connect to Zeenie skill handle'
     }],
     properties: [
       {
@@ -204,6 +215,7 @@ export const SKILL_NODE_TYPES = [
   'schedulerSkill',
   'androidSkill',
   'codeSkill',
+  'webSearchSkill',
   'customSkill'
 ];
 

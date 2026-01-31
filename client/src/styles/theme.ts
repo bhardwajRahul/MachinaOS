@@ -223,7 +223,12 @@ export const theme = {
     medium: '500',
     semibold: '600',
   },
-  
+
+  fontFamily: {
+    sans: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+    mono: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, monospace',
+  },
+
   borderRadius: {
     sm: '4px',
     md: '6px',

@@ -24,14 +24,14 @@ from pydantic import ValidationError
 from services import event_waiter
 from services.handlers import (
     handle_ai_agent, handle_chat_agent, handle_ai_chat_model, handle_simple_memory,
-    handle_android_device_setup, handle_android_service,
+    handle_android_service,
     handle_python_executor, handle_javascript_executor,
     handle_http_request, handle_webhook_response, handle_trigger_node,
     handle_create_map, handle_add_locations, handle_nearby_places,
     handle_text_generator, handle_file_handler,
     handle_chat_send, handle_chat_history,
     handle_start, handle_cron_scheduler, handle_timer, handle_console,
-    handle_whatsapp_send, handle_whatsapp_connect, handle_whatsapp_db,
+    handle_whatsapp_send, handle_whatsapp_db,
     handle_http_scraper, handle_file_downloader, handle_document_parser,
     handle_text_chunker, handle_embedding_generator, handle_vector_store,
 )
@@ -117,15 +117,12 @@ class NodeExecutor:
             'fileHandler': partial(handle_file_handler, text_service=self.text_service),
             # WhatsApp
             'whatsappSend': handle_whatsapp_send,
-            'whatsappConnect': handle_whatsapp_connect,
             'whatsappDb': handle_whatsapp_db,
             # Chat
             'chatSend': handle_chat_send,
             'chatHistory': handle_chat_history,
             # HTTP
             'httpRequest': handle_http_request,
-            # Android setup
-            'androidDeviceSetup': partial(handle_android_device_setup, settings=self.settings),
             # Document processing
             'httpScraper': handle_http_scraper,
             'fileDownloader': handle_file_downloader,

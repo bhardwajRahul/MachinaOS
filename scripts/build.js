@@ -2,6 +2,11 @@
 /**
  * Cross-platform build script for MachinaOS.
  * Works on: Windows, macOS, Linux, WSL, Git Bash
+ *
+ * Automatically installs missing dependencies:
+ * - Python 3.11+ (via winget/brew/apt)
+ * - uv (Python package manager)
+ * - Go (for WhatsApp service)
  */
 import { execSync } from 'child_process';
 import { existsSync, copyFileSync } from 'fs';
@@ -11,6 +16,10 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 
+// Platform detection
+const isWindows = process.platform === 'win32';
+const isMac = process.platform === 'darwin';
+
 // Ensure Python UTF-8 encoding
 process.env.PYTHONUTF8 = '1';
 
@@ -18,7 +27,7 @@ function run(cmd, cwd = ROOT) {
   execSync(cmd, { cwd, stdio: 'inherit', shell: true });
 }
 
-function check(cmd) {
+function runSilent(cmd) {
   try {
     execSync(cmd, { stdio: 'pipe', shell: true });
     return true;
@@ -40,7 +49,6 @@ function log(step, msg) {
 }
 
 function npmInstall(cwd = ROOT) {
-  // Try npm ci first (fast), fall back to npm install if lock file out of sync
   try {
     execSync('npm ci', { cwd, stdio: 'pipe', shell: true });
   } catch {
@@ -49,70 +57,166 @@ function npmInstall(cwd = ROOT) {
 }
 
 // ============================================================================
-// Check Dependencies
+// Auto-install missing dependencies
+// ============================================================================
+
+function installPython() {
+  console.log('  Installing Python 3.11+...');
+  if (isWindows) {
+    // Try winget first, then choco
+    if (runSilent('winget --version')) {
+      run('winget install Python.Python.3.12 --accept-package-agreements --accept-source-agreements');
+    } else if (runSilent('choco --version')) {
+      run('choco install python312 -y');
+    } else {
+      console.error('  Error: Please install Python manually from https://python.org/');
+      console.error('  Or install winget/chocolatey first.');
+      process.exit(1);
+    }
+  } else if (isMac) {
+    if (runSilent('brew --version')) {
+      run('brew install python@3.12');
+    } else {
+      console.error('  Error: Please install Homebrew first: https://brew.sh/');
+      process.exit(1);
+    }
+  } else {
+    // Linux
+    if (runSilent('apt --version')) {
+      run('sudo apt update && sudo apt install -y python3.12 python3.12-venv');
+    } else if (runSilent('dnf --version')) {
+      run('sudo dnf install -y python3.12');
+    } else if (runSilent('pacman --version')) {
+      run('sudo pacman -S --noconfirm python');
+    } else {
+      console.error('  Error: Please install Python manually from https://python.org/');
+      process.exit(1);
+    }
+  }
+}
+
+function installUv() {
+  console.log('  Installing uv...');
+  if (isWindows) {
+    run('powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"');
+  } else {
+    run('curl -LsSf https://astral.sh/uv/install.sh | sh');
+  }
+  // Add to PATH for current session
+  if (isWindows) {
+    process.env.PATH = `${process.env.USERPROFILE}\\.local\\bin;${process.env.PATH}`;
+  } else {
+    process.env.PATH = `${process.env.HOME}/.local/bin:${process.env.PATH}`;
+  }
+}
+
+function installGo() {
+  console.log('  Installing Go...');
+  if (isWindows) {
+    if (runSilent('winget --version')) {
+      run('winget install GoLang.Go --accept-package-agreements --accept-source-agreements');
+    } else if (runSilent('choco --version')) {
+      run('choco install golang -y');
+    } else {
+      console.error('  Error: Please install Go manually from https://go.dev/dl/');
+      process.exit(1);
+    }
+  } else if (isMac) {
+    if (runSilent('brew --version')) {
+      run('brew install go');
+    } else {
+      console.error('  Error: Please install Homebrew first: https://brew.sh/');
+      process.exit(1);
+    }
+  } else {
+    if (runSilent('apt --version')) {
+      run('sudo apt update && sudo apt install -y golang-go');
+    } else if (runSilent('dnf --version')) {
+      run('sudo dnf install -y golang');
+    } else if (runSilent('pacman --version')) {
+      run('sudo pacman -S --noconfirm go');
+    } else {
+      console.error('  Error: Please install Go manually from https://go.dev/dl/');
+      process.exit(1);
+    }
+  }
+}
+
+// ============================================================================
+// Check and Install Dependencies
 // ============================================================================
 
 console.log('Checking dependencies...\n');
 
-const missing = [];
-
-// Node.js
+// Node.js (must already be installed to run this script)
 const nodeVersion = getVersion('node --version');
-if (nodeVersion) {
-  console.log(`  Node.js: ${nodeVersion}`);
-} else {
-  missing.push('Node.js - https://nodejs.org/');
-}
+console.log(`  Node.js: ${nodeVersion}`);
 
-// npm
 const npmVersion = getVersion('npm --version');
-if (npmVersion) {
-  console.log(`  npm: ${npmVersion}`);
-} else {
-  missing.push('npm - comes with Node.js');
-}
+console.log(`  npm: ${npmVersion}`);
 
 // Python
 let pyCmd = null;
-if (check('python --version')) {
+if (runSilent('python --version')) {
   pyCmd = 'python';
-} else if (check('python3 --version')) {
+} else if (runSilent('python3 --version')) {
   pyCmd = 'python3';
 }
+
 if (pyCmd) {
   const pyVersion = getVersion(`${pyCmd} --version`);
-  console.log(`  ${pyVersion}`);
+  const match = pyVersion?.match(/Python (\d+)\.(\d+)/);
+  if (match) {
+    const [, major, minor] = match.map(Number);
+    if (major >= 3 && minor >= 11) {
+      console.log(`  ${pyVersion}`);
+    } else {
+      console.log(`  ${pyVersion} (too old, need 3.11+)`);
+      installPython();
+    }
+  }
 } else {
-  missing.push('Python 3.11+ - https://python.org/');
+  installPython();
+  // Re-check
+  pyCmd = runSilent('python --version') ? 'python' : 'python3';
+  console.log(`  ${getVersion(`${pyCmd} --version`)}`);
 }
 
-// uv (Python package manager)
-const uvVersion = getVersion('uv --version');
+// uv
+let uvVersion = getVersion('uv --version');
 if (uvVersion) {
   console.log(`  uv: ${uvVersion}`);
 } else {
-  missing.push('uv - https://docs.astral.sh/uv/getting-started/installation/');
+  installUv();
+  uvVersion = getVersion('uv --version');
+  if (uvVersion) {
+    console.log(`  uv: ${uvVersion}`);
+  } else {
+    console.error('  Error: Failed to install uv. Please install manually.');
+    console.error('  https://docs.astral.sh/uv/getting-started/installation/');
+    process.exit(1);
+  }
 }
 
-// Go (required for WhatsApp server)
-const goVersionFull = getVersion('go version');
+// Go
+let goVersionFull = getVersion('go version');
 if (goVersionFull) {
   const goVersion = goVersionFull.match(/go\d+\.\d+(\.\d+)?/)?.[0] || 'go';
   console.log(`  Go: ${goVersion}`);
 } else {
-  missing.push('Go - https://go.dev/dl/');
-}
-
-if (missing.length > 0) {
-  console.error('\nMissing required dependencies:\n');
-  for (const dep of missing) {
-    console.error(`  - ${dep}`);
+  installGo();
+  goVersionFull = getVersion('go version');
+  if (goVersionFull) {
+    const goVersion = goVersionFull.match(/go\d+\.\d+(\.\d+)?/)?.[0] || 'go';
+    console.log(`  Go: ${goVersion}`);
+  } else {
+    console.error('  Error: Failed to install Go. Please install manually.');
+    console.error('  https://go.dev/dl/');
+    process.exit(1);
   }
-  console.error('\nPlease install the missing dependencies and try again.');
-  process.exit(1);
 }
 
-console.log('\nAll dependencies found.\n');
+console.log('\nAll dependencies ready.\n');
 
 // ============================================================================
 // Build

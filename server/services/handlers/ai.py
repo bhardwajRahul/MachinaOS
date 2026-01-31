@@ -1,4 +1,4 @@
-"""AI node handlers - AI Agent, Chat Agent, AI Chat Model, Simple Memory."""
+"""AI node handlers - AI Agent, Zeenie, AI Chat Model, Simple Memory."""
 
 from typing import Dict, Any, List, Optional, TYPE_CHECKING
 from core.logging import get_logger
@@ -162,9 +162,9 @@ async def handle_chat_agent(
     ai_service: "AIService",
     database: "Database"
 ) -> Dict[str, Any]:
-    """Handle Chat Agent node execution with skill-based tool calling.
+    """Handle Zeenie node execution with skill-based tool calling.
 
-    Chat Agent supports:
+    Zeenie supports:
     - Memory (input-memory): SimpleMemory node for conversation history
     - Skills (input-skill): Provide context/instructions via SKILL.md
     - Tools (input-tools): Tool nodes (httpRequest, etc.) for LangGraph tool calling
@@ -249,6 +249,41 @@ async def handle_chat_agent(
                     'parameters': tool_params,
                     'label': source_node.get('data', {}).get('label', tool_type)
                 }
+
+                # Special handling for androidTool - discover connected Android services
+                # Follows n8n Sub-Node pattern (same as AI Agent)
+                if tool_type == 'androidTool':
+                    connected_services = []
+
+                    # Scan edges for Android nodes connected to this toolkit
+                    for service_edge in edges:
+                        # Skip if not targeting this androidTool node
+                        if service_edge.get('target') != source_node_id:
+                            continue
+
+                        service_target_handle = service_edge.get('targetHandle')
+                        # Accept input-main or no handle (ReactFlow may omit handle for single-input nodes)
+                        if service_target_handle is not None and service_target_handle != 'input-main':
+                            continue
+
+                        android_node_id = service_edge.get('source')
+                        android_node = next((n for n in nodes if n.get('id') == android_node_id), None)
+
+                        if android_node and android_node.get('type') in ANDROID_SERVICE_NODE_TYPES:
+                            android_params = await database.get_node_parameters(android_node_id) or {}
+                            connected_services.append({
+                                'node_id': android_node_id,
+                                'node_type': android_node.get('type'),
+                                'service_id': android_params.get('service_id'),
+                                'action': android_params.get('action'),
+                                'parameters': android_params,
+                                'label': android_node.get('data', {}).get('label', android_node.get('type'))
+                            })
+                            logger.debug(f"[Chat Agent] Android toolkit connected service: {android_params.get('service_id')}")
+
+                    tool_entry['connected_services'] = connected_services
+                    logger.info(f"[Chat Agent] Android toolkit has {len(connected_services)} connected services")
+
                 tool_data.append(tool_entry)
                 logger.info(f"[Chat Agent] Connected tool: {tool_type} ({tool_entry['label']})")
 

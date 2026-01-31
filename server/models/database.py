@@ -180,8 +180,33 @@ class ChatMessage(SQLModel, table=True):
     )
 
 
+class ConsoleLog(SQLModel, table=True):
+    """Console panel logs - persisted across server restarts.
+
+    Stores output from Console nodes during workflow execution.
+    Separate from chat_messages which stores Chat panel messages.
+    """
+
+    __tablename__ = "console_logs"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    node_id: str = Field(index=True, max_length=255)  # Console node ID
+    label: str = Field(max_length=255)  # User-defined label
+    workflow_id: Optional[str] = Field(default=None, max_length=255)
+    data: str = Field(max_length=100000)  # JSON-encoded data
+    formatted: str = Field(max_length=100000)  # Pre-formatted string
+    format: str = Field(default="text", max_length=20)  # json, json_compact, text, table
+    source_node_id: Optional[str] = Field(default=None, max_length=255)
+    source_node_type: Optional[str] = Field(default=None, max_length=100)
+    source_node_label: Optional[str] = Field(default=None, max_length=255)
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(DateTime(timezone=True), server_default=func.now())
+    )
+
+
 class UserSkill(SQLModel, table=True):
-    """User-created custom skills for Chat Agent.
+    """User-created custom skills for Zeenie.
 
     Skills are defined using the Agent Skills specification format with YAML frontmatter.
     This allows non-technical users to create and manage skills via the UI editor.

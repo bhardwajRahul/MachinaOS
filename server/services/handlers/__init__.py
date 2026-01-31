@@ -9,7 +9,7 @@ This package contains all node execution handlers organized by category:
 - tools.py: Tool execution handlers for AI Agent tool calling
 - triggers.py: Generic trigger node handler
 - utility.py: Maps, Text, Chat, Cron, Start
-- whatsapp.py: WhatsApp Send, WhatsApp Connect
+- whatsapp.py: WhatsApp Send, WhatsApp DB
 - polyglot.py: Polyglot server integration (standalone, not auto-imported)
 """
 
@@ -23,7 +23,6 @@ from .ai import (
 
 # Android handlers
 from .android import (
-    handle_android_device_setup,
     handle_android_service,
 )
 
@@ -62,7 +61,6 @@ from .utility import (
 # WhatsApp handlers
 from .whatsapp import (
     handle_whatsapp_send,
-    handle_whatsapp_connect,
     handle_whatsapp_db,
 )
 
@@ -88,7 +86,6 @@ __all__ = [
     'handle_ai_chat_model',
     'handle_simple_memory',
     # Android
-    'handle_android_device_setup',
     'handle_android_service',
     # Code
     'handle_python_executor',
@@ -112,7 +109,6 @@ __all__ = [
     'handle_console',
     # WhatsApp
     'handle_whatsapp_send',
-    'handle_whatsapp_connect',
     'handle_whatsapp_db',
     # Document processing
     'handle_http_scraper',

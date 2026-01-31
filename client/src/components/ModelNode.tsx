@@ -31,10 +31,10 @@ const ModelNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectabl
   const executionStatus = nodeStatus?.status || 'idle';
   const isExecuting = executionStatus === 'executing' || executionStatus === 'waiting';
 
-  const definition = nodeDefinitions[type as keyof typeof nodeDefinitions];
-
-  // Check if this is a tool node
+  // Check if this is a tool node (for status indicator tooltip)
   const isToolNode = type ? ['calculatorTool', 'currentTimeTool', 'webSearchTool'].includes(type) : false;
+
+  const definition = nodeDefinitions[type as keyof typeof nodeDefinitions];
 
   // Determine provider from node definition or type
   const provider = useMemo(() => {

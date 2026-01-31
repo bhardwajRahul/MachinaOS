@@ -1,4 +1,4 @@
-"""WhatsApp node handlers - Send and Connect."""
+"""WhatsApp node handlers - Send and DB operations."""
 
 import time
 from datetime import datetime
@@ -106,59 +106,6 @@ async def handle_whatsapp_send(
             "success": False,
             "node_id": node_id,
             "node_type": "whatsappSend",
-            "error": str(e),
-            "execution_time": time.time() - start_time,
-            "timestamp": datetime.now().isoformat()
-        }
-
-
-async def handle_whatsapp_connect(
-    node_id: str,
-    node_type: str,
-    parameters: Dict[str, Any],
-    context: Dict[str, Any]
-) -> Dict[str, Any]:
-    """Handle WhatsApp connect - check status via Go RPC service.
-
-    Args:
-        node_id: The node ID
-        node_type: The node type (whatsappConnect)
-        parameters: Resolved parameters
-        context: Execution context
-
-    Returns:
-        Execution result dict with connection status
-    """
-    from routers.whatsapp import handle_whatsapp_status
-    start_time = time.time()
-
-    try:
-        # Call WhatsApp Go RPC service via handler
-        data = await handle_whatsapp_status()
-
-        result_data = data.get('data', {})
-        return {
-            "success": data.get('success', False),
-            "node_id": node_id,
-            "node_type": "whatsappConnect",
-            "result": {
-                "connected": result_data.get('connected', False),
-                "device_id": result_data.get('device_id'),
-                "has_session": result_data.get('has_session', False),
-                "running": result_data.get('running', False),
-                "status": "connected" if result_data.get('connected') else "disconnected",
-                "timestamp": datetime.now().isoformat()
-            },
-            "execution_time": time.time() - start_time,
-            "timestamp": datetime.now().isoformat()
-        }
-
-    except Exception as e:
-        logger.error("WhatsApp connect failed", node_id=node_id, error=str(e))
-        return {
-            "success": False,
-            "node_id": node_id,
-            "node_type": "whatsappConnect",
             "error": str(e),
             "execution_time": time.time() - start_time,
             "timestamp": datetime.now().isoformat()

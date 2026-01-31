@@ -76,6 +76,9 @@ docs-internal/
 CLAUDE.md
 .claude/
 
+# Experiments (work in progress)
+server/experiments/
+
 # Duplicate folder
 MachinaOS/
 

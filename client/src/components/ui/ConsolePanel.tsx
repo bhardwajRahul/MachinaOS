@@ -10,6 +10,9 @@
 
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { Node } from 'reactflow';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 import { useWebSocket, ConsoleLogEntry } from '../../contexts/WebSocketContext';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -373,6 +376,77 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
     .console-json-output .token.property { color: ${theme.dracula.cyan}; }
     .console-json-output .token.punctuation { color: ${theme.colors.text}; }
     .console-json-output .token.operator { color: ${theme.dracula.pink}; }
+
+    /* Chat markdown styles */
+    .chat-markdown p { margin: 0 0 8px 0; }
+    .chat-markdown p:last-child { margin-bottom: 0; }
+    .chat-markdown h1, .chat-markdown h2, .chat-markdown h3 {
+      margin: 12px 0 8px 0;
+      font-weight: 600;
+      color: ${theme.colors.text};
+    }
+    .chat-markdown h1:first-child, .chat-markdown h2:first-child, .chat-markdown h3:first-child {
+      margin-top: 0;
+    }
+    .chat-markdown h1 { font-size: 1.25em; }
+    .chat-markdown h2 { font-size: 1.1em; }
+    .chat-markdown h3 { font-size: 1em; }
+    .chat-markdown strong { font-weight: 600; color: ${theme.colors.text}; }
+    .chat-markdown em { font-style: italic; }
+    .chat-markdown ul, .chat-markdown ol {
+      margin: 8px 0;
+      padding-left: 20px;
+    }
+    .chat-markdown li { margin: 4px 0; }
+    .chat-markdown code {
+      background-color: ${isDarkMode ? theme.dracula.currentLine : `${theme.colors.border}50`};
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, monospace;
+      font-size: 0.9em;
+    }
+    .chat-markdown pre {
+      background-color: ${isDarkMode ? theme.dracula.currentLine : theme.colors.backgroundPanel};
+      padding: 12px;
+      border-radius: 6px;
+      overflow-x: auto;
+      margin: 8px 0;
+    }
+    .chat-markdown pre code {
+      background: none;
+      padding: 0;
+    }
+    .chat-markdown table {
+      border-collapse: collapse;
+      margin: 8px 0;
+      width: 100%;
+      font-size: 0.9em;
+    }
+    .chat-markdown th, .chat-markdown td {
+      border: 1px solid ${isDarkMode ? theme.dracula.selection : theme.colors.border};
+      padding: 6px 10px;
+      text-align: left;
+    }
+    .chat-markdown th {
+      background-color: ${isDarkMode ? theme.dracula.currentLine : theme.colors.backgroundPanel};
+      font-weight: 600;
+    }
+    .chat-markdown blockquote {
+      border-left: 3px solid ${isDarkMode ? theme.dracula.purple : theme.colors.primary};
+      margin: 8px 0;
+      padding: 4px 12px;
+      color: ${theme.colors.textSecondary};
+    }
+    .chat-markdown a {
+      color: ${isDarkMode ? theme.dracula.cyan : theme.colors.primary};
+      text-decoration: none;
+    }
+    .chat-markdown a:hover { text-decoration: underline; }
+    .chat-markdown hr {
+      border: none;
+      border-top: 1px solid ${isDarkMode ? theme.dracula.selection : theme.colors.border};
+      margin: 12px 0;
+    }
   `;
 
   // Resize handle style
@@ -486,6 +560,7 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
     padding: '2px 6px',
     borderRadius: theme.borderRadius.sm,
     fontSize: theme.fontSize.xs,
+    fontFamily: theme.fontFamily.sans,
     color: theme.colors.textSecondary,
     transition: theme.transitions.fast
   };
@@ -499,6 +574,7 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
   const filterInputStyle: React.CSSProperties = {
     padding: '2px 6px',
     fontSize: theme.fontSize.xs,
+    fontFamily: theme.fontFamily.sans,
     backgroundColor: isDarkMode ? theme.dracula.background : theme.colors.background,
     border: `1px solid ${theme.colors.border}`,
     borderRadius: theme.borderRadius.sm,
@@ -511,6 +587,7 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
   const selectStyle: React.CSSProperties = {
     padding: '2px 4px',
     fontSize: theme.fontSize.xs,
+    fontFamily: theme.fontFamily.sans,
     backgroundColor: isDarkMode ? theme.dracula.currentLine : theme.colors.background,
     color: theme.colors.text,
     border: `1px solid ${isDarkMode ? theme.dracula.selection : theme.colors.border}`,
@@ -549,7 +626,7 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
   const nodeInfoStyle: React.CSSProperties = {
     color: isDarkMode ? theme.dracula.pink : theme.colors.categoryTrigger,
     fontSize: theme.fontSize.xs,
-    fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, monospace',
+    fontFamily: theme.fontFamily.mono,
     minWidth: '80px',
     maxWidth: '120px',
     overflow: 'hidden',
@@ -579,7 +656,9 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
   const chatMessagesStyle: React.CSSProperties = {
     flex: 1,
     overflow: 'auto',
-    padding: '12px 16px'
+    padding: '12px 16px',
+    fontFamily: theme.fontFamily.sans,
+    fontSize: theme.fontSize.sm,
   };
 
   const chatInputContainerStyle: React.CSSProperties = {
@@ -594,6 +673,7 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
     flex: 1,
     padding: '8px 12px',
     fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.sans,
     backgroundColor: isDarkMode ? theme.dracula.background : theme.colors.background,
     border: `1px solid ${isDarkMode ? theme.dracula.selection : theme.colors.border}`,
     borderRadius: '8px',
@@ -604,6 +684,7 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
   const sendButtonStyle: React.CSSProperties = {
     padding: '6px 12px',
     fontSize: theme.fontSize.xs,
+    fontFamily: theme.fontFamily.sans,
     fontWeight: theme.fontWeight.medium,
     backgroundColor: isDarkMode ? theme.dracula.green : theme.colors.success,
     color: isDarkMode ? theme.dracula.background : 'white',
@@ -747,17 +828,25 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 {chatMessages.map((msg, index) => (
                   <div key={`${msg.timestamp}-${index}`} style={chatMessageStyle(msg.role === 'user')}>
-                    <pre style={{
-                      ...chatMessageTextStyle,
-                      margin: 0,
-                      whiteSpace: 'pre-wrap',
-                      wordBreak: 'break-word',
-                      lineHeight: 1.15,
-                      fontFamily: 'inherit',
-                      fontSize: 'inherit'
-                    }}>
-                      {msg.message}
-                    </pre>
+                    {msg.role === 'user' ? (
+                      <pre style={{
+                        ...chatMessageTextStyle,
+                        margin: 0,
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-word',
+                        lineHeight: 1.15,
+                        fontFamily: 'inherit',
+                        fontSize: 'inherit'
+                      }}>
+                        {msg.message}
+                      </pre>
+                    ) : (
+                      <div className="chat-markdown" style={{ ...chatMessageTextStyle, lineHeight: 1.4 }}>
+                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
+                          {msg.message}
+                        </ReactMarkdown>
+                      </div>
+                    )}
                     <div style={chatMessageTimeStyle}>
                       {formatTimestamp(msg.timestamp)}
                     </div>
@@ -956,7 +1045,7 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
               )}
             </div>
           </div>
-          <div style={{ flex: 1, overflow: 'auto', fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, monospace', fontSize: theme.fontSize.sm }}>
+          <div style={{ flex: 1, overflow: 'auto', fontFamily: theme.fontFamily.mono, fontSize: theme.fontSize.sm }}>
             {consoleTab === 'console' ? (
               // Console Logs Tab
               filteredLogs.length === 0 ? (
@@ -979,35 +1068,54 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
                     )}
                     {(() => {
                       const { formatted, isJson } = formatForDisplay(log.formatted);
-                      return isJson && prettyPrint ? (
-                        <pre
-                          className="console-json-output"
-                          style={{
-                            margin: 0,
-                            flex: 1,
-                            overflow: 'auto',
-                            whiteSpace: 'pre-wrap',
-                            wordBreak: 'break-word'
-                          }}
-                          dangerouslySetInnerHTML={{ __html: highlightJson(formatted) }}
-                        />
-                      ) : (
-                        <pre
-                          style={{
-                            margin: 0,
-                            flex: 1,
-                            overflow: 'auto',
-                            color: getFormatColor(log.format),
-                            whiteSpace: 'pre-wrap',
-                            wordBreak: 'break-word',
-                            lineHeight: 1.15,
-                            fontFamily: 'inherit',
-                            fontSize: 'inherit'
-                          }}
-                        >
-                          {formatted}
-                        </pre>
-                      );
+                      if (isJson && prettyPrint) {
+                        return (
+                          <pre
+                            className="console-json-output"
+                            style={{
+                              margin: 0,
+                              flex: 1,
+                              overflow: 'auto',
+                              whiteSpace: 'pre-wrap',
+                              wordBreak: 'break-word'
+                            }}
+                            dangerouslySetInnerHTML={{ __html: highlightJson(formatted) }}
+                          />
+                        );
+                      } else if (!isJson && prettyPrint) {
+                        // Render markdown when Pretty Print is enabled for non-JSON text
+                        return (
+                          <div
+                            className="chat-markdown"
+                            style={{
+                              flex: 1,
+                              overflow: 'auto',
+                              color: getFormatColor(log.format),
+                              lineHeight: 1.4,
+                            }}
+                          >
+                            <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{formatted}</ReactMarkdown>
+                          </div>
+                        );
+                      } else {
+                        return (
+                          <pre
+                            style={{
+                              margin: 0,
+                              flex: 1,
+                              overflow: 'auto',
+                              color: getFormatColor(log.format),
+                              whiteSpace: 'pre-wrap',
+                              wordBreak: 'break-word',
+                              lineHeight: 1.15,
+                              fontFamily: 'inherit',
+                              fontSize: 'inherit'
+                            }}
+                          >
+                            {formatted}
+                          </pre>
+                        );
+                      }
                     })()}
                   </div>
                 ))

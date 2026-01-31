@@ -945,20 +945,22 @@ async def handle_execute_ai_node(data: Dict[str, Any], websocket: WebSocket) -> 
     workflow_service = container.workflow_service()
     broadcaster = get_status_broadcaster()
     node_id, node_type = data["node_id"], data["node_type"]
+    workflow_id = data.get("workflow_id")  # Per-workflow isolation for tool node glowing
 
-    await broadcaster.update_node_status(node_id, "executing")
+    await broadcaster.update_node_status(node_id, "executing", workflow_id=workflow_id)
     result = await workflow_service.execute_node(
         node_id=node_id, node_type=node_type,
         parameters=data.get("parameters", {}),
         nodes=data.get("nodes", []), edges=data.get("edges", []),
-        session_id=data.get("session_id", "default")
+        session_id=data.get("session_id", "default"),
+        workflow_id=workflow_id,
     )
 
     if result.get("success"):
-        await broadcaster.update_node_status(node_id, "success", result.get("result"))
-        await broadcaster.update_node_output(node_id, result.get("result"))
+        await broadcaster.update_node_status(node_id, "success", result.get("result"), workflow_id=workflow_id)
+        await broadcaster.update_node_output(node_id, result.get("result"), workflow_id=workflow_id)
     else:
-        await broadcaster.update_node_status(node_id, "error", {"error": result.get("error")})
+        await broadcaster.update_node_status(node_id, "error", {"error": result.get("error")}, workflow_id=workflow_id)
 
     return {"node_id": node_id, "result": result.get("result"), "error": result.get("error"),
             "execution_time": result.get("execution_time"), "timestamp": time.time()}
@@ -1054,37 +1056,6 @@ async def handle_execute_android_action(data: Dict[str, Any], websocket: WebSock
 
     status = "success" if result.get("success") else "error"
     await broadcaster.update_node_status(node_id, status, result.get("result") or {"error": result.get("error")})
-    return result
-
-
-@ws_handler()
-async def handle_setup_android_device(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
-    """Setup Android device connection."""
-    workflow_service = container.workflow_service()
-    broadcaster = get_status_broadcaster()
-    connection_type = data.get("connection_type", "local")
-
-    result = await workflow_service.execute_node(
-        node_id=data.get("node_id", "android_setup"),
-        node_type="androidDeviceSetup",
-        parameters={
-            "connection_type": connection_type,
-            "device_id": data.get("device_id", ""),
-            "websocket_url": data.get("websocket_url", ""),
-            "port": data.get("port", 8888),
-            "auto_forward": data.get("auto_forward", True)
-        }
-    )
-
-    if result.get("success"):
-        info = result.get("result", {})
-        has_device = info.get("has_real_device", False)
-        await broadcaster.update_android_status(
-            connected=has_device,
-            device_id=info.get("android_device") if has_device else None,
-            connected_devices=info.get("connected_devices", []),
-            connection_type=connection_type if has_device else "proxy_only"
-        )
     return result
 
 
@@ -1316,6 +1287,7 @@ from routers.whatsapp import (
     handle_whatsapp_groups as _wa_groups,
     handle_whatsapp_group_info as _wa_group_info,
     handle_whatsapp_chat_history as _wa_chat_history,
+    whatsapp_rpc_call as _wa_rpc_call,
 )
 
 
@@ -1353,6 +1325,31 @@ async def handle_whatsapp_group_info(data: Dict[str, Any], websocket: WebSocket)
 async def handle_whatsapp_chat_history(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
     """Get chat history from WhatsApp history store."""
     return await _wa_chat_history(data)
+
+
+async def handle_whatsapp_rate_limit_get(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Get rate limit config and current stats."""
+    result = await _wa_rpc_call("rate_limit_get", {})
+    return result
+
+
+async def handle_whatsapp_rate_limit_set(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Update rate limit configuration."""
+    config = data.get("config", {})
+    result = await _wa_rpc_call("rate_limit_set", config)
+    return result
+
+
+async def handle_whatsapp_rate_limit_stats(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Get current rate limit statistics."""
+    result = await _wa_rpc_call("rate_limit_stats", {})
+    return result
+
+
+async def handle_whatsapp_rate_limit_unpause(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Resume rate limiting after automatic pause."""
+    result = await _wa_rpc_call("rate_limit_unpause", {})
+    return result
 
 
 # ============================================================================
@@ -1484,6 +1481,38 @@ async def handle_clear_chat_messages(data: Dict[str, Any], websocket: WebSocket)
     return {
         "success": True,
         "message": f"Cleared {count} chat messages",
+        "cleared_count": count
+    }
+
+
+@ws_handler()
+async def handle_get_console_logs(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Get console logs from database."""
+    limit = data.get("limit", 100)
+
+    database = container.database()
+    logs = await database.get_console_logs(limit)
+
+    return {
+        "success": True,
+        "logs": logs
+    }
+
+
+@ws_handler()
+async def handle_clear_console_logs(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Clear all console logs from database and memory."""
+    database = container.database()
+    count = await database.clear_console_logs()
+
+    # Also clear in-memory logs
+    broadcaster = get_status_broadcaster()
+    if "console_logs" in broadcaster._status:
+        broadcaster._status["console_logs"] = []
+
+    return {
+        "success": True,
+        "message": f"Cleared {count} console logs",
         "cleared_count": count
     }
 
@@ -1753,6 +1782,78 @@ async def handle_delete_user_skill(data: Dict[str, Any], websocket: WebSocket) -
 
 
 # ============================================================================
+# Memory and Skill Clear/Reset Handlers
+# ============================================================================
+
+@ws_handler()
+async def handle_clear_memory(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Clear memory content and optionally the long-term vector store."""
+    from services.ai import _memory_vector_stores
+
+    session_id = data.get("session_id", "default")
+    clear_long_term = data.get("clear_long_term", False)
+
+    default_content = "# Conversation History\n\n*No messages yet.*\n"
+    cleared_vector_store = False
+
+    if clear_long_term and session_id in _memory_vector_stores:
+        del _memory_vector_stores[session_id]
+        cleared_vector_store = True
+        logger.info(f"[Memory] Cleared vector store for session '{session_id}'")
+
+    logger.info(f"[Memory] Cleared memory content for session '{session_id}', vector_store={cleared_vector_store}")
+
+    return {
+        "success": True,
+        "default_content": default_content,
+        "cleared_vector_store": cleared_vector_store,
+        "session_id": session_id
+    }
+
+
+@ws_handler("skill_name")
+async def handle_reset_skill(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Get original SKILL.md content for resetting a built-in skill."""
+    import re
+    from services.skill_loader import get_skill_loader
+
+    skill_name = data["skill_name"]
+    skill_loader = get_skill_loader()
+
+    # Check if skill exists in registry
+    if skill_name not in skill_loader._registry:
+        return {"success": False, "error": f"Skill '{skill_name}' not found"}
+
+    metadata = skill_loader._registry[skill_name]
+
+    # User skills don't have a default to reset to
+    if metadata.path is None:
+        return {"success": False, "error": f"Cannot reset user skill '{skill_name}' - no default exists"}
+
+    skill_md_path = metadata.path / "SKILL.md"
+    if not skill_md_path.exists():
+        return {"success": False, "error": f"SKILL.md not found for '{skill_name}'"}
+
+    content = skill_md_path.read_text(encoding='utf-8')
+
+    # Extract body after frontmatter
+    frontmatter_match = re.match(r'^---\s*\n.*?\n---\s*\n', content, re.DOTALL)
+    if frontmatter_match:
+        original_instructions = content[frontmatter_match.end():]
+    else:
+        original_instructions = content
+
+    logger.info(f"[Skill] Reset skill '{skill_name}' to default content")
+
+    return {
+        "success": True,
+        "skill_name": skill_name,
+        "original_content": original_instructions,
+        "is_builtin": True
+    }
+
+
+# ============================================================================
 # Message Router
 # ============================================================================
 
@@ -1815,7 +1916,6 @@ MESSAGE_HANDLERS: Dict[str, MessageHandler] = {
     # Android operations
     "get_android_devices": handle_get_android_devices,
     "execute_android_action": handle_execute_android_action,
-    "setup_android_device": handle_setup_android_device,
     "android_relay_connect": handle_android_relay_connect,
     "android_relay_disconnect": handle_android_relay_disconnect,
     "android_relay_reconnect": handle_android_relay_reconnect,
@@ -1832,6 +1932,10 @@ MESSAGE_HANDLERS: Dict[str, MessageHandler] = {
     "whatsapp_groups": handle_whatsapp_groups,
     "whatsapp_group_info": handle_whatsapp_group_info,
     "whatsapp_chat_history": handle_whatsapp_chat_history,
+    "whatsapp_rate_limit_get": handle_whatsapp_rate_limit_get,
+    "whatsapp_rate_limit_set": handle_whatsapp_rate_limit_set,
+    "whatsapp_rate_limit_stats": handle_whatsapp_rate_limit_stats,
+    "whatsapp_rate_limit_unpause": handle_whatsapp_rate_limit_unpause,
 
     # Workflow storage operations
     "save_workflow": handle_save_workflow,
@@ -1844,6 +1948,10 @@ MESSAGE_HANDLERS: Dict[str, MessageHandler] = {
     "get_chat_messages": handle_get_chat_messages,
     "clear_chat_messages": handle_clear_chat_messages,
     "save_chat_message": handle_save_chat_message,
+
+    # Console logs (for Console nodes)
+    "get_console_logs": handle_get_console_logs,
+    "clear_console_logs": handle_clear_console_logs,
 
     # Terminal logs
     "get_terminal_logs": handle_get_terminal_logs,
@@ -1859,6 +1967,10 @@ MESSAGE_HANDLERS: Dict[str, MessageHandler] = {
     # Skill Content (built-in and user skills)
     "get_skill_content": handle_get_skill_content,
     "save_skill_content": handle_save_skill_content,
+
+    # Memory and Skill Clear/Reset
+    "clear_memory": handle_clear_memory,
+    "reset_skill": handle_reset_skill,
 }
 
 

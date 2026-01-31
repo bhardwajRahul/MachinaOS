@@ -18,7 +18,6 @@ from constants import (
     AI_MEMORY_TYPES,
     GOOGLE_MAPS_TYPES,
     ANDROID_SERVICE_NODE_TYPES,
-    ANDROID_SETUP_TYPES,
     WHATSAPP_TYPES,
     CHAT_TYPES,
     CODE_EXECUTOR_TYPES,
@@ -117,17 +116,6 @@ class ShowNearbyPlacesParams(BaseNodeParams):
 # ANDROID NODE MODELS
 # =============================================================================
 
-class AndroidDeviceSetupParams(BaseNodeParams):
-    """Parameters for Android device setup node."""
-    type: Literal["androidDeviceSetup"]
-    connection_type: Literal["local", "remote"] = Field(default="local", alias="connection_type")
-    device_id: str = Field(default="", alias="device_id")
-    websocket_url: str = Field(default="", alias="websocket_url")
-    port: int = Field(default=8888, ge=1, le=65535)
-    auto_forward: bool = Field(default=True, alias="auto_forward")
-    target_device_id: str = Field(default="", alias="target_device_id")
-
-
 class AndroidServiceParams(BaseNodeParams):
     """Parameters for Android service nodes (battery, network, wifi, etc.)."""
     type: str  # Validated separately against ANDROID_SERVICE_NODE_TYPES
@@ -148,11 +136,6 @@ class WhatsAppSendParams(BaseNodeParams):
     phone_number: str = Field(default="", alias="phoneNumber")
     message: str = ""
     message_type: Literal["text", "image", "video", "audio", "document"] = Field(default="text", alias="messageType")
-
-
-class WhatsAppConnectParams(BaseNodeParams):
-    """Parameters for WhatsApp connect node."""
-    type: Literal["whatsappConnect"]
 
 
 class WhatsAppReceiveParams(BaseNodeParams):
@@ -293,7 +276,7 @@ MapsNodeParams = Annotated[
 
 # WhatsApp Nodes
 WhatsAppNodeParams = Annotated[
-    Union[WhatsAppSendParams, WhatsAppConnectParams, WhatsAppReceiveParams],
+    Union[WhatsAppSendParams, WhatsAppReceiveParams],
     Field(discriminator="type")
 ]
 
@@ -334,10 +317,8 @@ KnownNodeParams = Annotated[
         AIChatModelParams, AIAgentParams, ChatAgentParams, SimpleMemoryParams,
         # Maps
         CreateMapParams, AddLocationsParams, ShowNearbyPlacesParams,
-        # Android Setup
-        AndroidDeviceSetupParams,
         # WhatsApp
-        WhatsAppSendParams, WhatsAppConnectParams, WhatsAppReceiveParams,
+        WhatsAppSendParams, WhatsAppReceiveParams,
         # Code
         PythonExecutorParams, JavaScriptExecutorParams,
         # HTTP
@@ -444,7 +425,6 @@ def get_all_node_types() -> set:
         AI_MEMORY_TYPES |
         GOOGLE_MAPS_TYPES |
         ANDROID_SERVICE_NODE_TYPES |
-        ANDROID_SETUP_TYPES |
         WHATSAPP_TYPES |
         CHAT_TYPES |
         CODE_EXECUTOR_TYPES |

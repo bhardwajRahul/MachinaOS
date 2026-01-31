@@ -241,7 +241,7 @@ const ToolkitNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
           title={isExecuting ? 'Executing...' : 'Toolkit ready'}
         />
 
-        {/* TOP Output Handle - connects to AI Agent/Chat Agent */}
+        {/* TOP Output Handle - connects to AI Agent/Zeenie */}
         <Handle
           id="output-main"
           type="source"
@@ -259,7 +259,7 @@ const ToolkitNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
             borderRadius: '50%',
             zIndex: 20
           }}
-          title={isSkillNode ? "Connect to Chat Agent's skill input" : "Connect to AI Agent's tool input"}
+          title={isSkillNode ? "Connect to Zeenie's skill input" : "Connect to AI Agent's tool input"}
         />
 
         {/* BOTTOM Input Handle - receives from Android nodes (not shown for skill nodes) */}

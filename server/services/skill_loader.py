@@ -1,7 +1,7 @@
 """Skill loader service for discovering and loading Agent Skills.
 
 Implements the Agent Skills specification (https://agentskills.io/specification).
-Skills are modular capabilities defined in Markdown files that the Chat Agent
+Skills are modular capabilities defined in Markdown files that Zeenie
 can discover and use on demand.
 """
 

@@ -7,6 +7,7 @@ import { useWebSocket } from './contexts/WebSocketContext';
 import { ExecutionService, ExecutionResult } from './services/executionService';
 import { useAppTheme } from './hooks/useAppTheme';
 import { ScheduleOutlined, PlayCircleFilled } from '@ant-design/icons';
+import { SKILL_NODE_TYPES } from './nodeDefinitions/skillNodes';
 
 const ParameterPanel: React.FC = () => {
   const theme = useAppTheme();
@@ -115,8 +116,9 @@ const ParameterPanel: React.FC = () => {
   const canExecute = selectedNode && nodeDefinition &&
     ExecutionService.isNodeTypeSupported(nodeDefinition.name);
 
-  // Check if this is a Start node (only show middle section)
+  // Check if this is a Start node or Skill node (only show middle section)
   const isStartNode = nodeDefinition?.name === 'start';
+  const isSkillNode = nodeDefinition?.name && SKILL_NODE_TYPES.includes(nodeDefinition.name);
 
   if (!selectedNode || !nodeDefinition) {
     return null;
@@ -290,8 +292,8 @@ const ParameterPanel: React.FC = () => {
         onParameterChange={handleParameterChange}
         executionResults={executionResults}
         onClearResults={handleClearResults}
-        showInputSection={!isStartNode}
-        showOutputSection={!isStartNode}
+        showInputSection={!isStartNode && !isSkillNode}
+        showOutputSection={!isStartNode && !isSkillNode}
         isLoadingParameters={isLoading}
       />
     </Modal>

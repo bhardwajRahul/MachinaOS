@@ -140,7 +140,7 @@ User prefers formal language.
 
 ## Integration with SimpleMemory Node
 
-When connected to a Chat Agent:
+When connected to a Zeenie:
 1. Conversation is automatically logged to markdown
 2. Window size limits short-term memory
 3. Overflow archives to vector DB (if long-term enabled)

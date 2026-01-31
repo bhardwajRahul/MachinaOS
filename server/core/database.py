@@ -709,6 +709,92 @@ class Database:
             return []
 
     # ============================================================================
+    # Console Logs (Console Panel persistence)
+    # ============================================================================
+
+    async def add_console_log(self, log_data: Dict[str, Any]) -> bool:
+        """Add a console log entry to the database."""
+        from models.database import ConsoleLog
+        import json
+
+        try:
+            async with self.get_session() as session:
+                console_log = ConsoleLog(
+                    node_id=log_data.get("node_id", ""),
+                    label=log_data.get("label", ""),
+                    workflow_id=log_data.get("workflow_id"),
+                    data=json.dumps(log_data.get("data", {})),
+                    formatted=log_data.get("formatted", ""),
+                    format=log_data.get("format", "text"),
+                    source_node_id=log_data.get("source_node_id"),
+                    source_node_type=log_data.get("source_node_type"),
+                    source_node_label=log_data.get("source_node_label"),
+                )
+                session.add(console_log)
+                await session.commit()
+                logger.debug(f"[Console] Added log from node '{log_data.get('node_id')}'")
+                return True
+
+        except Exception as e:
+            logger.error("Failed to add console log", error=str(e))
+            return False
+
+    async def get_console_logs(self, limit: int = 100) -> List[Dict[str, Any]]:
+        """Get console logs, optionally limited to last N entries."""
+        from models.database import ConsoleLog
+        import json
+
+        try:
+            async with self.get_session() as session:
+                stmt = select(ConsoleLog).order_by(ConsoleLog.created_at.desc()).limit(limit)
+
+                result = await session.execute(stmt)
+                logs = result.scalars().all()
+
+                # Return in chronological order (oldest first)
+                return [
+                    {
+                        "node_id": log.node_id,
+                        "label": log.label,
+                        "workflow_id": log.workflow_id,
+                        "data": json.loads(log.data) if log.data else {},
+                        "formatted": log.formatted,
+                        "format": log.format,
+                        "source_node_id": log.source_node_id,
+                        "source_node_type": log.source_node_type,
+                        "source_node_label": log.source_node_label,
+                        "timestamp": log.created_at.isoformat(),
+                    }
+                    for log in reversed(logs)
+                ]
+
+        except Exception as e:
+            logger.error("Failed to get console logs", error=str(e))
+            return []
+
+    async def clear_console_logs(self) -> int:
+        """Clear all console logs. Returns count deleted."""
+        from models.database import ConsoleLog
+
+        try:
+            async with self.get_session() as session:
+                stmt = select(ConsoleLog)
+                result = await session.execute(stmt)
+                logs = result.scalars().all()
+
+                count = len(logs)
+                for log in logs:
+                    await session.delete(log)
+
+                await session.commit()
+                logger.info(f"[Console] Cleared {count} console logs")
+                return count
+
+        except Exception as e:
+            logger.error("Failed to clear console logs", error=str(e))
+            return 0
+
+    # ============================================================================
     # Cache Entries (SQLite-backed Redis alternative)
     # ============================================================================
 
@@ -1026,7 +1112,7 @@ class Database:
             return False
 
     # ============================================================================
-    # User Skills (Custom skills for Chat Agent)
+    # User Skills (Custom skills for Zeenie)
     # ============================================================================
 
     async def create_user_skill(

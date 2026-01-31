@@ -5,19 +5,15 @@ import { useAppStore } from '../store/useAppStore';
 import { nodeDefinitions } from '../nodeDefinitions';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { ANDROID_SERVICE_NODE_TYPES } from '../nodeDefinitions/androidServiceNodes';
-import { ANDROID_DEVICE_NODE_TYPES } from '../nodeDefinitions/androidDeviceNodes';
 import { useWebSocket, useWhatsAppStatus } from '../contexts/WebSocketContext';
 import { useApiKeys } from '../hooks/useApiKeys';
 import { getAIProviderIcon } from './icons/AIProviderIcons';
 import { PlayCircleFilled, ScheduleOutlined } from '@ant-design/icons';
 
-// All Android node types combined
-const ALL_ANDROID_NODE_TYPES = [...ANDROID_SERVICE_NODE_TYPES, ...ANDROID_DEVICE_NODE_TYPES];
-
 // Android service nodes that can connect to Android Toolkit as tools
 const ANDROID_TOOL_CAPABLE_NODES = ANDROID_SERVICE_NODE_TYPES;
 
-// Nodes with 'tool' in their group can connect to AI Agent/Chat Agent tool handles
+// Nodes with 'tool' in their group can connect to AI Agent/Zeenie tool handles
 const hasToolGroup = (definition: any): boolean => {
   const groups = definition?.group || [];
   return groups.includes('tool');
@@ -27,7 +23,7 @@ const hasToolGroup = (definition: any): boolean => {
 const GOOGLE_MAPS_NODE_TYPES = ['createMap', 'addLocations', 'showNearbyPlaces'];
 
 // WhatsApp node types
-const WHATSAPP_NODE_TYPES = ['whatsappConnect', 'whatsappSend', 'whatsappReceive', 'whatsappDb'];
+const WHATSAPP_NODE_TYPES = ['whatsappSend', 'whatsappReceive', 'whatsappDb'];
 
 // Nodes that should not have output handles (input-only nodes)
 const NO_OUTPUT_NODE_TYPES = ['console'];
@@ -56,7 +52,7 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
 
   // Get Android status, node status, and API key status from WebSocket context
   const { androidStatus, getNodeStatus, getApiKeyStatus } = useWebSocket();
-  const { getStoredApiKey, validateGoogleMapsKey } = useApiKeys();
+  const { getStoredApiKey, isConnected: wsConnected } = useApiKeys();
   const nodeStatus = getNodeStatus(id);
   const executionStatus = nodeStatus?.status || 'idle';
 
@@ -72,9 +68,9 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
   const definition = nodeDefinitions[type as keyof typeof nodeDefinitions];
 
   // Check if this is an Android node
-  const isAndroidNode = type ? ALL_ANDROID_NODE_TYPES.includes(type) : false;
+  const isAndroidNode = type ? ANDROID_SERVICE_NODE_TYPES.includes(type) : false;
 
-  // Check if this node can be used as a tool (connects to Android Toolkit or AI Agent/Chat Agent tool handle)
+  // Check if this node can be used as a tool (connects to Android Toolkit or AI Agent/Zeenie tool handle)
   const isToolCapable = type ? (ANDROID_TOOL_CAPABLE_NODES.includes(type) || hasToolGroup(definition)) : false;
 
   // Android connection status from WebSocket (real-time updates)
@@ -136,6 +132,9 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
 
   // Check API key and configuration status
   useEffect(() => {
+    // Only run when WebSocket is connected
+    if (!wsConnected) return;
+
     const checkConfiguration = async () => {
       try {
         // Determine provider from node definition credentials
@@ -165,11 +164,6 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
         const hasRequiredParams = data && Object.keys(data).length > 0;
         setIsConfigured(hasRequiredParams && !!apiKey);
 
-        // For Google Maps nodes, trigger validation via WebSocket
-        if (isGoogleMapsNode && apiKey) {
-          await validateGoogleMapsKey(apiKey);
-        }
-
         if (!apiKey && provider) {
           console.warn(`[SquareNode] ${definition?.displayName} ${id}: No API key configured for ${provider}`);
         }
@@ -181,22 +175,11 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
     };
 
     checkConfiguration();
-  }, [data, id, type, definition?.displayName, definition?.credentials, isGoogleMapsNode, getStoredApiKey, validateGoogleMapsKey]);
-
-  // Get settings panel controls from store
-  const { setWhatsAppSettingsOpen, setAndroidSettingsOpen } = useAppStore();
+  }, [data, id, type, definition?.displayName, definition?.credentials, isGoogleMapsNode, getStoredApiKey, wsConnected]);
 
   const handleParametersClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    // For whatsappConnect, open the WhatsApp settings panel instead
-    if (type === 'whatsappConnect') {
-      setWhatsAppSettingsOpen(true);
-    } else if (type === 'androidDeviceSetup') {
-      // For androidDeviceSetup, open the Android settings panel
-      setAndroidSettingsOpen(true);
-    } else {
-      setSelectedNode({ id, type, data, position: { x: 0, y: 0 } });
-    }
+    setSelectedNode({ id, type, data, position: { x: 0, y: 0 } });
   };
 
   // Get status indicator color based on execution state
@@ -686,7 +669,7 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
           />
         )}
 
-        {/* Top Tool Output Handle - for nodes that can connect to AI Agent/Chat Agent tool handle */}
+        {/* Top Tool Output Handle - for nodes that can connect to AI Agent/Zeenie tool handle */}
         {isToolCapable && (
           <Handle
             id="output-tool"
@@ -705,7 +688,7 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
               borderRadius: '50%',
               zIndex: 20
             }}
-            title={ANDROID_TOOL_CAPABLE_NODES.includes(type || '') ? 'Connect to Android Toolkit' : 'Connect to AI Agent/Chat Agent tool handle'}
+            title={ANDROID_TOOL_CAPABLE_NODES.includes(type || '') ? 'Connect to Android Toolkit' : 'Connect to AI Agent/Zeenie tool handle'}
           />
         )}
 

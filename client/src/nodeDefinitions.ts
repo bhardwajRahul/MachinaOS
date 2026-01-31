@@ -10,7 +10,6 @@ import { whatsappNodes, WHATSAPP_NODE_TYPES } from './nodeDefinitions/whatsappNo
 import { workflowNodes } from './nodeDefinitions/workflowNodes';
 import { schedulerNodes, SCHEDULER_NODE_TYPES } from './nodeDefinitions/schedulerNodes';
 import { androidServiceNodes, ANDROID_SERVICE_NODE_TYPES } from './nodeDefinitions/androidServiceNodes';
-import { androidDeviceNodes } from './nodeDefinitions/androidDeviceNodes';
 import { chatNodes, CHAT_NODE_TYPES } from './nodeDefinitions/chatNodes';
 import { codeNodes, CODE_NODE_TYPES } from './nodeDefinitions/codeNodes';
 import { utilityNodes, UTILITY_NODE_TYPES } from './nodeDefinitions/utilityNodes';
@@ -31,7 +30,6 @@ export const nodeDefinitions: Record<string, INodeTypeDescription> = {
   ...locationNodes,
   ...whatsappNodes,
   ...androidServiceNodes,
-  ...androidDeviceNodes,
   ...chatNodes,
   ...codeNodes,
   ...utilityNodes,

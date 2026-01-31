@@ -41,8 +41,6 @@ interface AppStore {
   sidebarVisible: boolean;
   componentPaletteVisible: boolean;
   proMode: boolean;  // false = noob mode (only AI categories), true = pro mode (all categories)
-  whatsappSettingsOpen: boolean;
-  androidSettingsOpen: boolean;
   renamingNodeId: string | null;
 
   // Saved workflows
@@ -63,8 +61,6 @@ interface AppStore {
   toggleSidebar: () => void;
   toggleComponentPalette: () => void;
   toggleProMode: () => void;
-  setWhatsAppSettingsOpen: (open: boolean) => void;
-  setAndroidSettingsOpen: (open: boolean) => void;
   setRenamingNodeId: (nodeId: string | null) => void;
 
   // Per-workflow UI state actions (n8n pattern)
@@ -154,8 +150,6 @@ export const useAppStore = create<AppStore>((set, get) => ({
   sidebarVisible: loadBooleanFromStorage(STORAGE_KEYS.sidebarVisible, true),
   componentPaletteVisible: loadBooleanFromStorage(STORAGE_KEYS.componentPaletteVisible, true),
   proMode: loadBooleanFromStorage(STORAGE_KEYS.proMode, false),  // Default to noob mode
-  whatsappSettingsOpen: false,
-  androidSettingsOpen: false,
   renamingNodeId: null,
   savedWorkflows: [],
   
@@ -270,6 +264,17 @@ export const useAppStore = create<AppStore>((set, get) => ({
       lastModified: new Date(w.lastModified),
     }));
     set({ savedWorkflows });
+
+    // Auto-load the most recent workflow if no current workflow is set
+    const { currentWorkflow } = get();
+    if (!currentWorkflow && savedWorkflows.length > 0) {
+      // Sort by lastModified descending and load the first one
+      const sortedWorkflows = [...savedWorkflows].sort(
+        (a, b) => b.lastModified.getTime() - a.lastModified.getTime()
+      );
+      const mostRecent = sortedWorkflows[0];
+      await get().loadWorkflow(mostRecent.id);
+    }
   },
 
   deleteWorkflow: async (id) => {
@@ -357,14 +362,6 @@ export const useAppStore = create<AppStore>((set, get) => ({
       saveBooleanToStorage(STORAGE_KEYS.proMode, newValue);
       return { proMode: newValue };
     });
-  },
-
-  setWhatsAppSettingsOpen: (open) => {
-    set({ whatsappSettingsOpen: open });
-  },
-
-  setAndroidSettingsOpen: (open) => {
-    set({ androidSettingsOpen: open });
   },
 
   setRenamingNodeId: (nodeId) => {

@@ -1,18 +1,17 @@
-# Publish to GitHub Packages when a release is created
-# Uses GITHUB_TOKEN for authentication (no secrets needed)
+# CI workflow - runs on every push and PR to main
+# Validates build and linting before merge
 
-name: Publish to GitHub Packages
+name: CI
 
 on:
-  release:
-    types: [created]
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
-  publish:
+  build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,8 +20,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@trohitg'
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -40,7 +37,5 @@ jobs:
       - name: Build all services
         run: npm run build
 
-      - name: Publish to GitHub Packages
-        run: npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Lint client
+        run: cd client && npm run lint

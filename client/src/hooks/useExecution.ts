@@ -39,7 +39,10 @@ export interface UseExecutionResult {
     nodeId: string,
     nodeType: string,
     parameters: Record<string, any>,
-    model: string
+    model: string,
+    workflowId: string,
+    nodes: Node[],
+    edges: Edge[]
   ) => Promise<ExecutionResult>;
 
   // Execution state
@@ -201,19 +204,22 @@ export const useExecution = (): UseExecutionResult => {
     nodeId: string,
     nodeType: string,
     parameters: Record<string, any>,
-    model: string
+    model: string,
+    workflowId: string,
+    nodes: Node[],
+    edges: Edge[]
   ): Promise<ExecutionResult> => {
     const startTime = Date.now();
 
     try {
-      console.log(`[WebSocket AI Execution] Starting: ${nodeId} (type: ${nodeType})`);
+      console.log(`[WebSocket AI Execution] Starting: ${nodeId} (type: ${nodeType}), workflow: ${workflowId}`);
 
       setIsExecuting(true);
       setExecutingNodeId(nodeId);
       setLastError(null);
 
-      // Execute AI node via WebSocket
-      const result = await wsExecuteAiNode(nodeId, nodeType, parameters, model);
+      // Execute AI node via WebSocket with workflow context for tool node glowing
+      const result = await wsExecuteAiNode(nodeId, nodeType, parameters, model, workflowId, nodes, edges);
 
       console.log(`[WebSocket AI Execution] Result:`, result);
 

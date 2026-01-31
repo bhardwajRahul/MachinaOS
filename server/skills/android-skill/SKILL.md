@@ -13,12 +13,12 @@ This skill provides context for monitoring and controlling Android devices.
 
 ## How It Works
 
-This skill provides instructions and context. To execute Android actions, connect the **Android Toolkit** node to the Chat Agent's `input-tools` handle, then connect Android service nodes to the toolkit:
+This skill provides instructions and context. To execute Android actions, connect the **Android Toolkit** node to the Zeenie's `input-tools` handle, then connect Android service nodes to the toolkit:
 
 ```
 [Battery Monitor] --+
                     |
-[WiFi Automation] --+--> [Android Toolkit] --> [Chat Agent]
+[WiFi Automation] --+--> [Android Toolkit] --> [Zeenie]
                     |
 [Location]       ---+
 ```
@@ -76,7 +76,7 @@ Before using Android tools, ensure:
 
 ## Setup Requirements
 
-1. Connect this skill to Chat Agent's `input-skill` handle
-2. Add **Android Toolkit** node and connect to Chat Agent's `input-tools` handle
+1. Connect this skill to Zeenie's `input-skill` handle
+2. Add **Android Toolkit** node and connect to Zeenie's `input-tools` handle
 3. Connect desired Android service nodes to the Android Toolkit
 4. Ensure Android device is paired (green status indicator)

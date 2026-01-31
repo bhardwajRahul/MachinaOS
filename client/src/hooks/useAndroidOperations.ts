@@ -24,14 +24,6 @@ export interface UseAndroidOperationsResult {
   // Get list of connected devices
   getDevices: () => Promise<AndroidDevice[]>;
 
-  // Setup Android device connection
-  setupDevice: (
-    connectionType: 'local' | 'remote',
-    deviceId?: string,
-    websocketUrl?: string,
-    port?: number
-  ) => Promise<AndroidActionResult>;
-
   // Execute Android service action
   executeAction: (
     serviceId: string,
@@ -57,7 +49,6 @@ export interface UseAndroidOperationsResult {
 export const useAndroidOperations = (): UseAndroidOperationsResult => {
   const {
     getAndroidDevices: wsGetDevices,
-    setupAndroidDevice: wsSetupDevice,
     executeAndroidAction: wsExecuteAction,
     androidStatus,
     isConnected
@@ -79,42 +70,6 @@ export const useAndroidOperations = (): UseAndroidOperationsResult => {
       return [];
     }
   }, [wsGetDevices]);
-
-  /**
-   * Setup Android device connection
-   */
-  const setupDevice = useCallback(async (
-    connectionType: 'local' | 'remote',
-    deviceId?: string,
-    websocketUrl?: string,
-    _port: number = 8888  // Port passed to backend via wsSetupDevice
-  ): Promise<AndroidActionResult> => {
-    setIsExecuting(true);
-    setLastError(null);
-
-    try {
-      const result = await wsSetupDevice(connectionType, deviceId, websocketUrl);
-
-      if (!result.success) {
-        setLastError(result.error || 'Setup failed');
-      }
-
-      return {
-        success: result.success,
-        result: result.result,
-        error: result.error
-      };
-    } catch (error: any) {
-      const errorMsg = error.message || 'Device setup failed';
-      setLastError(errorMsg);
-      return {
-        success: false,
-        error: errorMsg
-      };
-    } finally {
-      setIsExecuting(false);
-    }
-  }, [wsSetupDevice]);
 
   /**
    * Execute Android service action
@@ -154,7 +109,6 @@ export const useAndroidOperations = (): UseAndroidOperationsResult => {
 
   return {
     getDevices,
-    setupDevice,
     executeAction,
     isExecuting,
     lastError,

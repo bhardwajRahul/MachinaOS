@@ -1,6 +1,5 @@
 import { nodeDefinitions } from '../nodeDefinitions';
 import { ANDROID_SERVICE_NODE_TYPES } from '../nodeDefinitions/androidServiceNodes';
-import { ANDROID_DEVICE_NODE_TYPES } from '../nodeDefinitions/androidDeviceNodes';
 import { SCHEDULER_NODE_TYPES } from '../nodeDefinitions/schedulerNodes';
 import { CODE_NODE_TYPES } from '../nodeDefinitions/codeNodes';
 import { UTILITY_NODE_TYPES } from '../nodeDefinitions/utilityNodes';
@@ -207,7 +206,6 @@ export class ExecutionService {
       'showNearbyPlaces',
       // WhatsApp Nodes
       'whatsappSend',
-      'whatsappConnect',
       'whatsappReceive',
       'whatsappDb',
       // Text Processing Nodes
@@ -215,8 +213,6 @@ export class ExecutionService {
       'fileHandler',
       // Android Services (16 individual nodes)
       ...ANDROID_SERVICE_NODE_TYPES,
-      // Android Device Setup
-      ...ANDROID_DEVICE_NODE_TYPES,
       // Scheduler Nodes
       ...SCHEDULER_NODE_TYPES,
       // Code Execution Nodes

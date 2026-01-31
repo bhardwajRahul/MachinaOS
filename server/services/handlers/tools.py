@@ -40,9 +40,13 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
     if node_type in ('httpRequest', 'httpRequestTool'):
         return await _execute_http_request(tool_args, config.get('parameters', {}))
 
-    # Python executor tool
+    # Python executor tool (dual-purpose: workflow node + AI tool)
     if node_type == 'pythonExecutor':
         return await _execute_python_code(tool_args, config.get('parameters', {}))
+
+    # JavaScript executor tool (dual-purpose: workflow node + AI tool)
+    if node_type == 'javascriptExecutor':
+        return await _execute_javascript_code(tool_args, config.get('parameters', {}))
 
     # Current time tool
     if node_type == 'currentTimeTool':
@@ -191,14 +195,14 @@ async def _execute_http_request(args: Dict[str, Any],
 
 async def _execute_python_code(args: Dict[str, Any],
                                 node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Python code tool.
+    """Execute Python code (dual-purpose: workflow node + AI tool).
 
     Args:
-        args: Dict with 'code'
+        args: Dict with 'code' from LLM
         node_params: Node parameters containing timeout, etc.
 
     Returns:
-        Dict with result or output
+        Dict with success, result, output, or error
     """
     import subprocess
     import tempfile
@@ -210,25 +214,44 @@ async def _execute_python_code(args: Dict[str, Any],
     if not code:
         return {"error": "No code provided"}
 
-    # Create a temporary file with the code
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
-        # Wrap code to capture the result
-        wrapped_code = f"""
+    # Wrap code to capture output and result
+    wrapped_code = f'''
 import json
 import sys
+import math
+from datetime import datetime, timedelta
+from collections import Counter, defaultdict
 
-def main():
-{chr(10).join('    ' + line for line in code.split(chr(10)))}
+input_data = {{}}
+output = None
+_stdout_lines = []
+
+class _PrintCapture:
+    def write(self, text):
+        if text.strip():
+            _stdout_lines.append(text.rstrip())
+    def flush(self):
+        pass
+
+_old_stdout = sys.stdout
+sys.stdout = _PrintCapture()
 
 try:
-    result = main()
-    if result is not None:
-        print(json.dumps({{"result": result}}, default=str))
-    else:
-        print(json.dumps({{"result": "Code executed successfully"}}))
+{chr(10).join("    " + line for line in code.split(chr(10)))}
+
+    sys.stdout = _old_stdout
+    result = {{"success": True}}
+    if output is not None:
+        result["result"] = output
+    if _stdout_lines:
+        result["output"] = chr(10).join(_stdout_lines)
+    print(json.dumps(result, default=str))
 except Exception as e:
+    sys.stdout = _old_stdout
     print(json.dumps({{"error": str(e)}}))
-"""
+'''
+
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
         f.write(wrapped_code)
         temp_path = f.name
 
@@ -243,20 +266,101 @@ except Exception as e:
 
         if result.returncode == 0:
             try:
-                output = json.loads(result.stdout.strip())
-                return output
+                return json.loads(result.stdout.strip())
             except:
-                return {"output": result.stdout.strip()}
+                return {"success": True, "output": result.stdout.strip()}
         else:
-            return {"error": result.stderr or "Code execution failed"}
+            return {"error": result.stderr or "Python execution failed"}
 
     except subprocess.TimeoutExpired:
-        return {"error": f"Code execution timed out after {timeout} seconds"}
+        return {"error": f"Python execution timed out after {timeout} seconds"}
     except Exception as e:
         logger.error(f"[Python Tool] Error: {e}")
         return {"error": str(e)}
     finally:
-        # Clean up temp file
+        try:
+            os.unlink(temp_path)
+        except:
+            pass
+
+
+async def _execute_javascript_code(args: Dict[str, Any],
+                                    node_params: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute JavaScript code (dual-purpose: workflow node + AI tool).
+
+    Args:
+        args: Dict with 'code' from LLM
+        node_params: Node parameters containing timeout, etc.
+
+    Returns:
+        Dict with success, result, output, or error
+    """
+    import subprocess
+    import tempfile
+    import os
+
+    code = args.get('code', '')
+    timeout = int(node_params.get('timeout', 30))
+
+    if not code:
+        return {"error": "No code provided"}
+
+    # Wrap code to capture output and result
+    wrapped_code = f'''
+const input_data = {{}};
+let output = undefined;
+const _stdout_lines = [];
+
+const _originalLog = console.log;
+console.log = (...args) => {{
+    _stdout_lines.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
+}};
+
+try {{
+{chr(10).join("    " + line for line in code.split(chr(10)))}
+
+    const result = {{ success: true }};
+    if (output !== undefined) {{
+        result.result = output;
+    }}
+    if (_stdout_lines.length > 0) {{
+        result.output = _stdout_lines.join('\\n');
+    }}
+    _originalLog(JSON.stringify(result));
+}} catch (e) {{
+    _originalLog(JSON.stringify({{ error: e.message }}));
+}}
+'''
+
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.js', delete=False) as f:
+        f.write(wrapped_code)
+        temp_path = f.name
+
+    try:
+        logger.info(f"[JavaScript Tool] Executing code (timeout: {timeout}s)")
+        result = subprocess.run(
+            ['node', temp_path],
+            capture_output=True,
+            text=True,
+            timeout=timeout
+        )
+
+        if result.returncode == 0:
+            try:
+                return json.loads(result.stdout.strip())
+            except:
+                return {"success": True, "output": result.stdout.strip()}
+        else:
+            return {"error": result.stderr or "JavaScript execution failed"}
+
+    except subprocess.TimeoutExpired:
+        return {"error": f"JavaScript execution timed out after {timeout} seconds"}
+    except FileNotFoundError:
+        return {"error": "Node.js is not installed. Cannot execute JavaScript code."}
+    except Exception as e:
+        logger.error(f"[JavaScript Tool] Error: {e}")
+        return {"error": str(e)}
+    finally:
         try:
             os.unlink(temp_path)
         except:
@@ -323,14 +427,14 @@ async def _execute_web_search(args: Dict[str, Any],
 
     try:
         if provider == 'duckduckgo':
-            # Use the duckduckgo-search library for proper web search results
+            # Use the ddgs library for proper web search results
             try:
-                from duckduckgo_search import DDGS
+                from ddgs import DDGS
 
                 # Run synchronous DDGS in a thread pool to not block async
                 def do_search():
-                    with DDGS() as ddgs:
-                        return list(ddgs.text(query, max_results=max_results))
+                    ddgs = DDGS()
+                    return list(ddgs.text(query, max_results=max_results))
 
                 search_results = await asyncio.get_event_loop().run_in_executor(
                     None, do_search
@@ -352,7 +456,7 @@ async def _execute_web_search(args: Dict[str, Any],
                 }
 
             except ImportError:
-                logger.warning("[WebSearch] duckduckgo-search not installed, falling back to Instant Answer API")
+                logger.warning("[WebSearch] ddgs not installed, falling back to Instant Answer API")
                 # Fallback to Instant Answer API (limited results)
                 async with httpx.AsyncClient(timeout=10.0) as client:
                     response = await client.get(
@@ -743,8 +847,12 @@ async def _execute_geocoding(args: Dict[str, Any],
     from services.handlers.utility import handle_add_locations
     from core.container import container
 
+    # Fetch API key from database (source of truth)
+    auth_service = container.auth_service()
+    api_key = await auth_service.get_api_key("google_maps", "default") or ''
+
     # Args use snake_case matching Pydantic schema and node params
-    parameters = {**args, 'api_key': node_params.get('api_key', '')}
+    parameters = {**args, 'api_key': api_key}
 
     service_type = parameters.get('service_type', 'geocode')
 
@@ -793,8 +901,12 @@ async def _execute_nearby_places(args: Dict[str, Any],
     from services.handlers.utility import handle_nearby_places
     from core.container import container
 
+    # Fetch API key from database (source of truth)
+    auth_service = container.auth_service()
+    api_key = await auth_service.get_api_key("google_maps", "default") or ''
+
     # Args use snake_case matching Pydantic schema and node params
-    parameters = {**args, 'api_key': node_params.get('api_key', '')}
+    parameters = {**args, 'api_key': api_key}
 
     # Validate required fields
     if parameters.get('lat') is None or parameters.get('lng') is None:

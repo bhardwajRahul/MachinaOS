@@ -13,7 +13,7 @@ This skill provides context for location-based capabilities using Google Maps se
 
 ## How It Works
 
-This skill provides instructions and context. To execute location actions, connect the appropriate **tool nodes** to the Chat Agent's `input-tools` handle:
+This skill provides instructions and context. To execute location actions, connect the appropriate **tool nodes** to the Zeenie's `input-tools` handle:
 
 - **Add Locations** node - Geocode addresses to coordinates or reverse geocode
 - **Show Nearby Places** node - Search for nearby places
@@ -165,6 +165,6 @@ When presenting location results:
 
 ## Setup Requirements
 
-1. Connect this skill to Chat Agent's `input-skill` handle
-2. Connect location tool nodes to Chat Agent's `input-tools` handle
+1. Connect this skill to Zeenie's `input-skill` handle
+2. Connect location tool nodes to Zeenie's `input-tools` handle
 3. Ensure Google Maps API key is configured in credentials

@@ -90,6 +90,33 @@ export interface WhatsAppStatus {
   timestamp?: number;
 }
 
+// WhatsApp Rate Limit types (from Go RPC schema)
+export interface RateLimitConfig {
+  enabled: boolean;
+  min_delay_ms: number;
+  max_delay_ms: number;
+  typing_delay_ms: number;
+  link_extra_delay_ms: number;
+  max_messages_per_minute: number;
+  max_messages_per_hour: number;
+  max_new_contacts_per_day: number;
+  simulate_typing: boolean;
+  randomize_delays: boolean;
+  pause_on_low_response: boolean;
+  response_rate_threshold: number;
+}
+
+export interface RateLimitStats {
+  messages_sent_last_minute: number;
+  messages_sent_last_hour: number;
+  messages_sent_today: number;
+  new_contacts_today: number;
+  responses_received: number;
+  response_rate: number;
+  is_paused: boolean;
+  pause_reason?: string;
+}
+
 export interface ApiKeyStatus {
   valid: boolean;
   hasKey?: boolean;
@@ -223,7 +250,7 @@ interface WebSocketContextValue {
   getDeploymentStatus: (workflowId?: string) => Promise<{ isRunning: boolean; activeRuns: number; settings?: any; workflow_id?: string }>;
 
   // AI Operations
-  executeAiNode: (nodeId: string, nodeType: string, parameters: Record<string, any>, model: string) => Promise<any>;
+  executeAiNode: (nodeId: string, nodeType: string, parameters: Record<string, any>, model: string, workflowId: string, nodes: any[], edges: any[]) => Promise<any>;
   getAiModels: (provider: string, apiKey: string) => Promise<string[]>;
 
   // API Key Operations
@@ -235,7 +262,6 @@ interface WebSocketContextValue {
   // Android Operations
   getAndroidDevices: () => Promise<string[]>;
   executeAndroidAction: (serviceId: string, action: string, parameters: Record<string, any>, deviceId?: string) => Promise<any>;
-  setupAndroidDevice: (connectionType: string, deviceId?: string, websocketUrl?: string) => Promise<any>;
 
   // Maps Operations
   validateMapsKey: (apiKey: string) => Promise<{ valid: boolean; message?: string }>;
@@ -248,6 +274,14 @@ interface WebSocketContextValue {
   restartWhatsAppConnection: () => Promise<{ success: boolean; message?: string }>;
   getWhatsAppGroups: () => Promise<{ success: boolean; groups: Array<{ jid: string; name: string; topic?: string; size?: number; is_community?: boolean }>; error?: string }>;
   getWhatsAppGroupInfo: (groupId: string) => Promise<{ success: boolean; participants: Array<{ phone: string; name: string; jid: string; is_admin?: boolean }>; name?: string; error?: string }>;
+  getWhatsAppRateLimitConfig: () => Promise<{ success: boolean; config?: RateLimitConfig; stats?: RateLimitStats; error?: string }>;
+  setWhatsAppRateLimitConfig: (config: Partial<RateLimitConfig>) => Promise<{ success: boolean; config?: RateLimitConfig; error?: string }>;
+  getWhatsAppRateLimitStats: () => Promise<{ success: boolean; stats?: RateLimitStats; error?: string }>;
+  unpauseWhatsAppRateLimit: () => Promise<{ success: boolean; stats?: RateLimitStats; error?: string }>;
+
+  // Memory and Skill Operations
+  clearMemory: (sessionId: string, clearLongTerm?: boolean) => Promise<{ success: boolean; default_content?: string; cleared_vector_store?: boolean; error?: string }>;
+  resetSkill: (skillName: string) => Promise<{ success: boolean; original_content?: string; is_builtin?: boolean; error?: string }>;
 }
 
 // Default values
@@ -950,6 +984,46 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         } catch {
           // Ignore errors loading chat messages
         }
+
+        // Load console logs from database
+        try {
+          const consoleRequestId = `console_${Date.now()}`;
+          const consoleResponse = await new Promise<any>((resolve, reject) => {
+            const timeout = setTimeout(() => reject(new Error('Timeout')), 5000);
+
+            const handler = (event: MessageEvent) => {
+              try {
+                const msg = JSON.parse(event.data);
+                if (msg.request_id === consoleRequestId) {
+                  clearTimeout(timeout);
+                  ws.removeEventListener('message', handler);
+                  resolve(msg);
+                }
+              } catch {}
+            };
+
+            ws.addEventListener('message', handler);
+            ws.send(JSON.stringify({ type: 'get_console_logs', limit: 100, request_id: consoleRequestId }));
+          });
+
+          if (consoleResponse.success && consoleResponse.logs) {
+            const logs: ConsoleLogEntry[] = consoleResponse.logs.map((log: any) => ({
+              node_id: log.node_id,
+              label: log.label,
+              timestamp: log.timestamp,
+              data: log.data,
+              formatted: log.formatted,
+              format: log.format,
+              workflow_id: log.workflow_id,
+              source_node_id: log.source_node_id,
+              source_node_type: log.source_node_type,
+              source_node_label: log.source_node_label,
+            }));
+            setConsoleLogs(logs);
+          }
+        } catch {
+          // Ignore errors loading console logs
+        }
       };
 
       ws.onmessage = handleMessage;
@@ -1045,9 +1119,13 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setLastWhatsAppMessage(null);
   }, []);
 
-  // Clear console logs
+  // Clear console logs (both local state and database)
   const clearConsoleLogs = useCallback(() => {
     setConsoleLogs([]);
+    // Also clear from database via direct WebSocket send
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'clear_console_logs' }));
+    }
   }, []);
 
   // Clear terminal logs (also clears on server)
@@ -1422,14 +1500,20 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     nodeId: string,
     nodeType: string,
     parameters: Record<string, any>,
-    model: string
+    model: string,
+    workflowId: string,
+    nodes: any[],
+    edges: any[]
   ): Promise<any> => {
     try {
       const response = await sendRequest<any>('execute_ai_node', {
         node_id: nodeId,
         node_type: nodeType,
         parameters,
-        model
+        model,
+        workflow_id: workflowId,
+        nodes,
+        edges
       });
       return response;
     } catch (error) {
@@ -1591,24 +1675,6 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, [sendRequest]);
 
-  const setupAndroidDeviceAsync = useCallback(async (
-    connectionType: string,
-    deviceId?: string,
-    websocketUrl?: string
-  ): Promise<any> => {
-    try {
-      const response = await sendRequest<any>('setup_android_device', {
-        connection_type: connectionType,
-        device_id: deviceId,
-        websocket_url: websocketUrl
-      });
-      return response;
-    } catch (error) {
-      console.error('[WebSocket] Failed to setup Android device:', error);
-      throw error;
-    }
-  }, [sendRequest]);
-
   // =========================================================================
   // Maps Operations
   // =========================================================================
@@ -1732,6 +1798,107 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, [sendRequest]);
 
+  const getWhatsAppRateLimitConfigAsync = useCallback(async (): Promise<{ success: boolean; config?: RateLimitConfig; stats?: RateLimitStats; error?: string }> => {
+    try {
+      const response = await sendRequest<any>('whatsapp_rate_limit_get', {});
+      return {
+        success: response.success !== false,
+        config: response.config,
+        stats: response.stats,
+        error: response.error
+      };
+    } catch (error: any) {
+      console.error('[WebSocket] Failed to get WhatsApp rate limit config:', error);
+      return { success: false, error: error.message || 'Failed to get rate limit config' };
+    }
+  }, [sendRequest]);
+
+  const setWhatsAppRateLimitConfigAsync = useCallback(async (config: Partial<RateLimitConfig>): Promise<{ success: boolean; config?: RateLimitConfig; error?: string }> => {
+    try {
+      const response = await sendRequest<any>('whatsapp_rate_limit_set', { config });
+      return {
+        success: response.success !== false,
+        config: response.config,
+        error: response.error
+      };
+    } catch (error: any) {
+      console.error('[WebSocket] Failed to set WhatsApp rate limit config:', error);
+      return { success: false, error: error.message || 'Failed to set rate limit config' };
+    }
+  }, [sendRequest]);
+
+  const getWhatsAppRateLimitStatsAsync = useCallback(async (): Promise<{ success: boolean; stats?: RateLimitStats; error?: string }> => {
+    try {
+      const response = await sendRequest<any>('whatsapp_rate_limit_stats', {});
+      return {
+        success: response.success !== false,
+        stats: response.stats || response,
+        error: response.error
+      };
+    } catch (error: any) {
+      console.error('[WebSocket] Failed to get WhatsApp rate limit stats:', error);
+      return { success: false, error: error.message || 'Failed to get rate limit stats' };
+    }
+  }, [sendRequest]);
+
+  const unpauseWhatsAppRateLimitAsync = useCallback(async (): Promise<{ success: boolean; stats?: RateLimitStats; error?: string }> => {
+    try {
+      const response = await sendRequest<any>('whatsapp_rate_limit_unpause', {});
+      return {
+        success: response.success !== false,
+        stats: response.stats,
+        error: response.error
+      };
+    } catch (error: any) {
+      console.error('[WebSocket] Failed to unpause WhatsApp rate limit:', error);
+      return { success: false, error: error.message || 'Failed to unpause rate limit' };
+    }
+  }, [sendRequest]);
+
+  // =========================================================================
+  // Memory and Skill Operations
+  // =========================================================================
+
+  const clearMemoryAsync = useCallback(async (
+    sessionId: string,
+    clearLongTerm = false
+  ): Promise<{ success: boolean; default_content?: string; cleared_vector_store?: boolean; error?: string }> => {
+    try {
+      const response = await sendRequest<any>('clear_memory', {
+        session_id: sessionId,
+        clear_long_term: clearLongTerm
+      });
+      return {
+        success: response.success !== false,
+        default_content: response.default_content,
+        cleared_vector_store: response.cleared_vector_store,
+        error: response.error
+      };
+    } catch (error: any) {
+      console.error('[WebSocket] Failed to clear memory:', error);
+      return { success: false, error: error.message || 'Failed to clear memory' };
+    }
+  }, [sendRequest]);
+
+  const resetSkillAsync = useCallback(async (
+    skillName: string
+  ): Promise<{ success: boolean; original_content?: string; is_builtin?: boolean; error?: string }> => {
+    try {
+      const response = await sendRequest<any>('reset_skill', {
+        skill_name: skillName
+      });
+      return {
+        success: response.success !== false,
+        original_content: response.original_content,
+        is_builtin: response.is_builtin,
+        error: response.error
+      };
+    } catch (error: any) {
+      console.error('[WebSocket] Failed to reset skill:', error);
+      return { success: false, error: error.message || 'Failed to reset skill' };
+    }
+  }, [sendRequest]);
+
   // Track if component is mounted to prevent state updates after unmount
   const isMountedRef = useRef(true);
 
@@ -1850,8 +2017,6 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     // Android Operations
     getAndroidDevices: getAndroidDevicesAsync,
     executeAndroidAction: executeAndroidActionAsync,
-    setupAndroidDevice: setupAndroidDeviceAsync,
-
     // Maps Operations
     validateMapsKey: validateMapsKeyAsync,
 
@@ -1862,7 +2027,15 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     startWhatsAppConnection: startWhatsAppConnectionAsync,
     restartWhatsAppConnection: restartWhatsAppConnectionAsync,
     getWhatsAppGroups: getWhatsAppGroupsAsync,
-    getWhatsAppGroupInfo: getWhatsAppGroupInfoAsync
+    getWhatsAppGroupInfo: getWhatsAppGroupInfoAsync,
+    getWhatsAppRateLimitConfig: getWhatsAppRateLimitConfigAsync,
+    setWhatsAppRateLimitConfig: setWhatsAppRateLimitConfigAsync,
+    getWhatsAppRateLimitStats: getWhatsAppRateLimitStatsAsync,
+    unpauseWhatsAppRateLimit: unpauseWhatsAppRateLimitAsync,
+
+    // Memory and Skill Operations
+    clearMemory: clearMemoryAsync,
+    resetSkill: resetSkillAsync
   };
 
   return (

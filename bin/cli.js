@@ -1,22 +1,20 @@
 #!/usr/bin/env node
 
 import { spawn, execSync } from 'child_process';
-import { existsSync, copyFileSync } from 'fs';
-import { resolve, dirname } from 'path';
+import { dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const ROOT_DIR = resolve(__dirname, '..');
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 const COMMANDS = {
   start: 'Start the development server',
   stop: 'Stop all running services',
   build: 'Build the project for production',
+  clean: 'Clean build artifacts',
   'docker:up': 'Start with Docker Compose',
   'docker:down': 'Stop Docker Compose services',
+  'docker:build': 'Build Docker images',
   'docker:logs': 'View Docker logs',
-  init: 'Initialize environment file from template',
   help: 'Show this help message',
 };
 
@@ -27,133 +25,91 @@ MachinaOS - Workflow Automation Platform
 Usage: machinaos <command>
 
 Commands:
-${Object.entries(COMMANDS)
-    .map(([cmd, desc]) => `  ${cmd.padEnd(14)} ${desc}`)
-    .join('\n')}
+${Object.entries(COMMANDS).map(([cmd, desc]) => `  ${cmd.padEnd(14)} ${desc}`).join('\n')}
 
 Examples:
-  machinaos init       # Create .env from template
   machinaos start      # Start development server
+  machinaos build      # Build for production
   machinaos docker:up  # Start with Docker
 
 Documentation: https://github.com/trohitg/MachinaOS
 `);
 }
 
-function checkDependencies() {
-  const missing = [];
-
-  // Check Node.js version
-  const nodeVersion = process.version.slice(1).split('.')[0];
-  if (parseInt(nodeVersion) < 18) {
-    console.error(`Error: Node.js 18+ required (found ${process.version})`);
-    process.exit(1);
-  }
-
-  // Check Python
+function getVersion(cmd) {
   try {
-    execSync('python --version', { stdio: 'pipe' });
+    return execSync(cmd, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
   } catch {
-    missing.push('Python 3.11+');
+    return null;
+  }
+}
+
+function checkDeps() {
+  const errors = [];
+  const warnings = [];
+
+  // Node.js version check
+  const nodeVersion = parseInt(process.version.slice(1));
+  if (nodeVersion < 18) {
+    errors.push(`Node.js 18+ required (found ${process.version})`);
   }
 
-  // Check uv (Python package manager)
-  try {
-    execSync('uv --version', { stdio: 'pipe' });
-  } catch {
-    missing.push('uv (install: curl -LsSf https://astral.sh/uv/install.sh | sh)');
+  // Python version check
+  let pyVersion = getVersion('python --version') || getVersion('python3 --version');
+  if (!pyVersion) {
+    errors.push('Python 3.11+ - https://python.org/');
+  } else {
+    const match = pyVersion.match(/Python (\d+)\.(\d+)/);
+    if (match) {
+      const [, major, minor] = match.map(Number);
+      if (major < 3 || (major === 3 && minor < 11)) {
+        errors.push(`Python 3.11+ required (found ${pyVersion})`);
+      }
+    }
   }
 
-  if (missing.length > 0) {
-    console.error('Missing dependencies:');
-    missing.forEach((dep) => console.error(`  - ${dep}`));
-    console.error('\nPlease install the missing dependencies and try again.');
+  // uv package manager check
+  if (!getVersion('uv --version')) {
+    errors.push('uv (Python package manager) - https://docs.astral.sh/uv/');
+  }
+
+  // Go check (warning only - needed for WhatsApp service)
+  if (!getVersion('go version')) {
+    warnings.push('Go 1.21+ (optional, for WhatsApp service) - https://go.dev/dl/');
+  }
+
+  if (warnings.length > 0) {
+    console.warn('Warnings:\n' + warnings.map(w => `  - ${w}`).join('\n') + '\n');
+  }
+
+  if (errors.length > 0) {
+    console.error('Missing required dependencies:\n' + errors.map(e => `  - ${e}`).join('\n'));
+    console.error('\nInstall the missing dependencies and try again.');
     process.exit(1);
   }
 }
 
-function initEnv() {
-  const envPath = resolve(ROOT_DIR, 'server', '.env');
-  const templatePath = resolve(ROOT_DIR, '.env.template');
-
-  if (existsSync(envPath)) {
-    console.log('.env file already exists at server/.env');
-    return;
-  }
-
-  if (!existsSync(templatePath)) {
-    console.error('Error: .env.template not found');
-    process.exit(1);
-  }
-
-  copyFileSync(templatePath, envPath);
-  console.log('Created server/.env from template');
-  console.log('Edit server/.env to configure your API keys and settings');
-}
-
-function runNpmScript(script) {
-  const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-  const child = spawn(npm, ['run', script], {
-    cwd: ROOT_DIR,
+function run(script) {
+  const child = spawn(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', script], {
+    cwd: ROOT,
     stdio: 'inherit',
     shell: true,
   });
-
-  child.on('error', (err) => {
-    console.error(`Failed to run: ${err.message}`);
-    process.exit(1);
-  });
-
-  child.on('close', (code) => {
-    process.exit(code || 0);
-  });
+  child.on('error', (e) => { console.error(`Failed: ${e.message}`); process.exit(1); });
+  child.on('close', (code) => process.exit(code || 0));
 }
 
-// Main
-const [, , command = 'help'] = process.argv;
+const cmd = process.argv[2] || 'help';
 
-switch (command) {
-  case 'help':
-  case '--help':
-  case '-h':
-    printHelp();
-    break;
-
-  case 'init':
-    initEnv();
-    break;
-
-  case 'start':
-    checkDependencies();
-    if (!existsSync(resolve(ROOT_DIR, 'server', '.env'))) {
-      console.log('No .env found. Running init first...');
-      initEnv();
-    }
-    runNpmScript('start');
-    break;
-
-  case 'stop':
-    runNpmScript('stop');
-    break;
-
-  case 'build':
-    runNpmScript('build');
-    break;
-
-  case 'docker:up':
-    runNpmScript('docker:up');
-    break;
-
-  case 'docker:down':
-    runNpmScript('docker:down');
-    break;
-
-  case 'docker:logs':
-    runNpmScript('docker:logs');
-    break;
-
-  default:
-    console.error(`Unknown command: ${command}`);
-    printHelp();
-    process.exit(1);
+if (cmd === 'help' || cmd === '--help' || cmd === '-h') {
+  printHelp();
+} else if (cmd === 'start' || cmd === 'build') {
+  checkDeps();
+  run(cmd);
+} else if (COMMANDS[cmd]) {
+  run(cmd);
+} else {
+  console.error(`Unknown command: ${cmd}`);
+  printHelp();
+  process.exit(1);
 }

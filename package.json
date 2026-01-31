@@ -32,6 +32,14 @@
   "engines": {
     "node": ">=18.0.0"
   },
+  "files": [
+    "bin/",
+    "scripts/",
+    "client/",
+    "server/",
+    ".env.template",
+    "README.md"
+  ],
   "workspaces": [
     "client"
   ],
@@ -59,7 +67,8 @@
     "docker:prod:build": "docker-compose -f docker-compose.prod.yml build",
     "docker:prod:logs": "docker-compose -f docker-compose.prod.yml logs -f",
     "deploy": "bash deploy.sh",
-    "deploy:gcp": "bash deploy.sh"
+    "deploy:gcp": "bash deploy.sh",
+    "prepublishOnly": "node -e \"const p=require('./package.json'); if(!p.bin||!p.version){process.exit(1)}\""
   },
   "dependencies": {
     "concurrently": "^9.2.1",

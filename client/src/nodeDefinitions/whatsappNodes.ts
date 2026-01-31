@@ -385,50 +385,6 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
     ]
   },
 
-  // WhatsApp Connection/Auth Node
-  whatsappConnect: {
-    displayName: 'WhatsApp Connect',
-    name: 'whatsappConnect',
-    icon: WHATSAPP_CONNECT_ICON,
-    group: ['whatsapp'],
-    version: 1,
-    subtitle: 'WhatsApp Status',
-    description: 'Check WhatsApp connection status (QR code authentication removed - use external WhatsApp service)',
-    defaults: { name: 'WhatsApp Connect', color: '#128C7E' },
-    inputs: [],
-    outputs: [{
-      name: 'main',
-      displayName: 'Output',
-      type: 'main' as NodeConnectionType,
-      description: 'Connection output'
-    }],
-    properties: [
-      {
-        displayName: 'Connection Type',
-        name: 'connectionType',
-        type: 'options',
-        options: [
-          {
-            name: 'Scan QR Code',
-            value: 'qr_code'
-          },
-          {
-            name: 'Use Existing Session',
-            value: 'existing'
-          }
-        ],
-        default: 'qr_code',
-        description: 'How to connect to WhatsApp'
-      },
-      {
-        displayName: 'Session Info',
-        name: 'sessionInfo',
-        type: 'notice',
-        default: 'Session will persist across workflow runs. Re-authentication required approximately every 20 days.'
-      }
-    ]
-  },
-
   // WhatsApp Receive Message - triggers workflow on incoming messages
   whatsappReceive: {
     displayName: 'WhatsApp Receive',
@@ -862,4 +818,4 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
 // EXPORTS
 // ============================================================================
 
-export const WHATSAPP_NODE_TYPES = ['whatsappSend', 'whatsappConnect', 'whatsappReceive', 'whatsappDb'];
+export const WHATSAPP_NODE_TYPES = ['whatsappSend', 'whatsappReceive', 'whatsappDb'];

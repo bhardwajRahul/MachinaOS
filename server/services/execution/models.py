@@ -337,7 +337,7 @@ class ExecutionContext:
             if target in toolkit_node_ids and source:
                 subnode_ids.add(source)
 
-            # Nodes connected to AI Agent/Chat Agent config handles are sub-nodes
+            # Nodes connected to AI Agent/Zeenie config handles are sub-nodes
             # These handles: input-memory, input-tools, input-skill
             if target in ai_agent_node_ids and source and target_handle:
                 if target_handle in ('input-memory', 'input-tools', 'input-skill'):

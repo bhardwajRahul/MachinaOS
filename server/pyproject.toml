@@ -53,6 +53,9 @@ dependencies = [
     "apscheduler>=3.10.0",
     "qrcode[pil]>=8.0",
     "pytz>=2024.1",
+
+    # Web Search
+    "ddgs>=9.0.0",
 ]
 
 [project.optional-dependencies]

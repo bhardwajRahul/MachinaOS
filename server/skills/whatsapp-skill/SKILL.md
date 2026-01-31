@@ -13,7 +13,7 @@ This skill provides context for WhatsApp messaging capabilities.
 
 ## How It Works
 
-This skill provides instructions and context. To execute WhatsApp actions, connect the appropriate **tool nodes** to the Chat Agent's `input-tools` handle:
+This skill provides instructions and context. To execute WhatsApp actions, connect the appropriate **tool nodes** to the Zeenie's `input-tools` handle:
 
 - **WhatsApp Send** node - Send messages to contacts or groups
 - **WhatsApp DB** node - Query contacts, groups, and chat history
@@ -278,6 +278,6 @@ Check WhatsApp registration status.
 
 ## Setup Requirements
 
-1. Connect this skill to Chat Agent's `input-skill` handle
-2. Connect WhatsApp tool nodes to Chat Agent's `input-tools` handle
+1. Connect this skill to Zeenie's `input-skill` handle
+2. Connect WhatsApp tool nodes to Zeenie's `input-tools` handle
 3. Ensure WhatsApp is connected (green status indicator)

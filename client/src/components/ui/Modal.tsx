@@ -37,20 +37,23 @@ const Modal: React.FC<ModalProps> = ({
         <Dialog.Content
           style={{
             position: 'fixed',
-            top: '2.5vh',
-            left: '2.5vw',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
             backgroundColor: theme.colors.background,
             borderRadius: theme.borderRadius.lg,
             boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
             width: maxWidth,
+            minWidth: maxWidth,
             height: maxHeight,
+            maxHeight: maxHeight,
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
             zIndex: 1001,
           }}
         >
-          {title && (
+          {(title || headerActions) && (
             <div
               style={{
                 padding: `${theme.spacing.lg} ${theme.spacing.xl}`,

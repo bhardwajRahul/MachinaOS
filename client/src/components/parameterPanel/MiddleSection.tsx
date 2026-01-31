@@ -3,6 +3,7 @@ import ParameterRenderer from '../ParameterRenderer';
 import ToolSchemaEditor from './ToolSchemaEditor';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { useAppStore } from '../../store/useAppStore';
+import { useWebSocket } from '../../contexts/WebSocketContext';
 import { nodeDefinitions } from '../../nodeDefinitions';
 import { INodeTypeDescription, INodeProperties } from '../../types/INodeProperties';
 import { ExecutionResult } from '../../services/executionService';
@@ -64,9 +65,48 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
 }) => {
   const theme = useAppTheme();
   const { currentWorkflow } = useAppStore();
+  const { clearMemory, resetSkill } = useWebSocket();
   const [isConsoleExpanded, setIsConsoleExpanded] = useState(true);
   const [connectedSkills, setConnectedSkills] = useState<ConnectedSkill[]>([]);
   const [isSkillsExpanded, setIsSkillsExpanded] = useState(true);
+
+  // Clear/Reset dialog state
+  const [showClearMemoryDialog, setShowClearMemoryDialog] = useState(false);
+  const [showResetSkillDialog, setShowResetSkillDialog] = useState(false);
+  const [clearLongTermMemory, setClearLongTermMemory] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  // Clear memory handler
+  const handleClearMemory = async () => {
+    setIsProcessing(true);
+    try {
+      const sessionId = parameters.sessionId || 'default';
+      const result = await clearMemory(sessionId, clearLongTermMemory);
+      if (result.success && result.default_content) {
+        onParameterChange('memoryContent', result.default_content);
+      }
+    } finally {
+      setIsProcessing(false);
+      setShowClearMemoryDialog(false);
+      setClearLongTermMemory(false);
+    }
+  };
+
+  // Reset skill handler
+  const handleResetSkill = async () => {
+    setIsProcessing(true);
+    try {
+      const skillName = parameters.skillName;
+      if (!skillName) return;
+      const result = await resetSkill(skillName);
+      if (result.success && result.original_content) {
+        onParameterChange('instructions', result.original_content);
+      }
+    } finally {
+      setIsProcessing(false);
+      setShowResetSkillDialog(false);
+    }
+  };
 
   const visibleParams = (nodeDefinition.properties || [])
     .filter((param: INodeProperties) => shouldShowParameter(param, parameters));
@@ -86,10 +126,10 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
   // Check if this is a tool node that supports schema editing
   const isToolNode = TOOL_NODE_TYPES.includes(nodeDefinition.name);
 
-  // Check if this is a Chat Agent node
+  // Check if this is a Zeenie node
   const isChatAgentNode = nodeDefinition.name === 'chatAgent';
 
-  // Get connected skills for Chat Agent nodes
+  // Get connected skills for Zeenie nodes
   useEffect(() => {
     if (!isChatAgentNode || !currentWorkflow) {
       setConnectedSkills([]);
@@ -240,9 +280,261 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
                 toolDescription={parameters.toolDescription || nodeDefinition.description || ''}
               />
             )}
+
+            {/* Clear Memory Button - Only for memory nodes */}
+            {isMemoryNode && (
+              <div style={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                paddingTop: theme.spacing.md,
+                marginTop: theme.spacing.md,
+                borderTop: `1px solid ${theme.colors.border}`
+              }}>
+                <button
+                  onClick={() => setShowClearMemoryDialog(true)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '6px 12px',
+                    backgroundColor: `${theme.dracula.red}20`,
+                    color: theme.dracula.red,
+                    border: `1px solid ${theme.dracula.red}50`,
+                    borderRadius: theme.borderRadius.sm,
+                    fontSize: theme.fontSize.sm,
+                    fontWeight: theme.fontWeight.medium,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                  </svg>
+                  Clear Memory
+                </button>
+              </div>
+            )}
+
+            {/* Reset Skill Button - Only for built-in skill nodes */}
+            {isSkillNode && (
+              <div style={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                paddingTop: theme.spacing.md,
+                marginTop: theme.spacing.md,
+                borderTop: `1px solid ${theme.colors.border}`
+              }}>
+                <button
+                  onClick={() => setShowResetSkillDialog(true)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '6px 12px',
+                    backgroundColor: `${theme.dracula.orange}20`,
+                    color: theme.dracula.orange,
+                    border: `1px solid ${theme.dracula.orange}50`,
+                    borderRadius: theme.borderRadius.sm,
+                    fontSize: theme.fontSize.sm,
+                    fontWeight: theme.fontWeight.medium,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="1 4 1 10 7 10" />
+                    <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+                  </svg>
+                  Reset to Default
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* Connected Skills Section - Only for Chat Agent nodes */}
+          {/* Clear Memory Confirmation Dialog */}
+          {showClearMemoryDialog && (
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 9999
+            }}>
+              <div style={{
+                backgroundColor: theme.colors.background,
+                borderRadius: theme.borderRadius.lg,
+                border: `1px solid ${theme.colors.border}`,
+                padding: theme.spacing.xl,
+                maxWidth: '400px',
+                width: '90%',
+                boxShadow: '0 10px 40px rgba(0, 0, 0, 0.3)'
+              }}>
+                <h3 style={{
+                  margin: `0 0 ${theme.spacing.md}`,
+                  fontSize: theme.fontSize.lg,
+                  fontWeight: theme.fontWeight.semibold,
+                  color: theme.colors.text
+                }}>
+                  Clear Conversation Memory
+                </h3>
+                <p style={{
+                  margin: `0 0 ${theme.spacing.lg}`,
+                  fontSize: theme.fontSize.sm,
+                  color: theme.colors.textSecondary,
+                  lineHeight: 1.5
+                }}>
+                  This will reset the conversation history to its initial state. This action cannot be undone.
+                </p>
+
+                {/* Long-term memory checkbox */}
+                {parameters.longTermEnabled && (
+                  <label style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    marginBottom: theme.spacing.lg,
+                    fontSize: theme.fontSize.sm,
+                    color: theme.colors.text,
+                    cursor: 'pointer'
+                  }}>
+                    <input
+                      type="checkbox"
+                      checked={clearLongTermMemory}
+                      onChange={(e) => setClearLongTermMemory(e.target.checked)}
+                      style={{ width: 16, height: 16 }}
+                    />
+                    Also clear long-term memory (vector store)
+                  </label>
+                )}
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: theme.spacing.sm }}>
+                  <button
+                    onClick={() => {
+                      setShowClearMemoryDialog(false);
+                      setClearLongTermMemory(false);
+                    }}
+                    disabled={isProcessing}
+                    style={{
+                      padding: '8px 16px',
+                      backgroundColor: theme.colors.backgroundAlt,
+                      color: theme.colors.text,
+                      border: `1px solid ${theme.colors.border}`,
+                      borderRadius: theme.borderRadius.sm,
+                      fontSize: theme.fontSize.sm,
+                      fontWeight: theme.fontWeight.medium,
+                      cursor: isProcessing ? 'not-allowed' : 'pointer'
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleClearMemory}
+                    disabled={isProcessing}
+                    style={{
+                      padding: '8px 16px',
+                      backgroundColor: theme.dracula.red,
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: theme.borderRadius.sm,
+                      fontSize: theme.fontSize.sm,
+                      fontWeight: theme.fontWeight.medium,
+                      cursor: isProcessing ? 'not-allowed' : 'pointer',
+                      opacity: isProcessing ? 0.7 : 1
+                    }}
+                  >
+                    {isProcessing ? 'Clearing...' : 'Clear Memory'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Reset Skill Confirmation Dialog */}
+          {showResetSkillDialog && (
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 9999
+            }}>
+              <div style={{
+                backgroundColor: theme.colors.background,
+                borderRadius: theme.borderRadius.lg,
+                border: `1px solid ${theme.colors.border}`,
+                padding: theme.spacing.xl,
+                maxWidth: '400px',
+                width: '90%',
+                boxShadow: '0 10px 40px rgba(0, 0, 0, 0.3)'
+              }}>
+                <h3 style={{
+                  margin: `0 0 ${theme.spacing.md}`,
+                  fontSize: theme.fontSize.lg,
+                  fontWeight: theme.fontWeight.semibold,
+                  color: theme.colors.text
+                }}>
+                  Reset Skill to Default
+                </h3>
+                <p style={{
+                  margin: `0 0 ${theme.spacing.lg}`,
+                  fontSize: theme.fontSize.sm,
+                  color: theme.colors.textSecondary,
+                  lineHeight: 1.5
+                }}>
+                  This will restore the skill instructions to their original content. Any customizations will be lost.
+                </p>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: theme.spacing.sm }}>
+                  <button
+                    onClick={() => setShowResetSkillDialog(false)}
+                    disabled={isProcessing}
+                    style={{
+                      padding: '8px 16px',
+                      backgroundColor: theme.colors.backgroundAlt,
+                      color: theme.colors.text,
+                      border: `1px solid ${theme.colors.border}`,
+                      borderRadius: theme.borderRadius.sm,
+                      fontSize: theme.fontSize.sm,
+                      fontWeight: theme.fontWeight.medium,
+                      cursor: isProcessing ? 'not-allowed' : 'pointer'
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleResetSkill}
+                    disabled={isProcessing}
+                    style={{
+                      padding: '8px 16px',
+                      backgroundColor: theme.dracula.orange,
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: theme.borderRadius.sm,
+                      fontSize: theme.fontSize.sm,
+                      fontWeight: theme.fontWeight.medium,
+                      cursor: isProcessing ? 'not-allowed' : 'pointer',
+                      opacity: isProcessing ? 0.7 : 1
+                    }}
+                  >
+                    {isProcessing ? 'Resetting...' : 'Reset to Default'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Connected Skills Section - Only for Zeenie nodes */}
           {isChatAgentNode && (
             <div style={{
               marginTop: theme.spacing.lg,
@@ -375,7 +667,11 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
                             justifyContent: 'center',
                             flexShrink: 0
                           }}>
-                            <span style={{ fontSize: 18 }}>{skill.icon}</span>
+                            {skill.icon.startsWith('data:') ? (
+                              <img src={skill.icon} alt={skill.name} style={{ width: 20, height: 20 }} />
+                            ) : (
+                              <span style={{ fontSize: 18 }}>{skill.icon}</span>
+                            )}
                           </div>
 
                           {/* Skill Info */}

@@ -122,7 +122,8 @@ function killPid(pid) {
     sleep(100);
     exec(`kill -9 ${pid} 2>/dev/null`);
   } else {
-    exec(`taskkill /PID ${pid} /F 2>nul`);
+    // /T kills process tree (parent + children), needed for uvicorn --reload
+    exec(`taskkill /PID ${pid} /T /F 2>nul`);
   }
 }
 
@@ -142,6 +143,14 @@ function freePort(port) {
 // Main
 // ============================================================================
 
+// Check if build has been run (before anything else)
+const rootNodeModules = resolve(ROOT, 'node_modules');
+const pythonVenv = resolve(ROOT, 'server', '.venv');
+if (!existsSync(rootNodeModules) || !existsSync(pythonVenv)) {
+  console.error('\nError: Project not built. Run "npm run build" first.\n');
+  process.exit(1);
+}
+
 const config = loadConfig();
 
 // Ensure Python UTF-8 encoding
@@ -158,13 +167,6 @@ const templatePath = resolve(ROOT, '.env.template');
 if (!existsSync(envPath) && existsSync(templatePath)) {
   copyFileSync(templatePath, envPath);
   log('Created .env from template');
-}
-
-// Install client dependencies if needed (for npx/global install)
-const clientNodeModules = resolve(ROOT, 'client', 'node_modules');
-if (!existsSync(clientNodeModules)) {
-  log('Installing client dependencies...');
-  execSync('npm install', { cwd: resolve(ROOT, 'client'), stdio: 'inherit', shell: true });
 }
 
 // Free ports

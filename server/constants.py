@@ -36,7 +36,7 @@ AI_TOOL_TYPES: FrozenSet[str] = frozenset([
     'androidTool',
 ])
 
-# Skill node types (connect to Chat Agent's input-skill handle)
+# Skill node types (connect to Zeenie's input-skill handle)
 # Skills provide SKILL.md context/instructions, not executed as workflow nodes
 SKILL_NODE_TYPES: FrozenSet[str] = frozenset([
     'assistantPersonality',
@@ -71,7 +71,7 @@ CONFIG_NODE_TYPES: FrozenSet[str] = (
     AI_MEMORY_TYPES |    # Memory nodes (connect to input-memory)
     AI_TOOL_TYPES |      # Tool nodes (connect to AI Agent's input-tools)
     AI_CHAT_MODEL_TYPES |  # Model config nodes (connect to input-model)
-    SKILL_NODE_TYPES     # Skill nodes (connect to Chat Agent's input-skill)
+    SKILL_NODE_TYPES     # Skill nodes (connect to Zeenie's input-skill)
 )
 
 # =============================================================================
@@ -133,19 +133,14 @@ ANDROID_SERVICE_NODE_TYPES: FrozenSet[str] = (
     ANDROID_MEDIA_TYPES
 )
 
-# Android device setup (separate from services)
-ANDROID_SETUP_TYPES: FrozenSet[str] = frozenset([
-    'androidDeviceSetup',
-])
-
 # =============================================================================
 # WHATSAPP NODE TYPES
 # =============================================================================
 
 WHATSAPP_TYPES: FrozenSet[str] = frozenset([
     'whatsappSend',
-    'whatsappConnect',
     'whatsappReceive',
+    'whatsappDb',
 ])
 
 # =============================================================================

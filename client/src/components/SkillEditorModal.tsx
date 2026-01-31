@@ -35,7 +35,7 @@ const DEFAULT_SKILL: UserSkill = {
 - List the main functions
 
 ## Usage
-Explain when and how the Chat Agent should use this skill.
+Explain when and how the Zeenie should use this skill.
 
 ## Examples
 
@@ -262,7 +262,7 @@ const SkillEditorModal: React.FC<SkillEditorModalProps> = ({
                   style={{ ...inputStyle, resize: 'vertical', minHeight: '80px' }}
                 />
                 <span style={{ fontSize: theme.fontSize.xs, color: theme.colors.textMuted }}>
-                  This appears in the skill registry to help the Chat Agent decide when to use it
+                  This appears in the skill registry to help the Zeenie decide when to use it
                 </span>
               </div>
 
@@ -332,7 +332,7 @@ const SkillEditorModal: React.FC<SkillEditorModalProps> = ({
           {activeTab === 'instructions' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.md, height: '100%' }}>
               <div style={{ fontSize: theme.fontSize.sm, color: theme.colors.textSecondary }}>
-                Write markdown instructions for the Chat Agent. Include capabilities, usage guidelines, and examples.
+                Write markdown instructions for the Zeenie. Include capabilities, usage guidelines, and examples.
               </div>
               <div style={{ flex: 1, minHeight: '400px' }}>
                 <CodeEditor

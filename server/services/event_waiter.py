@@ -61,110 +61,13 @@ def is_redis_mode() -> bool:
 
 
 # =============================================================================
-# LID TO PHONE RESOLUTION CACHE
+# NOTE: LID TO PHONE RESOLUTION
 # =============================================================================
-
-# Cache: group_jid -> {lid -> phone}
-# TTL: 5 minutes (group membership can change)
-_lid_phone_cache: Dict[str, Dict[str, str]] = {}
-_lid_cache_timestamps: Dict[str, float] = {}
-LID_CACHE_TTL = 300  # 5 minutes
-
-
-async def resolve_lid_to_phone(group_jid: str, lid: str) -> Optional[str]:
-    """Resolve a LID to phone number using cached group info.
-
-    Args:
-        group_jid: The group JID (e.g., '120363422738675920@g.us')
-        lid: The LID to resolve (e.g., '201872623300767@lid' or just '201872623300767')
-
-    Returns:
-        Phone number if found, None otherwise
-    """
-    # Normalize LID (remove @lid suffix if present)
-    lid_key = lid.split('@')[0] if '@' in lid else lid
-
-    # Check cache validity
-    if group_jid in _lid_phone_cache:
-        cache_time = _lid_cache_timestamps.get(group_jid, 0)
-        if time.time() - cache_time < LID_CACHE_TTL:
-            phone = _lid_phone_cache[group_jid].get(lid_key)
-            if phone:
-                return phone
-
-    # Cache miss or expired - fetch group info
-    await refresh_group_lid_cache(group_jid)
-
-    # Try again from cache
-    if group_jid in _lid_phone_cache:
-        phone = _lid_phone_cache[group_jid].get(lid_key)
-        if phone:
-            return phone
-
-    logger.warning(f"[LIDResolver] Could not resolve LID {lid_key} in group {group_jid}")
-    return None
-
-
-async def refresh_group_lid_cache(group_jid: str) -> bool:
-    """Fetch group info and cache LID->phone mappings.
-
-    Args:
-        group_jid: The group JID to fetch info for
-
-    Returns:
-        True if successful, False otherwise
-    """
-    try:
-        from routers.whatsapp import get_client
-
-        client = await get_client()
-        result = await client.call("group_info", {"group_id": group_jid})
-
-        if not result or 'participants' not in result:
-            logger.warning(f"[LIDResolver] No participants in group_info for {group_jid}")
-            return False
-
-        # Build LID->phone mapping
-        lid_map: Dict[str, str] = {}
-        for participant in result.get('participants', []):
-            jid = participant.get('jid', '')
-            phone = participant.get('phone', '')
-
-            if jid and phone:
-                # Extract LID key (number before @)
-                lid_key = jid.split('@')[0] if '@' in jid else jid
-                lid_map[lid_key] = phone
-                logger.debug(f"[LIDResolver] Cached: {lid_key} -> {phone}")
-
-        _lid_phone_cache[group_jid] = lid_map
-        _lid_cache_timestamps[group_jid] = time.time()
-
-        logger.debug(f"[LIDResolver] Cached {len(lid_map)} participants for group {group_jid}")
-        return True
-
-    except Exception as e:
-        logger.error(f"[LIDResolver] Failed to fetch group info for {group_jid}: {e}")
-        return False
-
-
-def get_cached_phone(group_jid: str, lid: str) -> Optional[str]:
-    """Get phone from cache synchronously (for use in filter function).
-
-    Args:
-        group_jid: The group JID
-        lid: The LID to look up
-
-    Returns:
-        Phone number if cached, None otherwise
-    """
-    lid_key = lid.split('@')[0] if '@' in lid else lid
-
-    if group_jid in _lid_phone_cache:
-        cache_time = _lid_cache_timestamps.get(group_jid, 0)
-        if time.time() - cache_time < LID_CACHE_TTL:
-            return _lid_phone_cache[group_jid].get(lid_key)
-
-    return None
+# LID (Linked ID) resolution is now handled by the Go WhatsApp RPC (service.go).
+# The Go RPC resolves LIDs to phone numbers before sending the message_received event.
+# The sender_phone field in the event data contains the already-resolved phone number.
+# No Python-side LID cache is needed anymore.
+# =============================================================================
 
 
 # =============================================================================
@@ -241,16 +144,26 @@ def get_trigger_config(node_type: str) -> Optional[TriggerConfig]:
 def build_whatsapp_filter(params: Dict) -> Callable[[Dict], bool]:
     """Build filter function for WhatsApp messages.
 
-    Based on schema.json event.message_received fields:
-    - message_type: text, image, video, audio, document, sticker, location, contact, contacts
-    - sender: Sender JID (e.g., 1234567890@s.whatsapp.net for DMs, or LID like 123@lid for groups)
-    - chat_id: Chat JID (same as sender for DMs, group JID for groups)
+    Based on Go RPC handleIncomingMessage() event fields (service.go):
+    - message_id: string - unique message ID
+    - sender: string - Sender JID (may be LID for groups)
+    - sender_phone: string - RESOLVED phone number (LID already resolved by Go RPC!)
+    - chat_id: string - Chat JID (same as sender for DMs, group JID for groups)
+    - timestamp: time - message timestamp
     - is_from_me: boolean - true if sent by connected account
     - is_group: boolean - true if message is in a group chat
+    - message_type: string - text, image, video, audio, document, sticker, location, contact, contacts
+    - text: string - text content (for text messages)
     - is_forwarded: boolean - true if message is forwarded
-    - text: text content (for text messages)
-    - group_info: { group_jid, sender_jid, sender_name } - present for group messages
-      - sender_jid may be LID format, use LID cache to resolve to real phone
+    - forwarding_score: int - forwarding count
+    - group_info: object - present for group messages:
+      - group_jid: string
+      - sender_jid: string
+      - sender_phone: string - RESOLVED phone number
+      - sender_name: string - push name if available
+
+    Note: The Go RPC already resolves LIDs to phone numbers before sending the event.
+    The sender_phone field contains the resolved phone number - no manual LID resolution needed!
     """
     msg_type = params.get('messageTypeFilter', 'all')
     sender_filter = params.get('filter', 'all')
@@ -265,30 +178,20 @@ def build_whatsapp_filter(params: Dict) -> Callable[[Dict], bool]:
 
     def matches(m: Dict) -> bool:
         msg_chat_id = m.get('chat_id', '')
-        msg_sender = m.get('sender', '')
-        group_info = m.get('group_info', {})
         is_group = m.get('is_group', False)
+        group_info = m.get('group_info', {})
 
-        # For group messages, try to resolve LID to phone using cache
-        sender_jid = group_info.get('sender_jid', '') if is_group else msg_sender
-        sender_phone = ''
-
-        if is_group and sender_jid:
-            # Check if sender_jid is a LID (ends with @lid)
-            if '@lid' in sender_jid:
-                # Try to get resolved phone from cache
-                cached_phone = get_cached_phone(msg_chat_id, sender_jid)
-                if cached_phone:
-                    sender_phone = cached_phone
-                else:
-                    # LID not in cache, extract number part as fallback
-                    sender_phone = sender_jid.split('@')[0] if '@' in sender_jid else sender_jid
-            else:
-                # Not a LID, extract phone from JID
-                sender_phone = sender_jid.split('@')[0] if '@' in sender_jid else sender_jid
+        # Use sender_phone directly - Go RPC already resolves LIDs to phone numbers!
+        # For group messages, prefer group_info.sender_phone, fall back to root sender_phone
+        if is_group:
+            sender_phone = group_info.get('sender_phone', '') or m.get('sender_phone', '')
         else:
-            # DM - extract phone from sender
-            sender_phone = msg_sender.split('@')[0] if '@' in msg_sender else msg_sender
+            sender_phone = m.get('sender_phone', '')
+
+        # Fallback: extract phone from sender JID if sender_phone not available
+        if not sender_phone:
+            sender = m.get('sender', '')
+            sender_phone = sender.split('@')[0] if '@' in sender else sender
 
         # Message type filter (schema field: message_type)
         if msg_type != 'all' and m.get('message_type') != msg_type:
@@ -326,12 +229,9 @@ def build_whatsapp_filter(params: Dict) -> Callable[[Dict], bool]:
 
         # Forwarded message filter (schema field: is_forwarded)
         is_forwarded = m.get('is_forwarded', False)
-        logger.debug(f"[WhatsAppFilter] Forwarded check: filter={forwarded_filter}, is_forwarded={is_forwarded}, raw_value={m.get('is_forwarded')}")
         if forwarded_filter == 'only_forwarded' and not is_forwarded:
-            logger.debug(f"[WhatsAppFilter] Rejected: only_forwarded but message is not forwarded")
             return False
         if forwarded_filter == 'ignore_forwarded' and is_forwarded:
-            logger.debug(f"[WhatsAppFilter] Rejected: ignore_forwarded but message is forwarded")
             return False
 
         logger.debug(f"[WhatsAppFilter] Matched message from {sender_phone}")
@@ -456,16 +356,6 @@ async def register(node_type: str, node_id: str, params: Dict) -> Waiter:
     config = get_trigger_config(node_type)
     if not config:
         raise ValueError(f"Unknown trigger type: {node_type}")
-
-    # Note: LID cache for group sender resolution is populated lazily on first message
-    # We don't pre-fetch here to avoid blocking deployment with sequential RPC calls
-    if node_type == 'whatsappReceive':
-        filter_type = params.get('filter', 'all')
-        group_id = params.get('group_id') or params.get('groupId', '')
-        sender_number = params.get('senderNumber', '')
-
-        if filter_type == 'group' and group_id and sender_number:
-            logger.debug(f"[EventWaiter] Group filter with sender: {group_id}, sender: {sender_number}")
 
     # Create waiter
     waiter = Waiter(

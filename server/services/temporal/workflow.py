@@ -19,7 +19,7 @@ from temporalio.common import RetryPolicy
 
 # Config handles - nodes connecting via these are config nodes (not executed)
 # AI Agent handles: input-memory, input-tools, input-model
-# Chat Agent handles: input-skill, input-tools
+# Zeenie handles: input-skill, input-tools
 CONFIG_HANDLES = {"input-tools", "input-memory", "input-model", "input-skill"}
 
 # Android service types (connect to androidTool, not executed directly)
@@ -28,7 +28,7 @@ ANDROID_SERVICE_TYPES = {
     "systemInfo", "appList", "appLauncher",
 }
 
-# Skill node types (connect to Chat Agent's input-skill, not executed directly)
+# Skill node types (connect to Zeenie's input-skill, not executed directly)
 SKILL_NODE_TYPES = {
     "assistantPersonality", "whatsappSkill", "memorySkill", "mapsSkill",
     "httpSkill", "schedulerSkill", "androidSkill", "codeSkill", "customSkill",
@@ -293,7 +293,7 @@ class MachinaWorkflow:
             if source_node.get("type") in ANDROID_SERVICE_TYPES:
                 config_ids.add(source_id)
 
-            # Skill nodes (always config, connect to Chat Agent)
+            # Skill nodes (always config, connect to Zeenie)
             if source_node.get("type") in SKILL_NODE_TYPES:
                 config_ids.add(source_id)
 

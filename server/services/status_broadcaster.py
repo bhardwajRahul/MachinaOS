@@ -663,6 +663,14 @@ class StatusBroadcaster:
         if len(self._status["console_logs"]) > 100:
             self._status["console_logs"] = self._status["console_logs"][-100:]
 
+        # Save to database for persistence
+        try:
+            from core.container import container
+            database = container.database()
+            await database.add_console_log(log_data)
+        except Exception as e:
+            logger.warning(f"[StatusBroadcaster] Failed to persist console log: {e}")
+
         # Broadcast to all clients
         await self.broadcast({
             "type": "console_log",

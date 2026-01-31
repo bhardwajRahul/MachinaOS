@@ -1360,8 +1360,6 @@ class AIService:
                 config = tool_configs.get(tool_name, {})
                 tool_node_id = config.get('node_id')
 
-                logger.info(f"[LangGraph] tool_executor called: tool_name={tool_name}, node_id={tool_node_id}, workflow_id={workflow_id}")
-
                 # Broadcast executing status to the AI Agent node
                 await broadcast_status("executing_tool", {
                     "message": f"Executing tool: {tool_name}",
@@ -1393,15 +1391,12 @@ class AIService:
 
                     # Broadcast success status to the tool node
                     if tool_node_id and broadcaster:
-                        logger.info(f"[LangGraph] Broadcasting success to tool node: node_id={tool_node_id}, workflow_id={workflow_id}")
                         await broadcaster.update_node_status(
                             tool_node_id,
                             "success",
                             {"message": f"{tool_name} completed", "result": result},
                             workflow_id=workflow_id
                         )
-                    else:
-                        logger.warning(f"[LangGraph] Cannot broadcast success: tool_node_id={tool_node_id}, broadcaster={broadcaster is not None}")
 
                     return result
 
@@ -1673,7 +1668,7 @@ class AIService:
                     logger.info(f"No model specified, using default: {model}")
 
             if not api_key:
-                raise ValueError("API key is required for Chat Agent")
+                raise ValueError("API key is required for Zeenie")
 
             # Build thinking config from parameters
             thinking_config = None
@@ -1783,6 +1778,10 @@ class AIService:
                             {"message": f"Executing {tool_name}"},
                             workflow_id=workflow_id
                         )
+
+                    # Include workflow_id in config so tool handlers can broadcast with proper scoping
+                    # This is needed for Android toolkit to broadcast status to connected service nodes
+                    config['workflow_id'] = workflow_id
 
                     try:
                         # Execute via handlers/tools.py - same pattern as AI Agent
@@ -1936,12 +1935,6 @@ class AIService:
             log_execution_time(logger, "chat_agent", start_time, time.time())
             log_api_call(logger, provider, model, "chat_agent", True)
 
-            # Save assistant response to chat messages database for console panel persistence
-            try:
-                await self.database.add_chat_message("default", "assistant", response_content)
-            except Exception as e:
-                logger.warning(f"[ChatAgent] Failed to save chat response to database: {e}")
-
             return {
                 "success": True,
                 "node_id": node_id,
@@ -1980,6 +1973,8 @@ class AIService:
             'calculatorTool': 'calculator',
             'currentTimeTool': 'get_current_time',
             'webSearchTool': 'web_search',
+            'pythonExecutor': 'python_code',
+            'javascriptExecutor': 'javascript_code',
             'androidTool': 'android_device',
             'whatsappSend': 'whatsapp_send',
             'whatsappDb': 'whatsapp_db',
@@ -1990,6 +1985,8 @@ class AIService:
             'calculatorTool': 'Perform mathematical calculations. Operations: add, subtract, multiply, divide, power, sqrt, mod, abs',
             'currentTimeTool': 'Get the current date and time. Optionally specify timezone.',
             'webSearchTool': 'Search the web for information. Returns relevant search results.',
+            'pythonExecutor': 'Execute Python code for calculations, data processing, and automation. Available: math, json, datetime, Counter, defaultdict. Set output variable with result.',
+            'javascriptExecutor': 'Execute JavaScript code for calculations, data processing, and JSON manipulation. Set output variable with result.',
             'androidTool': 'Control Android device. Available services are determined by connected nodes.',
             'whatsappSend': 'Send WhatsApp messages to contacts or groups. Supports text, media, location, and contact messages.',
             'whatsappDb': 'Query WhatsApp database - list contacts, search groups, get contact/group info, retrieve chat history.',
@@ -2113,13 +2110,25 @@ class AIService:
 
             return HttpRequestSchema
 
-        # Python executor tool schema
+        # Python executor tool schema (dual-purpose: workflow node + AI tool)
         if node_type == 'pythonExecutor':
             class PythonCodeSchema(BaseModel):
-                """Schema for Python code execution."""
-                code: str = Field(description="Python code to execute")
+                """Execute Python code for calculations, data processing, and automation."""
+                code: str = Field(
+                    description="Python code to execute. Set 'output' variable with result. Use print() for console output. Available: input_data (dict), math, json, datetime, Counter, defaultdict."
+                )
 
             return PythonCodeSchema
+
+        # JavaScript executor tool schema (dual-purpose: workflow node + AI tool)
+        if node_type == 'javascriptExecutor':
+            class JavaScriptCodeSchema(BaseModel):
+                """Execute JavaScript code for calculations, data processing, and automation."""
+                code: str = Field(
+                    description="JavaScript code to execute. Set 'output' variable with result. Use console.log() for output. Available: input_data (object)."
+                )
+
+            return JavaScriptCodeSchema
 
         # Current time tool schema
         if node_type == 'currentTimeTool':

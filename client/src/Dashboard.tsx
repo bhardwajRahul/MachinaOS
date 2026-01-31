@@ -22,7 +22,6 @@ import ConditionalEdge from './components/ConditionalEdge';
 import NodeContextMenu from './components/ui/NodeContextMenu';
 import { nodeDefinitions } from './nodeDefinitions';
 import { ANDROID_SERVICE_NODE_TYPES } from './nodeDefinitions/androidServiceNodes';
-import { ANDROID_DEVICE_NODE_TYPES } from './nodeDefinitions/androidDeviceNodes';
 import { SCHEDULER_NODE_TYPES } from './nodeDefinitions/schedulerNodes';
 import { CHAT_NODE_TYPES } from './nodeDefinitions/chatNodes';
 import { CODE_NODE_TYPES } from './nodeDefinitions/codeNodes';
@@ -37,8 +36,6 @@ import ComponentPalette from './components/ui/ComponentPalette';
 import TopToolbar from './components/ui/TopToolbar';
 import WorkflowSidebar from './components/ui/WorkflowSidebar';
 import SettingsPanel, { WorkflowSettings, defaultSettings } from './components/ui/SettingsPanel';
-import WhatsAppSettingsPanel from './components/ui/WhatsAppSettingsPanel';
-import AndroidSettingsPanel from './components/ui/AndroidSettingsPanel';
 import AIResultModal from './components/ui/AIResultModal';
 import CredentialsModal from './components/CredentialsModal';
 import ErrorBoundary from './components/ui/ErrorBoundary';
@@ -82,11 +79,11 @@ const createNodeTypes = (): Record<string, React.ComponentType<any>> => {
     } else if (type === 'simpleMemory') {
       // Simple Memory node for AI conversation history - uses circular ModelNode design
       types[type] = ModelNode;
-    } else if (type === 'whatsappConnect' || type === 'whatsappSend' || type === 'whatsappDb') {
+    } else if (type === 'whatsappSend' || type === 'whatsappDb') {
       // WhatsApp action nodes use SquareNode (whatsappReceive is a trigger)
       types[type] = SquareNode;
-    } else if (ANDROID_SERVICE_NODE_TYPES.includes(type) || ANDROID_DEVICE_NODE_TYPES.includes(type)) {
-      // Android service and device nodes use SquareNode component
+    } else if (ANDROID_SERVICE_NODE_TYPES.includes(type)) {
+      // Android service nodes use SquareNode component
       types[type] = SquareNode;
     } else if (SCHEDULER_NODE_TYPES.includes(type)) {
       // Timer uses SquareNode (has input), cronScheduler already handled as trigger above
@@ -244,6 +241,7 @@ const DashboardContent: React.FC = () => {
     updateWorkflow,
     loadSavedWorkflows,
     createNewWorkflow,
+    saveWorkflow,
     deleteWorkflow,
     migrateCurrentWorkflow,
     toggleSidebar,
@@ -253,10 +251,6 @@ const DashboardContent: React.FC = () => {
     exportWorkflowToJSON,
     exportWorkflowToFile,
     setCurrentWorkflow,
-    whatsappSettingsOpen,
-    setWhatsAppSettingsOpen,
-    androidSettingsOpen,
-    setAndroidSettingsOpen,
     selectedNode,
     setSelectedNode,
     renamingNodeId,
@@ -418,7 +412,7 @@ const DashboardContent: React.FC = () => {
             className = 'completed';
           }
         }
-        // Skill connection highlights during skill loading phase (Chat Agent)
+        // Skill connection highlights during skill loading phase (Zeenie)
         // Skills provide context to LLM, so highlight only when loading skills
         else if (isSkillConnection) {
           if (phase === 'loading_skills') {
@@ -699,8 +693,40 @@ const DashboardContent: React.FC = () => {
 
         const importedWorkflow = await importWorkflowFromFile(file);
 
+        // Check for name conflict with existing workflows
+        const existingNames = savedWorkflows.map(w => w.name.toLowerCase());
+        let finalName = importedWorkflow.name;
+
+        if (existingNames.includes(finalName.toLowerCase())) {
+          // Name conflict detected - prompt user for new name
+          const suggestedName = `${importedWorkflow.name} (imported)`;
+          const userInput = window.prompt(
+            `A workflow named "${importedWorkflow.name}" already exists.\n\nEnter a new name for the imported workflow:`,
+            suggestedName
+          );
+
+          if (userInput === null) {
+            // User cancelled the import
+            return;
+          }
+
+          finalName = userInput.trim();
+
+          if (!finalName) {
+            alert('Workflow name cannot be empty');
+            return;
+          }
+
+          // Check if the new name also conflicts
+          if (existingNames.includes(finalName.toLowerCase())) {
+            alert(`A workflow named "${finalName}" also exists. Please try again with a different name.`);
+            return;
+          }
+        }
+
         const workflow = {
           ...importedWorkflow,
+          name: finalName,
           id: generateWorkflowId(),
           createdAt: new Date(),
           lastModified: new Date()
@@ -708,6 +734,7 @@ const DashboardContent: React.FC = () => {
 
         console.log('Importing workflow:', workflow);
 
+        // Save node parameters to database
         for (const node of workflow.nodes) {
           if (node.data && Object.keys(node.data).length > 0) {
             try {
@@ -719,9 +746,13 @@ const DashboardContent: React.FC = () => {
           }
         }
 
+        // Set as current workflow first
         setCurrentWorkflow(workflow);
 
-        console.log('Workflow imported successfully');
+        // Auto-save to database so it appears in sidebar immediately
+        await saveWorkflow();
+
+        console.log('Workflow imported and saved successfully');
         alert(`Workflow "${workflow.name}" imported with ${workflow.nodes.length} nodes and ${workflow.edges.length} connections`);
       } catch (error: any) {
         console.error('Import error:', error);
@@ -730,21 +761,36 @@ const DashboardContent: React.FC = () => {
     };
     fileInput.click();
   };
-  // Load saved workflows on mount and create default workflow if needed
+  // Load saved workflows on mount and auto-select most recent or create new if none exist
   const hasMigrated = React.useRef(false);
+  const hasInitialized = React.useRef(false);
   useEffect(() => {
+    if (hasInitialized.current) return;
+    hasInitialized.current = true;
+
     console.log('[Dashboard] Mount effect - loading workflows', {
       hasCurrentWorkflow: !!currentWorkflow,
       currentWorkflowId: currentWorkflow?.id,
     });
-    loadSavedWorkflows();
+
+    const initWorkflows = async () => {
+      await loadSavedWorkflows();
+      // loadSavedWorkflows auto-loads the most recent workflow if none is set
+      // Only create new if still no workflow after loading
+      const state = useAppStore.getState();
+      if (!state.currentWorkflow) {
+        console.log('[Dashboard] No saved workflows found, creating new one');
+        createNewWorkflow();
+      }
+    };
+
     if (!currentWorkflow) {
-      console.log('[Dashboard] No current workflow, creating new one');
-      createNewWorkflow();
+      initWorkflows();
     } else if (!hasMigrated.current) {
       console.log('[Dashboard] Migrating current workflow');
       migrateCurrentWorkflow();
       hasMigrated.current = true;
+      loadSavedWorkflows(); // Still load sidebar list
     }
   }, [loadSavedWorkflows, currentWorkflow, createNewWorkflow, migrateCurrentWorkflow]);
 
@@ -754,12 +800,6 @@ const DashboardContent: React.FC = () => {
   // and when backend executes nodes (NodeExecutor._prepare_parameters)
   useEffect(() => {
     if (currentWorkflow && currentWorkflow.id) {
-      console.log('[Dashboard] Sync Store -> ReactFlow', {
-        workflowId: currentWorkflow.id,
-        storeEdgeCount: (currentWorkflow.edges || []).length,
-        storeEdges: (currentWorkflow.edges || []).map(e => ({ id: e.id, source: e.source, target: e.target })),
-        lastModified: currentWorkflow.lastModified
-      });
       const workflowNodes = currentWorkflow.nodes || [];
       setNodes(workflowNodes);
       setEdges(currentWorkflow.edges || []);
@@ -1124,18 +1164,6 @@ const DashboardContent: React.FC = () => {
           onClose={() => setSettingsOpen(false)}
           settings={settings}
           onSettingsChange={setSettings}
-        />
-
-        {/* WhatsApp Settings Panel Modal */}
-        <WhatsAppSettingsPanel
-          isOpen={whatsappSettingsOpen}
-          onClose={() => setWhatsAppSettingsOpen(false)}
-        />
-
-        {/* Android Settings Panel Modal */}
-        <AndroidSettingsPanel
-          isOpen={androidSettingsOpen}
-          onClose={() => setAndroidSettingsOpen(false)}
         />
 
         {/* Credentials Modal */}

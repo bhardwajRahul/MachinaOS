@@ -41,12 +41,6 @@ const RobotIcon = ({ size = 32, color = 'currentColor' }: { size?: number; color
   </svg>
 );
 
-// Lucide MessageSquare icon - clean chat bubble
-const ChatAgentIcon = ({ size = 32, color = 'currentColor' }: { size?: number; color?: string }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-  </svg>
-);
 
 const AGENT_CONFIGS: Record<string, AgentConfig> = {
   aiAgent: {
@@ -60,9 +54,9 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
     ],
   },
   chatAgent: {
-    icon: <ChatAgentIcon />,
-    title: 'Chat Agent',
-    subtitle: 'Skill-based Agent',
+    icon: <span style={{ fontSize: '28px' }}>🧞</span>,
+    title: 'Zeenie',
+    subtitle: 'Your Personal Assistant',
     accentColor: '#3B82F6',
     bottomHandles: [
       { id: 'input-memory', label: 'Memory', position: '25%' },
