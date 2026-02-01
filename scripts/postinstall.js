@@ -37,14 +37,18 @@ print('  MachinaOS - Installing...');
 print('========================================');
 print('');
 
-// Run a script and pipe output to stderr
+// Run a script and pipe all output to stderr (npm shows stderr during install)
 function runScript(scriptPath) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [scriptPath], {
       cwd: ROOT,
-      stdio: ['inherit', process.stderr, 'inherit'],
+      stdio: ['inherit', 'pipe', 'pipe'],
       env: { ...process.env, FORCE_COLOR: '1' }
     });
+
+    // Pipe stdout to stderr so npm shows it
+    child.stdout.on('data', (data) => process.stderr.write(data));
+    child.stderr.on('data', (data) => process.stderr.write(data));
 
     child.on('error', reject);
     child.on('close', (code) => {

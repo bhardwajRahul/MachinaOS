@@ -47,14 +47,19 @@ jobs:
           go-version: '1.24'
           cache-dependency-path: server/whatsapp-rpc/go.sum
 
-      - name: Install GCC (Windows)
+      - name: Setup MSYS2 (Windows)
         if: matrix.os == 'windows-latest'
-        run: choco install mingw -y
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
+          install: mingw-w64-x86_64-gcc
 
       - name: Build WhatsApp RPC Server
         working-directory: server/whatsapp-rpc
         env:
           CGO_ENABLED: 1
+          CC: ${{ matrix.os == 'windows-latest' && 'C:/msys64/mingw64/bin/gcc.exe' || 'gcc' }}
         run: go build -ldflags="-s -w" -o whatsapp-rpc-server-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }} ./src/go/cmd/server
 
       - name: Upload artifact
