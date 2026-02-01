@@ -23,11 +23,11 @@ jobs:
             goos: linux
             goarch: amd64
             suffix: ''
-          - os: macos-13
+          - os: macos-15
             goos: darwin
             goarch: amd64
             suffix: ''
-          - os: macos-14
+          - os: macos-latest
             goos: darwin
             goarch: arm64
             suffix: ''
