@@ -4,7 +4,21 @@ Open-source workflow automation platform with AI agents, React Flow, and n8n-ins
 
 ## Quick Start
 
-### Option 1: Clone & Run
+### Option 1: One-Line Install (Recommended)
+
+**Linux/macOS:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/trohitg/MachinaOS/main/install.sh | bash
+```
+
+**Windows (PowerShell):**
+```powershell
+iwr -useb https://raw.githubusercontent.com/trohitg/MachinaOS/main/install.ps1 | iex
+```
+
+This automatically installs all dependencies (Node.js, Python, uv, Go) and MachinaOS.
+
+### Option 2: Clone & Run
 
 ```bash
 git clone https://github.com/trohitg/MachinaOS.git
@@ -13,14 +27,16 @@ npm run build
 npm run start
 ```
 
-### Option 2: Global Install
+### Option 3: npm Global Install
 
 ```bash
 npm install -g machinaos
 machinaos start
 ```
 
-### Option 3: Docker
+Requires Node.js 18+, Python 3.11+, uv, and Go 1.21+ to be pre-installed.
+
+### Option 4: Docker
 
 ```bash
 git clone https://github.com/trohitg/MachinaOS.git
@@ -31,6 +47,8 @@ npm run docker:up
 Open http://localhost:3000
 
 ## Prerequisites
+
+The install script handles these automatically, but for manual installation:
 
 - **Node.js 18+** - https://nodejs.org/
 - **Python 3.11+** - https://python.org/

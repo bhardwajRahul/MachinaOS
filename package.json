@@ -38,7 +38,9 @@
     "client/",
     "server/",
     ".env.template",
-    "README.md"
+    "README.md",
+    "install.sh",
+    "install.ps1"
   ],
   "workspaces": [
     "client"

@@ -32,6 +32,7 @@ if (isCI && isPostInstall) {
   process.exit(0);
 }
 
+
 // Ensure Python UTF-8 encoding
 process.env.PYTHONUTF8 = '1';
 
@@ -61,11 +62,9 @@ function log(step, msg) {
 }
 
 function npmInstall(cwd = ROOT) {
-  try {
-    execSync('npm ci', { cwd, stdio: 'pipe', shell: true });
-  } catch {
-    execSync('npm install', { cwd, stdio: 'inherit', shell: true });
-  }
+  // Use npm install directly with visible output
+  // npm ci requires package-lock.json which may not exist in all directories
+  execSync('npm install', { cwd, stdio: 'inherit', shell: true });
 }
 
 // ============================================================================
