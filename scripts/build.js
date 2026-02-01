@@ -32,7 +32,6 @@ if (isCI && isPostInstall) {
   process.exit(0);
 }
 
-
 // Ensure Python UTF-8 encoding
 process.env.PYTHONUTF8 = '1';
 

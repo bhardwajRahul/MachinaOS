@@ -97,13 +97,22 @@ async function status() {
 }
 
 async function build() {
+  const bin = join(BIN_DIR, BIN);
+
+  // Skip if binary already exists (e.g., downloaded from GitHub Releases)
+  if (existsSync(bin)) {
+    log(`Binary already exists: ${BIN} (${(statSync(bin).size / 1024 / 1024).toFixed(1)}MB)`, 'green');
+    return;
+  }
+
+  // Build from source requires Go
   if (!hasGo()) {
-    log('Go is not installed. Install from: https://go.dev/dl/', 'red');
+    log('Go is not installed and no pre-built binary found.', 'red');
+    log('Install Go from: https://go.dev/dl/', 'yellow');
     process.exit(1);
   }
-  const bin = join(BIN_DIR, BIN);
+
   if (!existsSync(BIN_DIR)) { await execa('mkdir', ['-p', BIN_DIR]); }
-  if (existsSync(bin)) unlinkSync(bin);
   await execa('go', ['build', '-o', bin, './src/go/cmd/server'], { cwd: ROOT, stdio: 'inherit' });
   log(`Built: ${BIN} (${(statSync(bin).size / 1024 / 1024).toFixed(1)}MB)`, 'green');
 }

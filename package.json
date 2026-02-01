@@ -1,6 +1,6 @@
 {
   "name": "machinaos",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "Open source workflow automation platform with AI agents, React Flow, and n8n-inspired architecture",
   "type": "module",
   "keywords": [
@@ -71,7 +71,7 @@
     "deploy": "bash deploy.sh",
     "deploy:gcp": "bash deploy.sh",
     "prepublishOnly": "node -e \"const p=require('./package.json'); if(!p.bin||!p.version){process.exit(1)}\"",
-    "postinstall": "node scripts/build.js"
+    "postinstall": "node scripts/postinstall.js"
   },
   "dependencies": {
     "concurrently": "^9.2.1",
