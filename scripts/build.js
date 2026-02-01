@@ -20,6 +20,18 @@ const ROOT = resolve(__dirname, '..');
 const isWindows = process.platform === 'win32';
 const isMac = process.platform === 'darwin';
 
+// Environment detection
+// - postinstall: npm already installed root deps, skip to avoid infinite loop
+// - CI: GitHub Actions handles build separately, skip postinstall entirely
+const isPostInstall = process.env.npm_lifecycle_event === 'postinstall';
+const isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
+
+// Skip build entirely in CI (workflows handle this)
+if (isCI && isPostInstall) {
+  console.log('CI environment detected, skipping postinstall build.');
+  process.exit(0);
+}
+
 // Ensure Python UTF-8 encoding
 process.env.PYTHONUTF8 = '1';
 
@@ -231,9 +243,13 @@ try {
     log('0/5', 'Created .env from template');
   }
 
-  // Step 1: Install root dependencies
-  log('1/6', 'Installing root dependencies...');
-  npmInstall(ROOT);
+  // Step 1: Install root dependencies (skip if postinstall - npm already did this)
+  if (!isPostInstall) {
+    log('1/6', 'Installing root dependencies...');
+    npmInstall(ROOT);
+  } else {
+    log('1/6', 'Root dependencies already installed by npm');
+  }
 
   // Step 2: Install client dependencies
   log('2/6', 'Installing client dependencies...');
