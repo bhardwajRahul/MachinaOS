@@ -2,9 +2,21 @@
 
 Open-source workflow automation platform with AI agents, React Flow, and n8n-inspired architecture.
 
+**60 nodes** | **6 AI providers** | **WebSocket-first** | **Self-hosted**
+
 ## Quick Start
 
-### Option 1: One-Line Install (Recommended)
+```bash
+npm install -g machinaos
+machinaos start
+```
+
+Open http://localhost:3000
+
+<details>
+<summary><b>Other Install Options</b></summary>
+
+### One-Line Install (installs all dependencies automatically)
 
 **Linux/macOS:**
 ```bash
@@ -16,9 +28,7 @@ curl -fsSL https://raw.githubusercontent.com/trohitg/MachinaOS/main/install.sh |
 iwr -useb https://raw.githubusercontent.com/trohitg/MachinaOS/main/install.ps1 | iex
 ```
 
-This automatically installs all dependencies (Node.js, Python, uv, Go) and MachinaOS.
-
-### Option 2: Clone & Run
+### Clone & Run
 
 ```bash
 git clone https://github.com/trohitg/MachinaOS.git
@@ -27,16 +37,7 @@ npm run build
 npm run start
 ```
 
-### Option 3: npm Global Install
-
-```bash
-npm install -g machinaos
-machinaos start
-```
-
-Requires Node.js 18+, Python 3.11+, uv, and Go 1.21+ to be pre-installed.
-
-### Option 4: Docker
+### Docker
 
 ```bash
 git clone https://github.com/trohitg/MachinaOS.git
@@ -44,7 +45,62 @@ cd MachinaOS
 npm run docker:up
 ```
 
-Open http://localhost:3000
+</details>
+
+## Features
+
+### AI Integration (6 Providers)
+
+| Provider | Models | Features |
+|----------|--------|----------|
+| **OpenAI** | GPT-4o, GPT-4 Turbo, o1, o3, o4-mini | JSON mode, reasoning effort |
+| **Anthropic** | Claude 3.5 Sonnet, Claude 3 Opus, Claude 3 Haiku | Extended thinking |
+| **Google** | Gemini 2.5 Pro, Gemini 2.5 Flash, Gemini 2.0 Flash Thinking | Multimodal, 1M context |
+| **OpenRouter** | 200+ models | Unified API for all providers |
+| **Groq** | Llama, Mixtral, Qwen | Ultra-fast inference |
+| **Cerebras** | Llama, Qwen | Ultra-fast on custom hardware |
+
+### AI Agents & Skills
+
+- **AI Agent** - LangGraph-powered with tool calling and iterative reasoning
+- **Chat Agent** - Conversational agent with skill support for multi-turn chat
+- **10 Skills** - WhatsApp, Maps, HTTP, Scheduler, Android, Code, Memory, Web Search, Custom
+- **4 Tools** - Calculator, Current Time, Web Search, Android Toolkit
+- **Simple Memory** - Markdown-based conversation history with vector storage
+
+### Platform Integrations
+
+- **WhatsApp** - Send/receive messages with QR pairing, filters, group support
+- **Android** - 17 service nodes for device control (battery, WiFi, Bluetooth, apps, camera, sensors)
+- **HTTP/Webhooks** - REST API integration with event-driven triggers
+- **Google Maps** - Geocoding, nearby places, directions
+
+### Document Processing (RAG Pipeline)
+
+- **HTTP Scraper** - Scrape URLs with pagination and date ranges
+- **File Downloader** - Parallel downloads with semaphore concurrency
+- **Document Parser** - PyPDF, Marker (OCR), Unstructured, BeautifulSoup
+- **Text Chunker** - Recursive, markdown, or token-based splitting
+- **Embedding Generator** - HuggingFace, OpenAI, Ollama embeddings
+- **Vector Store** - ChromaDB, Qdrant, Pinecone backends
+
+## Node Categories
+
+| Category | Count | Description |
+|----------|-------|-------------|
+| AI Models | 6 | OpenAI, Anthropic, Google, OpenRouter, Groq, Cerebras |
+| AI Agents | 3 | AI Agent, Chat Agent, Simple Memory |
+| AI Skills | 10 | WhatsApp, Maps, HTTP, Scheduler, Android, Code, etc. |
+| AI Tools | 4 | Calculator, Time, Search, Android Toolkit |
+| WhatsApp | 3 | Send, Receive, Database |
+| Android | 17 | Device control and monitoring |
+| Documents | 6 | RAG pipeline nodes |
+| Utilities | 5 | HTTP, Webhooks, Chat Trigger, Console |
+| Location | 3 | Google Maps integration |
+| Code | 2 | Python and JavaScript executors |
+| Workflow | 1 | Start node |
+
+**Total: 60 nodes**
 
 ## Prerequisites
 
@@ -66,26 +122,6 @@ The install script handles these automatically, but for manual installation:
 | `machinaos docker:up` | Start with Docker Compose |
 | `machinaos docker:down` | Stop Docker containers |
 | `machinaos help` | Show all available commands |
-
-## Local Development
-
-```bash
-git clone https://github.com/trohitg/MachinaOS.git
-cd MachinaOS
-npm run build
-npm run start
-```
-
----
-
-## Features
-
-- **AI Workflows** - OpenAI, Claude, Gemini, Groq, OpenRouter models with tool calling
-- **AI Agents** - LangGraph-powered agents with memory and skills
-- **Android Automation** - Control your phone via 17 service nodes
-- **WhatsApp Bots** - Send/receive messages with filters and triggers
-- **HTTP/Webhooks** - API integrations with event-driven triggers
-- **Document Processing** - RAG pipeline with vector storage
 
 ## Configuration
 
@@ -130,6 +166,16 @@ MachinaOS/
 - **Backend:** Python 3.11+, FastAPI, SQLite, LangChain/LangGraph
 - **Services:** WhatsApp (Go + whatsmeow), WebSocket relay
 - **Package Manager:** uv (Python), npm (Node.js)
+
+## Documentation
+
+Full documentation available at: https://docs.machinaos.dev
+
+- [Installation Guide](https://docs.machinaos.dev/installation)
+- [Quick Start](https://docs.machinaos.dev/quickstart)
+- [Node Catalog](https://docs.machinaos.dev/nodes/overview)
+- [AI Models](https://docs.machinaos.dev/nodes/ai-models)
+- [AI Agents](https://docs.machinaos.dev/nodes/ai-agent)
 
 ## Troubleshooting
 
