@@ -29,17 +29,14 @@ const isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
 // Ensure Python UTF-8 encoding
 process.env.PYTHONUTF8 = '1';
 
-// Use stderr for all output so npm shows it during postinstall
-const print = (msg) => process.stderr.write(msg + '\n');
-
 // Skip build entirely in CI (workflows handle this)
 if (isCI && isPostInstall) {
-  print('CI environment detected, skipping postinstall build.');
+  console.log('CI environment detected, skipping postinstall build.');
   process.exit(0);
 }
 
 function run(cmd, cwd = ROOT) {
-  execSync(cmd, { cwd, stdio: ['inherit', process.stderr, process.stderr], shell: true });
+  execSync(cmd, { cwd, stdio: 'inherit', shell: true });
 }
 
 function runSilent(cmd) {
@@ -53,20 +50,14 @@ function runSilent(cmd) {
 
 function getVersion(cmd) {
   try {
-    return execSync(cmd, { encoding: 'utf-8', shell: true }).trim();
+    return execSync(cmd, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], shell: true }).trim();
   } catch {
     return null;
   }
 }
 
-function log(step, msg) {
-  print(`[${step}] ${msg}`);
-}
-
 function npmInstall(cwd = ROOT) {
-  // Use npm install directly with visible output via stderr
-  // npm ci requires package-lock.json which may not exist in all directories
-  execSync('npm install', { cwd, stdio: ['inherit', process.stderr, process.stderr], shell: true });
+  execSync('npm install', { cwd, stdio: 'inherit', shell: true });
 }
 
 // ============================================================================
@@ -74,27 +65,25 @@ function npmInstall(cwd = ROOT) {
 // ============================================================================
 
 function installPython() {
-  print('  Installing Python 3.11+...');
+  console.log('  Installing Python 3.11+...');
   if (isWindows) {
-    // Try winget first, then choco
     if (runSilent('winget --version')) {
       run('winget install Python.Python.3.12 --accept-package-agreements --accept-source-agreements');
     } else if (runSilent('choco --version')) {
       run('choco install python312 -y');
     } else {
-      print('  Error: Please install Python manually from https://python.org/');
-      print('  Or install winget/chocolatey first.');
+      console.log('  Error: Please install Python manually from https://python.org/');
+      console.log('  Or install winget/chocolatey first.');
       process.exit(1);
     }
   } else if (isMac) {
     if (runSilent('brew --version')) {
       run('brew install python@3.12');
     } else {
-      print('  Error: Please install Homebrew first: https://brew.sh/');
+      console.log('  Error: Please install Homebrew first: https://brew.sh/');
       process.exit(1);
     }
   } else {
-    // Linux
     if (runSilent('apt --version')) {
       run('sudo apt update && sudo apt install -y python3.12 python3.12-venv');
     } else if (runSilent('dnf --version')) {
@@ -102,20 +91,19 @@ function installPython() {
     } else if (runSilent('pacman --version')) {
       run('sudo pacman -S --noconfirm python');
     } else {
-      print('  Error: Please install Python manually from https://python.org/');
+      console.log('  Error: Please install Python manually from https://python.org/');
       process.exit(1);
     }
   }
 }
 
 function installUv() {
-  print('  Installing uv...');
+  console.log('  Installing uv...');
   if (isWindows) {
     run('powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"');
   } else {
     run('curl -LsSf https://astral.sh/uv/install.sh | sh');
   }
-  // Add to PATH for current session
   if (isWindows) {
     process.env.PATH = `${process.env.USERPROFILE}\\.local\\bin;${process.env.PATH}`;
   } else {
@@ -124,21 +112,21 @@ function installUv() {
 }
 
 function installGo() {
-  print('  Installing Go...');
+  console.log('  Installing Go...');
   if (isWindows) {
     if (runSilent('winget --version')) {
       run('winget install GoLang.Go --accept-package-agreements --accept-source-agreements');
     } else if (runSilent('choco --version')) {
       run('choco install golang -y');
     } else {
-      print('  Error: Please install Go manually from https://go.dev/dl/');
+      console.log('  Error: Please install Go manually from https://go.dev/dl/');
       process.exit(1);
     }
   } else if (isMac) {
     if (runSilent('brew --version')) {
       run('brew install go');
     } else {
-      print('  Error: Please install Homebrew first: https://brew.sh/');
+      console.log('  Error: Please install Homebrew first: https://brew.sh/');
       process.exit(1);
     }
   } else {
@@ -149,7 +137,7 @@ function installGo() {
     } else if (runSilent('pacman --version')) {
       run('sudo pacman -S --noconfirm go');
     } else {
-      print('  Error: Please install Go manually from https://go.dev/dl/');
+      console.log('  Error: Please install Go manually from https://go.dev/dl/');
       process.exit(1);
     }
   }
@@ -159,14 +147,13 @@ function installGo() {
 // Check and Install Dependencies
 // ============================================================================
 
-print('Checking dependencies...\n');
+console.log('Checking dependencies...\n');
 
-// Node.js (must already be installed to run this script)
 const nodeVersion = getVersion('node --version');
-print(`  Node.js: ${nodeVersion}`);
+console.log(`  Node.js: ${nodeVersion}`);
 
 const npmVersion = getVersion('npm --version');
-print(`  npm: ${npmVersion}`);
+console.log(`  npm: ${npmVersion}`);
 
 // Python
 let pyCmd = null;
@@ -182,31 +169,30 @@ if (pyCmd) {
   if (match) {
     const [, major, minor] = match.map(Number);
     if (major >= 3 && minor >= 11) {
-      print(`  ${pyVersion}`);
+      console.log(`  ${pyVersion}`);
     } else {
-      print(`  ${pyVersion} (too old, need 3.11+)`);
+      console.log(`  ${pyVersion} (too old, need 3.11+)`);
       installPython();
     }
   }
 } else {
   installPython();
-  // Re-check
   pyCmd = runSilent('python --version') ? 'python' : 'python3';
-  print(`  ${getVersion(`${pyCmd} --version`)}`);
+  console.log(`  ${getVersion(`${pyCmd} --version`)}`);
 }
 
 // uv
 let uvVersion = getVersion('uv --version');
 if (uvVersion) {
-  print(`  uv: ${uvVersion}`);
+  console.log(`  uv: ${uvVersion}`);
 } else {
   installUv();
   uvVersion = getVersion('uv --version');
   if (uvVersion) {
-    print(`  uv: ${uvVersion}`);
+    console.log(`  uv: ${uvVersion}`);
   } else {
-    print('  Error: Failed to install uv. Please install manually.');
-    print('  https://docs.astral.sh/uv/getting-started/installation/');
+    console.log('  Error: Failed to install uv. Please install manually.');
+    console.log('  https://docs.astral.sh/uv/getting-started/installation/');
     process.exit(1);
   }
 }
@@ -215,21 +201,21 @@ if (uvVersion) {
 let goVersionFull = getVersion('go version');
 if (goVersionFull) {
   const goVersion = goVersionFull.match(/go\d+\.\d+(\.\d+)?/)?.[0] || 'go';
-  print(`  Go: ${goVersion}`);
+  console.log(`  Go: ${goVersion}`);
 } else {
   installGo();
   goVersionFull = getVersion('go version');
   if (goVersionFull) {
     const goVersion = goVersionFull.match(/go\d+\.\d+(\.\d+)?/)?.[0] || 'go';
-    print(`  Go: ${goVersion}`);
+    console.log(`  Go: ${goVersion}`);
   } else {
-    print('  Error: Failed to install Go. Please install manually.');
-    print('  https://go.dev/dl/');
+    console.log('  Error: Failed to install Go. Please install manually.');
+    console.log('  https://go.dev/dl/');
     process.exit(1);
   }
 }
 
-print('\nAll dependencies ready.\n');
+console.log('\nAll dependencies ready.\n');
 
 // ============================================================================
 // Build
@@ -241,43 +227,43 @@ try {
   const templatePath = resolve(ROOT, '.env.template');
   if (!existsSync(envPath) && existsSync(templatePath)) {
     copyFileSync(templatePath, envPath);
-    log('0/5', 'Created .env from template');
+    console.log('[0/6] Created .env from template');
   }
 
   // Step 1: Install root dependencies (skip if postinstall - npm already did this)
   if (!isPostInstall) {
-    log('1/6', 'Installing root dependencies...');
+    console.log('[1/6] Installing root dependencies...');
     npmInstall(ROOT);
   } else {
-    log('1/6', 'Root dependencies already installed by npm');
+    console.log('[1/6] Root dependencies already installed by npm');
   }
 
   // Step 2: Install client dependencies
-  log('2/6', 'Installing client dependencies...');
+  console.log('[2/6] Installing client dependencies...');
   npmInstall(resolve(ROOT, 'client'));
 
   // Step 3: Build client
-  log('3/6', 'Building client...');
+  console.log('[3/6] Building client...');
   run('npm run build', resolve(ROOT, 'client'));
 
   // Step 4: Install Python dependencies
-  log('4/6', 'Installing Python dependencies...');
+  console.log('[4/6] Installing Python dependencies...');
   const serverDir = resolve(ROOT, 'server');
   run('uv venv', serverDir);
   run('uv sync', serverDir);
 
   // Step 5: Install WhatsApp dependencies
-  log('5/6', 'Installing WhatsApp dependencies...');
+  console.log('[5/6] Installing WhatsApp dependencies...');
   const whatsappDir = resolve(ROOT, 'server/whatsapp-rpc');
   npmInstall(whatsappDir);
 
   // Step 6: Build WhatsApp server (Go binary)
-  log('6/6', 'Building WhatsApp server...');
+  console.log('[6/6] Building WhatsApp server...');
   run('npm run build', whatsappDir);
 
-  print('\nBuild complete.');
+  console.log('\nBuild complete.');
 
 } catch (err) {
-  print(`\nBuild failed: ${err.message}`);
+  console.log(`\nBuild failed: ${err.message}`);
   process.exit(1);
 }
