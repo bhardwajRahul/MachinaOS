@@ -42,7 +42,13 @@ jobs:
 
       - name: Test global install
         shell: bash
+        env:
+          CI: ''
+          GITHUB_ACTIONS: ''
         run: |
+          # Unset CI vars so postinstall runs fully
+          unset CI GITHUB_ACTIONS
+
           # Install the packed tarball globally
           npm install -g machinaos-*.tgz
 
