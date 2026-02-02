@@ -1,6 +1,6 @@
 # MachinaOS
 
-Open-source workflow automation platform with AI agents, React Flow, and n8n-inspired architecture.
+Open-source Platform to Build Your Own Personal AI Assistant, mashup of clawdbot and n8n, but More Powerful.
 
 **60 nodes** | **6 AI providers** | **WebSocket-first** | **Self-hosted**
 
