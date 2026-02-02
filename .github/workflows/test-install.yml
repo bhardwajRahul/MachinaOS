@@ -29,27 +29,17 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
 
-      - name: Setup Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
+      # Python and uv are NOT pre-installed - install.js handles them
+      # This tests the real user experience of `npm install -g machinaos`
 
       - name: Pack npm package
         run: npm pack
 
       - name: Test global install
         shell: bash
-        env:
-          CI: ''
-          GITHUB_ACTIONS: ''
         run: |
-          # Unset CI vars so postinstall runs fully
-          unset CI GITHUB_ACTIONS
-
           # Install the packed tarball globally
+          # This tests the full installation flow including Python/uv detection and installation
           npm install -g machinaos-*.tgz
 
           # Verify CLI is available
@@ -91,4 +81,25 @@ jobs:
             ls -la "$INSTALL_PATH/client/dist"
           else
             echo "Warning: client/dist not found"
+          fi
+
+      - name: Test machinaos start
+        shell: bash
+        timeout-minutes: 2
+        run: |
+          # Start machinaos in background and verify it starts successfully
+          machinaos start &
+          PID=$!
+
+          # Wait a few seconds for startup
+          sleep 10
+
+          # Check if process is still running (it should be)
+          if kill -0 $PID 2>/dev/null; then
+            echo "machinaos start: OK - process running"
+            # Clean shutdown
+            kill $PID 2>/dev/null || true
+          else
+            echo "machinaos start: FAILED - process exited"
+            exit 1
           fi

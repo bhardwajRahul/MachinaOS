@@ -1,10 +1,13 @@
 /**
- * ToolkitNode - A node component with top/bottom connectors for aggregating services.
- * Used by Android Toolkit to receive Android service nodes from bottom and output to AI Agent from top.
+ * ToolkitNode - A node component for skill nodes and toolkit nodes with vertical handle layout.
  *
- * Based on SquareNode but with vertical handle layout:
- * - Input handle at BOTTOM (receives from Android service nodes)
- * - Output handle at TOP (connects to AI Agent's input-tools)
+ * Skill nodes (whatsappSkill, memorySkill, etc.): Square (60x60px)
+ *   - Output handle at TOP (connects to agent's skill input)
+ *   - No input handle (passive nodes)
+ *
+ * Toolkit nodes (androidTool): Rectangular (100x60px)
+ *   - Output handle at TOP (connects to AI Agent's tool input)
+ *   - Input handle at BOTTOM (receives Android service nodes)
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -14,7 +17,9 @@ import { useAppStore } from '../store/useAppStore';
 import { nodeDefinitions } from '../nodeDefinitions';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { useWebSocket } from '../contexts/WebSocketContext';
-import { SKILL_NODE_TYPES } from '../nodeDefinitions/skillNodes';
+
+// Toolkit node types that render rectangular (wider than tall)
+const TOOLKIT_NODE_TYPES = ['androidTool'];
 
 const ToolkitNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectable, selected }) => {
   const theme = useAppTheme();
@@ -32,8 +37,8 @@ const ToolkitNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
 
   const definition = nodeDefinitions[type as keyof typeof nodeDefinitions];
 
-  // Check if this is a skill node (skill nodes don't have bottom input handle)
-  const isSkillNode = type ? SKILL_NODE_TYPES.includes(type) : false;
+  // Check if this is a toolkit node (rectangular) vs skill node (square)
+  const isToolkitNode = type ? TOOLKIT_NODE_TYPES.includes(type) : false;
 
   // Execution state
   const isExecuting = executionStatus === 'executing' || executionStatus === 'waiting';
@@ -150,12 +155,12 @@ const ToolkitNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
         cursor: 'pointer',
       }}
     >
-      {/* Main Square Node */}
+      {/* Main Node - rectangular for toolkit, square for skills */}
       <div
         style={{
           position: 'relative',
-          width: theme.nodeSize.square,
-          height: theme.nodeSize.square,
+          width: isToolkitNode ? theme.nodeSize.toolkitWidth : theme.nodeSize.square,
+          height: isToolkitNode ? theme.nodeSize.toolkitHeight : theme.nodeSize.square,
           borderRadius: theme.borderRadius.lg,
           background: theme.isDarkMode
             ? `linear-gradient(135deg, ${nodeColor}25 0%, ${theme.colors.background} 100%)`
@@ -241,7 +246,7 @@ const ToolkitNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
           title={isExecuting ? 'Executing...' : 'Toolkit ready'}
         />
 
-        {/* TOP Output Handle - connects to AI Agent/Zeenie */}
+        {/* TOP Output Handle - connects to AI Agent's tool/skill input */}
         <Handle
           id="output-main"
           type="source"
@@ -259,13 +264,13 @@ const ToolkitNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
             borderRadius: '50%',
             zIndex: 20
           }}
-          title={isSkillNode ? "Connect to Zeenie's skill input" : "Connect to AI Agent's tool input"}
+          title={isToolkitNode ? "Connect to AI Agent's tool input" : "Connect to agent's skill input"}
         />
 
-        {/* BOTTOM Input Handle - receives from Android nodes (not shown for skill nodes) */}
-        {!isSkillNode && (
+        {/* BOTTOM Input Handle - only for toolkit nodes (receives Android service nodes) */}
+        {isToolkitNode && (
           <Handle
-            id="input-main"
+            id="input-services"
             type="target"
             position={Position.Bottom}
             isConnectable={isConnectable}
@@ -281,7 +286,7 @@ const ToolkitNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
               borderRadius: '50%',
               zIndex: 20
             }}
-            title="Connect Android service nodes here"
+            title="Connect Android service nodes"
           />
         )}
 

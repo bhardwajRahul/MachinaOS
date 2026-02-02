@@ -18,8 +18,8 @@ const isMac = process.platform === 'darwin';
 
 process.env.PYTHONUTF8 = '1';
 
-function run(cmd, cwd = ROOT) {
-  execSync(cmd, { cwd, stdio: 'inherit', shell: true });
+function run(cmd, cwd = ROOT, timeoutMs = 300000) {
+  execSync(cmd, { cwd, stdio: 'inherit', shell: true, timeout: timeoutMs });
 }
 
 function runSilent(cmd) {
@@ -67,10 +67,12 @@ function checkGo() {
 function installPython() {
   console.log('Installing Python 3.11+...');
   if (isWindows) {
-    if (runSilent('winget --version')) {
-      run('winget install Python.Python.3.12 --accept-package-agreements --accept-source-agreements');
-    } else if (runSilent('choco --version')) {
+    // choco is pre-installed on GitHub Actions Windows runners
+    // winget is only on windows-2025, not windows-2022 (windows-latest)
+    if (runSilent('choco --version')) {
       run('choco install python312 -y');
+    } else if (runSilent('winget --version')) {
+      run('winget install Python.Python.3.12 --accept-package-agreements --accept-source-agreements --disable-interactivity');
     } else {
       console.log('ERROR: Cannot auto-install Python. Please install manually:');
       console.log('  https://python.org/downloads/');
@@ -102,12 +104,16 @@ function installPython() {
   }
 }
 
-function installUv() {
+function installUv(pythonCmd) {
   console.log('Installing uv...');
   if (isWindows) {
-    run('powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"');
-    process.env.PATH = `${process.env.USERPROFILE}\\.local\\bin;${process.env.PATH}`;
+    // Use pip on Windows (no PEP 668 issues)
+    run(`${pythonCmd} -m pip install uv`);
+  } else if (isMac) {
+    // Use pip on macOS (no PEP 668 issues with Homebrew Python)
+    run(`${pythonCmd} -m pip install uv`);
   } else {
+    // Linux: use official installer (avoids PEP 668 externally-managed-environment)
     run('curl -LsSf https://astral.sh/uv/install.sh | sh');
     process.env.PATH = `${process.env.HOME}/.local/bin:${process.env.PATH}`;
   }
@@ -143,7 +149,7 @@ let uvVersion = checkUv();
 if (uvVersion) {
   console.log(`  uv: ${uvVersion}`);
 } else {
-  installUv();
+  installUv(python.cmd);
   uvVersion = checkUv();
   if (uvVersion) {
     console.log(`  uv: ${uvVersion}`);
@@ -178,22 +184,22 @@ try {
 
   // Install client dependencies
   console.log('[2/5] Installing client dependencies...');
-  run('npm install', resolve(ROOT, 'client'));
+  run('npm install', resolve(ROOT, 'client'), 600000);  // 10 min timeout
 
   // Build client
   console.log('[3/5] Building client...');
-  run('npm run build', resolve(ROOT, 'client'));
+  run('npm run build', resolve(ROOT, 'client'), 600000);  // 10 min timeout
 
   // Install Python dependencies
   console.log('[4/5] Installing Python dependencies...');
   const serverDir = resolve(ROOT, 'server');
-  run('uv venv', serverDir);
-  run('uv sync', serverDir);
+  run('uv venv', serverDir);  // 5 min default
+  run('uv sync', serverDir, 600000);  // 10 min timeout
 
   // WhatsApp service
   console.log('[5/5] Setting up WhatsApp service...');
   const whatsappDir = resolve(ROOT, 'server/whatsapp-rpc');
-  run('npm install', whatsappDir);
+  run('npm install', whatsappDir);  // 5 min default
 
   const binPath = resolve(whatsappDir, 'bin', isWindows ? 'whatsapp-rpc-server.exe' : 'whatsapp-rpc-server');
   if (!existsSync(binPath) && go) {

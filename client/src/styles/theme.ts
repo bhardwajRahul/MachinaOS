@@ -239,6 +239,8 @@ export const theme = {
   nodeSize: {
     square: '60px',          // SquareNode, BaseChatModelNode, ModelNode
     squareIcon: '28px',      // Icon inside square node
+    toolkitWidth: '120px',   // ToolkitNode width (rectangular, wider)
+    toolkitHeight: '50px',   // ToolkitNode height (shorter)
     handle: '8px',           // Connection handles
     statusIndicator: '10px', // Status dot
     paramButton: '16px',     // Parameters gear button
