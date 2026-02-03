@@ -15,12 +15,10 @@ const targets = [
   'client/node_modules',
   'client/dist',
   'client/.vite',
-  'server/whatsapp-rpc/node_modules',
-  'server/whatsapp-rpc/bin',
-  'server/whatsapp-rpc/data',
   'server/data',
   'server/.venv',
 ];
+// Note: whatsapp-rpc is now an npm dependency, not a local directory
 
 console.log('Cleaning...');
 

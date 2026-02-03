@@ -111,37 +111,7 @@ function installUv() {
   }
 }
 
-function installGo() {
-  console.log('  Installing Go...');
-  if (isWindows) {
-    if (runSilent('winget --version')) {
-      run('winget install GoLang.Go --accept-package-agreements --accept-source-agreements');
-    } else if (runSilent('choco --version')) {
-      run('choco install golang -y');
-    } else {
-      console.log('  Error: Please install Go manually from https://go.dev/dl/');
-      process.exit(1);
-    }
-  } else if (isMac) {
-    if (runSilent('brew --version')) {
-      run('brew install go');
-    } else {
-      console.log('  Error: Please install Homebrew first: https://brew.sh/');
-      process.exit(1);
-    }
-  } else {
-    if (runSilent('apt --version')) {
-      run('sudo apt update && sudo apt install -y golang-go');
-    } else if (runSilent('dnf --version')) {
-      run('sudo dnf install -y golang');
-    } else if (runSilent('pacman --version')) {
-      run('sudo pacman -S --noconfirm go');
-    } else {
-      console.log('  Error: Please install Go manually from https://go.dev/dl/');
-      process.exit(1);
-    }
-  }
-}
+// Go is no longer required - whatsapp-rpc is an npm package with pre-built binaries
 
 // ============================================================================
 // Check and Install Dependencies
@@ -197,22 +167,13 @@ if (uvVersion) {
   }
 }
 
-// Go
-let goVersionFull = getVersion('go version');
+// Go is optional (whatsapp-rpc uses pre-built binaries)
+const goVersionFull = getVersion('go version');
 if (goVersionFull) {
   const goVersion = goVersionFull.match(/go\d+\.\d+(\.\d+)?/)?.[0] || 'go';
-  console.log(`  Go: ${goVersion}`);
+  console.log(`  Go: ${goVersion} (optional)`);
 } else {
-  installGo();
-  goVersionFull = getVersion('go version');
-  if (goVersionFull) {
-    const goVersion = goVersionFull.match(/go\d+\.\d+(\.\d+)?/)?.[0] || 'go';
-    console.log(`  Go: ${goVersion}`);
-  } else {
-    console.log('  Error: Failed to install Go. Please install manually.');
-    console.log('  https://go.dev/dl/');
-    process.exit(1);
-  }
+  console.log('  Go: not installed (optional - whatsapp-rpc uses pre-built binaries)');
 }
 
 console.log('\nAll dependencies ready.\n');
@@ -232,35 +193,27 @@ try {
 
   // Step 1: Install root dependencies (skip if postinstall - npm already did this)
   if (!isPostInstall) {
-    console.log('[1/6] Installing root dependencies...');
+    console.log('[1/4] Installing root dependencies...');
     npmInstall(ROOT);
   } else {
-    console.log('[1/6] Root dependencies already installed by npm');
+    console.log('[1/4] Root dependencies already installed by npm');
   }
 
   // Step 2: Install client dependencies
-  console.log('[2/6] Installing client dependencies...');
+  console.log('[2/4] Installing client dependencies...');
   npmInstall(resolve(ROOT, 'client'));
 
   // Step 3: Build client
-  console.log('[3/6] Building client...');
+  console.log('[3/4] Building client...');
   run('npm run build', resolve(ROOT, 'client'));
 
   // Step 4: Install Python dependencies
-  console.log('[4/6] Installing Python dependencies...');
+  console.log('[4/4] Installing Python dependencies...');
   const serverDir = resolve(ROOT, 'server');
   run('uv venv', serverDir);
   run('uv sync', serverDir);
 
-  // Step 5: Install WhatsApp dependencies
-  console.log('[5/6] Installing WhatsApp dependencies...');
-  const whatsappDir = resolve(ROOT, 'server/whatsapp-rpc');
-  npmInstall(whatsappDir);
-
-  // Step 6: Build WhatsApp server (Go binary)
-  console.log('[6/6] Building WhatsApp server...');
-  run('npm run build', whatsappDir);
-
+  // WhatsApp is now an npm dependency - binary downloaded via postinstall
   console.log('\nBuild complete.');
 
 } catch (err) {

@@ -72,12 +72,14 @@ services:
     depends_on:
       - backend
 
-  # WhatsApp RPC Service (Go API only)
+  # WhatsApp RPC Service (npm package with pre-built binaries)
   whatsapp:
     build:
-      context: ./server/whatsapp-rpc
-      dockerfile: Dockerfile
+      context: ./docker
+      dockerfile: Dockerfile.whatsapp
     container_name: machina-whatsapp
+    ports:
+      - "${WHATSAPP_RPC_PORT:-9400}:${WHATSAPP_RPC_PORT:-9400}"
     volumes:
       - whatsapp-data:/app/data
     networks:
@@ -86,13 +88,14 @@ services:
     # Privileged mode for proper SQLite WAL mmap support
     privileged: true
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9400/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${WHATSAPP_RPC_PORT:-9400}/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 15s
     environment:
       - TZ=UTC
+      - PORT=${WHATSAPP_RPC_PORT:-9400}
 
 networks:
   app-network:

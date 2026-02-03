@@ -68,11 +68,11 @@ services:
     depends_on:
       - backend
 
-  # WhatsApp RPC Service (Go API)
+  # WhatsApp RPC Service (npm package with pre-built binaries)
   whatsapp:
     build:
-      context: ./server/whatsapp-rpc
-      dockerfile: Dockerfile
+      context: ./docker
+      dockerfile: Dockerfile.whatsapp
     container_name: machina-whatsapp
     ports:
       - "${WHATSAPP_RPC_PORT:-9400}:${WHATSAPP_RPC_PORT:-9400}"

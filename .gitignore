@@ -35,15 +35,8 @@ server/.env.*
 **/*.p12
 **/*.pfx
 
-# WhatsApp session data (contains auth tokens)
-server/whatsapp-rpc/.wwebjs_*
-server/whatsapp-rpc/.wwebjs_auth/
-server/whatsapp-rpc/session/
-server/whatsapp-rpc/*.db
-server/whatsapp-rpc/data/
-server/whatsapp-rpc/bin/
-server/whatsapp-rpc/*.exe
-server/whatsapp-rpc/qr_*.png
+# WhatsApp RPC is now an npm dependency (@anthropic/whatsapp-rpc)
+# Session data is stored in node_modules/@anthropic/whatsapp-rpc/data/
 
 # =============================================================================
 # Database files (may contain sensitive user data)

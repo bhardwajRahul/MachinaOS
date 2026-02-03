@@ -1,0 +1,23 @@
+# WhatsApp RPC Dockerfile
+# Uses the npm package @anthropic/whatsapp-rpc with pre-built binaries
+
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install the whatsapp-rpc package
+RUN npm init -y && npm install @trohitg/whatsapp-rpc
+
+# Create data directory for SQLite and QR codes
+RUN mkdir -p /app/data
+
+# Set environment variables
+ENV NODE_ENV=production
+ENV TZ=UTC
+ENV PORT=9400
+
+# Expose the RPC port (configurable via PORT env var)
+EXPOSE ${PORT}
+
+# Run the RPC server
+CMD ["npx", "whatsapp-rpc", "api", "--foreground"]

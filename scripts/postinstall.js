@@ -2,9 +2,8 @@
 /**
  * Postinstall script for MachinaOS.
  *
- * Runs:
- * 1. download-binaries.js (download pre-built WhatsApp binary)
- * 2. install.js (check deps, install npm/Python packages, build)
+ * Runs install.js to check deps, install npm/Python packages, build.
+ * WhatsApp RPC is now an npm dependency - binary downloaded by its own postinstall.
  */
 import { spawn } from 'child_process';
 import { resolve, dirname } from 'path';
@@ -47,17 +46,8 @@ function runScript(scriptPath) {
 
 async function main() {
   try {
-    // Download pre-built binaries (optional, non-fatal)
-    console.log('[1/2] Downloading pre-built binaries...');
-    try {
-      await runScript(resolve(__dirname, 'download-binaries.js'));
-    } catch (e) {
-      console.log('  Skipped (will build from source if Go available)');
-    }
-
     // Run full installation
-    console.log('');
-    console.log('[2/2] Installing...');
+    console.log('Installing dependencies...');
     await runScript(resolve(__dirname, 'install.js'));
 
     console.log('');

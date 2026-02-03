@@ -3,12 +3,19 @@
  * MachinaOS Installation Script
  *
  * Called by postinstall.js after npm install.
- * Installs all dependencies including Python, uv, and builds the project.
+ * Installs all dependencies including Python and uv.
+ * WhatsApp RPC is now an npm dependency with pre-built binaries.
  */
 import { execSync } from 'child_process';
 import { existsSync, copyFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
+
+// Prevent recursive execution when npm install runs in subdirectories
+if (process.env.MACHINAOS_INSTALLING === 'true') {
+  process.exit(0);
+}
+process.env.MACHINAOS_INSTALLING = 'true';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
@@ -19,7 +26,13 @@ const isMac = process.platform === 'darwin';
 process.env.PYTHONUTF8 = '1';
 
 function run(cmd, cwd = ROOT, timeoutMs = 300000) {
-  execSync(cmd, { cwd, stdio: 'inherit', shell: true, timeout: timeoutMs });
+  execSync(cmd, {
+    cwd,
+    stdio: 'inherit',
+    shell: true,
+    timeout: timeoutMs,
+    env: { ...process.env, MACHINAOS_INSTALLING: 'true' }
+  });
 }
 
 function runSilent(cmd) {
@@ -57,11 +70,6 @@ function checkPython() {
 
 function checkUv() {
   return getVersion('uv --version');
-}
-
-function checkGo() {
-  const version = getVersion('go version');
-  return version ? { version } : null;
 }
 
 function installPython() {
@@ -159,12 +167,12 @@ if (uvVersion) {
   }
 }
 
-// Check Go (optional)
-const go = checkGo();
-if (go) {
-  console.log(`  Go: ${go.version}`);
+// Go is optional (whatsapp-rpc uses pre-built binaries via npm)
+const goVersion = getVersion('go version');
+if (goVersion) {
+  console.log(`  Go: ${goVersion.match(/go\d+\.\d+(\.\d+)?/)?.[0] || 'installed'} (optional)`);
 } else {
-  console.log('  Go: not found (using pre-built binary)');
+  console.log('  Go: not installed (optional - whatsapp-rpc uses pre-built binaries)');
 }
 
 console.log('');
@@ -174,16 +182,12 @@ console.log('');
 try {
   const clientDir = resolve(ROOT, 'client');
   const serverDir = resolve(ROOT, 'server');
-  const whatsappDir = resolve(ROOT, 'server/whatsapp-rpc');
   const clientDistExists = existsSync(resolve(clientDir, 'dist', 'index.html'));
-  const binPath = resolve(whatsappDir, 'bin', isWindows ? 'whatsapp-rpc-server.exe' : 'whatsapp-rpc-server');
-  const binExists = existsSync(binPath);
 
   // Calculate total steps
   let totalSteps = 1;  // .env always
   if (!clientDistExists) totalSteps += 2;  // client deps + build
   totalSteps += 1;  // Python deps always
-  if (!binExists) totalSteps += 1;  // WhatsApp setup if no binary
   let step = 0;
 
   // Create .env if needed
@@ -218,26 +222,11 @@ try {
   run('uv venv', serverDir);  // 5 min default
   run('uv sync', serverDir, 600000);  // 10 min timeout
 
-  // WhatsApp service - skip if binary already exists (pre-built in npm package)
-  if (binExists) {
-    console.log(`[SKIP] WhatsApp binary already exists`);
-  } else {
-    step++;
-    console.log(`[${step}/${totalSteps}] Setting up WhatsApp service...`);
-    run('npm install', whatsappDir);  // 5 min default
-
-    // Try to build from source if Go is available
-    if (go) {
-      console.log('      Building WhatsApp from source...');
-      run('npm run build', whatsappDir);
-    } else {
-      console.log('      WhatsApp binary not found and Go not available');
-      console.log('      WhatsApp features will not work until binary is provided');
-    }
-  }
-
+  // WhatsApp RPC is now an npm dependency - binary downloaded via postinstall
   console.log('');
   console.log('Done!');
+  console.log('');
+  console.log('WhatsApp RPC installed as npm dependency (@trohitg/whatsapp-rpc)');
 
 } catch (err) {
   console.log('');
