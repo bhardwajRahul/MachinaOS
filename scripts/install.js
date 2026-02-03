@@ -172,39 +172,68 @@ console.log('Installing...');
 console.log('');
 
 try {
+  const clientDir = resolve(ROOT, 'client');
+  const serverDir = resolve(ROOT, 'server');
+  const whatsappDir = resolve(ROOT, 'server/whatsapp-rpc');
+  const clientDistExists = existsSync(resolve(clientDir, 'dist', 'index.html'));
+  const binPath = resolve(whatsappDir, 'bin', isWindows ? 'whatsapp-rpc-server.exe' : 'whatsapp-rpc-server');
+  const binExists = existsSync(binPath);
+
+  // Calculate total steps
+  let totalSteps = 1;  // .env always
+  if (!clientDistExists) totalSteps += 2;  // client deps + build
+  totalSteps += 1;  // Python deps always
+  if (!binExists) totalSteps += 1;  // WhatsApp setup if no binary
+  let step = 0;
+
   // Create .env if needed
+  step++;
   const envPath = resolve(ROOT, '.env');
   const templatePath = resolve(ROOT, '.env.template');
   if (!existsSync(envPath) && existsSync(templatePath)) {
     copyFileSync(templatePath, envPath);
-    console.log('[1/5] Created .env from template');
+    console.log(`[${step}/${totalSteps}] Created .env from template`);
   } else {
-    console.log('[1/5] .env exists');
+    console.log(`[${step}/${totalSteps}] .env exists`);
   }
 
-  // Install client dependencies
-  console.log('[2/5] Installing client dependencies...');
-  run('npm install', resolve(ROOT, 'client'), 600000);  // 10 min timeout
+  // Skip client install/build if dist already exists (pre-built in npm package)
+  if (clientDistExists) {
+    console.log(`[SKIP] Client already built (dist/index.html exists)`);
+  } else {
+    // Install client dependencies
+    step++;
+    console.log(`[${step}/${totalSteps}] Installing client dependencies...`);
+    run('npm install', clientDir, 600000);  // 10 min timeout
 
-  // Build client
-  console.log('[3/5] Building client...');
-  run('npm run build', resolve(ROOT, 'client'), 600000);  // 10 min timeout
+    // Build client
+    step++;
+    console.log(`[${step}/${totalSteps}] Building client...`);
+    run('npm run build', clientDir, 600000);  // 10 min timeout
+  }
 
-  // Install Python dependencies
-  console.log('[4/5] Installing Python dependencies...');
-  const serverDir = resolve(ROOT, 'server');
+  // Install Python dependencies (always needed - venv not included in package)
+  step++;
+  console.log(`[${step}/${totalSteps}] Installing Python dependencies...`);
   run('uv venv', serverDir);  // 5 min default
   run('uv sync', serverDir, 600000);  // 10 min timeout
 
-  // WhatsApp service
-  console.log('[5/5] Setting up WhatsApp service...');
-  const whatsappDir = resolve(ROOT, 'server/whatsapp-rpc');
-  run('npm install', whatsappDir);  // 5 min default
+  // WhatsApp service - skip if binary already exists (pre-built in npm package)
+  if (binExists) {
+    console.log(`[SKIP] WhatsApp binary already exists`);
+  } else {
+    step++;
+    console.log(`[${step}/${totalSteps}] Setting up WhatsApp service...`);
+    run('npm install', whatsappDir);  // 5 min default
 
-  const binPath = resolve(whatsappDir, 'bin', isWindows ? 'whatsapp-rpc-server.exe' : 'whatsapp-rpc-server');
-  if (!existsSync(binPath) && go) {
-    console.log('      Building WhatsApp from source...');
-    run('npm run build', whatsappDir);
+    // Try to build from source if Go is available
+    if (go) {
+      console.log('      Building WhatsApp from source...');
+      run('npm run build', whatsappDir);
+    } else {
+      console.log('      WhatsApp binary not found and Go not available');
+      console.log('      WhatsApp features will not work until binary is provided');
+    }
   }
 
   console.log('');

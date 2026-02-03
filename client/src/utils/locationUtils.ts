@@ -72,7 +72,7 @@ export const createLocationUpdateHandler = (
 export const isLocationNode = (nodeDefinition: INodeTypeDescription | null): boolean => {
   if (!nodeDefinition) return false;
 
-  const isCreateMap = nodeDefinition.name === 'createMap';
+  const isCreateMap = nodeDefinition.name === 'gmaps_create';
   const hasLocationGroup = nodeDefinition.group?.includes('location') ?? false;
   const hasCoordinates = getCoordinateParams(nodeDefinition).latParam !== null;
 
@@ -81,5 +81,5 @@ export const isLocationNode = (nodeDefinition: INodeTypeDescription | null): boo
 
 // Check if node should show maps preview
 export const shouldShowMapsPreview = (nodeDefinition: INodeTypeDescription | null): boolean => {
-  return nodeDefinition?.name === 'createMap';
+  return nodeDefinition?.name === 'gmaps_create';
 };

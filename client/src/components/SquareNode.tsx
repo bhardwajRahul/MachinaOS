@@ -20,7 +20,7 @@ const hasToolGroup = (definition: any): boolean => {
 };
 
 // Google Maps node types
-const GOOGLE_MAPS_NODE_TYPES = ['createMap', 'addLocations', 'showNearbyPlaces'];
+const GOOGLE_MAPS_NODE_TYPES = ['gmaps_create', 'gmaps_locations', 'gmaps_nearby_places'];
 
 // WhatsApp node types
 const WHATSAPP_NODE_TYPES = ['whatsappSend', 'whatsappReceive', 'whatsappDb'];
@@ -523,9 +523,9 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
     }
 
     // Fallback logic based on node type
-    if (type?.includes('createMap')) return '🗺️';
-    if (type?.includes('addLocations')) return '🌍';
-    if (type?.includes('showNearbyPlaces')) return '🔍';
+    if (type?.includes('gmaps_create')) return '🗺️';
+    if (type?.includes('gmaps_locations')) return '🌍';
+    if (type?.includes('gmaps_nearby_places')) return '🔍';
 
     return '📍';
   };
@@ -679,7 +679,7 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
           title="Service Input"
         />
 
-        {/* Square Output Handle - hidden for input-only nodes like console */}
+        {/* Square Output Handle */}
         {!NO_OUTPUT_NODE_TYPES.includes(type || '') && (
           <Handle
             id="output-main"

@@ -22,6 +22,11 @@ AI_CHAT_MODEL_TYPES: FrozenSet[str] = frozenset([
 AI_AGENT_TYPES: FrozenSet[str] = frozenset([
     'aiAgent',
     'chatAgent',
+    'android_agent',
+    'coding_agent',
+    'web_agent',
+    'task_agent',
+    'social_agent',
 ])
 
 AI_MEMORY_TYPES: FrozenSet[str] = frozenset([
@@ -79,9 +84,9 @@ CONFIG_NODE_TYPES: FrozenSet[str] = (
 # =============================================================================
 
 GOOGLE_MAPS_TYPES: FrozenSet[str] = frozenset([
-    'createMap',
-    'addLocations',
-    'showNearbyPlaces',
+    'gmaps_create',
+    'gmaps_locations',
+    'gmaps_nearby_places',
 ])
 
 # =============================================================================
@@ -141,6 +146,20 @@ WHATSAPP_TYPES: FrozenSet[str] = frozenset([
     'whatsappSend',
     'whatsappReceive',
     'whatsappDb',
+])
+
+# =============================================================================
+# SOCIAL NODE TYPES (unified messaging)
+# =============================================================================
+
+SOCIAL_NODE_TYPES: FrozenSet[str] = frozenset([
+    'socialReceive',
+    'socialSend',
+])
+
+# Dual-purpose social nodes (workflow node + AI tool)
+SOCIAL_TOOL_TYPES: FrozenSet[str] = frozenset([
+    'socialSend',  # Can be used as AI Agent tool
 ])
 
 # =============================================================================

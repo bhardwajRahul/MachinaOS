@@ -1,7 +1,7 @@
 // Tool Node Definitions - Tool nodes for AI Agent tool calling
 import {
   INodeTypeDescription,
-  NodeConnectionType
+  NodeConnectionType,
 } from '../types/INodeProperties';
 
 // ============================================================================
@@ -158,35 +158,6 @@ export const toolNodes: Record<string, INodeTypeDescription> = {
         description: 'Maximum number of results to return'
       }
     ]
-  },
-
-  // Android Toolkit - aggregates Android service nodes for AI Agent
-  // Follows n8n Sub-Node pattern and LangChain Toolkit pattern
-  androidTool: {
-    displayName: 'Android Toolkit',
-    name: 'androidTool',
-    icon: '📱',
-    group: ['tool', 'ai'],
-    version: 1,
-    subtitle: 'Device Control',
-    description: 'Aggregate Android service nodes into a single AI-callable tool. Connect Android nodes to enable those capabilities.',
-    defaults: { name: 'Android Toolkit', color: '#3DDC84' },
-    // Input for connecting Android service nodes (uses SquareNode's input-main)
-    inputs: [{
-      name: 'main',
-      displayName: 'Android Services',
-      type: 'main' as NodeConnectionType,
-      description: 'Connect Android service nodes (battery, wifi, apps, etc.)'
-    }],
-    // Output connects to AI Agent's input-tools handle (uses SquareNode's output-main)
-    outputs: [{
-      name: 'main',
-      displayName: 'Tool Output',
-      type: 'main' as NodeConnectionType,
-      description: 'Connect to AI Agent tool handle'
-    }],
-    // No properties - schema is managed by ToolSchemaEditor component
-    properties: []
   }
 };
 
@@ -195,4 +166,4 @@ export const toolNodes: Record<string, INodeTypeDescription> = {
 // ============================================================================
 
 // List of tool node types for identification
-export const TOOL_NODE_TYPES = ['calculatorTool', 'currentTimeTool', 'webSearchTool', 'androidTool'];
+export const TOOL_NODE_TYPES = ['calculatorTool', 'currentTimeTool', 'webSearchTool'];

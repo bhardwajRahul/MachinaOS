@@ -5,6 +5,7 @@ import { INodeTypeDescription } from './types/INodeProperties';
 import { aiModelNodes } from './nodeDefinitions/aiModelNodes';
 import { aiAgentNodes, AI_NODE_TYPES } from './nodeDefinitions/aiAgentNodes';
 import { toolNodes, TOOL_NODE_TYPES } from './nodeDefinitions/toolNodes';
+import { specializedAgentNodes, SPECIALIZED_AGENT_TYPES } from './nodeDefinitions/specializedAgentNodes';
 import { locationNodes, LOCATION_NODE_TYPES } from './nodeDefinitions/locationNodes';
 import { whatsappNodes, WHATSAPP_NODE_TYPES } from './nodeDefinitions/whatsappNodes';
 import { workflowNodes } from './nodeDefinitions/workflowNodes';
@@ -15,6 +16,7 @@ import { codeNodes, CODE_NODE_TYPES } from './nodeDefinitions/codeNodes';
 import { utilityNodes, UTILITY_NODE_TYPES } from './nodeDefinitions/utilityNodes';
 import { skillNodes, SKILL_NODE_TYPES } from './nodeDefinitions/skillNodes';
 import { documentNodes, DOCUMENT_NODE_TYPES } from './nodeDefinitions/documentNodes';
+import { socialNodes, SOCIAL_NODE_TYPES } from './nodeDefinitions/socialNodes';
 
 // ============================================================================
 // MAIN NODE REGISTRY - Combining all modular definitions
@@ -27,6 +29,7 @@ export const nodeDefinitions: Record<string, INodeTypeDescription> = {
   ...aiModelNodes,
   ...aiAgentNodes,
   ...toolNodes,
+  ...specializedAgentNodes,
   ...locationNodes,
   ...whatsappNodes,
   ...androidServiceNodes,
@@ -34,7 +37,8 @@ export const nodeDefinitions: Record<string, INodeTypeDescription> = {
   ...codeNodes,
   ...utilityNodes,
   ...skillNodes,
-  ...documentNodes
+  ...documentNodes,
+  ...socialNodes
 };
 
 // ============================================================================
@@ -90,12 +94,20 @@ export const TOOL_NODES = [
   ...TOOL_NODE_TYPES
 ];
 
+export const SPECIALIZED_AGENT_NODES = [
+  ...SPECIALIZED_AGENT_TYPES
+];
+
 export const SKILL_NODES = [
   ...SKILL_NODE_TYPES
 ];
 
 export const DOCUMENT_NODES = [
   ...DOCUMENT_NODE_TYPES
+];
+
+export const SOCIAL_NODES = [
+  ...SOCIAL_NODE_TYPES
 ];
 
 // Re-export types and utilities from modular files for external access

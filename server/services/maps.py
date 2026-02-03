@@ -64,7 +64,7 @@ class MapsService:
             return {
                 "success": True,
                 "node_id": node_id,
-                "node_type": "createMap",
+                "node_type": "gmaps_create",
                 "operation": "map_initialization",
                 "result": result,
                 "execution_time": time.time() - start_time,
@@ -76,7 +76,7 @@ class MapsService:
             return {
                 "success": False,
                 "node_id": node_id,
-                "node_type": "createMap",
+                "node_type": "gmaps_create",
                 "error": str(e),
                 "execution_time": time.time() - start_time,
                 "timestamp": datetime.now().isoformat()
@@ -130,7 +130,7 @@ class MapsService:
             return {
                 "success": True,
                 "node_id": node_id,
-                "node_type": "addLocations",
+                "node_type": "gmaps_locations",
                 "operation": service_type,
                 "result": result,
                 "execution_time": time.time() - start_time,
@@ -142,7 +142,7 @@ class MapsService:
             return {
                 "success": False,
                 "node_id": node_id,
-                "node_type": "addLocations",
+                "node_type": "gmaps_locations",
                 "error": f"Google Maps API error: {str(e)}",
                 "execution_time": time.time() - start_time,
                 "timestamp": datetime.now().isoformat()
@@ -153,7 +153,7 @@ class MapsService:
             return {
                 "success": False,
                 "node_id": node_id,
-                "node_type": "addLocations",
+                "node_type": "gmaps_locations",
                 "error": str(e),
                 "execution_time": time.time() - start_time,
                 "timestamp": datetime.now().isoformat()
@@ -259,7 +259,7 @@ class MapsService:
             return {
                 "success": True,
                 "node_id": node_id,
-                "node_type": "showNearbyPlaces",
+                "node_type": "gmaps_nearby_places",
                 "operation": "nearby_search",
                 "result": result,
                 "execution_time": time.time() - start_time,
@@ -271,7 +271,7 @@ class MapsService:
             return {
                 "success": False,
                 "node_id": node_id,
-                "node_type": "showNearbyPlaces",
+                "node_type": "gmaps_nearby_places",
                 "error": f"Google Places API error: {str(e)}",
                 "execution_time": time.time() - start_time,
                 "timestamp": datetime.now().isoformat()
@@ -282,7 +282,7 @@ class MapsService:
             return {
                 "success": False,
                 "node_id": node_id,
-                "node_type": "showNearbyPlaces",
+                "node_type": "gmaps_nearby_places",
                 "error": str(e),
                 "execution_time": time.time() - start_time,
                 "timestamp": datetime.now().isoformat()

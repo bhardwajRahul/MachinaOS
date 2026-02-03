@@ -5,10 +5,11 @@ from typing import Dict, Any, List, Optional
 from sqlmodel import SQLModel, select, Session
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import text
 from contextlib import asynccontextmanager
 
 from core.config import Settings
-from models.database import NodeParameter, Workflow, Execution, APIKey, APIKeyValidation, NodeOutput, ConversationMessage, ToolSchema, UserSkill, ChatMessage
+from models.database import NodeParameter, Workflow, Execution, APIKey, APIKeyValidation, NodeOutput, ConversationMessage, ToolSchema, UserSkill, ChatMessage, UserSettings
 from models.cache import CacheEntry  # SQLite-backed cache for Redis alternative
 from models.auth import User  # Import User model to ensure table creation
 from core.logging import get_logger
@@ -54,11 +55,30 @@ class Database:
             async with self.engine.begin() as conn:
                 await conn.run_sync(SQLModel.metadata.create_all)
 
+            # Add missing columns to existing tables (simple migration)
+            await self._migrate_user_settings()
+
             logger.info("Database initialized successfully")
 
         except Exception as e:
             logger.error("Database startup failed", error=str(e))
             raise
+
+    async def _migrate_user_settings(self):
+        """Add missing columns to user_settings table."""
+        try:
+            async with self.engine.begin() as conn:
+                # Check if column exists and add if missing
+                result = await conn.execute(text("PRAGMA table_info(user_settings)"))
+                columns = {row[1] for row in result.fetchall()}
+
+                if "console_panel_default_open" not in columns:
+                    await conn.execute(text(
+                        "ALTER TABLE user_settings ADD COLUMN console_panel_default_open BOOLEAN DEFAULT 0"
+                    ))
+                    logger.info("Added console_panel_default_open column to user_settings")
+        except Exception as e:
+            logger.warning(f"Migration check failed (table may not exist yet): {e}")
 
     async def shutdown(self):
         """Close database connections."""
@@ -1295,3 +1315,74 @@ class Database:
             "created_at": skill.created_at.isoformat() if skill.created_at else None,
             "updated_at": skill.updated_at.isoformat() if skill.updated_at else None
         }
+
+    # ============================================================================
+    # User Settings (UI defaults and preferences)
+    # ============================================================================
+
+    async def get_user_settings(self, user_id: str = "default") -> Optional[Dict[str, Any]]:
+        """Get user settings. Returns None if not found."""
+        try:
+            async with self.get_session() as session:
+                stmt = select(UserSettings).where(UserSettings.user_id == user_id)
+                result = await session.execute(stmt)
+                settings = result.scalar_one_or_none()
+
+                if not settings:
+                    return None
+
+                return {
+                    "user_id": settings.user_id,
+                    "auto_save": settings.auto_save,
+                    "auto_save_interval": settings.auto_save_interval,
+                    "sidebar_default_open": settings.sidebar_default_open,
+                    "component_palette_default_open": settings.component_palette_default_open,
+                    "console_panel_default_open": settings.console_panel_default_open,
+                    "created_at": settings.created_at.isoformat() if settings.created_at else None,
+                    "updated_at": settings.updated_at.isoformat() if settings.updated_at else None
+                }
+
+        except Exception as e:
+            logger.error("Failed to get user settings", user_id=user_id, error=str(e))
+            return None
+
+    async def save_user_settings(self, settings_data: Dict[str, Any], user_id: str = "default") -> bool:
+        """Save or update user settings."""
+        try:
+            async with self.get_session() as session:
+                # Try to get existing settings
+                stmt = select(UserSettings).where(UserSettings.user_id == user_id)
+                result = await session.execute(stmt)
+                existing = result.scalar_one_or_none()
+
+                if existing:
+                    # Update existing settings
+                    if "auto_save" in settings_data:
+                        existing.auto_save = settings_data["auto_save"]
+                    if "auto_save_interval" in settings_data:
+                        existing.auto_save_interval = settings_data["auto_save_interval"]
+                    if "sidebar_default_open" in settings_data:
+                        existing.sidebar_default_open = settings_data["sidebar_default_open"]
+                    if "component_palette_default_open" in settings_data:
+                        existing.component_palette_default_open = settings_data["component_palette_default_open"]
+                    if "console_panel_default_open" in settings_data:
+                        existing.console_panel_default_open = settings_data["console_panel_default_open"]
+                else:
+                    # Create new settings
+                    existing = UserSettings(
+                        user_id=user_id,
+                        auto_save=settings_data.get("auto_save", True),
+                        auto_save_interval=settings_data.get("auto_save_interval", 30),
+                        sidebar_default_open=settings_data.get("sidebar_default_open", True),
+                        component_palette_default_open=settings_data.get("component_palette_default_open", True),
+                        console_panel_default_open=settings_data.get("console_panel_default_open", False)
+                    )
+                    session.add(existing)
+
+                await session.commit()
+                logger.info(f"[DB] User settings saved for user_id: {user_id}")
+                return True
+
+        except Exception as e:
+            logger.error("Failed to save user settings", user_id=user_id, error=str(e))
+            return False

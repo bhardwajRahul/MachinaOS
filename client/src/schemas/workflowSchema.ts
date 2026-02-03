@@ -73,9 +73,9 @@ export const WorkflowJSONSchema = {
             "openaiChatModel",
             "anthropicChatModel",
             "googleChatModel",
-            "createMap",
-            "addLocations",
-            "showNearbyPlaces",
+            "gmaps_create",
+            "gmaps_locations",
+            "gmaps_nearby_places",
             "whatsappSendMessage",
             "whatsappReceiveMessage"
           ]

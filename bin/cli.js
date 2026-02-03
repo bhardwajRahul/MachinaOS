@@ -44,6 +44,24 @@ function getVersion(cmd) {
   }
 }
 
+// Add common binary paths to PATH (Linux installs uv to ~/.local/bin)
+function expandPath() {
+  const home = process.env.HOME || process.env.USERPROFILE;
+  if (home) {
+    const additionalPaths = [
+      `${home}/.local/bin`,      // uv, cargo installs
+      `${home}/.cargo/bin`,      // Rust tools
+      '/usr/local/bin',          // Homebrew on macOS
+    ];
+    const currentPath = process.env.PATH || '';
+    const sep = process.platform === 'win32' ? ';' : ':';
+    const newPaths = additionalPaths.filter(p => !currentPath.includes(p));
+    if (newPaths.length > 0) {
+      process.env.PATH = newPaths.join(sep) + sep + currentPath;
+    }
+  }
+}
+
 function checkDeps() {
   const errors = [];
   const warnings = [];
@@ -98,6 +116,9 @@ function run(script) {
   child.on('error', (e) => { console.error(`Failed: ${e.message}`); process.exit(1); });
   child.on('close', (code) => process.exit(code || 0));
 }
+
+// Expand PATH to find tools like uv installed in user directories
+expandPath();
 
 const cmd = process.argv[2] || 'help';
 

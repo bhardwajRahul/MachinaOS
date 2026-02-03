@@ -40,6 +40,7 @@ interface AppStore {
   selectedNode: Node | null;  // Kept for backward compatibility, derived from workflowUIStates
   sidebarVisible: boolean;
   componentPaletteVisible: boolean;
+  consolePanelVisible: boolean;
   proMode: boolean;  // false = noob mode (only AI categories), true = pro mode (all categories)
   renamingNodeId: string | null;
 
@@ -62,6 +63,13 @@ interface AppStore {
   toggleComponentPalette: () => void;
   toggleProMode: () => void;
   setRenamingNodeId: (nodeId: string | null) => void;
+
+  // UI defaults from database
+  setSidebarVisible: (visible: boolean) => void;
+  setComponentPaletteVisible: (visible: boolean) => void;
+  setConsolePanelVisible: (visible: boolean) => void;
+  toggleConsolePanelVisible: () => void;
+  applyUIDefaults: (defaults: { sidebarDefaultOpen?: boolean; componentPaletteDefaultOpen?: boolean; consolePanelDefaultOpen?: boolean }) => void;
 
   // Per-workflow UI state actions (n8n pattern)
   getWorkflowUIState: (workflowId: string) => WorkflowUIState;
@@ -117,6 +125,7 @@ const migrateNodes = (nodes: Node[]): Node[] => {
 const STORAGE_KEYS = {
   sidebarVisible: 'ui_sidebar_visible',
   componentPaletteVisible: 'ui_component_palette_visible',
+  consolePanelVisible: 'ui_console_panel_visible',
   proMode: 'ui_pro_mode',
 };
 
@@ -149,6 +158,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   selectedNode: null,
   sidebarVisible: loadBooleanFromStorage(STORAGE_KEYS.sidebarVisible, true),
   componentPaletteVisible: loadBooleanFromStorage(STORAGE_KEYS.componentPaletteVisible, true),
+  consolePanelVisible: loadBooleanFromStorage(STORAGE_KEYS.consolePanelVisible, false),
   proMode: loadBooleanFromStorage(STORAGE_KEYS.proMode, false),  // Default to noob mode
   renamingNodeId: null,
   savedWorkflows: [],
@@ -366,6 +376,53 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   setRenamingNodeId: (nodeId) => {
     set({ renamingNodeId: nodeId });
+  },
+
+  // UI defaults setters (for database sync)
+  setSidebarVisible: (visible) => {
+    saveBooleanToStorage(STORAGE_KEYS.sidebarVisible, visible);
+    set({ sidebarVisible: visible });
+  },
+
+  setComponentPaletteVisible: (visible) => {
+    saveBooleanToStorage(STORAGE_KEYS.componentPaletteVisible, visible);
+    set({ componentPaletteVisible: visible });
+  },
+
+  setConsolePanelVisible: (visible) => {
+    saveBooleanToStorage(STORAGE_KEYS.consolePanelVisible, visible);
+    set({ consolePanelVisible: visible });
+  },
+
+  toggleConsolePanelVisible: () => {
+    set((state) => {
+      const newValue = !state.consolePanelVisible;
+      saveBooleanToStorage(STORAGE_KEYS.consolePanelVisible, newValue);
+      return { consolePanelVisible: newValue };
+    });
+  },
+
+  applyUIDefaults: (defaults) => {
+    const updates: Partial<{ sidebarVisible: boolean; componentPaletteVisible: boolean; consolePanelVisible: boolean }> = {};
+
+    if (defaults.sidebarDefaultOpen !== undefined) {
+      updates.sidebarVisible = defaults.sidebarDefaultOpen;
+      saveBooleanToStorage(STORAGE_KEYS.sidebarVisible, defaults.sidebarDefaultOpen);
+    }
+
+    if (defaults.componentPaletteDefaultOpen !== undefined) {
+      updates.componentPaletteVisible = defaults.componentPaletteDefaultOpen;
+      saveBooleanToStorage(STORAGE_KEYS.componentPaletteVisible, defaults.componentPaletteDefaultOpen);
+    }
+
+    if (defaults.consolePanelDefaultOpen !== undefined) {
+      updates.consolePanelVisible = defaults.consolePanelDefaultOpen;
+      saveBooleanToStorage(STORAGE_KEYS.consolePanelVisible, defaults.consolePanelDefaultOpen);
+    }
+
+    if (Object.keys(updates).length > 0) {
+      set(updates);
+    }
   },
 
   // Per-workflow UI state management (n8n pattern - isolated execution state per workflow)

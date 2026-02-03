@@ -10,6 +10,7 @@ This package contains all node execution handlers organized by category:
 - triggers.py: Generic trigger node handler
 - utility.py: Maps, Text, Chat, Cron, Start
 - whatsapp.py: WhatsApp Send, WhatsApp DB
+- social.py: Social Receive, Social Send (unified messaging)
 - polyglot.py: Polyglot server integration (standalone, not auto-imported)
 """
 
@@ -64,6 +65,12 @@ from .whatsapp import (
     handle_whatsapp_db,
 )
 
+# Social handlers (unified messaging)
+from .social import (
+    handle_social_receive,
+    handle_social_send,
+)
+
 # Document processing handlers
 from .document import (
     handle_http_scraper,
@@ -110,6 +117,9 @@ __all__ = [
     # WhatsApp
     'handle_whatsapp_send',
     'handle_whatsapp_db',
+    # Social
+    'handle_social_receive',
+    'handle_social_send',
     # Document processing
     'handle_http_scraper',
     'handle_file_downloader',

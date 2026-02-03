@@ -195,12 +195,30 @@ if (!allFree) {
 log('Starting services...');
 log('Press Ctrl+C to stop (use npm run stop to kill all services)\n');
 
+// Detect if we should run dev mode (vite) or production mode (static serve)
+const clientDist = resolve(ROOT, 'client', 'dist', 'index.html');
+const clientNodeModules = resolve(ROOT, 'client', 'node_modules');
+const isProduction = existsSync(clientDist) && !existsSync(clientNodeModules);
+
+if (isProduction) {
+  log('Mode: Production (serving pre-built client)');
+} else {
+  log('Mode: Development (running vite)');
+}
+
 // Build concurrently command based on config
-const services = [
-  'npm:client:start',
-  'npm:python:start',
-  'npm:whatsapp:api'
-];
+const services = [];
+
+// Client: use static server in production, vite in development
+if (isProduction) {
+  // Use dedicated serve-client.js script
+  services.push(`"node ${resolve(ROOT, 'scripts', 'serve-client.js').replace(/\\/g, '/')}"`);
+} else {
+  services.push('npm:client:start');
+}
+
+services.push('npm:python:start');
+services.push('npm:whatsapp:api');
 
 if (config.temporalEnabled) {
   services.push('npm:temporal:worker');
@@ -209,7 +227,7 @@ if (config.temporalEnabled) {
 const concurrentlyArgs = [
   '--raw',
   '--kill-others-on-fail',
-  ...services.map(s => `"${s}"`)
+  ...services
 ];
 
 // Use spawn with shell:true for cross-platform compatibility

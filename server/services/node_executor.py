@@ -32,6 +32,7 @@ from services.handlers import (
     handle_chat_send, handle_chat_history,
     handle_start, handle_cron_scheduler, handle_timer, handle_console,
     handle_whatsapp_send, handle_whatsapp_db,
+    handle_social_receive, handle_social_send,
     handle_http_scraper, handle_file_downloader, handle_document_parser,
     handle_text_chunker, handle_embedding_generator, handle_vector_store,
 )
@@ -107,17 +108,26 @@ class NodeExecutor:
             # AI
             'aiAgent': partial(handle_ai_agent, ai_service=self.ai_service, database=self.database),
             'chatAgent': partial(handle_chat_agent, ai_service=self.ai_service, database=self.database),
+            # Specialized Agents (use chatAgent handler - same skill/memory/tools architecture)
+            'android_agent': partial(handle_chat_agent, ai_service=self.ai_service, database=self.database),
+            'coding_agent': partial(handle_chat_agent, ai_service=self.ai_service, database=self.database),
+            'web_agent': partial(handle_chat_agent, ai_service=self.ai_service, database=self.database),
+            'task_agent': partial(handle_chat_agent, ai_service=self.ai_service, database=self.database),
+            'social_agent': partial(handle_chat_agent, ai_service=self.ai_service, database=self.database),
             'simpleMemory': handle_simple_memory,
             # Maps
-            'createMap': partial(handle_create_map, maps_service=self.maps_service),
-            'addLocations': partial(handle_add_locations, maps_service=self.maps_service),
-            'showNearbyPlaces': partial(handle_nearby_places, maps_service=self.maps_service),
+            'gmaps_create': partial(handle_create_map, maps_service=self.maps_service),
+            'gmaps_locations': partial(handle_add_locations, maps_service=self.maps_service),
+            'gmaps_nearby_places': partial(handle_nearby_places, maps_service=self.maps_service),
             # Text
             'textGenerator': partial(handle_text_generator, text_service=self.text_service),
             'fileHandler': partial(handle_file_handler, text_service=self.text_service),
             # WhatsApp
             'whatsappSend': handle_whatsapp_send,
             'whatsappDb': handle_whatsapp_db,
+            # Social (unified messaging)
+            # Note: socialReceive handled in _dispatch with connected_outputs
+            'socialSend': handle_social_send,
             # Chat
             'chatSend': handle_chat_send,
             'chatHistory': handle_chat_history,
@@ -196,6 +206,17 @@ class NodeExecutor:
                         output_data = {**output_data, **nested_data}
                         logger.debug(f"[NodeExecutor] Flattened Android output for {node_id}: keys={list(output_data.keys())}")
 
+                # For socialReceive, store 4 outputs for different handle connections
+                # - output_message: Text for LLM input
+                # - output_media: Media data
+                # - output_contact: Sender/contact info
+                # - output_metadata: Message metadata
+                if node_type == 'socialReceive' and isinstance(output_data, dict):
+                    await self._output_store(session_id, node_id, "output_message", output_data.get('message', ''))
+                    await self._output_store(session_id, node_id, "output_media", output_data.get('media', {}))
+                    await self._output_store(session_id, node_id, "output_contact", output_data.get('contact', {}))
+                    await self._output_store(session_id, node_id, "output_metadata", output_data.get('metadata', {}))
+
                 await self._output_store(session_id, node_id, "output_0", output_data)
 
             return result
@@ -259,10 +280,14 @@ class NodeExecutor:
             return await handler(node_id, node_type, params, context)
 
         # Special handlers needing connected outputs
-        if node_type in ('pythonExecutor', 'javascriptExecutor', 'webhookResponse', 'console'):
+        if node_type in ('pythonExecutor', 'javascriptExecutor', 'webhookResponse', 'console', 'socialReceive'):
+            logger.debug(f"[_dispatch] Getting connected outputs for {node_type} node_id={node_id}")
             outputs, source_nodes = await self._get_connected_outputs_with_info(context, node_id)
+            logger.debug(f"[_dispatch] Got {len(outputs)} outputs for {node_type}: keys={list(outputs.keys())}")
             if node_type == 'console':
                 return await handle_console(node_id, node_type, params, context, outputs, source_nodes)
+            if node_type == 'socialReceive':
+                return await handle_social_receive(node_id, node_type, params, context, outputs, source_nodes)
             handlers = {
                 'pythonExecutor': handle_python_executor,
                 'javascriptExecutor': handle_javascript_executor,
@@ -285,7 +310,7 @@ class NodeExecutor:
         }
 
     async def _get_connected_outputs(self, context: Dict, node_id: str) -> Dict[str, Any]:
-        """Get outputs from connected upstream nodes."""
+        """Get outputs from connected upstream nodes with handle-aware routing."""
         get_output = context.get('get_output_fn')
         if not get_output:
             return {}
@@ -298,7 +323,21 @@ class NodeExecutor:
         for edge in edges:
             if edge.get('target') == node_id:
                 source_id = edge.get('source')
-                output = await get_output(session_id, source_id, "output_0")
+                source_handle = edge.get('sourceHandle')
+
+                # Map sourceHandle to output key
+                if source_handle and source_handle.startswith('output-'):
+                    handle_name = source_handle.replace('output-', '')
+                    output_key = f"output_{handle_name}"
+                else:
+                    output_key = "output_0"
+
+                output = await get_output(session_id, source_id, output_key)
+
+                # Fallback to output_0 if specific handle output not found
+                if output is None and output_key != "output_0":
+                    output = await get_output(session_id, source_id, "output_0")
+
                 if output:
                     source = next((n for n in nodes if n.get('id') == source_id), {})
                     result[source.get('type', 'unknown')] = output
@@ -347,14 +386,33 @@ class NodeExecutor:
         outputs = {}
         source_nodes = []
 
-        logger.debug(f"[_get_connected_outputs_with_info] node_id={node_id}, edges={len(edges)}, session={session_id}")
+        logger.info(f"[_get_connected_outputs_with_info] node_id={node_id}, edges={len(edges)}, session={session_id}")
 
         for edge in edges:
+            logger.debug(f"[_get_connected_outputs_with_info] Checking edge: source={edge.get('source')}, target={edge.get('target')}, sourceHandle={edge.get('sourceHandle')}, targetHandle={edge.get('targetHandle')}")
             if edge.get('target') == node_id:
                 source_id = edge.get('source')
-                logger.debug(f"[_get_connected_outputs_with_info] Found edge from {source_id} to {node_id}")
-                output = await get_output(session_id, source_id, "output_0")
-                logger.debug(f"[_get_connected_outputs_with_info] Output from {source_id}: {'FOUND' if output else 'NOT FOUND'}")
+                source_handle = edge.get('sourceHandle')
+
+                # Map sourceHandle to output key
+                # Frontend uses "output-<name>", backend stores as "output_<name>"
+                if source_handle and source_handle.startswith('output-'):
+                    handle_name = source_handle.replace('output-', '')
+                    output_key = f"output_{handle_name}"
+                else:
+                    output_key = "output_0"
+
+                logger.info(f"[_get_connected_outputs_with_info] Found edge from {source_id} to {node_id}, sourceHandle={source_handle}, using output_key={output_key}")
+                output = await get_output(session_id, source_id, output_key)
+                logger.info(f"[_get_connected_outputs_with_info] First lookup (key={output_key}): {'FOUND' if output else 'NOT_FOUND'}")
+
+                # Fallback to output_0 if specific handle output not found
+                if output is None and output_key != "output_0":
+                    logger.info(f"[_get_connected_outputs_with_info] output_key {output_key} not found, falling back to output_0")
+                    output = await get_output(session_id, source_id, "output_0")
+                    logger.info(f"[_get_connected_outputs_with_info] Fallback lookup (output_0): {'FOUND' if output else 'NOT_FOUND'}")
+
+                logger.info(f"[_get_connected_outputs_with_info] Final output from {source_id}: {'FOUND' if output else 'NOT FOUND'}")
                 if output:
                     source = next((n for n in nodes if n.get('id') == source_id), {})
                     source_type = source.get('type', 'unknown')

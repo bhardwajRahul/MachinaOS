@@ -13,16 +13,16 @@ export const locationNodes: Record<string, INodeTypeDescription> = {
   // GOOGLE MAPS NODES - Map Creation and Places Integration
   // ============================================================================
 
-  // Create Map - Initialize Google Maps JavaScript API with coordinates
-  createMap: {
-    displayName: 'Create Map',
-    name: 'createMap',
+  // GMaps Create - Initialize Google Maps JavaScript API with coordinates
+  gmaps_create: {
+    displayName: 'GMaps Create',
+    name: 'gmaps_create',
     icon: '🗺️',
     group: ['location', 'service'],
     version: 1,
     subtitle: 'Initialize Google Map',
     description: 'Creates an interactive Google Map using the Maps JavaScript API with customizable center, zoom, and map type',
-    defaults: { name: 'Create Map', color: '#1A73E8' },
+    defaults: { name: 'GMaps Create', color: '#1A73E8' },
     inputs: [{
       name: 'main',
       displayName: 'Map Configuration',
@@ -98,16 +98,16 @@ export const locationNodes: Record<string, INodeTypeDescription> = {
     ]
   },
 
-  // Add Locations - Google Maps Geocoding Service (Dual-purpose: workflow node + AI tool)
-  addLocations: {
-    displayName: 'Add Locations',
-    name: 'addLocations',
+  // GMaps Locations - Google Maps Geocoding Service (Dual-purpose: workflow node + AI tool)
+  gmaps_locations: {
+    displayName: 'GMaps Locations',
+    name: 'gmaps_locations',
     icon: '🌍',
     group: ['location', 'service', 'tool'],  // 'tool' enables AI Agent tool calling
     version: 1,
     subtitle: 'Geocoding Service',
     description: 'Use Google Maps Geocoding Service for address-to-coordinates conversion and reverse geocoding with detailed location information',
-    defaults: { name: 'Add Locations', color: '#34A853' },
+    defaults: { name: 'GMaps Locations', color: '#34A853' },
     inputs: [{
       name: 'main',
       displayName: 'Geocoding Input',
@@ -219,16 +219,16 @@ export const locationNodes: Record<string, INodeTypeDescription> = {
     ]
   },
 
-  // Show Nearby Places - Google Maps Places API nearbySearch (Dual-purpose: workflow node + AI tool)
-  showNearbyPlaces: {
-    displayName: 'Show Nearby Places',
-    name: 'showNearbyPlaces',
+  // GMaps Nearby Places - Google Maps Places API nearbySearch (Dual-purpose: workflow node + AI tool)
+  gmaps_nearby_places: {
+    displayName: 'GMaps Nearby Places',
+    name: 'gmaps_nearby_places',
     icon: '🔍',
     group: ['location', 'service', 'tool'],  // 'tool' enables AI Agent tool calling
     version: 1,
     subtitle: 'Places API nearbySearch',
     description: 'Search for places near a location using Google Maps Places API nearbySearch with detailed place information in JSON format',
-    defaults: { name: 'Show Nearby Places', color: '#FF6D01' },
+    defaults: { name: 'GMaps Nearby Places', color: '#FF6D01' },
     inputs: [{
       name: 'main',
       displayName: 'Search Parameters',
@@ -460,4 +460,4 @@ export const locationNodes: Record<string, INodeTypeDescription> = {
 };
 
 // List of Google Maps node types for easy identification
-export const LOCATION_NODE_TYPES = ['createMap', 'addLocations', 'showNearbyPlaces'];
+export const LOCATION_NODE_TYPES = ['gmaps_create', 'gmaps_locations', 'gmaps_nearby_places'];

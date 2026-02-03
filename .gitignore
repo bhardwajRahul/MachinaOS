@@ -123,13 +123,11 @@ server/.python-version
 # Claude Code configuration
 # =============================================================================
 .claude/
-CLAUDE.md
-**/CLAUDE.md
 
 # =============================================================================
-# Documentation (separate repos)
+# Documentation (internal docs excluded, public docs tracked)
 # =============================================================================
-docs*/
+docs-internal/
 
 # =============================================================================
 # Experiments (work in progress)

@@ -810,7 +810,8 @@ class AIService:
 
     def create_model(self, provider: str, api_key: str, model: str,
                     temperature: float, max_tokens: int,
-                    thinking: Optional[ThinkingConfig] = None):
+                    thinking: Optional[ThinkingConfig] = None,
+                    proxy_url: Optional[str] = None):
         """Create LangChain model instance using provider registry.
 
         Args:
@@ -820,6 +821,7 @@ class AIService:
             temperature: Sampling temperature
             max_tokens: Maximum response tokens
             thinking: Optional thinking/reasoning configuration
+            proxy_url: Optional proxy URL (Ollama-style auth delegation)
 
         Returns:
             Configured LangChain chat model instance
@@ -836,8 +838,14 @@ class AIService:
             config.max_tokens_param: max_tokens
         }
 
+        # Proxy mode: route through local proxy that handles auth (Ollama pattern)
+        # Proxy URL stored as {provider}_proxy credential
+        if proxy_url:
+            kwargs['base_url'] = proxy_url
+            kwargs[config.api_key_param] = "ollama"  # Ollama-style token
+            logger.info(f"[AI] Using proxy for {provider}: {proxy_url}")
         # OpenRouter uses OpenAI-compatible API with custom base_url
-        if provider == 'openrouter':
+        elif provider == 'openrouter':
             kwargs['base_url'] = 'https://openrouter.ai/api/v1'
             kwargs['default_headers'] = {
                 'HTTP-Referer': 'http://localhost:3000',
@@ -1112,7 +1120,10 @@ class AIService:
                     format=flattened.get('reasoningFormat', 'parsed'),
                 )
 
-            chat_model = self.create_model(provider, api_key, model, temperature, max_tokens, thinking_config)
+            # Check for proxy URL (stored as {provider}_proxy credential)
+            proxy_url = await self.auth.get_api_key(f"{provider}_proxy")
+
+            chat_model = self.create_model(provider, api_key, model, temperature, max_tokens, thinking_config, proxy_url)
 
             # Prepare messages
             messages = []
@@ -1193,9 +1204,11 @@ class AIService:
 
     async def execute_agent(self, node_id: str, parameters: Dict[str, Any],
                             memory_data: Optional[Dict[str, Any]] = None,
+                            skill_data: Optional[List[Dict[str, Any]]] = None,
                             tool_data: Optional[List[Dict[str, Any]]] = None,
                             broadcaster = None,
-                            workflow_id: Optional[str] = None) -> Dict[str, Any]:
+                            workflow_id: Optional[str] = None,
+                            context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Execute AI Agent using LangGraph state machine.
 
         This method uses LangGraph for structured agent execution with:
@@ -1209,16 +1222,21 @@ class AIService:
             parameters: Node parameters including prompt, model, etc.
             memory_data: Optional memory data from connected simpleMemory node
                         containing session_id, window_size for conversation history
+            skill_data: Optional skill configurations from connected skill nodes
             tool_data: Optional list of tool configurations from connected tool nodes
             broadcaster: Optional StatusBroadcaster for real-time UI updates
             workflow_id: Optional workflow ID for scoped status broadcasts
+            context: Optional execution context with nodes, edges for nested agent delegation
         """
         start_time = time.time()
         provider = 'unknown'
         model = 'unknown'
 
         # EARLY LOG: Entry point for debugging
-        logger.info(f"[AIAgent] execute_agent called: node_id={node_id}, workflow_id={workflow_id}, tool_data_count={len(tool_data) if tool_data else 0}")
+        logger.info(f"[AIAgent] execute_agent called: node_id={node_id}, workflow_id={workflow_id}, skill_count={len(skill_data) if skill_data else 0}, tool_count={len(tool_data) if tool_data else 0}")
+        if skill_data:
+            for i, sd in enumerate(skill_data):
+                logger.debug(f"[AIAgent] Skill {i}: type={sd.get('node_type')}, label={sd.get('label')}")
         if tool_data:
             for i, td in enumerate(tool_data):
                 logger.info(f"[AIAgent] Tool {i}: type={td.get('node_type')}, node_id={td.get('node_id')}")
@@ -1236,6 +1254,30 @@ class AIService:
             # Extract top-level parameters (always visible in UI)
             prompt = parameters.get('prompt', 'Hello')
             system_message = parameters.get('systemMessage', 'You are a helpful assistant')
+
+            # Load skills and enhance system message with SKILL.md context
+            # Skills provide instructions/context - actual tools come from tool nodes
+            if skill_data:
+                from services.skill_loader import get_skill_loader
+
+                skill_loader = get_skill_loader()
+                skill_loader.scan_skills()
+
+                # Extract skill names from connected skill nodes
+                skill_names = []
+                for skill_info in skill_data:
+                    skill_name = skill_info.get('skill_name') or skill_info.get('node_type', '').replace('Skill', '-skill').lower()
+                    # Convert node type to skill name (e.g., 'whatsappSkill' -> 'whatsapp-skill')
+                    if skill_name.endswith('skill') and not '-' in skill_name:
+                        skill_name = skill_name[:-5] + '-skill'  # whatsappskill -> whatsapp-skill
+                    skill_names.append(skill_name)
+                    logger.debug(f"[AIAgent] Skill detected: {skill_name}")
+
+                # Add skill SKILL.md content to system message
+                skill_prompt = skill_loader.get_registry_prompt(skill_names)
+                if skill_prompt:
+                    system_message = f"{system_message}\n\n{skill_prompt}"
+                    logger.info(f"[AIAgent] Enhanced system message with {len(skill_names)} skill contexts")
 
             # Flatten options collection from frontend
             options = parameters.get('options', {})
@@ -1281,9 +1323,12 @@ class AIService:
                 "model": model
             })
 
+            # Check for proxy URL (stored as {provider}_proxy credential)
+            proxy_url = await self.auth.get_api_key(f"{provider}_proxy")
+
             # Create LLM using the provider from node configuration
             logger.debug(f"[LangGraph] Creating {provider} model: {model}")
-            chat_model = self.create_model(provider, api_key, model, temperature, max_tokens, thinking_config)
+            chat_model = self.create_model(provider, api_key, model, temperature, max_tokens, thinking_config, proxy_url)
 
             # Build initial messages for state
             initial_messages: List[BaseMessage] = []
@@ -1387,6 +1432,14 @@ class AIService:
 
                 # Include workflow_id in config so tool handlers can broadcast with proper scoping
                 config['workflow_id'] = workflow_id
+
+                # For nested agent delegation: inject services and graph context
+                # These allow child agents to execute with their own tools
+                config['ai_service'] = self
+                config['database'] = self.database
+                if context:
+                    config['nodes'] = context.get('nodes', [])
+                    config['edges'] = context.get('edges', [])
 
                 try:
                     result = await execute_tool(tool_name, tool_args, config)
@@ -1573,7 +1626,8 @@ class AIService:
                                   skill_data: Optional[List[Dict[str, Any]]] = None,
                                   tool_data: Optional[List[Dict[str, Any]]] = None,
                                   broadcaster=None,
-                                  workflow_id: Optional[str] = None) -> Dict[str, Any]:
+                                  workflow_id: Optional[str] = None,
+                                  context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Execute Chat Agent - conversational AI with memory, skills, and tool calling.
 
         Chat Agent supports:
@@ -1589,6 +1643,7 @@ class AIService:
             tool_data: Optional tool configurations from connected tool nodes (httpRequest, etc.)
             broadcaster: Optional StatusBroadcaster for real-time UI updates
             workflow_id: Optional workflow ID for scoped status broadcasts
+            context: Optional execution context with nodes, edges for nested agent delegation
         """
         start_time = time.time()
         provider = 'unknown'
@@ -1701,8 +1756,11 @@ class AIService:
                 "model": model
             })
 
+            # Check for proxy URL (stored as {provider}_proxy credential)
+            proxy_url = await self.auth.get_api_key(f"{provider}_proxy")
+
             # Create chat model
-            chat_model = self.create_model(provider, api_key, model, temperature, max_tokens, thinking_config)
+            chat_model = self.create_model(provider, api_key, model, temperature, max_tokens, thinking_config, proxy_url)
 
             # Build messages
             messages: List[BaseMessage] = []
@@ -1797,6 +1855,14 @@ class AIService:
                     # Include workflow_id in config so tool handlers can broadcast with proper scoping
                     # This is needed for Android toolkit to broadcast status to connected service nodes
                     config['workflow_id'] = workflow_id
+
+                    # For nested agent delegation: inject services and graph context
+                    # These allow child agents to execute with their own tools
+                    config['ai_service'] = self
+                    config['database'] = self.database
+                    if context:
+                        config['nodes'] = context.get('nodes', [])
+                        config['edges'] = context.get('edges', [])
 
                     try:
                         # Execute via handlers/tools.py - same pattern as AI Agent
@@ -1993,8 +2059,10 @@ class AIService:
             'androidTool': 'android_device',
             'whatsappSend': 'whatsapp_send',
             'whatsappDb': 'whatsapp_db',
-            'addLocations': 'geocode',
-            'showNearbyPlaces': 'nearby_places',
+            'gmaps_locations': 'geocode',
+            'gmaps_nearby_places': 'nearby_places',
+            'aiAgent': 'delegate_to_ai_agent',
+            'chatAgent': 'delegate_to_chat_agent',
         }
         DEFAULT_TOOL_DESCRIPTIONS = {
             'calculatorTool': 'Perform mathematical calculations. Operations: add, subtract, multiply, divide, power, sqrt, mod, abs',
@@ -2005,8 +2073,10 @@ class AIService:
             'androidTool': 'Control Android device. Available services are determined by connected nodes.',
             'whatsappSend': 'Send WhatsApp messages to contacts or groups. Supports text, media, location, and contact messages.',
             'whatsappDb': 'Query WhatsApp database - list contacts, search groups, get contact/group info, retrieve chat history.',
-            'addLocations': 'Geocode addresses to coordinates or reverse geocode coordinates to addresses using Google Maps.',
-            'showNearbyPlaces': 'Search for nearby places (restaurants, hospitals, banks, etc.) using Google Maps Places API.',
+            'gmaps_locations': 'Geocode addresses to coordinates or reverse geocode coordinates to addresses using Google Maps.',
+            'gmaps_nearby_places': 'Search for nearby places (restaurants, hospitals, banks, etc.) using Google Maps Places API.',
+            'aiAgent': 'Delegate a task to another AI Agent. The agent works independently without blocking.',
+            'chatAgent': 'Delegate a task to a Chat Agent. The agent works independently without blocking.',
         }
 
         try:
@@ -2276,6 +2346,64 @@ class AIService:
 
             return WhatsAppDbSchema
 
+        # Social Send schema (unified messaging to any platform)
+        if node_type == 'socialSend':
+            class SocialSendSchema(BaseModel):
+                """Send messages to any supported chat platform (WhatsApp, Telegram, Discord, Slack, Signal, SMS, Webchat, Email, Matrix, Teams)."""
+                channel: str = Field(
+                    default="whatsapp",
+                    description="Target platform: 'whatsapp', 'telegram', 'discord', 'slack', 'signal', 'sms', 'webchat', 'email', 'matrix', 'teams'"
+                )
+                recipient_type: str = Field(
+                    default="phone",
+                    description="Recipient type: 'phone', 'group', 'channel', 'user', 'chat'"
+                )
+                phone: Optional[str] = Field(
+                    default=None,
+                    description="Phone number without + prefix (for recipient_type='phone')"
+                )
+                group_id: Optional[str] = Field(
+                    default=None,
+                    description="Group identifier (for recipient_type='group')"
+                )
+                channel_id: Optional[str] = Field(
+                    default=None,
+                    description="Channel identifier (for recipient_type='channel')"
+                )
+                user_id: Optional[str] = Field(
+                    default=None,
+                    description="User identifier (for recipient_type='user')"
+                )
+                chat_id: Optional[str] = Field(
+                    default=None,
+                    description="Generic chat identifier (for recipient_type='chat')"
+                )
+                message_type: str = Field(
+                    default="text",
+                    description="Message type: 'text', 'image', 'video', 'audio', 'document', 'sticker', 'location', 'contact', 'poll'"
+                )
+                message: Optional[str] = Field(
+                    default=None,
+                    description="Text message content (for message_type='text')"
+                )
+                media_url: Optional[str] = Field(
+                    default=None,
+                    description="URL for media (image/video/audio/document/sticker)"
+                )
+                caption: Optional[str] = Field(
+                    default=None,
+                    description="Caption for media messages"
+                )
+                latitude: Optional[float] = Field(default=None, description="Latitude for location message")
+                longitude: Optional[float] = Field(default=None, description="Longitude for location message")
+                location_name: Optional[str] = Field(default=None, description="Display name for location")
+                address: Optional[str] = Field(default=None, description="Address text for location")
+                contact_name: Optional[str] = Field(default=None, description="Contact card display name")
+                contact_phone: Optional[str] = Field(default=None, description="Contact phone number")
+                vcard: Optional[str] = Field(default=None, description="vCard 3.0 format string for contact")
+
+            return SocialSendSchema
+
         # Android toolkit schema - dynamic based on connected services
         # Follows LangChain dynamic tool binding pattern
         if node_type == 'androidTool':
@@ -2318,9 +2446,9 @@ class AIService:
 
             return AndroidToolSchema
 
-        # Google Maps Geocoding schema (addLocations node as tool)
+        # Google Maps Geocoding schema (gmaps_locations node as tool)
         # camelCase to match JSON/frontend convention
-        if node_type == 'addLocations':
+        if node_type == 'gmaps_locations':
             class GeocodingSchema(BaseModel):
                 """Geocode addresses to coordinates or reverse geocode coordinates to addresses."""
                 service_type: str = Field(
@@ -2342,9 +2470,9 @@ class AIService:
 
             return GeocodingSchema
 
-        # Google Maps Nearby Places schema (showNearbyPlaces node as tool)
+        # Google Maps Nearby Places schema (gmaps_nearby_places node as tool)
         # snake_case to match Python convention
-        if node_type == 'showNearbyPlaces':
+        if node_type == 'gmaps_nearby_places':
             class NearbyPlacesSchema(BaseModel):
                 """Search for nearby places using Google Maps Places API."""
                 lat: float = Field(
@@ -2367,6 +2495,26 @@ class AIService:
                 )
 
             return NearbyPlacesSchema
+
+        # AI Agent delegation schema (fire-and-forget async delegation)
+        if node_type in ('aiAgent', 'chatAgent'):
+            agent_label = params.get('label', node_type)
+
+            class DelegateToAgentSchema(BaseModel):
+                """Delegate a task to another AI Agent (non-blocking).
+
+                The child agent will work independently without blocking the parent.
+                Use this to assign subtasks to specialized agents.
+                """
+                task: str = Field(
+                    description=f"The task/instruction to delegate to '{agent_label}'. Be specific about what you want done."
+                )
+                context: Optional[str] = Field(
+                    default=None,
+                    description="Additional context or data the child agent needs to complete the task"
+                )
+
+            return DelegateToAgentSchema
 
         # Generic schema for other nodes
         class GenericToolSchema(BaseModel):

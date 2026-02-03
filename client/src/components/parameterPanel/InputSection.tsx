@@ -12,7 +12,8 @@ interface InputSectionProps {
 }
 
 interface NodeData {
-  id: string;
+  id: string;           // Unique key (includes handle suffix for multi-output)
+  sourceNodeId: string; // Original node ID for template variable resolution
   name: string;
   type: string;
   icon: string;
@@ -59,9 +60,10 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
       // Helper to check if a handle is a config/auxiliary handle (not main data flow)
       const isConfigHandle = (handle: string | null | undefined): boolean => {
         if (!handle) return false;
-        // Config handles follow pattern: input-<type> where type is not 'main'
-        // Examples: input-memory, input-tools, input-model
-        if (handle.startsWith('input-') && handle !== 'input-main') {
+        // Config handles follow pattern: input-<type> where type is not 'main' or 'chat'
+        // Examples: input-memory, input-tools, input-model, input-skill
+        // Non-config (primary data) handles: input-main, input-chat
+        if (handle.startsWith('input-') && handle !== 'input-main' && handle !== 'input-chat') {
           return true;
         }
         return false;
@@ -81,17 +83,33 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
       const currentNode = nodes.find((node: Node) => node.id === nodeId);
       const currentNodeType = currentNode?.type;
 
+      // Agent node types that support skills (have input-skill handle)
+      const AGENT_WITH_SKILLS_TYPES = [
+        'aiAgent', 'chatAgent', 'android_agent', 'coding_agent',
+        'web_agent', 'task_agent', 'social_agent'
+      ];
+      // Check if current node is an agent that shows skills in Middle Section
+      const isAgentWithSkills = AGENT_WITH_SKILLS_TYPES.includes(currentNodeType || '');
+
       // Collect all edges to process (direct + inherited from parent for config nodes)
-      interface EdgeWithLabel { edge: Edge; label?: string }
+      interface EdgeWithLabel { edge: Edge; label?: string; targetHandleLabel?: string }
       const edgesToProcess: EdgeWithLabel[] = [];
 
-      // 1. Add direct incoming edges (excluding config handle connections)
-      const directEdges = edges.filter((edge: Edge) => {
-        if (edge.target !== nodeId) return false;
-        if (isConfigHandle(edge.targetHandle)) return false;
-        return true;
+      // 1. Add direct incoming edges to main data handles
+      // Skip config handle connections (memory, tools, skill) for agent nodes - they're shown in Middle Section
+      const directEdges = edges.filter((edge: Edge) => edge.target === nodeId);
+      directEdges.forEach(edge => {
+        // Skip config handle edges for agent nodes - they have dedicated UI in Middle Section
+        if (isAgentWithSkills && isConfigHandle(edge.targetHandle)) {
+          return;
+        }
+        // Extract target handle name for display (e.g., "input-skill" -> "skill")
+        let targetHandleLabel: string | undefined;
+        if (edge.targetHandle && edge.targetHandle.startsWith('input-') && edge.targetHandle !== 'input-main') {
+          targetHandleLabel = edge.targetHandle.replace('input-', '');
+        }
+        edgesToProcess.push({ edge, targetHandleLabel });
       });
-      directEdges.forEach(edge => edgesToProcess.push({ edge }));
 
       // 2. If current node is a config node (memory, tool), inherit parent node's main inputs
       if (isConfigNode(currentNodeType)) {
@@ -118,12 +136,24 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
         }
       }
 
-      const nodeDataPromises = edgesToProcess.map(async ({ edge, label }) => {
+      const nodeDataPromises = edgesToProcess.map(async ({ edge, label, targetHandleLabel }) => {
         const sourceNode = nodes.find((node: Node) => node.id === edge.source);
         const nodeType = sourceNode?.type || '';
         const nodeDef = nodeDefinitions[nodeType];
 
-        const executionData = await getNodeOutput(edge.source, 'output_0');
+        // Determine output key from sourceHandle (edge-aware for multi-output nodes)
+        let outputKey = 'output_0';
+        if (edge.sourceHandle && edge.sourceHandle.startsWith('output-')) {
+          const handleName = edge.sourceHandle.replace('output-', '');
+          outputKey = `output_${handleName}`;
+        }
+
+        let executionData = await getNodeOutput(edge.source, outputKey);
+
+        // Fallback to output_0 if specific handle output not found
+        if (!executionData && outputKey !== 'output_0') {
+          executionData = await getNodeOutput(edge.source, 'output_0');
+        }
         let inputData: any = null;
         let outputSchema: Record<string, any>;
         let hasExecutionData = false;
@@ -348,6 +378,62 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                 timestamp: 'string',
                 session_id: 'string'
               },
+              // Social nodes schema (4 output handles)
+              social: {
+                // Output 1: message text for LLM input
+                message: 'string',
+                // Output 2: media data
+                media: {
+                  url: 'string',
+                  type: 'string',
+                  mimetype: 'string',
+                  caption: 'string',
+                  size: 'number',
+                  thumbnail: 'string',
+                  filename: 'string'
+                },
+                // Output 3: contact/sender info
+                contact: {
+                  sender: 'string',
+                  sender_phone: 'string',
+                  sender_name: 'string',
+                  sender_username: 'string',
+                  channel: 'string',
+                  is_group: 'boolean',
+                  group_info: 'object',
+                  chat_title: 'string'
+                },
+                // Output 4: message metadata
+                metadata: {
+                  message_id: 'string',
+                  chat_id: 'string',
+                  timestamp: 'string',
+                  message_type: 'string',
+                  is_from_me: 'boolean',
+                  is_forwarded: 'boolean',
+                  reply_to: 'object',
+                  thread_id: 'string'
+                },
+                // Backwards compatibility - also available at top level
+                message_id: 'string',
+                sender: 'string',
+                sender_phone: 'string',
+                sender_name: 'string',
+                chat_id: 'string',
+                channel: 'string',
+                text: 'string',
+                timestamp: 'string',
+                is_group: 'boolean',
+                is_from_me: 'boolean'
+              },
+              socialSend: {
+                success: 'boolean',
+                message_id: 'string',
+                channel: 'string',
+                recipient: 'string',
+                message_type: 'string',
+                timestamp: 'string'
+              },
               // Document processing schemas
               httpScraper: {
                 items: 'array',
@@ -387,7 +473,9 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
             // Node type detection
             const isMemory = nodeType === 'simpleMemory';
             const nodeTypeLower = nodeType.toLowerCase();
-            const isAI = !isMemory && (nodeTypeLower.includes('chatmodel') || nodeTypeLower.includes('aiagent') || nodeTypeLower.includes('chatagent'));
+            // AI agent types that use the AI output schema
+            const aiAgentTypes = ['aiAgent', 'chatAgent', 'android_agent', 'coding_agent', 'web_agent', 'task_agent', 'social_agent'];
+            const isAI = !isMemory && (nodeTypeLower.includes('chatmodel') || aiAgentTypes.includes(nodeType));
             const isFile = nodeType.includes('file');
             const isWhatsAppDb = nodeType === 'whatsappDb';
             const isWhatsApp = !isWhatsAppDb && (nodeType.includes('whatsapp') || nodeType.includes('Whatsapp'));
@@ -398,6 +486,8 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
             const isCodeExecutor = isPython || isJavaScript;
             const isCronScheduler = nodeType === 'cronScheduler';
             const isChatTrigger = nodeType === 'chatTrigger';
+            const isSocialReceive = nodeType === 'socialReceive';
+            const isSocialSend = nodeType === 'socialSend';
 
             // Document processing node detection
             const documentNodeTypes = ['httpScraper', 'fileDownloader', 'documentParser', 'textChunker', 'embeddingGenerator', 'vectorStore'];
@@ -416,7 +506,7 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
 
             // Location nodes (Google Maps, not Android location)
             const isLocationNode = nodeType.includes('location') && !isAndroidLocation;
-            const isGoogleMaps = nodeType === 'createMap' || nodeType === 'addLocations' || nodeType === 'showNearbyPlaces';
+            const isGoogleMaps = nodeType === 'gmaps_create' || nodeType === 'gmaps_locations' || nodeType === 'gmaps_nearby_places';
 
             // Select appropriate schema
             if (isAndroidLocation) {
@@ -437,15 +527,58 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                             isCodeExecutor ? sampleSchemas.python :
                             isCronScheduler ? sampleSchemas.cronScheduler :
                             isChatTrigger ? sampleSchemas.chatTrigger :
+                            isSocialReceive ? sampleSchemas.social :
+                            isSocialSend ? sampleSchemas.socialSend :
                             { data: 'any' };
+            }
+
+            // Filter schema for multi-output nodes based on connected handle
+            // When connected via specific output handle, show only that handle's schema
+            if (isSocialReceive && edge.sourceHandle && edge.sourceHandle.startsWith('output-')) {
+              const handleName = edge.sourceHandle.replace('output-', '');
+              const socialSchema = sampleSchemas.social as Record<string, any>;
+              if (handleName && socialSchema[handleName]) {
+                // Show only the specific output's schema
+                outputSchema = typeof socialSchema[handleName] === 'object'
+                  ? socialSchema[handleName]
+                  : { [handleName]: socialSchema[handleName] };
+              }
             }
           }
         }
 
         const baseName = sourceNode?.data?.label || nodeDef?.displayName || nodeType;
+
+        // Build display name with handle info for multi-output and multi-input nodes
+        let displayName = baseName;
+        let handleSuffix = '';
+
+        // Add source handle (output) info: "Node → message"
+        if (edge.sourceHandle && edge.sourceHandle.startsWith('output-')) {
+          const handleName = edge.sourceHandle.replace('output-', '');
+          handleSuffix = handleName;
+          displayName = `${baseName} → ${handleName}`;
+        }
+
+        // Add target handle (input) info: "Node (skill)" or "Node → message (skill)"
+        if (targetHandleLabel) {
+          displayName = `${displayName} (${targetHandleLabel})`;
+          handleSuffix = handleSuffix ? `${handleSuffix}-${targetHandleLabel}` : targetHandleLabel;
+        }
+
+        // Add inherited label: "Node (via Parent)"
+        if (label) {
+          displayName = `${displayName} (${label})`;
+        }
+
+        // Use unique key combining source node ID, source handle, and target handle
+        // to avoid duplicate keys when multiple edges connect the same nodes
+        const uniqueId = handleSuffix ? `${edge.source}-${handleSuffix}` : edge.source;
+
         return {
-          id: edge.source,
-          name: label ? `${baseName} (${label})` : baseName,
+          id: uniqueId,
+          sourceNodeId: edge.source, // Keep original node ID for template variable resolution
+          name: displayName,
           type: nodeType,
           icon: nodeDef?.icon || '',
           inputData,
@@ -1046,7 +1179,7 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                   <div>
                     {typeof node.outputSchema === 'object' && node.outputSchema !== null
                       ? Object.entries(node.outputSchema).map(([key, value]) =>
-                          renderDraggableProperty(key, value, node.id)
+                          renderDraggableProperty(key, value, node.sourceNodeId || node.id)
                         )
                       : (
                         <div style={{

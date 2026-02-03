@@ -27,10 +27,22 @@ export const aiAgentNodes: Record<string, INodeTypeDescription> = {
         description: 'Agent input'
       },
       {
+        name: 'skill',
+        displayName: 'Skill',
+        type: 'main' as NodeConnectionType,
+        description: 'Skill nodes that provide context and instructions'
+      },
+      {
         name: 'memory',
         displayName: 'Memory',
         type: 'main' as NodeConnectionType,
-        description: 'Memory node connection for conversation history'
+        description: 'Memory node for conversation history'
+      },
+      {
+        name: 'tools',
+        displayName: 'Tool',
+        type: 'main' as NodeConnectionType,
+        description: 'Tool nodes for agent capabilities'
       }
     ],
     outputs: [{
@@ -168,19 +180,19 @@ export const aiAgentNodes: Record<string, INodeTypeDescription> = {
         name: 'main',
         displayName: 'Input',
         type: 'main' as NodeConnectionType,
-        description: 'Chat input'
-      },
-      {
-        name: 'memory',
-        displayName: 'Memory',
-        type: 'main' as NodeConnectionType,
-        description: 'Memory node for conversation history'
+        description: 'Agent input'
       },
       {
         name: 'skill',
         displayName: 'Skill',
         type: 'main' as NodeConnectionType,
         description: 'Skill nodes that provide context and instructions via SKILL.md'
+      },
+      {
+        name: 'memory',
+        displayName: 'Memory',
+        type: 'main' as NodeConnectionType,
+        description: 'Memory node for conversation history'
       },
       {
         name: 'tools',

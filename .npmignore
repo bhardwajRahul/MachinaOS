@@ -43,8 +43,8 @@ node_modules/
 .vite/
 **/.vite/
 
-# Client build output (users build locally)
-client/dist/
+# Client build output - INCLUDED in npm package (pre-built)
+# client/dist/
 
 # IDE & editors
 .vscode/
@@ -87,10 +87,10 @@ server/whatsapp-rpc/.wwebjs_*/
 server/whatsapp-rpc/session/
 server/whatsapp-rpc/qr_*.png
 server/whatsapp-rpc/data/
-server/whatsapp-rpc/bin/
+# server/whatsapp-rpc/bin/ - INCLUDED (pre-built binaries)
 
-# Built binaries (users build locally)
-*.exe
+# Built binaries - INCLUDED in npm package (pre-built for each platform)
+# The bin/ directory has the pre-built binary, exclude the old build location
 server/whatsapp-rpc/server
 server/whatsapp-rpc/server.exe
 

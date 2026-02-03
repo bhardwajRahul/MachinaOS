@@ -462,6 +462,7 @@ class WorkflowService:
         if key not in self._outputs:
             self._outputs[key] = {}
         self._outputs[key][output_name] = data
+        logger.debug(f"[store_node_output] Stored in memory: key={key}, output_name={output_name}, _outputs keys={list(self._outputs.keys())}")
         await self.database.save_node_output(node_id, session_id, output_name, data)
 
     async def get_node_output(
@@ -472,10 +473,13 @@ class WorkflowService:
     ) -> Optional[Dict[str, Any]]:
         """Get stored node output."""
         key = f"{session_id}_{node_id}"
+        logger.debug(f"[get_node_output] Looking for: key={key}, output_name={output_name}, _outputs keys={list(self._outputs.keys())}")
         output = self._outputs.get(key, {}).get(output_name)
+        logger.debug(f"[get_node_output] Memory lookup result: {'FOUND' if output else 'NOT_FOUND'}")
 
         if output is None:
             output = await self.database.get_node_output(node_id, session_id, output_name)
+            logger.debug(f"[get_node_output] DB lookup result: {'FOUND' if output else 'NOT_FOUND'}")
             if output:
                 if key not in self._outputs:
                     self._outputs[key] = {}

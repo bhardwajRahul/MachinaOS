@@ -4,6 +4,7 @@ import { SCHEDULER_NODE_TYPES } from '../nodeDefinitions/schedulerNodes';
 import { CODE_NODE_TYPES } from '../nodeDefinitions/codeNodes';
 import { UTILITY_NODE_TYPES } from '../nodeDefinitions/utilityNodes';
 import { DOCUMENT_NODE_TYPES } from '../nodeDefinitions/documentNodes';
+import { SPECIALIZED_AGENT_TYPES } from '../nodeDefinitions/specializedAgentNodes';
 import { Node, Edge } from 'reactflow';
 import { INodeExecutionData } from '../types/INodeProperties';
 import { API_CONFIG } from '../config/api';
@@ -189,6 +190,8 @@ export class ExecutionService {
       // AI Nodes
       'aiAgent',
       'chatAgent',
+      // Specialized Agent Nodes (use chatAgent backend handler)
+      ...SPECIALIZED_AGENT_TYPES,
       // Note: simpleMemory is passive - accessed by AI Agent automatically, not executed directly
       'openaiChatModel',
       'anthropicChatModel',
@@ -201,9 +204,9 @@ export class ExecutionService {
       'ollamaChatModel',         // Planned
       'mistralChatModel',        // Planned
       // Google Maps Nodes
-      'createMap',
-      'addLocations',
-      'showNearbyPlaces',
+      'gmaps_create',
+      'gmaps_locations',
+      'gmaps_nearby_places',
       // WhatsApp Nodes
       'whatsappSend',
       'whatsappReceive',

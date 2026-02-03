@@ -7,10 +7,21 @@ and returns results.
 
 import math
 import json
-from typing import Dict, Any, Optional
+import asyncio
+import uuid
+from typing import Dict, Any, Optional, TYPE_CHECKING
+
 from core.logging import get_logger
+from constants import ANDROID_SERVICE_NODE_TYPES
+
+if TYPE_CHECKING:
+    from services.ai import AIService
+    from core.database import Database
 
 logger = get_logger(__name__)
+
+# Track running delegated tasks for status checking
+_delegated_tasks: Dict[str, asyncio.Task] = {}
 
 
 async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
@@ -68,13 +79,21 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
     if node_type == 'androidTool':
         return await _execute_android_toolkit(tool_args, config)
 
-    # Google Maps Geocoding (addLocations node as tool)
-    if node_type == 'addLocations':
+    # Direct Android service node (connected directly to AI Agent tools handle)
+    if node_type in ANDROID_SERVICE_NODE_TYPES:
+        return await _execute_android_service(tool_args, config)
+
+    # Google Maps Geocoding (gmaps_locations node as tool)
+    if node_type == 'gmaps_locations':
         return await _execute_geocoding(tool_args, config.get('parameters', {}))
 
-    # Google Maps Nearby Places (showNearbyPlaces node as tool)
-    if node_type == 'showNearbyPlaces':
+    # Google Maps Nearby Places (gmaps_nearby_places node as tool)
+    if node_type == 'gmaps_nearby_places':
         return await _execute_nearby_places(tool_args, config.get('parameters', {}))
+
+    # AI Agent delegation (fire-and-forget async delegation)
+    if node_type in ('aiAgent', 'chatAgent'):
+        return await _execute_delegated_agent(tool_args, config)
 
     # Generic fallback for unknown node types
     logger.warning(f"[Tool] Unknown tool type: {node_type}, using generic handler")
@@ -835,9 +854,129 @@ async def _execute_android_toolkit(args: Dict[str, Any],
         return {"error": str(e)}
 
 
+async def _execute_android_service(args: Dict[str, Any],
+                                   config: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute a direct Android service node (not via toolkit).
+
+    This handles Android service nodes (batteryMonitor, wifiAutomation, etc.)
+    connected directly to the AI Agent's input-tools handle.
+
+    Args:
+        args: LLM-provided arguments {action, parameters}
+        config: Tool config with node_type, node_id, parameters
+
+    Returns:
+        Service execution result
+    """
+    from services.android_service import AndroidService
+    from services.status_broadcaster import get_status_broadcaster
+
+    node_type = config.get('node_type', '')
+    node_id = config.get('node_id', '')
+    node_params = config.get('parameters', {})
+    workflow_id = config.get('workflow_id')
+
+    # Map node type to service_id (convert camelCase to snake_case)
+    # e.g., batteryMonitor -> battery, wifiAutomation -> wifi_automation
+    service_id_map = {
+        'batteryMonitor': 'battery',
+        'networkMonitor': 'network',
+        'systemInfo': 'system_info',
+        'location': 'location',
+        'appLauncher': 'app_launcher',
+        'appList': 'app_list',
+        'wifiAutomation': 'wifi_automation',
+        'bluetoothAutomation': 'bluetooth_automation',
+        'audioAutomation': 'audio_automation',
+        'deviceStateAutomation': 'device_state',
+        'screenControlAutomation': 'screen_control',
+        'airplaneModeControl': 'airplane_mode',
+        'motionDetection': 'motion_detection',
+        'environmentalSensors': 'environmental_sensors',
+        'cameraControl': 'camera_control',
+        'mediaControl': 'media_control',
+    }
+    service_id = service_id_map.get(node_type, node_type)
+
+    # Get action from LLM args or fall back to node params or default
+    action = args.get('action') or node_params.get('action', 'status')
+    parameters = args.get('parameters') or {}
+
+    # Get connection parameters from node
+    host = node_params.get('android_host', 'localhost')
+    port = int(node_params.get('android_port', 8888))
+
+    logger.info(f"[Android Service] Executing {service_id}.{action} (node: {node_id}, workflow: {workflow_id})")
+
+    # Broadcast executing status
+    broadcaster = get_status_broadcaster()
+    if node_id:
+        await broadcaster.update_node_status(
+            node_id,
+            "executing",
+            {"message": f"Executing {action} via AI Agent"},
+            workflow_id=workflow_id
+        )
+
+    try:
+        # Use AndroidService which handles relay vs local connection automatically
+        android_service = AndroidService()
+        result = await android_service.execute_service(
+            node_id=node_id,
+            service_id=service_id,
+            action=action,
+            parameters=parameters,
+            android_host=host,
+            android_port=port
+        )
+
+        # Broadcast success/error status
+        if node_id:
+            if result.get('success'):
+                await broadcaster.update_node_status(
+                    node_id,
+                    "success",
+                    {"message": f"{action} completed", "result": result.get('result', {})},
+                    workflow_id=workflow_id
+                )
+            else:
+                await broadcaster.update_node_status(
+                    node_id,
+                    "error",
+                    {"message": result.get('error', 'Unknown error')},
+                    workflow_id=workflow_id
+                )
+
+        # Extract and return the relevant data
+        if result.get('success'):
+            return {
+                "success": True,
+                "service": service_id,
+                "action": action,
+                "data": result.get('result', {}).get('data', result.get('result', {}))
+            }
+        else:
+            return {
+                "error": result.get('error', 'Unknown error'),
+                "service": service_id,
+                "action": action
+            }
+
+    except Exception as e:
+        logger.error(f"[Android Service] Unexpected error: {e}")
+        if node_id:
+            await broadcaster.update_node_status(
+                node_id,
+                "error",
+                {"message": str(e)},
+                workflow_id=workflow_id
+            )
+        return {"error": str(e)}
+
+
 async def _execute_geocoding(args: Dict[str, Any],
                               node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Google Maps geocoding (addLocations node as tool).
+    """Execute Google Maps geocoding (gmaps_locations node as tool).
 
     Args:
         args: LLM-provided arguments (snake_case: service_type, address, lat, lng)
@@ -873,7 +1012,7 @@ async def _execute_geocoding(args: Dict[str, Any],
         maps_service = container.maps_service()
         result = await handle_add_locations(
             node_id="tool_geocoding",
-            node_type="addLocations",
+            node_type="gmaps_locations",
             parameters=parameters,
             context={},
             maps_service=maps_service
@@ -891,7 +1030,7 @@ async def _execute_geocoding(args: Dict[str, Any],
 
 async def _execute_nearby_places(args: Dict[str, Any],
                                   node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Google Maps nearby places search (showNearbyPlaces node as tool).
+    """Execute Google Maps nearby places search (gmaps_nearby_places node as tool).
 
     Args:
         args: LLM-provided arguments (snake_case: lat, lng, radius, type, keyword)
@@ -921,7 +1060,7 @@ async def _execute_nearby_places(args: Dict[str, Any],
         maps_service = container.maps_service()
         result = await handle_nearby_places(
             node_id="tool_nearby_places",
-            node_type="showNearbyPlaces",
+            node_type="gmaps_nearby_places",
             parameters=parameters,
             context={},
             maps_service=maps_service
@@ -957,3 +1096,160 @@ async def _execute_generic(args: Dict[str, Any],
         "node_id": config.get('node_id'),
         "message": "Generic tool executed - no specific handler for this node type"
     }
+
+
+async def _execute_delegated_agent(args: Dict[str, Any],
+                                    config: Dict[str, Any]) -> Dict[str, Any]:
+    """Delegate a task to a child AI Agent (fire-and-forget pattern).
+
+    This spawns the child agent as an asyncio background task and returns
+    immediately, allowing the parent agent to continue working.
+
+    Args:
+        args: Dict with 'task' and optional 'context'
+        config: Tool config with node_id, node_type, parameters, ai_service, database,
+                nodes, edges, workflow_id
+
+    Returns:
+        Immediate acknowledgment with task_id (child runs in background)
+    """
+    from services.status_broadcaster import get_status_broadcaster
+
+    node_id = config.get('node_id')
+    node_type = config.get('node_type')
+    workflow_id = config.get('workflow_id')
+    task_description = args.get('task', '')
+    task_context = args.get('context', '')
+
+    # Get injected services
+    ai_service = config.get('ai_service')
+    database = config.get('database')
+    nodes = config.get('nodes', [])
+    edges = config.get('edges', [])
+
+    if not ai_service or not database:
+        return {
+            "error": "Agent delegation requires ai_service and database in config",
+            "hint": "Ensure nodes/edges are passed to tool config"
+        }
+
+    # Generate unique task ID
+    task_id = f"delegated_{node_id}_{uuid.uuid4().hex[:8]}"
+
+    # Get child agent parameters from database
+    child_params = await database.get_node_parameters(node_id) or {}
+
+    # Build prompt from task + context
+    full_prompt = task_description
+    if task_context:
+        full_prompt = f"{task_description}\n\nContext:\n{task_context}"
+    child_params['prompt'] = full_prompt
+
+    # Create execution context for child agent
+    child_context = {
+        'nodes': nodes,
+        'edges': edges,
+        'workflow_id': workflow_id,
+        'outputs': {},
+        'parent_task_id': task_id
+    }
+
+    broadcaster = get_status_broadcaster()
+    agent_label = child_params.get('label', node_type)
+
+    logger.info(f"[Delegated Agent] Starting task {task_id} for '{agent_label}' (node: {node_id})")
+
+    # Define the background coroutine
+    async def run_child_agent():
+        try:
+            # Broadcast that child agent is starting
+            await broadcaster.update_node_status(
+                node_id,
+                "executing",
+                {
+                    "phase": "delegated_task",
+                    "task_id": task_id,
+                    "message": f"Working on: {task_description[:100]}..."
+                },
+                workflow_id=workflow_id
+            )
+
+            # Execute the child agent
+            if node_type == 'aiAgent':
+                from services.handlers.ai import handle_ai_agent
+                result = await handle_ai_agent(
+                    node_id, node_type, child_params, child_context, ai_service, database
+                )
+            else:
+                from services.handlers.ai import handle_chat_agent
+                result = await handle_chat_agent(
+                    node_id, node_type, child_params, child_context, ai_service, database
+                )
+
+            logger.info(f"[Delegated Agent] Task {task_id} completed: success={result.get('success')}")
+
+            # Broadcast completion
+            response_preview = str(result.get('result', {}).get('response', ''))[:200]
+            await broadcaster.update_node_status(
+                node_id,
+                "success",
+                {
+                    "phase": "delegated_complete",
+                    "task_id": task_id,
+                    "result_summary": response_preview
+                },
+                workflow_id=workflow_id
+            )
+
+            return result
+
+        except Exception as e:
+            logger.error(f"[Delegated Agent] Task {task_id} failed: {e}")
+            await broadcaster.update_node_status(
+                node_id,
+                "error",
+                {
+                    "phase": "delegated_error",
+                    "task_id": task_id,
+                    "error": str(e)
+                },
+                workflow_id=workflow_id
+            )
+            return {"success": False, "error": str(e)}
+
+        finally:
+            # Cleanup task reference
+            _delegated_tasks.pop(task_id, None)
+
+    # Spawn as background task (fire-and-forget)
+    task = asyncio.create_task(run_child_agent())
+    _delegated_tasks[task_id] = task
+
+    # Return immediately - Parent agent continues working
+    return {
+        "success": True,
+        "status": "delegated",
+        "task_id": task_id,
+        "agent_node_id": node_id,
+        "agent_name": agent_label,
+        "message": f"Task delegated to '{agent_label}'. Agent is now working independently on: {task_description[:100]}..."
+    }
+
+
+def get_delegated_task_status(task_id: str) -> Dict[str, Any]:
+    """Check status of a delegated task (optional utility).
+
+    Args:
+        task_id: The task_id returned from delegation
+
+    Returns:
+        Status dict with task state
+    """
+    task = _delegated_tasks.get(task_id)
+
+    if task is None:
+        return {"status": "not_found_or_completed", "task_id": task_id}
+    elif task.done():
+        return {"status": "completed", "task_id": task_id}
+    else:
+        return {"status": "running", "task_id": task_id}

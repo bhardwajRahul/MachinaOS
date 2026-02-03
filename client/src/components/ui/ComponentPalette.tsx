@@ -15,7 +15,7 @@ const CATEGORY_EMOJIS: Record<string, string> = {
   skill: '🎯',
   tool: '🛠️',
   location: '📍',
-  whatsapp: '💬',
+  social: '📱',
   android: '📱',
   chat: '💭',
   code: '💻',
@@ -23,8 +23,11 @@ const CATEGORY_EMOJIS: Record<string, string> = {
   util: '🔧',
 };
 
+// Categories that should be merged into 'social' (Social Media Platforms)
+const SOCIAL_CATEGORIES = ['whatsapp', 'social'];
+
 // Categories shown in simple (noob) mode - only AI related
-const SIMPLE_MODE_CATEGORIES = ['agent', 'model', 'skill'];
+const SIMPLE_MODE_CATEGORIES = ['agent', 'model', 'skill', 'tool'];
 
 const ComponentPalette: React.FC<ComponentPaletteProps> = ({
   nodeDefinitions,
@@ -50,7 +53,7 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
       skill: colors.categorySkill || theme.dracula.green,
       tool: colors.categoryTool || theme.dracula.green,
       location: colors.categoryLocation || theme.dracula.red,
-      whatsapp: colors.categoryWhatsapp || theme.dracula.green,
+      social: colors.categorySocial || theme.dracula.green,
       android: colors.categoryAndroid || theme.dracula.cyan,
       chat: colors.categoryChat || theme.dracula.yellow,
       code: colors.categoryCode || theme.dracula.orange,
@@ -66,7 +69,7 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
       skill: 'AI Skills',
       tool: 'AI Tools',
       location: 'Google Maps',
-      whatsapp: 'WhatsApp',
+      social: 'Social Media Platforms',
       android: 'Android',
       chat: 'Chat',
       code: 'Code Executors',
@@ -112,7 +115,13 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
 
     filteredDefinitions.forEach((definition) => {
       try {
-        const categoryKey = definition.group?.[0] || 'Uncategorized';
+        let categoryKey = definition.group?.[0] || 'Uncategorized';
+
+        // Merge whatsapp and social categories into 'social'
+        if (SOCIAL_CATEGORIES.includes(categoryKey.toLowerCase())) {
+          categoryKey = 'social';
+        }
+
         if (!categories[categoryKey]) {
           categories[categoryKey] = [];
         }

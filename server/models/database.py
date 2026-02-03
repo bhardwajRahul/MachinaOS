@@ -234,3 +234,29 @@ class UserSkill(SQLModel, table=True):
         default_factory=lambda: datetime.now(timezone.utc),
         sa_column=Column(DateTime(timezone=True), onupdate=func.now())
     )
+
+
+class UserSettings(SQLModel, table=True):
+    """User settings/preferences - persisted across server restarts.
+
+    Database is the source of truth for all application settings.
+    Settings apply on browser refresh/app load.
+    """
+
+    __tablename__ = "user_settings"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: str = Field(default="default", unique=True, index=True, max_length=255)  # For future multi-user
+    auto_save: bool = Field(default=True)
+    auto_save_interval: int = Field(default=30)  # seconds
+    sidebar_default_open: bool = Field(default=True)
+    component_palette_default_open: bool = Field(default=True)
+    console_panel_default_open: bool = Field(default=False)
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(DateTime(timezone=True), server_default=func.now())
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(DateTime(timezone=True), onupdate=func.now())
+    )

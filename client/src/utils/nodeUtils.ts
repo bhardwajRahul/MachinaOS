@@ -10,9 +10,9 @@ export const getShortNodeName = (nodeType: string): string => {
     // AI Agents
     'aiAgent': 'ai',
     // Location Services
-    'createMap': 'map',
-    'addLocations': 'location',
-    'showNearbyPlaces': 'places'
+    'gmaps_create': 'map',
+    'gmaps_locations': 'location',
+    'gmaps_nearby_places': 'places'
   };
   
   // If we have a specific mapping, use it

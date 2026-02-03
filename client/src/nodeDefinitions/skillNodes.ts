@@ -172,6 +172,34 @@ export const skillNodes: Record<string, INodeTypeDescription> = {
     description: 'Search the web for current information, news, facts, and real-time data'
   }),
 
+  // Master Skill - Aggregates multiple skills with enable/disable toggles
+  masterSkill: {
+    displayName: 'Master Skill',
+    name: 'masterSkill',
+    icon: '🎯',
+    group: ['skill'],
+    version: 1,
+    subtitle: 'Skill Aggregator',
+    description: 'Combine multiple skills with enable/disable toggles in a single connection',
+    defaults: { name: 'Master Skill', color: '#9333EA' },
+    inputs: [],
+    outputs: [{
+      name: 'skill',
+      displayName: 'Skills',
+      type: 'main' as NodeConnectionType,
+      description: 'Connect to AI Agent skill handle'
+    }],
+    properties: [
+      {
+        displayName: 'Skills Configuration',
+        name: 'skillsConfig',
+        type: 'json',
+        default: {},
+        description: 'Enabled skills and their instructions'
+      }
+    ]
+  },
+
   // Custom Skill - User-created skill
   customSkill: {
     displayName: 'Custom Skill',
@@ -216,6 +244,7 @@ export const SKILL_NODE_TYPES = [
   'androidSkill',
   'codeSkill',
   'webSearchSkill',
+  'masterSkill',
   'customSkill'
 ];
 

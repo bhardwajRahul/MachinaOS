@@ -62,6 +62,9 @@ class Settings(BaseSettings):
     # WhatsApp Service URL (Flask service)
     whatsapp_service_url: str = Field(default="http://localhost:5000", env="WHATSAPP_SERVICE_URL")
 
+    # AI Proxy Configuration (Ollama-style proxy)
+    ai_proxy_default_port: int = Field(default=11434, env="AI_PROXY_DEFAULT_PORT")
+
     # WebSocket Configuration
     websocket_url: str = Field(default="", env="WEBSOCKET_URL")
     websocket_api_key: Optional[str] = Field(default=None, env="WEBSOCKET_API_KEY")

@@ -35,7 +35,7 @@ const LocationParameterPanel: React.FC = () => {
 
     setIsExecuting(true);
     try {
-      // Location nodes like createMap typically don't need backend execution
+      // Location nodes like gmaps_create typically don't need backend execution
       // They're configuration nodes that output map instances
     } catch (error: any) {
       console.error('Location node execution failed:', error);
@@ -52,8 +52,8 @@ const LocationParameterPanel: React.FC = () => {
     return null;
   }
 
-  // Only show LocationParameterPanel for createMap node
-  if (nodeDefinition.name !== 'createMap') {
+  // Only show LocationParameterPanel for gmaps_create node
+  if (nodeDefinition.name !== 'gmaps_create') {
     return null;
   }
 

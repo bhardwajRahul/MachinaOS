@@ -128,7 +128,42 @@ const GenericNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
 
   const nodeInputs = getNodeInputs();
   const nodeOutputs = getNodeOutputs();
-  
+
+  // Check if string is likely an emoji (contains emoji characters)
+  const isEmoji = (str: string): boolean => {
+    const emojiRegex = /[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2300}-\u{23FF}]|[\u{2B50}]|[\u{231A}-\u{231B}]|[\u{25AA}-\u{25AB}]|[\u{25B6}]|[\u{25C0}]|[\u{25FB}-\u{25FE}]|[\u{2614}-\u{2615}]|[\u{2648}-\u{2653}]|[\u{267F}]|[\u{2693}]|[\u{26A1}]|[\u{26AA}-\u{26AB}]|[\u{26BD}-\u{26BE}]|[\u{26C4}-\u{26C5}]|[\u{26CE}]|[\u{26D4}]|[\u{26EA}]|[\u{26F2}-\u{26F3}]|[\u{26F5}]|[\u{26FA}]|[\u{26FD}]|[\u{2702}]|[\u{2705}]|[\u{2708}-\u{270D}]|[\u{270F}]|[\u{2712}]|[\u{2714}]|[\u{2716}]|[\u{271D}]|[\u{2721}]|[\u{2728}]|[\u{2733}-\u{2734}]|[\u{2744}]|[\u{2747}]|[\u{274C}]|[\u{274E}]|[\u{2753}-\u{2755}]|[\u{2757}]|[\u{2763}-\u{2764}]|[\u{2795}-\u{2797}]|[\u{27A1}]|[\u{27B0}]|[\u{27BF}]|[\u{E000}-\u{F8FF}]/u;
+    return emojiRegex.test(str);
+  };
+
+  // Helper to render icon (handles URLs, SVG data URIs, emojis)
+  const renderIcon = (icon: string | undefined) => {
+    if (!icon) return '📦';
+
+    // Handle image URLs and data URIs (including SVG)
+    if (icon.startsWith('http') || icon.startsWith('data:') || icon.startsWith('/')) {
+      return (
+        <img
+          src={icon}
+          alt="icon"
+          style={{
+            width: '24px',
+            height: '24px',
+            objectFit: 'contain',
+            borderRadius: '4px'
+          }}
+        />
+      );
+    }
+
+    // If it's already an emoji, return it directly
+    if (isEmoji(icon)) {
+      return icon;
+    }
+
+    // Fallback for unknown formats
+    return icon || '📦';
+  };
+
   // Helper functions for color management
   const getNodeColor = () => definition.defaults.color || '#9E9E9E';
   const getBorderColor = () => {
@@ -274,7 +309,9 @@ const GenericNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
         zIndex: 10,
         paddingRight: '4px'
       }}>
-        <span style={{ fontSize: type === 'aiAgent' ? '18px' : '24px' }}>{definition.icon}</span>
+        <span style={{ fontSize: type === 'aiAgent' ? '18px' : '24px', display: 'flex', alignItems: 'center' }}>
+          {renderIcon(definition.icon)}
+        </span>
         {isRenaming ? (
           <input
             ref={inputRef}

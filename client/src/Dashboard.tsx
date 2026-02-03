@@ -27,8 +27,10 @@ import { CHAT_NODE_TYPES } from './nodeDefinitions/chatNodes';
 import { CODE_NODE_TYPES } from './nodeDefinitions/codeNodes';
 import { UTILITY_NODE_TYPES } from './nodeDefinitions/utilityNodes';
 import { TOOL_NODE_TYPES } from './nodeDefinitions/toolNodes';
+import { SPECIALIZED_AGENT_TYPES } from './nodeDefinitions/specializedAgentNodes';
 import { SKILL_NODE_TYPES } from './nodeDefinitions/skillNodes';
 import { DOCUMENT_NODE_TYPES } from './nodeDefinitions/documentNodes';
+import { SOCIAL_NODE_TYPES } from './nodeDefinitions/socialNodes';
 import ParameterPanel from './ParameterPanel';
 import LocationParameterPanel from './components/LocationParameterPanel';
 import { useAppStore } from './store/useAppStore';
@@ -65,6 +67,12 @@ const createNodeTypes = (): Record<string, React.ComponentType<any>> => {
   // Trigger nodes (no input handles) - check by group or specific types
   const TRIGGER_NODE_TYPES = ['start', 'cronScheduler', 'webhookTrigger', 'whatsappReceive', 'chatTrigger'];
 
+  // Pre-register specialized agent nodes explicitly to ensure they're always available
+  // This handles cases where nodeDefinitions iteration order might miss them
+  SPECIALIZED_AGENT_TYPES.forEach(type => {
+    types[type] = AIAgentNode;
+  });
+
   Object.keys(nodeDefinitions).forEach(type => {
     const definition = nodeDefinitions[type];
 
@@ -98,11 +106,15 @@ const createNodeTypes = (): Record<string, React.ComponentType<any>> => {
       // Utility nodes (HTTP, Webhooks) use SquareNode component
       // Note: webhookTrigger is already handled as trigger above
       types[type] = SquareNode;
+    } else if (SPECIALIZED_AGENT_TYPES.includes(type)) {
+      // Specialized agent nodes use AIAgentNode (rectangular card with bottom handles)
+      types[type] = AIAgentNode;
     } else if (TOOL_NODE_TYPES.includes(type)) {
-      // Most tool nodes use circular ModelNode
-      // Exception: androidTool uses ToolkitNode with top/bottom handles
-      if (type === 'androidTool') {
-        types[type] = ToolkitNode;
+      // Tool node component mapping:
+      // - webSearchTool: SquareNode (square shape like utility nodes)
+      // - calculatorTool, currentTimeTool: ModelNode (circular)
+      if (type === 'webSearchTool') {
+        types[type] = SquareNode;
       } else {
         types[type] = ModelNode;
       }
@@ -112,6 +124,9 @@ const createNodeTypes = (): Record<string, React.ComponentType<any>> => {
     } else if (DOCUMENT_NODE_TYPES.includes(type)) {
       // Document processing nodes use SquareNode component
       types[type] = SquareNode;
+    } else if (SOCIAL_NODE_TYPES.includes(type)) {
+      // Social nodes use AIAgentNode for multiple output handles support
+      types[type] = AIAgentNode;
     } else if (definition?.group?.includes('model')) {
       // Fallback for other model nodes
       types[type] = ModelNode;
@@ -293,7 +308,8 @@ const DashboardContent: React.FC = () => {
   } = useWorkflowManagement();
 
   const { collapsedSections, searchQuery, setSearchQuery, toggleSection } = useComponentPalette();
-  const { saveNodeParameters, executeWorkflow, deployWorkflow, cancelDeployment, nodeStatuses, deploymentStatus, workflowLock } = useWebSocket();
+  const { saveNodeParameters, executeWorkflow, deployWorkflow, cancelDeployment, nodeStatuses, deploymentStatus, workflowLock, isConnected, sendRequest } = useWebSocket();
+  const applyUIDefaults = useAppStore((state) => state.applyUIDefaults);
 
   // Scope deployment and lock to current workflow (n8n pattern)
   // Only show as "running" or "locked" if it applies to the currently viewed workflow
@@ -334,7 +350,10 @@ const DashboardContent: React.FC = () => {
   });
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [credentialsOpen, setCredentialsOpen] = React.useState(false);
-  const [consolePanelOpen, setConsolePanelOpen] = React.useState(false);
+
+  // Console panel visibility from store (database-backed)
+  const consolePanelVisible = useAppStore((state) => state.consolePanelVisible);
+  const toggleConsolePanelVisible = useAppStore((state) => state.toggleConsolePanelVisible);
 
   // Context menu state for node right-click
   const [contextMenu, setContextMenu] = React.useState<{
@@ -347,6 +366,40 @@ const DashboardContent: React.FC = () => {
   React.useEffect(() => {
     localStorage.setItem('workflow_settings', JSON.stringify(settings));
   }, [settings]);
+
+  // Load UI defaults from database on initial WebSocket connection
+  const hasLoadedUIDefaults = React.useRef(false);
+  React.useEffect(() => {
+    if (!isConnected || hasLoadedUIDefaults.current) return;
+    hasLoadedUIDefaults.current = true;
+
+    const loadUIDefaults = async () => {
+      try {
+        const response = await sendRequest<{ settings: any }>('get_user_settings', {});
+        if (response?.settings) {
+          applyUIDefaults({
+            sidebarDefaultOpen: response.settings.sidebar_default_open,
+            componentPaletteDefaultOpen: response.settings.component_palette_default_open,
+            consolePanelDefaultOpen: response.settings.console_panel_default_open,
+          });
+          // Also update local settings state for auto-save preferences
+          setSettings(prev => ({
+            ...prev,
+            autoSave: response.settings.auto_save ?? prev.autoSave,
+            autoSaveInterval: response.settings.auto_save_interval ?? prev.autoSaveInterval,
+            sidebarDefaultOpen: response.settings.sidebar_default_open ?? prev.sidebarDefaultOpen,
+            componentPaletteDefaultOpen: response.settings.component_palette_default_open ?? prev.componentPaletteDefaultOpen,
+            consolePanelDefaultOpen: response.settings.console_panel_default_open ?? prev.consolePanelDefaultOpen,
+          }));
+          console.log('[Dashboard] UI defaults loaded from database');
+        }
+      } catch (error) {
+        console.error('[Dashboard] Failed to load UI defaults:', error);
+      }
+    };
+
+    loadUIDefaults();
+  }, [isConnected, sendRequest, applyUIDefaults]);
 
   // Update nodes with execution status classes
   const styledNodes = React.useMemo(() => {
@@ -1140,8 +1193,8 @@ const DashboardContent: React.FC = () => {
 
         {/* Console Panel - n8n-style debug output at bottom */}
         <ConsolePanel
-          isOpen={consolePanelOpen}
-          onToggle={() => setConsolePanelOpen(prev => !prev)}
+          isOpen={consolePanelVisible}
+          onToggle={toggleConsolePanelVisible}
           nodes={nodes}
         />
 

@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Button, Tag, Alert, Descriptions, Space, InputNumber, Switch } from 'antd';
+import { Button, Tag, Alert, Descriptions, Space, InputNumber, Switch, Input } from 'antd';
 import {
   CheckCircleOutlined,
   SafetyOutlined,
@@ -114,9 +114,10 @@ interface Props {
 
 const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
   const theme = useAppTheme();
-  const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey, validateGoogleMapsKey } = useApiKeys();
+  const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey, validateGoogleMapsKey, isConnected } = useApiKeys();
   const whatsappStatus = useWhatsAppStatus();
   const androidStatus = useAndroidStatus();
+
 
   // Tag style helper - consistent theming for status tags
   const getTagStyle = (type: 'success' | 'error' | 'warning'): React.CSSProperties => {
@@ -134,13 +135,15 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
   const [loading, setLoading] = useState<Record<string, boolean>>({});
   const [models, setModels] = useState<Record<string, string[]>>({});
   const [keys, setKeys] = useState<Record<string, string>>({});
+  const [proxyUrls, setProxyUrls] = useState<Record<string, string>>({});
   const [selectedItem, setSelectedItem] = useState<CredentialItem | null>(null);
 
-  // Load stored keys
+  // Load stored keys and proxy URLs
   const loadKeys = useCallback(async () => {
     const allItems = CATEGORIES.flatMap(c => c.items);
     const newKeys: Record<string, string> = {};
     const newValid: Record<string, boolean> = {};
+    const newProxyUrls: Record<string, string> = {};
 
     for (const item of allItems) {
       if (item.isSpecial) continue;
@@ -151,19 +154,28 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
           newValid[item.id] = true;
         }
       }
+      // Load proxy URL for AI providers (stored as {provider}_proxy)
+      const proxyKey = `${item.id}_proxy`;
+      if (await hasStoredKey(proxyKey)) {
+        const proxyUrl = await getStoredApiKey(proxyKey);
+        if (proxyUrl) {
+          newProxyUrls[item.id] = proxyUrl;
+        }
+      }
     }
     setKeys(newKeys);
     setValidKeys(newValid);
+    setProxyUrls(newProxyUrls);
   }, [hasStoredKey, getStoredApiKey]);
 
   useEffect(() => {
-    if (visible) {
+    if (visible && isConnected) {
       loadKeys();
       // Select first item by default
       const firstItem = CATEGORIES[0]?.items[0];
       if (firstItem) setSelectedItem(firstItem);
     }
-  }, [visible, loadKeys]);
+  }, [visible, isConnected, loadKeys]);
 
   const handleValidate = async (id: string) => {
     const key = keys[id];
@@ -1095,6 +1107,111 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
             isStored={isValid}
           />
         </div>
+
+        {/* Claude Code OAuth - Alternative auth for Anthropic */}
+        {item.id === 'anthropic' && (
+          <div style={{ marginBottom: theme.spacing.xl }}>
+            <label style={{
+              display: 'block',
+              fontSize: theme.fontSize.sm,
+              fontWeight: theme.fontWeight.medium,
+              color: theme.colors.text,
+              marginBottom: theme.spacing.sm,
+            }}>
+              Or use Claude Code CLI
+            </label>
+            <div style={{ display: 'flex', gap: theme.spacing.sm }}>
+              <Input
+                readOnly
+                value="Isolated OAuth session"
+                style={{
+                  flex: 1,
+                  backgroundColor: theme.colors.background,
+                  borderColor: theme.colors.border,
+                  color: theme.colors.textSecondary,
+                  fontFamily: 'monospace',
+                }}
+              />
+              <Button
+                onClick={async () => {
+                  const result = await sendRequest('claude_oauth_login', {});
+                  if (result.success) {
+                    alert('OAuth login started. Complete authentication in the browser window that opened.');
+                  } else {
+                    alert(`Failed: ${result.error || 'Unknown error'}`);
+                  }
+                }}
+                style={{
+                  backgroundColor: `${theme.dracula.cyan}25`,
+                  borderColor: `${theme.dracula.cyan}60`,
+                  color: theme.dracula.cyan,
+                }}
+              >
+                OAuth Login
+              </Button>
+            </div>
+            <div style={{
+              fontSize: theme.fontSize.xs,
+              color: theme.colors.textMuted,
+              marginTop: theme.spacing.sm,
+            }}>
+              Opens browser login without affecting your main Claude Code session.
+            </div>
+          </div>
+        )}
+
+        {/* Proxy URL Input - Only for AI providers */}
+        {CATEGORIES.find(c => c.key === 'ai')?.items.some(i => i.id === item.id) && (
+          <div style={{ marginBottom: theme.spacing.xl }}>
+            <label style={{
+              display: 'block',
+              fontSize: theme.fontSize.sm,
+              fontWeight: theme.fontWeight.medium,
+              color: theme.colors.text,
+              marginBottom: theme.spacing.sm,
+            }}>
+              Proxy URL <span style={{ fontWeight: theme.fontWeight.normal, color: theme.colors.textMuted }}>(optional)</span>
+            </label>
+            <Space.Compact style={{ width: '100%' }}>
+              <Input
+                value={proxyUrls[item.id] || ''}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setProxyUrls(p => ({ ...p, [item.id]: e.target.value }))}
+                placeholder="http://localhost:11434"
+                style={{
+                  fontFamily: 'monospace',
+                  backgroundColor: theme.colors.background,
+                  borderColor: theme.colors.border,
+                  color: theme.colors.text,
+                }}
+              />
+              <Button
+                onClick={async () => {
+                  const proxyUrl = proxyUrls[item.id]?.trim();
+                  if (proxyUrl) {
+                    await saveApiKey(`${item.id}_proxy`, proxyUrl);
+                  } else {
+                    await removeApiKey(`${item.id}_proxy`);
+                    setProxyUrls(p => ({ ...p, [item.id]: '' }));
+                  }
+                }}
+                style={{
+                  backgroundColor: `${theme.dracula.purple}25`,
+                  borderColor: `${theme.dracula.purple}60`,
+                  color: theme.dracula.purple,
+                }}
+              >
+                {proxyUrls[item.id]?.trim() ? 'Save' : 'Clear'}
+              </Button>
+            </Space.Compact>
+            <div style={{
+              fontSize: theme.fontSize.xs,
+              color: theme.colors.textMuted,
+              marginTop: theme.spacing.sm,
+            }}>
+              Route requests through a proxy (e.g., Ollama). When set, the proxy handles authentication.
+            </div>
+          </div>
+        )}
 
         {/* Models list */}
         {models[item.id]?.length > 0 && (

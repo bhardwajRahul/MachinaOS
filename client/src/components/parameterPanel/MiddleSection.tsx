@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ParameterRenderer from '../ParameterRenderer';
 import ToolSchemaEditor from './ToolSchemaEditor';
+import MasterSkillEditor from './MasterSkillEditor';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { useAppStore } from '../../store/useAppStore';
 import { useWebSocket } from '../../contexts/WebSocketContext';
@@ -8,10 +9,21 @@ import { nodeDefinitions } from '../../nodeDefinitions';
 import { INodeTypeDescription, INodeProperties } from '../../types/INodeProperties';
 import { ExecutionResult } from '../../services/executionService';
 import { Edge } from 'reactflow';
-import { SKILL_NODE_TYPES } from '../../nodeDefinitions/skillNodes';
+import { SKILL_NODE_TYPES, skillNodes } from '../../nodeDefinitions/skillNodes';
 
 // Tool node types that support schema editing
 const TOOL_NODE_TYPES = ['androidTool', 'calculatorTool', 'currentTimeTool', 'webSearchTool'];
+
+// Agent node types that support skills (have input-skill handle)
+const AGENT_WITH_SKILLS_TYPES = [
+  'aiAgent',
+  'chatAgent',
+  'android_agent',
+  'coding_agent',
+  'web_agent',
+  'task_agent',
+  'social_agent'
+];
 
 interface ConnectedSkill {
   id: string;
@@ -115,7 +127,10 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
   const isCodeExecutorNode = nodeDefinition.name === 'pythonExecutor' || nodeDefinition.name === 'javascriptExecutor';
 
   // Check if this is a skill node with code editor (needs similar flex layout)
-  const isSkillNode = SKILL_NODE_TYPES.includes(nodeDefinition.name) && nodeDefinition.name !== 'customSkill';
+  const isSkillNode = SKILL_NODE_TYPES.includes(nodeDefinition.name) && nodeDefinition.name !== 'customSkill' && nodeDefinition.name !== 'masterSkill';
+
+  // Check if this is a master skill node (needs split panel layout)
+  const isMasterSkillNode = nodeDefinition.name === 'masterSkill';
 
   // Check if this is a memory node with markdown editor
   const isMemoryNode = nodeDefinition.name === 'simpleMemory';
@@ -126,12 +141,16 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
   // Check if this is a tool node that supports schema editing
   const isToolNode = TOOL_NODE_TYPES.includes(nodeDefinition.name);
 
-  // Check if this is a Zeenie node
-  const isChatAgentNode = nodeDefinition.name === 'chatAgent';
+  // Check if this is an agent node that supports skills (has input-skill handle)
+  const isAgentWithSkills = AGENT_WITH_SKILLS_TYPES.includes(nodeDefinition.name);
 
-  // Get connected skills for Zeenie nodes
+  // State for Master Skill parameters
+  const [masterSkillParams, setMasterSkillParams] = useState<Record<string, any>>({});
+  const { sendRequest } = useWebSocket();
+
+  // Get connected skills for agent nodes
   useEffect(() => {
-    if (!isChatAgentNode || !currentWorkflow) {
+    if (!isAgentWithSkills || !currentWorkflow) {
       setConnectedSkills([]);
       return;
     }
@@ -144,24 +163,90 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
       edge.target === nodeId && edge.targetHandle === 'input-skill'
     );
 
-    // Get skill node data
-    const skills: ConnectedSkill[] = skillEdges.map((edge: Edge) => {
+    // Get skill node data - expand Master Skill nodes
+    const skills: ConnectedSkill[] = [];
+
+    for (const edge of skillEdges) {
       const sourceNode = nodes.find((n: any) => n.id === edge.source);
       const nodeType = sourceNode?.type || '';
       const nodeDef = nodeDefinitions[nodeType];
 
-      return {
-        id: edge.source,
-        name: sourceNode?.data?.label || nodeDef?.displayName || nodeType,
-        type: nodeType,
-        icon: nodeDef?.icon || '',
-        description: nodeDef?.description || '',
-        color: nodeDef?.defaults?.color as string || '#6366F1',
-      };
-    });
+      // Check if this is a Master Skill node
+      if (nodeType === 'masterSkill') {
+        // Load Master Skill parameters to get enabled skills
+        const loadMasterSkillParams = async () => {
+          try {
+            const response = await sendRequest<{ parameters: Record<string, any> }>('get_node_parameters', {
+              node_id: edge.source
+            });
+            if (response?.parameters) {
+              setMasterSkillParams(prev => ({ ...prev, [edge.source]: response.parameters }));
+            }
+          } catch (err) {
+            console.error('[MiddleSection] Failed to load Master Skill params:', err);
+          }
+        };
+        loadMasterSkillParams();
+      } else {
+        // Regular skill node
+        skills.push({
+          id: edge.source,
+          name: sourceNode?.data?.label || nodeDef?.displayName || nodeType,
+          type: nodeType,
+          icon: nodeDef?.icon || '',
+          description: nodeDef?.description || '',
+          color: nodeDef?.defaults?.color as string || '#6366F1',
+        });
+      }
+    }
 
     setConnectedSkills(skills);
-  }, [nodeId, isChatAgentNode, currentWorkflow]);
+  }, [nodeId, isAgentWithSkills, currentWorkflow, sendRequest]);
+
+  // Expand Master Skill enabled skills into connected skills list
+  const expandedConnectedSkills = React.useMemo(() => {
+    const skills = [...connectedSkills];
+
+    // Get Master Skill node IDs from edges
+    const nodes = currentWorkflow?.nodes || [];
+    const edges = currentWorkflow?.edges || [];
+    const skillEdges = edges.filter((edge: Edge) =>
+      edge.target === nodeId && edge.targetHandle === 'input-skill'
+    );
+
+    for (const edge of skillEdges) {
+      const sourceNode = nodes.find((n: any) => n.id === edge.source);
+      if (sourceNode?.type === 'masterSkill') {
+        const params = masterSkillParams[edge.source];
+        const skillsConfig = params?.skillsConfig || {};
+
+        // Add each enabled skill from Master Skill
+        for (const [skillName, config] of Object.entries(skillsConfig as Record<string, any>)) {
+          if (!config?.enabled) continue;
+
+          // Find the skill node definition by skillName
+          const skillNodeType = SKILL_NODE_TYPES.find(type => {
+            const def = skillNodes[type];
+            const skillNameProp = def?.properties?.find((p: any) => p.name === 'skillName');
+            return skillNameProp?.default === skillName;
+          });
+
+          const nodeDef = skillNodeType ? skillNodes[skillNodeType] : null;
+
+          skills.push({
+            id: `${edge.source}_${skillName}`,
+            name: nodeDef?.displayName || skillName,
+            type: skillNodeType || 'masterSkill',
+            icon: nodeDef?.icon || '🎯',
+            description: nodeDef?.description || `Skill from Master Skill node`,
+            color: (nodeDef?.defaults?.color as string) || '#9333EA',
+          });
+        }
+      }
+    }
+
+    return skills;
+  }, [connectedSkills, masterSkillParams, currentWorkflow, nodeId]);
 
   // Extract console output from execution results
   const getConsoleOutput = (): string => {
@@ -197,8 +282,8 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
       overflow: 'hidden',
       position: 'relative'
     }}>
-      {/* Description - hide for code editor nodes (Python, Skill) */}
-      {!needsCodeEditorLayout && (
+      {/* Description - hide for code editor nodes (Python, Skill) and masterSkill */}
+      {!needsCodeEditorLayout && !isMasterSkillNode && (
         <div style={{
           padding: `${theme.spacing.lg} ${theme.spacing.xl} ${theme.spacing.sm}`,
           borderBottom: `1px solid ${theme.colors.border}`,
@@ -218,6 +303,16 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
 
       {/* Main Content Area - Flexible */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
+        {/* Master Skill Editor - Full panel for masterSkill nodes */}
+        {isMasterSkillNode ? (
+          <div style={{ flex: 1, padding: theme.spacing.lg, overflow: 'hidden' }}>
+            <MasterSkillEditor
+              skillsConfig={parameters.skillsConfig || {}}
+              onConfigChange={(config) => onParameterChange('skillsConfig', config)}
+            />
+          </div>
+        ) : (
+        <>
         {/* Parameters */}
         <div style={{
           padding: theme.spacing.xl,
@@ -535,7 +630,7 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
           )}
 
           {/* Connected Skills Section - Only for Zeenie nodes */}
-          {isChatAgentNode && (
+          {isAgentWithSkills && (
             <div style={{
               marginTop: theme.spacing.lg,
               backgroundColor: theme.colors.background,
@@ -597,20 +692,20 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
                 </div>
                 <span style={{
                   fontSize: theme.fontSize.xs,
-                  color: connectedSkills.length > 0 ? theme.dracula.purple : theme.colors.textMuted,
+                  color: expandedConnectedSkills.length > 0 ? theme.dracula.purple : theme.colors.textMuted,
                   padding: `2px ${theme.spacing.sm}`,
-                  backgroundColor: connectedSkills.length > 0 ? theme.dracula.purple + '20' : theme.colors.backgroundAlt,
+                  backgroundColor: expandedConnectedSkills.length > 0 ? theme.dracula.purple + '20' : theme.colors.backgroundAlt,
                   borderRadius: theme.borderRadius.sm,
                   fontWeight: theme.fontWeight.medium
                 }}>
-                  {connectedSkills.length}
+                  {expandedConnectedSkills.length}
                 </span>
               </div>
 
               {/* Skills Content */}
               {isSkillsExpanded && (
                 <div style={{ padding: theme.spacing.md }}>
-                  {connectedSkills.length === 0 ? (
+                  {expandedConnectedSkills.length === 0 ? (
                     <div style={{
                       display: 'flex',
                       flexDirection: 'column',
@@ -642,7 +737,7 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
                     </div>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.sm }}>
-                      {connectedSkills.map((skill) => (
+                      {expandedConnectedSkills.map((skill) => (
                         <div
                           key={skill.id}
                           style={{
@@ -858,6 +953,8 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
               )}
             </div>
           </div>
+        )}
+        </>
         )}
       </div>
     </div>

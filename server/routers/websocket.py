@@ -962,7 +962,7 @@ async def handle_execute_ai_node(data: Dict[str, Any], websocket: WebSocket) -> 
     else:
         await broadcaster.update_node_status(node_id, "error", {"error": result.get("error")}, workflow_id=workflow_id)
 
-    return {"node_id": node_id, "result": result.get("result"), "error": result.get("error"),
+    return {"success": result.get("success", False), "node_id": node_id, "result": result.get("result"), "error": result.get("error"),
             "execution_time": result.get("execution_time"), "timestamp": time.time()}
 
 
@@ -1024,6 +1024,61 @@ async def handle_delete_api_key(data: Dict[str, Any], websocket: WebSocket) -> D
     auth_service = container.auth_service()
     await auth_service.remove_api_key(data["provider"].lower(), data.get("session_id", "default"))
     return {"provider": data["provider"]}
+
+
+# ============================================================================
+# Claude OAuth Handlers
+# ============================================================================
+
+@ws_handler()
+async def handle_claude_oauth_login(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Initiate Claude OAuth in isolated session."""
+    from services.claude_oauth import initiate_claude_oauth
+    return await initiate_claude_oauth()
+
+
+@ws_handler()
+async def handle_claude_oauth_status(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Check Claude OAuth credentials status."""
+    from services.claude_oauth import get_claude_credentials
+    return get_claude_credentials()
+
+
+@ws_handler("url")
+async def handle_test_ai_proxy(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Test connectivity to an AI proxy server."""
+    import httpx
+
+    url = data["url"].rstrip("/")
+    timeout = data.get("timeout", 5.0)
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            # Try common health/models endpoints
+            for endpoint in ["/v1/models", "/api/tags", "/health", "/"]:
+                try:
+                    response = await client.get(f"{url}{endpoint}")
+                    if response.status_code < 500:
+                        return {
+                            "success": True,
+                            "url": url,
+                            "status_code": response.status_code,
+                            "endpoint": endpoint,
+                        }
+                except httpx.RequestError:
+                    continue
+
+            return {
+                "success": False,
+                "url": url,
+                "error": "No responding endpoints found",
+            }
+    except httpx.ConnectError:
+        return {"success": False, "url": url, "error": "Connection refused"}
+    except httpx.TimeoutException:
+        return {"success": False, "url": url, "error": "Connection timeout"}
+    except Exception as e:
+        return {"success": False, "url": url, "error": str(e)}
 
 
 # ============================================================================
@@ -1854,6 +1909,47 @@ async def handle_reset_skill(data: Dict[str, Any], websocket: WebSocket) -> Dict
 
 
 # ============================================================================
+# User Settings Handlers
+# ============================================================================
+
+@ws_handler()
+async def handle_get_user_settings(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Get user settings from database."""
+    database = container.database()
+    user_id = data.get("user_id", "default")
+    settings = await database.get_user_settings(user_id)
+
+    # Return default settings if none exist
+    if settings is None:
+        settings = {
+            "user_id": user_id,
+            "auto_save": True,
+            "auto_save_interval": 30,
+            "sidebar_default_open": True,
+            "component_palette_default_open": True
+        }
+
+    return {"settings": settings}
+
+
+@ws_handler()
+async def handle_save_user_settings(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Save user settings to database."""
+    database = container.database()
+    user_id = data.get("user_id", "default")
+    settings_data = data.get("settings", {})
+
+    success = await database.save_user_settings(settings_data, user_id)
+
+    if success:
+        # Fetch the saved settings to return
+        settings = await database.get_user_settings(user_id)
+        return {"settings": settings}
+    else:
+        return {"success": False, "error": "Failed to save settings"}
+
+
+# ============================================================================
 # Message Router
 # ============================================================================
 
@@ -1913,6 +2009,10 @@ MESSAGE_HANDLERS: Dict[str, MessageHandler] = {
     "save_api_key": handle_save_api_key,
     "delete_api_key": handle_delete_api_key,
 
+    # Claude OAuth operations
+    "claude_oauth_login": handle_claude_oauth_login,
+    "claude_oauth_status": handle_claude_oauth_status,
+
     # Android operations
     "get_android_devices": handle_get_android_devices,
     "execute_android_action": handle_execute_android_action,
@@ -1971,6 +2071,10 @@ MESSAGE_HANDLERS: Dict[str, MessageHandler] = {
     # Memory and Skill Clear/Reset
     "clear_memory": handle_clear_memory,
     "reset_skill": handle_reset_skill,
+
+    # User Settings
+    "get_user_settings": handle_get_user_settings,
+    "save_user_settings": handle_save_user_settings,
 }
 
 

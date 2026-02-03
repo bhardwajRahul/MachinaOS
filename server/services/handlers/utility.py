@@ -29,7 +29,7 @@ async def handle_create_map(
 
     Args:
         node_id: The node ID
-        node_type: The node type (createMap)
+        node_type: The node type (gmaps_create)
         parameters: Resolved parameters
         context: Execution context
         maps_service: The maps service instance
@@ -37,9 +37,9 @@ async def handle_create_map(
     Returns:
         Execution result dict
     """
-    logger.info("[Maps Execution] Executing createMap", node_id=node_id)
+    logger.info("[Maps Execution] Executing gmaps_create", node_id=node_id)
     result = await maps_service.create_map(node_id, parameters)
-    logger.info("[Maps Execution] createMap result", success=result.get('success'),
+    logger.info("[Maps Execution] gmaps_create result", success=result.get('success'),
                has_result='result' in result,
                result_keys=list(result.get('result', {}).keys()) if isinstance(result.get('result'), dict) else 'not_dict')
     return result
@@ -56,7 +56,7 @@ async def handle_add_locations(
 
     Args:
         node_id: The node ID
-        node_type: The node type (addLocations)
+        node_type: The node type (gmaps_locations)
         parameters: Resolved parameters
         context: Execution context
         maps_service: The maps service instance
@@ -64,9 +64,9 @@ async def handle_add_locations(
     Returns:
         Execution result dict
     """
-    logger.info("[Maps Execution] Executing addLocations", node_id=node_id)
+    logger.info("[Maps Execution] Executing gmaps_locations", node_id=node_id)
     result = await maps_service.geocode_location(node_id, parameters)
-    logger.info("[Maps Execution] addLocations result", success=result.get('success'),
+    logger.info("[Maps Execution] gmaps_locations result", success=result.get('success'),
                has_result='result' in result,
                result_keys=list(result.get('result', {}).keys()) if isinstance(result.get('result'), dict) else 'not_dict')
     return result
@@ -83,7 +83,7 @@ async def handle_nearby_places(
 
     Args:
         node_id: The node ID
-        node_type: The node type (showNearbyPlaces)
+        node_type: The node type (gmaps_nearby_places)
         parameters: Resolved parameters
         context: Execution context
         maps_service: The maps service instance
@@ -91,9 +91,9 @@ async def handle_nearby_places(
     Returns:
         Execution result dict
     """
-    logger.info("[Maps Execution] Executing showNearbyPlaces", node_id=node_id)
+    logger.info("[Maps Execution] Executing gmaps_nearby_places", node_id=node_id)
     result = await maps_service.find_nearby_places(node_id, parameters)
-    logger.info("[Maps Execution] showNearbyPlaces result", success=result.get('success'),
+    logger.info("[Maps Execution] gmaps_nearby_places result", success=result.get('success'),
                has_result='result' in result,
                result_keys=list(result.get('result', {}).keys()) if isinstance(result.get('result'), dict) else 'not_dict')
     return result

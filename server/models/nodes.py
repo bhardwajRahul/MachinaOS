@@ -86,8 +86,8 @@ class SimpleMemoryParams(BaseNodeParams):
 # =============================================================================
 
 class CreateMapParams(BaseNodeParams):
-    """Parameters for create map node."""
-    type: Literal["createMap"]
+    """Parameters for GMaps Create node."""
+    type: Literal["gmaps_create"]
     center_lat: float = Field(default=0.0, alias="centerLat")
     center_lng: float = Field(default=0.0, alias="centerLng")
     zoom: int = Field(default=10, ge=1, le=20)
@@ -95,16 +95,16 @@ class CreateMapParams(BaseNodeParams):
     api_key: Optional[str] = Field(default=None, alias="apiKey")
 
 
-class AddLocationsParams(BaseNodeParams):
-    """Parameters for add locations (geocoding) node."""
-    type: Literal["addLocations"]
+class GmapsLocationsParams(BaseNodeParams):
+    """Parameters for GMaps Locations (geocoding) node."""
+    type: Literal["gmaps_locations"]
     address: str = ""
     api_key: Optional[str] = Field(default=None, alias="apiKey")
 
 
-class ShowNearbyPlacesParams(BaseNodeParams):
-    """Parameters for show nearby places node."""
-    type: Literal["showNearbyPlaces"]
+class GmapsNearbyPlacesParams(BaseNodeParams):
+    """Parameters for GMaps Nearby Places node."""
+    type: Literal["gmaps_nearby_places"]
     latitude: float = 0.0
     longitude: float = 0.0
     radius: int = Field(default=1000, ge=1, le=50000)
@@ -270,7 +270,7 @@ AINodeParams = Annotated[
 
 # Maps Nodes
 MapsNodeParams = Annotated[
-    Union[CreateMapParams, AddLocationsParams, ShowNearbyPlacesParams],
+    Union[CreateMapParams, GmapsLocationsParams, GmapsNearbyPlacesParams],
     Field(discriminator="type")
 ]
 
@@ -316,7 +316,7 @@ KnownNodeParams = Annotated[
         # AI
         AIChatModelParams, AIAgentParams, ChatAgentParams, SimpleMemoryParams,
         # Maps
-        CreateMapParams, AddLocationsParams, ShowNearbyPlacesParams,
+        CreateMapParams, GmapsLocationsParams, GmapsNearbyPlacesParams,
         # WhatsApp
         WhatsAppSendParams, WhatsAppReceiveParams,
         # Code
