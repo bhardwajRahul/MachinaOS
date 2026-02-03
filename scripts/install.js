@@ -226,7 +226,7 @@ try {
   console.log('');
   console.log('Done!');
   console.log('');
-  console.log('WhatsApp RPC installed as npm dependency (@trohitg/whatsapp-rpc)');
+  console.log('WhatsApp RPC installed as npm dependency (whatsapp-rpc)');
 
 } catch (err) {
   console.log('');

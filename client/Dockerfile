@@ -5,10 +5,10 @@ FROM node:22-alpine AS development
 WORKDIR /app
 
 # Copy package files
-COPY package.json package-lock.json* ./
+COPY package.json ./
 
-# Install dependencies (npm ci for faster, deterministic installs)
-RUN npm ci
+# Install dependencies
+RUN npm install
 
 # Copy application code
 COPY . .
@@ -28,10 +28,10 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 
 # Copy package files
-COPY package.json package-lock.json* ./
+COPY package.json ./
 
-# Install dependencies (npm ci for faster, deterministic installs)
-RUN npm ci
+# Install dependencies
+RUN npm install
 
 # Copy application code
 COPY . .
