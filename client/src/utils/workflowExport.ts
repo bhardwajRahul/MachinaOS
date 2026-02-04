@@ -3,8 +3,31 @@
  * Handles exporting workflows to JSON files and importing from JSON
  */
 
+import { Node } from 'reactflow';
 import { WorkflowData } from '../store/useAppStore';
 import { validateWorkflow, serializeWorkflow, deserializeWorkflow } from '../schemas/workflowSchema';
+import packageJson from '../../../package.json';
+
+// Use project version from package.json for workflow exports
+const APP_VERSION = packageJson.version;
+
+// Fields allowed in node.data for export/save - everything else is parameter data
+// that belongs in the DB and should not leak into exported JSON files.
+export const UI_DATA_FIELDS = new Set(['label', 'disabled', 'condition']);
+
+/**
+ * Strip node.data down to UI-essential fields only.
+ * Prevents personal data (phone numbers, contact names, API keys, etc.)
+ * from leaking into exported workflow JSON files.
+ */
+export function sanitizeNodes(nodes: Node[]): Node[] {
+  return nodes.map(node => ({
+    ...node,
+    data: Object.fromEntries(
+      Object.entries(node.data || {}).filter(([key]) => UI_DATA_FIELDS.has(key))
+    )
+  }));
+}
 
 /**
  * Export workflow to JSON file
@@ -19,9 +42,10 @@ export function exportWorkflowToFile(workflow: WorkflowData): void {
 
   const workflowJSON = {
     ...workflow,
+    nodes: sanitizeNodes(workflow.nodes),
     createdAt: workflow.createdAt.toISOString(),
     lastModified: workflow.lastModified.toISOString(),
-    version: '1.0.0'
+    version: APP_VERSION
   };
 
   const jsonString = serializeWorkflow(workflowJSON);
@@ -81,9 +105,10 @@ export function exportWorkflowToJSON(workflow: WorkflowData): string {
 
   const workflowJSON = {
     ...workflow,
+    nodes: sanitizeNodes(workflow.nodes),
     createdAt: workflow.createdAt.toISOString(),
     lastModified: workflow.lastModified.toISOString(),
-    version: '1.0.0'
+    version: APP_VERSION
   };
 
   return serializeWorkflow(workflowJSON);

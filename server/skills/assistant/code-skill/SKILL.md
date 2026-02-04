@@ -6,6 +6,8 @@ metadata:
   author: machina
   version: "3.0"
   category: code
+  icon: "💻"
+  color: "#F59E0B"
 ---
 
 # Code Execution

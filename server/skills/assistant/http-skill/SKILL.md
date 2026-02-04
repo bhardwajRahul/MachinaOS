@@ -6,6 +6,8 @@ metadata:
   author: machina
   version: "2.0"
   category: integration
+  icon: "🌐"
+  color: "#EF4444"
 ---
 
 # HTTP Requests

@@ -84,7 +84,7 @@ class RelayWebSocketClient:
             Tuple of (success: bool, error_message: str)
         """
         try:
-            logger.info("[Relay] Connecting...", url=self.url)
+            logger.debug("[Relay] Connecting...", url=self.url)
             timeout = aiohttp.ClientTimeout(total=None, connect=10, sock_read=300)
             self.session = aiohttp.ClientSession(timeout=timeout)
 
@@ -97,7 +97,7 @@ class RelayWebSocketClient:
             self.connected = True
             self._running = True
 
-            logger.info("[Relay] WebSocket connected, waiting for server message...", url=self.base_url)
+            logger.debug("[Relay] WebSocket connected, waiting for server message...", url=self.base_url)
 
             # Wait for connection.established event
             msg = await asyncio.wait_for(self.ws.receive(), timeout=10.0)
@@ -105,7 +105,7 @@ class RelayWebSocketClient:
             if msg.type == aiohttp.WSMsgType.TEXT:
                 data = json.loads(msg.data)
                 method = data.get("method")
-                logger.info("[Relay] Received initial message", method=method)
+                logger.debug("[Relay] Received initial message", method=method)
 
                 # Handle both "welcome" and "connection.established" methods
                 if method in ("welcome", "connection.established"):
@@ -167,7 +167,7 @@ class RelayWebSocketClient:
                                   Set to False when disconnecting due to connection drop
                                   (will try to auto-reconnect later).
         """
-        logger.info("[Relay] Disconnecting...", clear_stored_session=clear_stored_session)
+        logger.debug("[Relay] Disconnecting...", clear_stored_session=clear_stored_session)
         self._running = False
 
         # Cancel background tasks
@@ -204,7 +204,7 @@ class RelayWebSocketClient:
         # Broadcast relay disconnection (fully disconnected from relay server)
         await broadcast_relay_disconnected()
 
-        logger.info("[Relay] Disconnected")
+        logger.debug("[Relay] Disconnected")
 
     async def _clear_stored_session(self):
         """Clear stored pairing session from database."""
@@ -213,7 +213,7 @@ class RelayWebSocketClient:
             database = container.database()
 
             await database.clear_android_relay_session()
-            logger.info("[Relay] Cleared stored pairing session")
+            logger.debug("[Relay] Cleared stored pairing session")
         except Exception as e:
             logger.warning("[Relay] Failed to clear stored session", error=str(e))
 
@@ -231,7 +231,7 @@ class RelayWebSocketClient:
 
     async def _receive_loop(self):
         """Background task to receive messages."""
-        logger.info("[Relay] Receive loop started")
+        logger.debug("[Relay] Receive loop started")
         unexpected_disconnect = False
         try:
             while self._running and self.ws and not self.ws.closed:
@@ -263,7 +263,7 @@ class RelayWebSocketClient:
         finally:
             self._running = False
             self.connected = False
-            logger.info("[Relay] Receive loop stopped")
+            logger.debug("[Relay] Receive loop stopped")
 
             # Broadcast relay disconnection if connection dropped unexpectedly
             if unexpected_disconnect:
@@ -299,7 +299,7 @@ class RelayWebSocketClient:
         """Handle incoming JSON-RPC message."""
         # Log ALL incoming messages for debugging
         method = data.get("method", "")
-        logger.info("[Relay] Received message", method=method, has_result="result" in data, has_error="error" in data)
+        logger.debug("[Relay] Received message", method=method, has_result="result" in data, has_error="error" in data)
 
         # Check if response to pending request
         if is_response(data):
@@ -380,7 +380,7 @@ class RelayWebSocketClient:
                 device_name=self.paired_device_name,
                 session_token=self.session_token
             )
-            logger.info("[Relay] Pairing session saved for auto-reconnect")
+            logger.debug("[Relay] Pairing session saved for auto-reconnect")
         except Exception as e:
             logger.warning("[Relay] Failed to save pairing session", error=str(e))
 
@@ -416,20 +416,19 @@ class RelayWebSocketClient:
         # Schema: params = {"data": {...}}
         data = params.get("data", {})
 
-        logger.info("[Relay] relay.message received",
-                   data_keys=list(data.keys()) if isinstance(data, dict) else "not_dict",
-                   data=data)
+        logger.debug("[Relay] relay.message received",
+                   data_keys=list(data.keys()) if isinstance(data, dict) else "not_dict")
 
         # Route to service response queue if matching request_id
         # Android app uses "request_id" (underscore), not "requestId" (camelCase)
         request_id = data.get("request_id")
-        logger.info("[Relay] Checking request_id", request_id=request_id, waiting_for=list(self._service_queues.keys()))
+        logger.debug("[Relay] Checking request_id", request_id=request_id, waiting_for=list(self._service_queues.keys()))
 
         if request_id and request_id in self._service_queues:
-            logger.info("[Relay] Routing to service queue", request_id=request_id)
+            logger.debug("[Relay] Routing to service queue", request_id=request_id)
             await self._service_queues[request_id].put(data)
         elif self.on_relay_message:
-            logger.info("[Relay] Passing to on_relay_message callback")
+            logger.debug("[Relay] Passing to on_relay_message callback")
             await self.on_relay_message(data)
         else:
             logger.warning("[Relay] Unhandled relay message", request_id=request_id, data=data)
@@ -491,11 +490,11 @@ class RelayWebSocketClient:
         if not self.paired:
             raise Exception("Not paired with Android device")
 
-        logger.info("[Relay] Sending relay.send RPC", data=data)
+        logger.debug("[Relay] Sending relay.send RPC", service=data.get("service"), action=data.get("action"))
 
         # Schema: {"jsonrpc": "2.0", "method": "relay.send", "params": {"data": {...}}, "id": 1}
         result = await self.call("relay.send", {"data": data}, timeout=timeout)
-        logger.info("[Relay] relay.send RPC response", result=result)
+        logger.debug("[Relay] relay.send RPC response", delivered=result.get("delivered") if isinstance(result, dict) else None)
         return result
 
     # =========================================================================
@@ -545,15 +544,15 @@ class RelayWebSocketClient:
                 "params": parameters or {}
             }, timeout=5.0)
 
-            logger.info("[Relay] Sent service request",
+            logger.debug("[Relay] Sent service request",
                        request_id=request_id,
                        service_id=service_id,
                        action=action)
 
             # Wait for response
-            logger.info("[Relay] Waiting for response", request_id=request_id, timeout=timeout)
+            logger.debug("[Relay] Waiting for response", request_id=request_id, timeout=timeout)
             response = await asyncio.wait_for(response_queue.get(), timeout=timeout)
-            logger.info("[Relay] Service response received", request_id=request_id, response_keys=list(response.keys()) if isinstance(response, dict) else "not_dict")
+            logger.debug("[Relay] Service response received", request_id=request_id)
             return response
 
         except asyncio.TimeoutError:

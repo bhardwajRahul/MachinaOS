@@ -5,6 +5,8 @@ metadata:
   author: machina
   version: "2.0"
   category: automation
+  icon: "⏰"
+  color: "#10B981"
 ---
 
 # Task Scheduling

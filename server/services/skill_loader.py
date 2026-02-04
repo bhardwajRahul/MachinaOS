@@ -68,24 +68,21 @@ class SkillLoader:
         """
         self._registry.clear()
 
-        # Scan filesystem directories
+        # Scan filesystem directories (recursive - finds SKILL.md in any subdirectory)
         for skill_dir in self._skill_dirs:
             if not skill_dir.exists():
                 logger.debug(f"[SkillLoader] Skill directory not found: {skill_dir}")
                 continue
 
-            for skill_path in skill_dir.iterdir():
-                if skill_path.is_dir():
-                    skill_md = skill_path / "SKILL.md"
-                    if skill_md.exists():
-                        try:
-                            metadata = self._parse_skill_metadata(skill_md)
-                            if metadata:
-                                metadata.path = skill_path
-                                self._registry[metadata.name] = metadata
-                                logger.debug(f"[SkillLoader] Loaded skill: {metadata.name}")
-                        except Exception as e:
-                            logger.error(f"[SkillLoader] Failed to parse {skill_md}: {e}")
+            for skill_md in skill_dir.rglob("SKILL.md"):
+                try:
+                    metadata = self._parse_skill_metadata(skill_md)
+                    if metadata:
+                        metadata.path = skill_md.parent
+                        self._registry[metadata.name] = metadata
+                        logger.debug(f"[SkillLoader] Loaded skill: {metadata.name}")
+                except Exception as e:
+                    logger.error(f"[SkillLoader] Failed to parse {skill_md}: {e}")
 
         logger.info(f"[SkillLoader] Loaded {len(self._registry)} skills from filesystem")
         return self._registry

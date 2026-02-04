@@ -29,6 +29,7 @@ import json
 from core.config import Settings
 from core.logging import get_logger, log_execution_time, log_api_call
 from services.auth import AuthService
+from constants import ANDROID_SERVICE_NODE_TYPES
 
 logger = get_logger(__name__)
 
@@ -564,11 +565,11 @@ def create_agent_node(chat_model):
             # Model wants to use tools
             pending_tool_calls = response.tool_calls
             should_continue = True
-            logger.info(f"[LangGraph] Agent requesting {len(pending_tool_calls)} tool call(s)")
+            logger.debug(f"[LangGraph] Agent requesting {len(pending_tool_calls)} tool call(s)")
             # Debug: log raw tool calls to diagnose empty args issue
             for tc in pending_tool_calls:
-                logger.info(f"[LangGraph] Raw tool_call object: {tc}")
-                logger.info(f"[LangGraph] Tool call type: {type(tc)}, keys: {tc.keys() if hasattr(tc, 'keys') else 'N/A'}")
+                logger.debug(f"[LangGraph] Raw tool_call object: {tc}")
+                logger.debug(f"[LangGraph] Tool call type: {type(tc)}, keys: {tc.keys() if hasattr(tc, 'keys') else 'N/A'}")
 
         return {
             "messages": [response],  # Will be appended via operator.add
@@ -603,12 +604,12 @@ def create_tool_node(tool_executor: Callable):
             tool_args = tool_call.get("args", {})
             tool_id = tool_call.get("id", "")
 
-            logger.info(f"[LangGraph] Executing tool: {tool_name} (args={tool_args})")
+            logger.debug(f"[LangGraph] Executing tool: {tool_name} (args={tool_args})")
 
             try:
                 # Directly await the async tool executor (proper async pattern)
                 result = await tool_executor(tool_name, tool_args)
-                logger.info(f"[LangGraph] Tool {tool_name} returned: {str(result)[:100]}")
+                logger.debug(f"[LangGraph] Tool {tool_name} returned: {str(result)[:100]}")
             except Exception as e:
                 logger.error(f"[LangGraph] Tool execution failed: {tool_name}", error=str(e))
                 result = {"error": str(e)}
@@ -620,7 +621,7 @@ def create_tool_node(tool_executor: Callable):
                 name=tool_name
             ))
 
-            logger.info(f"[LangGraph] Tool {tool_name} completed, result added to messages")
+            logger.debug(f"[LangGraph] Tool {tool_name} completed, result added to messages")
 
         return {
             "messages": tool_messages,
@@ -1139,27 +1140,27 @@ class AIService:
 
             # Debug: Log response structure for o-series reasoning models
             if thinking_config and thinking_config.enabled:
-                logger.info(f"[AI Debug] Response type: {type(response).__name__}")
-                logger.info(f"[AI Debug] Response content type: {type(response.content)}")
-                logger.info(f"[AI Debug] Response content: {response.content[:500] if isinstance(response.content, str) else response.content}")
+                logger.debug(f"[AI Debug] Response type: {type(response).__name__}")
+                logger.debug(f"[AI Debug] Response content type: {type(response.content)}")
+                logger.debug(f"[AI Debug] Response content: {response.content[:500] if isinstance(response.content, str) else response.content}")
                 if hasattr(response, 'content_blocks'):
-                    logger.info(f"[AI Debug] content_blocks: {response.content_blocks}")
+                    logger.debug(f"[AI Debug] content_blocks: {response.content_blocks}")
                 if hasattr(response, 'additional_kwargs'):
-                    logger.info(f"[AI Debug] additional_kwargs: {response.additional_kwargs}")
+                    logger.debug(f"[AI Debug] additional_kwargs: {response.additional_kwargs}")
                 if hasattr(response, 'response_metadata'):
-                    logger.info(f"[AI Debug] response_metadata: {response.response_metadata}")
+                    logger.debug(f"[AI Debug] response_metadata: {response.response_metadata}")
 
             # Extract text and thinking content from response
             text_content, thinking_content = extract_thinking_from_response(response)
 
             # Debug: Log extraction results
-            logger.info(f"[AI Debug] Extracted text_content: {repr(text_content[:200] if text_content else None)}")
-            logger.info(f"[AI Debug] Extracted thinking_content: {repr(thinking_content[:200] if thinking_content else None)}")
+            logger.debug(f"[AI Debug] Extracted text_content: {repr(text_content[:200] if text_content else None)}")
+            logger.debug(f"[AI Debug] Extracted thinking_content: {repr(thinking_content[:200] if thinking_content else None)}")
 
             # Use extracted text if available, fall back to raw content
             response_text = text_content if text_content else response.content
 
-            logger.info(f"[AI Debug] Final response_text: {repr(response_text[:200] if response_text else None)}")
+            logger.debug(f"[AI Debug] Final response_text: {repr(response_text[:200] if response_text else None)}")
 
             result = {
                 "response": response_text,
@@ -1185,7 +1186,7 @@ class AIService:
                 "result": result,
                 "execution_time": time.time() - start_time
             }
-            logger.info(f"[AI Debug] Returning final_result: success={final_result['success']}, result.response={repr(result.get('response', 'MISSING')[:100] if result.get('response') else 'None')}")
+            logger.debug(f"[AI Debug] Returning final_result: success={final_result['success']}, result.response={repr(result.get('response', 'MISSING')[:100] if result.get('response') else 'None')}")
             return final_result
 
         except Exception as e:
@@ -1233,13 +1234,13 @@ class AIService:
         model = 'unknown'
 
         # EARLY LOG: Entry point for debugging
-        logger.info(f"[AIAgent] execute_agent called: node_id={node_id}, workflow_id={workflow_id}, skill_count={len(skill_data) if skill_data else 0}, tool_count={len(tool_data) if tool_data else 0}")
+        logger.debug(f"[AIAgent] execute_agent called: node_id={node_id}, workflow_id={workflow_id}, skill_count={len(skill_data) if skill_data else 0}, tool_count={len(tool_data) if tool_data else 0}")
         if skill_data:
             for i, sd in enumerate(skill_data):
                 logger.debug(f"[AIAgent] Skill {i}: type={sd.get('node_type')}, label={sd.get('label')}")
         if tool_data:
             for i, td in enumerate(tool_data):
-                logger.info(f"[AIAgent] Tool {i}: type={td.get('node_type')}, node_id={td.get('node_id')}")
+                logger.debug(f"[AIAgent] Tool {i}: type={td.get('node_type')}, node_id={td.get('node_id')}")
 
         # Helper to broadcast status updates with workflow_id for proper scoping
         async def broadcast_status(phase: str, details: Dict[str, Any] = None):
@@ -1277,7 +1278,7 @@ class AIService:
                 skill_prompt = skill_loader.get_registry_prompt(skill_names)
                 if skill_prompt:
                     system_message = f"{system_message}\n\n{skill_prompt}"
-                    logger.info(f"[AIAgent] Enhanced system message with {len(skill_names)} skill contexts")
+                    logger.debug(f"[AIAgent] Enhanced system message with {len(skill_names)} skill contexts")
 
             # Flatten options collection from frontend
             options = parameters.get('options', {})
@@ -1290,7 +1291,7 @@ class AIService:
             temperature = float(flattened.get('temperature', 0.7))
             max_tokens = int(flattened.get('max_tokens') or flattened.get('maxTokens') or 1000)
 
-            logger.info(f"[LangGraph] Agent: {provider}/{model}, tools={len(tool_data) if tool_data else 0}")
+            logger.debug(f"[LangGraph] Agent: {provider}/{model}, tools={len(tool_data) if tool_data else 0}")
 
             # If no model specified or model doesn't match provider, use default from registry
             if not model or not is_model_valid_for_provider(model, provider):
@@ -1314,7 +1315,7 @@ class AIService:
                     level=flattened.get('thinkingLevel', 'medium'),
                     format=flattened.get('reasoningFormat', 'parsed'),
                 )
-                logger.info(f"[LangGraph] Thinking enabled: budget={thinking_config.budget}, effort={thinking_config.effort}")
+                logger.debug(f"[LangGraph] Thinking enabled: budget={thinking_config.budget}, effort={thinking_config.effort}")
 
             # Broadcast: Initializing model
             await broadcast_status("initializing", {
@@ -1397,7 +1398,7 @@ class AIService:
                     if tool:
                         tools.append(tool)
                         tool_configs[tool.name] = config
-                        logger.info(f"[LangGraph] Registered tool: name={tool.name}, node_id={config.get('node_id')}")
+                        logger.debug(f"[LangGraph] Registered tool: name={tool.name}, node_id={config.get('node_id')}")
 
                 logger.debug(f"[LangGraph] Built {len(tools)} tools")
 
@@ -1410,9 +1411,9 @@ class AIService:
                 tool_node_id = config.get('node_id')
 
                 # Log tool execution details for debugging glow animation
-                logger.info(f"[LangGraph] Executing tool: {tool_name} (args={tool_args})")
-                logger.info(f"[LangGraph] Available tool configs: {list(tool_configs.keys())}")
-                logger.info(f"[LangGraph] Tool node_id={tool_node_id}, workflow_id={workflow_id}, broadcaster={'yes' if broadcaster else 'no'}")
+                logger.debug(f"[LangGraph] Executing tool: {tool_name} (args={tool_args})")
+                logger.debug(f"[LangGraph] Available tool configs: {list(tool_configs.keys())}")
+                logger.debug(f"[LangGraph] Tool node_id={tool_node_id}, workflow_id={workflow_id}, broadcaster={'yes' if broadcaster else 'no'}")
 
                 # Broadcast executing status to the AI Agent node
                 await broadcast_status("executing_tool", {
@@ -1649,7 +1650,7 @@ class AIService:
         provider = 'unknown'
         model = 'unknown'
 
-        logger.info(f"[ChatAgent] execute_chat_agent called: node_id={node_id}, workflow_id={workflow_id}, skill_count={len(skill_data) if skill_data else 0}, tool_count={len(tool_data) if tool_data else 0}")
+        logger.debug(f"[ChatAgent] execute_chat_agent called: node_id={node_id}, workflow_id={workflow_id}, skill_count={len(skill_data) if skill_data else 0}, tool_count={len(tool_data) if tool_data else 0}")
 
         async def broadcast_status(phase: str, details: Dict[str, Any] = None):
             if broadcaster:
@@ -1686,7 +1687,7 @@ class AIService:
                 skill_prompt = skill_loader.get_registry_prompt(skill_names)
                 if skill_prompt:
                     system_message = f"{system_message}\n\n{skill_prompt}"
-                    logger.info(f"[ChatAgent] Enhanced system message with {len(skill_names)} skill contexts")
+                    logger.debug(f"[ChatAgent] Enhanced system message with {len(skill_names)} skill contexts")
 
             # Build tools from tool_data using same method as AI Agent
             # This supports ALL tool types: calculatorTool, currentTimeTool, webSearchTool, androidTool, httpRequest
@@ -1704,11 +1705,11 @@ class AIService:
                     if tool:
                         all_tools.append(tool)
                         tool_node_configs[tool.name] = config
-                        logger.info(f"[ChatAgent] Built tool: {tool.name} (type={config.get('node_type')}, node_id={config.get('node_id')})")
+                        logger.debug(f"[ChatAgent] Built tool: {tool.name} (type={config.get('node_type')}, node_id={config.get('node_id')})")
 
-                logger.info(f"[ChatAgent] Built {len(all_tools)} tools from tool_data")
+                logger.debug(f"[ChatAgent] Built {len(all_tools)} tools from tool_data")
 
-            logger.info(f"[ChatAgent] Total tools available: {len(all_tools)}")
+            logger.debug(f"[ChatAgent] Total tools available: {len(all_tools)}")
             # Debug: log all tool schemas to verify they're correct
             for t in all_tools:
                 schema = t.get_input_schema().model_json_schema()
@@ -1724,7 +1725,7 @@ class AIService:
             temperature = float(flattened.get('temperature', 0.7))
             max_tokens = int(flattened.get('max_tokens') or flattened.get('maxTokens') or 1000)
 
-            logger.info(f"[ChatAgent] Provider: {provider}, Model: {model}")
+            logger.debug(f"[ChatAgent] Provider: {provider}, Model: {model}")
 
             # Validate model for provider
             if not model or not is_model_valid_for_provider(model, provider):
@@ -1827,7 +1828,7 @@ class AIService:
 
             if all_tools:
                 # Use LangGraph for tool execution (like AI Agent)
-                logger.info(f"[ChatAgent] Using LangGraph with {len(all_tools)} tools")
+                logger.debug(f"[ChatAgent] Using LangGraph with {len(all_tools)} tools")
 
                 # Create tool executor callback - same pattern as AI Agent
                 # Uses handlers/tools.py execute_tool() for actual execution
@@ -1835,16 +1836,16 @@ class AIService:
                     """Execute a tool by name using handlers/tools.py (same as AI Agent)."""
                     from services.handlers.tools import execute_tool
 
-                    logger.info(f"[ChatAgent] Executing tool: {tool_name}, args={tool_args}")
+                    logger.debug(f"[ChatAgent] Executing tool: {tool_name}, args={tool_args}")
 
                     # Get tool node config (contains node_id, node_type, parameters)
                     config = tool_node_configs.get(tool_name, {})
                     tool_node_id = config.get('node_id')
-                    logger.info(f"[ChatAgent] Tool config: node_id={tool_node_id}, node_type={config.get('node_type')}, workflow_id={workflow_id}")
+                    logger.debug(f"[ChatAgent] Tool config: node_id={tool_node_id}, node_type={config.get('node_type')}, workflow_id={workflow_id}")
 
                     # Broadcast executing status to tool node for glow effect
                     if tool_node_id and broadcaster:
-                        logger.info(f"[ChatAgent] Broadcasting 'executing' status to node {tool_node_id}")
+                        logger.debug(f"[ChatAgent] Broadcasting 'executing' status to node {tool_node_id}")
                         await broadcaster.update_node_status(
                             tool_node_id,
                             "executing",
@@ -1867,7 +1868,7 @@ class AIService:
                     try:
                         # Execute via handlers/tools.py - same pattern as AI Agent
                         result = await execute_tool(tool_name, tool_args, config)
-                        logger.info(f"[ChatAgent] Tool executed successfully: {tool_name}")
+                        logger.debug(f"[ChatAgent] Tool executed successfully: {tool_name}")
 
                         # Broadcast success to tool node
                         if tool_node_id and broadcaster:
@@ -2061,8 +2062,37 @@ class AIService:
             'whatsappDb': 'whatsapp_db',
             'gmaps_locations': 'geocode',
             'gmaps_nearby_places': 'nearby_places',
+            'timer': 'timer',
+            'cronScheduler': 'cron_scheduler',
             'aiAgent': 'delegate_to_ai_agent',
             'chatAgent': 'delegate_to_chat_agent',
+            'android_agent': 'delegate_to_android_agent',
+            'coding_agent': 'delegate_to_coding_agent',
+            'web_agent': 'delegate_to_web_agent',
+            'task_agent': 'delegate_to_task_agent',
+            'social_agent': 'delegate_to_social_agent',
+            'travel_agent': 'delegate_to_travel_agent',
+            'tool_agent': 'delegate_to_tool_agent',
+            'productivity_agent': 'delegate_to_productivity_agent',
+            'payments_agent': 'delegate_to_payments_agent',
+            'consumer_agent': 'delegate_to_consumer_agent',
+            # Android service nodes (direct tool usage)
+            'batteryMonitor': 'android_battery',
+            'networkMonitor': 'android_network',
+            'systemInfo': 'android_system_info',
+            'location': 'android_location',
+            'appLauncher': 'android_app_launcher',
+            'appList': 'android_app_list',
+            'wifiAutomation': 'android_wifi',
+            'bluetoothAutomation': 'android_bluetooth',
+            'audioAutomation': 'android_audio',
+            'deviceStateAutomation': 'android_device_state',
+            'screenControlAutomation': 'android_screen_control',
+            'airplaneModeControl': 'android_airplane_mode',
+            'motionDetection': 'android_motion_detection',
+            'environmentalSensors': 'android_environmental_sensors',
+            'cameraControl': 'android_camera',
+            'mediaControl': 'android_media',
         }
         DEFAULT_TOOL_DESCRIPTIONS = {
             'calculatorTool': 'Perform mathematical calculations. Operations: add, subtract, multiply, divide, power, sqrt, mod, abs',
@@ -2075,8 +2105,37 @@ class AIService:
             'whatsappDb': 'Query WhatsApp database - list contacts, search groups, get contact/group info, retrieve chat history.',
             'gmaps_locations': 'Geocode addresses to coordinates or reverse geocode coordinates to addresses using Google Maps.',
             'gmaps_nearby_places': 'Search for nearby places (restaurants, hospitals, banks, etc.) using Google Maps Places API.',
+            'timer': 'Wait/sleep for a specified duration. Specify duration (1-3600) and unit (seconds, minutes, or hours). Returns timestamp and elapsed time after waiting.',
+            'cronScheduler': 'Schedule a delayed or recurring execution. Supports seconds, minutes, hours, daily, weekly, monthly frequencies with timezone. Use frequency to set schedule type, then set the relevant interval/time parameters.',
             'aiAgent': 'Delegate a task to another AI Agent. The agent works independently without blocking.',
             'chatAgent': 'Delegate a task to a Chat Agent. The agent works independently without blocking.',
+            'android_agent': 'Delegate a task to an Android Control Agent for device automation. Works independently.',
+            'coding_agent': 'Delegate a task to a Coding Agent for code execution. Works independently.',
+            'web_agent': 'Delegate a task to a Web Control Agent for web automation. Works independently.',
+            'task_agent': 'Delegate a task to a Task Management Agent for task automation. Works independently.',
+            'social_agent': 'Delegate a task to a Social Media Agent for social messaging. Works independently.',
+            'travel_agent': 'Delegate a task to a Travel Agent for travel planning and itinerary building. Works independently.',
+            'tool_agent': 'Delegate a task to a Tool Agent for multi-tool orchestration and complex task execution. Works independently.',
+            'productivity_agent': 'Delegate a task to a Productivity Agent for scheduling, reminders, and workflow automation. Works independently.',
+            'payments_agent': 'Delegate a task to a Payments Agent for payment processing, invoice generation, and financial operations. Works independently.',
+            'consumer_agent': 'Delegate a task to a Consumer Agent for customer support, product recommendations, and order management. Works independently.',
+            # Android service nodes (direct tool usage)
+            'batteryMonitor': 'Monitor Android battery status, level, charging state, temperature, and health.',
+            'networkMonitor': 'Monitor Android network connectivity, type, and internet availability.',
+            'systemInfo': 'Get Android device and OS information including version, API level, memory, hardware.',
+            'location': 'Get Android GPS location with latitude, longitude, accuracy, and provider.',
+            'appLauncher': 'Launch Android applications by package name.',
+            'appList': 'Get list of installed Android applications with package names and versions.',
+            'wifiAutomation': 'Control Android WiFi - enable, disable, get status, scan for networks.',
+            'bluetoothAutomation': 'Control Android Bluetooth - enable, disable, get status, paired devices.',
+            'audioAutomation': 'Control Android volume and audio - get/set volume, mute, unmute.',
+            'deviceStateAutomation': 'Control Android device state - airplane mode, screen, power save, brightness.',
+            'screenControlAutomation': 'Control Android screen - brightness, wake, auto-brightness, timeout.',
+            'airplaneModeControl': 'Monitor and control Android airplane mode.',
+            'motionDetection': 'Read Android accelerometer and gyroscope - detect motion, shake, orientation.',
+            'environmentalSensors': 'Read Android environmental sensors - temperature, humidity, pressure, light.',
+            'cameraControl': 'Control Android camera - get info, take photos, camera capabilities.',
+            'mediaControl': 'Control Android media playback - volume, playback control, play media files.',
         }
 
         try:
@@ -2239,6 +2298,26 @@ class AIService:
                 query: str = Field(description="Search query to look up on the web")
 
             return WebSearchSchema
+
+        # Timer tool schema (dual-purpose: workflow node + AI tool)
+        if node_type == 'timer':
+            class TimerSchema(BaseModel):
+                """Wait/sleep for a specified duration before continuing."""
+                duration: int = Field(
+                    default=5,
+                    description="Duration to wait (1-3600)"
+                )
+                unit: str = Field(
+                    default="seconds",
+                    description="Time unit: 'seconds', 'minutes', or 'hours'"
+                )
+
+            return TimerSchema
+
+        # Cron Scheduler tool schema (reuses CronSchedulerParams from models/nodes.py)
+        if node_type == 'cronScheduler':
+            from models.nodes import CronSchedulerParams
+            return CronSchedulerParams
 
         # WhatsApp send schema (existing node used as tool)
         if node_type == 'whatsappSend':
@@ -2404,6 +2483,46 @@ class AIService:
 
             return SocialSendSchema
 
+        # Direct Android service node schema (connected directly to AI Agent tools handle)
+        if node_type in ANDROID_SERVICE_NODE_TYPES:
+            from services.android_service import SERVICE_ACTIONS
+
+            _svc_id_map = {
+                'batteryMonitor': 'battery',
+                'networkMonitor': 'network',
+                'systemInfo': 'system_info',
+                'location': 'location',
+                'appLauncher': 'app_launcher',
+                'appList': 'app_list',
+                'wifiAutomation': 'wifi_automation',
+                'bluetoothAutomation': 'bluetooth_automation',
+                'audioAutomation': 'audio_automation',
+                'deviceStateAutomation': 'device_state',
+                'screenControlAutomation': 'screen_control',
+                'airplaneModeControl': 'airplane_mode',
+                'motionDetection': 'motion_detection',
+                'environmentalSensors': 'environmental_sensors',
+                'cameraControl': 'camera_control',
+                'mediaControl': 'media_control',
+            }
+            svc_id = _svc_id_map.get(node_type, node_type)
+            actions = SERVICE_ACTIONS.get(svc_id, [])
+            action_list = [a['value'] for a in actions] if actions else ['status']
+            actions_desc = ', '.join(action_list)
+
+            class AndroidServiceSchema(BaseModel):
+                """Schema for a direct Android service tool."""
+                action: str = Field(
+                    default=action_list[0] if action_list else 'status',
+                    description=f"Action to perform. Available: {actions_desc}"
+                )
+                parameters: Optional[Dict[str, Any]] = Field(
+                    default=None,
+                    description="Action-specific parameters (e.g., {{package_name: 'com.app'}} for app_launcher, {{volume: 50}} for audio)"
+                )
+
+            return AndroidServiceSchema
+
         # Android toolkit schema - dynamic based on connected services
         # Follows LangChain dynamic tool binding pattern
         if node_type == 'androidTool':
@@ -2497,7 +2616,7 @@ class AIService:
             return NearbyPlacesSchema
 
         # AI Agent delegation schema (fire-and-forget async delegation)
-        if node_type in ('aiAgent', 'chatAgent'):
+        if node_type in ('aiAgent', 'chatAgent', 'android_agent', 'coding_agent', 'web_agent', 'task_agent', 'social_agent', 'travel_agent', 'tool_agent', 'productivity_agent', 'payments_agent', 'consumer_agent'):
             agent_label = params.get('label', node_type)
 
             class DelegateToAgentSchema(BaseModel):

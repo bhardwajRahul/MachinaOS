@@ -41,7 +41,7 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
     """
     node_type = config.get('node_type', '')
 
-    logger.info(f"[Tool] Executing tool '{tool_name}' (node_type: {node_type})")
+    logger.debug(f"[Tool] Executing tool '{tool_name}' (node_type: {node_type})")
 
     # Calculator tool
     if node_type == 'calculatorTool':
@@ -66,6 +66,30 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
     # Web search tool
     if node_type == 'webSearchTool':
         return await _execute_web_search(tool_args, config.get('parameters', {}))
+
+    # Timer tool (dual-purpose: workflow node + AI tool)
+    # LLM fills duration/unit via Pydantic schema; calls existing handle_timer handler
+    if node_type == 'timer':
+        from services.handlers.utility import handle_timer
+        parameters = {**config.get('parameters', {}), **tool_args}
+        return await handle_timer(
+            node_id=config.get('node_id', 'tool_timer'),
+            node_type='timer',
+            parameters=parameters,
+            context={}
+        )
+
+    # Cron Scheduler tool (dual-purpose: workflow node + AI tool)
+    # LLM fills schedule params via CronSchedulerParams schema; calls existing handler
+    if node_type == 'cronScheduler':
+        from services.handlers.utility import handle_cron_scheduler
+        parameters = {**config.get('parameters', {}), **tool_args}
+        return await handle_cron_scheduler(
+            node_id=config.get('node_id', 'tool_cron_scheduler'),
+            node_type='cronScheduler',
+            parameters=parameters,
+            context={}
+        )
 
     # WhatsApp send (existing node used as tool)
     if node_type == 'whatsappSend':
@@ -92,7 +116,8 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
         return await _execute_nearby_places(tool_args, config.get('parameters', {}))
 
     # AI Agent delegation (fire-and-forget async delegation)
-    if node_type in ('aiAgent', 'chatAgent'):
+    # Includes specialized agents: android_agent, coding_agent, web_agent, task_agent, social_agent
+    if node_type in ('aiAgent', 'chatAgent', 'android_agent', 'coding_agent', 'web_agent', 'task_agent', 'social_agent', 'travel_agent', 'tool_agent', 'productivity_agent', 'payments_agent', 'consumer_agent'):
         return await _execute_delegated_agent(tool_args, config)
 
     # Generic fallback for unknown node types
@@ -134,7 +159,7 @@ async def _execute_calculator(args: Dict[str, Any]) -> Dict[str, Any]:
 
     try:
         result = operations[operation]()
-        logger.info(f"[Calculator] {operation}({a}, {b}) = {result}")
+        logger.debug(f"[Calculator] {operation}({a}, {b}) = {result}")
         return {
             "operation": operation,
             "a": a,
@@ -179,7 +204,7 @@ async def _execute_http_request(args: Dict[str, Any],
     except:
         default_headers = {}
 
-    logger.info(f"[HTTP Tool] {method} {full_url}")
+    logger.debug(f"[HTTP Tool] {method} {full_url}")
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -276,7 +301,7 @@ except Exception as e:
         temp_path = f.name
 
     try:
-        logger.info(f"[Python Tool] Executing code (timeout: {timeout}s)")
+        logger.debug(f"[Python Tool] Executing code (timeout: {timeout}s)")
         result = subprocess.run(
             ['python', temp_path],
             capture_output=True,
@@ -358,7 +383,7 @@ try {{
         temp_path = f.name
 
     try:
-        logger.info(f"[JavaScript Tool] Executing code (timeout: {timeout}s)")
+        logger.debug(f"[JavaScript Tool] Executing code (timeout: {timeout}s)")
         result = subprocess.run(
             ['node', temp_path],
             capture_output=True,
@@ -416,7 +441,7 @@ async def _execute_current_time(args: Dict[str, Any],
             "day_of_week": now.strftime("%A"),
             "timestamp": int(now.timestamp())
         }
-        logger.info(f"[CurrentTime] {timezone_str}: {result['datetime']}")
+        logger.debug(f"[CurrentTime] {timezone_str}: {result['datetime']}")
         return result
     except Exception as e:
         logger.error(f"[CurrentTime] Error: {e}")
@@ -1139,6 +1164,24 @@ async def _execute_delegated_agent(args: Dict[str, Any],
     # Get child agent parameters from database
     child_params = await database.get_node_parameters(node_id) or {}
 
+    # Inject API key - delegated agents bypass NodeExecutor._inject_api_keys,
+    # so we must resolve the key here from the credential store
+    if not child_params.get('api_key') and not child_params.get('apiKey'):
+        from constants import detect_ai_provider
+        provider = detect_ai_provider(node_type, child_params)
+        key = await ai_service.auth.get_api_key(provider, "default")
+        if key:
+            child_params['api_key'] = key
+            logger.debug(f"[Delegated Agent] Injected API key for provider={provider}")
+
+    # Inject default model if not set
+    if not child_params.get('model'):
+        from constants import detect_ai_provider
+        provider = detect_ai_provider(node_type, child_params)
+        models = await ai_service.auth.get_stored_models(provider, "default")
+        if models:
+            child_params['model'] = models[0]
+
     # Build prompt from task + context
     full_prompt = task_description
     if task_context:
@@ -1158,6 +1201,8 @@ async def _execute_delegated_agent(args: Dict[str, Any],
     agent_label = child_params.get('label', node_type)
 
     logger.info(f"[Delegated Agent] Starting task {task_id} for '{agent_label}' (node: {node_id})")
+    logger.debug(f"[Delegated Agent] Context: {len(nodes)} nodes, {len(edges)} edges, "
+                 f"edge_targets={set(e.get('target') for e in edges)}")
 
     # Define the background coroutine
     async def run_child_agent():

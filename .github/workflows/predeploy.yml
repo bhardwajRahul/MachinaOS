@@ -1,0 +1,182 @@
+# Reusable validation workflow called by ci.yml, release.yml, and docker-build.yml
+# Jobs: build-and-lint, docker-build, docker-compose-test, test-install (cross-platform)
+
+name: Predeploy
+
+on:
+  workflow_call:
+
+jobs:
+  build-and-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup environment
+        uses: ./.github/actions/setup
+
+      - name: Build all services
+        run: npm run build
+
+      - name: Lint client
+        run: cd client && npm run lint
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Frontend Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./client
+          file: ./client/Dockerfile
+          target: production
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build Backend Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./server
+          file: ./server/Dockerfile
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build WhatsApp Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./docker
+          file: ./docker/Dockerfile.whatsapp
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  docker-compose-test:
+    needs: docker-build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create .env from template
+        run: cp .env.template .env
+
+      - name: Build with Docker Compose
+        run: docker compose -f docker-compose.prod.yml build
+
+      - name: Start services
+        run: docker compose -f docker-compose.prod.yml up -d
+
+      - name: Wait for healthy services
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3010/health > /dev/null 2>&1; then
+              echo "Backend healthy after $((i*2))s"
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "Timeout waiting for backend"
+              exit 1
+            fi
+            sleep 2
+          done
+          curl -f http://localhost:3000 || exit 1
+          docker compose -f docker-compose.prod.yml ps
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.prod.yml logs
+
+      - name: Stop services
+        if: always()
+        run: docker compose -f docker-compose.prod.yml down -v
+
+  test-install:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node-version: [18, 20, 22]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      # Python and uv are NOT pre-installed - install.js handles them
+      # This tests the real user experience of `npm install -g machinaos`
+
+      - name: Pack npm package
+        run: npm pack
+
+      - name: Test global install
+        shell: bash
+        run: |
+          npm install -g machinaos-*.tgz
+
+          # Verify CLI is available
+          machinaos --help
+
+          # Check installed files exist
+          INSTALL_PATH=$(npm root -g)/machinaos
+          echo "Installed to: $INSTALL_PATH"
+          ls -la "$INSTALL_PATH"
+
+          # Verify key files
+          test -f "$INSTALL_PATH/.env" && echo ".env created"
+          test -d "$INSTALL_PATH/client" && echo "client/ exists"
+          test -d "$INSTALL_PATH/server" && echo "server/ exists"
+
+      - name: Verify Python environment
+        shell: bash
+        run: |
+          INSTALL_PATH=$(npm root -g)/machinaos
+          cd "$INSTALL_PATH/server"
+
+          if [ -d ".venv" ]; then
+            echo "Python venv created successfully"
+            ls -la .venv/bin 2>/dev/null || ls -la .venv/Scripts 2>/dev/null
+          else
+            echo "Warning: .venv not found"
+          fi
+
+      - name: Verify client build
+        shell: bash
+        run: |
+          INSTALL_PATH=$(npm root -g)/machinaos
+
+          if [ -d "$INSTALL_PATH/client/dist" ]; then
+            echo "Client built successfully"
+            ls -la "$INSTALL_PATH/client/dist"
+          else
+            echo "Warning: client/dist not found"
+          fi
+
+      - name: Test machinaos start
+        shell: bash
+        timeout-minutes: 2
+        run: |
+          machinaos start &
+          PID=$!
+
+          sleep 10
+
+          if kill -0 $PID 2>/dev/null; then
+            echo "machinaos start: OK - process running"
+            kill $PID 2>/dev/null || true
+          else
+            echo "machinaos start: FAILED - process exited"
+            exit 1
+          fi

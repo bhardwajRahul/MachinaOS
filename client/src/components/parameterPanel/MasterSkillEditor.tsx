@@ -1,20 +1,19 @@
 /**
  * MasterSkillEditor - Editor for Master Skill node
  *
- * Split panel showing available skills with enable/disable toggles on left,
- * and selected skill's markdown instructions on right.
+ * Split panel: left side has folder input, search, and skill toggles.
+ * Right side shows selected skill's markdown instructions.
  *
- * Skills are loaded from the skill folder (server/skills/).
+ * Skills loaded from skillFolder (server/skills/<folder>/) or built-in list.
  * The skillsConfig uses skillName (folder name) as keys.
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Input, Checkbox, Button, Spin, List, Badge, Empty, Tooltip, Alert } from 'antd';
-import { SearchOutlined, ReloadOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { Input, Select, Checkbox, Button, Spin, List, Badge, Empty, Tooltip, Alert } from 'antd';
+import { SearchOutlined, ReloadOutlined, InfoCircleOutlined, FolderOutlined } from '@ant-design/icons';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { skillNodes, SKILL_NODE_TYPES } from '../../nodeDefinitions/skillNodes';
-import CodeEditor from '../ui/CodeEditor';
 
 // Skill configuration stored in node parameters
 // Key is skillName (folder name like 'whatsapp-skill')
@@ -40,7 +39,25 @@ interface AvailableSkill {
 interface MasterSkillEditorProps {
   skillsConfig: MasterSkillConfig;
   onConfigChange: (config: MasterSkillConfig) => void;
+  skillFolder?: string;
+  onSkillFolderChange?: (folder: string) => void;
 }
+
+// Lookup icon/color from skillNodes.ts definitions by skill name
+const getNodeDefaults = (skillName: string): { icon: string; color: string } => {
+  for (const type of SKILL_NODE_TYPES) {
+    const nodeDef = skillNodes[type];
+    if (!nodeDef) continue;
+    const skillNameProp = nodeDef.properties?.find(p => p.name === 'skillName');
+    if (skillNameProp?.default === skillName) {
+      return {
+        icon: nodeDef.icon || '',
+        color: (nodeDef.defaults?.color as string) || '#6366F1'
+      };
+    }
+  }
+  return { icon: '', color: '' };
+};
 
 // Helper to render icon (handles emojis and SVG data URIs)
 const renderSkillIcon = (icon: string, size: number = 16) => {
@@ -52,7 +69,9 @@ const renderSkillIcon = (icon: string, size: number = 16) => {
 
 const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
   skillsConfig,
-  onConfigChange
+  onConfigChange,
+  skillFolder,
+  onSkillFolderChange
 }) => {
   const theme = useAppTheme();
   const { sendRequest } = useWebSocket();
@@ -60,9 +79,99 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [defaultInstructions, setDefaultInstructions] = useState<Record<string, string>>({});
   const [searchQuery, setSearchQuery] = useState('');
+  const [folderSkills, setFolderSkills] = useState<AvailableSkill[]>([]);
+  const [folderLoading, setFolderLoading] = useState(false);
+  const [availableFolders, setAvailableFolders] = useState<Array<{ name: string; skill_count: number }>>([]);
+  const [foldersLoaded, setFoldersLoaded] = useState(false);
+  const hasFetchedFolders = useRef(false);
+  const editorWrapperRef = useRef<HTMLDivElement>(null);
 
-  // Build list of available skills from node definitions
+  // Native DOM keydown handler to stop React Flow's document-level listeners
+  // from intercepting standard text editing shortcuts (Ctrl+A, Ctrl+C, etc.)
+  // React synthetic stopPropagation doesn't prevent native document.addEventListener handlers.
+  useEffect(() => {
+    const el = editorWrapperRef.current;
+    if (!el) return;
+
+    const handler = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.stopPropagation();
+      }
+    };
+    el.addEventListener('keydown', handler);
+    return () => el.removeEventListener('keydown', handler);
+  });
+
+  // Fetch available skill folders on mount
+  useEffect(() => {
+    if (hasFetchedFolders.current) return;
+    hasFetchedFolders.current = true;
+
+    const fetchFolders = async () => {
+      try {
+        const response = await sendRequest<{
+          success: boolean;
+          folders: Array<{ name: string; skill_count: number }>;
+        }>('list_skill_folders', {});
+
+        if (response?.success && response.folders) {
+          setAvailableFolders(response.folders);
+        }
+      } catch (error) {
+        console.error('[MasterSkillEditor] Failed to list skill folders:', error);
+      } finally {
+        setFoldersLoaded(true);
+      }
+    };
+
+    fetchFolders();
+  }, [sendRequest]);
+
+  // Fetch skills from folder when skillFolder is set
+  useEffect(() => {
+    if (!skillFolder) {
+      setFolderSkills([]);
+      return;
+    }
+
+    const fetchFolderSkills = async () => {
+      setFolderLoading(true);
+      try {
+        const response = await sendRequest<{
+          success: boolean;
+          skills: Array<{ name: string; description: string; metadata?: Record<string, any> }>;
+          error?: string;
+        }>('scan_skill_folder', { folder: skillFolder });
+
+        if (response?.success && response.skills) {
+          setFolderSkills(response.skills.map(s => {
+            const defaults = getNodeDefaults(s.name);
+            return {
+              type: s.name,
+              skillName: s.name,
+              displayName: s.name.split('-').map(w => w[0].toUpperCase() + w.slice(1)).join(' '),
+              icon: defaults.icon || s.metadata?.icon || '📄',
+              color: defaults.color || s.metadata?.color || '#6366F1',
+              description: s.description || ''
+            };
+          }));
+        }
+      } catch (error) {
+        console.error('[MasterSkillEditor] Failed to scan skill folder:', error);
+      } finally {
+        setFolderLoading(false);
+      }
+    };
+
+    fetchFolderSkills();
+  }, [skillFolder, sendRequest]);
+
+  // Build list of available skills - from folder scan or node definitions
   const availableSkills = useMemo<AvailableSkill[]>(() => {
+    if (skillFolder && folderSkills.length > 0) {
+      return folderSkills;
+    }
+
     return SKILL_NODE_TYPES
       .filter(type => type !== 'customSkill' && type !== 'masterSkill')
       .map(type => {
@@ -82,7 +191,7 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
         };
       })
       .filter((s): s is AvailableSkill => s !== null);
-  }, []);
+  }, [skillFolder, folderSkills]);
 
   // Filter skills based on search query
   const filteredSkills = useMemo(() => {
@@ -200,10 +309,13 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
   const selectedSkillConfig = selectedSkillName ? skillsConfig[selectedSkillName] : undefined;
   const enabledCount = Object.values(skillsConfig).filter(c => c?.enabled).length;
 
+  console.log('[MasterSkillEditor] RENDER', { skillFolder, onSkillFolderChange: !!onSkillFolderChange, skillsConfig: Object.keys(skillsConfig) });
+
   return (
     <div style={{
       display: 'flex',
-      height: '100%',
+      flex: 1,
+      minHeight: 0,
       gap: theme.spacing.md,
       overflow: 'hidden'
     }}>
@@ -251,12 +363,36 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
           />
         </div>
 
+        {/* Skill Folder Dropdown */}
+        <div style={{ padding: theme.spacing.sm, borderBottom: `1px solid ${theme.colors.border}`, flexShrink: 0 }}>
+          <Select
+            value={skillFolder || 'assistant'}
+            onChange={(value) => {
+              onSkillFolderChange?.(value);
+              setSelectedSkillName(null);
+            }}
+            loading={!foldersLoaded}
+            disabled={!foldersLoaded}
+            getPopupContainer={(trigger) => trigger.parentElement || document.body}
+            style={{ width: '100%' }}
+            suffixIcon={<FolderOutlined style={{ color: theme.colors.textSecondary }} />}
+            options={availableFolders.map(f => ({
+              value: f.name,
+              label: `${f.name} (${f.skill_count})`,
+            }))}
+          />
+        </div>
+
         {/* Skills List */}
         <div style={{ flex: 1, overflowY: 'auto' }}>
-          {filteredSkills.length === 0 ? (
+          {folderLoading ? (
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: theme.spacing.lg }}>
+              <Spin tip="Scanning folder..." />
+            </div>
+          ) : filteredSkills.length === 0 ? (
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description="No skills found"
+              description={skillFolder ? `No skills found in skills/${skillFolder}/` : 'No skills found'}
               style={{ marginTop: theme.spacing.lg }}
             />
           ) : (
@@ -387,21 +523,32 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
               )}
             </div>
 
-            {/* Code Editor */}
-            <div style={{ flex: 1, padding: theme.spacing.md, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            {/* Skill Instructions Editor */}
+            <div ref={editorWrapperRef} style={{ flex: 1, padding: theme.spacing.md, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               {isLoading ? (
                 <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Spin tip="Loading..." />
                 </div>
               ) : (
-                <div style={{ flex: 1, minHeight: 0 }}>
-                  <CodeEditor
-                    value={selectedSkillConfig?.instructions || defaultInstructions[selectedSkillName!] || ''}
-                    onChange={(value) => handleUpdateInstructions(selectedSkillName!, value)}
-                    language="markdown"
-                    placeholder="Loading skill instructions..."
-                  />
-                </div>
+                <Input.TextArea
+                  value={selectedSkillConfig?.instructions || defaultInstructions[selectedSkillName!] || ''}
+                  onChange={(e) => handleUpdateInstructions(selectedSkillName!, e.target.value)}
+                  placeholder="Loading skill instructions..."
+                  spellCheck={false}
+                  autoSize={false}
+                  style={{
+                    flex: 1,
+                    minHeight: 0,
+                    resize: 'none',
+                    fontFamily: "'Consolas', 'Monaco', 'Fira Code', monospace",
+                    fontSize: 13,
+                    lineHeight: 1.5,
+                    backgroundColor: theme.colors.backgroundAlt,
+                    color: theme.colors.text,
+                    borderColor: theme.colors.border,
+                    borderRadius: theme.borderRadius.md,
+                  }}
+                />
               )}
 
               {/* Enable hint */}

@@ -1739,6 +1739,62 @@ async def handle_save_skill_content(data: Dict[str, Any], websocket: WebSocket) 
 
 
 @ws_handler()
+async def handle_list_skill_folders(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """List top-level subdirectories under server/skills/.
+
+    Returns folder names for the skill folder dropdown in MasterSkillEditor.
+    """
+    from pathlib import Path
+
+    server_dir = Path(__file__).parent.parent
+    skills_dir = server_dir / "skills"
+
+    folders = []
+    if skills_dir.exists():
+        for item in sorted(skills_dir.iterdir()):
+            if item.is_dir() and not item.name.startswith('.'):
+                # Count SKILL.md files inside
+                skill_count = len(list(item.rglob("SKILL.md")))
+                folders.append({
+                    "name": item.name,
+                    "skill_count": skill_count
+                })
+
+    return {"success": True, "folders": folders}
+
+
+@ws_handler("folder")
+async def handle_scan_skill_folder(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Scan a subfolder under server/skills/ for SKILL.md files.
+
+    Returns list of discovered skills with their metadata.
+    Used by MasterSkillEditor when skillFolder is set.
+    """
+    from pathlib import Path
+    from services.skill_loader import get_skill_loader
+
+    folder = data["folder"]
+    server_dir = Path(__file__).parent.parent
+    target_dir = server_dir / "skills" / folder
+
+    if not target_dir.exists():
+        return {"success": False, "error": f"Folder not found: skills/{folder}"}
+
+    skill_loader = get_skill_loader()
+    skills = []
+    for skill_md in target_dir.rglob("SKILL.md"):
+        metadata = skill_loader._parse_skill_metadata(skill_md)
+        if metadata:
+            skills.append({
+                "name": metadata.name,
+                "description": metadata.description,
+                "metadata": metadata.metadata
+            })
+
+    return {"success": True, "skills": skills, "folder": folder}
+
+
+@ws_handler()
 async def handle_get_user_skills(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
     """Get all user-created skills."""
     database = container.database()
@@ -2067,6 +2123,8 @@ MESSAGE_HANDLERS: Dict[str, MessageHandler] = {
     # Skill Content (built-in and user skills)
     "get_skill_content": handle_get_skill_content,
     "save_skill_content": handle_save_skill_content,
+    "scan_skill_folder": handle_scan_skill_folder,
+    "list_skill_folders": handle_list_skill_folders,
 
     # Memory and Skill Clear/Reset
     "clear_memory": handle_clear_memory,

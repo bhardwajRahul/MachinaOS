@@ -198,6 +198,86 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
     width: 260,
     height: 160,
   },
+  travel_agent: {
+    icon: <span style={{ fontSize: '28px' }}>✈️</span>,
+    title: 'Travel Agent',
+    subtitle: 'Travel Planning',
+    themeColorKey: 'orange',
+    bottomHandles: [
+      { id: 'input-skill', label: 'Skill', position: '25%' },
+      { id: 'input-tools', label: 'Tool', position: '75%' },
+    ],
+    leftHandles: [
+      { id: 'input-memory', label: 'Memory', position: '70%' },
+    ],
+    topOutputHandle: { id: 'output-top', label: 'Output' },
+    width: 260,
+    height: 160,
+  },
+  tool_agent: {
+    icon: <span style={{ fontSize: '28px' }}>🔧</span>,
+    title: 'Tool Agent',
+    subtitle: 'Tool Orchestration',
+    themeColorKey: 'yellow',
+    bottomHandles: [
+      { id: 'input-skill', label: 'Skill', position: '25%' },
+      { id: 'input-tools', label: 'Tool', position: '75%' },
+    ],
+    leftHandles: [
+      { id: 'input-memory', label: 'Memory', position: '70%' },
+    ],
+    topOutputHandle: { id: 'output-top', label: 'Output' },
+    width: 260,
+    height: 160,
+  },
+  productivity_agent: {
+    icon: <span style={{ fontSize: '28px' }}>⏰</span>,
+    title: 'Productivity Agent',
+    subtitle: 'Productivity',
+    themeColorKey: 'cyan',
+    bottomHandles: [
+      { id: 'input-skill', label: 'Skill', position: '25%' },
+      { id: 'input-tools', label: 'Tool', position: '75%' },
+    ],
+    leftHandles: [
+      { id: 'input-memory', label: 'Memory', position: '70%' },
+    ],
+    topOutputHandle: { id: 'output-top', label: 'Output' },
+    width: 260,
+    height: 160,
+  },
+  payments_agent: {
+    icon: <span style={{ fontSize: '28px' }}>💳</span>,
+    title: 'Payments Agent',
+    subtitle: 'Payment Processing',
+    themeColorKey: 'green',
+    bottomHandles: [
+      { id: 'input-skill', label: 'Skill', position: '25%' },
+      { id: 'input-tools', label: 'Tool', position: '75%' },
+    ],
+    leftHandles: [
+      { id: 'input-memory', label: 'Memory', position: '70%' },
+    ],
+    topOutputHandle: { id: 'output-top', label: 'Output' },
+    width: 260,
+    height: 160,
+  },
+  consumer_agent: {
+    icon: <span style={{ fontSize: '28px' }}>🛒</span>,
+    title: 'Consumer Agent',
+    subtitle: 'Consumer Support',
+    themeColorKey: 'purple',
+    bottomHandles: [
+      { id: 'input-skill', label: 'Skill', position: '25%' },
+      { id: 'input-tools', label: 'Tool', position: '75%' },
+    ],
+    leftHandles: [
+      { id: 'input-memory', label: 'Memory', position: '70%' },
+    ],
+    topOutputHandle: { id: 'output-top', label: 'Output' },
+    width: 260,
+    height: 160,
+  },
 };
 
 const AIAgentNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectable, selected }) => {

@@ -6,7 +6,8 @@ import { theme } from '../styles/theme';
 import {
   exportWorkflowToJSON as exportToJSON,
   exportWorkflowToFile as exportToFile,
-  importWorkflowFromJSON as importFromJSON
+  importWorkflowFromJSON as importFromJSON,
+  sanitizeNodes
 } from '../utils/workflowExport';
 import { workflowApi } from '../services/workflowApi';
 
@@ -202,11 +203,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
       lastModified: new Date(),
     };
 
-    // Save to database
+    // Save to database - sanitize node.data to only include UI fields (label, disabled, condition).
+    // Parameters live in the DB node_parameters table, not in node.data.
     const success = await workflowApi.saveWorkflow(
       updatedWorkflow.id,
       updatedWorkflow.name,
-      { nodes: updatedWorkflow.nodes, edges: updatedWorkflow.edges }
+      { nodes: sanitizeNodes(updatedWorkflow.nodes), edges: updatedWorkflow.edges }
     );
 
     if (!success) {
@@ -331,11 +333,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
         nodes: migratedNodes
       };
 
-      // Save migrated workflow to database
+      // Save migrated workflow to database (sanitize node.data)
       await workflowApi.saveWorkflow(
         migratedWorkflow.id,
         migratedWorkflow.name,
-        { nodes: migratedWorkflow.nodes, edges: migratedWorkflow.edges }
+        { nodes: sanitizeNodes(migratedWorkflow.nodes), edges: migratedWorkflow.edges }
       );
 
       set({

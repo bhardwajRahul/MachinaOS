@@ -4,6 +4,7 @@ import {
   NodeConnectionType,
   INodeProperties
 } from '../types/INodeProperties';
+import { dracula } from '../styles/theme';
 
 // ============================================================================
 // SHARED AI AGENT PROPERTIES - Used by Specialized Agent Nodes
@@ -126,7 +127,7 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
     version: 1,
     subtitle: 'Device Control',
     description: 'AI Agent specialized for Android device control. Connect skills, memory, and tool nodes to enable Android automation capabilities.',
-    defaults: { name: 'Android Control Agent', color: '#3DDC84' },
+    defaults: { name: 'Android Control Agent', color: dracula.green },
     inputs: [
       {
         name: 'main',
@@ -171,7 +172,7 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
     version: 1,
     subtitle: 'Code Execution',
     description: 'AI Agent specialized for code execution. Connect skills, memory, and code executor nodes to enable coding capabilities.',
-    defaults: { name: 'Coding Agent', color: '#61DAFB' },
+    defaults: { name: 'Coding Agent', color: dracula.cyan },
     inputs: [
       {
         name: 'main',
@@ -216,7 +217,7 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
     version: 1,
     subtitle: 'Browser Automation',
     description: 'AI Agent specialized for web automation. Connect skills, memory, and web control nodes to enable browser automation and HTTP capabilities.',
-    defaults: { name: 'Web Control Agent', color: '#FF6B6B' },
+    defaults: { name: 'Web Control Agent', color: dracula.pink },
     inputs: [
       {
         name: 'main',
@@ -261,7 +262,7 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
     version: 1,
     subtitle: 'Task Automation',
     description: 'AI Agent specialized for task management. Connect skills, memory, and task nodes to enable scheduling and reminder capabilities.',
-    defaults: { name: 'Task Management Agent', color: '#9B59B6' },
+    defaults: { name: 'Task Management Agent', color: dracula.purple },
     inputs: [
       {
         name: 'main',
@@ -306,7 +307,7 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
     version: 1,
     subtitle: 'Social Messaging',
     description: 'AI Agent specialized for social media. Connect skills, memory, and messaging nodes to enable WhatsApp, Telegram, and other social capabilities.',
-    defaults: { name: 'Social Media Agent', color: '#25D366' },
+    defaults: { name: 'Social Media Agent', color: dracula.green },
     inputs: [
       {
         name: 'main',
@@ -340,6 +341,231 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
       description: 'Agent output'
     }],
     properties: AI_AGENT_PROPERTIES
+  },
+
+  // Travel Agent - AI Agent with travel planning capabilities
+  travel_agent: {
+    displayName: 'Travel Agent',
+    name: 'travel_agent',
+    icon: '✈️',
+    group: ['agent', 'ai'],
+    version: 1,
+    subtitle: 'Travel Planning',
+    description: 'AI Agent specialized for travel planning. Connect skills, memory, and tool nodes to enable itinerary building, location lookups, and travel recommendations.',
+    defaults: { name: 'Travel Agent', color: dracula.orange },
+    inputs: [
+      {
+        name: 'main',
+        displayName: 'Input',
+        type: 'main' as NodeConnectionType,
+        description: 'Agent input'
+      },
+      {
+        name: 'skill',
+        displayName: 'Skill',
+        type: 'main' as NodeConnectionType,
+        description: 'Skill nodes that provide context and instructions'
+      },
+      {
+        name: 'memory',
+        displayName: 'Memory',
+        type: 'main' as NodeConnectionType,
+        description: 'Memory node for conversation history'
+      },
+      {
+        name: 'tools',
+        displayName: 'Tool',
+        type: 'main' as NodeConnectionType,
+        description: 'Tool nodes for travel planning (maps, HTTP, search, etc.)'
+      }
+    ],
+    outputs: [{
+      name: 'main',
+      displayName: 'Output',
+      type: 'main' as NodeConnectionType,
+      description: 'Agent output'
+    }],
+    properties: AI_AGENT_PROPERTIES
+  },
+
+  // Tool Agent - AI Agent for orchestrating multiple tools
+  tool_agent: {
+    displayName: 'Tool Agent',
+    name: 'tool_agent',
+    icon: '🔧',
+    group: ['agent', 'ai'],
+    version: 1,
+    subtitle: 'Tool Orchestration',
+    description: 'AI Agent specialized for tool orchestration. Connect skills, memory, and multiple tool nodes to enable multi-tool workflows and complex task execution.',
+    defaults: { name: 'Tool Agent', color: dracula.yellow },
+    inputs: [
+      {
+        name: 'main',
+        displayName: 'Input',
+        type: 'main' as NodeConnectionType,
+        description: 'Agent input'
+      },
+      {
+        name: 'skill',
+        displayName: 'Skill',
+        type: 'main' as NodeConnectionType,
+        description: 'Skill nodes that provide context and instructions'
+      },
+      {
+        name: 'memory',
+        displayName: 'Memory',
+        type: 'main' as NodeConnectionType,
+        description: 'Memory node for conversation history'
+      },
+      {
+        name: 'tools',
+        displayName: 'Tool',
+        type: 'main' as NodeConnectionType,
+        description: 'Tool nodes to orchestrate (calculators, HTTP, search, code, etc.)'
+      }
+    ],
+    outputs: [{
+      name: 'main',
+      displayName: 'Output',
+      type: 'main' as NodeConnectionType,
+      description: 'Agent output'
+    }],
+    properties: AI_AGENT_PROPERTIES
+  },
+
+  // Productivity Agent - AI Agent for productivity and time management
+  productivity_agent: {
+    displayName: 'Productivity Agent',
+    name: 'productivity_agent',
+    icon: '⏰',
+    group: ['agent', 'ai'],
+    version: 1,
+    subtitle: 'Productivity',
+    description: 'AI Agent specialized for productivity. Connect skills, memory, and tool nodes to enable scheduling, reminders, note-taking, and workflow automation.',
+    defaults: { name: 'Productivity Agent', color: dracula.cyan },
+    inputs: [
+      {
+        name: 'main',
+        displayName: 'Input',
+        type: 'main' as NodeConnectionType,
+        description: 'Agent input'
+      },
+      {
+        name: 'skill',
+        displayName: 'Skill',
+        type: 'main' as NodeConnectionType,
+        description: 'Skill nodes that provide context and instructions'
+      },
+      {
+        name: 'memory',
+        displayName: 'Memory',
+        type: 'main' as NodeConnectionType,
+        description: 'Memory node for conversation history'
+      },
+      {
+        name: 'tools',
+        displayName: 'Tool',
+        type: 'main' as NodeConnectionType,
+        description: 'Tool nodes for productivity (scheduler, HTTP, code, etc.)'
+      }
+    ],
+    outputs: [{
+      name: 'main',
+      displayName: 'Output',
+      type: 'main' as NodeConnectionType,
+      description: 'Agent output'
+    }],
+    properties: AI_AGENT_PROPERTIES
+  },
+
+  // Payments Agent - AI Agent for payment processing and financial operations
+  payments_agent: {
+    displayName: 'Payments Agent',
+    name: 'payments_agent',
+    icon: '💳',
+    group: ['agent', 'ai'],
+    version: 1,
+    subtitle: 'Payment Processing',
+    description: 'AI Agent specialized for payment processing. Connect skills, memory, and tool nodes to enable payment workflows, invoice generation, and financial operations.',
+    defaults: { name: 'Payments Agent', color: dracula.green },
+    inputs: [
+      {
+        name: 'main',
+        displayName: 'Input',
+        type: 'main' as NodeConnectionType,
+        description: 'Agent input'
+      },
+      {
+        name: 'skill',
+        displayName: 'Skill',
+        type: 'main' as NodeConnectionType,
+        description: 'Skill nodes that provide context and instructions'
+      },
+      {
+        name: 'memory',
+        displayName: 'Memory',
+        type: 'main' as NodeConnectionType,
+        description: 'Memory node for conversation history'
+      },
+      {
+        name: 'tools',
+        displayName: 'Tool',
+        type: 'main' as NodeConnectionType,
+        description: 'Tool nodes for payment processing (HTTP, code, etc.)'
+      }
+    ],
+    outputs: [{
+      name: 'main',
+      displayName: 'Output',
+      type: 'main' as NodeConnectionType,
+      description: 'Agent output'
+    }],
+    properties: AI_AGENT_PROPERTIES
+  },
+
+  // Consumer Agent - AI Agent for consumer interactions and support
+  consumer_agent: {
+    displayName: 'Consumer Agent',
+    name: 'consumer_agent',
+    icon: '🛒',
+    group: ['agent', 'ai'],
+    version: 1,
+    subtitle: 'Consumer Support',
+    description: 'AI Agent specialized for consumer interactions. Connect skills, memory, and tool nodes to enable customer support, product recommendations, and order management.',
+    defaults: { name: 'Consumer Agent', color: dracula.purple },
+    inputs: [
+      {
+        name: 'main',
+        displayName: 'Input',
+        type: 'main' as NodeConnectionType,
+        description: 'Agent input'
+      },
+      {
+        name: 'skill',
+        displayName: 'Skill',
+        type: 'main' as NodeConnectionType,
+        description: 'Skill nodes that provide context and instructions'
+      },
+      {
+        name: 'memory',
+        displayName: 'Memory',
+        type: 'main' as NodeConnectionType,
+        description: 'Memory node for conversation history'
+      },
+      {
+        name: 'tools',
+        displayName: 'Tool',
+        type: 'main' as NodeConnectionType,
+        description: 'Tool nodes for consumer operations (HTTP, search, code, etc.)'
+      }
+    ],
+    outputs: [{
+      name: 'main',
+      displayName: 'Output',
+      type: 'main' as NodeConnectionType,
+      description: 'Agent output'
+    }],
+    properties: AI_AGENT_PROPERTIES
   }
 };
 
@@ -348,4 +574,4 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
 // ============================================================================
 
 // List of specialized agent node types for identification
-export const SPECIALIZED_AGENT_TYPES = ['android_agent', 'coding_agent', 'web_agent', 'task_agent', 'social_agent'];
+export const SPECIALIZED_AGENT_TYPES = ['android_agent', 'coding_agent', 'web_agent', 'task_agent', 'social_agent', 'travel_agent', 'tool_agent', 'productivity_agent', 'payments_agent', 'consumer_agent'];

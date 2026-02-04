@@ -51,6 +51,10 @@ async def _collect_agent_connections(
     # Log incoming edges for debugging
     incoming_edges = [e for e in edges if e.get('target') == node_id]
     logger.info(f"{log_prefix} Incoming edges to {node_id}: {len(incoming_edges)}")
+    if not incoming_edges:
+        # Debug: show all edge targets to diagnose missing connections
+        edge_targets = set(e.get('target') for e in edges)
+        logger.debug(f"{log_prefix} All edge targets in graph: {edge_targets}")
     for e in incoming_edges:
         logger.debug(f"{log_prefix} Edge: source={e.get('source')}, targetHandle={e.get('targetHandle')}")
 
@@ -109,23 +113,19 @@ async def _collect_agent_connections(
                     if not skill_cfg.get('enabled', False):
                         continue
 
-                    # Load instructions: use customized if available, otherwise load from skill folder
-                    instructions = ''
-                    if skill_cfg.get('isCustomized', False) and skill_cfg.get('instructions'):
-                        # Use customized instructions from config
-                        instructions = skill_cfg.get('instructions', '')
-                        logger.debug(f"{log_prefix} Using customized instructions for {skill_key}")
+                    # DB is source of truth - use instructions from skillsConfig
+                    instructions = skill_cfg.get('instructions', '')
+                    if instructions:
+                        logger.debug(f"{log_prefix} Using DB instructions for {skill_key}")
                     else:
-                        # Load from skill folder via skill_loader
+                        # Fallback: load from skill folder for legacy data missing instructions
                         try:
                             skill = skill_loader.load_skill(skill_key)
                             if skill:
                                 instructions = skill.instructions
-                                logger.debug(f"{log_prefix} Loaded instructions from skill folder for {skill_key}")
+                                logger.debug(f"{log_prefix} Fallback: loaded instructions from skill folder for {skill_key}")
                         except Exception as e:
                             logger.warning(f"{log_prefix} Failed to load skill {skill_key}: {e}")
-                            # Fallback to config instructions if available
-                            instructions = skill_cfg.get('instructions', '')
 
                     # Create a skill entry for each enabled skill in the config
                     skill_entry = {

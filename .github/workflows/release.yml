@@ -1,0 +1,23 @@
+# Release workflow - chained: predeploy validation gate -> deploy publish
+# Triggers on version tags and GitHub releases
+
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  predeploy:
+    uses: ./.github/workflows/predeploy.yml
+
+  deploy:
+    needs: predeploy
+    uses: ./.github/workflows/deploy.yml
+    permissions:
+      contents: read
+      id-token: write
+      packages: write

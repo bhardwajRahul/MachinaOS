@@ -5,6 +5,8 @@ metadata:
   author: machina
   version: "3.0"
   category: messaging
+  icon: "💬"
+  color: "#25D366"
 ---
 
 # WhatsApp Messaging Skill

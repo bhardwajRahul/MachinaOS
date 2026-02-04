@@ -5,6 +5,8 @@ metadata:
   author: machina
   version: "1.0"
   category: assistant
+  icon: "✨"
+  color: "#D97706"
 ---
 
 # Assistant Personality

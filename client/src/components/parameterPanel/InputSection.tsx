@@ -86,7 +86,8 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
       // Agent node types that support skills (have input-skill handle)
       const AGENT_WITH_SKILLS_TYPES = [
         'aiAgent', 'chatAgent', 'android_agent', 'coding_agent',
-        'web_agent', 'task_agent', 'social_agent'
+        'web_agent', 'task_agent', 'social_agent', 'travel_agent',
+        'tool_agent', 'productivity_agent', 'payments_agent', 'consumer_agent'
       ];
       // Check if current node is an agent that shows skills in Middle Section
       const isAgentWithSkills = AGENT_WITH_SKILLS_TYPES.includes(currentNodeType || '');
@@ -474,7 +475,7 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
             const isMemory = nodeType === 'simpleMemory';
             const nodeTypeLower = nodeType.toLowerCase();
             // AI agent types that use the AI output schema
-            const aiAgentTypes = ['aiAgent', 'chatAgent', 'android_agent', 'coding_agent', 'web_agent', 'task_agent', 'social_agent'];
+            const aiAgentTypes = ['aiAgent', 'chatAgent', 'android_agent', 'coding_agent', 'web_agent', 'task_agent', 'social_agent', 'travel_agent', 'tool_agent', 'productivity_agent', 'payments_agent', 'consumer_agent'];
             const isAI = !isMemory && (nodeTypeLower.includes('chatmodel') || aiAgentTypes.includes(nodeType));
             const isFile = nodeType.includes('file');
             const isWhatsAppDb = nodeType === 'whatsappDb';

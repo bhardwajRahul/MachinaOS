@@ -5,6 +5,8 @@ metadata:
   author: machina
   version: "2.0"
   category: device
+  icon: "📱"
+  color: "#3DDC84"
 ---
 
 # Android Device Control

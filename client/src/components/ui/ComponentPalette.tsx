@@ -19,11 +19,11 @@ const CATEGORY_EMOJIS: Record<string, string> = {
   android: '📱',
   chat: '💭',
   code: '💻',
-  data: '🗄️',
-  util: '🔧',
+  document: '🗄️',
+  utility: '🔧',
 };
 
-// Categories that should be merged into 'social' (Social Media Platforms)
+// Categories that should be merged into 'social' (Social Media)
 const SOCIAL_CATEGORIES = ['whatsapp', 'social'];
 
 // Categories shown in simple (noob) mode - only AI related
@@ -57,24 +57,24 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
       android: colors.categoryAndroid || theme.dracula.cyan,
       chat: colors.categoryChat || theme.dracula.yellow,
       code: colors.categoryCode || theme.dracula.orange,
-      data: colors.categoryTrigger || theme.dracula.pink,
-      util: colors.categoryUtil || theme.dracula.purple,
+      document: colors.categoryTrigger || theme.dracula.pink,
+      utility: colors.categoryUtil || theme.dracula.purple,
     };
     const labelMap: Record<string, string> = {
-      workflow: 'Workflow',
+      workflow: 'Workflows',
       trigger: 'Triggers',
       ai: 'AI',
       agent: 'AI Agents',
       model: 'AI Models',
       skill: 'AI Skills',
       tool: 'AI Tools',
-      location: 'Google Maps',
-      social: 'Social Media Platforms',
+      location: 'Location',
+      social: 'Social',
       android: 'Android',
       chat: 'Chat',
-      code: 'Code Executors',
-      data: 'Data',
-      util: 'Utilities',
+      code: 'Code',
+      document: 'Documents',
+      utility: 'Utilities',
     };
     return {
       icon: CATEGORY_EMOJIS[key] || '📦',

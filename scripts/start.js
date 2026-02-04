@@ -196,9 +196,11 @@ log('Starting services...');
 log('Press Ctrl+C to stop (use npm run stop to kill all services)\n');
 
 // Detect if we should run dev mode (vite) or production mode (static serve)
+// Check for vite in both root (npm workspaces hoist here) and client node_modules
 const clientDist = resolve(ROOT, 'client', 'dist', 'index.html');
-const clientNodeModules = resolve(ROOT, 'client', 'node_modules');
-const isProduction = existsSync(clientDist) && !existsSync(clientNodeModules);
+const hasVite = existsSync(resolve(ROOT, 'node_modules', 'vite'))
+  || existsSync(resolve(ROOT, 'client', 'node_modules', 'vite'));
+const isProduction = existsSync(clientDist) && !hasVite;
 
 if (isProduction) {
   log('Mode: Production (serving pre-built client)');

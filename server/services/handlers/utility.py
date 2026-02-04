@@ -422,9 +422,9 @@ def _calculate_wait_seconds(parameters: Dict[str, Any]) -> int:
         case 'seconds':
             return int(parameters.get('interval', 30))
         case 'minutes':
-            return int(parameters.get('intervalMinutes', 5)) * 60
+            return int(parameters.get('interval_minutes', 5)) * 60
         case 'hours':
-            return int(parameters.get('intervalHours', 1)) * 3600
+            return int(parameters.get('interval_hours', 1)) * 3600
         case 'days':
             return 24 * 3600  # Wait 24 hours
         case 'weeks':
@@ -461,23 +461,23 @@ def _get_schedule_description(parameters: Dict[str, Any]) -> str:
             interval = parameters.get('interval', 30)
             return f"Every {interval} seconds"
         case 'minutes':
-            interval = parameters.get('intervalMinutes', 5)
+            interval = parameters.get('interval_minutes', 5)
             return f"Every {interval} minutes"
         case 'hours':
-            interval = parameters.get('intervalHours', 1)
+            interval = parameters.get('interval_hours', 1)
             return f"Every {interval} hours"
         case 'days':
-            time_str = parameters.get('dailyTime', '09:00')
+            time_str = parameters.get('daily_time', '09:00')
             return f"Daily at {time_str}"
         case 'weeks':
             weekday = parameters.get('weekday', '1')
-            time_str = parameters.get('weeklyTime', '09:00')
+            time_str = parameters.get('weekly_time', '09:00')
             days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
             day_name = days[int(weekday)] if weekday.isdigit() else weekday
             return f"Weekly on {day_name} at {time_str}"
         case 'months':
-            day = parameters.get('monthDay', '1')
-            time_str = parameters.get('monthlyTime', '09:00')
+            day = parameters.get('month_day', '1')
+            time_str = parameters.get('monthly_time', '09:00')
             return f"Monthly on day {day} at {time_str}"
         case 'once':
             return "Once (no repeat)"

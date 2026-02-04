@@ -206,17 +206,18 @@ class StartNodeParams(BaseNodeParams):
 
 
 class CronSchedulerParams(BaseNodeParams):
-    """Parameters for cron scheduler node."""
+    """Parameters for cron scheduler node. Also used as AI tool schema."""
     type: Literal["cronScheduler"]
-    frequency: Literal["seconds", "minutes", "hours", "days", "weeks", "months", "once"] = "minutes"
-    interval: int = Field(default=5, ge=1)
-    interval_minutes: int = Field(default=5, alias="intervalMinutes", ge=1)
-    interval_hours: int = Field(default=1, alias="intervalHours", ge=1)
-    daily_time: str = Field(default="09:00", alias="dailyTime")
-    weekly_time: str = Field(default="09:00", alias="weeklyTime")
-    weekday: str = Field(default="1")
-    monthly_time: str = Field(default="09:00", alias="monthlyTime")
-    month_day: str = Field(default="1", alias="monthDay")
+    frequency: Literal["seconds", "minutes", "hours", "days", "weeks", "months", "once"] = Field(default="minutes", description="Schedule frequency")
+    interval: int = Field(default=5, ge=1, description="Interval for seconds frequency (5-59)")
+    interval_minutes: int = Field(default=5, ge=1, description="Interval for minutes frequency (1-59)")
+    interval_hours: int = Field(default=1, ge=1, description="Interval for hours frequency (1-23)")
+    daily_time: str = Field(default="09:00", description="Time for daily frequency (HH:MM format)")
+    weekly_time: str = Field(default="09:00", description="Time for weekly frequency (HH:MM format)")
+    weekday: str = Field(default="1", description="Day of week for weekly: '0'=Sunday .. '6'=Saturday")
+    monthly_time: str = Field(default="09:00", description="Time for monthly frequency (HH:MM format)")
+    month_day: str = Field(default="1", description="Day of month: '1'-'28' or 'L' for last day")
+    timezone: str = Field(default="UTC", description="Timezone e.g. UTC, America/New_York, Asia/Tokyo")
 
 
 class WorkflowTriggerParams(BaseNodeParams):

@@ -36,7 +36,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     <div style={{
       height: '100%',
       borderRadius: theme.borderRadius.md,
-      overflow: 'hidden',
+      overflow: 'auto',
       border: `1px solid ${theme.colors.border}`
     }}>
       <style>{`
@@ -69,8 +69,8 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
             backgroundColor: theme.colors.backgroundAlt,
             color: theme.colors.text,
             minHeight: '100%',
-            height: '100%',
-            overflow: 'auto'
+            height: 'auto',
+            overflow: 'visible'
           }}
         />
       </div>

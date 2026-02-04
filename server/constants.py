@@ -27,6 +27,11 @@ AI_AGENT_TYPES: FrozenSet[str] = frozenset([
     'web_agent',
     'task_agent',
     'social_agent',
+    'travel_agent',
+    'tool_agent',
+    'productivity_agent',
+    'payments_agent',
+    'consumer_agent',
 ])
 
 AI_MEMORY_TYPES: FrozenSet[str] = frozenset([

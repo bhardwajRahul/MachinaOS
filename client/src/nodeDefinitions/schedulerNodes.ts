@@ -7,10 +7,10 @@ export const schedulerNodes: Record<string, INodeTypeDescription> = {
     displayName: 'Timer',
     name: 'timer',
     icon: '⏱️',
-    group: ['utility', 'workflow'],
+    group: ['utility', 'workflow', 'tool'],
     version: 1,
     subtitle: '={{$parameter["duration"]}} {{$parameter["unit"]}}',
-    description: 'Wait for a specified duration before continuing',
+    description: 'Wait for a specified duration before continuing. Can also be used as an AI Agent tool.',
     defaults: { name: 'Timer', color: '#10b981' },
     inputs: [{
       name: 'main',
@@ -18,12 +18,20 @@ export const schedulerNodes: Record<string, INodeTypeDescription> = {
       type: 'main' as NodeConnectionType,
       description: 'Trigger to start timer'
     }],
-    outputs: [{
-      name: 'main',
-      displayName: 'Output',
-      type: 'main' as NodeConnectionType,
-      description: 'timestamp, elapsed_ms, duration, unit'
-    }],
+    outputs: [
+      {
+        name: 'main',
+        displayName: 'Output',
+        type: 'main' as NodeConnectionType,
+        description: 'timestamp, elapsed_ms, duration, unit'
+      },
+      {
+        name: 'tool',
+        displayName: 'Tool',
+        type: 'main' as NodeConnectionType,
+        description: 'Connect to AI Agent tool handle'
+      }
+    ],
     properties: [
       {
         displayName: 'Duration',
@@ -57,18 +65,26 @@ export const schedulerNodes: Record<string, INodeTypeDescription> = {
     displayName: 'Cron Scheduler',
     name: 'cronScheduler',
     icon: '⏰',
-    group: ['trigger', 'workflow'],
+    group: ['trigger', 'workflow', 'tool'],
     version: 1,
     subtitle: '={{$parameter["frequency"]}}',
-    description: 'Trigger workflow execution on a schedule',
+    description: 'Trigger workflow execution on a schedule. Can also be used as an AI Agent tool.',
     defaults: { name: 'Cron Scheduler', color: '#6366f1' },
     inputs: [],
-    outputs: [{
-      name: 'main',
-      displayName: 'Trigger',
-      type: 'main' as NodeConnectionType,
-      description: 'timestamp, iteration, scheduled_time, next_run'
-    }],
+    outputs: [
+      {
+        name: 'main',
+        displayName: 'Trigger',
+        type: 'main' as NodeConnectionType,
+        description: 'timestamp, iteration, scheduled_time, next_run'
+      },
+      {
+        name: 'tool',
+        displayName: 'Tool',
+        type: 'main' as NodeConnectionType,
+        description: 'Connect to AI Agent tool handle'
+      }
+    ],
     properties: [
       // Duration Type
       {
@@ -98,7 +114,7 @@ export const schedulerNodes: Record<string, INodeTypeDescription> = {
       },
       {
         displayName: 'Interval',
-        name: 'intervalMinutes',
+        name: 'interval_minutes',
         type: 'number',
         default: 5,
         description: 'Run every X minutes (1-59)',
@@ -106,7 +122,7 @@ export const schedulerNodes: Record<string, INodeTypeDescription> = {
       },
       {
         displayName: 'Interval',
-        name: 'intervalHours',
+        name: 'interval_hours',
         type: 'number',
         default: 1,
         description: 'Run every X hours (1-23)',
@@ -115,7 +131,7 @@ export const schedulerNodes: Record<string, INodeTypeDescription> = {
       // Time for daily
       {
         displayName: 'At Time',
-        name: 'dailyTime',
+        name: 'daily_time',
         type: 'options',
         default: '09:00',
         options: [
@@ -154,7 +170,7 @@ export const schedulerNodes: Record<string, INodeTypeDescription> = {
       },
       {
         displayName: 'At Time',
-        name: 'weeklyTime',
+        name: 'weekly_time',
         type: 'options',
         default: '09:00',
         options: [
@@ -171,7 +187,7 @@ export const schedulerNodes: Record<string, INodeTypeDescription> = {
       // Day of month + Time for monthly
       {
         displayName: 'On Day',
-        name: 'monthDay',
+        name: 'month_day',
         type: 'options',
         default: '1',
         options: [
@@ -183,7 +199,7 @@ export const schedulerNodes: Record<string, INodeTypeDescription> = {
       },
       {
         displayName: 'At Time',
-        name: 'monthlyTime',
+        name: 'monthly_time',
         type: 'options',
         default: '09:00',
         options: [

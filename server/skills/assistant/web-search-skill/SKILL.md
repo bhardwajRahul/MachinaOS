@@ -6,6 +6,8 @@ metadata:
   author: machina
   version: "1.0"
   category: search
+  icon: "🔍"
+  color: "#bd93f9"
 ---
 
 # Web Search Skill

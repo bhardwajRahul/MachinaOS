@@ -11,7 +11,7 @@ This is a React Flow-based workflow automation platform implementing n8n-inspire
 |----------|-------------|
 | **[Node Creation Guide](./docs-internal/node_creation.md)** | Complete guide for creating new nodes (frontend definitions, backend handlers, config nodes, triggers) |
 | **[AI Tool Node Guide](./docs-internal/ai_tool_node_creation.md)** | Detailed guide for creating dedicated AI Agent tool nodes (schemas, handlers, toolkits) |
-| **[Specialized Agent Guide](./docs-internal/specialized_agent_node_creation.md)** | Guide for creating specialized AI agents (Android, Coding, Web, Social, Task) with full AI configuration |
+| **[Specialized Agent Guide](./docs-internal/specialized_agent_node_creation.md)** | Guide for creating specialized AI agents (Android, Coding, Web, Task, Social, Travel, Tool, Productivity, Payments, Consumer) with full AI configuration |
 | **[Dual-Purpose Tool Guide](./docs-internal/dual_purpose_tool_node_creation.md)** | Guide for nodes that work as both workflow nodes AND AI Agent tools (e.g., whatsappSend) |
 | **[Workflow Schema](./docs-internal/workflow-schema.md)** | JSON schema for workflows, edge handle conventions, config node architecture |
 | **[Execution Engine Design](./docs-internal/DESIGN.md)** | Architecture patterns, design standards, and implementation details for the workflow execution engine |
@@ -19,6 +19,7 @@ This is a React Flow-based workflow automation platform implementing n8n-inspire
 | **[Setup Guide](./docs-internal/SETUP.md)** | Development environment setup and installation instructions |
 | **[Scripts Reference](./docs-internal/SCRIPTS.md)** | Available npm/shell scripts and their usage |
 | **[Server Documentation](./docs-internal/server-readme.md)** | Python backend architecture and API documentation |
+| **[Skill Creation Guide](./server/skills/GUIDE.md)** | How to create new skills (folder structure, SKILL.md format, metadata, supporting files) |
 | **[Polyglot Server](../polyglot-server/ARCHITECTURE.md)** | Plugin registry microservice with MCP gateway (optional integration) |
 
 ## Design Principles & Standards
@@ -284,8 +285,8 @@ class CacheEntry(SQLModel, table=True):
 
 ## Codebase Summary
 - **Hybrid architecture**: Node.js + Python + React TypeScript
-- **63 implemented workflow nodes** with clean service separation (6 AI models + 3 AI agents/memory + 5 specialized agents + 10 skills + 4 dedicated tools + 2 dual-purpose tools + 16 Android + 4 WhatsApp + 3 Location + 1 Code + 3 Utility + 6 Document)
-- **WebSocket-First Architecture**: WebSocket as primary frontend-backend communication (25 message types)
+- **68 implemented workflow nodes** with clean service separation (6 AI models + 3 AI agents/memory + 10 specialized agents + 10 skills + 4 dedicated tools + 2 dual-purpose tools + 16 Android + 4 WhatsApp + 3 Location + 1 Code + 3 Utility + 6 Document)
+- **WebSocket-First Architecture**: WebSocket as primary frontend-backend communication (32 message types)
 - **Recent optimizations**: REST APIs replaced with WebSocket, AI endpoints migrated to Python, Android automation integrated
 
 ## Architecture Refactoring
@@ -309,7 +310,7 @@ The project was completely refactored from schema-based node definitions to expl
 - `src/nodeDefinitions/aiModelNodes.ts` - AI chat model definitions using factory pattern
 - `src/nodeDefinitions/aiAgentNodes.ts` - AI agent and processing components
 - `src/nodeDefinitions/skillNodes.ts` - Skill node definitions (10 nodes including masterSkill)
-- `src/nodeDefinitions/specializedAgentNodes.ts` - Specialized AI agent definitions (5 nodes) with shared AI_AGENT_PROPERTIES
+- `src/nodeDefinitions/specializedAgentNodes.ts` - Specialized AI agent definitions (10 nodes) with shared AI_AGENT_PROPERTIES and centralized dracula theming
 - `src/nodeDefinitions/androidServiceNodes.ts` - 16 Android service nodes (monitoring, apps, automation, sensors, media)
 - `src/nodeDefinitions/androidDeviceNodes.ts` - Android device setup and ADB port forwarding
 - `src/nodeDefinitions/locationNodes.ts` - Google Maps and location services
@@ -427,7 +428,7 @@ React Flow edges use dynamic Dracula colors via `getEdgeStyles(theme.dracula)`:
 ### WebSocket-First Architecture
 The project uses WebSocket as the primary communication method between frontend and backend, replacing most REST API calls:
 - `src/contexts/WebSocketContext.tsx` - Central WebSocket context with request/response pattern
-- `server/routers/websocket.py` - WebSocket endpoint with 25 message handlers
+- `server/routers/websocket.py` - WebSocket endpoint with 32 message handlers
 - `server/services/status_broadcaster.py` - Connection management and broadcasting
 
 ## Implemented Node Types
@@ -461,15 +462,23 @@ Skill nodes connect to Zeenie's `input-skill` handle to provide capabilities def
 - **customSkill**: User-created custom skill with configurable capabilities (select from database)
 
 #### Skill Node Architecture
-Skills are modular capabilities defined in Markdown files:
+Skills are organized in subfolders under `server/skills/`. Each top-level folder appears as an option in the Master Skill node's folder dropdown. See **[Skill Creation Guide](./server/skills/GUIDE.md)** for full documentation.
+
 ```
 server/skills/
-├── claude-assistant/SKILL.md    # Default assistant behavior
-├── whatsapp-skill/SKILL.md      # WhatsApp messaging
-├── memory-skill/SKILL.md        # Memory management
-├── maps-skill/SKILL.md          # Location services
-├── http-skill/SKILL.md          # HTTP requests
-└── scheduler-skill/SKILL.md     # Task scheduling
+├── GUIDE.md                              # Skill creation guide
+├── assistant/                            # General-purpose assistant skills
+│   ├── assistant-personality/SKILL.md
+│   ├── code-skill/SKILL.md
+│   ├── http-skill/SKILL.md
+│   ├── maps-skill/SKILL.md
+│   ├── memory-skill/SKILL.md
+│   ├── scheduler-skill/SKILL.md
+│   ├── web-search-skill/SKILL.md
+│   └── whatsapp-skill/SKILL.md
+└── android/                              # Android device control skills
+    ├── personality/SKILL.md
+    └── skill/SKILL.md
 ```
 
 **SKILL.md Format:**
@@ -481,16 +490,25 @@ allowed-tools: tool1 tool2
 metadata:
   author: machina
   version: "1.0"
+  category: general
+  icon: "🔧"
+  color: "#6366F1"
 ---
 
 # Skill Instructions (Markdown)
 Detailed instructions loaded when skill is activated.
 ```
 
+**Skill Content Lifecycle:**
+1. First load reads from SKILL.md on disk, seeds to database
+2. Database is source of truth after first activation
+3. Users edit instructions in UI, edits saved to DB only
+4. "Reset to Default" reloads from original SKILL.md file
+
 #### Skill Content Editor
-Skill nodes display a code editor (markdown syntax highlighting) to view and edit SKILL.md content:
+Skill nodes display an Ant Design `Input.TextArea` (markdown content) to view and edit instructions:
 - Instructions loaded automatically when skill node is selected
-- Save button writes changes back to SKILL.md file
+- Save button writes changes back to database
 - Uses `get_skill_content` / `save_skill_content` WebSocket handlers
 - **No Input/Output panels**: Skill nodes only show the middle section (parameters + editor) in the parameter panel
 
@@ -500,7 +518,7 @@ Skill nodes display a code editor (markdown syntax highlighting) to view and edi
 | `client/src/nodeDefinitions/skillNodes.ts` | Skill node definitions with factory pattern |
 | `client/src/hooks/useParameterPanel.ts` | Loads/saves skill content for skill nodes |
 | `server/services/skill_loader.py` | SkillLoader for filesystem and database skills |
-| `server/routers/websocket.py` | `get_skill_content`, `save_skill_content` handlers |
+| `server/routers/websocket.py` | `get_skill_content`, `save_skill_content`, `list_skill_folders`, `scan_skill_folder` handlers |
 
 #### Master Skill Editor
 The Master Skill node uses a custom split-panel editor (`MasterSkillEditor.tsx`) instead of standard parameters:
@@ -508,7 +526,7 @@ The Master Skill node uses a custom split-panel editor (`MasterSkillEditor.tsx`)
 **UI Layout:**
 ```
 +----------------------------------------------------------+
-| Master Skill Editor                                       |
+| [Folder Dropdown: assistant v]                            |
 +----------------------------------------------------------+
 | +--------------------+ +--------------------------------+ |
 | | SKILLS LIST        | | SKILL INSTRUCTIONS             | |
@@ -523,6 +541,23 @@ The Master Skill node uses a custom split-panel editor (`MasterSkillEditor.tsx`)
 | +--------------------+ +--------------------------------+ |
 +----------------------------------------------------------+
 ```
+
+**Folder Dropdown:**
+- Ant Design `Select` listing available skill folders from backend via `list_skill_folders` WebSocket handler
+- Shows loading/disabled state while folders are being fetched
+- Uses `getPopupContainer` to ensure dropdown renders correctly regardless of parent overflow
+- Default folder: `assistant`
+
+**Icon Resolution Priority:**
+Skill icons are resolved in this order (node definition first for SVG support):
+1. `skillNodes.ts` node definition icon (supports SVG data URIs, e.g., WhatsApp logo)
+2. SKILL.md metadata `icon` field (emoji strings)
+3. Default fallback
+
+Implemented via `getNodeDefaults()` helper that looks up icon/color from `skillNodes.ts` by matching `skillName` property.
+
+**Keyboard Handling:**
+The editor uses a native DOM `addEventListener('keydown')` on a wrapper div (via `useRef`) to `stopPropagation()` for Ctrl/Meta key events. This prevents React Flow's document-level `useKeyPress` hook from intercepting Ctrl+A (select all) and other Ctrl shortcuts inside the textarea. React synthetic `stopPropagation()` is insufficient because React Flow uses native `document.addEventListener`.
 
 **Data Structure:**
 ```typescript
@@ -557,9 +592,10 @@ if skill_type == 'masterSkill':
 **Key Files:**
 | File | Description |
 |------|-------------|
-| `client/src/components/parameterPanel/MasterSkillEditor.tsx` | Split-panel skill aggregator UI |
+| `client/src/components/parameterPanel/MasterSkillEditor.tsx` | Split-panel skill aggregator UI with folder dropdown |
 | `client/src/nodeDefinitions/skillNodes.ts` | masterSkill node definition |
 | `server/services/handlers/ai.py` | Expands masterSkill into individual skills |
+| `server/skills/GUIDE.md` | Skill creation guide |
 
 ### AI Agent Tool Nodes (3 dedicated + 6 dual-purpose)
 Tool nodes connect to AI Agent's `input-tools` handle to provide capabilities the agent can invoke during reasoning.
@@ -569,8 +605,8 @@ Tool nodes connect to AI Agent's `input-tools` handle to provide capabilities th
 - **currentTimeTool**: Get current date/time with timezone support
 - **webSearchTool**: Web search via DuckDuckGo (free, uses `ddgs` library) or Serper API with configurable max results
 
-### Specialized AI Agents (5 nodes)
-Specialized agents are AI Agents pre-configured for specific domains. They inherit full AI Agent functionality (provider, model, prompt, system message, thinking/reasoning) while being tailored for specific capabilities. All specialized agents route to `handle_chat_agent` in the backend and support the same input handles.
+### Specialized AI Agents (10 nodes)
+Specialized agents are AI Agents pre-configured for specific domains. They inherit full AI Agent functionality (provider, model, prompt, system message, thinking/reasoning) while being tailored for specific capabilities. All specialized agents route to `handle_chat_agent` in the backend and support the same input handles. Node colors use centralized dracula theme constants imported from `client/src/styles/theme.ts`.
 
 **Input Handles:**
 - `input-main` - Main data input (auto-prompting fallback)
@@ -584,12 +620,20 @@ Specialized agents are AI Agents pre-configured for specific domains. They inher
 - **web_agent**: Web Control Agent - AI agent for web automation. Connect web/browser nodes (scraper, HTTP, browser) as tools.
 - **task_agent**: Task Management Agent - AI agent for task automation. Connect scheduling nodes (scheduler, reminders) as tools.
 - **social_agent**: Social Media Agent - AI agent for social messaging. Connect messaging nodes (WhatsApp, Telegram) as tools.
+- **travel_agent**: Travel Agent - AI agent for travel planning. Connect location, maps, and scheduling nodes as tools.
+- **tool_agent**: Tool Agent - AI agent for tool orchestration. Connect any combination of tool nodes for flexible automation.
+- **productivity_agent**: Productivity Agent - AI agent for productivity workflows. Connect scheduling, task, and utility nodes as tools.
+- **payments_agent**: Payments Agent - AI agent for payment processing. Connect payment, invoice, and financial tool nodes.
+- **consumer_agent**: Consumer Agent - AI agent for consumer interactions. Connect customer support, product, and order management tools.
 
 **Backend Routing:**
 Specialized agents are detected by `SPECIALIZED_AGENT_TYPES` and routed to `handle_chat_agent`:
 ```python
-# In node_executor.py
-SPECIALIZED_AGENT_TYPES = {'android_agent', 'coding_agent', 'web_agent', 'task_agent', 'social_agent'}
+# In node_executor.py - all specialized agents route to handle_chat_agent
+SPECIALIZED_AGENT_TYPES = {
+    'android_agent', 'coding_agent', 'web_agent', 'task_agent', 'social_agent',
+    'travel_agent', 'tool_agent', 'productivity_agent', 'payments_agent', 'consumer_agent'
+}
 ```
 
 **Direct Android Service Tools:**
@@ -903,7 +947,7 @@ See **[Scripts Reference](./docs-internal/SCRIPTS.md)** for full documentation.
 
 ## Current Status
 ✅ **INodeProperties System**: Fully implemented with 41 functional components
-✅ **WebSocket-First Architecture**: 25 message handlers replacing REST APIs
+✅ **WebSocket-First Architecture**: 32 message handlers replacing REST APIs
 ✅ **Code Editor**: Python executor with syntax-highlighted editor (react-simple-code-editor + prismjs) and console output
 ✅ **Component Palette**: Emoji icons with distinct dracula-themed category colors, localStorage persistence for collapsed sections
 ✅ **Android Integration**: 16 Android service nodes with ADB automation and remote WebSocket support
@@ -1384,7 +1428,8 @@ const sampleSchemas = {
 // Node types that use the AI output schema
 const aiAgentTypes = [
   'aiAgent', 'chatAgent',
-  'android_agent', 'coding_agent', 'web_agent', 'task_agent', 'social_agent'  // Specialized agents
+  'android_agent', 'coding_agent', 'web_agent', 'task_agent', 'social_agent',
+  'travel_agent', 'tool_agent', 'productivity_agent', 'payments_agent', 'consumer_agent'
 ];
 const isAI = nodeTypeLower.includes('chatmodel') || aiAgentTypes.includes(nodeType);
 ```
@@ -1406,24 +1451,27 @@ The `AIAgentNode.tsx` component uses a configuration-driven pattern to support m
 
 #### AGENT_CONFIGS Object
 ```typescript
+type ThemeColorKey = 'purple' | 'cyan' | 'green' | 'pink' | 'orange' | 'yellow' | 'red';
+
 interface AgentConfig {
-  icon: React.ReactNode;  // Lucide-style SVG icons
+  icon: React.ReactNode;
   title: string;
   subtitle: string;
-  accentColor: string;
+  themeColorKey: ThemeColorKey;  // References dracula theme constant
   bottomHandles: Array<{ id: string; label: string; position: string }>;
+  leftHandles?: Array<{ id: string; label: string; position: string }>;
+  topOutputHandle?: { id: string; label: string };
+  width?: number;
+  height?: number;
 }
 
-// Lucide-style SVG icons defined as React components
-const RobotIcon = ({ size, color }) => <svg>...</svg>;      // Robot with antenna
-const ZeenieIcon = ({ size, color }) => <svg>...</svg>;  // MessageSquare bubble
-
+// Color resolved at runtime: dracula[config.themeColorKey]
 const AGENT_CONFIGS: Record<string, AgentConfig> = {
   aiAgent: {
     icon: <RobotIcon />,
     title: 'AI Agent',
     subtitle: 'LangGraph Agent',
-    accentColor: '#9333EA',  // Purple
+    themeColorKey: 'purple',
     bottomHandles: [
       { id: 'input-memory', label: 'Memory', position: '35%' },
       { id: 'input-tools', label: 'Tool', position: '65%' },
@@ -1433,12 +1481,15 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
     icon: <ZeenieIcon />,
     title: 'Zeenie',
     subtitle: 'Conversational Agent',
-    accentColor: '#3B82F6',  // Blue
+    themeColorKey: 'cyan',
     bottomHandles: [
       { id: 'input-memory', label: 'Memory', position: '35%' },
       { id: 'input-skill', label: 'Skill', position: '65%' },
     ],
   },
+  // ... 10 specialized agents (android_agent, coding_agent, web_agent, task_agent,
+  //     social_agent, travel_agent, tool_agent, productivity_agent, payments_agent, consumer_agent)
+  //     each with themeColorKey, standard Skill/Tool bottom handles, Memory left handle
 };
 ```
 
@@ -1577,15 +1628,20 @@ Child broadcasts its own status updates (executing, success, error)
 
 The system supports specialized agent variants that inherit from the base AI Agent architecture:
 
-| Agent Type | Node Type | Purpose | Theme Color |
-|------------|-----------|---------|-------------|
-| AI Agent | `aiAgent` | General-purpose LangGraph agent | Purple |
-| Zeenie | `chatAgent` | Personal assistant with skills | Cyan |
-| Android Control | `android_agent` | Device automation | Green |
-| Coding Agent | `coding_agent` | Code execution | Cyan |
-| Web Control | `web_agent` | Browser automation | Pink |
-| Task Management | `task_agent` | Task automation | Purple |
-| Social Media | `social_agent` | Social messaging | Green |
+| Agent Type | Node Type | Icon | Theme Color (dracula) |
+|------------|-----------|------|-----------------------|
+| AI Agent | `aiAgent` | Robot SVG | purple |
+| Zeenie | `chatAgent` | Chat SVG | cyan |
+| Android Control | `android_agent` | robot | green |
+| Coding Agent | `coding_agent` | laptop | cyan |
+| Web Control | `web_agent` | globe | pink |
+| Task Management | `task_agent` | clipboard | purple |
+| Social Media | `social_agent` | phone | green |
+| Travel Agent | `travel_agent` | plane | orange |
+| Tool Agent | `tool_agent` | wrench | yellow |
+| Productivity | `productivity_agent` | clock | cyan |
+| Payments | `payments_agent` | credit card | green |
+| Consumer | `consumer_agent` | cart | purple |
 
 All specialized agents share the same handle configuration:
 - **Left**: `input-main` (Input), `input-memory` (Memory)
@@ -1679,11 +1735,14 @@ The project deploys using Docker Compose with nginx reverse proxy.
 - Depends on: redis, whatsapp
 - Size: ~528 MB
 
-**WhatsApp (`whatsapp/Dockerfile`):**
-- Multi-stage Go build with CGO for SQLite
-- whatsmeow library for WhatsApp Web protocol
-- Health check endpoint on port 5000
-- Size: ~25 MB
+**WhatsApp (`docker/Dockerfile.whatsapp`):**
+- Uses npm package `whatsapp-rpc` with pre-built binaries
+- Node.js 20-alpine base with `npx whatsapp-rpc api --foreground`
+- Binary downloaded from GitHub releases during npm postinstall
+- Exposed on port 9400 (configurable via `PORT`, `WHATSAPP_RPC_PORT` env vars, or `--port` CLI flag)
+- QR codes generated as base64 PNG in memory (no file I/O)
+- Also published to PyPI as `whatsapp-rpc` (async Python client)
+- Size: ~150 MB (includes Node.js runtime)
 
 **Redis:**
 - Official redis:7-alpine image
@@ -1717,7 +1776,9 @@ services:
     ports: ["${VITE_CLIENT_PORT:-3000}:${VITE_CLIENT_PORT:-3000}"]
 
   whatsapp:
-    build: ./server/whatsapp-rpc
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.whatsapp
     ports: ["${WHATSAPP_RPC_PORT:-9400}:${WHATSAPP_RPC_PORT:-9400}"]
 ```
 
@@ -1749,10 +1810,12 @@ services:
       test: ["CMD", "redis-cli", "ping"]
 
   whatsapp:
-    build: ./whatsapp
-    ports: ["5000:5000"]
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.whatsapp
+    ports: ["9400:9400"]
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:5000/health"]
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9400/health"]
 
   backend:
     build: ./server
@@ -1869,7 +1932,7 @@ docker-compose -f docker-compose.prod.yml up --build
 # Access locally
 # Frontend: http://localhost:3000
 # Backend API: http://localhost:3010
-# WhatsApp: http://localhost:5000
+# WhatsApp RPC: http://localhost:9400
 # Redis: localhost:6379
 
 # Stop all containers
@@ -2387,7 +2450,8 @@ Tool Node (calculatorTool) → (tool output) → AI Agent (input-tools handle)
 ### Key Files
 | File | Description |
 |------|-------------|
-| `client/src/nodeDefinitions/toolNodes.ts` | Tool and specialized agent node definitions + AI_AGENT_PROPERTIES |
+| `client/src/nodeDefinitions/toolNodes.ts` | Tool node definitions (calculatorTool, currentTimeTool, webSearchTool, androidTool) |
+| `client/src/nodeDefinitions/specializedAgentNodes.ts` | Specialized agent definitions (10 nodes) + AI_AGENT_PROPERTIES + SPECIALIZED_AGENT_TYPES |
 | `server/services/handlers/tools.py` | Tool execution handlers |
 | `server/services/ai.py` | `_get_tool_schema()` - Pydantic schemas for tools |
 | `server/services/handlers/ai.py` | Tool discovery from edges |
@@ -2438,10 +2502,20 @@ android_agent: {
 4. **TOOL_NODE_TYPES**: Add to array in `toolNodes.ts`
 
 ### Adding New Specialized Agents
-1. **Frontend Definition**: Add node definition in `specializedAgentNodes.ts` with `group: ['agent', 'ai']` and `properties: AI_AGENT_PROPERTIES`
-2. **AIAgentNode Config**: Add config to `AGENT_CONFIGS` in `AIAgentNode.tsx` with icon, title, subtitle, accentColor, bottomHandles
-3. **Dashboard Mapping**: `SPECIALIZED_AGENT_TYPES` array automatically maps to `AIAgentNode` component
-4. **SPECIALIZED_AGENT_TYPES**: Add to array in `toolNodes.ts`
+**Frontend (5 files):**
+1. **Node Definition**: Add to `specializedAgentNodes.ts` with `group: ['agent', 'ai']`, `properties: AI_AGENT_PROPERTIES`, and `defaults.color: dracula.<color>`
+2. **SPECIALIZED_AGENT_TYPES**: Add to array in `specializedAgentNodes.ts`
+3. **AIAgentNode Config**: Add to `AGENT_CONFIGS` in `AIAgentNode.tsx` with icon, title, subtitle, `themeColorKey`, standard handles (Skill 25%, Tool 75%, Memory 70%), 260x160px
+4. **MiddleSection.tsx**: Add to `AGENT_WITH_SKILLS_TYPES` array
+5. **InputSection.tsx**: Add to both `AGENT_WITH_SKILLS_TYPES` and `aiAgentTypes` arrays
+
+**Backend (4 files):**
+6. **constants.py**: Add to `AI_AGENT_TYPES` frozenset
+7. **node_executor.py**: Add handler registry entry mapping to `partial(handle_chat_agent, ...)`
+8. **handlers/tools.py**: Add to delegation check tuple in `execute_tool()`
+9. **ai.py**: Add entries to `DEFAULT_TOOL_NAMES`, `DEFAULT_TOOL_DESCRIPTIONS`, and `DelegateToAgentSchema` condition
+
+**No changes needed:** `Dashboard.tsx` auto-maps via `SPECIALIZED_AGENT_TYPES.forEach()`
 
 ### Tool Execution Animation
 Tool nodes display execution status via the standard node status system:
@@ -2840,11 +2914,11 @@ export interface AndroidStatus {
 ## WhatsApp Integration
 
 ### Overview
-WhatsApp nodes use square design with integrated QR code viewing and proper error handling. The integration proxies all requests through the Python backend to the WhatsApp Flask service on port 5000.
+WhatsApp nodes use square design with integrated QR code viewing and proper error handling. The integration proxies all requests through the Python backend to the WhatsApp RPC service (default port 9400, configurable via `WHATSAPP_RPC_PORT` env var or `--port` CLI flag).
 
 ### Architecture
 ```
-Frontend (WhatsAppNode.tsx) → Python Backend (/api/whatsapp/*) → WhatsApp Flask Service (localhost:5000)
+Frontend (WhatsAppNode.tsx) → Python Backend (/api/whatsapp/*) → WhatsApp RPC Service (localhost:${WHATSAPP_RPC_PORT:-9400})
 ```
 
 ### Key Features
@@ -3348,7 +3422,7 @@ def has_real_android_devices(self) -> bool:
 
 Updated `client_left` and presence handlers use `has_real_android_devices()` instead of checking total device count.
 
-### WebSocket Message Types (28 Handlers)
+### WebSocket Message Types (32 Handlers)
 
 #### Request/Response Messages (Client -> Server -> Client)
 | Message Type | Description |
@@ -3378,6 +3452,10 @@ Updated `client_left` and presence handlers use `has_real_android_devices()` ins
 | `send_chat_message` | Send chat message, optionally to specific node |
 | `get_chat_messages` | Get chat history for session |
 | `clear_chat_messages` | Clear chat history for session |
+| `get_skill_content` | Get skill instructions from database or SKILL.md file |
+| `save_skill_content` | Save skill instructions to database |
+| `list_skill_folders` | List available skill folders under server/skills/ |
+| `scan_skill_folder` | Scan a folder for skills, returns name/description/metadata |
 | `ping` | Keep-alive request |
 
 #### Broadcast Messages (Server -> All Clients)
@@ -3535,7 +3613,7 @@ This function:
 - **Performance**: Fast HMR updates and clean TypeScript compilation
 - **AI Architecture**: 5-layer system with factory pattern and secure credential management
 - **Android Architecture**: Factory-based node creation with ADB integration for device automation
-- **WebSocket-First Architecture**: 25 message handlers replace REST APIs for parameters, execution, API keys, Android, and WhatsApp operations
+- **WebSocket-First Architecture**: 32 message handlers replace REST APIs for parameters, execution, API keys, Android, WhatsApp, and skill operations
 - **WebSocket Hooks**: Dedicated React hooks (useWhatsApp, useExecution, useApiKeys, useAndroidOperations, useParameterPanel) for clean component integration
 - **WebSocket Support**: Persistent remote Android device connections via WebSocket proxy with background tasks
   - Connection stays alive across multiple API requests until switched to local ADB
@@ -3560,11 +3638,12 @@ This function:
 - **WhatsApp Integration**: Square node design with QR code viewer, proper error handling, no crashes
   - Critical fix: Added "routers.whatsapp" to dependency injection wiring
   - All endpoints use safe JSON parsing with comprehensive error handling
-  - Backend proxies all requests to WhatsApp Flask service (port 5000)
+  - Backend proxies all requests to WhatsApp RPC service (default port 9400, configurable)
   - Returns proper HTTP status codes (503, 504, 410) instead of mock data
   - Python server never crashes when WhatsApp service is unavailable
   - WebSocket handlers for status, QR code, send message, and start connection
   - useWhatsApp hook provides clean React component integration
+  - Uses external npm package `whatsapp-rpc` with pre-built Go binaries
 - **Event-Driven Triggers**: Generic trigger node architecture with asyncio.Future
   - `server/services/event_waiter.py` - Waiter registration, dispatch, cancellation
   - TRIGGER_REGISTRY for extensible trigger types (WhatsApp, Webhook, future: Email, MQTT, Telegram)
@@ -3608,8 +3687,15 @@ This function:
   - Frontend creates anonymous user with owner privileges when disabled
   - AuthContext includes retry logic (5 retries, exponential backoff) for startup race conditions
   - Pydantic Settings accepts `vite_auth_enabled` field (required due to `extra="forbid"`)
-- **npm ci Optimization**: Faster Docker builds and CI/CD
-  - `client/Dockerfile` uses `npm ci` instead of `npm install` (2x faster)
-  - `package.json` build script uses `npm ci` for root and whatsapp-rpc
-  - `client/package-lock.json` generated for npm ci support (workspace child)
+- **whatsapp-rpc Package**: External dependency for WhatsApp integration
+  - Published to npm as `whatsapp-rpc` (unscoped) and GitHub Packages as `@trohitg/whatsapp-rpc`
+  - Published to PyPI as `whatsapp-rpc` (async Python client)
+  - Cross-platform binaries built via GitHub Actions (linux/amd64, linux/arm64, darwin/amd64, darwin/arm64, windows/amd64)
+  - Binary downloaded from GitHub releases during npm postinstall
+  - Configurable port via `--port` CLI flag, `PORT` or `WHATSAPP_RPC_PORT` env vars (default: 9400)
+  - QR codes generated as base64 PNG in memory (no file I/O, no `data/qr` directory)
+  - Source: https://github.com/trohitg/whatsapp-rpc
+- **Node Data Architecture**: `node.data` only stores `label` (display name). All parameters are stored in the database via `save_node_parameters` WebSocket handler. This prevents parameter bloat in workflow JSON exports and keeps React Flow state lightweight. `useDragAndDrop.ts` saves default parameters to DB on drop, not to `node.data`.
+- **Workflow Export Sanitization**: `exportWorkflow()` in `useWorkflow.ts` strips transient fields (`selected`, `dragging`, `width`, `height`, `measured`, `positionAbsolute`) from nodes and edges before export. Only `id`, `type`, `position`, `data.label` are included per node.
+- **Skill System Architecture**: Skills organized in `server/skills/<folder>/` subfolders. Each folder appears in Master Skill dropdown. DB is source of truth for skill instructions (seeded from SKILL.md on first load). Icon resolution: node definition (SVG) > SKILL.md metadata (emoji) > fallback. Native DOM keydown handler prevents React Flow from intercepting Ctrl shortcuts in skill editor.
 - never use emojis in prints

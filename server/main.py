@@ -139,8 +139,8 @@ async def lifespan(app: FastAPI):
             logger.info("Temporal integration initialized successfully")
 
         except Exception as e:
-            logger.error(f"Failed to initialize Temporal: {str(e)}")
-            logger.warning("Falling back to Redis/sequential execution")
+            logger.warning(f"Temporal not available (optional): {str(e)}")
+            logger.info("Continuing without Temporal - using local parallel/sequential execution")
 
     logger.info("Services started successfully")
     yield

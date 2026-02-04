@@ -10,7 +10,7 @@ import { WHATSAPP_CONNECT_ICON } from './whatsappNodes';
 // ============================================================================
 
 // Factory function for creating skill node definitions
-function createSkillNode(config: {
+export function createSkillNode(config: {
   name: string;
   displayName: string;
   icon: string;
@@ -190,6 +190,13 @@ export const skillNodes: Record<string, INodeTypeDescription> = {
       description: 'Connect to AI Agent skill handle'
     }],
     properties: [
+      {
+        displayName: 'Skill Folder',
+        name: 'skillFolder',
+        type: 'string',
+        default: 'assistant',
+        description: 'Subfolder under server/skills/ to scan for skills.'
+      },
       {
         displayName: 'Skills Configuration',
         name: 'skillsConfig',

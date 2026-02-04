@@ -110,14 +110,7 @@ const createNodeTypes = (): Record<string, React.ComponentType<any>> => {
       // Specialized agent nodes use AIAgentNode (rectangular card with bottom handles)
       types[type] = AIAgentNode;
     } else if (TOOL_NODE_TYPES.includes(type)) {
-      // Tool node component mapping:
-      // - webSearchTool: SquareNode (square shape like utility nodes)
-      // - calculatorTool, currentTimeTool: ModelNode (circular)
-      if (type === 'webSearchTool') {
-        types[type] = SquareNode;
-      } else {
-        types[type] = ModelNode;
-      }
+      types[type] = SquareNode;
     } else if (SKILL_NODE_TYPES.includes(type)) {
       // Skill nodes use ToolkitNode (vertical handle layout like Android Toolkit)
       types[type] = ToolkitNode;

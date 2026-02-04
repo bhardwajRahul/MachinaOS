@@ -22,7 +22,12 @@ const AGENT_WITH_SKILLS_TYPES = [
   'coding_agent',
   'web_agent',
   'task_agent',
-  'social_agent'
+  'social_agent',
+  'travel_agent',
+  'tool_agent',
+  'productivity_agent',
+  'payments_agent',
+  'consumer_agent'
 ];
 
 interface ConnectedSkill {
@@ -131,6 +136,7 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
 
   // Check if this is a master skill node (needs split panel layout)
   const isMasterSkillNode = nodeDefinition.name === 'masterSkill';
+  console.log('[MiddleSection] nodeDefinition.name:', nodeDefinition.name, 'isMasterSkillNode:', isMasterSkillNode);
 
   // Check if this is a memory node with markdown editor
   const isMemoryNode = nodeDefinition.name === 'simpleMemory';
@@ -305,10 +311,12 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
         {/* Master Skill Editor - Full panel for masterSkill nodes */}
         {isMasterSkillNode ? (
-          <div style={{ flex: 1, padding: theme.spacing.lg, overflow: 'hidden' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: theme.spacing.lg, overflow: 'hidden' }}>
             <MasterSkillEditor
               skillsConfig={parameters.skillsConfig || {}}
               onConfigChange={(config) => onParameterChange('skillsConfig', config)}
+              skillFolder={parameters.skillFolder || 'assistant'}
+              onSkillFolderChange={(folder) => onParameterChange('skillFolder', folder)}
             />
           </div>
         ) : (

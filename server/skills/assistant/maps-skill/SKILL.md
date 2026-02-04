@@ -5,6 +5,8 @@ metadata:
   author: machina
   version: "3.0"
   category: location
+  icon: "🗺️"
+  color: "#4285F4"
 ---
 
 # Location Services

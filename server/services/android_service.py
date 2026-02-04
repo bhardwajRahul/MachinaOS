@@ -231,13 +231,12 @@ class AndroidService:
             device_id = relay_client.paired_device_id
             device_name = relay_client.paired_device_name
 
-            logger.info(
+            logger.debug(
                 "[Android Service] Sending relay service request",
                 service_id=service_id,
                 action=action,
                 device_id=device_id,
-                device_name=device_name,
-                parameters=parameters
+                device_name=device_name
             )
 
             # Send service request via relay
@@ -259,9 +258,8 @@ class AndroidService:
             # 2. {"data": {...}} (success implied)
             # 3. {"success": false, "error": "..."}
             # 4. Raw data object without wrapper
-            logger.info("[Android Service] Raw relay response",
-                       response_keys=list(response.keys()) if isinstance(response, dict) else "not_dict",
-                       response=response)
+            logger.debug("[Android Service] Raw relay response",
+                        response_keys=list(response.keys()) if isinstance(response, dict) else "not_dict")
 
             # Check for explicit success field, otherwise infer from data presence
             if 'success' in response:
@@ -273,10 +271,10 @@ class AndroidService:
             data = response.get('data', response if 'success' not in response and 'error' not in response else {})
             error_msg = response.get('error')
 
-            logger.info("[Android Service] Relay response parsed",
-                       success=success,
-                       has_data=bool(data),
-                       error=error_msg)
+            logger.debug("[Android Service] Relay response parsed",
+                        success=success,
+                        has_data=bool(data),
+                        error=error_msg)
 
             if success:
                 result = {
@@ -316,7 +314,7 @@ class AndroidService:
 
             log_execution_time(logger, f"android_service_{service_id}_{action}_relay", start_time, time.time())
 
-            logger.info(
+            logger.debug(
                 "[Android Service] Relay execution completed",
                 node_id=node_id,
                 service_id=service_id,
@@ -381,7 +379,7 @@ class AndroidService:
 
             if relay_client and relay_client.is_paired():
                 # Use relay for remote Android device
-                logger.info(
+                logger.debug(
                     "[Android Service] Using relay connection",
                     node_id=node_id,
                     service_id=service_id,
@@ -393,7 +391,7 @@ class AndroidService:
             else:
                 # Use local HTTP connection
                 base_url = f"http://{android_host}:{android_port}/api"
-                logger.info(
+                logger.debug(
                     "[Android Service] Using local HTTP connection",
                     node_id=node_id,
                     service_id=service_id,
@@ -443,7 +441,7 @@ class AndroidService:
 
                     log_execution_time(logger, f"android_service_{service_id}_{action}", start_time, time.time())
 
-                    logger.info(
+                    logger.debug(
                         "[Android Service] Execution completed",
                         node_id=node_id,
                         service_id=service_id,

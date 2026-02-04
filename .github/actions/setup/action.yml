@@ -1,0 +1,49 @@
+# Composite action for shared environment setup across all workflows.
+# Eliminates duplicated Node/Python/uv setup.
+#
+# Usage:
+#   - uses: ./.github/actions/setup
+#   - uses: ./.github/actions/setup
+#     with:
+#       install-go: 'true'
+
+name: 'Setup MachinaOS Environment'
+description: 'Setup Node.js, Python, and uv. Optionally Go.'
+
+inputs:
+  node-version:
+    description: 'Node.js version'
+    default: '20'
+  python-version:
+    description: 'Python version'
+    default: '3.12'
+  go-version:
+    description: 'Go version (only used if install-go is true)'
+    default: '1.21'
+  install-go:
+    description: 'Whether to install Go'
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: 'npm'
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Setup Go
+      if: inputs.install-go == 'true'
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ inputs.go-version }}
+
+    - name: Install uv
+      shell: bash
+      run: curl -LsSf https://astral.sh/uv/install.sh | sh && echo "$HOME/.cargo/bin" >> $GITHUB_PATH

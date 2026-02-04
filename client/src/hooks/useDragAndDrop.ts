@@ -79,16 +79,16 @@ export const useDragAndDrop = ({ nodes, setNodes, saveNodeParameters }: UseDragA
           type: nodeData.type,
           position,
           data: {
-            ...(nodeData.data || {}),
-            label: uniqueLabel,  // Add unique label for template resolution
+            label: uniqueLabel,  // Only UI-display fields in node.data (not parameters)
           },
         };
 
-        // Save node parameters to database immediately via WebSocket (including hidden parameters)
-        if (newNode.data && Object.keys(newNode.data).length > 0 && saveNodeParameters) {
+        // Save full default parameters to DB only (not to node.data)
+        const defaults = nodeData.data || {};
+        if (Object.keys(defaults).length > 0 && saveNodeParameters) {
           try {
-            await saveNodeParameters(newNode.id, newNode.data);
-            console.log(`[DragAndDrop] Saved default parameters for node ${newNode.id}:`, newNode.data);
+            await saveNodeParameters(newNode.id, { ...defaults, label: uniqueLabel });
+            console.log(`[DragAndDrop] Saved default parameters for node ${newNode.id}`);
           } catch (error) {
             console.error(`[DragAndDrop] Failed to save parameters for node ${newNode.id}:`, error);
           }

@@ -1,0 +1,17 @@
+# Docker build validation - scoped to Dockerfile and compose changes
+# Delegates to predeploy.yml to avoid duplicating docker build logic
+
+name: Docker Build
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'client/Dockerfile'
+      - 'server/Dockerfile'
+      - 'docker/Dockerfile.whatsapp'
+      - 'docker-compose*.yml'
+
+jobs:
+  predeploy:
+    uses: ./.github/workflows/predeploy.yml
