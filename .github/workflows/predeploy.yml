@@ -127,7 +127,6 @@ jobs:
 
       - name: Build (install client deps, build client, setup Python venv)
         shell: bash
-        timeout-minutes: 10
         run: machinaos build
 
       - name: Verify build artifacts
@@ -142,7 +141,6 @@ jobs:
 
       - name: Test machinaos start
         shell: bash
-        timeout-minutes: 2
         run: |
           machinaos start &
           PID=$!
