@@ -67,8 +67,8 @@ function checkDeps() {
 
   // Node.js version check
   const nodeVersion = parseInt(process.version.slice(1));
-  if (nodeVersion < 18) {
-    errors.push(`Node.js 18+ required (found ${process.version})`);
+  if (nodeVersion < 20) {
+    errors.push(`Node.js 20+ required (found ${process.version})`);
   }
 
   // Python version check
