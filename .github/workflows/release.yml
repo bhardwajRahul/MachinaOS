@@ -1,5 +1,4 @@
-# Release workflow - chained: predeploy validation gate -> deploy publish
-# Triggers on version tags and GitHub releases
+# Release workflow - predeploy gate then publish
 
 name: Release
 
@@ -14,10 +13,61 @@ jobs:
   predeploy:
     uses: ./.github/workflows/predeploy.yml
 
-  deploy:
+  publish-npm:
+    name: Publish to npm
     needs: predeploy
-    uses: ./.github/workflows/deploy.yml
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm install --ignore-scripts
+
+      - name: Verify package contents
+        run: npm pack --dry-run
+
+      - name: Publish to npm
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-github-packages:
+    name: Publish to GitHub Packages
+    needs: predeploy
+    runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
       packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://npm.pkg.github.com'
+
+      - name: Install dependencies
+        run: npm install --ignore-scripts
+
+      - name: Configure scoped package
+        run: |
+          node -e "
+            const pkg = require('./package.json');
+            pkg.name = '@trohitg/machinaos';
+            pkg.publishConfig = { registry: 'https://npm.pkg.github.com' };
+            require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2));
+          "
+
+      - name: Publish to GitHub Packages
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
