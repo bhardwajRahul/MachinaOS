@@ -110,22 +110,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
+      # Setup Python and uv (postinstall.js skips in CI, so these must be pre-installed)
+      - name: Setup environment
+        uses: ./.github/actions/setup
         with:
           node-version: ${{ matrix.node-version }}
-
-      # Python and uv are NOT pre-installed - install.js handles them
-      # This tests the real user experience of `npm install -g machinaos`
 
       - name: Pack npm package
         run: npm pack
 
       - name: Test global install
         shell: bash
-        env:
-          CI: 'false'
-          GITHUB_ACTIONS: 'false'
         run: |
           npm install -g machinaos-*.tgz
 
@@ -142,18 +137,13 @@ jobs:
           test -d "$INSTALL_PATH/client" && echo "client/ exists"
           test -d "$INSTALL_PATH/server" && echo "server/ exists"
 
-      - name: Verify Python environment
+      - name: Setup Python venv
         shell: bash
         run: |
           INSTALL_PATH=$(npm root -g)/machinaos
           cd "$INSTALL_PATH/server"
-
-          if [ -d ".venv" ]; then
-            echo "Python venv created successfully"
-            ls -la .venv/bin 2>/dev/null || ls -la .venv/Scripts 2>/dev/null
-          else
-            echo "Warning: .venv not found"
-          fi
+          uv venv
+          uv sync
 
       - name: Verify client build
         shell: bash
