@@ -2,6 +2,9 @@
 
 Open-source Platform to Build Your Own Personal AI Assistant, mashup of clawdbot and n8n, but More Powerful.
 
+Full Capabilities.
+<img width="1280" height="671" alt="func_img" src="https://github.com/user-attachments/assets/2f14b6c8-3995-4ccc-b076-e40749a83df2" />
+
 **60 nodes** | **6 AI providers** | **WebSocket-first** | **Self-hosted**
 
 ## Quick Start
