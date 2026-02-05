@@ -1,6 +1,15 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
+import { readFileSync } from 'fs'
+
+// Read root package.json for app version (one level up from client/)
+// Falls back to '0.0.0' in Docker where only client/ is in the build context
+let appVersion = '0.0.0'
+try {
+  const rootPkg = JSON.parse(readFileSync(resolve(process.cwd(), '..', 'package.json'), 'utf-8'))
+  appVersion = rootPkg.version
+} catch { /* Docker build - root package.json not available */ }
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
@@ -13,10 +22,14 @@ export default defineConfig(({ mode }) => {
     return process.env[key] || fileEnv[key] || defaultValue
   }
 
+  // APP_VERSION: from root package.json locally, or VITE_APP_VERSION build arg in Docker
+  const version = getEnv('VITE_APP_VERSION', '') || appVersion
+
   return {
     plugins: [react()],
     // Expose VITE_ prefixed env vars to client code via import.meta.env
     define: {
+      __APP_VERSION__: JSON.stringify(version),
       'import.meta.env.VITE_AUTH_ENABLED': JSON.stringify(getEnv('VITE_AUTH_ENABLED', 'true')),
       'import.meta.env.VITE_PYTHON_SERVICE_URL': JSON.stringify(getEnv('VITE_PYTHON_SERVICE_URL', '')),
       'import.meta.env.VITE_WHATSAPP_SERVICE_URL': JSON.stringify(getEnv('VITE_WHATSAPP_SERVICE_URL', '')),

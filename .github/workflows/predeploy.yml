@@ -123,6 +123,9 @@ jobs:
 
       - name: Test global install
         shell: bash
+        env:
+          CI: 'false'
+          GITHUB_ACTIONS: 'false'
         run: |
           npm install -g machinaos-*.tgz
 

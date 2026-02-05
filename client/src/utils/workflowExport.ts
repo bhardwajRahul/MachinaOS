@@ -6,10 +6,9 @@
 import { Node } from 'reactflow';
 import { WorkflowData } from '../store/useAppStore';
 import { validateWorkflow, serializeWorkflow, deserializeWorkflow } from '../schemas/workflowSchema';
-import packageJson from '../../../package.json';
-
-// Use project version from package.json for workflow exports
-const APP_VERSION = packageJson.version;
+// Injected by Vite define from root package.json (see vite.config.js)
+declare const __APP_VERSION__: string;
+const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0';
 
 // Fields allowed in node.data for export/save - everything else is parameter data
 // that belongs in the DB and should not leak into exported JSON files.
