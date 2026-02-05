@@ -85,6 +85,7 @@ NUL
 # Build artifacts
 # =============================================================================
 build/
+*.tgz
 *.exe
 *.dll
 *.so
@@ -118,9 +119,9 @@ server/.python-version
 .claude/
 
 # =============================================================================
-# Documentation (internal docs excluded, public docs tracked)
+# Documentation (docs-MachinaOs is a separate GitHub project)
 # =============================================================================
-docs-internal/
+docs-MachinaOs/
 
 # =============================================================================
 # Experiments (work in progress)
