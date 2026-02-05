@@ -64,7 +64,6 @@ function expandPath() {
 
 function checkDeps() {
   const errors = [];
-  const warnings = [];
 
   // Node.js version check
   const nodeVersion = parseInt(process.version.slice(1));
@@ -89,15 +88,6 @@ function checkDeps() {
   // uv package manager check
   if (!getVersion('uv --version')) {
     errors.push('uv (Python package manager) - https://docs.astral.sh/uv/');
-  }
-
-  // Go check (warning only - needed for WhatsApp service)
-  if (!getVersion('go version')) {
-    warnings.push('Go 1.21+ (optional, for WhatsApp service) - https://go.dev/dl/');
-  }
-
-  if (warnings.length > 0) {
-    console.warn('Warnings:\n' + warnings.map(w => `  - ${w}`).join('\n') + '\n');
   }
 
   if (errors.length > 0) {

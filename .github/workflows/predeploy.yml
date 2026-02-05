@@ -110,7 +110,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Setup Python and uv (postinstall.js skips in CI, so these must be pre-installed)
+      # Python and uv needed because postinstall.js skips in CI
       - name: Setup environment
         uses: ./.github/actions/setup
         with:
@@ -123,39 +123,22 @@ jobs:
         shell: bash
         run: |
           npm install -g machinaos-*.tgz
-
-          # Verify CLI is available
           machinaos --help
 
-          # Check installed files exist
+      - name: Build (install client deps, build client, setup Python venv)
+        shell: bash
+        timeout-minutes: 10
+        run: machinaos build
+
+      - name: Verify build artifacts
+        shell: bash
+        run: |
           INSTALL_PATH=$(npm root -g)/machinaos
           echo "Installed to: $INSTALL_PATH"
-          ls -la "$INSTALL_PATH"
 
-          # Verify key files
-          test -f "$INSTALL_PATH/.env" && echo ".env created"
-          test -d "$INSTALL_PATH/client" && echo "client/ exists"
-          test -d "$INSTALL_PATH/server" && echo "server/ exists"
-
-      - name: Setup Python venv
-        shell: bash
-        run: |
-          INSTALL_PATH=$(npm root -g)/machinaos
-          cd "$INSTALL_PATH/server"
-          uv venv
-          uv sync
-
-      - name: Verify client build
-        shell: bash
-        run: |
-          INSTALL_PATH=$(npm root -g)/machinaos
-
-          if [ -d "$INSTALL_PATH/client/dist" ]; then
-            echo "Client built successfully"
-            ls -la "$INSTALL_PATH/client/dist"
-          else
-            echo "Warning: client/dist not found"
-          fi
+          test -f "$INSTALL_PATH/.env" && echo ".env exists"
+          test -d "$INSTALL_PATH/client/dist" && echo "client/dist/ built"
+          test -d "$INSTALL_PATH/server/.venv" && echo "server/.venv/ created"
 
       - name: Test machinaos start
         shell: bash

@@ -5,10 +5,10 @@
 #   - uses: ./.github/actions/setup
 #   - uses: ./.github/actions/setup
 #     with:
-#       install-go: 'true'
+#       node-version: '22'
 
 name: 'Setup MachinaOS Environment'
-description: 'Setup Node.js, Python, and uv. Optionally Go.'
+description: 'Setup Node.js, Python, and uv.'
 
 inputs:
   node-version:
@@ -17,12 +17,6 @@ inputs:
   python-version:
     description: 'Python version'
     default: '3.12'
-  go-version:
-    description: 'Go version (only used if install-go is true)'
-    default: '1.21'
-  install-go:
-    description: 'Whether to install Go'
-    default: 'false'
 
 runs:
   using: composite
@@ -37,12 +31,6 @@ runs:
       uses: actions/setup-python@v5
       with:
         python-version: ${{ inputs.python-version }}
-
-    - name: Setup Go
-      if: inputs.install-go == 'true'
-      uses: actions/setup-go@v5
-      with:
-        go-version: ${{ inputs.go-version }}
 
     - name: Install uv
       uses: astral-sh/setup-uv@v4
