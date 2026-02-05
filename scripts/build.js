@@ -193,27 +193,54 @@ try {
 
   // Step 1: Install root dependencies (skip if postinstall - npm already did this)
   if (!isPostInstall) {
-    console.log('[1/4] Installing root dependencies...');
+    console.log('[1/5] Installing root dependencies...');
     npmInstall(ROOT);
   } else {
-    console.log('[1/4] Root dependencies already installed by npm');
+    console.log('[1/5] Root dependencies already installed by npm');
   }
 
   // Step 2: Install client dependencies
-  console.log('[2/4] Installing client dependencies...');
+  console.log('[2/5] Installing client dependencies...');
   npmInstall(resolve(ROOT, 'client'));
 
   // Step 3: Build client
-  console.log('[3/4] Building client...');
+  console.log('[3/5] Building client...');
   run('npm run build', resolve(ROOT, 'client'));
 
   // Step 4: Install Python dependencies
-  console.log('[4/4] Installing Python dependencies...');
+  console.log('[4/5] Installing Python dependencies...');
   const serverDir = resolve(ROOT, 'server');
   run('uv venv', serverDir);
   run('uv sync', serverDir);
 
-  // WhatsApp is now an npm dependency - binary downloaded via postinstall
+  // Step 5: Ensure WhatsApp RPC binary is downloaded
+  // The whatsapp-rpc postinstall skips download in CI, so we run it explicitly.
+  const whatsappBin = resolve(ROOT, 'node_modules', 'whatsapp-rpc', 'bin',
+    isWindows ? 'whatsapp-rpc-server.exe' : 'whatsapp-rpc-server');
+  const whatsappDownloadScript = resolve(ROOT, 'node_modules', 'whatsapp-rpc', 'scripts', 'download-binary.js');
+  if (!existsSync(whatsappBin) && existsSync(whatsappDownloadScript)) {
+    console.log('[5/5] Downloading WhatsApp RPC binary...');
+    try {
+      // Run download script without CI env vars so it doesn't skip
+      const dlEnv = { ...process.env };
+      delete dlEnv.CI;
+      delete dlEnv.GITHUB_ACTIONS;
+      const scriptPath = whatsappDownloadScript.replace(/\\/g, '/');
+      execSync(`node "${scriptPath}"`, {
+        cwd: resolve(ROOT, 'node_modules', 'whatsapp-rpc'),
+        stdio: 'inherit',
+        shell: true,
+        env: dlEnv
+      });
+    } catch (e) {
+      console.log('Warning: Failed to download WhatsApp RPC binary. WhatsApp features will be unavailable.');
+    }
+  } else if (existsSync(whatsappBin)) {
+    console.log('[5/5] WhatsApp RPC binary already present');
+  } else {
+    console.log('[5/5] WhatsApp RPC package not found, skipping binary download');
+  }
+
   console.log('\nBuild complete.');
 
 } catch (err) {

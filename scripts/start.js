@@ -220,7 +220,15 @@ if (isProduction) {
 }
 
 services.push('npm:python:start');
-services.push('npm:whatsapp:api');
+
+// WhatsApp RPC: only start if the pre-built binary exists
+const whatsappBin = resolve(ROOT, 'node_modules', 'whatsapp-rpc', 'bin',
+  isWindows ? 'whatsapp-rpc-server.exe' : 'whatsapp-rpc-server');
+if (existsSync(whatsappBin)) {
+  services.push('npm:whatsapp:api');
+} else {
+  log('WhatsApp RPC binary not found, skipping. Run "npm run build" to download it.');
+}
 
 if (config.temporalEnabled) {
   services.push('npm:temporal:worker');
