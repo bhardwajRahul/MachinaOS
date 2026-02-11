@@ -5,7 +5,7 @@ from typing import Dict, Any, List, Optional
 from sqlmodel import SQLModel, select, Session
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import text
+from sqlalchemy import text, func
 from contextlib import asynccontextmanager
 
 from core.config import Settings
@@ -77,6 +77,12 @@ class Database:
                         "ALTER TABLE user_settings ADD COLUMN console_panel_default_open BOOLEAN DEFAULT 0"
                     ))
                     logger.info("Added console_panel_default_open column to user_settings")
+
+                if "examples_loaded" not in columns:
+                    await conn.execute(text(
+                        "ALTER TABLE user_settings ADD COLUMN examples_loaded BOOLEAN DEFAULT 0"
+                    ))
+                    logger.info("Added examples_loaded column to user_settings")
         except Exception as e:
             logger.warning(f"Migration check failed (table may not exist yet): {e}")
 
@@ -489,6 +495,27 @@ class Database:
             logger.error("Failed to get node output", node_id=node_id, error=str(e))
             return None
 
+    async def get_node_output_by_session(self, session_id: str,
+                                          output_name: str = "output_0") -> Optional[Dict[str, Any]]:
+        """Get node output by session_id only (for delegation result lookup).
+
+        Used when node_id is unknown but session_id encodes the lookup key.
+        """
+        try:
+            async with self.get_session() as session:
+                stmt = select(NodeOutput).where(
+                    NodeOutput.session_id == session_id,
+                    NodeOutput.output_name == output_name
+                )
+                result = await session.execute(stmt)
+                output = result.scalar_one_or_none()
+
+                return {"data": output.data} if output else None
+
+        except Exception as e:
+            logger.error("Failed to get node output by session", session_id=session_id, error=str(e))
+            return None
+
     async def delete_node_output(self, node_id: str) -> int:
         """Delete all outputs for a node (any session). Returns count deleted."""
         try:
@@ -814,6 +841,47 @@ class Database:
             logger.error("Failed to clear console logs", error=str(e))
             return 0
 
+    async def cleanup_old_console_logs(self, keep: int = 1000) -> int:
+        """Keep only the most recent N console logs. Returns count deleted."""
+        from models.database import ConsoleLog
+
+        try:
+            async with self.get_session() as session:
+                # Count total logs
+                count_stmt = select(func.count()).select_from(ConsoleLog)
+                total_result = await session.execute(count_stmt)
+                total = total_result.scalar() or 0
+
+                if total <= keep:
+                    return 0
+
+                # Get IDs of logs to keep (most recent)
+                keep_stmt = (
+                    select(ConsoleLog.id)
+                    .order_by(ConsoleLog.created_at.desc())
+                    .limit(keep)
+                )
+                keep_result = await session.execute(keep_stmt)
+                keep_ids = {row[0] for row in keep_result.fetchall()}
+
+                # Delete logs not in keep list
+                delete_stmt = select(ConsoleLog).where(ConsoleLog.id.notin_(keep_ids))
+                result = await session.execute(delete_stmt)
+                old_logs = result.scalars().all()
+
+                count = len(old_logs)
+                for log in old_logs:
+                    await session.delete(log)
+
+                await session.commit()
+                if count > 0:
+                    logger.info("Cleaned up old console logs", deleted=count, kept=keep)
+                return count
+
+        except Exception as e:
+            logger.error("Failed to cleanup old console logs", error=str(e))
+            return 0
+
     # ============================================================================
     # Cache Entries (SQLite-backed Redis alternative)
     # ============================================================================
@@ -939,6 +1007,29 @@ class Database:
 
         except Exception as e:
             logger.error("Failed to cleanup expired cache", error=str(e))
+            return 0
+
+    async def cleanup_old_cache(self, max_age_hours: int = 24) -> int:
+        """Remove cache entries older than max_age_hours. Returns count deleted."""
+        import time
+        try:
+            async with self.get_session() as session:
+                cutoff_time = time.time() - (max_age_hours * 3600)
+                stmt = select(CacheEntry).where(CacheEntry.created_at < cutoff_time)
+                result = await session.execute(stmt)
+                entries = result.scalars().all()
+
+                count = len(entries)
+                for entry in entries:
+                    await session.delete(entry)
+
+                await session.commit()
+                if count > 0:
+                    logger.info("Cleaned up old cache entries", count=count, max_age_hours=max_age_hours)
+                return count
+
+        except Exception as e:
+            logger.error("Failed to cleanup old cache", error=str(e))
             return 0
 
     async def cache_exists(self, key: str) -> bool:

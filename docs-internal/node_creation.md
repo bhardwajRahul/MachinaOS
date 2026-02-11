@@ -239,10 +239,31 @@ const createNodeTypes = () => {
 
 | Component | Shape | Use Case |
 |-----------|-------|----------|
-| `SquareNode` | 80x80px square | Standard nodes, triggers |
+| `SquareNode` | 80x80px square | Standard nodes, action nodes |
+| `TriggerNode` | 80x80px square | Trigger nodes (no input handles) |
 | `ModelNode` | 80x80px circle | AI models, config nodes |
 | `AIAgentNode` | Rectangle with handles | AI agents with tool/memory inputs |
-| `WhatsAppNode` | Square with status | WhatsApp-specific features |
+| `ToolkitNode` | Square with vertical handles | Skill nodes, toolkit aggregators |
+
+### Trigger Node Registration
+
+Trigger nodes must be added to `TRIGGER_NODE_TYPES` array in Dashboard.tsx:
+
+```typescript
+// In createNodeTypes()
+const TRIGGER_NODE_TYPES = ['start', 'cronScheduler', 'webhookTrigger', 'whatsappReceive', 'chatTrigger', 'taskTrigger'];
+
+// Trigger nodes map to TriggerNode component
+if (TRIGGER_NODE_TYPES.includes(type)) {
+  types[type] = TriggerNode;
+}
+```
+
+Also add to the deploy validation array in `handleDeploy()`:
+
+```typescript
+const triggerTypes = ['start', 'cronScheduler', 'webhookTrigger', 'whatsappReceive', 'workflowTrigger', 'chatTrigger', 'taskTrigger'];
+```
 
 ---
 
@@ -845,6 +866,99 @@ event_waiter.dispatch('my_event_received', {
     'data': {...},
     'timestamp': datetime.now().isoformat()
 })
+```
+
+### Example: Task Trigger (Agent Delegation)
+
+The `taskTrigger` node demonstrates a complete trigger implementation that fires when delegated child agents complete:
+
+**Frontend Definition** (`client/src/nodeDefinitions/workflowNodes.ts`):
+```typescript
+taskTrigger: {
+  displayName: 'Task Completed',
+  name: 'taskTrigger',
+  icon: '📨',
+  group: ['trigger', 'workflow'],
+  version: 1,
+  subtitle: 'Child Agent Completed',
+  description: 'Triggers when a delegated child agent completes its task',
+  defaults: { name: 'Task Completed', color: '#bd93f9' },
+  inputs: [],
+  outputs: [{
+    name: 'main',
+    displayName: 'Output',
+    type: 'main' as NodeConnectionType,
+    description: 'task_id, status, agent_name, result/error, parent_node_id'
+  }],
+  properties: [
+    { displayName: 'Task ID Filter', name: 'task_id', type: 'string', default: '' },
+    { displayName: 'Agent Name Filter', name: 'agent_name', type: 'string', default: '' },
+    { displayName: 'Status Filter', name: 'status_filter', type: 'options', default: 'all',
+      options: [{ name: 'All', value: 'all' }, { name: 'Completed Only', value: 'completed' }, { name: 'Errors Only', value: 'error' }] },
+    { displayName: 'Parent Node ID', name: 'parent_node_id', type: 'string', default: '' }
+  ]
+}
+```
+
+**Backend Registry** (`server/services/event_waiter.py`):
+```python
+'taskTrigger': TriggerConfig(
+    node_type='taskTrigger',
+    event_type='task_completed',
+    display_name='Task Completed'
+),
+
+def build_task_completed_filter(params: Dict) -> Callable[[Dict], bool]:
+    """Build filter for task completed events."""
+    task_id_filter = params.get('task_id', '')
+    agent_name_filter = params.get('agent_name', '')
+    status_filter = params.get('status_filter', 'all')
+    parent_node_id = params.get('parent_node_id', '')
+
+    def matches(data: Dict) -> bool:
+        if task_id_filter and data.get('task_id') != task_id_filter:
+            return False
+        if agent_name_filter:
+            if agent_name_filter.lower() not in data.get('agent_name', '').lower():
+                return False
+        if status_filter == 'completed' and data.get('status') != 'completed':
+            return False
+        if status_filter == 'error' and data.get('status') != 'error':
+            return False
+        if parent_node_id and data.get('parent_node_id') != parent_node_id:
+            return False
+        return True
+    return matches
+
+FILTER_BUILDERS['taskTrigger'] = build_task_completed_filter
+```
+
+**Event Dispatch** (`server/services/handlers/tools.py`):
+```python
+# In _execute_delegated_agent(), after child completes:
+await broadcaster.send_custom_event('task_completed', {
+    'task_id': task_id,
+    'status': 'completed',  # or 'error'
+    'agent_name': agent_label,
+    'agent_node_id': node_id,
+    'parent_node_id': config.get('parent_node_id', ''),
+    'result': result.get('result', {}).get('response', ...),
+    'workflow_id': workflow_id,
+})
+```
+
+**Output Schema** (`client/src/components/parameterPanel/InputSection.tsx`):
+```typescript
+taskTrigger: {
+  task_id: 'string',
+  status: 'string',
+  agent_name: 'string',
+  agent_node_id: 'string',
+  parent_node_id: 'string',
+  result: 'string',
+  error: 'string',
+  workflow_id: 'string',
+}
 ```
 
 ---

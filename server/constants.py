@@ -214,6 +214,7 @@ EVENT_TRIGGER_TYPES: FrozenSet[str] = frozenset([
     'whatsappReceive',
     'workflowTrigger',
     'chatTrigger',
+    'taskTrigger',
 ])
 
 # Legacy alias for backwards compatibility
@@ -235,6 +236,7 @@ WORKFLOW_TRIGGER_TYPES: FrozenSet[str] = frozenset([
     'whatsappReceive',
     'workflowTrigger',
     'chatTrigger',
+    'taskTrigger',
 ])
 
 # =============================================================================

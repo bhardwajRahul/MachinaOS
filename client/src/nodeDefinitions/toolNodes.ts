@@ -158,6 +158,92 @@ export const toolNodes: Record<string, INodeTypeDescription> = {
         description: 'Maximum number of results to return'
       }
     ]
+  },
+
+  // Task Manager Tool - allows AI Agent to track and manage delegated tasks
+  taskManager: {
+    displayName: 'Task Manager',
+    name: 'taskManager',
+    icon: '📋',
+    group: ['tool', 'ai'],
+    version: 1,
+    subtitle: 'Track Delegated Tasks',
+    description: 'Manage and track delegated sub-agent tasks. Works as AI tool OR standalone workflow node.',
+    defaults: { name: 'Task Manager', color: '#8B5CF6' },
+    inputs: [],
+    outputs: [
+      {
+        name: 'tool',
+        displayName: 'Tool',
+        type: 'main' as NodeConnectionType,
+        description: 'Connect to AI Agent tool handle'
+      },
+      {
+        name: 'main',
+        displayName: 'Output',
+        type: 'main' as NodeConnectionType,
+        description: 'Task list output for workflow use'
+      }
+    ],
+    properties: [
+      {
+        displayName: 'Tool Name',
+        name: 'toolName',
+        type: 'string',
+        default: 'task_manager',
+        description: 'Name visible to the AI agent'
+      },
+      {
+        displayName: 'Tool Description',
+        name: 'toolDescription',
+        type: 'string',
+        default: 'Manage delegated tasks - list active/completed tasks, check task status, mark tasks done',
+        typeOptions: { rows: 2 },
+        description: 'Description for the AI agent'
+      },
+      {
+        displayName: 'Operation',
+        name: 'operation',
+        type: 'options',
+        options: [
+          { name: 'List Tasks', value: 'list_tasks' },
+          { name: 'Get Task', value: 'get_task' },
+          { name: 'Mark Done', value: 'mark_done' }
+        ],
+        default: 'list_tasks',
+        description: 'Operation to perform when run as workflow node'
+      },
+      {
+        displayName: 'Task ID',
+        name: 'task_id',
+        type: 'string',
+        default: '',
+        description: 'Task ID for get_task/mark_done operations',
+        displayOptions: {
+          show: {
+            operation: ['get_task', 'mark_done']
+          }
+        }
+      },
+      {
+        displayName: 'Status Filter',
+        name: 'status_filter',
+        type: 'options',
+        options: [
+          { name: 'All', value: '' },
+          { name: 'Running', value: 'running' },
+          { name: 'Completed', value: 'completed' },
+          { name: 'Error', value: 'error' }
+        ],
+        default: '',
+        description: 'Filter tasks by status',
+        displayOptions: {
+          show: {
+            operation: ['list_tasks']
+          }
+        }
+      }
+    ]
   }
 };
 
@@ -166,4 +252,4 @@ export const toolNodes: Record<string, INodeTypeDescription> = {
 // ============================================================================
 
 // List of tool node types for identification
-export const TOOL_NODE_TYPES = ['calculatorTool', 'currentTimeTool', 'webSearchTool'];
+export const TOOL_NODE_TYPES = ['calculatorTool', 'currentTimeTool', 'webSearchTool', 'taskManager'];

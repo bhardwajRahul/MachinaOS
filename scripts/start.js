@@ -12,6 +12,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 const START_TIME = Date.now();
 
+// Parse command line arguments
+const args = process.argv.slice(2);
+const isDaemonMode = args.includes('--daemon');
+
 // ============================================================================
 // Platform Detection
 // ============================================================================
@@ -158,6 +162,7 @@ process.env.PYTHONUTF8 = '1';
 
 console.log('\n=== MachinaOS Starting ===\n');
 log(`Platform: ${getPlatformName()}`);
+log(`Mode: ${isDaemonMode ? 'Daemon (Gunicorn)' : 'Development (uvicorn)'}`);
 log(`Ports: ${config.ports.join(', ')}`);
 log(`Temporal: ${config.temporalEnabled ? 'enabled' : 'disabled'}`);
 
@@ -219,7 +224,8 @@ if (isProduction) {
   services.push('npm:client:start');
 }
 
-services.push('npm:python:start');
+// Python backend: use gunicorn in daemon mode, uvicorn in development
+services.push(isDaemonMode ? 'npm:python:daemon' : 'npm:python:start');
 
 // WhatsApp RPC: only start if the pre-built binary exists
 const whatsappBin = resolve(ROOT, 'node_modules', 'whatsapp-rpc', 'bin',

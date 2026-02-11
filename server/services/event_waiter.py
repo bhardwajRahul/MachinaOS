@@ -105,6 +105,11 @@ TRIGGER_REGISTRY: Dict[str, TriggerConfig] = {
         event_type='chat_message_received',
         display_name='Chat Message'
     ),
+    'taskTrigger': TriggerConfig(
+        node_type='taskTrigger',
+        event_type='task_completed',
+        display_name='Task Completed'
+    ),
     # Future triggers - just add to registry:
     # 'emailTrigger': TriggerConfig('emailTrigger', 'email_received', 'Email'),
     # 'mqttTrigger': TriggerConfig('mqttTrigger', 'mqtt_message', 'MQTT Message'),
@@ -282,11 +287,61 @@ def build_chat_filter(params: Dict) -> Callable[[Dict], bool]:
     return matches
 
 
+def build_task_completed_filter(params: Dict) -> Callable[[Dict], bool]:
+    """Build filter function for task completed events.
+
+    Filters by:
+    - task_id: Specific task ID to watch (optional)
+    - agent_name: Filter by child agent name (optional)
+    - status_filter: 'all', 'completed', 'error' (default: 'all')
+    - parent_node_id: Filter by parent node (optional, for scoping)
+
+    Args:
+        params: Node parameters
+
+    Returns:
+        Filter function that checks if event matches criteria
+    """
+    task_id_filter = params.get('task_id', '')
+    agent_name_filter = params.get('agent_name', '')
+    status_filter = params.get('status_filter', 'all')  # all, completed, error
+    parent_node_id = params.get('parent_node_id', '')
+
+    def matches(data: Dict) -> bool:
+        # Task ID filter (exact match if specified)
+        if task_id_filter:
+            if data.get('task_id') != task_id_filter:
+                return False
+
+        # Agent name filter (contains match)
+        if agent_name_filter:
+            event_agent = data.get('agent_name', '')
+            if agent_name_filter.lower() not in event_agent.lower():
+                return False
+
+        # Status filter
+        event_status = data.get('status', '')
+        if status_filter == 'completed' and event_status != 'completed':
+            return False
+        if status_filter == 'error' and event_status != 'error':
+            return False
+
+        # Parent node filter (for scoping to specific parent agent)
+        if parent_node_id:
+            if data.get('parent_node_id') != parent_node_id:
+                return False
+
+        return True
+
+    return matches
+
+
 # Registry of filter builders per trigger type
 FILTER_BUILDERS: Dict[str, Callable[[Dict], Callable[[Dict], bool]]] = {
     'whatsappReceive': build_whatsapp_filter,
     'webhookTrigger': build_webhook_filter,
     'chatTrigger': build_chat_filter,
+    'taskTrigger': build_task_completed_filter,
 }
 
 

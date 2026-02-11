@@ -35,6 +35,7 @@ from services.handlers import (
     handle_social_receive, handle_social_send,
     handle_http_scraper, handle_file_downloader, handle_document_parser,
     handle_text_chunker, handle_embedding_generator, handle_vector_store,
+    handle_task_manager,
 )
 
 if TYPE_CHECKING:
@@ -145,6 +146,8 @@ class NodeExecutor:
             'textChunker': handle_text_chunker,
             'embeddingGenerator': handle_embedding_generator,
             'vectorStore': handle_vector_store,
+            # Task management
+            'taskManager': handle_task_manager,
             # Note: 'console' handled in _dispatch with connected_outputs
         }
 

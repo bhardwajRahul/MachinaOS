@@ -14,6 +14,8 @@ This is a React Flow-based workflow automation platform implementing n8n-inspire
 | **[Specialized Agent Guide](./docs-internal/specialized_agent_node_creation.md)** | Guide for creating specialized AI agents (Android, Coding, Web, Task, Social, Travel, Tool, Productivity, Payments, Consumer) with full AI configuration |
 | **[Dual-Purpose Tool Guide](./docs-internal/dual_purpose_tool_node_creation.md)** | Guide for nodes that work as both workflow nodes AND AI Agent tools (e.g., whatsappSend) |
 | **[Agent Architecture](./docs-internal/agent_architecture.md)** | How AI Agent and Chat Agent discover skills/tools, inject them into LLM prompts, and execute via LangGraph |
+| **[Agent Delegation](./docs-internal/agent_delegation.md)** | How memory, parameters, and execution context flow when one AI agent delegates work to another agent connected as a tool |
+| **[CI/CD Pipeline](./docs-internal/ci_cd.md)** | GitHub Actions workflows, predeploy validation, release publishing, and composite setup action |
 | **[Workflow Schema](./docs-internal/workflow-schema.md)** | JSON schema for workflows, edge handle conventions, config node architecture |
 | **[Execution Engine Design](./docs-internal/DESIGN.md)** | Architecture patterns, design standards, and implementation details for the workflow execution engine |
 | **[Execution Roadmap](./docs-internal/ROADMAP.md)** | Implementation status, completed phases, and pending features |
@@ -78,7 +80,8 @@ server/core/
 ├── container.py             # Dependency injection container
 ├── database.py              # SQLite database with cache CRUD methods
 ├── cache.py                 # CacheService with Redis/SQLite/Memory fallback
-└── settings.py              # Application configuration
+├── config.py                # Application configuration
+└── logging.py               # Logging configuration
 
 server/models/
 ├── cache.py                 # CacheEntry SQLModel for SQLite cache
@@ -286,15 +289,15 @@ class CacheEntry(SQLModel, table=True):
 
 ## Codebase Summary
 - **Hybrid architecture**: Node.js + Python + React TypeScript
-- **68 implemented workflow nodes** with clean service separation (6 AI models + 3 AI agents/memory + 10 specialized agents + 10 skills + 4 dedicated tools + 2 dual-purpose tools + 16 Android + 4 WhatsApp + 3 Location + 1 Code + 3 Utility + 6 Document)
-- **WebSocket-First Architecture**: WebSocket as primary frontend-backend communication (32 message types)
+- **75 implemented workflow nodes** with clean service separation (6 AI models + 3 AI agents/memory + 10 specialized agents + 11 skills + 3 dedicated tools + 6 dual-purpose tools + 16 Android + 3 WhatsApp + 2 Social + 3 Location + 2 Code + 5 Utility + 6 Document + 2 Chat + 2 Scheduler + 1 Workflow)
+- **WebSocket-First Architecture**: WebSocket as primary frontend-backend communication (84 message handlers)
 - **Recent optimizations**: REST APIs replaced with WebSocket, AI endpoints migrated to Python, Android automation integrated
 
 ## Architecture Refactoring
 The project was completely refactored from schema-based node definitions to explicit INodeProperties interface system inspired by n8n architecture. Key changes:
 - **Pure INodeProperties System**: Removed all backward compatibility layers
-- **35 Implemented Node Components**: AI models, agents, location services, Android automation, WhatsApp, Python code execution, and HTTP/Webhook utilities with full execution support
-- **WebSocket-First Communication**: 25 WebSocket message handlers replace most REST API calls
+- **75 Implemented Node Components**: AI models, agents, skills, location services, Android automation, WhatsApp, social, code execution, HTTP/Webhook utilities, document processing, chat, and schedulers
+- **WebSocket-First Communication**: 84 WebSocket message handlers replace most REST API calls
 - **Resource-Operation Pattern**: Organized by functional categories (AI, Location, Android, WhatsApp)
 - **TypeScript-First**: Full type safety with proper interface alignment
 - **Code Cleanup**: Removed dead code, unused files, and legacy methods
@@ -307,18 +310,22 @@ The project was completely refactored from schema-based node definitions to expl
 - `src/types/NodeTypes.ts` - Legacy compatibility types (NodeParameter, NodeOutput)
 
 ### Node System
-- `src/nodeDefinitions.ts` - Main registry importing modular node definitions
+- `src/nodeDefinitions.ts` - Main registry importing and merging all modular node definitions
 - `src/nodeDefinitions/aiModelNodes.ts` - AI chat model definitions using factory pattern
 - `src/nodeDefinitions/aiAgentNodes.ts` - AI agent and processing components
-- `src/nodeDefinitions/skillNodes.ts` - Skill node definitions (10 nodes including masterSkill)
+- `src/nodeDefinitions/skillNodes.ts` - Skill node definitions (11 nodes including masterSkill and customSkill)
 - `src/nodeDefinitions/specializedAgentNodes.ts` - Specialized AI agent definitions (10 nodes) with shared AI_AGENT_PROPERTIES and centralized dracula theming
+- `src/nodeDefinitions/toolNodes.ts` - AI Agent tool nodes (calculatorTool, currentTimeTool, webSearchTool)
 - `src/nodeDefinitions/androidServiceNodes.ts` - 16 Android service nodes (monitoring, apps, automation, sensors, media)
-- `src/nodeDefinitions/androidDeviceNodes.ts` - Android device setup and ADB port forwarding
 - `src/nodeDefinitions/locationNodes.ts` - Google Maps and location services
-- `src/nodeDefinitions/whatsappNodes.ts` - WhatsApp messaging integration
-- `src/nodeDefinitions/codeNodes.ts` - Python code execution node with syntax highlighting
-- `src/nodeDefinitions/utilityNodes.ts` - HTTP Request and Webhook nodes (httpRequest, webhookTrigger, webhookResponse)
+- `src/nodeDefinitions/whatsappNodes.ts` - WhatsApp messaging integration (3 nodes)
+- `src/nodeDefinitions/socialNodes.ts` - Unified social messaging nodes (socialReceive, socialSend)
+- `src/nodeDefinitions/codeNodes.ts` - Python and JavaScript code execution nodes
+- `src/nodeDefinitions/utilityNodes.ts` - HTTP, Webhook, chatTrigger, and console nodes
 - `src/nodeDefinitions/documentNodes.ts` - Document processing nodes (httpScraper, fileDownloader, documentParser, textChunker, embeddingGenerator, vectorStore)
+- `src/nodeDefinitions/chatNodes.ts` - Chat send and history nodes
+- `src/nodeDefinitions/schedulerNodes.ts` - Timer and cron scheduler nodes
+- `src/nodeDefinitions/workflowNodes.ts` - Workflow start node
 - `src/factories/baseChatModelFactory.ts` - Factory for creating standardized chat models
 - `src/services/executionService.ts` - Node execution engine with routing to Python backend
 
@@ -429,11 +436,11 @@ React Flow edges use dynamic Dracula colors via `getEdgeStyles(theme.dracula)`:
 ### WebSocket-First Architecture
 The project uses WebSocket as the primary communication method between frontend and backend, replacing most REST API calls:
 - `src/contexts/WebSocketContext.tsx` - Central WebSocket context with request/response pattern
-- `server/routers/websocket.py` - WebSocket endpoint with 32 message handlers
+- `server/routers/websocket.py` - WebSocket endpoint with 84 message handlers
 - `server/services/status_broadcaster.py` - Connection management and broadcasting
 
 ## Implemented Node Types
-The following 58 nodes are currently implemented and functional:
+The following 75 nodes are currently implemented and functional:
 
 ### AI Chat Models (6 nodes)
 - **openaiChatModel**: OpenAI GPT models with response format options. O-series models (o1, o3, o4) support reasoning effort parameter.
@@ -448,10 +455,10 @@ The following 58 nodes are currently implemented and functional:
 - **chatAgent**: Conversational AI agent with memory and skill support for multi-turn chat interactions. Parameters: Provider, Model, Prompt (supports `{{chatTrigger.message}}` template or auto-fallback from connected input), System Message. Behavior extended by connected skills.
 - **simpleMemory**: Markdown-based conversation memory with editable UI, window-based trimming, and optional vector DB for long-term semantic retrieval
 
-### Zeenie Skill Nodes (10 nodes)
+### Zeenie Skill Nodes (11 nodes)
 Skill nodes connect to Zeenie's `input-skill` handle to provide capabilities defined in SKILL.md files following the [Agent Skills specification](https://agentskills.io/specification):
 - **masterSkill**: Master Skill (icon: target) - Aggregates multiple skills with enable/disable toggles. Split-panel UI: left panel shows skill list with checkboxes, right panel shows selected skill's markdown editor. Enabled skills are expanded into individual skill entries when the AI Agent executes.
-- **claudeSkill**: Assistant Skill (icon: sparkles) - default assistant personality with helpful, harmless, honest responses
+- **assistantPersonality**: Assistant Skill (icon: sparkles) - default assistant personality with helpful, harmless, honest responses
 - **whatsappSkill**: Send and receive WhatsApp messages via Zeenie
 - **memorySkill**: Long-term memory management across conversations
 - **mapsSkill**: Location services - geocoding, nearby places, directions via Google Maps
@@ -716,7 +723,7 @@ Android device connection is configured via the Credentials Modal (Android panel
 - **cameraControl**: Camera control - get camera info, take photos, camera capabilities
 - **mediaControl**: Media playback control - volume control, playback control, play media files
 
-### WhatsApp Nodes (4 nodes)
+### WhatsApp Nodes (3 nodes)
 - **whatsappSend**: **Dual-purpose node** - Send WhatsApp messages (text, image, video, audio, document, sticker, location, contact). Works as workflow node OR AI Agent tool. Group: `['whatsapp', 'tool']`. Full parameter schema for recipient type, message type, media URL, location coordinates, contact vCard.
 - **whatsappDb**: **Dual-purpose node** - Comprehensive WhatsApp database query node with 6 operations. Works as workflow node OR AI Agent tool. Group: `['whatsapp', 'tool']`. Operations:
   - `chat_history`: Retrieve messages from individual or group chats with filtering and pagination
@@ -725,7 +732,6 @@ Android device connection is configured via the Credentials Modal (Android panel
   - `get_contact_info`: Get full contact info (name, phone, profile picture) for sending/replying
   - `list_contacts`: List all contacts with saved names
   - `check_contacts`: Check WhatsApp registration status for phone numbers
-- **whatsappConnect**: Check WhatsApp connection status and device info
 - **whatsappReceive**: Event-driven trigger that waits for incoming WhatsApp messages with filters (message type, sender, group, keywords, forwarded status). Marked with `['whatsapp', 'trigger']` group for n8n-style trigger identification. Stores group/sender names alongside JID/phone for display persistence. The Go RPC resolves LIDs to phone numbers before sending events - `sender_phone` field is already resolved. Filter options: All Messages, From Any Contact (Non-Group), From Specific Contact, From Specific Group, Contains Keywords
 
 ### Social Nodes (2 nodes)
@@ -734,17 +740,20 @@ Unified social messaging nodes for multi-platform communication. Supports WhatsA
 - **socialReceive**: Normalizes messages from platform triggers into unified format. Multiple outputs: Message, Media, Contact, Metadata. Filters by channel, message type, sender.
 - **socialSend**: **Dual-purpose node** - Send messages to any supported platform. Works as workflow node OR AI Agent tool. Supports text, image, video, audio, document, sticker, location, contact, poll, buttons, list message types.
 
-### Workflow Nodes (1 node)
-- **workflowTrigger**: Manual workflow trigger to start workflow execution
+### Workflow Nodes (2 nodes)
+- **start**: Manual workflow trigger to start workflow execution
+- **taskTrigger**: Event-driven trigger that fires when a delegated child agent completes its task (success or error). Filters by task_id, agent_name, status (all/completed/error), and parent_node_id. Output includes task_id, status, agent_name, result/error, workflow_id.
 
 ### Code Nodes (2 nodes)
 - **pythonExecutor**: **Dual-purpose node** - Execute Python code with syntax-highlighted editor, input_data access, and console output. Works as workflow node OR AI Agent tool (`python_code`). Available libraries: math, json, datetime, timedelta, re, random, Counter, defaultdict.
 - **javascriptExecutor**: **Dual-purpose node** - Execute JavaScript code with syntax-highlighted editor and console output. Works as workflow node OR AI Agent tool (`javascript_code`).
 
-### Utility Nodes (3 nodes)
+### Utility Nodes (5 nodes)
 - **httpRequest**: Make HTTP requests to external APIs (GET, POST, PUT, DELETE, PATCH) with configurable headers, body, and timeout
 - **webhookTrigger**: Event-driven trigger that waits for incoming HTTP requests at `/webhook/{path}` with method filtering and authentication options
 - **webhookResponse**: Send custom response back to webhook caller with configurable status code, body, and content type
+- **chatTrigger**: Trigger node that receives messages from the Console Panel chat interface
+- **console**: Console output node for logging workflow execution data
 
 ### Document Processing Nodes (6 nodes)
 RAG pipeline nodes for document ingestion, processing, and vector storage. Supports multiple providers and backends.
@@ -755,6 +764,14 @@ RAG pipeline nodes for document ingestion, processing, and vector storage. Suppo
 - **textChunker**: Split text into overlapping chunks for embedding. Strategies: recursive (recommended), markdown, token. Parameters: chunk size (100-8000), overlap (0-1000).
 - **embeddingGenerator**: Generate vector embeddings from text chunks. Providers: HuggingFace (local), OpenAI, Ollama. Default model: BAAI/bge-small-en-v1.5.
 - **vectorStore**: Store and query vector embeddings. Operations: store, query, delete. Backends: ChromaDB (local), Qdrant (production), Pinecone (cloud).
+
+### Chat Nodes (2 nodes)
+- **chatSend**: Send messages to chat conversations
+- **chatHistory**: Retrieve chat conversation history
+
+### Scheduler Nodes (2 nodes)
+- **timer**: Timer-based trigger with configurable delay
+- **cronScheduler**: Cron expression-based scheduling trigger
 
 #### Document Processing Dependencies
 ```
@@ -947,8 +964,8 @@ All scripts in `scripts/` are cross-platform Node.js (Windows, macOS, Linux, WSL
 See **[Scripts Reference](./docs-internal/SCRIPTS.md)** for full documentation.
 
 ## Current Status
-✅ **INodeProperties System**: Fully implemented with 41 functional components
-✅ **WebSocket-First Architecture**: 32 message handlers replacing REST APIs
+✅ **INodeProperties System**: Fully implemented with 75 functional node components
+✅ **WebSocket-First Architecture**: 84 message handlers replacing REST APIs
 ✅ **Code Editor**: Python executor with syntax-highlighted editor (react-simple-code-editor + prismjs) and console output
 ✅ **Component Palette**: Emoji icons with distinct dracula-themed category colors, localStorage persistence for collapsed sections
 ✅ **Android Integration**: 16 Android service nodes with ADB automation and remote WebSocket support
@@ -1474,8 +1491,12 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
     subtitle: 'LangGraph Agent',
     themeColorKey: 'purple',
     bottomHandles: [
-      { id: 'input-memory', label: 'Memory', position: '35%' },
-      { id: 'input-tools', label: 'Tool', position: '65%' },
+      { id: 'input-skill', label: 'Skill', position: '25%' },
+      { id: 'input-tools', label: 'Tool', position: '75%' },
+    ],
+    leftHandles: [
+      { id: 'input-memory', label: 'Memory', position: '55%' },
+      { id: 'input-task', label: 'Task', position: '85%' },
     ],
   },
   chatAgent: {
@@ -1484,13 +1505,17 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
     subtitle: 'Conversational Agent',
     themeColorKey: 'cyan',
     bottomHandles: [
-      { id: 'input-memory', label: 'Memory', position: '35%' },
-      { id: 'input-skill', label: 'Skill', position: '65%' },
+      { id: 'input-skill', label: 'Skill', position: '25%' },
+      { id: 'input-tools', label: 'Tool', position: '75%' },
+    ],
+    leftHandles: [
+      { id: 'input-memory', label: 'Memory', position: '55%' },
+      { id: 'input-task', label: 'Task', position: '85%' },
     ],
   },
   // ... 10 specialized agents (android_agent, coding_agent, web_agent, task_agent,
   //     social_agent, travel_agent, tool_agent, productivity_agent, payments_agent, consumer_agent)
-  //     each with themeColorKey, standard Skill/Tool bottom handles, Memory left handle
+  //     each with themeColorKey, standard Skill/Tool bottom handles, Memory/Task left handles
 };
 ```
 
@@ -1509,8 +1534,9 @@ In `Dashboard.tsx`, both agent types map to the same component:
 | Tool Calling | Yes (LangGraph) | Yes (LangGraph) |
 | Memory Support | Yes | Yes |
 | Skill Support | Yes | Yes |
+| Task Input | Yes (input-task) | Yes (input-task) |
 | Bottom Handles | Skill, Tools | Skill, Tools |
-| Left Handles | Input, Memory | Input, Memory |
+| Left Handles | Input, Memory, Task | Input, Memory, Task |
 | Backend Method | `execute_agent()` | `execute_chat_agent()` |
 | Async Delegation | Yes (fire-and-forget) | Yes (fire-and-forget) |
 
@@ -2137,6 +2163,116 @@ useEffect(() => {
 bcrypt>=4.1.0
 python-jose[cryptography]>=3.3.0
 email-validator>=2.0.0
+```
+
+## Example Workflows
+
+### Overview
+Example workflows are pre-built workflow templates that auto-load on first use. They provide users with starting points to explore the platform's capabilities. Examples are stored as JSON files in the `workflows/` folder at the project root.
+
+### Architecture
+```
+workflows/                        # Example workflow JSON files (project root)
+├── hello_world.json
+├── zeenie_chat.json
+└── ...
+
+server/services/
+└── example_loader.py             # Loads and imports examples
+
+server/models/database.py         # UserSettings.examples_loaded flag
+server/core/database.py           # Migration for examples_loaded column
+server/routers/database.py        # Auto-load logic in get_all_workflows
+```
+
+### How It Works
+1. **First Fetch Detection**: When `get_all_workflows` API is called, it checks `UserSettings.examples_loaded`
+2. **Auto-Import**: If `examples_loaded=false`, imports all JSON files from `workflows/` folder
+3. **Mark Complete**: Sets `examples_loaded=true` to prevent re-import on subsequent fetches
+4. **Anonymous Support**: Uses `user_id="default"` when `VITE_AUTH_ENABLED=false`
+
+### Workflow JSON Format
+Example workflows use the same format as UI exports:
+```json
+{
+  "id": "hello_world",
+  "name": "Hello World",
+  "description": "A simple workflow with a start node",
+  "nodes": [
+    {
+      "id": "start_1",
+      "type": "start",
+      "position": {"x": 250, "y": 150},
+      "data": {"label": "Start"}
+    }
+  ],
+  "edges": [],
+  "version": "0.0.10"
+}
+```
+
+**Fields:**
+| Field | Description |
+|-------|-------------|
+| `id` | Unique identifier (prefixed with `example_` when imported) |
+| `name` | Display name in workflow sidebar |
+| `description` | Optional description |
+| `nodes` | Array of node objects with id, type, position, data |
+| `edges` | Array of edge connections between nodes |
+| `version` | App version (e.g., "0.0.10") |
+
+### Key Files
+| File | Description |
+|------|-------------|
+| `workflows/*.json` | Example workflow JSON files |
+| `server/services/example_loader.py` | `get_example_workflows()`, `import_examples_for_user()` |
+| `server/models/database.py` | `UserSettings.examples_loaded` field |
+| `server/core/database.py` | Migration adds `examples_loaded` column |
+| `server/routers/database.py` | Auto-load check in `get_all_workflows` |
+
+### Example Loader Service
+```python
+# server/services/example_loader.py
+EXAMPLES_DIR = Path(__file__).parent.parent.parent / "workflows"
+
+def get_example_workflows() -> List[Dict[str, Any]]:
+    """Load all example workflow JSON files from disk."""
+
+async def import_examples_for_user(database) -> int:
+    """Import all examples using existing database.save_workflow().
+    Returns count of workflows imported."""
+```
+
+### Auto-Load Logic
+```python
+# server/routers/database.py - get_all_workflows endpoint
+user_id = "default"
+settings = await database.get_user_settings(user_id)
+
+if not settings or not settings.get("examples_loaded", False):
+    count = await import_examples_for_user(database)
+    if count > 0:
+        logger.info(f"Auto-loaded {count} example workflows")
+    current = settings or {}
+    current["examples_loaded"] = True
+    await database.save_user_settings(current, user_id)
+```
+
+### Adding Custom Examples
+1. Export a workflow from the UI (File > Export)
+2. Copy the JSON file to `workflows/` folder at project root
+3. Edit the `id` and `name` fields as needed
+4. Delete `server/machina.db` (or set `examples_loaded=false` in database)
+5. Restart server - examples auto-load on first workflow list fetch
+
+### Database Migration
+The `examples_loaded` column is automatically added to existing databases:
+```python
+# server/core/database.py - _migrate_user_settings()
+if "examples_loaded" not in columns:
+    await conn.execute(text(
+        "ALTER TABLE user_settings ADD COLUMN examples_loaded BOOLEAN DEFAULT 0"
+    ))
 ```
 
 ## AI Chat Model Development Guide
@@ -3110,6 +3246,8 @@ class TriggerConfig:
 TRIGGER_REGISTRY: Dict[str, TriggerConfig] = {
     'whatsappReceive': TriggerConfig('whatsappReceive', 'whatsapp_message_received', 'WhatsApp Message'),
     'webhookTrigger': TriggerConfig('webhookTrigger', 'webhook_received', 'Webhook Request'),
+    'chatTrigger': TriggerConfig('chatTrigger', 'chat_message_received', 'Chat Message'),
+    'taskTrigger': TriggerConfig('taskTrigger', 'task_completed', 'Task Completed'),
     # Future: 'emailTrigger', 'mqttTrigger', 'telegramTrigger', etc.
 }
 
@@ -3235,6 +3373,72 @@ const sampleSchemas = {
     }
   }
 };
+```
+
+### Task Trigger Node
+
+The Task Trigger node fires when a delegated child agent completes its task (success or error). This enables parent agents to react to child completion via workflow nodes.
+
+#### Node Definition (`client/src/nodeDefinitions/workflowNodes.ts`)
+```typescript
+taskTrigger: {
+  displayName: 'Task Completed',
+  name: 'taskTrigger',
+  icon: '📨',
+  group: ['trigger', 'workflow'],
+  outputs: [{
+    name: 'main',
+    displayName: 'Output',
+    type: 'main',
+    description: 'task_id, status, agent_name, result/error, parent_node_id'
+  }],
+  properties: [
+    // Task ID Filter: Optional specific task ID to watch
+    // Agent Name Filter: Optional partial match on agent name
+    // Status Filter: all, completed, error
+    // Parent Node ID: Optional filter by parent agent node
+  ]
+}
+```
+
+#### Output Schema (`client/src/components/parameterPanel/InputSection.tsx`)
+```typescript
+taskTrigger: {
+  task_id: 'string',
+  status: 'string',      // 'completed' or 'error'
+  agent_name: 'string',
+  agent_node_id: 'string',
+  parent_node_id: 'string',
+  result: 'string',      // Present when status='completed'
+  error: 'string',       // Present when status='error'
+  workflow_id: 'string',
+}
+```
+
+#### Event Dispatch (`server/services/handlers/tools.py`)
+The `task_completed` event is dispatched when a delegated child agent finishes:
+```python
+# On success:
+await broadcaster.send_custom_event('task_completed', {
+    'task_id': task_id,
+    'status': 'completed',
+    'agent_name': agent_label,
+    'agent_node_id': node_id,
+    'parent_node_id': config.get('parent_node_id', ''),
+    'result': result.get('result', {}).get('response', ...),
+    'workflow_id': workflow_id,
+})
+
+# On error:
+await broadcaster.send_custom_event('task_completed', {
+    'task_id': task_id,
+    'status': 'error',
+    'agent_name': agent_label,
+    'agent_node_id': node_id,
+    'parent_node_id': config.get('parent_node_id', ''),
+    'error': str(e),
+    'workflow_id': workflow_id,
+})
 ```
 
 ### Adding New Trigger Types
@@ -3423,41 +3627,31 @@ def has_real_android_devices(self) -> bool:
 
 Updated `client_left` and presence handlers use `has_real_android_devices()` instead of checking total device count.
 
-### WebSocket Message Types (32 Handlers)
+### WebSocket Message Types (84 Handlers)
 
 #### Request/Response Messages (Client -> Server -> Client)
-| Message Type | Description |
-|--------------|-------------|
-| `get_node_parameters` | Get parameters for a single node |
-| `get_all_node_parameters` | Get parameters for multiple nodes |
-| `save_node_parameters` | Save node parameters to database |
-| `delete_node_parameters` | Delete node parameters |
-| `execute_node` | Execute a workflow node |
-| `cancel_execution` | Cancel running node execution |
-| `execute_ai_node` | Execute AI model node |
-| `get_ai_models` | Get available models for provider |
-| `validate_api_key` | Validate AI provider API key |
-| `get_stored_api_key` | Get stored API key for provider |
-| `save_api_key` | Save API key to secure storage |
-| `delete_api_key` | Delete stored API key |
-| `get_android_devices` | List connected Android devices |
-| `execute_android_action` | Execute Android service action |
-| `setup_android_device` | Setup Android device connection |
-| `validate_maps_key` | Validate Google Maps API key |
-| `whatsapp_status` | Get WhatsApp connection status |
-| `whatsapp_qr` | Get WhatsApp QR code |
-| `whatsapp_send` | Send WhatsApp message |
-| `whatsapp_start` | Start WhatsApp connection |
-| `cancel_event_wait` | Cancel active event waiter (trigger nodes) |
-| `get_active_waiters` | Get list of active event waiters |
-| `send_chat_message` | Send chat message, optionally to specific node |
-| `get_chat_messages` | Get chat history for session |
-| `clear_chat_messages` | Clear chat history for session |
-| `get_skill_content` | Get skill instructions from database or SKILL.md file |
-| `save_skill_content` | Save skill instructions to database |
-| `list_skill_folders` | List available skill folders under server/skills/ |
-| `scan_skill_folder` | Scan a folder for skills, returns name/description/metadata |
-| `ping` | Keep-alive request |
+| Category | Message Types |
+|----------|--------------|
+| **Status/Ping** | `ping`, `get_status`, `get_android_status`, `get_node_status`, `get_variable` |
+| **Node Parameters** | `get_node_parameters`, `get_all_node_parameters`, `save_node_parameters`, `delete_node_parameters` |
+| **Tool Schemas** | `get_tool_schema`, `save_tool_schema`, `delete_tool_schema`, `get_all_tool_schemas` |
+| **Node Execution** | `execute_node`, `execute_workflow`, `cancel_execution`, `get_node_output`, `clear_node_output` |
+| **Triggers/Events** | `cancel_event_wait`, `get_active_waiters` |
+| **Dead Letter Queue** | `get_dlq_entries`, `get_dlq_entry`, `get_dlq_stats`, `replay_dlq_entry`, `remove_dlq_entry`, `purge_dlq` |
+| **Deployment** | `deploy_workflow`, `cancel_deployment`, `get_deployment_status`, `get_workflow_lock`, `update_deployment_settings` |
+| **AI Operations** | `execute_ai_node`, `get_ai_models` |
+| **API Keys** | `validate_api_key`, `get_stored_api_key`, `save_api_key`, `delete_api_key` |
+| **Claude OAuth** | `claude_oauth_login`, `claude_oauth_status` |
+| **Android** | `get_android_devices`, `execute_android_action`, `android_relay_connect`, `android_relay_disconnect`, `android_relay_reconnect` |
+| **Maps** | `validate_maps_key` |
+| **WhatsApp** | `whatsapp_status`, `whatsapp_qr`, `whatsapp_send`, `whatsapp_start`, `whatsapp_restart`, `whatsapp_groups`, `whatsapp_group_info`, `whatsapp_chat_history`, `whatsapp_rate_limit_get`, `whatsapp_rate_limit_set`, `whatsapp_rate_limit_stats`, `whatsapp_rate_limit_unpause` |
+| **Workflow Storage** | `save_workflow`, `get_workflow`, `get_all_workflows`, `delete_workflow` |
+| **Chat Messages** | `send_chat_message`, `get_chat_messages`, `clear_chat_messages`, `save_chat_message` |
+| **Console/Terminal** | `get_console_logs`, `clear_console_logs`, `get_terminal_logs`, `clear_terminal_logs` |
+| **User Skills** | `get_user_skills`, `get_user_skill`, `create_user_skill`, `update_user_skill`, `delete_user_skill` |
+| **Built-in Skills** | `get_skill_content`, `save_skill_content`, `scan_skill_folder`, `list_skill_folders` |
+| **Memory/Skill Reset** | `clear_memory`, `reset_skill` |
+| **User Settings** | `get_user_settings`, `save_user_settings` |
 
 #### Broadcast Messages (Server -> All Clients)
 | Message Type | Description |
@@ -3614,7 +3808,7 @@ This function:
 - **Performance**: Fast HMR updates and clean TypeScript compilation
 - **AI Architecture**: 5-layer system with factory pattern and secure credential management
 - **Android Architecture**: Factory-based node creation with ADB integration for device automation
-- **WebSocket-First Architecture**: 32 message handlers replace REST APIs for parameters, execution, API keys, Android, WhatsApp, and skill operations
+- **WebSocket-First Architecture**: 84 message handlers replace REST APIs for parameters, execution, API keys, Android, WhatsApp, and skill operations
 - **WebSocket Hooks**: Dedicated React hooks (useWhatsApp, useExecution, useApiKeys, useAndroidOperations, useParameterPanel) for clean component integration
 - **WebSocket Support**: Persistent remote Android device connections via WebSocket proxy with background tasks
   - Connection stays alive across multiple API requests until switched to local ADB
@@ -3699,4 +3893,5 @@ This function:
 - **Node Data Architecture**: `node.data` only stores `label` (display name). All parameters are stored in the database via `save_node_parameters` WebSocket handler. This prevents parameter bloat in workflow JSON exports and keeps React Flow state lightweight. `useDragAndDrop.ts` saves default parameters to DB on drop, not to `node.data`.
 - **Workflow Export Sanitization**: `exportWorkflow()` in `useWorkflow.ts` strips transient fields (`selected`, `dragging`, `width`, `height`, `measured`, `positionAbsolute`) from nodes and edges before export. Only `id`, `type`, `position`, `data.label` are included per node.
 - **Skill System Architecture**: Skills organized in `server/skills/<folder>/` subfolders. Each folder appears in Master Skill dropdown. DB is source of truth for skill instructions (seeded from SKILL.md on first load). Icon resolution: node definition (SVG) > SKILL.md metadata (emoji) > fallback. Native DOM keydown handler prevents React Flow from intercepting Ctrl shortcuts in skill editor.
+- **Example Workflows**: Auto-load example workflows from `workflows/` folder on first use. Uses `UserSettings.examples_loaded` flag to track import status. Supports anonymous users (`user_id="default"`). Reuses existing `database.save_workflow()` for import. See "Example Workflows" section for details.
 - never use emojis in prints

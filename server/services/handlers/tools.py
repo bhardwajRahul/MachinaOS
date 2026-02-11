@@ -9,7 +9,7 @@ import math
 import json
 import asyncio
 import uuid
-from typing import Dict, Any, Optional, TYPE_CHECKING
+from typing import Dict, Any, Optional, List, TYPE_CHECKING
 
 from core.logging import get_logger
 from constants import ANDROID_SERVICE_NODE_TYPES
@@ -22,6 +22,10 @@ logger = get_logger(__name__)
 
 # Track running delegated tasks for status checking
 _delegated_tasks: Dict[str, asyncio.Task] = {}
+
+# In-memory cache of delegation results (fast path, survives task cleanup)
+# Follows Celery AsyncResult / Ray ObjectRef pattern
+_delegation_results: Dict[str, Dict[str, Any]] = {}
 
 
 async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
@@ -114,6 +118,15 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
     # Google Maps Nearby Places (gmaps_nearby_places node as tool)
     if node_type == 'gmaps_nearby_places':
         return await _execute_nearby_places(tool_args, config.get('parameters', {}))
+
+    # Task Manager (dual-purpose: AI tool + workflow node)
+    if node_type == 'taskManager':
+        return await _execute_task_manager(tool_args, config)
+
+    # Built-in: Check delegated task results
+    # Auto-injected when parent has delegation tools
+    if node_type == '_builtin_check_delegated_tasks':
+        return await _execute_check_delegated_tasks(tool_args, config)
 
     # AI Agent delegation (fire-and-forget async delegation)
     # Includes specialized agents: android_agent, coding_agent, web_agent, task_agent, social_agent
@@ -1246,6 +1259,42 @@ async def _execute_delegated_agent(args: Dict[str, Any],
                 workflow_id=workflow_id
             )
 
+            # Cache result for parent retrieval (Layer 2: in-memory)
+            _delegation_results[task_id] = {
+                "task_id": task_id,
+                "status": "completed",
+                "agent_name": agent_label,
+                "agent_node_id": node_id,
+                "result": result.get('result', {}).get('response', str(result.get('result', ''))),
+                "error": None,
+            }
+
+            # Persist to DB (Layer 3: cross-restart via existing NodeOutput)
+            if database:
+                await database.save_node_output(
+                    node_id=node_id,
+                    session_id=f"delegation_{task_id}",
+                    output_name="delegation_result",
+                    data={
+                        "task_id": task_id,
+                        "parent_node_id": config.get('parent_node_id', ''),
+                        "agent_name": agent_label,
+                        "status": "completed",
+                        "result": result.get('result', {}),
+                    }
+                )
+
+            # Dispatch task_completed event for trigger nodes
+            await broadcaster.send_custom_event('task_completed', {
+                'task_id': task_id,
+                'status': 'completed',
+                'agent_name': agent_label,
+                'agent_node_id': node_id,
+                'parent_node_id': config.get('parent_node_id', ''),
+                'result': result.get('result', {}).get('response', str(result.get('result', ''))),
+                'workflow_id': workflow_id,
+            })
+
             return result
 
         except Exception as e:
@@ -1260,6 +1309,43 @@ async def _execute_delegated_agent(args: Dict[str, Any],
                 },
                 workflow_id=workflow_id
             )
+
+            # Cache error for parent retrieval (Layer 2: in-memory)
+            _delegation_results[task_id] = {
+                "task_id": task_id,
+                "status": "error",
+                "agent_name": agent_label,
+                "agent_node_id": node_id,
+                "result": None,
+                "error": str(e),
+            }
+
+            # Persist to DB (Layer 3: cross-restart)
+            if database:
+                await database.save_node_output(
+                    node_id=node_id,
+                    session_id=f"delegation_{task_id}",
+                    output_name="delegation_result",
+                    data={
+                        "task_id": task_id,
+                        "parent_node_id": config.get('parent_node_id', ''),
+                        "agent_name": agent_label,
+                        "status": "error",
+                        "error": str(e),
+                    }
+                )
+
+            # Dispatch task_completed event for trigger nodes (error case)
+            await broadcaster.send_custom_event('task_completed', {
+                'task_id': task_id,
+                'status': 'error',
+                'agent_name': agent_label,
+                'agent_node_id': node_id,
+                'parent_node_id': config.get('parent_node_id', ''),
+                'error': str(e),
+                'workflow_id': workflow_id,
+            })
+
             return {"success": False, "error": str(e)}
 
         finally:
@@ -1281,20 +1367,268 @@ async def _execute_delegated_agent(args: Dict[str, Any],
     }
 
 
-def get_delegated_task_status(task_id: str) -> Dict[str, Any]:
-    """Check status of a delegated task (optional utility).
+async def get_delegated_task_status(task_ids: Optional[List[str]] = None,
+                                     database=None) -> Dict[str, Any]:
+    """Check status and retrieve results of delegated tasks.
+
+    3-layer lookup: live tasks -> memory cache -> DB (NodeOutput).
+    Follows Celery AsyncResult / Ray ObjectRef pattern.
 
     Args:
-        task_id: The task_id returned from delegation
+        task_ids: Optional list of specific task IDs to check. If None, returns all known tasks.
+        database: Database instance for Layer 3 (SQLite) lookup.
 
     Returns:
-        Status dict with task state
+        Dict with 'tasks' list containing status and results for each task.
     """
-    task = _delegated_tasks.get(task_id)
+    if not task_ids:
+        # Return all known from memory
+        task_ids = list(set(
+            list(_delegated_tasks.keys()) + list(_delegation_results.keys())
+        ))
 
-    if task is None:
-        return {"status": "not_found_or_completed", "task_id": task_id}
-    elif task.done():
-        return {"status": "completed", "task_id": task_id}
-    else:
-        return {"status": "running", "task_id": task_id}
+    tasks = []
+    db_lookup_ids = []
+
+    for tid in task_ids:
+        # Layer 1: Live asyncio.Task (still running or just finished)
+        live_task = _delegated_tasks.get(tid)
+        if live_task is not None:
+            if not live_task.done():
+                tasks.append({"task_id": tid, "status": "running"})
+            else:
+                # Task finished -- extract result via task.result()
+                try:
+                    result = live_task.result()
+                    response = result.get('result', {}).get('response', str(result.get('result', '')))
+                    tasks.append({"task_id": tid, "status": "completed", "result": response})
+                except Exception as e:
+                    tasks.append({"task_id": tid, "status": "error", "error": str(e)})
+            continue
+
+        # Layer 2: In-memory result cache
+        cached = _delegation_results.get(tid)
+        if cached:
+            tasks.append(cached)
+            continue
+
+        # Layer 3: Need DB lookup
+        db_lookup_ids.append(tid)
+
+    # DB fallback for results not in memory (cross-restart)
+    if db_lookup_ids and database:
+        for tid in list(db_lookup_ids):
+            db_result = await database.get_node_output_by_session(
+                session_id=f"delegation_{tid}",
+                output_name="delegation_result"
+            )
+            if db_result:
+                data = db_result.get('data', {})
+                result_data = data.get("result", {})
+                response_text = result_data.get("response", str(result_data)) if isinstance(result_data, dict) else str(result_data)
+                tasks.append({
+                    "task_id": tid,
+                    "status": data.get("status", "completed"),
+                    "agent_name": data.get("agent_name", ""),
+                    "result": response_text,
+                    "error": data.get("error"),
+                })
+                db_lookup_ids.remove(tid)
+
+    # Remaining IDs not found anywhere
+    for tid in db_lookup_ids:
+        tasks.append({"task_id": tid, "status": "not_found"})
+
+    return {"tasks": tasks}
+
+
+async def _execute_check_delegated_tasks(args: Dict[str, Any],
+                                          config: Dict[str, Any]) -> Dict[str, Any]:
+    """LLM-callable tool: check on delegated child agents.
+
+    Returns status and results for previously delegated tasks.
+    Follows Celery AsyncResult / Ray ObjectRef patterns.
+    """
+    task_ids = args.get('task_ids')
+    database = config.get('database')
+    result = await get_delegated_task_status(task_ids=task_ids, database=database)
+
+    formatted = []
+    for task in result.get("tasks", []):
+        entry = {
+            "task_id": task.get("task_id"),
+            "status": task.get("status"),
+            "agent_name": task.get("agent_name"),
+        }
+        if task.get("status") == "completed":
+            text = str(task.get("result", ""))
+            entry["result"] = text[:4000] + "... [truncated]" if len(text) > 4000 else text
+        elif task.get("status") == "error":
+            entry["error"] = task.get("error")
+        elif task.get("status") == "running":
+            entry["message"] = f"Agent '{task.get('agent_name', 'unknown')}' is still working"
+        formatted.append(entry)
+
+    return {
+        "total_tasks": len(formatted),
+        "completed": sum(1 for t in formatted if t.get("status") == "completed"),
+        "running": sum(1 for t in formatted if t.get("status") == "running"),
+        "errors": sum(1 for t in formatted if t.get("status") == "error"),
+        "tasks": formatted,
+    }
+
+
+async def _execute_task_manager(
+    tool_args: Dict[str, Any],
+    config: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Execute task manager operations.
+
+    Dual-purpose: works as AI tool (LLM fills args) or workflow node (uses params).
+
+    Operations:
+    - list_tasks: List all active and completed delegated tasks
+    - get_task: Get status details for a specific task
+    - mark_done: Remove a task from active tracking
+
+    Args:
+        tool_args: Arguments from LLM tool call (operation, task_id, status_filter)
+        config: Tool configuration with node parameters
+
+    Returns:
+        Dict with operation results
+    """
+    # Merge tool_args with node parameters (tool_args takes precedence)
+    params = config.get('parameters', {})
+    operation = tool_args.get('operation') or params.get('operation', 'list_tasks')
+    task_id = tool_args.get('task_id') or params.get('task_id')
+    status_filter = tool_args.get('status_filter') or params.get('status_filter')
+    database = config.get('database')
+
+    logger.debug(f"[TaskManager] Operation: {operation}, task_id: {task_id}, filter: {status_filter}")
+
+    if operation == 'list_tasks':
+        # Collect all tasks from _delegated_tasks and _delegation_results
+        tasks = []
+
+        # Active tasks from asyncio.Task tracking
+        for tid, task in _delegated_tasks.items():
+            if task.done():
+                try:
+                    if task.cancelled():
+                        status = 'cancelled'
+                    elif task.exception():
+                        status = 'error'
+                    else:
+                        status = 'completed'
+                except Exception:
+                    status = 'completed'
+            else:
+                status = 'running'
+
+            tasks.append({
+                'task_id': tid,
+                'status': status,
+                'active': True
+            })
+
+        # Completed tasks from in-memory cache
+        for tid, result in _delegation_results.items():
+            if tid not in [t['task_id'] for t in tasks]:
+                tasks.append({
+                    'task_id': tid,
+                    'status': result.get('status', 'completed'),
+                    'agent_name': result.get('agent_name'),
+                    'result_summary': str(result.get('result', ''))[:200],
+                    'active': False
+                })
+
+        # Apply status filter
+        if status_filter:
+            tasks = [t for t in tasks if t.get('status') == status_filter]
+
+        return {
+            'success': True,
+            'operation': 'list_tasks',
+            'tasks': tasks,
+            'count': len(tasks),
+            'running': sum(1 for t in tasks if t.get('status') == 'running'),
+            'completed': sum(1 for t in tasks if t.get('status') == 'completed'),
+            'errors': sum(1 for t in tasks if t.get('status') == 'error')
+        }
+
+    elif operation == 'get_task':
+        if not task_id:
+            return {'success': False, 'error': 'task_id is required for get_task operation'}
+
+        # Use existing get_delegated_task_status for detailed lookup
+        result = await get_delegated_task_status(task_ids=[task_id], database=database)
+        tasks = result.get('tasks', [])
+
+        if not tasks:
+            return {
+                'success': False,
+                'error': f'Task {task_id} not found',
+                'task_id': task_id
+            }
+
+        task_info = tasks[0]
+        return {
+            'success': True,
+            'operation': 'get_task',
+            'task_id': task_id,
+            'status': task_info.get('status'),
+            'agent_name': task_info.get('agent_name'),
+            'result': task_info.get('result'),
+            'error': task_info.get('error')
+        }
+
+    elif operation == 'mark_done':
+        if not task_id:
+            return {'success': False, 'error': 'task_id is required for mark_done operation'}
+
+        # Remove from active tracking
+        removed = False
+        if task_id in _delegated_tasks:
+            del _delegated_tasks[task_id]
+            removed = True
+        if task_id in _delegation_results:
+            del _delegation_results[task_id]
+            removed = True
+
+        return {
+            'success': True,
+            'operation': 'mark_done',
+            'task_id': task_id,
+            'removed': removed,
+            'message': f'Task {task_id} marked as done and removed from tracking' if removed else f'Task {task_id} was not in active tracking'
+        }
+
+    return {'success': False, 'error': f'Unknown operation: {operation}'}
+
+
+async def handle_task_manager(
+    node_id: str,
+    node_type: str,
+    parameters: Dict[str, Any],
+    context: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Handle taskManager as workflow node.
+
+    Wrapper for _execute_task_manager that conforms to the standard
+    workflow node handler signature.
+
+    Args:
+        node_id: The node ID
+        node_type: Should be 'taskManager'
+        parameters: Node parameters (operation, task_id, status_filter)
+        context: Execution context
+
+    Returns:
+        Task manager operation results
+    """
+    config = {
+        'parameters': parameters,
+        'database': context.get('database')
+    }
+    return await _execute_task_manager({}, config)

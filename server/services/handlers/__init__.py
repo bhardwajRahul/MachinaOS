@@ -84,6 +84,7 @@ from .document import (
 # Tool execution handlers (for AI Agent tool calling)
 from .tools import (
     execute_tool,
+    handle_task_manager,
 )
 
 __all__ = [
@@ -129,4 +130,5 @@ __all__ = [
     'handle_vector_store',
     # Tools
     'execute_tool',
+    'handle_task_manager',
 ]

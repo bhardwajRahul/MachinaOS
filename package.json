@@ -60,9 +60,11 @@
   ],
   "scripts": {
     "start": "node scripts/start.js",
+    "start:daemon": "node scripts/start.js --daemon",
     "start:temporal": "cross-env TEMPORAL_ENABLED=true node scripts/start.js",
     "client:start": "cd client && npm run start",
     "python:start": "cd server && uv run uvicorn main:app --host 127.0.0.1 --port 3010 --reload --reload-dir . --reload-exclude \"*.pyc\" --reload-exclude \"__pycache__\" --log-level warning",
+    "python:daemon": "cd server && uv run gunicorn main:app -c gunicorn.conf.py",
     "temporal:worker": "cd server && uv run python -m services.temporal.worker",
     "whatsapp:start": "whatsapp-rpc start",
     "whatsapp:stop": "whatsapp-rpc stop",
@@ -82,11 +84,17 @@
     "docker:prod:logs": "docker-compose -f docker-compose.prod.yml logs -f",
     "deploy": "bash deploy.sh",
     "deploy:gcp": "bash deploy.sh",
+    "daemon:install": "node scripts/daemon.js install",
+    "daemon:uninstall": "node scripts/daemon.js uninstall",
+    "daemon:status": "node scripts/daemon.js status",
+    "daemon:start": "node scripts/daemon.js start",
+    "daemon:stop": "node scripts/daemon.js stop",
+    "daemon:restart": "node scripts/daemon.js restart",
     "prepublishOnly": "node -e \"const p=require('./package.json'); if(!p.bin||!p.version){process.exit(1)}\"",
     "postinstall": "node scripts/postinstall.js"
   },
   "dependencies": {
-    "whatsapp-rpc": "^0.0.5",
+    "whatsapp-rpc": "^0.0.8",
     "concurrently": "^9.2.1",
     "cross-env": "^7.0.3",
     "rimraf": "^6.0.1"

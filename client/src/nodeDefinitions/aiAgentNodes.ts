@@ -43,6 +43,12 @@ export const aiAgentNodes: Record<string, INodeTypeDescription> = {
         displayName: 'Tool',
         type: 'main' as NodeConnectionType,
         description: 'Tool nodes for agent capabilities'
+      },
+      {
+        name: 'task',
+        displayName: 'Task',
+        type: 'main' as NodeConnectionType,
+        description: 'Task completion events from taskTrigger'
       }
     ],
     outputs: [{
@@ -199,6 +205,12 @@ export const aiAgentNodes: Record<string, INodeTypeDescription> = {
         displayName: 'Tool',
         type: 'main' as NodeConnectionType,
         description: 'Tool nodes (httpRequest, etc.) for LangGraph tool calling'
+      },
+      {
+        name: 'task',
+        displayName: 'Task',
+        type: 'main' as NodeConnectionType,
+        description: 'Task completion events from taskTrigger'
       }
     ],
     outputs: [{

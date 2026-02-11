@@ -244,6 +244,7 @@ async def handle_execute_node(data: Dict[str, Any], websocket: WebSocket) -> Dic
         nodes=data.get("nodes", []), edges=data.get("edges", []),
         session_id=data.get("session_id", "default"),
         workflow_id=workflow_id,
+        outputs=data.get("outputs", {}),  # Upstream node outputs for data flow
     )
 
     if result.get("success"):

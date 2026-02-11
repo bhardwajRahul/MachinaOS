@@ -208,6 +208,9 @@ class NodeExecutionActivities:
             "edges": context.get("edges", []),
             "session_id": context.get("session_id", "default"),
             "workflow_id": context.get("workflow_id"),
+            # CRITICAL: Pass upstream node outputs for downstream nodes to access
+            # This enables taskTrigger -> chatAgent data flow via input-task handle
+            "outputs": context.get("inputs", {}),
         }
 
         print(f"[Activity] WebSocket execute for {node_id}")

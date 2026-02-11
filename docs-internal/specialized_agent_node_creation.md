@@ -15,13 +15,15 @@ Memory Node --------+           (AI Agent)
 Tool Nodes ---------+
 [Battery Monitor]
 [WiFi Automation]
+Task Trigger -------+  (input-task handle)
 ```
 
 **Key Characteristics:**
 - **Full AI Agent Inheritance**: Same AI configuration options as base AI Agent (provider, model, prompt, system message, temperature, thinking)
-- **Left Input Handles**: Main input (30%) and Memory input (70%) on the left side
+- **Left Input Handles**: Main input (30%), Memory input (55%), Task input (85%) on the left side
 - **Bottom Handles**: Skill (25%) and Tool (75%) connections at the bottom
 - **Right Output Handle**: Agent output for workflow continuation
+- **Task Input**: Receives task completion events from taskTrigger nodes for delegation result handling
 - **Domain-Specific**: Pre-configured descriptions and use cases for specific capabilities
 
 ## Existing Specialized Agents
@@ -149,6 +151,31 @@ const AI_AGENT_PROPERTIES: INodeProperties[] = [
 ];
 ```
 
+## Shared Constants
+
+All specialized agents use shared constants defined in `specializedAgentNodes.ts`:
+
+```typescript
+// Inputs shared by AI Agent and all Specialized Agent nodes
+export const AI_AGENT_INPUTS = [
+  { name: 'main', displayName: 'Input', type: 'main' as NodeConnectionType, description: 'Agent input' },
+  { name: 'skill', displayName: 'Skill', type: 'main' as NodeConnectionType, description: 'Skill nodes that provide context and instructions' },
+  { name: 'memory', displayName: 'Memory', type: 'main' as NodeConnectionType, description: 'Memory node for conversation history' },
+  { name: 'tools', displayName: 'Tool', type: 'main' as NodeConnectionType, description: 'Tool nodes for agent capabilities' },
+  { name: 'task', displayName: 'Task', type: 'main' as NodeConnectionType, description: 'Task completion events from taskTrigger' },
+];
+
+// Outputs shared by AI Agent and all Specialized Agent nodes
+export const AI_AGENT_OUTPUTS = [
+  { name: 'main', displayName: 'Output', type: 'main' as NodeConnectionType, description: 'Agent output' }
+];
+
+// Properties shared by AI Agent and all Specialized Agent nodes
+export const AI_AGENT_PROPERTIES: INodeProperties[] = [
+  // Provider, Model, Prompt, System Message, Options (temperature, maxTokens, thinking)
+];
+```
+
 ## Creating a New Specialized Agent
 
 ### Step 1: Add Node Definition
@@ -168,35 +195,41 @@ database_agent: {
   subtitle: 'Data Operations',
   description: 'AI Agent specialized for database operations. Connect skills, memory, and database nodes.',
   defaults: { name: 'Database Agent', color: dracula.cyan },  // Use centralized dracula theme
-  inputs: [
-    {
-      name: 'main',
-      displayName: 'Input',
-      type: 'main' as NodeConnectionType,
-      description: 'Agent input'
-    },
-    {
-      name: 'skill',
-      displayName: 'Skill',
-      type: 'main' as NodeConnectionType,
-      description: 'Skill nodes that provide context and instructions'
-    },
-    {
-      name: 'memory',
-      displayName: 'Memory',
-      type: 'main' as NodeConnectionType,
-      description: 'Memory node for conversation history'
-    },
-    {
-      name: 'tools',
-      displayName: 'Tool',
-      type: 'main' as NodeConnectionType,
-      description: 'Database tool nodes (SQL, MongoDB, Redis, etc.)'
-    }
-  ],
-  outputs: [{
+  inputs: AI_AGENT_INPUTS,    // Use shared constant
+  outputs: AI_AGENT_OUTPUTS,  // Use shared constant
+  properties: AI_AGENT_PROPERTIES  // Use shared constant
+}
+```
+
+**Important**: Always use the shared constants (`AI_AGENT_INPUTS`, `AI_AGENT_OUTPUTS`, `AI_AGENT_PROPERTIES`) instead of defining inputs/outputs inline. This ensures all agents have consistent handles including the `input-task` handle for delegation.
+
+### Step 1b: Add to SPECIALIZED_AGENT_TYPES
+
+```typescript
+export const SPECIALIZED_AGENT_TYPES = [
+  'android_agent', 'coding_agent', 'web_agent', 'task_agent', 'social_agent',
+  'travel_agent', 'tool_agent', 'productivity_agent', 'payments_agent', 'consumer_agent',
+  'database_agent'  // Add new agent
+];
+```
+
+### Step 2 (Legacy Pattern - NOT RECOMMENDED)
+
+The old pattern defined inputs inline:
+
+```typescript
+inputs: [
+  {
     name: 'main',
-    displayName: 'Output',
+    displayName: 'Input',
+    type: 'main' as NodeConnectionType,
+    description: 'Agent input'
+  },
+  // ... more inputs
+],
+outputs: [{
+  name: 'main',
+  displayName: 'Output',
     type: 'main' as NodeConnectionType,
     description: 'Agent output'
   }],

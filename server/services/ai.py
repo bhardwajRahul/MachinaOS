@@ -1402,6 +1402,20 @@ class AIService:
 
                 logger.debug(f"[LangGraph] Built {len(tools)} tools")
 
+                # Auto-inject check_delegated_tasks tool when delegation tools present
+                if any(name.startswith('delegate_to_') for name in tool_configs):
+                    check_info = {
+                        'node_type': '_builtin_check_delegated_tasks',
+                        'node_id': f'{node_id}_check_tasks',
+                        'parameters': {},
+                        'label': 'Check Delegated Tasks',
+                    }
+                    check_tool, check_config = await self._build_tool_from_node(check_info)
+                    if check_tool:
+                        tools.append(check_tool)
+                        tool_configs[check_tool.name] = check_config
+                        logger.debug(f"[LangGraph] Auto-injected check_delegated_tasks tool")
+
             # Create tool executor callback
             async def tool_executor(tool_name: str, tool_args: Dict) -> Any:
                 """Execute a tool by name."""
@@ -1438,6 +1452,7 @@ class AIService:
                 # These allow child agents to execute with their own tools
                 config['ai_service'] = self
                 config['database'] = self.database
+                config['parent_node_id'] = node_id  # For delegation result tracking
                 if context:
                     config['nodes'] = context.get('nodes', [])
                     config['edges'] = context.get('edges', [])
@@ -1709,6 +1724,20 @@ class AIService:
 
                 logger.debug(f"[ChatAgent] Built {len(all_tools)} tools from tool_data")
 
+                # Auto-inject check_delegated_tasks tool when delegation tools present
+                if any(name.startswith('delegate_to_') for name in tool_node_configs):
+                    check_info = {
+                        'node_type': '_builtin_check_delegated_tasks',
+                        'node_id': f'{node_id}_check_tasks',
+                        'parameters': {},
+                        'label': 'Check Delegated Tasks',
+                    }
+                    check_tool, check_config = await self._build_tool_from_node(check_info)
+                    if check_tool:
+                        all_tools.append(check_tool)
+                        tool_node_configs[check_tool.name] = check_config
+                        logger.debug(f"[ChatAgent] Auto-injected check_delegated_tasks tool")
+
             logger.debug(f"[ChatAgent] Total tools available: {len(all_tools)}")
             # Debug: log all tool schemas to verify they're correct
             for t in all_tools:
@@ -1861,6 +1890,7 @@ class AIService:
                     # These allow child agents to execute with their own tools
                     config['ai_service'] = self
                     config['database'] = self.database
+                    config['parent_node_id'] = node_id  # For delegation result tracking
                     if context:
                         config['nodes'] = context.get('nodes', [])
                         config['edges'] = context.get('edges', [])
@@ -2064,6 +2094,9 @@ class AIService:
             'gmaps_nearby_places': 'nearby_places',
             'timer': 'timer',
             'cronScheduler': 'cron_scheduler',
+            # Built-in check tool for delegation results
+            '_builtin_check_delegated_tasks': 'check_delegated_tasks',
+            # Agent delegation tools
             'aiAgent': 'delegate_to_ai_agent',
             'chatAgent': 'delegate_to_chat_agent',
             'android_agent': 'delegate_to_android_agent',
@@ -2107,18 +2140,21 @@ class AIService:
             'gmaps_nearby_places': 'Search for nearby places (restaurants, hospitals, banks, etc.) using Google Maps Places API.',
             'timer': 'Wait/sleep for a specified duration. Specify duration (1-3600) and unit (seconds, minutes, or hours). Returns timestamp and elapsed time after waiting.',
             'cronScheduler': 'Schedule a delayed or recurring execution. Supports seconds, minutes, hours, daily, weekly, monthly frequencies with timezone. Use frequency to set schedule type, then set the relevant interval/time parameters.',
-            'aiAgent': 'Delegate a task to another AI Agent. The agent works independently without blocking.',
-            'chatAgent': 'Delegate a task to a Chat Agent. The agent works independently without blocking.',
-            'android_agent': 'Delegate a task to an Android Control Agent for device automation. Works independently.',
-            'coding_agent': 'Delegate a task to a Coding Agent for code execution. Works independently.',
-            'web_agent': 'Delegate a task to a Web Control Agent for web automation. Works independently.',
-            'task_agent': 'Delegate a task to a Task Management Agent for task automation. Works independently.',
-            'social_agent': 'Delegate a task to a Social Media Agent for social messaging. Works independently.',
-            'travel_agent': 'Delegate a task to a Travel Agent for travel planning and itinerary building. Works independently.',
-            'tool_agent': 'Delegate a task to a Tool Agent for multi-tool orchestration and complex task execution. Works independently.',
-            'productivity_agent': 'Delegate a task to a Productivity Agent for scheduling, reminders, and workflow automation. Works independently.',
-            'payments_agent': 'Delegate a task to a Payments Agent for payment processing, invoice generation, and financial operations. Works independently.',
-            'consumer_agent': 'Delegate a task to a Consumer Agent for customer support, product recommendations, and order management. Works independently.',
+            # Built-in check tool for delegation results
+            '_builtin_check_delegated_tasks': 'Check status and retrieve results of previously delegated tasks.',
+            # Agent delegation tools
+            'aiAgent': 'Delegate a task to another AI Agent. Returns task_id. Use check_delegated_tasks for results.',
+            'chatAgent': 'Delegate a task to a Chat Agent. Returns task_id. Use check_delegated_tasks for results.',
+            'android_agent': 'Delegate to Android Control Agent. Returns task_id. Use check_delegated_tasks for results.',
+            'coding_agent': 'Delegate to Coding Agent. Returns task_id. Use check_delegated_tasks for results.',
+            'web_agent': 'Delegate to Web Control Agent. Returns task_id. Use check_delegated_tasks for results.',
+            'task_agent': 'Delegate to Task Management Agent. Returns task_id. Use check_delegated_tasks for results.',
+            'social_agent': 'Delegate to Social Media Agent. Returns task_id. Use check_delegated_tasks for results.',
+            'travel_agent': 'Delegate to Travel Agent. Returns task_id. Use check_delegated_tasks for results.',
+            'tool_agent': 'Delegate to Tool Agent. Returns task_id. Use check_delegated_tasks for results.',
+            'productivity_agent': 'Delegate to Productivity Agent. Returns task_id. Use check_delegated_tasks for results.',
+            'payments_agent': 'Delegate to Payments Agent. Returns task_id. Use check_delegated_tasks for results.',
+            'consumer_agent': 'Delegate to Consumer Agent. Returns task_id. Use check_delegated_tasks for results.',
             # Android service nodes (direct tool usage)
             'batteryMonitor': 'Monitor Android battery status, level, charging state, temperature, and health.',
             'networkMonitor': 'Monitor Android network connectivity, type, and internet availability.',
@@ -2615,6 +2651,45 @@ class AIService:
 
             return NearbyPlacesSchema
 
+        # Task Manager schema (dual-purpose: AI tool + workflow node)
+        if node_type == 'taskManager':
+            class TaskManagerSchema(BaseModel):
+                """Manage delegated tasks - list, check status, mark done.
+
+                Use this to track sub-agent tasks you've delegated.
+                - list_tasks: See all active and completed tasks
+                - get_task: Get details on a specific task
+                - mark_done: Clean up a completed task from tracking
+                """
+                operation: str = Field(
+                    description="Operation: 'list_tasks', 'get_task', or 'mark_done'"
+                )
+                task_id: Optional[str] = Field(
+                    default=None,
+                    description="Task ID (required for get_task/mark_done)"
+                )
+                status_filter: Optional[str] = Field(
+                    default=None,
+                    description="Filter by status: 'running', 'completed', or 'error' (for list_tasks)"
+                )
+
+            return TaskManagerSchema
+
+        # Check delegated tasks schema (built-in tool for result retrieval)
+        if node_type == '_builtin_check_delegated_tasks':
+            class CheckDelegatedTasksSchema(BaseModel):
+                """Check on previously delegated tasks and retrieve their results.
+
+                Call this to see if delegated agents have completed their work.
+                Returns status and results for each task.
+                """
+                task_ids: Optional[List[str]] = Field(
+                    default=None,
+                    description="Specific task IDs to check. Omit to get ALL delegated tasks."
+                )
+
+            return CheckDelegatedTasksSchema
+
         # AI Agent delegation schema (fire-and-forget async delegation)
         if node_type in ('aiAgent', 'chatAgent', 'android_agent', 'coding_agent', 'web_agent', 'task_agent', 'social_agent', 'travel_agent', 'tool_agent', 'productivity_agent', 'payments_agent', 'consumer_agent'):
             agent_label = params.get('label', node_type)
@@ -2622,8 +2697,9 @@ class AIService:
             class DelegateToAgentSchema(BaseModel):
                 """Delegate a task to another AI Agent (non-blocking).
 
-                The child agent will work independently without blocking the parent.
-                Use this to assign subtasks to specialized agents.
+                The child agent works independently in the background.
+                Returns a task_id immediately. Use 'check_delegated_tasks'
+                tool to check status and retrieve results when ready.
                 """
                 task: str = Field(
                     description=f"The task/instruction to delegate to '{agent_label}'. Be specific about what you want done."

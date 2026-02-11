@@ -86,7 +86,12 @@ class AuthService:
             api_key_record = await self.database.get_api_key_by_provider(provider, session_id)
             if api_key_record and api_key_record.is_valid:
                 # Check if not expired (30 days)
-                if datetime.now(timezone.utc) - api_key_record.last_validated < timedelta(days=30):
+                # Ensure both datetimes are timezone-aware for comparison
+                # SQLite may return offset-naive datetimes
+                last_validated = api_key_record.last_validated
+                if last_validated.tzinfo is None:
+                    last_validated = last_validated.replace(tzinfo=timezone.utc)
+                if datetime.now(timezone.utc) - last_validated < timedelta(days=30):
                     return self.decrypt_api_key(api_key_record.key_encrypted)
 
             return None

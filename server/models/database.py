@@ -252,6 +252,7 @@ class UserSettings(SQLModel, table=True):
     sidebar_default_open: bool = Field(default=True)
     component_palette_default_open: bool = Field(default=True)
     console_panel_default_open: bool = Field(default=False)
+    examples_loaded: bool = Field(default=False)  # Track if example workflows were imported
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         sa_column=Column(DateTime(timezone=True), server_default=func.now())

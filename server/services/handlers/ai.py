@@ -2,7 +2,7 @@
 
 from typing import Dict, Any, List, Optional, Tuple, TYPE_CHECKING
 from core.logging import get_logger
-from constants import ANDROID_SERVICE_NODE_TYPES
+from constants import ANDROID_SERVICE_NODE_TYPES, AI_AGENT_TYPES
 
 if TYPE_CHECKING:
     from services.ai import AIService
@@ -16,14 +16,15 @@ async def _collect_agent_connections(
     context: Dict[str, Any],
     database: "Database",
     log_prefix: str = "[Agent]"
-) -> Tuple[Optional[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]], Optional[Dict[str, Any]]]:
-    """Shared logic for collecting memory, skill, tool, and input data from connected nodes.
+) -> Tuple[Optional[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]], Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+    """Shared logic for collecting memory, skill, tool, input, and task data from connected nodes.
 
     Scans edges targeting the given node and collects:
     - Memory data from input-memory handle (simpleMemory nodes)
     - Skill data from input-skill handle (skill nodes)
     - Tool data from input-tools handle (tool nodes, including androidTool Sub-Node pattern)
     - Input data from input-main or input-chat handle (for auto-prompting fallback)
+    - Task data from input-task handle (taskTrigger nodes for delegated task results)
 
     Args:
         node_id: The agent node ID to collect connections for
@@ -32,7 +33,7 @@ async def _collect_agent_connections(
         log_prefix: Prefix for log messages (e.g., "[AI Agent]" or "[Chat Agent]")
 
     Returns:
-        Tuple of (memory_data, skill_data, tool_data, input_data)
+        Tuple of (memory_data, skill_data, tool_data, input_data, task_data)
     """
     nodes = context.get('nodes')
     edges = context.get('edges')
@@ -42,11 +43,12 @@ async def _collect_agent_connections(
     skill_data: List[Dict[str, Any]] = []
     tool_data: List[Dict[str, Any]] = []
     input_data: Optional[Dict[str, Any]] = None
+    task_data: Optional[Dict[str, Any]] = None
 
     logger.info(f"{log_prefix} Processing node {node_id}, edges={len(edges) if edges else 0}, nodes={len(nodes) if nodes else 0}, workflow_id={workflow_id}")
 
     if not edges or not nodes:
-        return memory_data, skill_data, tool_data, input_data
+        return memory_data, skill_data, tool_data, input_data, task_data
 
     # Log incoming edges for debugging
     incoming_edges = [e for e in edges if e.get('target') == node_id]
@@ -212,14 +214,75 @@ async def _collect_agent_connections(
                 input_data = source_output
                 logger.debug(f"{log_prefix} Input from {source_node.get('type')}: {list(source_output.keys()) if isinstance(source_output, dict) else type(source_output)}")
 
+        # Task data detection - taskTrigger nodes connected to input-task handle
+        # Used to receive results from delegated child agents
+        elif target_handle == 'input-task':
+            logger.info(f"{log_prefix} Found input-task edge from {source_node_id} (type={source_node.get('type')})")
+            all_outputs = context.get('outputs', {})
+            logger.info(f"{log_prefix} Available outputs in context: {list(all_outputs.keys())}")
+            source_output = all_outputs.get(source_node_id)
+            logger.info(f"{log_prefix} Source output for {source_node_id}: {source_output is not None}, type={type(source_output).__name__ if source_output else 'None'}")
+            if source_output:
+                # Handle nested result structure - taskTrigger may return {"result": {...}} or flat dict
+                if isinstance(source_output, dict) and 'result' in source_output and isinstance(source_output.get('result'), dict):
+                    # Nested structure - extract inner result
+                    task_data = source_output.get('result')
+                    logger.info(f"{log_prefix} Extracted nested task_data from result key")
+                else:
+                    task_data = source_output
+                logger.info(f"{log_prefix} Task completion data: task_id={task_data.get('task_id')}, status={task_data.get('status')}, agent_name={task_data.get('agent_name')}")
+
     # Log collection results
-    logger.info(f"{log_prefix} Collected: {len(skill_data)} skills, {len(tool_data)} tools, memory={'yes' if memory_data else 'no'}, input={'yes' if input_data else 'no'}")
+    logger.info(f"{log_prefix} Collected: {len(skill_data)} skills, {len(tool_data)} tools, memory={'yes' if memory_data else 'no'}, input={'yes' if input_data else 'no'}, task={'yes' if task_data else 'no'}")
     for sd in skill_data:
         logger.debug(f"{log_prefix} Skill: type={sd.get('node_type')}, label={sd.get('label')}")
     for td in tool_data:
         logger.info(f"{log_prefix} Tool: type={td.get('node_type')}, node_id={td.get('node_id')}")
 
-    return memory_data, skill_data, tool_data, input_data
+    return memory_data, skill_data, tool_data, input_data, task_data
+
+
+def _format_task_context(task_data: Dict[str, Any]) -> str:
+    """Format task completion data as context for the agent.
+
+    Args:
+        task_data: Task completion data from taskTrigger node
+
+    Returns:
+        Formatted string to prepend to agent prompt
+    """
+    status = task_data.get('status', 'unknown')
+    agent_name = task_data.get('agent_name', 'Unknown Agent')
+    task_id = task_data.get('task_id', '')
+
+    if status == 'completed':
+        result = task_data.get('result', 'No result provided')
+        return f"""A delegated task has completed:
+- Agent: {agent_name}
+- Task ID: {task_id}
+- Status: Completed Successfully
+- Result: {result}
+
+IMPORTANT: This task is COMPLETE. Do NOT delegate or call any agent tools.
+Simply report this result to the user in a natural, conversational way."""
+
+    elif status == 'error':
+        error = task_data.get('error', 'Unknown error')
+        return f"""A delegated task has failed:
+- Agent: {agent_name}
+- Task ID: {task_id}
+- Status: Error
+- Error: {error}
+
+IMPORTANT: This task has FAILED. Do NOT retry or delegate again.
+Report this error to the user and suggest next steps if appropriate."""
+
+    else:
+        return f"""Task update received:
+- Agent: {agent_name}
+- Task ID: {task_id}
+- Status: {status}
+- Data: {task_data}"""
 
 
 async def handle_ai_agent(
@@ -245,10 +308,31 @@ async def handle_ai_agent(
     """
     workflow_id = context.get('workflow_id')
 
-    # Collect connected memory, skill, tool, and input nodes using shared base function
-    memory_data, skill_data, tool_data, input_data = await _collect_agent_connections(
+    # Collect connected memory, skill, tool, input, and task nodes using shared base function
+    memory_data, skill_data, tool_data, input_data, task_data = await _collect_agent_connections(
         node_id, context, database, log_prefix="[AI Agent]"
     )
+
+    # If task data is present, format it as context for the agent
+    if task_data:
+        task_context = _format_task_context(task_data)
+        original_prompt = parameters.get('prompt', '')
+        parameters = {**parameters, 'prompt': f"{task_context}\n\n{original_prompt}"}
+        logger.info(f"[AI Agent] Task context injected for task_id={task_data.get('task_id')}")
+
+        # CRITICAL FIX: Strip delegation tools when handling task completion
+        # This prevents LLM confusion - tools bound but told not to use them
+        task_status = task_data.get('status', '')
+        if task_status in ('completed', 'error') and tool_data:
+            original_tool_count = len(tool_data)
+            # Filter out AI agent tools (delegation tools)
+            tool_data = [
+                t for t in tool_data
+                if t.get('node_type') not in AI_AGENT_TYPES
+            ]
+            filtered_count = original_tool_count - len(tool_data)
+            if filtered_count > 0:
+                logger.info(f"[AI Agent] Stripped {filtered_count} delegation tools for task completion handling")
 
     # Auto-use input data if prompt is empty (fallback for trigger nodes)
     if not parameters.get('prompt') and input_data:
@@ -306,10 +390,31 @@ async def handle_chat_agent(
     """
     workflow_id = context.get('workflow_id')
 
-    # Collect connected memory, skill, tool, and input nodes using shared base function
-    memory_data, skill_data, tool_data, input_data = await _collect_agent_connections(
+    # Collect connected memory, skill, tool, input, and task nodes using shared base function
+    memory_data, skill_data, tool_data, input_data, task_data = await _collect_agent_connections(
         node_id, context, database, log_prefix="[Chat Agent]"
     )
+
+    # If task data is present, format it as context for the agent
+    if task_data:
+        task_context = _format_task_context(task_data)
+        original_prompt = parameters.get('prompt', '')
+        parameters = {**parameters, 'prompt': f"{task_context}\n\n{original_prompt}"}
+        logger.info(f"[Chat Agent] Task context injected for task_id={task_data.get('task_id')}")
+
+        # CRITICAL FIX: Strip delegation tools when handling task completion
+        # This prevents LLM confusion - tools bound but told not to use them
+        task_status = task_data.get('status', '')
+        if task_status in ('completed', 'error') and tool_data:
+            original_tool_count = len(tool_data)
+            # Filter out AI agent tools (delegation tools)
+            tool_data = [
+                t for t in tool_data
+                if t.get('node_type') not in AI_AGENT_TYPES
+            ]
+            filtered_count = original_tool_count - len(tool_data)
+            if filtered_count > 0:
+                logger.info(f"[Chat Agent] Stripped {filtered_count} delegation tools for task completion handling")
 
     # Auto-use input data if prompt is empty (fallback for trigger nodes)
     if not parameters.get('prompt') and input_data:

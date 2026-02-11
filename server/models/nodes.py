@@ -147,6 +147,22 @@ class WhatsAppReceiveParams(BaseNodeParams):
     include_media: bool = Field(default=False, alias="includeMediaData")
 
 
+class WhatsAppDbParams(BaseNodeParams):
+    """Parameters for WhatsApp database query node."""
+    type: Literal["whatsappDb"]
+    operation: Literal["chat_history", "search_groups", "get_group_info", "get_contact_info", "list_contacts", "check_contacts"] = "chat_history"
+    # chat_history params
+    phone_number: str = Field(default="", alias="phoneNumber")
+    group_id: str = Field(default="", alias="groupId")
+    group_name: str = Field(default="", alias="groupName")
+    limit: int = Field(default=50, ge=1, le=500)
+    offset: int = Field(default=0, ge=0)
+    # search_groups params
+    search_query: str = Field(default="", alias="searchQuery")
+    # check_contacts params
+    phone_numbers: str = Field(default="", alias="phoneNumbers")
+
+
 # =============================================================================
 # CODE EXECUTOR NODE MODELS
 # =============================================================================
@@ -277,7 +293,7 @@ MapsNodeParams = Annotated[
 
 # WhatsApp Nodes
 WhatsAppNodeParams = Annotated[
-    Union[WhatsAppSendParams, WhatsAppReceiveParams],
+    Union[WhatsAppSendParams, WhatsAppReceiveParams, WhatsAppDbParams],
     Field(discriminator="type")
 ]
 
@@ -319,7 +335,7 @@ KnownNodeParams = Annotated[
         # Maps
         CreateMapParams, GmapsLocationsParams, GmapsNearbyPlacesParams,
         # WhatsApp
-        WhatsAppSendParams, WhatsAppReceiveParams,
+        WhatsAppSendParams, WhatsAppReceiveParams, WhatsAppDbParams,
         # Code
         PythonExecutorParams, JavaScriptExecutorParams,
         # HTTP

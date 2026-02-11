@@ -104,6 +104,21 @@ async def lifespan(app: FastAPI):
     setup_websocket_logging(loop)
     logger.info("WebSocket logging handler started")
 
+    # Start cleanup service for long-running daemon
+    from core.cleanup import CleanupService
+    from core.health import set_startup_time
+    cleanup_service = None
+    if settings.cleanup_enabled:
+        cleanup_service = CleanupService(
+            database=container.database(),
+            cache=container.cache(),
+            settings=settings
+        )
+        await cleanup_service.start()
+
+    # Record startup time for health reporting
+    set_startup_time()
+
     # Initialize Temporal if enabled
     temporal_worker_manager = None
     if settings.temporal_enabled:
@@ -164,6 +179,10 @@ async def lifespan(app: FastAPI):
     # Close Android relay client (prevents "Unclosed client session" warning)
     from services.android.manager import close_relay_client
     await close_relay_client(clear_stored_session=False)
+
+    # Stop cleanup service
+    if cleanup_service is not None:
+        await cleanup_service.stop()
 
     # Stop recovery sweeper first
     if settings.redis_enabled:
@@ -239,11 +258,19 @@ app.include_router(webhook.router)
 
 @app.get("/health")
 async def health_check():
-    """Detailed health check."""
+    """Detailed health check with resource monitoring."""
     from services import event_waiter
     from services.execution import get_recovery_sweeper
+    from core.health import get_health_status, get_uptime, get_memory_mb, get_disk_percent, get_cpu_percent
 
     sweeper = get_recovery_sweeper()
+
+    # Get comprehensive health status
+    health = await get_health_status(
+        database=container.database(),
+        cache=container.cache(),
+        settings=settings
+    )
 
     # Check Temporal status
     temporal_status = {
@@ -259,10 +286,18 @@ async def health_check():
             pass
 
     return {
-        "status": "OK",
+        "status": health["status"],
         "service": "python",
-        "version": "3.2.0",  # Bumped for Temporal integration
+        "version": "3.3.0",  # Bumped for daemon service support
         "environment": "development" if settings.debug else "production",
+        "uptime_seconds": health["uptime_seconds"],
+        "resources": {
+            "memory_mb": health["memory_mb"],
+            "disk_percent": health["disk_percent"],
+            "cpu_percent": health["cpu_percent"],
+        },
+        "checks": health["checks"],
+        "features": health["features"],
         "redis_enabled": settings.redis_enabled,
         "event_waiter_mode": event_waiter.get_backend_mode(),
         "execution_engine": {

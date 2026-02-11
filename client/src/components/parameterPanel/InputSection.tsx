@@ -379,6 +379,16 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                 timestamp: 'string',
                 session_id: 'string'
               },
+              taskTrigger: {
+                task_id: 'string',
+                status: 'string',      // 'completed' or 'error'
+                agent_name: 'string',
+                agent_node_id: 'string',
+                parent_node_id: 'string',
+                result: 'string',      // Present when status='completed'
+                error: 'string',       // Present when status='error'
+                workflow_id: 'string',
+              },
               // Social nodes schema (4 output handles)
               social: {
                 // Output 1: message text for LLM input
@@ -487,6 +497,7 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
             const isCodeExecutor = isPython || isJavaScript;
             const isCronScheduler = nodeType === 'cronScheduler';
             const isChatTrigger = nodeType === 'chatTrigger';
+            const isTaskTrigger = nodeType === 'taskTrigger';
             const isSocialReceive = nodeType === 'socialReceive';
             const isSocialSend = nodeType === 'socialSend';
 
@@ -528,6 +539,7 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                             isCodeExecutor ? sampleSchemas.python :
                             isCronScheduler ? sampleSchemas.cronScheduler :
                             isChatTrigger ? sampleSchemas.chatTrigger :
+                            isTaskTrigger ? sampleSchemas.taskTrigger :
                             isSocialReceive ? sampleSchemas.social :
                             isSocialSend ? sampleSchemas.socialSend :
                             { data: 'any' };

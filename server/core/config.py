@@ -100,6 +100,22 @@ class Settings(BaseSettings):
     # Health Check
     health_check_interval: int = Field(default=30, env="HEALTH_CHECK_INTERVAL", ge=10)
 
+    # Cleanup Configuration (for long-running daemon)
+    cleanup_enabled: bool = Field(default=True, env="CLEANUP_ENABLED")
+    cleanup_interval: int = Field(default=3600, env="CLEANUP_INTERVAL", ge=60)
+    cleanup_logs_max_count: int = Field(default=1000, env="CLEANUP_LOGS_MAX_COUNT", ge=100)
+    cleanup_cache_max_age_hours: int = Field(default=24, env="CLEANUP_CACHE_MAX_AGE_HOURS", ge=1)
+
+    # Feature Toggles
+    ws_logging_enabled: bool = Field(default=True, env="WS_LOGGING_ENABLED")
+
+    # Gunicorn Configuration (for production deployment)
+    gunicorn_timeout: int = Field(default=120, env="GUNICORN_TIMEOUT", ge=30)
+    gunicorn_graceful_timeout: int = Field(default=30, env="GUNICORN_GRACEFUL_TIMEOUT", ge=10)
+    gunicorn_keepalive: int = Field(default=5, env="GUNICORN_KEEPALIVE", ge=1)
+    gunicorn_max_requests: int = Field(default=10000, env="GUNICORN_MAX_REQUESTS", ge=0)
+    gunicorn_max_requests_jitter: int = Field(default=1000, env="GUNICORN_MAX_REQUESTS_JITTER", ge=0)
+
     @field_validator("database_url")
     @classmethod
     def validate_database_url(cls, v):

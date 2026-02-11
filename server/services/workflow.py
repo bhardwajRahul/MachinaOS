@@ -142,6 +142,7 @@ class WorkflowService:
         session_id: str = "default",
         execution_id: str = None,
         workflow_id: str = None,
+        outputs: Dict[str, Any] = None,
     ) -> Dict[str, Any]:
         """Execute a single workflow node."""
         context = {
@@ -151,6 +152,7 @@ class WorkflowService:
             "execution_id": execution_id,
             "workflow_id": workflow_id,  # For per-workflow status scoping (n8n pattern)
             "get_output_fn": self.get_node_output,
+            "outputs": outputs or {},  # Upstream node outputs for data flow (e.g., taskTrigger -> chatAgent)
         }
         return await self._node_executor.execute(
             node_id=node_id,

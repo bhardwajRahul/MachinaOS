@@ -66,7 +66,8 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
       { id: 'input-tools', label: 'Tool', position: '75%' },
     ],
     leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '70%' },
+      { id: 'input-memory', label: 'Memory', position: '55%' },
+      { id: 'input-task', label: 'Task', position: '85%' },
     ],
     topOutputHandle: { id: 'output-top', label: 'Output' },
     width: 260,
@@ -82,7 +83,8 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
       { id: 'input-tools', label: 'Tool', position: '75%' },
     ],
     leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '70%' },
+      { id: 'input-memory', label: 'Memory', position: '55%' },
+      { id: 'input-task', label: 'Task', position: '85%' },
     ],
     width: 260,
     height: 160,
@@ -128,7 +130,8 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
       { id: 'input-tools', label: 'Tool', position: '75%' },
     ],
     leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '70%' },
+      { id: 'input-memory', label: 'Memory', position: '55%' },
+      { id: 'input-task', label: 'Task', position: '85%' },
     ],
     topOutputHandle: { id: 'output-top', label: 'Output' },
     width: 260,
@@ -144,7 +147,8 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
       { id: 'input-tools', label: 'Tool', position: '75%' },
     ],
     leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '70%' },
+      { id: 'input-memory', label: 'Memory', position: '55%' },
+      { id: 'input-task', label: 'Task', position: '85%' },
     ],
     topOutputHandle: { id: 'output-top', label: 'Output' },
     width: 260,
@@ -160,7 +164,8 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
       { id: 'input-tools', label: 'Tool', position: '75%' },
     ],
     leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '70%' },
+      { id: 'input-memory', label: 'Memory', position: '55%' },
+      { id: 'input-task', label: 'Task', position: '85%' },
     ],
     topOutputHandle: { id: 'output-top', label: 'Output' },
     width: 260,
@@ -176,7 +181,8 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
       { id: 'input-tools', label: 'Tool', position: '75%' },
     ],
     leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '70%' },
+      { id: 'input-memory', label: 'Memory', position: '55%' },
+      { id: 'input-task', label: 'Task', position: '85%' },
     ],
     topOutputHandle: { id: 'output-top', label: 'Output' },
     width: 260,
@@ -192,7 +198,8 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
       { id: 'input-tools', label: 'Tool', position: '75%' },
     ],
     leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '70%' },
+      { id: 'input-memory', label: 'Memory', position: '55%' },
+      { id: 'input-task', label: 'Task', position: '85%' },
     ],
     topOutputHandle: { id: 'output-top', label: 'Output' },
     width: 260,
@@ -208,7 +215,8 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
       { id: 'input-tools', label: 'Tool', position: '75%' },
     ],
     leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '70%' },
+      { id: 'input-memory', label: 'Memory', position: '55%' },
+      { id: 'input-task', label: 'Task', position: '85%' },
     ],
     topOutputHandle: { id: 'output-top', label: 'Output' },
     width: 260,
@@ -224,7 +232,8 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
       { id: 'input-tools', label: 'Tool', position: '75%' },
     ],
     leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '70%' },
+      { id: 'input-memory', label: 'Memory', position: '55%' },
+      { id: 'input-task', label: 'Task', position: '85%' },
     ],
     topOutputHandle: { id: 'output-top', label: 'Output' },
     width: 260,
@@ -240,7 +249,8 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
       { id: 'input-tools', label: 'Tool', position: '75%' },
     ],
     leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '70%' },
+      { id: 'input-memory', label: 'Memory', position: '55%' },
+      { id: 'input-task', label: 'Task', position: '85%' },
     ],
     topOutputHandle: { id: 'output-top', label: 'Output' },
     width: 260,
@@ -256,7 +266,8 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
       { id: 'input-tools', label: 'Tool', position: '75%' },
     ],
     leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '70%' },
+      { id: 'input-memory', label: 'Memory', position: '55%' },
+      { id: 'input-task', label: 'Task', position: '85%' },
     ],
     topOutputHandle: { id: 'output-top', label: 'Output' },
     width: 260,
@@ -272,7 +283,8 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
       { id: 'input-tools', label: 'Tool', position: '75%' },
     ],
     leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '70%' },
+      { id: 'input-memory', label: 'Memory', position: '55%' },
+      { id: 'input-task', label: 'Task', position: '85%' },
     ],
     topOutputHandle: { id: 'output-top', label: 'Output' },
     width: 260,

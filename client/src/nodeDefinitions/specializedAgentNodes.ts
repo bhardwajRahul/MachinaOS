@@ -7,6 +7,54 @@ import {
 import { dracula } from '../styles/theme';
 
 // ============================================================================
+// SHARED AI AGENT INPUTS - Used by Specialized Agent Nodes
+// ============================================================================
+
+// Inputs shared by AI Agent and all Specialized Agent nodes
+export const AI_AGENT_INPUTS = [
+  {
+    name: 'main',
+    displayName: 'Input',
+    type: 'main' as NodeConnectionType,
+    description: 'Agent input'
+  },
+  {
+    name: 'skill',
+    displayName: 'Skill',
+    type: 'main' as NodeConnectionType,
+    description: 'Skill nodes that provide context and instructions'
+  },
+  {
+    name: 'memory',
+    displayName: 'Memory',
+    type: 'main' as NodeConnectionType,
+    description: 'Memory node for conversation history'
+  },
+  {
+    name: 'tools',
+    displayName: 'Tool',
+    type: 'main' as NodeConnectionType,
+    description: 'Tool nodes for agent capabilities'
+  },
+  {
+    name: 'task',
+    displayName: 'Task',
+    type: 'main' as NodeConnectionType,
+    description: 'Task completion events from taskTrigger'
+  }
+];
+
+// Outputs shared by AI Agent and all Specialized Agent nodes
+export const AI_AGENT_OUTPUTS = [
+  {
+    name: 'main',
+    displayName: 'Output',
+    type: 'main' as NodeConnectionType,
+    description: 'Agent output'
+  }
+];
+
+// ============================================================================
 // SHARED AI AGENT PROPERTIES - Used by Specialized Agent Nodes
 // ============================================================================
 
@@ -128,38 +176,8 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
     subtitle: 'Device Control',
     description: 'AI Agent specialized for Android device control. Connect skills, memory, and tool nodes to enable Android automation capabilities.',
     defaults: { name: 'Android Control Agent', color: dracula.green },
-    inputs: [
-      {
-        name: 'main',
-        displayName: 'Input',
-        type: 'main' as NodeConnectionType,
-        description: 'Agent input'
-      },
-      {
-        name: 'skill',
-        displayName: 'Skill',
-        type: 'main' as NodeConnectionType,
-        description: 'Skill nodes that provide context and instructions'
-      },
-      {
-        name: 'memory',
-        displayName: 'Memory',
-        type: 'main' as NodeConnectionType,
-        description: 'Memory node for conversation history'
-      },
-      {
-        name: 'tools',
-        displayName: 'Tool',
-        type: 'main' as NodeConnectionType,
-        description: 'Tool nodes for Android device operations'
-      }
-    ],
-    outputs: [{
-      name: 'main',
-      displayName: 'Output',
-      type: 'main' as NodeConnectionType,
-      description: 'Agent output'
-    }],
+    inputs: AI_AGENT_INPUTS,
+    outputs: AI_AGENT_OUTPUTS,
     properties: AI_AGENT_PROPERTIES
   },
 
@@ -173,38 +191,8 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
     subtitle: 'Code Execution',
     description: 'AI Agent specialized for code execution. Connect skills, memory, and code executor nodes to enable coding capabilities.',
     defaults: { name: 'Coding Agent', color: dracula.cyan },
-    inputs: [
-      {
-        name: 'main',
-        displayName: 'Input',
-        type: 'main' as NodeConnectionType,
-        description: 'Agent input'
-      },
-      {
-        name: 'skill',
-        displayName: 'Skill',
-        type: 'main' as NodeConnectionType,
-        description: 'Skill nodes that provide context and instructions'
-      },
-      {
-        name: 'memory',
-        displayName: 'Memory',
-        type: 'main' as NodeConnectionType,
-        description: 'Memory node for conversation history'
-      },
-      {
-        name: 'tools',
-        displayName: 'Tool',
-        type: 'main' as NodeConnectionType,
-        description: 'Code executor nodes (Python, JavaScript, etc.)'
-      }
-    ],
-    outputs: [{
-      name: 'main',
-      displayName: 'Output',
-      type: 'main' as NodeConnectionType,
-      description: 'Agent output'
-    }],
+    inputs: AI_AGENT_INPUTS,
+    outputs: AI_AGENT_OUTPUTS,
     properties: AI_AGENT_PROPERTIES
   },
 
@@ -218,38 +206,8 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
     subtitle: 'Browser Automation',
     description: 'AI Agent specialized for web automation. Connect skills, memory, and web control nodes to enable browser automation and HTTP capabilities.',
     defaults: { name: 'Web Control Agent', color: dracula.pink },
-    inputs: [
-      {
-        name: 'main',
-        displayName: 'Input',
-        type: 'main' as NodeConnectionType,
-        description: 'Agent input'
-      },
-      {
-        name: 'skill',
-        displayName: 'Skill',
-        type: 'main' as NodeConnectionType,
-        description: 'Skill nodes that provide context and instructions'
-      },
-      {
-        name: 'memory',
-        displayName: 'Memory',
-        type: 'main' as NodeConnectionType,
-        description: 'Memory node for conversation history'
-      },
-      {
-        name: 'tools',
-        displayName: 'Tool',
-        type: 'main' as NodeConnectionType,
-        description: 'Web control nodes (browser, scraper, HTTP, etc.)'
-      }
-    ],
-    outputs: [{
-      name: 'main',
-      displayName: 'Output',
-      type: 'main' as NodeConnectionType,
-      description: 'Agent output'
-    }],
+    inputs: AI_AGENT_INPUTS,
+    outputs: AI_AGENT_OUTPUTS,
     properties: AI_AGENT_PROPERTIES
   },
 
@@ -263,38 +221,8 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
     subtitle: 'Task Automation',
     description: 'AI Agent specialized for task management. Connect skills, memory, and task nodes to enable scheduling and reminder capabilities.',
     defaults: { name: 'Task Management Agent', color: dracula.purple },
-    inputs: [
-      {
-        name: 'main',
-        displayName: 'Input',
-        type: 'main' as NodeConnectionType,
-        description: 'Agent input'
-      },
-      {
-        name: 'skill',
-        displayName: 'Skill',
-        type: 'main' as NodeConnectionType,
-        description: 'Skill nodes that provide context and instructions'
-      },
-      {
-        name: 'memory',
-        displayName: 'Memory',
-        type: 'main' as NodeConnectionType,
-        description: 'Memory node for conversation history'
-      },
-      {
-        name: 'tools',
-        displayName: 'Tool',
-        type: 'main' as NodeConnectionType,
-        description: 'Task management nodes (scheduler, reminders, etc.)'
-      }
-    ],
-    outputs: [{
-      name: 'main',
-      displayName: 'Output',
-      type: 'main' as NodeConnectionType,
-      description: 'Agent output'
-    }],
+    inputs: AI_AGENT_INPUTS,
+    outputs: AI_AGENT_OUTPUTS,
     properties: AI_AGENT_PROPERTIES
   },
 
@@ -308,38 +236,8 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
     subtitle: 'Social Messaging',
     description: 'AI Agent specialized for social media. Connect skills, memory, and messaging nodes to enable WhatsApp, Telegram, and other social capabilities.',
     defaults: { name: 'Social Media Agent', color: dracula.green },
-    inputs: [
-      {
-        name: 'main',
-        displayName: 'Input',
-        type: 'main' as NodeConnectionType,
-        description: 'Agent input'
-      },
-      {
-        name: 'skill',
-        displayName: 'Skill',
-        type: 'main' as NodeConnectionType,
-        description: 'Skill nodes that provide context and instructions'
-      },
-      {
-        name: 'memory',
-        displayName: 'Memory',
-        type: 'main' as NodeConnectionType,
-        description: 'Memory node for conversation history'
-      },
-      {
-        name: 'tools',
-        displayName: 'Tool',
-        type: 'main' as NodeConnectionType,
-        description: 'Social media nodes (WhatsApp, Telegram, etc.)'
-      }
-    ],
-    outputs: [{
-      name: 'main',
-      displayName: 'Output',
-      type: 'main' as NodeConnectionType,
-      description: 'Agent output'
-    }],
+    inputs: AI_AGENT_INPUTS,
+    outputs: AI_AGENT_OUTPUTS,
     properties: AI_AGENT_PROPERTIES
   },
 
@@ -353,38 +251,8 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
     subtitle: 'Travel Planning',
     description: 'AI Agent specialized for travel planning. Connect skills, memory, and tool nodes to enable itinerary building, location lookups, and travel recommendations.',
     defaults: { name: 'Travel Agent', color: dracula.orange },
-    inputs: [
-      {
-        name: 'main',
-        displayName: 'Input',
-        type: 'main' as NodeConnectionType,
-        description: 'Agent input'
-      },
-      {
-        name: 'skill',
-        displayName: 'Skill',
-        type: 'main' as NodeConnectionType,
-        description: 'Skill nodes that provide context and instructions'
-      },
-      {
-        name: 'memory',
-        displayName: 'Memory',
-        type: 'main' as NodeConnectionType,
-        description: 'Memory node for conversation history'
-      },
-      {
-        name: 'tools',
-        displayName: 'Tool',
-        type: 'main' as NodeConnectionType,
-        description: 'Tool nodes for travel planning (maps, HTTP, search, etc.)'
-      }
-    ],
-    outputs: [{
-      name: 'main',
-      displayName: 'Output',
-      type: 'main' as NodeConnectionType,
-      description: 'Agent output'
-    }],
+    inputs: AI_AGENT_INPUTS,
+    outputs: AI_AGENT_OUTPUTS,
     properties: AI_AGENT_PROPERTIES
   },
 
@@ -398,38 +266,8 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
     subtitle: 'Tool Orchestration',
     description: 'AI Agent specialized for tool orchestration. Connect skills, memory, and multiple tool nodes to enable multi-tool workflows and complex task execution.',
     defaults: { name: 'Tool Agent', color: dracula.yellow },
-    inputs: [
-      {
-        name: 'main',
-        displayName: 'Input',
-        type: 'main' as NodeConnectionType,
-        description: 'Agent input'
-      },
-      {
-        name: 'skill',
-        displayName: 'Skill',
-        type: 'main' as NodeConnectionType,
-        description: 'Skill nodes that provide context and instructions'
-      },
-      {
-        name: 'memory',
-        displayName: 'Memory',
-        type: 'main' as NodeConnectionType,
-        description: 'Memory node for conversation history'
-      },
-      {
-        name: 'tools',
-        displayName: 'Tool',
-        type: 'main' as NodeConnectionType,
-        description: 'Tool nodes to orchestrate (calculators, HTTP, search, code, etc.)'
-      }
-    ],
-    outputs: [{
-      name: 'main',
-      displayName: 'Output',
-      type: 'main' as NodeConnectionType,
-      description: 'Agent output'
-    }],
+    inputs: AI_AGENT_INPUTS,
+    outputs: AI_AGENT_OUTPUTS,
     properties: AI_AGENT_PROPERTIES
   },
 
@@ -443,38 +281,8 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
     subtitle: 'Productivity',
     description: 'AI Agent specialized for productivity. Connect skills, memory, and tool nodes to enable scheduling, reminders, note-taking, and workflow automation.',
     defaults: { name: 'Productivity Agent', color: dracula.cyan },
-    inputs: [
-      {
-        name: 'main',
-        displayName: 'Input',
-        type: 'main' as NodeConnectionType,
-        description: 'Agent input'
-      },
-      {
-        name: 'skill',
-        displayName: 'Skill',
-        type: 'main' as NodeConnectionType,
-        description: 'Skill nodes that provide context and instructions'
-      },
-      {
-        name: 'memory',
-        displayName: 'Memory',
-        type: 'main' as NodeConnectionType,
-        description: 'Memory node for conversation history'
-      },
-      {
-        name: 'tools',
-        displayName: 'Tool',
-        type: 'main' as NodeConnectionType,
-        description: 'Tool nodes for productivity (scheduler, HTTP, code, etc.)'
-      }
-    ],
-    outputs: [{
-      name: 'main',
-      displayName: 'Output',
-      type: 'main' as NodeConnectionType,
-      description: 'Agent output'
-    }],
+    inputs: AI_AGENT_INPUTS,
+    outputs: AI_AGENT_OUTPUTS,
     properties: AI_AGENT_PROPERTIES
   },
 
@@ -488,38 +296,8 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
     subtitle: 'Payment Processing',
     description: 'AI Agent specialized for payment processing. Connect skills, memory, and tool nodes to enable payment workflows, invoice generation, and financial operations.',
     defaults: { name: 'Payments Agent', color: dracula.green },
-    inputs: [
-      {
-        name: 'main',
-        displayName: 'Input',
-        type: 'main' as NodeConnectionType,
-        description: 'Agent input'
-      },
-      {
-        name: 'skill',
-        displayName: 'Skill',
-        type: 'main' as NodeConnectionType,
-        description: 'Skill nodes that provide context and instructions'
-      },
-      {
-        name: 'memory',
-        displayName: 'Memory',
-        type: 'main' as NodeConnectionType,
-        description: 'Memory node for conversation history'
-      },
-      {
-        name: 'tools',
-        displayName: 'Tool',
-        type: 'main' as NodeConnectionType,
-        description: 'Tool nodes for payment processing (HTTP, code, etc.)'
-      }
-    ],
-    outputs: [{
-      name: 'main',
-      displayName: 'Output',
-      type: 'main' as NodeConnectionType,
-      description: 'Agent output'
-    }],
+    inputs: AI_AGENT_INPUTS,
+    outputs: AI_AGENT_OUTPUTS,
     properties: AI_AGENT_PROPERTIES
   },
 
@@ -533,38 +311,8 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
     subtitle: 'Consumer Support',
     description: 'AI Agent specialized for consumer interactions. Connect skills, memory, and tool nodes to enable customer support, product recommendations, and order management.',
     defaults: { name: 'Consumer Agent', color: dracula.purple },
-    inputs: [
-      {
-        name: 'main',
-        displayName: 'Input',
-        type: 'main' as NodeConnectionType,
-        description: 'Agent input'
-      },
-      {
-        name: 'skill',
-        displayName: 'Skill',
-        type: 'main' as NodeConnectionType,
-        description: 'Skill nodes that provide context and instructions'
-      },
-      {
-        name: 'memory',
-        displayName: 'Memory',
-        type: 'main' as NodeConnectionType,
-        description: 'Memory node for conversation history'
-      },
-      {
-        name: 'tools',
-        displayName: 'Tool',
-        type: 'main' as NodeConnectionType,
-        description: 'Tool nodes for consumer operations (HTTP, search, code, etc.)'
-      }
-    ],
-    outputs: [{
-      name: 'main',
-      displayName: 'Output',
-      type: 'main' as NodeConnectionType,
-      description: 'Agent output'
-    }],
+    inputs: AI_AGENT_INPUTS,
+    outputs: AI_AGENT_OUTPUTS,
     properties: AI_AGENT_PROPERTIES
   }
 };

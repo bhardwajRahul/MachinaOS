@@ -7,6 +7,7 @@ from typing import Dict, Any, Optional, List
 from core.container import container
 from core.database import Database
 from core.logging import get_logger
+from services.example_loader import import_examples_for_user
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/api/database", tags=["database"])
@@ -93,6 +94,21 @@ async def get_all_workflows(
 ):
     """Get all workflows."""
     try:
+        # Auto-load example workflows on first fetch
+        user_id = "default"
+        settings = await database.get_user_settings(user_id)
+
+        if not settings or not settings.get("examples_loaded", False):
+            # First time - import examples
+            count = await import_examples_for_user(database)
+            if count > 0:
+                logger.info(f"Auto-loaded {count} example workflows")
+
+            # Mark as loaded using existing save_user_settings
+            current = settings or {}
+            current["examples_loaded"] = True
+            await database.save_user_settings(current, user_id)
+
         workflows = await database.get_all_workflows()
         return {
             "success": True,
