@@ -1,6 +1,6 @@
 {
   "name": "machinaos",
-  "version": "0.0.10",
+  "version": "0.0.11",
   "description": "Open source workflow automation platform with AI agents, React Flow, and n8n-inspired architecture",
   "type": "module",
   "keywords": [
@@ -90,7 +90,8 @@
     "daemon:start": "node scripts/daemon.js start",
     "daemon:stop": "node scripts/daemon.js stop",
     "daemon:restart": "node scripts/daemon.js restart",
-    "prepublishOnly": "node -e \"const p=require('./package.json'); if(!p.bin||!p.version){process.exit(1)}\"",
+    "version:sync": "node scripts/sync-version.js",
+    "prepublishOnly": "node scripts/sync-version.js && node -e \"const p=require('./package.json'); if(!p.bin||!p.version){process.exit(1)}\"",
     "postinstall": "node scripts/postinstall.js"
   },
   "dependencies": {

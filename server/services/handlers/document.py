@@ -370,7 +370,10 @@ async def handle_embedding_generator(
         logger.info("[embeddingGenerator] Starting", node_id=node_id, texts=len(texts), provider=provider)
 
         if provider == 'huggingface':
-            from langchain_huggingface import HuggingFaceEmbeddings
+            try:
+                from langchain_huggingface import HuggingFaceEmbeddings
+            except ImportError:
+                raise ImportError("HuggingFace embeddings not available. Install with: pip install langchain-huggingface sentence-transformers")
             embedder = HuggingFaceEmbeddings(model_name=model)
         elif provider == 'openai':
             from langchain_openai import OpenAIEmbeddings
@@ -448,7 +451,10 @@ async def handle_vector_store(
 
 async def _chroma_op(operation: str, params: Dict, collection: str) -> Dict:
     """ChromaDB operations."""
-    import chromadb
+    try:
+        import chromadb
+    except ImportError:
+        raise ImportError("ChromaDB not available. Install with: pip install chromadb")
     import uuid
 
     persist_dir = params.get('persistDir', './data/vectors')
@@ -500,8 +506,11 @@ async def _chroma_op(operation: str, params: Dict, collection: str) -> Dict:
 
 async def _qdrant_op(operation: str, params: Dict, collection: str) -> Dict:
     """Qdrant operations."""
-    from qdrant_client import QdrantClient
-    from qdrant_client.models import VectorParams, Distance, PointStruct
+    try:
+        from qdrant_client import QdrantClient
+        from qdrant_client.models import VectorParams, Distance, PointStruct
+    except ImportError:
+        raise ImportError("Qdrant client not available. Install with: pip install qdrant-client")
     import uuid
 
     url = params.get('qdrantUrl', 'http://localhost:6333')

@@ -1,4 +1,4 @@
-# Python FastAPI Backend
+# Python FastAPI Backend (CPU-only, no CUDA)
 FROM python:3.12-slim
 
 WORKDIR /app
@@ -10,13 +10,12 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
-COPY requirements.txt .
+# Use requirements-docker.txt which excludes CUDA-heavy dependencies
+COPY requirements-docker.txt .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Install aiohttp for WebSocket client (Android relay)
-RUN pip install --no-cache-dir aiohttp>=3.9.0
+# Install Python dependencies (CPU-only)
+# This avoids sentence-transformers/PyTorch CUDA which adds ~5GB to image
+RUN pip install --no-cache-dir -r requirements-docker.txt
 
 # Copy application code
 COPY . .
