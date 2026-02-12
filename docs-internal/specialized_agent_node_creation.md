@@ -4,6 +4,22 @@
 
 Specialized Agent nodes are AI Agents pre-configured for specific domains and use cases. They inherit full AI Agent functionality (provider selection, model configuration, prompt templates, thinking/reasoning) while being tailored for specific capabilities like Android control, coding, web automation, task management, or social messaging.
 
+## Full Capabilities
+
+All specialized agents support:
+
+| Capability | Description |
+|------------|-------------|
+| **LangGraph Execution** | Full StateGraph with iterative tool-calling loop (max 10 iterations) |
+| **6 AI Providers** | OpenAI, Anthropic (Claude), Google (Gemini), Groq, OpenRouter, Cerebras |
+| **Extended Thinking** | Thinking/reasoning for Claude, Gemini, Groq, OpenAI o-series with output available for downstream nodes |
+| **Skill Injection** | Master Skill expansion with `get_registry_prompt()` system message enhancement |
+| **Tool Calling** | Connect tool nodes to `input-tools` for LLM tool invocation |
+| **Two-Tier Memory** | Short-term (markdown window) + long-term (vector store) via `input-memory` |
+| **Task Delegation** | Fire-and-forget async delegation, receive results via `input-task` handle |
+| **Input Auto-Fallback** | Empty prompt extracts text from connected `input-main` nodes |
+| **taskTrigger Integration** | React to child agent completion events via `input-task` handle |
+
 ## Architecture
 
 ```
@@ -441,16 +457,34 @@ All specialized agents support:
 
 | Feature | Description |
 |---------|-------------|
-| **Multi-Provider** | OpenAI, Anthropic, Google, Groq, OpenRouter |
+| **Multi-Provider** | OpenAI, Anthropic, Google, Groq, OpenRouter, Cerebras |
 | **Dynamic Models** | Model dropdown populated based on selected provider |
 | **Prompt Templates** | Support for `{{ $json.field }}` template variables |
 | **System Message** | Customizable agent personality and behavior |
 | **Temperature** | Response randomness control (0-2) |
 | **Max Tokens** | Output length limit (1-8192) |
-| **Thinking/Reasoning** | Extended thinking for Claude, Gemini, Groq models |
+| **Thinking/Reasoning** | Extended thinking for Claude, Gemini, Groq, OpenAI o-series |
 | **Thinking Budget** | Token budget for reasoning (1024-16000) |
 | **Reasoning Effort** | Low/Medium/High for OpenAI o-series and Groq |
+| **Thinking Output** | Thinking content available in Input Data & Variables for downstream nodes |
 | **Async Delegation** | Can be used as tools by parent agents (fire-and-forget) |
+| **Task Completion** | Receive delegated task results via `input-task` handle |
+| **Input Auto-Fallback** | Empty prompt extracts text from connected `input-main` nodes |
+| **Skill Injection** | Skills appended to system message via `get_registry_prompt()` |
+| **Two-Tier Memory** | Short-term (markdown) + long-term (vector store) memory |
+
+### Extended Thinking Details
+
+Thinking content is extracted differently per provider and accumulates across tool-calling iterations:
+
+| Provider | Extraction Method | Notes |
+|----------|------------------|-------|
+| **Claude** | `content_blocks` with `type='thinking'` | Requires `max_tokens > thinkingBudget` |
+| **Gemini** | `response_metadata.candidates[0].content.parts` with `thought=True` | 2.5/Flash Thinking models |
+| **Groq** | `additional_kwargs.reasoning` or `response_metadata.reasoning` | Qwen3/QwQ models, `reasoningFormat='parsed'` |
+| **OpenAI** | Reasoning summaries | o-series, requires org verification |
+
+The accumulated `thinking` content is available in the agent's output for downstream nodes to use via drag-and-drop in Input Data & Variables.
 
 ## Async Agent Delegation
 
@@ -526,6 +560,221 @@ When the AI Agent needs to control Android devices:
 | `server/services/ai.py` | `DelegateToAgentSchema` in `_get_tool_schema()` |
 | `server/services/handlers/tools.py` | `_execute_delegated_agent()` spawns child via `asyncio.create_task()` |
 | `server/services/handlers/ai.py` | Passes `context` for nested agent delegation |
+
+## Task Completion Handling
+
+The `input-task` handle allows specialized agents to receive and react to task completion events from delegated child agents.
+
+### taskTrigger Node Integration
+
+Connect a `taskTrigger` workflow node to the agent's `input-task` handle. When a delegated child agent completes (success or error), the taskTrigger fires and provides the completion data to the parent agent.
+
+```
+[Parent Agent] ←──task── [taskTrigger] ←── (listens for task_completed events)
+       ↓
+  delegates to
+       ↓
+[Child Agent] ──(completes)──→ broadcasts task_completed event
+```
+
+### Task Completion Event Structure
+
+When a delegated child agent completes, it broadcasts a `task_completed` event:
+
+```python
+{
+    'task_id': 'uuid-string',
+    'status': 'completed' | 'error',
+    'agent_name': 'Android Control Agent',
+    'agent_node_id': 'node-id',
+    'parent_node_id': 'parent-node-id',
+    'result': '...',      # Present when status='completed'
+    'error': '...',       # Present when status='error'
+    'workflow_id': 'workflow-uuid'
+}
+```
+
+### Tool Stripping Behavior
+
+**Critical**: When an agent receives task completion data via `input-task`, ALL tools are stripped from the agent before execution. This prevents confusion where the agent is instructed to "report the result" but still has tools bound that it might try to use.
+
+```python
+# In handlers/ai.py - when task_data is present
+if task_data:
+    # Strip all tools - agent's job is to report result, not execute
+    tool_data = []
+```
+
+### Use Case: Parent Reacting to Child Completion
+
+1. Parent agent delegates task: `delegate_to_android_agent(task="Check battery")`
+2. Parent continues immediately (fire-and-forget)
+3. Child agent executes and completes
+4. Child broadcasts `task_completed` event
+5. taskTrigger connected to parent's `input-task` fires
+6. Parent agent receives task result via `input-task` handle
+7. Parent agent (with tools stripped) reports the result naturally
+
+## LangGraph Execution
+
+Specialized agents use LangGraph's StateGraph for structured tool-calling execution.
+
+### StateGraph Construction
+
+When tools are connected to `input-tools`, the agent builds a conditional graph:
+
+```python
+# Simplified from server/services/ai.py
+graph = StateGraph(AgentState)
+graph.add_node("agent", call_model)
+graph.add_node("tools", tool_executor)
+
+graph.add_conditional_edges(
+    "agent",
+    should_continue,  # Check if LLM wants to call tools
+    {"continue": "tools", "end": END}
+)
+graph.add_edge("tools", "agent")  # Loop back after tool execution
+```
+
+### Iterative Tool-Calling Loop
+
+- **Max iterations**: 10 (prevents infinite loops)
+- **Loop pattern**: LLM → tool call → tool execution → LLM → ... → final response
+- **Exit conditions**: LLM returns response without tool calls, or max iterations reached
+
+### Tool-Less Optimization
+
+When no tools are connected to `input-tools`, the agent skips LangGraph entirely for better performance:
+
+```python
+if not tools:
+    # Direct LLM invocation without graph overhead
+    response = await model.ainvoke(messages)
+else:
+    # Full LangGraph execution with tool loop
+    response = await graph.ainvoke(state)
+```
+
+## Input Data Auto-Fallback
+
+When the agent's `prompt` parameter is empty, it automatically extracts text from nodes connected to `input-main`.
+
+### Extraction Priority
+
+The agent searches the connected node's output for text in this order:
+1. `message` field
+2. `text` field
+3. `content` field
+4. String representation of entire output
+
+### Use Case
+
+Enables simple workflows like:
+```
+[Chat Trigger] → [Zeenie]
+```
+
+Without manually setting `prompt` to `{{chatTrigger.message}}`, the agent auto-extracts the message.
+
+## Skill Injection
+
+Skills connected to `input-skill` are injected into the agent's system message.
+
+### Master Skill Expansion
+
+When a `masterSkill` node is connected, it expands into individual skill entries based on `skillsConfig`:
+
+```python
+skillsConfig = {
+    'whatsapp-skill': {
+        'enabled': True,
+        'instructions': '...',
+        'isCustomized': False
+    },
+    'http-skill': {
+        'enabled': True,
+        'instructions': '...',
+        'isCustomized': True  # User modified in UI
+    }
+}
+```
+
+### Registry Prompt Generation
+
+The `SkillLoader.get_registry_prompt()` method generates a skill list appended to the system message:
+
+```markdown
+## Available Skills
+
+You have access to the following skills. Use them when appropriate:
+
+- **whatsapp-skill**: Send and receive WhatsApp messages
+  - Tools: whatsapp_send, whatsapp_db
+- **http-skill**: Make HTTP requests to external APIs
+  - Tools: http-request
+```
+
+### DB-First Pattern
+
+After first activation, skill instructions are stored in and read from the database:
+1. First load: Instructions seeded from SKILL.md file
+2. Subsequent loads: Database is source of truth
+3. User edits: Saved to database only
+4. "Reset to Default": Reloads from SKILL.md file
+
+## Memory Integration
+
+Memory connected to `input-memory` provides conversation history via a two-tier system.
+
+### Short-Term Memory
+
+- **Format**: Markdown with timestamps
+- **Window-based trimming**: Keeps last N message pairs (configurable via `windowSize`)
+- **Auto-append**: New human/AI messages appended after each execution
+
+### Long-Term Memory
+
+- **Optional**: Enable via `longTermEnabled` parameter
+- **Storage**: InMemoryVectorStore per session
+- **Semantic retrieval**: Archived messages retrieved by similarity
+- **Retrieval count**: Configurable via `retrievalCount` parameter
+
+### Memory Lifecycle
+
+1. Load markdown from `memoryContent` parameter
+2. Parse to LangChain messages
+3. Retrieve relevant long-term memories (if enabled)
+4. Execute agent with conversation history
+5. Append new exchange to markdown
+6. Trim to window size, archive removed messages
+7. Save updated markdown back to node parameters
+
+## Architecture Notes
+
+### Shared Handler Routing
+
+All 10 specialized agents route to the same backend handler:
+
+```python
+# In node_executor.py
+'android_agent': partial(handle_chat_agent, ai_service=..., database=...),
+'coding_agent': partial(handle_chat_agent, ai_service=..., database=...),
+# ... all 10 specialized agents use handle_chat_agent
+```
+
+This means specialization is purely UI/configuration, not backend behavioral. All agents share:
+- Same `_collect_agent_connections()` base function
+- Same skill injection pipeline
+- Same tool execution flow
+- Same memory handling
+
+### Database-First Architecture
+
+Node parameters, memory content, and tool schemas come from database first (not `node.data`):
+- Reduces workflow JSON bloat
+- Enables user customization persistence
+- Separates configuration from workflow structure
 
 ## Testing
 

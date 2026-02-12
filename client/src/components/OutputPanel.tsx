@@ -177,9 +177,10 @@ const OutputPanel: React.FC<OutputPanelProps> = ({ nodeId }) => {
   // Helper to check if a handle is a config/auxiliary handle (not main data flow)
   const isConfigHandle = (handle: string | null | undefined): boolean => {
     if (!handle) return false;
-    // Config handles follow pattern: input-<type> where type is not 'main'
+    // Config handles follow pattern: input-<type> where type is not 'main', 'chat', or 'task'
     // Examples: input-memory, input-tools, input-model
-    if (handle.startsWith('input-') && handle !== 'input-main') {
+    // Non-config (data flow) handles: input-main, input-chat, input-task
+    if (handle.startsWith('input-') && handle !== 'input-main' && handle !== 'input-chat' && handle !== 'input-task') {
       return true;
     }
     return false;

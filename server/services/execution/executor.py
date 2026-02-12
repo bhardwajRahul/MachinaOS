@@ -804,6 +804,7 @@ class WorkflowExecutor:
 
         # Build execution context for node handler
         # workflow_id is included for per-workflow status scoping (n8n pattern)
+        logger.info(f"[Executor] Building context for {node.node_id}, ctx.outputs keys: {list(ctx.outputs.keys())}")
         exec_context = {
             "nodes": ctx.nodes,
             "edges": ctx.edges,
@@ -813,6 +814,7 @@ class WorkflowExecutor:
             "start_time": node.started_at,
             "outputs": ctx.outputs,  # Previous node outputs
         }
+        logger.info(f"[Executor] exec_context['outputs'] keys: {list(exec_context['outputs'].keys())}")
 
         # Call the actual node executor
         result = await self.node_executor(

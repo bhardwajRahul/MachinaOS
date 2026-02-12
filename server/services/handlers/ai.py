@@ -203,6 +203,45 @@ async def _collect_agent_connections(
                 tool_entry['connected_services'] = connected_services
                 logger.debug(f"{log_prefix} Android toolkit has {len(connected_services)} connected services")
 
+            # Special handling for AI Agent nodes - discover their connected tools
+            # This allows parent agent to know child agent's capabilities
+            if tool_type in AI_AGENT_TYPES:
+                child_tools = []
+
+                # Count edges targeting this child agent
+                child_incoming_edges = [e for e in edges if e.get('target') == source_node_id]
+                child_tool_edges = [e for e in child_incoming_edges if e.get('targetHandle') == 'input-tools']
+                logger.debug(f"{log_prefix} Child agent {source_node_id}: {len(child_incoming_edges)} incoming edges, {len(child_tool_edges)} input-tools edges")
+
+                # Log all incoming edge handles for debugging
+                if child_incoming_edges:
+                    handles = [e.get('targetHandle', 'None') for e in child_incoming_edges]
+                    logger.debug(f"{log_prefix} Child agent {source_node_id} incoming handles: {handles}")
+
+                # Scan edges for tools connected to this child agent's input-tools handle
+                for child_edge in edges:
+                    if child_edge.get('target') != source_node_id:
+                        continue
+                    if child_edge.get('targetHandle') != 'input-tools':
+                        continue
+
+                    child_tool_id = child_edge.get('source')
+                    child_tool_node = next((n for n in nodes if n.get('id') == child_tool_id), None)
+
+                    logger.debug(f"{log_prefix} Child agent {source_node_id}: tool edge from {child_tool_id}, node found: {child_tool_node is not None}")
+
+                    if child_tool_node:
+                        child_tool_type = child_tool_node.get('type', '')
+                        child_tool_label = child_tool_node.get('data', {}).get('label', child_tool_type)
+                        child_tools.append({
+                            'node_type': child_tool_type,
+                            'label': child_tool_label
+                        })
+
+                if child_tools:
+                    tool_entry['child_tools'] = child_tools
+                    logger.debug(f"{log_prefix} Child agent {source_node_id} has tools: {[t['label'] for t in child_tools]}")
+
             tool_data.append(tool_entry)
             logger.debug(f"{log_prefix} Connected tool: {tool_type}")
 
@@ -218,9 +257,24 @@ async def _collect_agent_connections(
         # Used to receive results from delegated child agents
         elif target_handle == 'input-task':
             logger.info(f"{log_prefix} Found input-task edge from {source_node_id} (type={source_node.get('type')})")
-            all_outputs = context.get('outputs', {})
-            logger.info(f"{log_prefix} Available outputs in context: {list(all_outputs.keys())}")
-            source_output = all_outputs.get(source_node_id)
+
+            # Try context.outputs first (parallel executor), then database via get_output_fn
+            source_output = context.get('outputs', {}).get(source_node_id)
+            logger.info(f"{log_prefix} Context outputs check for {source_node_id}: {source_output is not None}")
+
+            if not source_output:
+                # Database is source of truth - use get_output_fn to retrieve stored output
+                get_output_fn = context.get('get_output_fn')
+                session_id = context.get('session_id', 'default')
+                if get_output_fn:
+                    try:
+                        source_output = await get_output_fn(session_id, source_node_id, 'output_0')
+                        logger.info(f"{log_prefix} DB lookup for {source_node_id}: {source_output is not None}")
+                    except Exception as e:
+                        logger.warning(f"{log_prefix} Failed to get output from DB: {e}")
+                else:
+                    logger.warning(f"{log_prefix} No get_output_fn in context, cannot retrieve task output")
+
             logger.info(f"{log_prefix} Source output for {source_node_id}: {source_output is not None}, type={type(source_output).__name__ if source_output else 'None'}")
             if source_output:
                 # Handle nested result structure - taskTrigger may return {"result": {...}} or flat dict
@@ -320,19 +374,16 @@ async def handle_ai_agent(
         parameters = {**parameters, 'prompt': f"{task_context}\n\n{original_prompt}"}
         logger.info(f"[AI Agent] Task context injected for task_id={task_data.get('task_id')}")
 
-        # CRITICAL FIX: Strip delegation tools when handling task completion
-        # This prevents LLM confusion - tools bound but told not to use them
+        # CRITICAL FIX: Strip ALL tools when handling task completion
+        # When reporting a delegated task result, the agent should NOT use any tools.
+        # Binding tools while instructing "do not use tools" confuses Gemini (returns empty []).
+        # The agent's only job is to report the result naturally.
         task_status = task_data.get('status', '')
         if task_status in ('completed', 'error') and tool_data:
             original_tool_count = len(tool_data)
-            # Filter out AI agent tools (delegation tools)
-            tool_data = [
-                t for t in tool_data
-                if t.get('node_type') not in AI_AGENT_TYPES
-            ]
-            filtered_count = original_tool_count - len(tool_data)
-            if filtered_count > 0:
-                logger.info(f"[AI Agent] Stripped {filtered_count} delegation tools for task completion handling")
+            # Strip ALL tools - agent is just reporting result, not executing anything
+            tool_data = []
+            logger.info(f"[AI Agent] Stripped ALL {original_tool_count} tools for task completion handling")
 
     # Auto-use input data if prompt is empty (fallback for trigger nodes)
     if not parameters.get('prompt') and input_data:
@@ -402,19 +453,16 @@ async def handle_chat_agent(
         parameters = {**parameters, 'prompt': f"{task_context}\n\n{original_prompt}"}
         logger.info(f"[Chat Agent] Task context injected for task_id={task_data.get('task_id')}")
 
-        # CRITICAL FIX: Strip delegation tools when handling task completion
-        # This prevents LLM confusion - tools bound but told not to use them
+        # CRITICAL FIX: Strip ALL tools when handling task completion
+        # When reporting a delegated task result, the agent should NOT use any tools.
+        # Binding tools while instructing "do not use tools" confuses Gemini (returns empty []).
+        # The agent's only job is to report the result naturally.
         task_status = task_data.get('status', '')
         if task_status in ('completed', 'error') and tool_data:
             original_tool_count = len(tool_data)
-            # Filter out AI agent tools (delegation tools)
-            tool_data = [
-                t for t in tool_data
-                if t.get('node_type') not in AI_AGENT_TYPES
-            ]
-            filtered_count = original_tool_count - len(tool_data)
-            if filtered_count > 0:
-                logger.info(f"[Chat Agent] Stripped {filtered_count} delegation tools for task completion handling")
+            # Strip ALL tools - agent is just reporting result, not executing anything
+            tool_data = []
+            logger.info(f"[Chat Agent] Stripped ALL {original_tool_count} tools for task completion handling")
 
     # Auto-use input data if prompt is empty (fallback for trigger nodes)
     if not parameters.get('prompt') and input_data:

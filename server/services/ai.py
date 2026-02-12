@@ -2092,6 +2092,7 @@ class AIService:
             'whatsappDb': 'whatsapp_db',
             'gmaps_locations': 'geocode',
             'gmaps_nearby_places': 'nearby_places',
+            'taskManager': 'task_manager',
             'timer': 'timer',
             'cronScheduler': 'cron_scheduler',
             # Built-in check tool for delegation results
@@ -2138,23 +2139,24 @@ class AIService:
             'whatsappDb': 'Query WhatsApp database - list contacts, search groups, get contact/group info, retrieve chat history.',
             'gmaps_locations': 'Geocode addresses to coordinates or reverse geocode coordinates to addresses using Google Maps.',
             'gmaps_nearby_places': 'Search for nearby places (restaurants, hospitals, banks, etc.) using Google Maps Places API.',
+            'taskManager': 'Track delegated sub-agent tasks. Operations: list_tasks (see all tasks), get_task (check specific task status/result), mark_done (cleanup completed tasks).',
             'timer': 'Wait/sleep for a specified duration. Specify duration (1-3600) and unit (seconds, minutes, or hours). Returns timestamp and elapsed time after waiting.',
             'cronScheduler': 'Schedule a delayed or recurring execution. Supports seconds, minutes, hours, daily, weekly, monthly frequencies with timezone. Use frequency to set schedule type, then set the relevant interval/time parameters.',
             # Built-in check tool for delegation results
             '_builtin_check_delegated_tasks': 'Check status and retrieve results of previously delegated tasks.',
-            # Agent delegation tools
-            'aiAgent': 'Delegate a task to another AI Agent. Returns task_id. Use check_delegated_tasks for results.',
-            'chatAgent': 'Delegate a task to a Chat Agent. Returns task_id. Use check_delegated_tasks for results.',
-            'android_agent': 'Delegate to Android Control Agent. Returns task_id. Use check_delegated_tasks for results.',
-            'coding_agent': 'Delegate to Coding Agent. Returns task_id. Use check_delegated_tasks for results.',
-            'web_agent': 'Delegate to Web Control Agent. Returns task_id. Use check_delegated_tasks for results.',
-            'task_agent': 'Delegate to Task Management Agent. Returns task_id. Use check_delegated_tasks for results.',
-            'social_agent': 'Delegate to Social Media Agent. Returns task_id. Use check_delegated_tasks for results.',
-            'travel_agent': 'Delegate to Travel Agent. Returns task_id. Use check_delegated_tasks for results.',
-            'tool_agent': 'Delegate to Tool Agent. Returns task_id. Use check_delegated_tasks for results.',
-            'productivity_agent': 'Delegate to Productivity Agent. Returns task_id. Use check_delegated_tasks for results.',
-            'payments_agent': 'Delegate to Payments Agent. Returns task_id. Use check_delegated_tasks for results.',
-            'consumer_agent': 'Delegate to Consumer Agent. Returns task_id. Use check_delegated_tasks for results.',
+            # Agent delegation tools - ONE-SHOT fire-and-forget pattern
+            'aiAgent': 'ONE-SHOT delegation to AI Agent. Call ONCE per task, returns task_id immediately. Agent works in background - do NOT re-call.',
+            'chatAgent': 'ONE-SHOT delegation to Chat Agent. Call ONCE per task, returns task_id immediately. Agent works in background - do NOT re-call.',
+            'android_agent': 'ONE-SHOT delegation to Android Agent. Call ONCE per task, returns task_id. Agent works in background - do NOT re-call.',
+            'coding_agent': 'ONE-SHOT delegation to Coding Agent. Call ONCE per task, returns task_id. Agent works in background - do NOT re-call.',
+            'web_agent': 'ONE-SHOT delegation to Web Agent. Call ONCE per task, returns task_id. Agent works in background - do NOT re-call.',
+            'task_agent': 'ONE-SHOT delegation to Task Agent. Call ONCE per task, returns task_id. Agent works in background - do NOT re-call.',
+            'social_agent': 'ONE-SHOT delegation to Social Agent. Call ONCE per task, returns task_id. Agent works in background - do NOT re-call.',
+            'travel_agent': 'ONE-SHOT delegation to Travel Agent. Call ONCE per task, returns task_id. Agent works in background - do NOT re-call.',
+            'tool_agent': 'ONE-SHOT delegation to Tool Agent. Call ONCE per task, returns task_id. Agent works in background - do NOT re-call.',
+            'productivity_agent': 'ONE-SHOT delegation to Productivity Agent. Call ONCE per task, returns task_id. Agent works in background - do NOT re-call.',
+            'payments_agent': 'ONE-SHOT delegation to Payments Agent. Call ONCE per task, returns task_id. Agent works in background - do NOT re-call.',
+            'consumer_agent': 'ONE-SHOT delegation to Consumer Agent. Call ONCE per task, returns task_id. Agent works in background - do NOT re-call.',
             # Android service nodes (direct tool usage)
             'batteryMonitor': 'Monitor Android battery status, level, charging state, temperature, and health.',
             'networkMonitor': 'Monitor Android network connectivity, type, and internet availability.',
@@ -2209,6 +2211,29 @@ class AIService:
             if node_type == 'androidTool' and connected_services:
                 service_names = [s.get('label') or s.get('service_id', 'unknown') for s in connected_services]
                 tool_description = f"{tool_description} Connected: {', '.join(service_names)}"
+
+            # For AI Agent nodes, enhance description with child agent's tool capabilities
+            # This allows parent agent to know what the child agent can do
+            from constants import AI_AGENT_TYPES
+            if node_type in AI_AGENT_TYPES:
+                child_tools = tool_info.get('child_tools', [])
+                if child_tools:
+                    # Build capability description from child's connected tools
+                    capability_descriptions = []
+                    for child_tool in child_tools:
+                        child_type = child_tool.get('node_type', '')
+                        child_label = child_tool.get('label', child_type)
+                        # Get the tool description from DEFAULT_TOOL_DESCRIPTIONS
+                        child_desc = DEFAULT_TOOL_DESCRIPTIONS.get(child_type, f"Use {child_label}")
+                        capability_descriptions.append(f"- {child_label}: {child_desc}")
+
+                    capabilities_text = "\n".join(capability_descriptions)
+                    tool_description = (
+                        f"Delegate tasks to '{node_label}' agent. "
+                        f"This agent has the following capabilities:\n{capabilities_text}\n"
+                        f"Call ONCE per task, returns task_id. Agent works in background."
+                    )
+                    logger.info(f"[LangGraph] Enhanced tool description for {node_type} with {len(child_tools)} child tools")
 
             # Clean tool name (LangChain requires alphanumeric + underscores)
             import re

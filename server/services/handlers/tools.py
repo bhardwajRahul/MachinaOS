@@ -9,7 +9,8 @@ import math
 import json
 import asyncio
 import uuid
-from typing import Dict, Any, Optional, List, TYPE_CHECKING
+import hashlib
+from typing import Dict, Any, Optional, List, Tuple, TYPE_CHECKING
 
 from core.logging import get_logger
 from constants import ANDROID_SERVICE_NODE_TYPES
@@ -26,6 +27,9 @@ _delegated_tasks: Dict[str, asyncio.Task] = {}
 # In-memory cache of delegation results (fast path, survives task cleanup)
 # Follows Celery AsyncResult / Ray ObjectRef pattern
 _delegation_results: Dict[str, Dict[str, Any]] = {}
+
+# Track active delegations to prevent duplicate calls: (parent_node_id, child_node_id, task_hash) -> task_id
+_active_delegations: Dict[Tuple[str, str, str], str] = {}
 
 
 async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
@@ -1171,8 +1175,33 @@ async def _execute_delegated_agent(args: Dict[str, Any],
             "hint": "Ensure nodes/edges are passed to tool config"
         }
 
+    # Get parent node ID for duplicate tracking
+    parent_node_id = config.get('parent_node_id', '')
+
+    # Generate hash of task to detect duplicate delegation attempts
+    task_hash = hashlib.md5(f"{task_description}:{task_context}".encode()).hexdigest()[:16]
+    delegation_key = (parent_node_id, node_id, task_hash)
+
+    # Check for duplicate delegation (prevents LLM from calling same delegation twice)
+    existing_task_id = _active_delegations.get(delegation_key)
+    if existing_task_id:
+        logger.warning(f"[Delegated Agent] Duplicate delegation detected: task_hash={task_hash}, existing_task_id={existing_task_id}")
+        return {
+            "success": True,
+            "status": "ALREADY_DELEGATED",
+            "task_id": existing_task_id,
+            "agent_name": config.get('parameters', {}).get('label', node_type),
+            "result": (
+                f"This task was ALREADY delegated (task_id: {existing_task_id}). "
+                f"Do NOT call this tool again. Use 'check_delegated_tasks' to check status."
+            ),
+        }
+
     # Generate unique task ID
     task_id = f"delegated_{node_id}_{uuid.uuid4().hex[:8]}"
+
+    # Register this delegation to prevent duplicates
+    _active_delegations[delegation_key] = task_id
 
     # Get child agent parameters from database
     child_params = await database.get_node_parameters(node_id) or {}
@@ -1246,8 +1275,69 @@ async def _execute_delegated_agent(args: Dict[str, Any],
 
             logger.info(f"[Delegated Agent] Task {task_id} completed: success={result.get('success')}")
 
+            # Check if child agent actually succeeded
+            if not result.get('success'):
+                # Child agent returned failure - treat as error
+                error_msg = result.get('error', 'Child agent returned failure')
+                logger.warning(f"[Delegated Agent] Task {task_id} returned success=False: {error_msg}")
+
+                await broadcaster.update_node_status(
+                    node_id,
+                    "error",
+                    {
+                        "phase": "delegated_error",
+                        "task_id": task_id,
+                        "error": error_msg
+                    },
+                    workflow_id=workflow_id
+                )
+
+                # Cache error for parent retrieval
+                _delegation_results[task_id] = {
+                    "task_id": task_id,
+                    "status": "error",
+                    "agent_name": agent_label,
+                    "agent_node_id": node_id,
+                    "result": None,
+                    "error": error_msg,
+                }
+
+                # Persist error to DB
+                if database:
+                    await database.save_node_output(
+                        node_id=node_id,
+                        session_id=f"delegation_{task_id}",
+                        output_name="delegation_result",
+                        data={
+                            "task_id": task_id,
+                            "parent_node_id": config.get('parent_node_id', ''),
+                            "agent_name": agent_label,
+                            "status": "error",
+                            "error": error_msg,
+                        }
+                    )
+
+                # Dispatch error event for trigger nodes
+                await broadcaster.send_custom_event('task_completed', {
+                    'task_id': task_id,
+                    'status': 'error',
+                    'agent_name': agent_label,
+                    'agent_node_id': node_id,
+                    'parent_node_id': config.get('parent_node_id', ''),
+                    'error': error_msg,
+                    'workflow_id': workflow_id,
+                })
+
+                return result
+
+            # Success case - extract response properly
+            response_text = result.get('result', {}).get('response', '')
+            if not response_text:
+                # Fallback: try to stringify the result dict
+                response_text = str(result.get('result', '')) if result.get('result') else 'No response generated'
+
             # Broadcast completion
-            response_preview = str(result.get('result', {}).get('response', ''))[:200]
+            response_preview = response_text[:200] if response_text else ''
             await broadcaster.update_node_status(
                 node_id,
                 "success",
@@ -1265,7 +1355,7 @@ async def _execute_delegated_agent(args: Dict[str, Any],
                 "status": "completed",
                 "agent_name": agent_label,
                 "agent_node_id": node_id,
-                "result": result.get('result', {}).get('response', str(result.get('result', ''))),
+                "result": response_text,
                 "error": None,
             }
 
@@ -1280,7 +1370,7 @@ async def _execute_delegated_agent(args: Dict[str, Any],
                         "parent_node_id": config.get('parent_node_id', ''),
                         "agent_name": agent_label,
                         "status": "completed",
-                        "result": result.get('result', {}),
+                        "result": response_text,
                     }
                 )
 
@@ -1291,7 +1381,7 @@ async def _execute_delegated_agent(args: Dict[str, Any],
                 'agent_name': agent_label,
                 'agent_node_id': node_id,
                 'parent_node_id': config.get('parent_node_id', ''),
-                'result': result.get('result', {}).get('response', str(result.get('result', ''))),
+                'result': response_text,
                 'workflow_id': workflow_id,
             })
 
@@ -1351,6 +1441,8 @@ async def _execute_delegated_agent(args: Dict[str, Any],
         finally:
             # Cleanup task reference
             _delegated_tasks.pop(task_id, None)
+            # Cleanup delegation tracking (allows re-delegation after completion)
+            _active_delegations.pop(delegation_key, None)
 
     # Spawn as background task (fire-and-forget)
     task = asyncio.create_task(run_child_agent())
@@ -1363,7 +1455,12 @@ async def _execute_delegated_agent(args: Dict[str, Any],
         "task_id": task_id,
         "agent_node_id": node_id,
         "agent_name": agent_label,
-        "message": f"Task delegated to '{agent_label}'. Agent is now working independently on: {task_description[:100]}..."
+        "message": (
+            f"SUCCESS: Task delegated to '{agent_label}' (task_id: {task_id}). "
+            f"Agent is now working INDEPENDENTLY in the background. "
+            f"IMPORTANT: Delegation is COMPLETE. Do NOT call this tool again for this task. "
+            f"To check results later, use 'check_delegated_tasks' with task_id='{task_id}'."
+        ),
     }
 
 

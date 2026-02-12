@@ -60,10 +60,11 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
       // Helper to check if a handle is a config/auxiliary handle (not main data flow)
       const isConfigHandle = (handle: string | null | undefined): boolean => {
         if (!handle) return false;
-        // Config handles follow pattern: input-<type> where type is not 'main' or 'chat'
+        // Config handles follow pattern: input-<type> where type is not 'main', 'chat', or 'task'
         // Examples: input-memory, input-tools, input-model, input-skill
-        // Non-config (primary data) handles: input-main, input-chat
-        if (handle.startsWith('input-') && handle !== 'input-main' && handle !== 'input-chat') {
+        // Non-config (primary data) handles: input-main, input-chat, input-task
+        // Note: input-task is for taskTrigger node output which should be visible as draggable variables
+        if (handle.startsWith('input-') && handle !== 'input-main' && handle !== 'input-chat' && handle !== 'input-task') {
           return true;
         }
         return false;

@@ -621,6 +621,7 @@ Specialized agents are AI Agents pre-configured for specific domains. They inher
 - `input-skill` - Skill nodes (including Master Skill for aggregated skills)
 - `input-memory` - Memory node for conversation history
 - `input-tools` - Tool nodes for LLM tool calling
+- `input-task` - Task completion events from taskTrigger nodes
 
 **Specialized Agent Types:**
 - **android_agent**: Android Control Agent - AI agent for Android device control. Connect Android service nodes (battery, wifi, bluetooth, apps, location, camera, sensors) as tools.
@@ -1671,8 +1672,8 @@ The system supports specialized agent variants that inherit from the base AI Age
 | Consumer | `consumer_agent` | cart | purple |
 
 All specialized agents share the same handle configuration:
-- **Left**: `input-main` (Input), `input-memory` (Memory)
-- **Bottom**: `input-skill` (Skill), `input-tools` (Tool)
+- **Left**: `input-main` (Input, 30%), `input-memory` (Memory, 55%), `input-task` (Task, 85%)
+- **Bottom**: `input-skill` (Skill, 25%), `input-tools` (Tool, 75%)
 - **Top**: `output-top` (Output)
 
 The `AIAgentNode.tsx` component uses `AGENT_CONFIGS` to render all agent types with their specific icons, titles, and theme colors.

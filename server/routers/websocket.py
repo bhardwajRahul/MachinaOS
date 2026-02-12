@@ -629,20 +629,20 @@ async def handle_deploy_workflow(data: Dict[str, Any], websocket: WebSocket) -> 
     session_id = data.get("session_id", "default")
 
     # DEBUG: Log received edges to trace tool connection issues
-    logger.info(f"[Deploy] Received {len(edges)} edges for workflow {workflow_id}")
+    logger.debug(f"[Deploy] Received {len(edges)} edges for workflow {workflow_id}")
     for e in edges:
         target_handle = e.get('targetHandle')
         if target_handle and target_handle.startswith('input-') and target_handle != 'input-main':
-            logger.info(f"[Deploy] Config edge: {e.get('source')} -> {e.get('target')} (handle={target_handle})")
+            logger.debug(f"[Deploy] Config edge: {e.get('source')} -> {e.get('target')} (handle={target_handle})")
 
     # Check for tool connections to AI Agent
     tool_edges = [e for e in edges if e.get('targetHandle') == 'input-tools']
     if tool_edges:
-        logger.info(f"[Deploy] Tool edges found: {len(tool_edges)}")
+        logger.debug(f"[Deploy] Tool edges found: {len(tool_edges)}")
         for te in tool_edges:
-            logger.info(f"[Deploy] Tool edge: source={te.get('source')} -> target={te.get('target')}")
+            logger.debug(f"[Deploy] Tool edge: source={te.get('source')} -> target={te.get('target')}")
     else:
-        logger.info(f"[Deploy] No input-tools edges found")
+        logger.debug(f"[Deploy] No input-tools edges found")
 
     if not nodes:
         return {"success": False, "error": "No nodes provided"}

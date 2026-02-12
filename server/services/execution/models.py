@@ -13,6 +13,10 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict, Any, List, Optional
 
+from core.logging import get_logger
+
+logger = get_logger(__name__)
+
 
 class TaskStatus(str, Enum):
     """Task execution states (Conductor-style lifecycle).
@@ -361,6 +365,8 @@ class ExecutionContext:
             if node.get("_pre_executed"):
                 # Mark as COMPLETED with trigger output
                 trigger_output = node.get("_trigger_output", {})
+                logger.info(f"[ExecutionContext] Pre-executed node found: {node_id} (type={node_type})")
+                logger.info(f"[ExecutionContext] Trigger output keys: {list(trigger_output.keys()) if trigger_output else 'empty'}")
                 node_exec = NodeExecution(
                     node_id=node_id,
                     node_type=node_type,
@@ -369,6 +375,7 @@ class ExecutionContext:
                     completed_at=time.time(),
                 )
                 ctx.outputs[node_id] = trigger_output
+                logger.info(f"[ExecutionContext] Set ctx.outputs[{node_id}] = trigger_output")
                 ctx.checkpoints.append(node_id)
             else:
                 node_exec = NodeExecution(
@@ -378,6 +385,7 @@ class ExecutionContext:
 
             ctx.node_executions[node_id] = node_exec
 
+        logger.info(f"[ExecutionContext] Created context with outputs: {list(ctx.outputs.keys())}")
         return ctx
 
     def get_node_status(self, node_id: str) -> Optional[TaskStatus]:

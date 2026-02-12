@@ -629,6 +629,20 @@ class DeploymentManager:
                 downstream_ids.add(source)
                 logger.debug(f"[Deployment] Including sub-node {source} connected to toolkit {target}")
 
+        # Include tool nodes connected to AI Agent nodes (for capability discovery)
+        # When a child agent is included, we need its connected tools so the parent
+        # can discover what capabilities the child has
+        from constants import AI_AGENT_TYPES
+        agent_node_ids = {n['id'] for n in nodes if n.get('type') in AI_AGENT_TYPES and n['id'] in downstream_ids}
+        for edge in edges:
+            target = edge.get('target')
+            source = edge.get('source')
+            target_handle = edge.get('targetHandle', '')
+            # Include tool nodes connected to agent's input-tools handle
+            if target in agent_node_ids and target_handle == 'input-tools' and source not in downstream_ids:
+                downstream_ids.add(source)
+                logger.debug(f"[Deployment] Including tool node {source} connected to agent {target}")
+
         return [n for n in nodes if n['id'] in downstream_ids]
 
     # =========================================================================
