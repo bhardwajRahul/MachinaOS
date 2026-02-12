@@ -1770,6 +1770,7 @@ async def handle_scan_skill_folder(data: Dict[str, Any], websocket: WebSocket) -
 
     Returns list of discovered skills with their metadata.
     Used by MasterSkillEditor when skillFolder is set.
+    Also registers discovered skills in the global registry for get_skill_content.
     """
     from pathlib import Path
     from services.skill_loader import get_skill_loader
@@ -1786,6 +1787,10 @@ async def handle_scan_skill_folder(data: Dict[str, Any], websocket: WebSocket) -
     for skill_md in target_dir.rglob("SKILL.md"):
         metadata = skill_loader._parse_skill_metadata(skill_md)
         if metadata:
+            # Register the skill in the global registry so get_skill_content can find it
+            metadata.path = skill_md.parent
+            skill_loader._registry[metadata.name] = metadata
+
             skills.append({
                 "name": metadata.name,
                 "description": metadata.description,
@@ -2007,6 +2012,31 @@ async def handle_save_user_settings(data: Dict[str, Any], websocket: WebSocket) 
 
 
 # ============================================================================
+# Compaction Handlers
+# ============================================================================
+
+@ws_handler("session_id")
+async def handle_get_compaction_stats(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Get compaction statistics for a session."""
+    from services.compaction import get_compaction_service
+    svc = get_compaction_service()
+    if not svc:
+        return {"success": False, "error": "Compaction service not initialized"}
+    return await svc.stats(data["session_id"])
+
+
+@ws_handler("session_id")
+async def handle_configure_compaction(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Configure compaction settings for a session."""
+    from services.compaction import get_compaction_service
+    svc = get_compaction_service()
+    if not svc:
+        return {"success": False, "error": "Compaction service not initialized"}
+    success = await svc.configure(data["session_id"], data.get("threshold"), data.get("enabled"))
+    return {"success": success}
+
+
+# ============================================================================
 # Message Router
 # ============================================================================
 
@@ -2134,6 +2164,10 @@ MESSAGE_HANDLERS: Dict[str, MessageHandler] = {
     # User Settings
     "get_user_settings": handle_get_user_settings,
     "save_user_settings": handle_save_user_settings,
+
+    # Compaction
+    "get_compaction_stats": handle_get_compaction_stats,
+    "configure_compaction": handle_configure_compaction,
 }
 
 

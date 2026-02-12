@@ -761,6 +761,16 @@ class AIService:
         if isinstance(content, str) and content.strip():
             return content
 
+        # LangChain standard: use content_blocks property for typed content extraction
+        if ai_response and hasattr(ai_response, 'content_blocks') and ai_response.content_blocks:
+            text_parts = []
+            for block in ai_response.content_blocks:
+                if isinstance(block, dict) and block.get('type') == 'text':
+                    text_parts.append(block.get('text', ''))
+            extracted = '\n'.join(filter(None, text_parts))
+            if extracted.strip():
+                return extracted
+
         # Content is empty - try to get error details from metadata
         error_details = []
         if ai_response and hasattr(ai_response, 'response_metadata'):
@@ -775,13 +785,21 @@ class AIService:
                 if blocked:
                     error_details.append(f"Blocked categories: {', '.join(blocked)}")
 
-            elif finish_reason == 'MAX_TOKENS':
-                # Check if reasoning consumed all tokens
-                token_details = meta.get('output_token_details', {})
-                reasoning_tokens = token_details.get('reasoning', 0)
-                output_tokens = meta.get('usage_metadata', {}).get('candidates_token_count', 0)
-                if reasoning_tokens > 0 and output_tokens == 0:
-                    error_details.append(f"Model used all tokens for reasoning ({reasoning_tokens} tokens). Try increasing max_tokens or simplifying the prompt.")
+            elif finish_reason in ('MAX_TOKENS', 'length'):
+                # Check if reasoning consumed all tokens (OpenAI o-series models)
+                # OpenAI path: token_usage.completion_tokens_details.reasoning_tokens
+                token_usage = meta.get('token_usage', {})
+                completion_details = token_usage.get('completion_tokens_details', {})
+                reasoning_tokens = completion_details.get('reasoning_tokens', 0)
+                completion_tokens = token_usage.get('completion_tokens', 0)
+
+                # Also check Gemini path: output_token_details
+                if not reasoning_tokens:
+                    token_details = meta.get('output_token_details', {})
+                    reasoning_tokens = token_details.get('reasoning', 0)
+
+                if reasoning_tokens > 0 and reasoning_tokens >= completion_tokens:
+                    error_details.append(f"Model used all {reasoning_tokens} tokens for reasoning, none left for response. Increase max_tokens (current response used {completion_tokens} total).")
                 else:
                     error_details.append("Response truncated due to max_tokens limit")
 
@@ -794,8 +812,15 @@ class AIService:
         if error_details:
             raise ValueError(f"AI returned empty response. {'; '.join(error_details)}")
 
-        # Generic empty response
-        logger.warning(f"[LangGraph] Empty response with no error details. Content type: {type(content)}, value: {content}")
+        # Generic empty response - log full response details for debugging
+        if ai_response:
+            logger.warning(f"[LangGraph] Empty response debug - content_blocks: {getattr(ai_response, 'content_blocks', None)}")
+            logger.warning(f"[LangGraph] Empty response debug - additional_kwargs: {getattr(ai_response, 'additional_kwargs', {})}")
+            if hasattr(ai_response, 'response_metadata'):
+                meta = ai_response.response_metadata
+                logger.warning(f"[LangGraph] Empty response debug - finish_reason: {meta.get('finish_reason')}")
+                logger.warning(f"[LangGraph] Empty response debug - token_usage: {meta.get('token_usage')}")
+        logger.warning(f"[LangGraph] Empty response with no error details. Content type: {type(content)}, value: {repr(content)}")
         raise ValueError("AI generated empty response. Try rephrasing your prompt or using a different model.")
 
     def _is_reasoning_model(self, model: str) -> bool:
@@ -808,6 +833,141 @@ class AIService:
         # Check for o-series pattern: starts with 'o' followed by digit
         # e.g., o1, o1-mini, o3, o3-mini, o4-mini
         return bool(re.match(r'^o[134](-|$)', model_lower))
+
+    async def _track_token_usage(
+        self,
+        session_id: str,
+        node_id: str,
+        provider: str,
+        model: str,
+        ai_response,
+        all_messages: list,
+        broadcaster=None,
+        workflow_id: Optional[str] = None,
+        memory_content: Optional[str] = None,
+        api_key: Optional[str] = None,
+        memory_node_id: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Track token usage and trigger compaction if threshold exceeded.
+
+        Extracts usage_metadata from LangChain AIMessage and tracks it
+        in the compaction service for session token monitoring.
+
+        Args:
+            session_id: Memory session ID
+            node_id: Agent node ID
+            provider: AI provider name
+            model: Model name
+            ai_response: The AIMessage response
+            all_messages: All messages in conversation (for aggregation)
+            broadcaster: Optional status broadcaster
+            workflow_id: Optional workflow ID for scoped broadcasts
+            memory_content: Current memory content (for compaction)
+            api_key: API key (for compaction summarization)
+            memory_node_id: Memory node ID (for parameter updates)
+
+        Returns:
+            Compaction result if triggered, None otherwise
+        """
+        from services.compaction import get_compaction_service
+
+        svc = get_compaction_service()
+        if not svc:
+            return
+
+        # Extract usage_metadata from AIMessage (LangChain standardizes this)
+        usage = None
+        if hasattr(ai_response, 'usage_metadata') and ai_response.usage_metadata:
+            usage = ai_response.usage_metadata
+        elif hasattr(ai_response, 'response_metadata'):
+            # Fallback: check response_metadata for usage info
+            meta = ai_response.response_metadata
+            if 'usage' in meta:
+                usage = meta['usage']
+            elif 'token_usage' in meta:
+                usage = meta['token_usage']
+
+        if not usage:
+            # Aggregate usage from all AI messages if single message has no usage
+            total_input = 0
+            total_output = 0
+            for msg in all_messages:
+                if hasattr(msg, 'usage_metadata') and msg.usage_metadata:
+                    total_input += msg.usage_metadata.get('input_tokens', 0)
+                    total_output += msg.usage_metadata.get('output_tokens', 0)
+            if total_input > 0 or total_output > 0:
+                usage = {
+                    'input_tokens': total_input,
+                    'output_tokens': total_output,
+                    'total_tokens': total_input + total_output
+                }
+
+        if not usage:
+            logger.debug(f"[TokenTracking] No usage_metadata available for {provider}/{model}")
+            return
+
+        # Normalize usage dict (handle both dict and TypedDict formats)
+        usage_dict = {
+            'input_tokens': usage.get('input_tokens', 0) if isinstance(usage, dict) else getattr(usage, 'input_tokens', 0),
+            'output_tokens': usage.get('output_tokens', 0) if isinstance(usage, dict) else getattr(usage, 'output_tokens', 0),
+            'total_tokens': usage.get('total_tokens', 0) if isinstance(usage, dict) else getattr(usage, 'total_tokens', 0)
+        }
+
+        try:
+            tracking = await svc.track(
+                session_id=session_id,
+                node_id=node_id,
+                provider=provider,
+                model=model,
+                usage=usage_dict
+            )
+            logger.debug(f"[TokenTracking] Tracked {usage_dict['total_tokens']} tokens for session {session_id}, total={tracking['total']}")
+
+            # Broadcast token update
+            if broadcaster:
+                await broadcaster.broadcast({
+                    "type": "token_usage_update",
+                    "session_id": session_id,
+                    "workflow_id": workflow_id,
+                    "data": tracking
+                })
+
+            # Trigger compaction if threshold exceeded
+            if tracking.get('needs_compaction') and memory_content and api_key:
+                logger.info(f"[Compaction] Threshold exceeded for session {session_id}, triggering compaction")
+
+                if broadcaster:
+                    await broadcaster.broadcast({
+                        "type": "compaction_starting",
+                        "session_id": session_id,
+                        "node_id": node_id
+                    })
+
+                result = await svc.compact_context(
+                    session_id=session_id,
+                    node_id=node_id,
+                    memory_content=memory_content,
+                    provider=provider,
+                    api_key=api_key,
+                    model=model
+                )
+
+                if broadcaster:
+                    await broadcaster.broadcast({
+                        "type": "compaction_completed",
+                        "session_id": session_id,
+                        "success": result.get("success", False),
+                        "tokens_before": result.get("tokens_before", 0),
+                        "tokens_after": result.get("tokens_after", 0),
+                        "error": result.get("error")
+                    })
+
+                return result
+
+        except Exception as e:
+            logger.warning(f"[TokenTracking] Failed to track tokens: {e}")
+
+        return None
 
     def create_model(self, provider: str, api_key: str, model: str,
                     temperature: float, max_tokens: int,
@@ -1553,6 +1713,24 @@ class AIService:
 
             logger.info(f"[LangGraph] Agent completed in {iterations} iteration(s), thinking={'yes' if thinking_content else 'no'}")
 
+            # Track token usage if memory connected (for compaction service)
+            # Also triggers compaction if threshold exceeded
+            compaction_result = None
+            if session_id and ai_response:
+                compaction_result = await self._track_token_usage(
+                    session_id=session_id,
+                    node_id=node_id,
+                    provider=provider,
+                    model=model,
+                    ai_response=ai_response,
+                    all_messages=all_messages,
+                    broadcaster=broadcaster,
+                    workflow_id=workflow_id,
+                    memory_content=memory_data.get('memory_content', '') if memory_data else None,
+                    api_key=api_key,
+                    memory_node_id=memory_data.get('node_id') if memory_data else None
+                )
+
             # Save to memory if connected (markdown-based with optional vector DB)
             # Only save non-empty messages using standardized validation
             if memory_data and memory_data.get('node_id') and is_valid_message_content(prompt) and is_valid_message_content(response_content):
@@ -1564,10 +1742,18 @@ class AIService:
                     "history_count": history_count
                 })
 
-                # Update markdown content
-                updated_content = memory_data.get('memory_content', '# Conversation History\n\n*No messages yet.*\n')
-                updated_content = _append_to_memory_markdown(updated_content, 'human', prompt)
-                updated_content = _append_to_memory_markdown(updated_content, 'ai', response_content)
+                # If compaction happened, use compacted summary as base
+                if compaction_result and compaction_result.get('success') and compaction_result.get('summary'):
+                    # Start fresh with compacted summary, then add current exchange
+                    updated_content = compaction_result['summary']
+                    updated_content = _append_to_memory_markdown(updated_content, 'human', prompt)
+                    updated_content = _append_to_memory_markdown(updated_content, 'ai', response_content)
+                    logger.info(f"[LangGraph Memory] Using compacted summary as new base")
+                else:
+                    # Normal flow: append to existing memory
+                    updated_content = memory_data.get('memory_content', '# Conversation History\n\n*No messages yet.*\n')
+                    updated_content = _append_to_memory_markdown(updated_content, 'human', prompt)
+                    updated_content = _append_to_memory_markdown(updated_content, 'ai', response_content)
 
                 # Trim to window size, archive removed to vector DB
                 window_size = memory_data.get('window_size', 10)
@@ -1967,6 +2153,26 @@ class AIService:
 
             logger.info(f"[ChatAgent] Response generated, thinking={'yes' if thinking_content else 'no'}, iterations={iterations}")
 
+            # Track token usage if memory connected (for compaction service)
+            # Use ai_response for tools path, response for simple invoke
+            # Also triggers compaction if threshold exceeded
+            response_msg = ai_response if all_tools else response
+            compaction_result = None
+            if session_id and response_msg:
+                compaction_result = await self._track_token_usage(
+                    session_id=session_id,
+                    node_id=node_id,
+                    provider=provider,
+                    model=model,
+                    ai_response=response_msg,
+                    all_messages=all_messages if all_tools else messages + [response_msg],
+                    broadcaster=broadcaster,
+                    workflow_id=workflow_id,
+                    memory_content=memory_content,
+                    api_key=api_key,
+                    memory_node_id=memory_data.get('node_id') if memory_data else None
+                )
+
             # Save to memory if connected (markdown-based like AI Agent)
             if memory_data and memory_data.get('node_id') and is_valid_message_content(prompt) and is_valid_message_content(response_content):
                 await broadcast_status("saving_memory", {
@@ -1975,10 +2181,17 @@ class AIService:
                     "has_memory": True
                 })
 
-                # Update markdown content
-                updated_content = memory_content or '# Conversation History\n\n*No messages yet.*\n'
-                updated_content = _append_to_memory_markdown(updated_content, 'human', prompt)
-                updated_content = _append_to_memory_markdown(updated_content, 'ai', response_content)
+                # If compaction happened, use compacted summary as base
+                if compaction_result and compaction_result.get('success') and compaction_result.get('summary'):
+                    updated_content = compaction_result['summary']
+                    updated_content = _append_to_memory_markdown(updated_content, 'human', prompt)
+                    updated_content = _append_to_memory_markdown(updated_content, 'ai', response_content)
+                    logger.info(f"[ChatAgent Memory] Using compacted summary as new base")
+                else:
+                    # Normal flow: append to existing memory
+                    updated_content = memory_content or '# Conversation History\n\n*No messages yet.*\n'
+                    updated_content = _append_to_memory_markdown(updated_content, 'human', prompt)
+                    updated_content = _append_to_memory_markdown(updated_content, 'ai', response_content)
 
                 # Trim to window size, archive removed to vector DB
                 window_size = memory_data.get('window_size', 10)

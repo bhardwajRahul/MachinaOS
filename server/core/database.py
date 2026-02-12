@@ -9,7 +9,11 @@ from sqlalchemy import text, func
 from contextlib import asynccontextmanager
 
 from core.config import Settings
-from models.database import NodeParameter, Workflow, Execution, APIKey, APIKeyValidation, NodeOutput, ConversationMessage, ToolSchema, UserSkill, ChatMessage, UserSettings
+from models.database import (
+    NodeParameter, Workflow, Execution, APIKey, APIKeyValidation, NodeOutput,
+    ConversationMessage, ToolSchema, UserSkill, ChatMessage, UserSettings,
+    TokenUsageMetric, CompactionEvent, SessionTokenState
+)
 from models.cache import CacheEntry  # SQLite-backed cache for Redis alternative
 from models.auth import User  # Import User model to ensure table creation
 from core.logging import get_logger
@@ -1477,3 +1481,221 @@ class Database:
         except Exception as e:
             logger.error("Failed to save user settings", user_id=user_id, error=str(e))
             return False
+
+    # ============================================================================
+    # Token Usage Metrics
+    # ============================================================================
+
+    async def save_token_metric(self, metric: Dict[str, Any]) -> bool:
+        """Save a token usage metric record."""
+        try:
+            async with self.get_session() as session:
+                entry = TokenUsageMetric(
+                    session_id=metric.get("session_id", "default"),
+                    node_id=metric.get("node_id", ""),
+                    workflow_id=metric.get("workflow_id"),
+                    provider=metric.get("provider", ""),
+                    model=metric.get("model", ""),
+                    input_tokens=metric.get("input_tokens", 0),
+                    output_tokens=metric.get("output_tokens", 0),
+                    total_tokens=metric.get("total_tokens", 0),
+                    cache_creation_tokens=metric.get("cache_creation_tokens", 0),
+                    cache_read_tokens=metric.get("cache_read_tokens", 0),
+                    reasoning_tokens=metric.get("reasoning_tokens", 0),
+                    iteration=metric.get("iteration", 1),
+                    execution_id=metric.get("execution_id"),
+                    created_at=datetime.now(timezone.utc)
+                )
+                session.add(entry)
+                await session.commit()
+                return True
+        except Exception as e:
+            logger.error("Failed to save token metric", error=str(e))
+            return False
+
+    async def get_session_token_metrics(
+        self, session_id: str, limit: int = 100
+    ) -> List[Dict[str, Any]]:
+        """Get token metrics for a session."""
+        try:
+            async with self.get_session() as session:
+                stmt = (
+                    select(TokenUsageMetric)
+                    .where(TokenUsageMetric.session_id == session_id)
+                    .order_by(TokenUsageMetric.created_at.desc())
+                    .limit(limit)
+                )
+                result = await session.execute(stmt)
+                metrics = result.scalars().all()
+
+                return [
+                    {
+                        "id": m.id,
+                        "session_id": m.session_id,
+                        "node_id": m.node_id,
+                        "provider": m.provider,
+                        "model": m.model,
+                        "input_tokens": m.input_tokens,
+                        "output_tokens": m.output_tokens,
+                        "total_tokens": m.total_tokens,
+                        "cache_creation_tokens": m.cache_creation_tokens,
+                        "cache_read_tokens": m.cache_read_tokens,
+                        "reasoning_tokens": m.reasoning_tokens,
+                        "iteration": m.iteration,
+                        "created_at": m.created_at.isoformat() if m.created_at else None
+                    }
+                    for m in metrics
+                ]
+        except Exception as e:
+            logger.error("Failed to get token metrics", session_id=session_id, error=str(e))
+            return []
+
+    # ============================================================================
+    # Session Token State
+    # ============================================================================
+
+    async def get_or_create_session_token_state(
+        self, session_id: str
+    ) -> Dict[str, Any]:
+        """Get or create token state for a session."""
+        try:
+            async with self.get_session() as session:
+                stmt = select(SessionTokenState).where(
+                    SessionTokenState.session_id == session_id
+                )
+                result = await session.execute(stmt)
+                state = result.scalar_one_or_none()
+
+                if not state:
+                    state = SessionTokenState(
+                        session_id=session_id,
+                        updated_at=datetime.now(timezone.utc)
+                    )
+                    session.add(state)
+                    await session.commit()
+                    await session.refresh(state)
+
+                return {
+                    "session_id": state.session_id,
+                    "cumulative_input_tokens": state.cumulative_input_tokens,
+                    "cumulative_output_tokens": state.cumulative_output_tokens,
+                    "cumulative_cache_tokens": state.cumulative_cache_tokens,
+                    "cumulative_reasoning_tokens": state.cumulative_reasoning_tokens,
+                    "cumulative_total": state.cumulative_total,
+                    "last_compaction_at": state.last_compaction_at.isoformat() if state.last_compaction_at else None,
+                    "compaction_count": state.compaction_count,
+                    "custom_threshold": state.custom_threshold,
+                    "compaction_enabled": state.compaction_enabled
+                }
+        except Exception as e:
+            logger.error("Failed to get session token state", error=str(e))
+            return {
+                "session_id": session_id,
+                "cumulative_total": 0,
+                "compaction_enabled": True
+            }
+
+    async def update_session_token_state(
+        self, session_id: str, updates: Dict[str, Any]
+    ) -> bool:
+        """Update session token state."""
+        try:
+            async with self.get_session() as session:
+                stmt = select(SessionTokenState).where(
+                    SessionTokenState.session_id == session_id
+                )
+                result = await session.execute(stmt)
+                state = result.scalar_one_or_none()
+
+                if not state:
+                    state = SessionTokenState(session_id=session_id)
+                    session.add(state)
+
+                for key, value in updates.items():
+                    if hasattr(state, key):
+                        setattr(state, key, value)
+
+                state.updated_at = datetime.now(timezone.utc)
+                await session.commit()
+                return True
+        except Exception as e:
+            logger.error("Failed to update session token state", error=str(e))
+            return False
+
+    async def reset_session_token_state(self, session_id: str) -> bool:
+        """Reset token state after compaction."""
+        return await self.update_session_token_state(session_id, {
+            "cumulative_input_tokens": 0,
+            "cumulative_output_tokens": 0,
+            "cumulative_cache_tokens": 0,
+            "cumulative_reasoning_tokens": 0,
+            "cumulative_total": 0,
+            "last_compaction_at": datetime.now(timezone.utc)
+        })
+
+    # ============================================================================
+    # Compaction Events
+    # ============================================================================
+
+    async def save_compaction_event(self, event: Dict[str, Any]) -> bool:
+        """Save a compaction event record."""
+        try:
+            async with self.get_session() as session:
+                entry = CompactionEvent(
+                    session_id=event.get("session_id", "default"),
+                    node_id=event.get("node_id", ""),
+                    workflow_id=event.get("workflow_id"),
+                    trigger_reason=event.get("trigger_reason", "threshold"),
+                    tokens_before=event.get("tokens_before", 0),
+                    tokens_after=event.get("tokens_after", 0),
+                    messages_before=event.get("messages_before", 0),
+                    messages_after=event.get("messages_after", 0),
+                    summary_model=event.get("summary_model", ""),
+                    summary_provider=event.get("summary_provider", ""),
+                    summary_tokens_used=event.get("summary_tokens_used", 0),
+                    success=event.get("success", True),
+                    error_message=event.get("error_message"),
+                    summary_content=event.get("summary_content"),
+                    created_at=datetime.now(timezone.utc)
+                )
+                session.add(entry)
+                await session.commit()
+                return True
+        except Exception as e:
+            logger.error("Failed to save compaction event", error=str(e))
+            return False
+
+    async def get_compaction_history(
+        self, session_id: str, limit: int = 50
+    ) -> List[Dict[str, Any]]:
+        """Get compaction history for a session."""
+        try:
+            async with self.get_session() as session:
+                stmt = (
+                    select(CompactionEvent)
+                    .where(CompactionEvent.session_id == session_id)
+                    .order_by(CompactionEvent.created_at.desc())
+                    .limit(limit)
+                )
+                result = await session.execute(stmt)
+                events = result.scalars().all()
+
+                return [
+                    {
+                        "id": e.id,
+                        "session_id": e.session_id,
+                        "node_id": e.node_id,
+                        "trigger_reason": e.trigger_reason,
+                        "tokens_before": e.tokens_before,
+                        "tokens_after": e.tokens_after,
+                        "messages_before": e.messages_before,
+                        "messages_after": e.messages_after,
+                        "success": e.success,
+                        "error_message": e.error_message,
+                        "created_at": e.created_at.isoformat() if e.created_at else None
+                    }
+                    for e in events
+                ]
+        except Exception as e:
+            logger.error("Failed to get compaction history", session_id=session_id, error=str(e))
+            return []

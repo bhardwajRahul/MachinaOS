@@ -278,6 +278,60 @@ export const aiAgentNodes: Record<string, INodeTypeDescription> = {
         default: 'You are a helpful assistant.',
         typeOptions: { rows: 3 },
         description: 'Define the behavior and personality of the AI agent'
+      },
+      {
+        displayName: 'Options',
+        name: 'options',
+        type: 'collection',
+        placeholder: 'Add Option',
+        default: {},
+        options: [
+          {
+            displayName: 'Temperature',
+            name: 'temperature',
+            type: 'number',
+            default: 0.7,
+            typeOptions: { minValue: 0, maxValue: 2, numberStepSize: 0.1 },
+            description: 'Controls randomness in responses'
+          },
+          {
+            displayName: 'Maximum Tokens',
+            name: 'maxTokens',
+            type: 'number',
+            default: 1000,
+            typeOptions: { minValue: 1, maxValue: 8192 },
+            description: 'Maximum number of tokens to generate'
+          },
+          {
+            displayName: 'Thinking/Reasoning',
+            name: 'thinkingEnabled',
+            type: 'boolean',
+            default: false,
+            description: 'Enable extended thinking for supported providers (Anthropic, OpenAI o-series, Gemini, Groq, Cerebras)'
+          },
+          {
+            displayName: 'Thinking Budget',
+            name: 'thinkingBudget',
+            type: 'number',
+            default: 2048,
+            typeOptions: { minValue: 1024, maxValue: 16000 },
+            description: 'Token budget for thinking (Claude, Gemini, Cerebras)',
+            displayOptions: { show: { thinkingEnabled: [true] } }
+          },
+          {
+            displayName: 'Reasoning Effort',
+            name: 'reasoningEffort',
+            type: 'options',
+            options: [
+              { name: 'Low', value: 'low' },
+              { name: 'Medium', value: 'medium' },
+              { name: 'High', value: 'high' }
+            ],
+            default: 'medium',
+            description: 'Reasoning effort level (OpenAI o-series, Groq)',
+            displayOptions: { show: { thinkingEnabled: [true] } }
+          }
+        ] as any
       }
     ]
   },

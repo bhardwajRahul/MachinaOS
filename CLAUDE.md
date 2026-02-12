@@ -15,6 +15,7 @@ This is a React Flow-based workflow automation platform implementing n8n-inspire
 | **[Dual-Purpose Tool Guide](./docs-internal/dual_purpose_tool_node_creation.md)** | Guide for nodes that work as both workflow nodes AND AI Agent tools (e.g., whatsappSend) |
 | **[Agent Architecture](./docs-internal/agent_architecture.md)** | How AI Agent and Chat Agent discover skills/tools, inject them into LLM prompts, and execute via LangGraph |
 | **[Agent Delegation](./docs-internal/agent_delegation.md)** | How memory, parameters, and execution context flow when one AI agent delegates work to another agent connected as a tool |
+| **[Memory Compaction](./docs-internal/memory_compaction.md)** | Token tracking and memory compaction service using native provider APIs (Anthropic, OpenAI) |
 | **[CI/CD Pipeline](./docs-internal/ci_cd.md)** | GitHub Actions workflows, predeploy validation, release publishing, and composite setup action |
 | **[Workflow Schema](./docs-internal/workflow-schema.md)** | JSON schema for workflows, edge handle conventions, config node architecture |
 | **[Execution Engine Design](./docs-internal/DESIGN.md)** | Architecture patterns, design standards, and implementation details for the workflow execution engine |
@@ -86,7 +87,7 @@ server/core/
 server/models/
 ├── cache.py                 # CacheEntry SQLModel for SQLite cache
 ├── auth.py                  # User model with bcrypt
-└── database.py              # ConversationMessage, NodeParameter, ToolSchema, ChatMessage tables
+└── database.py              # ConversationMessage, NodeParameter, ToolSchema, ChatMessage, TokenUsageMetric, CompactionEvent, SessionTokenState tables
 ```
 
 ### Polyglot Server Integration (Optional)
@@ -484,9 +485,15 @@ server/skills/
 │   ├── scheduler-skill/SKILL.md
 │   ├── web-search-skill/SKILL.md
 │   └── whatsapp-skill/SKILL.md
-└── android/                              # Android device control skills
-    ├── personality/SKILL.md
-    └── skill/SKILL.md
+├── android/                              # Android device control skills
+│   ├── personality/SKILL.md
+│   └── skill/SKILL.md
+└── autonomous/                           # Autonomous agent patterns (Code Mode research)
+    ├── code-mode-skill/SKILL.md          # Generate code instead of tool calls (81-98% token savings)
+    ├── agentic-loop-skill/SKILL.md       # OBSERVE-THINK-ACT-REFLECT-DECIDE pattern
+    ├── progressive-discovery-skill/SKILL.md  # Load tools on-demand (98.7% token savings)
+    ├── error-recovery-skill/SKILL.md     # Retry strategies, graceful degradation
+    └── multi-tool-orchestration-skill/SKILL.md  # Coordinate multiple tools for complex tasks
 ```
 
 **SKILL.md Format:**
@@ -2557,6 +2564,246 @@ I don't have access to real-time weather data...
 - **Per-Session Vector Stores**: `_memory_vector_stores` dict keyed by session_id
 - **Window + Archive**: Short-term (recent messages) + long-term (semantic retrieval) memory pattern
 - **Auto-Save**: AI Agent automatically saves updated markdown content to node parameters
+
+## Memory Compaction and Token Tracking
+
+### Overview
+The compaction service enables automatic memory compaction and token tracking for specialized agents. It uses a hybrid approach: native compaction APIs for Anthropic/OpenAI, with tracking for all providers. Inspired by Claude Code's compaction pattern with a default 100,000 token threshold.
+
+### Architecture
+```
+AI Agent Execution
+       ↓
+CompactionService.track() → Save token metrics to DB
+       ↓                   → Update cumulative session state
+       ↓                   → Check if threshold exceeded
+       ↓
+If needs_compaction:
+  - Anthropic: Native compaction via context_management API
+  - OpenAI: Native compaction via compact_threshold
+  - Others: Client-side summarization fallback
+       ↓
+CompactionService.record() → Save compaction event to DB
+                           → Reset cumulative token count
+```
+
+### Native Provider APIs
+
+**Anthropic SDK (tool_runner):**
+```python
+compaction_control = {
+    "enabled": True,
+    "context_token_threshold": 100000
+}
+```
+
+**Anthropic Messages API:**
+```python
+{
+    "betas": ["compact-2026-01-12"],
+    "context_management": {
+        "edits": [{
+            "type": "compact_20260112",
+            "trigger": {"type": "input_tokens", "value": 100000}
+        }]
+    }
+}
+```
+
+**OpenAI:**
+```python
+{"context_management": {"compact_threshold": 100000}}
+```
+
+### Key Files
+| File | Description |
+|------|-------------|
+| `server/services/compaction.py` | CompactionService with track(), record(), stats(), configure(), compact_context() methods |
+| `server/services/ai.py` | `_track_token_usage()` with automatic compaction triggering |
+| `server/models/database.py` | TokenUsageMetric, CompactionEvent, SessionTokenState tables |
+| `server/core/database.py` | CRUD methods for token metrics and compaction events |
+| `server/core/config.py` | compaction_enabled, compaction_threshold settings |
+| `server/core/container.py` | Dependency injection for compaction_service |
+| `server/main.py` | Wires AI service to compaction service at startup |
+| `server/routers/websocket.py` | get_compaction_stats, configure_compaction handlers |
+| `client/src/components/parameterPanel/MiddleSection.tsx` | Token Usage UI with editable threshold |
+
+### Database Models
+
+**TokenUsageMetric** - Per-execution token usage:
+```python
+class TokenUsageMetric(SQLModel, table=True):
+    session_id: str          # Memory session identifier
+    node_id: str             # Agent node ID
+    provider: str            # openai, anthropic, gemini, groq, etc.
+    model: str               # Model name
+    input_tokens: int        # Input token count
+    output_tokens: int       # Output token count
+    total_tokens: int        # Total tokens
+    cache_creation_tokens: int  # Anthropic cache creation
+    cache_read_tokens: int      # Anthropic cache read
+    reasoning_tokens: int       # OpenAI o-series reasoning
+```
+
+**SessionTokenState** - Cumulative state per session:
+```python
+class SessionTokenState(SQLModel, table=True):
+    session_id: str              # Unique session identifier
+    cumulative_total: int        # Running total tokens
+    custom_threshold: int        # Per-session threshold override
+    compaction_count: int        # Number of compactions
+    last_compaction_at: datetime # Last compaction timestamp
+```
+
+**CompactionEvent** - Compaction history:
+```python
+class CompactionEvent(SQLModel, table=True):
+    session_id: str
+    trigger_reason: str      # "native" or "threshold"
+    tokens_before: int
+    tokens_after: int
+    summary_content: str     # Compacted summary (if available)
+```
+
+### CompactionService API
+
+```python
+from services.compaction import get_compaction_service
+
+svc = get_compaction_service()
+
+# Get provider-specific config
+anthropic_cfg = svc.anthropic_config(threshold=100000)
+openai_cfg = svc.openai_config(threshold=100000)
+
+# Track token usage after AI execution
+result = await svc.track(
+    session_id="user-123",
+    node_id="agent-1",
+    provider="anthropic",
+    model="claude-3-5-sonnet",
+    usage={"input_tokens": 5000, "output_tokens": 1000, "total_tokens": 6000}
+)
+# result: {"total": 6000, "threshold": 100000, "needs_compaction": False}
+
+# Record compaction event after native API handles it
+await svc.record(
+    session_id="user-123",
+    node_id="agent-1",
+    provider="anthropic",
+    model="claude-3-5-sonnet",
+    tokens_before=105000,
+    tokens_after=15000,
+    summary="Compacted conversation summary..."
+)
+
+# Get session statistics
+stats = await svc.stats("user-123")
+# {"session_id": "user-123", "total": 15000, "threshold": 100000, "count": 1}
+
+# Configure per-session settings
+await svc.configure("user-123", threshold=50000, enabled=True)
+```
+
+### WebSocket Handlers
+
+| Handler | Description |
+|---------|-------------|
+| `get_compaction_stats` | Get token statistics for a session |
+| `configure_compaction` | Update threshold/enabled settings for a session |
+
+### Configuration
+
+Environment variables in `.env`:
+```bash
+COMPACTION_ENABLED=true       # Enable/disable compaction globally
+COMPACTION_THRESHOLD=100000   # Default token threshold (min: 10000)
+```
+
+### Client-Side Compaction
+
+When the token threshold is exceeded, the service automatically triggers compaction using the AI service to generate a structured summary:
+
+```python
+# Automatic compaction in _track_token_usage()
+if tracking.get('needs_compaction') and memory_content and api_key:
+    result = await svc.compact_context(
+        session_id=session_id,
+        node_id=node_id,
+        memory_content=memory_content,  # Current conversation markdown
+        provider=provider,
+        api_key=api_key,
+        model=model
+    )
+    # result: {"success": True, "summary": "# Conversation Summary (Compacted)...", "tokens_before": 105000, "tokens_after": 0}
+```
+
+**Summary Structure** (Claude Code pattern):
+```markdown
+# Conversation Summary (Compacted)
+*Generated: 2025-02-12T10:30:00Z*
+
+## Task Overview
+What the user is trying to accomplish.
+
+## Current State
+What's been completed and what's in progress.
+
+## Important Discoveries
+Key findings, decisions, or problems encountered.
+
+## Next Steps
+What needs to happen next.
+
+## Context to Preserve
+Details that must be retained for continuity.
+```
+
+### WebSocket Broadcasts
+
+Real-time updates broadcast to frontend:
+
+| Event | Description |
+|-------|-------------|
+| `token_usage_update` | After each AI execution: `{session_id, data: {total, threshold, needs_compaction}}` |
+| `compaction_starting` | Before compaction begins: `{session_id, node_id}` |
+| `compaction_completed` | After compaction: `{session_id, success, tokens_before, tokens_after, error}` |
+
+### Token Usage UI
+
+The MiddleSection displays a Token Usage panel for memory nodes with:
+- **Progress bar**: Visual tokens used vs threshold
+- **Statistics**: Current token count, threshold, compaction count
+- **Editable threshold**: Click edit icon to change per-session threshold
+
+```typescript
+// In client/src/components/parameterPanel/MiddleSection.tsx
+<Collapse.Panel header="Token Usage" key="tokenUsage">
+  <Progress percent={Math.round((total / threshold) * 100)} />
+  <Statistic title="Tokens Used" value={`${total} / ${threshold}`} />
+  <Statistic title="Compactions" value={count} />
+  <InputNumber onChange={updateThreshold} />  {/* Edit threshold */}
+</Collapse.Panel>
+```
+
+### Service Wiring
+
+The compaction service requires AI service for summarization, wired at startup:
+
+```python
+# In server/main.py
+from services.compaction import get_compaction_service
+compaction_svc = container.compaction_service()
+compaction_svc.set_ai_service(container.ai_service())
+```
+
+### Design Decisions
+- **Hybrid Approach**: Native APIs for Anthropic/OpenAI configs, client-side summarization for actual compaction
+- **5-Section Summary**: Follows Claude Code's structured summary format for continuity
+- **Automatic Triggering**: Compaction triggered in `_track_token_usage()` when threshold exceeded
+- **Per-Session State**: Each memory session has independent token tracking and thresholds
+- **100K Threshold**: Matches Claude Code's default (configurable per session)
+- **Singleton Pattern**: Service accessible via `get_compaction_service()`
 
 ## AI Agent Tool System
 

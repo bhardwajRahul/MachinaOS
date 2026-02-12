@@ -116,6 +116,12 @@ async def lifespan(app: FastAPI):
         )
         await cleanup_service.start()
 
+    # Initialize compaction service and wire AI service
+    from services.compaction import get_compaction_service
+    compaction_svc = container.compaction_service()  # Trigger singleton initialization
+    compaction_svc.set_ai_service(container.ai_service())
+    logger.info("Compaction service initialized")
+
     # Record startup time for health reporting
     set_startup_time()
 

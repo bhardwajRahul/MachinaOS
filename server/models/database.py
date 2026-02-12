@@ -261,3 +261,72 @@ class UserSettings(SQLModel, table=True):
         default_factory=lambda: datetime.now(timezone.utc),
         sa_column=Column(DateTime(timezone=True), onupdate=func.now())
     )
+
+
+# =============================================================================
+# Token Tracking and Memory Compaction
+# =============================================================================
+
+
+class TokenUsageMetric(SQLModel, table=True):
+    """Token usage per agent execution."""
+
+    __tablename__ = "token_usage_metrics"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    session_id: str = Field(index=True, max_length=255)
+    node_id: str = Field(index=True, max_length=255)
+    workflow_id: Optional[str] = Field(default=None, max_length=255)
+    provider: str = Field(max_length=50)
+    model: str = Field(max_length=100)
+    input_tokens: int = Field(default=0)
+    output_tokens: int = Field(default=0)
+    total_tokens: int = Field(default=0)
+    cache_creation_tokens: int = Field(default=0)
+    cache_read_tokens: int = Field(default=0)
+    reasoning_tokens: int = Field(default=0)
+    iteration: int = Field(default=1)
+    execution_id: Optional[str] = Field(default=None, max_length=255)
+    created_at: Optional[datetime] = Field(default=None)
+
+
+class CompactionEvent(SQLModel, table=True):
+    """Compaction event history."""
+
+    __tablename__ = "compaction_events"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    session_id: str = Field(index=True, max_length=255)
+    node_id: str = Field(max_length=255)
+    workflow_id: Optional[str] = Field(default=None, max_length=255)
+    trigger_reason: str = Field(max_length=50)
+    tokens_before: int = Field(default=0)
+    tokens_after: int = Field(default=0)
+    messages_before: int = Field(default=0)
+    messages_after: int = Field(default=0)
+    summary_model: str = Field(max_length=100)
+    summary_provider: str = Field(max_length=50)
+    summary_tokens_used: int = Field(default=0)
+    success: bool = Field(default=True)
+    error_message: Optional[str] = Field(default=None, max_length=2000)
+    summary_content: Optional[str] = Field(default=None, max_length=50000)
+    created_at: Optional[datetime] = Field(default=None)
+
+
+class SessionTokenState(SQLModel, table=True):
+    """Cumulative token state per memory session."""
+
+    __tablename__ = "session_token_states"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    session_id: str = Field(unique=True, index=True, max_length=255)
+    cumulative_input_tokens: int = Field(default=0)
+    cumulative_output_tokens: int = Field(default=0)
+    cumulative_cache_tokens: int = Field(default=0)
+    cumulative_reasoning_tokens: int = Field(default=0)
+    cumulative_total: int = Field(default=0)
+    last_compaction_at: Optional[datetime] = Field(default=None)
+    compaction_count: int = Field(default=0)
+    custom_threshold: Optional[int] = Field(default=None)
+    compaction_enabled: bool = Field(default=True)
+    updated_at: Optional[datetime] = Field(default=None)

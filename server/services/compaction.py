@@ -1,0 +1,187 @@
+"""Memory compaction service using native provider APIs.
+
+Anthropic: tool_runner with compaction_control parameter
+OpenAI: context_management with compact_threshold
+Others: Client-side summarization fallback
+"""
+
+from pydantic import BaseModel
+from datetime import datetime, timezone
+from typing import Dict, Any, Optional, TYPE_CHECKING
+
+from core.logging import get_logger
+
+if TYPE_CHECKING:
+    from core.database import Database
+    from core.config import Settings
+
+logger = get_logger(__name__)
+
+
+class CompactionConfig(BaseModel):
+    """Provider-agnostic compaction configuration."""
+    enabled: bool = True
+    threshold: int = 100000
+
+
+class CompactionService:
+    """Minimal compaction service using native provider APIs."""
+
+    def __init__(self, database: "Database", settings: "Settings"):
+        self._db = database
+        self._config = CompactionConfig(
+            enabled=settings.compaction_enabled,
+            threshold=settings.compaction_threshold
+        )
+        self._ai_service = None
+
+    def set_ai_service(self, ai_service) -> None:
+        """Wire AI service for generating compaction summaries."""
+        self._ai_service = ai_service
+
+    def anthropic_config(self, threshold: Optional[int] = None) -> Dict[str, Any]:
+        """Anthropic SDK compaction_control for tool_runner."""
+        return {
+            "enabled": self._config.enabled,
+            "context_token_threshold": threshold or self._config.threshold
+        }
+
+    def anthropic_api_config(self, threshold: Optional[int] = None) -> Dict[str, Any]:
+        """Anthropic Messages API context_management config."""
+        return {
+            "betas": ["compact-2026-01-12"],
+            "context_management": {
+                "edits": [{
+                    "type": "compact_20260112",
+                    "trigger": {"type": "input_tokens", "value": threshold or self._config.threshold}
+                }]
+            }
+        }
+
+    def openai_config(self, threshold: Optional[int] = None) -> Dict[str, Any]:
+        """OpenAI context_management config."""
+        return {"context_management": {"compact_threshold": threshold or self._config.threshold}}
+
+    async def track(self, session_id: str, node_id: str, provider: str, model: str, usage: Dict[str, int]) -> Dict[str, Any]:
+        """Track token usage and return compaction status."""
+        await self._db.save_token_metric({"session_id": session_id, "node_id": node_id, "provider": provider, "model": model, **usage})
+
+        state = await self._db.get_or_create_session_token_state(session_id)
+        new_total = state["cumulative_total"] + usage.get("total_tokens", 0)
+
+        await self._db.update_session_token_state(session_id, {
+            "cumulative_input_tokens": state["cumulative_input_tokens"] + usage.get("input_tokens", 0),
+            "cumulative_output_tokens": state["cumulative_output_tokens"] + usage.get("output_tokens", 0),
+            "cumulative_total": new_total
+        })
+
+        threshold = state.get("custom_threshold") or self._config.threshold
+        return {"total": new_total, "threshold": threshold, "needs_compaction": self._config.enabled and new_total >= threshold}
+
+    async def record(self, session_id: str, node_id: str, provider: str, model: str, tokens_before: int, tokens_after: int, summary: Optional[str] = None) -> None:
+        """Record compaction event after native API handles it."""
+        state = await self._db.get_or_create_session_token_state(session_id)
+        await self._db.save_compaction_event({
+            "session_id": session_id, "node_id": node_id, "trigger_reason": "native",
+            "tokens_before": tokens_before, "tokens_after": tokens_after,
+            "summary_model": model, "summary_provider": provider, "success": True, "summary_content": summary
+        })
+        await self._db.update_session_token_state(session_id, {
+            "cumulative_total": tokens_after,
+            "last_compaction_at": datetime.now(timezone.utc),
+            "compaction_count": state["compaction_count"] + 1
+        })
+
+    async def stats(self, session_id: str) -> Dict[str, Any]:
+        """Get session statistics."""
+        state = await self._db.get_or_create_session_token_state(session_id)
+        return {"session_id": session_id, "total": state["cumulative_total"], "threshold": state.get("custom_threshold") or self._config.threshold, "count": state.get("compaction_count", 0)}
+
+    async def configure(self, session_id: str, threshold: Optional[int] = None, enabled: Optional[bool] = None) -> bool:
+        """Configure session settings."""
+        updates = {}
+        if threshold is not None:
+            updates["custom_threshold"] = threshold
+        if enabled is not None:
+            updates["compaction_enabled"] = enabled
+        return await self._db.update_session_token_state(session_id, updates) if updates else True
+
+    async def compact_context(
+        self,
+        session_id: str,
+        node_id: str,
+        memory_content: str,
+        provider: str,
+        api_key: str,
+        model: str,
+    ) -> Dict[str, Any]:
+        """Perform compaction by summarizing conversation history.
+
+        Uses the AI service to generate a structured summary following Claude Code pattern.
+        """
+        if not self._ai_service:
+            logger.warning("[Compaction] AI service not wired")
+            return {"success": False, "error": "AI service not available"}
+
+        if not memory_content or len(memory_content.strip()) < 100:
+            return {"success": False, "error": "Memory content too short"}
+
+        state = await self._db.get_or_create_session_token_state(session_id)
+        tokens_before = state["cumulative_total"]
+
+        try:
+            prompt = f"""Summarize this conversation into a structured format:
+
+## Task Overview
+What the user is trying to accomplish.
+
+## Current State
+What's been completed and what's in progress.
+
+## Important Discoveries
+Key findings, decisions, or problems encountered.
+
+## Next Steps
+What needs to happen next.
+
+## Context to Preserve
+Details that must be retained for continuity.
+
+---
+CONVERSATION:
+{memory_content}
+---
+
+Provide a concise but complete summary."""
+
+            llm = self._ai_service.create_model(
+                provider=provider, api_key=api_key, model=model,
+                temperature=0.3, max_tokens=2000
+            )
+
+            from langchain_core.messages import HumanMessage
+            response = await llm.ainvoke([HumanMessage(content=prompt)])
+            summary = response.content if hasattr(response, 'content') else str(response)
+
+            new_memory = f"# Conversation Summary (Compacted)\n*Generated: {datetime.now(timezone.utc).isoformat()}*\n\n{summary}"
+
+            await self.record(session_id, node_id, provider, model, tokens_before, 0, new_memory)
+            logger.info(f"[Compaction] Session {session_id}: {tokens_before} -> 0 tokens")
+
+            return {"success": True, "summary": new_memory, "tokens_before": tokens_before, "tokens_after": 0}
+
+        except Exception as e:
+            logger.error(f"[Compaction] Failed: {e}")
+            return {"success": False, "error": str(e)}
+
+
+_service: Optional[CompactionService] = None
+
+def get_compaction_service() -> Optional[CompactionService]:
+    return _service
+
+def init_compaction_service(database: "Database", settings: "Settings") -> CompactionService:
+    global _service
+    _service = CompactionService(database, settings)
+    logger.info("[Compaction] Initialized")
+    return _service

@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { Collapse, Progress, Statistic, Spin, Row, Col, Typography, InputNumber, Button, message } from 'antd';
+import { ThunderboltOutlined, EditOutlined, SaveOutlined } from '@ant-design/icons';
 import ParameterRenderer from '../ParameterRenderer';
 import ToolSchemaEditor from './ToolSchemaEditor';
 import MasterSkillEditor from './MasterSkillEditor';
@@ -82,7 +84,7 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
 }) => {
   const theme = useAppTheme();
   const { currentWorkflow } = useAppStore();
-  const { clearMemory, resetSkill } = useWebSocket();
+  const { clearMemory, resetSkill, sendRequest } = useWebSocket();
   const [isConsoleExpanded, setIsConsoleExpanded] = useState(true);
   const [connectedSkills, setConnectedSkills] = useState<ConnectedSkill[]>([]);
   const [isSkillsExpanded, setIsSkillsExpanded] = useState(true);
@@ -92,6 +94,19 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
   const [showResetSkillDialog, setShowResetSkillDialog] = useState(false);
   const [clearLongTermMemory, setClearLongTermMemory] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Compaction state
+  const [compactionStats, setCompactionStats] = useState<{
+    session_id: string;
+    total: number;
+    threshold: number;
+    count: number;
+  } | null>(null);
+  const [connectedMemorySessionId, setConnectedMemorySessionId] = useState<string | null>(null);
+  const [compactionLoading, setCompactionLoading] = useState(false);
+  const [isEditingThreshold, setIsEditingThreshold] = useState(false);
+  const [editThresholdValue, setEditThresholdValue] = useState<number>(100000);
+  const [savingThreshold, setSavingThreshold] = useState(false);
 
   // Clear memory handler
   const handleClearMemory = async () => {
@@ -152,7 +167,63 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
 
   // State for Master Skill parameters
   const [masterSkillParams, setMasterSkillParams] = useState<Record<string, any>>({});
-  const { sendRequest } = useWebSocket();
+
+  // Get connected memory session ID and compaction stats for agent nodes
+  useEffect(() => {
+    if (!isAgentWithSkills || !currentWorkflow) {
+      setConnectedMemorySessionId(null);
+      setCompactionStats(null);
+      return;
+    }
+
+    const edges = currentWorkflow.edges || [];
+
+    // Find memory node connected to input-memory handle
+    const memoryEdge = edges.find((edge: Edge) =>
+      edge.target === nodeId && edge.targetHandle === 'input-memory'
+    );
+
+    if (!memoryEdge) {
+      setConnectedMemorySessionId(null);
+      setCompactionStats(null);
+      return;
+    }
+
+    // Get memory node's sessionId from its parameters
+    const fetchMemorySessionId = async () => {
+      try {
+        const response = await sendRequest<{ parameters: Record<string, any> }>('get_node_parameters', {
+          node_id: memoryEdge.source
+        });
+        const sessionId = response?.parameters?.sessionId || 'default';
+        setConnectedMemorySessionId(sessionId);
+
+        // Fetch compaction stats for this session
+        setCompactionLoading(true);
+        const statsResponse = await sendRequest<{
+          session_id: string;
+          total: number;
+          threshold: number;
+          count: number;
+        }>('get_compaction_stats', { session_id: sessionId });
+
+        if (statsResponse) {
+          setCompactionStats({
+            session_id: statsResponse.session_id || sessionId,
+            total: statsResponse.total || 0,
+            threshold: statsResponse.threshold || 100000,
+            count: statsResponse.count || 0
+          });
+        }
+      } catch (err) {
+        console.error('[MiddleSection] Failed to fetch memory session/compaction stats:', err);
+      } finally {
+        setCompactionLoading(false);
+      }
+    };
+
+    fetchMemorySessionId();
+  }, [nodeId, isAgentWithSkills, currentWorkflow, sendRequest]);
 
   // Get connected skills for agent nodes
   useEffect(() => {
@@ -635,6 +706,91 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
                 </div>
               </div>
             </div>
+          )}
+
+          {/* Token Usage Section - Only for agent nodes with memory connected */}
+          {isAgentWithSkills && connectedMemorySessionId && (
+            <Collapse
+              defaultActiveKey={['tokens']}
+              style={{ marginTop: 16 }}
+              items={[{
+                key: 'tokens',
+                label: (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <ThunderboltOutlined />
+                    Token Usage
+                    {compactionStats && (
+                      <Typography.Text type="secondary" style={{ marginLeft: 'auto' }}>
+                        {Math.round(compactionStats.total / 1000)}K / {Math.round(compactionStats.threshold / 1000)}K
+                      </Typography.Text>
+                    )}
+                  </span>
+                ),
+                children: compactionLoading ? (
+                  <Spin />
+                ) : compactionStats ? (
+                  <>
+                    <Progress
+                      percent={Math.round((compactionStats.total / compactionStats.threshold) * 100)}
+                      status={compactionStats.total >= compactionStats.threshold * 0.8 ? 'exception' : 'active'}
+                    />
+                    <Row gutter={16} style={{ marginTop: 16 }}>
+                      <Col span={8}><Statistic title="Total" value={compactionStats.total} /></Col>
+                      <Col span={8}>
+                        {isEditingThreshold ? (
+                          <div>
+                            <Typography.Text type="secondary" style={{ fontSize: 12 }}>Threshold</Typography.Text>
+                            <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                              <InputNumber
+                                size="small"
+                                value={editThresholdValue}
+                                onChange={(v) => setEditThresholdValue(v || 100000)}
+                                min={10000}
+                                max={1000000}
+                                step={10000}
+                                style={{ width: 100 }}
+                              />
+                              <Button
+                                size="small"
+                                type="primary"
+                                icon={<SaveOutlined />}
+                                loading={savingThreshold}
+                                onClick={async () => {
+                                  setSavingThreshold(true);
+                                  try {
+                                    await sendRequest('configure_compaction', {
+                                      session_id: connectedMemorySessionId,
+                                      threshold: editThresholdValue
+                                    });
+                                    setCompactionStats(prev => prev ? { ...prev, threshold: editThresholdValue } : null);
+                                    setIsEditingThreshold(false);
+                                    message.success('Threshold updated');
+                                  } catch (err) {
+                                    message.error('Failed to update threshold');
+                                  } finally {
+                                    setSavingThreshold(false);
+                                  }
+                                }}
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <div onClick={() => { setEditThresholdValue(compactionStats.threshold); setIsEditingThreshold(true); }} style={{ cursor: 'pointer' }}>
+                            <Statistic title={<span>Threshold <EditOutlined style={{ fontSize: 10, marginLeft: 4 }} /></span>} value={compactionStats.threshold} />
+                          </div>
+                        )}
+                      </Col>
+                      <Col span={8}><Statistic title="Compactions" value={compactionStats.count} /></Col>
+                    </Row>
+                    <Typography.Text type="secondary" style={{ fontSize: 12, marginTop: 8, display: 'block' }}>
+                      Session: {compactionStats.session_id}
+                    </Typography.Text>
+                  </>
+                ) : (
+                  <Typography.Text type="secondary">No data yet. Run the agent to start tracking.</Typography.Text>
+                )
+              }]}
+            />
           )}
 
           {/* Connected Skills Section - Only for Zeenie nodes */}

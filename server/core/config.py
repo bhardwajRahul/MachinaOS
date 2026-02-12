@@ -109,6 +109,10 @@ class Settings(BaseSettings):
     # Feature Toggles
     ws_logging_enabled: bool = Field(default=True, env="WS_LOGGING_ENABLED")
 
+    # Compaction Configuration
+    compaction_enabled: bool = Field(default=True, env="COMPACTION_ENABLED")
+    compaction_threshold: int = Field(default=100000, env="COMPACTION_THRESHOLD", ge=10000)
+
     # Gunicorn Configuration (for production deployment)
     gunicorn_timeout: int = Field(default=120, env="GUNICORN_TIMEOUT", ge=30)
     gunicorn_graceful_timeout: int = Field(default=30, env="GUNICORN_GRACEFUL_TIMEOUT", ge=10)

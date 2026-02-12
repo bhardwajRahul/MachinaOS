@@ -14,6 +14,7 @@ from services.text import TextService
 from services.android_service import AndroidService
 from services.user_auth import UserAuthService
 from services.temporal import TemporalClientWrapper
+from services.compaction import init_compaction_service
 
 
 class Container(containers.DeclarativeContainer):
@@ -81,6 +82,12 @@ class Container(containers.DeclarativeContainer):
 
     android_service = providers.Factory(
         AndroidService
+    )
+
+    compaction_service = providers.Singleton(
+        init_compaction_service,
+        database=database,
+        settings=settings
     )
 
     workflow_service = providers.Singleton(
