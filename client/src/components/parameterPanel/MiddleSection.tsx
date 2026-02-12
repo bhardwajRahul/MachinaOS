@@ -765,7 +765,7 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
                                     setCompactionStats(prev => prev ? { ...prev, threshold: editThresholdValue } : null);
                                     setIsEditingThreshold(false);
                                     message.success('Threshold updated');
-                                  } catch (err) {
+                                  } catch (_err) {
                                     message.error('Failed to update threshold');
                                   } finally {
                                     setSavingThreshold(false);
