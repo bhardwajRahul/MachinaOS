@@ -79,7 +79,13 @@ async def _collect_agent_connections(
         if target_handle == 'input-memory':
             if source_node.get('type') == 'simpleMemory':
                 memory_params = await database.get_node_parameters(source_node_id) or {}
-                memory_session_id = memory_params.get('sessionId', 'default')
+                # Auto-derive session from connected AI Agent's node_id
+                # Memory node's sessionId is used only if explicitly set (not empty or 'default')
+                configured_session = memory_params.get('sessionId', '')
+                if configured_session and configured_session != 'default':
+                    memory_session_id = configured_session  # Explicit override
+                else:
+                    memory_session_id = node_id  # Auto: use AI Agent's node_id
                 window_size = int(memory_params.get('windowSize', 10))
                 memory_content = memory_params.get('memoryContent', '# Conversation History\n\n*No messages yet.*\n')
                 long_term_enabled = memory_params.get('longTermEnabled', False)
@@ -93,7 +99,7 @@ async def _collect_agent_connections(
                     'long_term_enabled': long_term_enabled,
                     'retrieval_count': retrieval_count
                 }
-                logger.debug(f"{log_prefix} Connected memory node: session={memory_session_id}, content_length={len(memory_content)}")
+                logger.debug(f"{log_prefix} Connected memory node: session={memory_session_id} (auto={not configured_session or configured_session == 'default'}), content_length={len(memory_content)}")
 
         # Skill detection - nodes connected to input-skill handle
         elif target_handle == 'input-skill':

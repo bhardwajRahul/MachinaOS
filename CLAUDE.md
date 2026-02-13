@@ -87,7 +87,7 @@ server/core/
 server/models/
 ├── cache.py                 # CacheEntry SQLModel for SQLite cache
 ├── auth.py                  # User model with bcrypt
-└── database.py              # ConversationMessage, NodeParameter, ToolSchema, ChatMessage, TokenUsageMetric, CompactionEvent, SessionTokenState tables
+└── database.py              # ConversationMessage, NodeParameter, ToolSchema, ChatMessage, TokenUsageMetric, CompactionEvent, SessionTokenState, UserSettings, ProviderDefaults tables
 ```
 
 ### Polyglot Server Integration (Optional)
@@ -290,15 +290,15 @@ class CacheEntry(SQLModel, table=True):
 
 ## Codebase Summary
 - **Hybrid architecture**: Node.js + Python + React TypeScript
-- **75 implemented workflow nodes** with clean service separation (6 AI models + 3 AI agents/memory + 10 specialized agents + 11 skills + 3 dedicated tools + 6 dual-purpose tools + 16 Android + 3 WhatsApp + 2 Social + 3 Location + 2 Code + 5 Utility + 6 Document + 2 Chat + 2 Scheduler + 1 Workflow)
-- **WebSocket-First Architecture**: WebSocket as primary frontend-backend communication (84 message handlers)
+- **77 implemented workflow nodes** with clean service separation (6 AI models + 3 AI agents/memory + 12 specialized agents + 11 skills + 3 dedicated tools + 6 dual-purpose tools + 16 Android + 3 WhatsApp + 2 Social + 3 Location + 2 Code + 5 Utility + 6 Document + 2 Chat + 2 Scheduler + 1 Workflow)
+- **WebSocket-First Architecture**: WebSocket as primary frontend-backend communication (86 message handlers)
 - **Recent optimizations**: REST APIs replaced with WebSocket, AI endpoints migrated to Python, Android automation integrated
 
 ## Architecture Refactoring
 The project was completely refactored from schema-based node definitions to explicit INodeProperties interface system inspired by n8n architecture. Key changes:
 - **Pure INodeProperties System**: Removed all backward compatibility layers
 - **75 Implemented Node Components**: AI models, agents, skills, location services, Android automation, WhatsApp, social, code execution, HTTP/Webhook utilities, document processing, chat, and schedulers
-- **WebSocket-First Communication**: 84 WebSocket message handlers replace most REST API calls
+- **WebSocket-First Communication**: 86 WebSocket message handlers replace most REST API calls
 - **Resource-Operation Pattern**: Organized by functional categories (AI, Location, Android, WhatsApp)
 - **TypeScript-First**: Full type safety with proper interface alignment
 - **Code Cleanup**: Removed dead code, unused files, and legacy methods
@@ -437,7 +437,7 @@ React Flow edges use dynamic Dracula colors via `getEdgeStyles(theme.dracula)`:
 ### WebSocket-First Architecture
 The project uses WebSocket as the primary communication method between frontend and backend, replacing most REST API calls:
 - `src/contexts/WebSocketContext.tsx` - Central WebSocket context with request/response pattern
-- `server/routers/websocket.py` - WebSocket endpoint with 84 message handlers
+- `server/routers/websocket.py` - WebSocket endpoint with 86 message handlers
 - `server/services/status_broadcaster.py` - Connection management and broadcasting
 
 ## Implemented Node Types
@@ -454,21 +454,12 @@ The following 75 nodes are currently implemented and functional:
 ### AI Agents & Memory (3 nodes)
 - **aiAgent**: Advanced AI agent with tool calling, memory input handle, and iterative reasoning. Uses LangGraph for structured execution. Parameters: Provider, Model, Prompt, System Message, Options.
 - **chatAgent**: Conversational AI agent with memory and skill support for multi-turn chat interactions. Parameters: Provider, Model, Prompt (supports `{{chatTrigger.message}}` template or auto-fallback from connected input), System Message. Behavior extended by connected skills.
-- **simpleMemory**: Markdown-based conversation memory with editable UI, window-based trimming, and optional vector DB for long-term semantic retrieval
+### AI Agent Tool Nodes (5 dedicated + 6 dual-purpose)
+Tool nodes connect to AI Agent's `input-tools` handle to provide capabilities the agent can invoke during reasoning. Both `masterSkill` and `simpleMemory` are in the AI Tools category.
 
-### Zeenie Skill Nodes (11 nodes)
-Skill nodes connect to Zeenie's `input-skill` handle to provide capabilities defined in SKILL.md files following the [Agent Skills specification](https://agentskills.io/specification):
-- **masterSkill**: Master Skill (icon: target) - Aggregates multiple skills with enable/disable toggles. Split-panel UI: left panel shows skill list with checkboxes, right panel shows selected skill's markdown editor. Enabled skills are expanded into individual skill entries when the AI Agent executes.
-- **assistantPersonality**: Assistant Skill (icon: sparkles) - default assistant personality with helpful, harmless, honest responses
-- **whatsappSkill**: Send and receive WhatsApp messages via Zeenie
-- **memorySkill**: Long-term memory management across conversations
-- **mapsSkill**: Location services - geocoding, nearby places, directions via Google Maps
-- **httpSkill**: Make HTTP requests to external APIs
-- **schedulerSkill**: Task scheduling with timers and cron expressions
-- **androidSkill**: Android device control - battery, wifi, bluetooth, apps, location, camera
-- **codeSkill**: Execute Python or JavaScript code for calculations and data processing
-- **webSearchSkill**: Search the web for current information, news, facts, and real-time data
-- **customSkill**: User-created custom skill with configurable capabilities (select from database)
+#### Dedicated Tool Nodes (passive, tool-only)
+- **masterSkill**: Master Skill (icon: target) - Aggregates multiple skills with enable/disable toggles. Split-panel UI: left panel shows skill list with checkboxes, right panel shows selected skill's markdown editor. Supports both built-in skills (from `server/skills/` folders) and user-created skills (stored in database). User skills can be created/edited/deleted inline via the "+" button.
+- **simpleMemory**: Markdown-based conversation memory with editable UI, window-based trimming, and optional vector DB for long-term semantic retrieval
 
 #### Skill Node Architecture
 Skills are organized in subfolders under `server/skills/`. Each top-level folder appears as an option in the Master Skill node's folder dropdown. See **[Skill Creation Guide](./server/skills/GUIDE.md)** for full documentation.
@@ -607,20 +598,19 @@ if skill_type == 'masterSkill':
 **Key Files:**
 | File | Description |
 |------|-------------|
-| `client/src/components/parameterPanel/MasterSkillEditor.tsx` | Split-panel skill aggregator UI with folder dropdown |
-| `client/src/nodeDefinitions/skillNodes.ts` | masterSkill node definition |
-| `server/services/handlers/ai.py` | Expands masterSkill into individual skills |
-| `server/skills/GUIDE.md` | Skill creation guide |
+| `client/src/components/parameterPanel/MasterSkillEditor.tsx` | Split-panel skill aggregator UI with inline user skill CRUD |
+| `client/src/nodeDefinitions/skillNodes.ts` | masterSkill node definition (group: tool) |
+| `server/routers/websocket.py` | User skill CRUD: `get_user_skills`, `create_user_skill`, `update_user_skill`, `delete_user_skill` |
+| `server/core/database.py` | UserSkill model and database CRUD methods |
+| `server/services/handlers/ai.py` | Expands masterSkill into individual skills at execution |
+| `server/skills/GUIDE.md` | Skill creation guide for built-in skills |
 
-### AI Agent Tool Nodes (3 dedicated + 6 dual-purpose)
-Tool nodes connect to AI Agent's `input-tools` handle to provide capabilities the agent can invoke during reasoning.
-
-#### Dedicated Tool Nodes (passive, tool-only)
+#### Other Dedicated Tool Nodes
 - **calculatorTool**: Mathematical operations (add, subtract, multiply, divide, power, sqrt, mod, abs)
 - **currentTimeTool**: Get current date/time with timezone support
 - **webSearchTool**: Web search via DuckDuckGo (free, uses `ddgs` library) or Serper API with configurable max results
 
-### Specialized AI Agents (10 nodes)
+### Specialized AI Agents (12 nodes)
 Specialized agents are AI Agents pre-configured for specific domains. They inherit full AI Agent functionality (provider, model, prompt, system message, thinking/reasoning) while being tailored for specific capabilities. All specialized agents route to `handle_chat_agent` in the backend and support the same input handles. Node colors use centralized dracula theme constants imported from `client/src/styles/theme.ts`.
 
 **Input Handles:**
@@ -641,6 +631,8 @@ Specialized agents are AI Agents pre-configured for specific domains. They inher
 - **productivity_agent**: Productivity Agent - AI agent for productivity workflows. Connect scheduling, task, and utility nodes as tools.
 - **payments_agent**: Payments Agent - AI agent for payment processing. Connect payment, invoice, and financial tool nodes.
 - **consumer_agent**: Consumer Agent - AI agent for consumer interactions. Connect customer support, product, and order management tools.
+- **autonomous_agent**: Autonomous Agent - AI agent for autonomous operations using Code Mode patterns. Uses agentic loops, progressive discovery, error recovery, and multi-tool orchestration for 81-98% token savings. Connect autonomous skills via Master Skill.
+- **orchestrator_agent**: Orchestrator Agent - AI agent for coordinating multiple agents in complex multi-agent workflows. Delegates tasks to specialized agents and synthesizes their results.
 
 **Backend Routing:**
 Specialized agents are detected by `SPECIALIZED_AGENT_TYPES` and routed to `handle_chat_agent`:
@@ -648,7 +640,8 @@ Specialized agents are detected by `SPECIALIZED_AGENT_TYPES` and routed to `hand
 # In node_executor.py - all specialized agents route to handle_chat_agent
 SPECIALIZED_AGENT_TYPES = {
     'android_agent', 'coding_agent', 'web_agent', 'task_agent', 'social_agent',
-    'travel_agent', 'tool_agent', 'productivity_agent', 'payments_agent', 'consumer_agent'
+    'travel_agent', 'tool_agent', 'productivity_agent', 'payments_agent', 'consumer_agent',
+    'autonomous_agent', 'orchestrator_agent'
 }
 ```
 
@@ -973,7 +966,7 @@ See **[Scripts Reference](./docs-internal/SCRIPTS.md)** for full documentation.
 
 ## Current Status
 ✅ **INodeProperties System**: Fully implemented with 75 functional node components
-✅ **WebSocket-First Architecture**: 84 message handlers replacing REST APIs
+✅ **WebSocket-First Architecture**: 86 message handlers replacing REST APIs
 ✅ **Code Editor**: Python executor with syntax-highlighted editor (react-simple-code-editor + prismjs) and console output
 ✅ **Component Palette**: Emoji icons with distinct dracula-themed category colors, localStorage persistence for collapsed sections
 ✅ **Android Integration**: 16 Android service nodes with ADB automation and remote WebSocket support
@@ -1281,11 +1274,13 @@ deploy_workflow() -> Sets up triggers, returns immediately
 - **Execution Engine**: Routes AI nodes to Python Flask backend with auto-injection of API keys
 
 #### Supported AI Providers & Models
-- **OpenAI**: GPT-4o, GPT-4 Turbo, GPT-3.5 Turbo with response format options. O-series (o1, o3, o4) with reasoning effort.
-- **Anthropic**: Claude 3.5 Sonnet/Haiku, Claude 3 Opus with extended thinking support (thinkingBudget parameter)
-- **Google**: Gemini 2.5 Pro/Flash, Gemini 2.0 Flash Thinking with thinking_budget parameter and safety settings
-- **Groq**: Ultra-fast Llama, Mixtral, Gemma models. Qwen3/QwQ with reasoning_format parameter.
-- **Cerebras**: Ultra-fast Llama and Qwen models on custom AI hardware with thinking support
+All 6 providers are available across aiAgent, chatAgent (Zeenie), and all specialized agents:
+- **OpenAI**: GPT-5, GPT-4o, o-series (o1, o3, o4) with reasoning effort. Max output: 128K tokens.
+- **Anthropic**: Claude Opus 4.6, Sonnet 4.5 with extended thinking. Max output: 128K tokens.
+- **Google**: Gemini 3.0, 2.5 Pro/Flash with thinking_budget. Max output: 65K tokens.
+- **Groq**: Ultra-fast Llama, Qwen3/QwQ with reasoning_format. Max output: 8K tokens.
+- **OpenRouter**: Unified API for 200+ models from multiple providers.
+- **Cerebras**: Ultra-fast Llama and Qwen models on custom AI hardware.
 
 #### Key Features
 - Visual configuration with status indicators and parameter buttons
@@ -1294,6 +1289,39 @@ deploy_workflow() -> Sets up triggers, returns immediately
 - Secure API key validation with automatic model discovery and 30-day expiration
 - Execution routing to Python Flask backend for AI model processing
 - **Proxy-based authentication** for routing through local servers (Ollama pattern)
+- **Provider default parameters** configurable in Credentials Modal (temperature, max_tokens, thinking settings)
+
+#### Provider Default Parameters
+Users can configure default parameter values per LLM provider in the Credentials Modal. These defaults are applied to new AI nodes using that provider.
+
+**Configurable Parameters:**
+- `temperature` (0-2): Controls randomness in responses
+- `max_tokens` (1-128000): Maximum response length
+- `thinking_enabled`: Enable extended thinking for supported models
+- `thinking_budget` (1024-16000): Token budget for thinking
+- `reasoning_effort` (low/medium/high): For OpenAI o-series, Groq
+- `reasoning_format` (parsed/hidden): For Groq Qwen models
+
+**Database Model** (`server/models/database.py`):
+```python
+class ProviderDefaults(SQLModel, table=True):
+    provider: str           # openai, anthropic, gemini, groq, openrouter, cerebras
+    temperature: float
+    max_tokens: int
+    thinking_enabled: bool
+    thinking_budget: int
+    reasoning_effort: str   # low, medium, high
+    reasoning_format: str   # parsed, hidden
+```
+
+**Key Files:**
+| File | Description |
+|------|-------------|
+| `server/models/database.py` | `ProviderDefaults` SQLModel |
+| `server/core/database.py` | `get_provider_defaults()`, `save_provider_defaults()` CRUD |
+| `server/routers/websocket.py` | `get_provider_defaults`, `save_provider_defaults` handlers |
+| `client/src/hooks/useApiKeys.ts` | `getProviderDefaults()`, `saveProviderDefaults()` methods |
+| `client/src/components/CredentialsModal.tsx` | Default Parameters UI section |
 
 #### Proxy-Based Authentication (Ollama Pattern)
 AI providers support optional proxy-based authentication, allowing requests to route through a local proxy server that handles authentication. This follows the [Ollama Claude Code integration](https://docs.ollama.com/integrations/claude-code) pattern.
@@ -1366,10 +1394,10 @@ Extended thinking and reasoning capabilities for supported AI models. When enabl
 
 | Provider | Models | Parameter | Notes |
 |----------|--------|-----------|-------|
-| **Claude** | claude-3-5-sonnet, claude-3-opus | `thinkingBudget` (1024-16000 tokens) | Requires `max_tokens > budget_tokens`. Temperature auto-set to 1. |
-| **Gemini** | gemini-2.5-flash, gemini-2.5-pro, gemini-2.0-flash-thinking | `thinkingBudget` (token count) | Uses `thinking_budget` API parameter |
+| **Claude** | opus-4.6, sonnet-4.5 | `thinkingBudget` (1024-16000 tokens) | Requires `max_tokens > budget_tokens`. Temperature auto-set to 1. |
+| **Gemini** | gemini-3.0, gemini-2.5-pro/flash | `thinkingBudget` (token count) | Uses `thinking_budget` API parameter |
 | **Groq** | qwen3-32b, qwq-32b | `reasoningFormat` ('parsed' or 'hidden') | 'parsed' returns reasoning, 'hidden' returns only final answer |
-| **OpenAI** | o1, o3, o4 series | `reasoningEffort` (minimal/low/medium/high) | Reasoning summaries require organization verification at platform.openai.com |
+| **OpenAI** | o1, o3, o4, GPT-5 series | `reasoningEffort` (minimal/low/medium/high/xhigh) | GPT-5.2 supports xhigh reasoning |
 
 #### Frontend Parameters (`client/src/factories/baseChatModelFactory.ts`)
 ```typescript
@@ -1521,8 +1549,8 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
       { id: 'input-task', label: 'Task', position: '85%' },
     ],
   },
-  // ... 10 specialized agents (android_agent, coding_agent, web_agent, task_agent,
-  //     social_agent, travel_agent, tool_agent, productivity_agent, payments_agent, consumer_agent)
+  // ... 11 specialized agents (android_agent, coding_agent, web_agent, task_agent,
+  //     social_agent, travel_agent, tool_agent, productivity_agent, payments_agent, consumer_agent, autonomous_agent)
   //     each with themeColorKey, standard Skill/Tool bottom handles, Memory/Task left handles
 };
 ```
@@ -1677,6 +1705,8 @@ The system supports specialized agent variants that inherit from the base AI Age
 | Productivity | `productivity_agent` | clock | cyan |
 | Payments | `payments_agent` | credit card | green |
 | Consumer | `consumer_agent` | cart | purple |
+| Autonomous | `autonomous_agent` | target | purple |
+| Orchestrator | `orchestrator_agent` | conductor | cyan |
 
 All specialized agents share the same handle configuration:
 - **Left**: `input-main` (Input, 30%), `input-memory` (Memory, 55%), `input-task` (Task, 85%)
@@ -3875,7 +3905,7 @@ def has_real_android_devices(self) -> bool:
 
 Updated `client_left` and presence handlers use `has_real_android_devices()` instead of checking total device count.
 
-### WebSocket Message Types (84 Handlers)
+### WebSocket Message Types (86 Handlers)
 
 #### Request/Response Messages (Client -> Server -> Client)
 | Category | Message Types |
@@ -3900,6 +3930,7 @@ Updated `client_left` and presence handlers use `has_real_android_devices()` ins
 | **Built-in Skills** | `get_skill_content`, `save_skill_content`, `scan_skill_folder`, `list_skill_folders` |
 | **Memory/Skill Reset** | `clear_memory`, `reset_skill` |
 | **User Settings** | `get_user_settings`, `save_user_settings` |
+| **Provider Defaults** | `get_provider_defaults`, `save_provider_defaults` |
 
 #### Broadcast Messages (Server -> All Clients)
 | Message Type | Description |
@@ -4056,7 +4087,7 @@ This function:
 - **Performance**: Fast HMR updates and clean TypeScript compilation
 - **AI Architecture**: 5-layer system with factory pattern and secure credential management
 - **Android Architecture**: Factory-based node creation with ADB integration for device automation
-- **WebSocket-First Architecture**: 84 message handlers replace REST APIs for parameters, execution, API keys, Android, WhatsApp, and skill operations
+- **WebSocket-First Architecture**: 86 message handlers replace REST APIs for parameters, execution, API keys, Android, WhatsApp, and skill operations
 - **WebSocket Hooks**: Dedicated React hooks (useWhatsApp, useExecution, useApiKeys, useAndroidOperations, useParameterPanel) for clean component integration
 - **WebSocket Support**: Persistent remote Android device connections via WebSocket proxy with background tasks
   - Connection stays alive across multiple API requests until switched to local ADB

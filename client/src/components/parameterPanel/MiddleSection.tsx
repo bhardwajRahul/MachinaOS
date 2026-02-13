@@ -29,7 +29,9 @@ const AGENT_WITH_SKILLS_TYPES = [
   'tool_agent',
   'productivity_agent',
   'payments_agent',
-  'consumer_agent'
+  'consumer_agent',
+  'autonomous_agent',
+  'orchestrator_agent'
 ];
 
 interface ConnectedSkill {
@@ -108,6 +110,9 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
   const [editThresholdValue, setEditThresholdValue] = useState<number>(100000);
   const [savingThreshold, setSavingThreshold] = useState(false);
 
+  // For Memory nodes: track the connected agent's ID for auto-session display
+  const [connectedAgentId, setConnectedAgentId] = useState<string | null>(null);
+
   // Clear memory handler
   const handleClearMemory = async () => {
     setIsProcessing(true);
@@ -168,6 +173,26 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
   // State for Master Skill parameters
   const [masterSkillParams, setMasterSkillParams] = useState<Record<string, any>>({});
 
+  // Load global memory window size setting for new Memory nodes
+  useEffect(() => {
+    if (!isMemoryNode) return;
+
+    // Only apply global default if windowSize hasn't been explicitly set yet
+    const loadGlobalWindowSize = async () => {
+      try {
+        const response = await sendRequest<{ settings: any }>('get_user_settings', {});
+        const globalWindowSize = response?.settings?.memory_window_size;
+        if (globalWindowSize !== undefined && parameters.windowSize === undefined) {
+          onParameterChange('windowSize', globalWindowSize);
+        }
+      } catch (err) {
+        console.error('[MiddleSection] Failed to load global memory settings:', err);
+      }
+    };
+
+    loadGlobalWindowSize();
+  }, [nodeId, isMemoryNode]); // Only run when node changes, not on every parameter change
+
   // Get connected memory session ID and compaction stats for agent nodes
   useEffect(() => {
     if (!isAgentWithSkills || !currentWorkflow) {
@@ -190,13 +215,18 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
     }
 
     // Get memory node's sessionId from its parameters
+    // If empty or 'default', the actual session will be the agent's node_id (auto-derived)
     const fetchMemorySessionId = async () => {
       try {
         const response = await sendRequest<{ parameters: Record<string, any> }>('get_node_parameters', {
           node_id: memoryEdge.source
         });
-        const sessionId = response?.parameters?.sessionId || 'default';
-        setConnectedMemorySessionId(sessionId);
+        const configuredSession = response?.parameters?.sessionId || '';
+        // Auto-derive: use agent's nodeId if sessionId is empty or 'default'
+        const actualSessionId = configuredSession && configuredSession !== 'default'
+          ? configuredSession
+          : nodeId;  // nodeId is the agent's ID
+        setConnectedMemorySessionId(actualSessionId);
 
         // Fetch compaction stats for this session
         setCompactionLoading(true);
@@ -205,11 +235,11 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
           total: number;
           threshold: number;
           count: number;
-        }>('get_compaction_stats', { session_id: sessionId });
+        }>('get_compaction_stats', { session_id: actualSessionId });
 
         if (statsResponse) {
           setCompactionStats({
-            session_id: statsResponse.session_id || sessionId,
+            session_id: statsResponse.session_id || actualSessionId,
             total: statsResponse.total || 0,
             threshold: statsResponse.threshold || 100000,
             count: statsResponse.count || 0
@@ -224,6 +254,28 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
 
     fetchMemorySessionId();
   }, [nodeId, isAgentWithSkills, currentWorkflow, sendRequest]);
+
+  // For Memory nodes: find which AI Agent this memory is connected TO
+  // Used to display the auto-derived session ID
+  useEffect(() => {
+    if (!isMemoryNode || !currentWorkflow) {
+      setConnectedAgentId(null);
+      return;
+    }
+
+    const edges = currentWorkflow.edges || [];
+
+    // Find edge where this memory node is the SOURCE and target handle is 'input-memory'
+    const agentEdge = edges.find((edge: Edge) =>
+      edge.source === nodeId && edge.targetHandle === 'input-memory'
+    );
+
+    if (agentEdge) {
+      setConnectedAgentId(agentEdge.target);
+    } else {
+      setConnectedAgentId(null);
+    }
+  }, [nodeId, isMemoryNode, currentWorkflow]);
 
   // Get connected skills for agent nodes
   useEffect(() => {
@@ -388,6 +440,7 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
               onConfigChange={(config) => onParameterChange('skillsConfig', config)}
               skillFolder={parameters.skillFolder || 'assistant'}
               onSkillFolderChange={(folder) => onParameterChange('skillFolder', folder)}
+              nodeId={nodeId}
             />
           </div>
         ) : (
@@ -441,6 +494,7 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
                   onParameterChange={onParameterChange}
                   onClosePanel={() => {}}
                   isLoadingParameters={isLoadingParameters}
+                  connectedAgentId={isMemoryNode ? connectedAgentId : undefined}
                 />
               </div>
               );

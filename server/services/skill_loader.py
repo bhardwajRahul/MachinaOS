@@ -184,9 +184,9 @@ class SkillLoader:
         if name in self._cache:
             return self._cache[name]
 
-        # Check registry
+        # Check registry (filesystem skills only - use load_skill_async for user skills)
         if name not in self._registry:
-            logger.warning(f"[SkillLoader] Skill not found: {name}")
+            logger.debug(f"[SkillLoader] Skill not in registry: {name}")
             return None
 
         metadata = self._registry[name]
@@ -275,20 +275,24 @@ class SkillLoader:
         # Load from database
         if self._database:
             try:
-                user_skill = await self._database.get_user_skill_by_name(name)
+                user_skill = await self._database.get_user_skill(name)
                 if user_skill:
-                    allowed_tools = []
-                    if user_skill.allowed_tools:
-                        allowed_tools = [t.strip() for t in user_skill.allowed_tools.split(',')]
+                    # user_skill is a dict from _skill_to_dict()
+                    allowed_tools = user_skill.get('allowed_tools', [])
+                    if isinstance(allowed_tools, str):
+                        allowed_tools = [t.strip() for t in allowed_tools.split(',') if t.strip()]
 
-                    metadata_dict = {}
-                    if user_skill.metadata_json:
+                    metadata_dict = user_skill.get('metadata', {})
+                    if isinstance(metadata_dict, str):
                         import json
-                        metadata_dict = json.loads(user_skill.metadata_json)
+                        try:
+                            metadata_dict = json.loads(metadata_dict) if metadata_dict else {}
+                        except json.JSONDecodeError:
+                            metadata_dict = {}
 
                     metadata = SkillMetadata(
-                        name=user_skill.name,
-                        description=user_skill.description,
+                        name=user_skill.get('name', name),
+                        description=user_skill.get('description', ''),
                         allowed_tools=allowed_tools,
                         metadata=metadata_dict,
                         path=None
@@ -296,11 +300,12 @@ class SkillLoader:
 
                     skill = Skill(
                         metadata=metadata,
-                        instructions=user_skill.instructions,
+                        instructions=user_skill.get('instructions', ''),
                         scripts={},
                         references={}
                     )
 
+                    logger.info(f"[SkillLoader] Loaded user skill from database: {name}")
                     self._cache[name] = skill
                     return skill
             except Exception as e:

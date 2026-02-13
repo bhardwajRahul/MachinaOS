@@ -45,9 +45,6 @@ dependencies = [
     # Dependency Injection
     "dependency-injector>=4.40.0",
 
-    # Temporal (distributed execution)
-    "temporalio>=1.7.0",
-
     # Utils
     "python-dotenv>=1.0.0",
     "apscheduler>=3.10.0",
@@ -62,6 +59,9 @@ dependencies = [
 dev = [
     "pytest>=8.0.0",
     "ruff>=0.8.0",
+]
+temporal = [
+    "temporalio>=1.7.0",
 ]
 extra-ai = [
     "langchain-cerebras>=0.1.0",

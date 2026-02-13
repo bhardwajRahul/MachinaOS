@@ -58,6 +58,8 @@ All agent colors use centralized dracula theme constants from `client/src/styles
 | `productivity_agent` | Productivity Agent | Productivity workflows agent | `dracula.cyan` |
 | `payments_agent` | Payments Agent | Payment processing agent | `dracula.green` |
 | `consumer_agent` | Consumer Agent | Consumer interactions agent | `dracula.purple` |
+| `autonomous_agent` | Autonomous Agent | Autonomous operations with Code Mode patterns | `dracula.purple` |
+| `orchestrator_agent` | Orchestrator Agent | Multi-agent coordination and task delegation | `dracula.cyan` |
 
 ## Shared AI Agent Properties
 
@@ -754,13 +756,13 @@ Memory connected to `input-memory` provides conversation history via a two-tier 
 
 ### Shared Handler Routing
 
-All 10 specialized agents route to the same backend handler:
+All 12 specialized agents route to the same backend handler:
 
 ```python
 # In node_executor.py
 'android_agent': partial(handle_chat_agent, ai_service=..., database=...),
 'coding_agent': partial(handle_chat_agent, ai_service=..., database=...),
-# ... all 10 specialized agents use handle_chat_agent
+# ... all 12 specialized agents use handle_chat_agent
 ```
 
 This means specialization is purely UI/configuration, not backend behavioral. All agents share:

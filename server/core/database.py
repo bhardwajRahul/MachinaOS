@@ -12,7 +12,7 @@ from core.config import Settings
 from models.database import (
     NodeParameter, Workflow, Execution, APIKey, APIKeyValidation, NodeOutput,
     ConversationMessage, ToolSchema, UserSkill, ChatMessage, UserSettings,
-    TokenUsageMetric, CompactionEvent, SessionTokenState
+    TokenUsageMetric, CompactionEvent, SessionTokenState, ProviderDefaults
 )
 from models.cache import CacheEntry  # SQLite-backed cache for Redis alternative
 from models.auth import User  # Import User model to ensure table creation
@@ -1483,6 +1483,70 @@ class Database:
             return False
 
     # ============================================================================
+    # Provider Defaults
+    # ============================================================================
+
+    async def get_provider_defaults(self, provider: str) -> Optional[Dict[str, Any]]:
+        """Get default parameters for a provider."""
+        try:
+            async with self.get_session() as session:
+                stmt = select(ProviderDefaults).where(ProviderDefaults.provider == provider.lower())
+                result = await session.execute(stmt)
+                record = result.scalar_one_or_none()
+                if not record:
+                    return None
+                return {
+                    "temperature": record.temperature,
+                    "max_tokens": record.max_tokens,
+                    "thinking_enabled": record.thinking_enabled,
+                    "thinking_budget": record.thinking_budget,
+                    "reasoning_effort": record.reasoning_effort,
+                    "reasoning_format": record.reasoning_format,
+                }
+        except Exception as e:
+            logger.error("Failed to get provider defaults", provider=provider, error=str(e))
+            return None
+
+    async def save_provider_defaults(self, provider: str, defaults: Dict[str, Any]) -> bool:
+        """Upsert provider defaults."""
+        try:
+            async with self.get_session() as session:
+                stmt = select(ProviderDefaults).where(ProviderDefaults.provider == provider.lower())
+                result = await session.execute(stmt)
+                record = result.scalar_one_or_none()
+
+                now = datetime.now(timezone.utc)
+                if record:
+                    record.temperature = defaults.get("temperature", record.temperature)
+                    record.max_tokens = defaults.get("max_tokens", record.max_tokens)
+                    record.thinking_enabled = defaults.get("thinking_enabled", record.thinking_enabled)
+                    record.thinking_budget = defaults.get("thinking_budget", record.thinking_budget)
+                    record.reasoning_effort = defaults.get("reasoning_effort", record.reasoning_effort)
+                    record.reasoning_format = defaults.get("reasoning_format", record.reasoning_format)
+                    record.updated_at = now
+                else:
+                    record = ProviderDefaults(
+                        provider=provider.lower(),
+                        temperature=defaults.get("temperature", 0.7),
+                        max_tokens=defaults.get("max_tokens", 1000),
+                        thinking_enabled=defaults.get("thinking_enabled", False),
+                        thinking_budget=defaults.get("thinking_budget", 2048),
+                        reasoning_effort=defaults.get("reasoning_effort", "medium"),
+                        reasoning_format=defaults.get("reasoning_format", "parsed"),
+                        created_at=now,
+                        updated_at=now
+                    )
+                    session.add(record)
+
+                await session.commit()
+                logger.info(f"[DB] Provider defaults saved for: {provider}")
+                return True
+
+        except Exception as e:
+            logger.error("Failed to save provider defaults", provider=provider, error=str(e))
+            return False
+
+    # ============================================================================
     # Token Usage Metrics
     # ============================================================================
 
@@ -1557,7 +1621,10 @@ class Database:
     async def get_or_create_session_token_state(
         self, session_id: str
     ) -> Dict[str, Any]:
-        """Get or create token state for a session."""
+        """Get or create token state for a session.
+
+        Handles race conditions when multiple requests try to create the same session.
+        """
         try:
             async with self.get_session() as session:
                 stmt = select(SessionTokenState).where(
@@ -1567,13 +1634,34 @@ class Database:
                 state = result.scalar_one_or_none()
 
                 if not state:
-                    state = SessionTokenState(
-                        session_id=session_id,
-                        updated_at=datetime.now(timezone.utc)
-                    )
-                    session.add(state)
-                    await session.commit()
-                    await session.refresh(state)
+                    try:
+                        state = SessionTokenState(
+                            session_id=session_id,
+                            updated_at=datetime.now(timezone.utc)
+                        )
+                        session.add(state)
+                        await session.commit()
+                        await session.refresh(state)
+                    except IntegrityError:
+                        # Race condition: another request created the session
+                        # Rollback and fetch the existing record
+                        await session.rollback()
+                        result = await session.execute(stmt)
+                        state = result.scalar_one_or_none()
+                        if not state:
+                            # Shouldn't happen, but return defaults if it does
+                            return {
+                                "session_id": session_id,
+                                "cumulative_input_tokens": 0,
+                                "cumulative_output_tokens": 0,
+                                "cumulative_cache_tokens": 0,
+                                "cumulative_reasoning_tokens": 0,
+                                "cumulative_total": 0,
+                                "last_compaction_at": None,
+                                "compaction_count": 0,
+                                "custom_threshold": None,
+                                "compaction_enabled": True
+                            }
 
                 return {
                     "session_id": state.session_id,

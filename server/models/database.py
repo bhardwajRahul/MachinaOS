@@ -263,6 +263,33 @@ class UserSettings(SQLModel, table=True):
     )
 
 
+class ProviderDefaults(SQLModel, table=True):
+    """LLM provider default parameters - persisted across server restarts.
+
+    Database is the source of truth for provider-specific default parameters.
+    These defaults are applied to new AI nodes and can be overridden per-node.
+    """
+
+    __tablename__ = "provider_defaults"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    provider: str = Field(unique=True, index=True, max_length=50)  # openai, anthropic, gemini, etc.
+    temperature: float = Field(default=0.7)
+    max_tokens: int = Field(default=1000)
+    thinking_enabled: bool = Field(default=False)
+    thinking_budget: int = Field(default=2048)
+    reasoning_effort: str = Field(default="medium", max_length=20)  # low, medium, high
+    reasoning_format: str = Field(default="parsed", max_length=20)  # parsed, hidden
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(DateTime(timezone=True), server_default=func.now())
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(DateTime(timezone=True), onupdate=func.now())
+    )
+
+
 # =============================================================================
 # Token Tracking and Memory Compaction
 # =============================================================================

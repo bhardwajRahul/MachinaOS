@@ -119,7 +119,7 @@ class RelayWebSocketClient:
 
                     # Broadcast QR data to frontend
                     if self.qr_data:
-                        await broadcast_qr_code(self.qr_data)
+                        await broadcast_qr_code(self.qr_data, self.session_token)
 
                     # Start background tasks
                     self._receive_task = asyncio.create_task(self._receive_loop())
@@ -329,7 +329,7 @@ class RelayWebSocketClient:
             self.session_token = params.get("session_token")
             self.qr_data = params.get("qr_data")
             if self.qr_data:
-                await broadcast_qr_code(self.qr_data)
+                await broadcast_qr_code(self.qr_data, self.session_token)
 
     async def _handle_pairing_connected(self, params: dict):
         """Handle pairing.connected event."""

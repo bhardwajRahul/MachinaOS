@@ -84,7 +84,11 @@ function installPython() {
       process.exit(1);
     }
   } else {
-    if (runSilent('apt --version')) {
+    // Linux package managers
+    if (runSilent('apk --version')) {
+      // Alpine Linux
+      run('apk add --no-cache python3 py3-pip');
+    } else if (runSilent('apt --version')) {
       run('sudo apt update && sudo apt install -y python3.12 python3.12-venv');
     } else if (runSilent('dnf --version')) {
       run('sudo dnf install -y python3.12');
@@ -97,17 +101,25 @@ function installPython() {
   }
 }
 
-function installUv() {
+function installUv(pythonCmd) {
   console.log('  Installing uv...');
   if (isWindows) {
-    run('powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"');
+    // Windows: use pip (simple and works)
+    run(`${pythonCmd} -m pip install uv`);
+  } else if (isMac) {
+    // macOS: use pip (no PEP 668 issues with Homebrew Python)
+    run(`${pythonCmd} -m pip install uv`);
+  } else if (runSilent('apk --version')) {
+    // Alpine: use pip with --break-system-packages
+    run(`${pythonCmd} -m pip install uv --break-system-packages`);
   } else {
-    run('curl -LsSf https://astral.sh/uv/install.sh | sh');
-  }
-  if (isWindows) {
-    process.env.PATH = `${process.env.USERPROFILE}\\.local\\bin;${process.env.PATH}`;
-  } else {
-    process.env.PATH = `${process.env.HOME}/.local/bin:${process.env.PATH}`;
+    // Other Linux: try pip first, fall back to curl installer
+    if (runSilent(`${pythonCmd} -m pip install uv --break-system-packages`)) {
+      // pip worked
+    } else {
+      run('curl -LsSf https://astral.sh/uv/install.sh | sh');
+      process.env.PATH = `${process.env.HOME}/.local/bin:${process.env.PATH}`;
+    }
   }
 }
 
@@ -156,7 +168,7 @@ let uvVersion = getVersion('uv --version');
 if (uvVersion) {
   console.log(`  uv: ${uvVersion}`);
 } else {
-  installUv();
+  installUv(pyCmd);
   uvVersion = getVersion('uv --version');
   if (uvVersion) {
     console.log(`  uv: ${uvVersion}`);
@@ -210,36 +222,15 @@ try {
   // Step 4: Install Python dependencies
   console.log('[4/5] Installing Python dependencies...');
   const serverDir = resolve(ROOT, 'server');
-  run('uv venv', serverDir);
+  // Check if .venv exists, skip creation if it does
+  if (!existsSync(resolve(serverDir, '.venv'))) {
+    run('uv venv', serverDir);
+  }
   run('uv sync', serverDir);
 
-  // Step 5: Ensure WhatsApp RPC binary is downloaded
-  // The whatsapp-rpc postinstall skips download in CI, so we run it explicitly.
-  const whatsappBin = resolve(ROOT, 'node_modules', 'whatsapp-rpc', 'bin',
-    isWindows ? 'whatsapp-rpc-server.exe' : 'whatsapp-rpc-server');
-  const whatsappDownloadScript = resolve(ROOT, 'node_modules', 'whatsapp-rpc', 'scripts', 'download-binary.js');
-  if (!existsSync(whatsappBin) && existsSync(whatsappDownloadScript)) {
-    console.log('[5/5] Downloading WhatsApp RPC binary...');
-    try {
-      // Run download script without CI env vars so it doesn't skip
-      const dlEnv = { ...process.env };
-      delete dlEnv.CI;
-      delete dlEnv.GITHUB_ACTIONS;
-      const scriptPath = whatsappDownloadScript.replace(/\\/g, '/');
-      execSync(`node "${scriptPath}"`, {
-        cwd: resolve(ROOT, 'node_modules', 'whatsapp-rpc'),
-        stdio: 'inherit',
-        shell: true,
-        env: dlEnv
-      });
-    } catch (e) {
-      console.log('Warning: Failed to download WhatsApp RPC binary. WhatsApp features will be unavailable.');
-    }
-  } else if (existsSync(whatsappBin)) {
-    console.log('[5/5] WhatsApp RPC binary already present');
-  } else {
-    console.log('[5/5] WhatsApp RPC package not found, skipping binary download');
-  }
+  // Step 5: Verify WhatsApp RPC package
+  console.log('[5/5] Verifying WhatsApp RPC...');
+  run('whatsapp-rpc status', ROOT);
 
   console.log('\nBuild complete.');
 

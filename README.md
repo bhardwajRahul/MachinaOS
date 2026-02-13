@@ -57,11 +57,11 @@ npm run docker:up
 
 | Provider | Models | Features |
 |----------|--------|----------|
-| **OpenAI** | GPT-4o, GPT-4 Turbo, o1, o3, o4-mini | JSON mode, reasoning effort |
-| **Anthropic** | Claude 3.5 Sonnet, Claude 3 Opus, Claude 3 Haiku | Extended thinking |
-| **Google** | Gemini 2.5 Pro, Gemini 2.5 Flash, Gemini 2.0 Flash Thinking | Multimodal, 1M context |
+| **OpenAI** | GPT-5, GPT-4o, o1, o3, o4 | 128K output, reasoning effort |
+| **Anthropic** | Claude Opus 4.6, Sonnet 4.5 | 128K output, extended thinking |
+| **Google** | Gemini 3.0, 2.5 Pro/Flash | 65K output, 1M context |
 | **OpenRouter** | 200+ models | Unified API for all providers |
-| **Groq** | Llama, Mixtral, Qwen | Ultra-fast inference |
+| **Groq** | Llama, Qwen | Ultra-fast inference |
 | **Cerebras** | Llama, Qwen | Ultra-fast on custom hardware |
 
 ### AI Agents & Skills

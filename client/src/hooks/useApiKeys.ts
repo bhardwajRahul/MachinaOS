@@ -14,6 +14,15 @@ export interface ApiKeyValidationResult {
   models?: string[];
 }
 
+export interface ProviderDefaults {
+  temperature: number;
+  max_tokens: number;
+  thinking_enabled: boolean;
+  thinking_budget: number;
+  reasoning_effort: 'low' | 'medium' | 'high';
+  reasoning_format: 'parsed' | 'hidden';
+}
+
 export interface UseApiKeysResult {
   // Validate and store API key
   validateApiKey: (provider: string, apiKey: string) => Promise<ApiKeyValidationResult>;
@@ -39,6 +48,10 @@ export interface UseApiKeysResult {
   // Get AI models for a provider
   getAiModels: (provider: string, apiKey: string) => Promise<string[]>;
 
+  // Provider defaults
+  getProviderDefaults: (provider: string) => Promise<ProviderDefaults>;
+  saveProviderDefaults: (provider: string, defaults: ProviderDefaults) => Promise<boolean>;
+
   // State
   isValidating: boolean;
   validationError: string | null;
@@ -53,6 +66,7 @@ export const useApiKeys = (): UseApiKeysResult => {
     deleteApiKey: wsDeleteApiKey,
     validateMapsKey: wsValidateMapsKey,
     getAiModels: wsGetAiModels,
+    sendRequest,
     isConnected
   } = useWebSocket();
 
@@ -222,6 +236,50 @@ export const useApiKeys = (): UseApiKeysResult => {
     }
   }, [wsGetAiModels]);
 
+  /**
+   * Get default parameters for a provider
+   */
+  const getProviderDefaults = useCallback(async (
+    provider: string
+  ): Promise<ProviderDefaults> => {
+    const defaultValues: ProviderDefaults = {
+      temperature: 0.7,
+      max_tokens: 4096,
+      thinking_enabled: false,
+      thinking_budget: 2048,
+      reasoning_effort: 'medium',
+      reasoning_format: 'parsed',
+    };
+
+    if (!isConnected) return defaultValues;
+
+    try {
+      const response = await sendRequest<{ defaults: ProviderDefaults }>('get_provider_defaults', { provider });
+      return response?.defaults || defaultValues;
+    } catch (error) {
+      console.warn(`Error fetching provider defaults for ${provider}:`, error);
+      return defaultValues;
+    }
+  }, [sendRequest, isConnected]);
+
+  /**
+   * Save default parameters for a provider
+   */
+  const saveProviderDefaults = useCallback(async (
+    provider: string,
+    defaults: ProviderDefaults
+  ): Promise<boolean> => {
+    if (!isConnected) return false;
+
+    try {
+      const response = await sendRequest<{ success: boolean }>('save_provider_defaults', { provider, defaults });
+      return response?.success || false;
+    } catch (error) {
+      console.warn(`Error saving provider defaults for ${provider}:`, error);
+      return false;
+    }
+  }, [sendRequest, isConnected]);
+
   return {
     validateApiKey,
     saveApiKey,
@@ -231,6 +289,8 @@ export const useApiKeys = (): UseApiKeysResult => {
     removeApiKey,
     validateGoogleMapsKey,
     getAiModels,
+    getProviderDefaults,
+    saveProviderDefaults,
     isValidating,
     validationError,
     isConnected

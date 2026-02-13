@@ -227,14 +227,8 @@ if (isProduction) {
 // Python backend: use gunicorn in daemon mode, uvicorn in development
 services.push(isDaemonMode ? 'npm:python:daemon' : 'npm:python:start');
 
-// WhatsApp RPC: only start if the pre-built binary exists
-const whatsappBin = resolve(ROOT, 'node_modules', 'whatsapp-rpc', 'bin',
-  isWindows ? 'whatsapp-rpc-server.exe' : 'whatsapp-rpc-server');
-if (existsSync(whatsappBin)) {
-  services.push('npm:whatsapp:api');
-} else {
-  log('WhatsApp RPC binary not found, skipping. Run "npm run build" to download it.');
-}
+// WhatsApp RPC service - npm handles package availability
+services.push('npm:whatsapp:api');
 
 if (config.temporalEnabled) {
   services.push('npm:temporal:worker');

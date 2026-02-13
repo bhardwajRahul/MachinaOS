@@ -15,9 +15,19 @@ When TEMPORAL_ENABLED=true:
 
 When TEMPORAL_ENABLED=false (default):
 - Falls back to the existing parallel/sequential executor
+
+Note: temporalio is an optional dependency. Import with try/except.
 """
 
-from .executor import TemporalExecutor
-from .client import TemporalClientWrapper
-
 __all__ = ["TemporalExecutor", "TemporalClientWrapper"]
+
+# Lazy imports - temporalio is optional
+TemporalExecutor = None
+TemporalClientWrapper = None
+
+try:
+    from .executor import TemporalExecutor
+    from .client import TemporalClientWrapper
+except ImportError:
+    # temporalio not installed - Temporal features disabled
+    pass

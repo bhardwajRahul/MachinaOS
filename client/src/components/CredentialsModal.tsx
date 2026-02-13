@@ -13,7 +13,7 @@ import {
 import Modal from './ui/Modal';
 import QRCodeDisplay from './ui/QRCodeDisplay';
 import ApiKeyInput from './ui/ApiKeyInput';
-import { useApiKeys } from '../hooks/useApiKeys';
+import { useApiKeys, ProviderDefaults } from '../hooks/useApiKeys';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { useWhatsAppStatus, useAndroidStatus, useWebSocket, RateLimitConfig, RateLimitStats } from '../contexts/WebSocketContext';
 import { useWhatsApp } from '../hooks/useWhatsApp';
@@ -114,7 +114,7 @@ interface Props {
 
 const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
   const theme = useAppTheme();
-  const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey, validateGoogleMapsKey, isConnected } = useApiKeys();
+  const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey, validateGoogleMapsKey, getProviderDefaults, saveProviderDefaults, isConnected } = useApiKeys();
   const whatsappStatus = useWhatsAppStatus();
   const androidStatus = useAndroidStatus();
 
@@ -137,6 +137,11 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
   const [keys, setKeys] = useState<Record<string, string>>({});
   const [proxyUrls, setProxyUrls] = useState<Record<string, string>>({});
   const [selectedItem, setSelectedItem] = useState<CredentialItem | null>(null);
+
+  // Provider defaults state
+  const [providerDefaults, setProviderDefaults] = useState<Record<string, ProviderDefaults>>({});
+  const [defaultsLoading, setDefaultsLoading] = useState<Record<string, boolean>>({});
+  const [defaultsDirty, setDefaultsDirty] = useState<Record<string, boolean>>({});
 
   // Load stored keys and proxy URLs
   const loadKeys = useCallback(async () => {
@@ -176,6 +181,42 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
       if (firstItem) setSelectedItem(firstItem);
     }
   }, [visible, isConnected, loadKeys]);
+
+  // Load provider defaults when AI provider is selected
+  useEffect(() => {
+    const isAIProvider = CATEGORIES.find(c => c.key === 'ai')?.items.some(i => i.id === selectedItem?.id);
+    if (selectedItem && !selectedItem.isSpecial && isAIProvider && isConnected) {
+      // Only load if we don't already have defaults for this provider
+      if (!providerDefaults[selectedItem.id]) {
+        const loadDefaults = async () => {
+          setDefaultsLoading(l => ({ ...l, [selectedItem.id]: true }));
+          const defaults = await getProviderDefaults(selectedItem.id);
+          setProviderDefaults(p => ({ ...p, [selectedItem.id]: defaults }));
+          setDefaultsLoading(l => ({ ...l, [selectedItem.id]: false }));
+        };
+        loadDefaults();
+      }
+    }
+  }, [selectedItem, isConnected, getProviderDefaults, providerDefaults]);
+
+  // Handler to update a single default value
+  const updateProviderDefault = (provider: string, key: keyof ProviderDefaults, value: number | boolean | string) => {
+    setProviderDefaults(p => ({
+      ...p,
+      [provider]: { ...(p[provider] || {}), [key]: value } as ProviderDefaults
+    }));
+    setDefaultsDirty(d => ({ ...d, [provider]: true }));
+  };
+
+  // Handler to save provider defaults
+  const handleSaveProviderDefaults = async (provider: string) => {
+    setDefaultsLoading(l => ({ ...l, [provider]: true }));
+    const success = await saveProviderDefaults(provider, providerDefaults[provider]);
+    if (success) {
+      setDefaultsDirty(d => ({ ...d, [provider]: false }));
+    }
+    setDefaultsLoading(l => ({ ...l, [provider]: false }));
+  };
 
   const handleValidate = async (id: string) => {
     const key = keys[id];
@@ -323,7 +364,7 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
 
   // WhatsApp actions
   const { getStatus: getWhatsAppStatus, startConnection, restartConnection } = useWhatsApp();
-  const { sendRequest, getWhatsAppRateLimitConfig, setWhatsAppRateLimitConfig, unpauseWhatsAppRateLimit } = useWebSocket();
+  const { sendRequest, setAndroidStatus, getWhatsAppRateLimitConfig, setWhatsAppRateLimitConfig, unpauseWhatsAppRateLimit } = useWebSocket();
 
   // Android state
   const [androidApiKey, setAndroidApiKey] = useState('');
@@ -381,8 +422,19 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
         url: import.meta.env.VITE_ANDROID_RELAY_URL || '',
         api_key: key,
       });
+      console.log('[Android] Connect response:', response);
       if (!response.success) {
         setAndroidError(response.error || 'Failed to connect');
+      } else if (response.qr_data) {
+        console.log('[Android] Setting QR data from response');
+        // Use response data directly - don't rely on broadcast timing
+        setAndroidStatus(prev => ({
+          ...prev,
+          connected: true,
+          paired: false,
+          qr_data: response.qr_data,
+          session_token: response.session_token || prev.session_token,
+        }));
       }
     } catch (err: any) {
       setAndroidError(err.message || 'Failed to connect');
@@ -592,7 +644,7 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
               <QRCodeDisplay
                 value={whatsappStatus.qr}
                 isConnected={whatsappStatus.connected}
-                size={200}
+                size={280}
                 connectedTitle="Already Connected!"
                 connectedSubtitle="No QR code needed"
                 loading={whatsappStatus.running && !whatsappStatus.qr && !whatsappStatus.connected}
@@ -916,12 +968,12 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
             backgroundColor: theme.colors.backgroundAlt,
             borderRadius: theme.borderRadius.lg,
             marginBottom: theme.spacing.xl,
-            minHeight: 200,
+            minHeight: 300,
           }}>
             <QRCodeDisplay
               value={androidStatus.qr_data}
               isConnected={androidStatus.paired}
-              size={260}
+              size={280}
               connectedTitle="Device Paired!"
               connectedSubtitle={androidStatus.device_name || androidStatus.device_id || 'Android Device'}
               loading={androidStatus.connected && !androidStatus.qr_data && !androidStatus.paired}
@@ -1209,6 +1261,110 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
               marginTop: theme.spacing.sm,
             }}>
               Route requests through a proxy (e.g., Ollama). When set, the proxy handles authentication.
+            </div>
+          </div>
+        )}
+
+        {/* Default Parameters Section - Only for AI providers */}
+        {CATEGORIES.find(c => c.key === 'ai')?.items.some(i => i.id === item.id) && (
+          <div style={{ marginBottom: theme.spacing.xl }}>
+            <label style={{
+              display: 'block',
+              fontSize: theme.fontSize.sm,
+              fontWeight: theme.fontWeight.medium,
+              color: theme.colors.text,
+              marginBottom: theme.spacing.md,
+            }}>
+              Default Parameters
+            </label>
+
+            <div style={{
+              padding: theme.spacing.lg,
+              backgroundColor: theme.colors.backgroundAlt,
+              borderRadius: theme.borderRadius.md,
+              border: `1px solid ${theme.colors.border}`,
+              opacity: defaultsLoading[item.id] ? 0.6 : 1,
+            }}>
+              {/* Temperature */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: theme.spacing.md }}>
+                <div>
+                  <div style={{ fontSize: theme.fontSize.sm, fontWeight: theme.fontWeight.medium, color: theme.colors.text }}>Temperature</div>
+                  <div style={{ fontSize: theme.fontSize.xs, color: theme.colors.textSecondary }}>Controls randomness (0-2)</div>
+                </div>
+                <InputNumber
+                  size="small"
+                  value={providerDefaults[item.id]?.temperature ?? 0.7}
+                  onChange={(v) => updateProviderDefault(item.id, 'temperature', v ?? 0.7)}
+                  min={0}
+                  max={2}
+                  step={0.1}
+                  style={{ width: 80 }}
+                />
+              </div>
+
+              {/* Max Tokens */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: theme.spacing.md }}>
+                <div>
+                  <div style={{ fontSize: theme.fontSize.sm, fontWeight: theme.fontWeight.medium, color: theme.colors.text }}>Max Tokens</div>
+                  <div style={{ fontSize: theme.fontSize.xs, color: theme.colors.textSecondary }}>Maximum response length</div>
+                </div>
+                <InputNumber
+                  size="small"
+                  value={providerDefaults[item.id]?.max_tokens ?? 4096}
+                  onChange={(v) => updateProviderDefault(item.id, 'max_tokens', v ?? 4096)}
+                  min={1}
+                  max={128000}
+                  style={{ width: 100 }}
+                />
+              </div>
+
+              {/* Thinking/Reasoning Toggle */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: theme.spacing.md }}>
+                <div>
+                  <div style={{ fontSize: theme.fontSize.sm, fontWeight: theme.fontWeight.medium, color: theme.colors.text }}>Thinking/Reasoning</div>
+                  <div style={{ fontSize: theme.fontSize.xs, color: theme.colors.textSecondary }}>Extended thinking for supported models</div>
+                </div>
+                <Switch
+                  size="small"
+                  checked={providerDefaults[item.id]?.thinking_enabled ?? false}
+                  onChange={(v) => updateProviderDefault(item.id, 'thinking_enabled', v)}
+                />
+              </div>
+
+              {/* Thinking Budget - conditional */}
+              {providerDefaults[item.id]?.thinking_enabled && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: theme.spacing.md }}>
+                  <div>
+                    <div style={{ fontSize: theme.fontSize.sm, fontWeight: theme.fontWeight.medium, color: theme.colors.text }}>Thinking Budget</div>
+                    <div style={{ fontSize: theme.fontSize.xs, color: theme.colors.textSecondary }}>Token budget (1024-16000)</div>
+                  </div>
+                  <InputNumber
+                    size="small"
+                    value={providerDefaults[item.id]?.thinking_budget ?? 2048}
+                    onChange={(v) => updateProviderDefault(item.id, 'thinking_budget', v ?? 2048)}
+                    min={1024}
+                    max={16000}
+                    style={{ width: 80 }}
+                  />
+                </div>
+              )}
+
+              {/* Save Button */}
+              <Button
+                size="small"
+                onClick={() => handleSaveProviderDefaults(item.id)}
+                loading={defaultsLoading[item.id]}
+                disabled={!defaultsDirty[item.id]}
+                block
+                style={{
+                  marginTop: theme.spacing.sm,
+                  backgroundColor: defaultsDirty[item.id] ? `${theme.dracula.green}25` : undefined,
+                  borderColor: defaultsDirty[item.id] ? `${theme.dracula.green}60` : undefined,
+                  color: defaultsDirty[item.id] ? theme.dracula.green : undefined,
+                }}
+              >
+                Save Defaults
+              </Button>
             </div>
           </div>
         )}

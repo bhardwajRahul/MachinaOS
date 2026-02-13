@@ -74,6 +74,18 @@ export const aiAgentNodes: Record<string, INodeTypeDescription> = {
           {
             name: 'Google (Gemini)',
             value: 'gemini'
+          },
+          {
+            name: 'Groq',
+            value: 'groq'
+          },
+          {
+            name: 'OpenRouter',
+            value: 'openrouter'
+          },
+          {
+            name: 'Cerebras',
+            value: 'cerebras'
           }
         ],
         default: 'openai',
@@ -133,8 +145,8 @@ export const aiAgentNodes: Record<string, INodeTypeDescription> = {
             displayName: 'Maximum Tokens',
             name: 'maxTokens',
             type: 'number',
-            default: 1000,
-            typeOptions: { minValue: 1, maxValue: 8192 },
+            default: 4096,
+            typeOptions: { minValue: 1, maxValue: 128000 },
             description: 'Maximum number of tokens to generate'
           },
           {
@@ -244,6 +256,10 @@ export const aiAgentNodes: Record<string, INodeTypeDescription> = {
           {
             name: 'OpenRouter',
             value: 'openrouter'
+          },
+          {
+            name: 'Cerebras',
+            value: 'cerebras'
           }
         ],
         default: 'openai',
@@ -298,8 +314,8 @@ export const aiAgentNodes: Record<string, INodeTypeDescription> = {
             displayName: 'Maximum Tokens',
             name: 'maxTokens',
             type: 'number',
-            default: 1000,
-            typeOptions: { minValue: 1, maxValue: 8192 },
+            default: 4096,
+            typeOptions: { minValue: 1, maxValue: 128000 },
             description: 'Maximum number of tokens to generate'
           },
           {
@@ -342,7 +358,7 @@ export const aiAgentNodes: Record<string, INodeTypeDescription> = {
     displayName: 'Simple Memory',
     name: 'simpleMemory',
     icon: '🧠',
-    group: ['skill', 'memory'],  // 'skill' = appears in AI Skills category
+    group: ['tool', 'memory'],  // 'tool' = appears in AI Tools category
     version: 1,
     description: 'Markdown-based conversation memory with optional vector DB for long-term retrieval',
     defaults: { name: 'Memory', color: '#8b5cf6' },
@@ -355,20 +371,21 @@ export const aiAgentNodes: Record<string, INodeTypeDescription> = {
     }],
     properties: [
       {
-        displayName: 'Session ID',
+        displayName: 'Session ID (Override)',
         name: 'sessionId',
         type: 'string',
-        default: 'default',
-        required: true,
-        description: 'Unique identifier for conversation session'
+        default: '',
+        required: false,
+        description: 'Leave empty to auto-use connected agent ID. Set manually to share memory across agents.',
+        placeholder: 'Auto (uses agent ID)'
       },
       {
         displayName: 'Window Size',
         name: 'windowSize',
         type: 'number',
-        default: 10,
+        default: 100,
         typeOptions: { minValue: 1, maxValue: 100 },
-        description: 'Number of message pairs to keep in short-term memory'
+        description: 'Number of message pairs to keep in short-term memory (uses global default from Settings)'
       },
       {
         displayName: 'Conversation History',

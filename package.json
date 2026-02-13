@@ -70,6 +70,7 @@
     "whatsapp:stop": "whatsapp-rpc stop",
     "whatsapp:status": "whatsapp-rpc status",
     "whatsapp:api": "whatsapp-rpc api --foreground",
+    "whatsapp:build": "whatsapp-rpc build",
     "build": "node scripts/build.js",
     "clean": "node scripts/clean.js",
     "stop": "node scripts/stop.js",

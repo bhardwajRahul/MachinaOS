@@ -49,7 +49,7 @@ const isBase64Image = (value: string): boolean => {
 const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({
   value,
   isConnected = false,
-  size = 160,
+  size = 280,
   loading = false,
   connectedTitle = 'Connected',
   connectedSubtitle = 'No QR code needed',

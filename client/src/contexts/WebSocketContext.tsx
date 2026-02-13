@@ -201,6 +201,7 @@ interface WebSocketContextValue {
 
   // Status data
   androidStatus: AndroidStatus;
+  setAndroidStatus: React.Dispatch<React.SetStateAction<AndroidStatus>>;
   whatsappStatus: WhatsAppStatus;
   whatsappMessages: WhatsAppMessage[];  // History of received messages
   lastWhatsAppMessage: WhatsAppMessage | null;  // Most recent message
@@ -1956,6 +1957,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
     // Status data
     androidStatus,
+    setAndroidStatus,
     whatsappStatus,
     whatsappMessages,
     lastWhatsAppMessage,

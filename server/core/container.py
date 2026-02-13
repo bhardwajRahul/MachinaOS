@@ -13,8 +13,22 @@ from services.auth import AuthService
 from services.text import TextService
 from services.android_service import AndroidService
 from services.user_auth import UserAuthService
-from services.temporal import TemporalClientWrapper
 from services.compaction import init_compaction_service
+
+# Temporal is optional - import with fallback
+try:
+    from services.temporal import TemporalClientWrapper
+    _TEMPORAL_AVAILABLE = True
+except ImportError:
+    TemporalClientWrapper = None
+    _TEMPORAL_AVAILABLE = False
+
+
+def _create_temporal_client(server_address: str, namespace: str):
+    """Factory function for temporal client - returns None if not available."""
+    if not _TEMPORAL_AVAILABLE or TemporalClientWrapper is None:
+        return None
+    return TemporalClientWrapper(server_address=server_address, namespace=namespace)
 
 
 class Container(containers.DeclarativeContainer):
@@ -41,9 +55,9 @@ class Container(containers.DeclarativeContainer):
         database=database
     )
 
-    # Temporal client (lazy - only created when temporal_enabled)
+    # Temporal client (lazy - returns None if temporalio not installed)
     temporal_client = providers.Singleton(
-        TemporalClientWrapper,
+        _create_temporal_client,
         server_address=settings.provided.temporal_server_address,
         namespace=settings.provided.temporal_namespace,
     )

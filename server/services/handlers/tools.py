@@ -133,8 +133,8 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
         return await _execute_check_delegated_tasks(tool_args, config)
 
     # AI Agent delegation (fire-and-forget async delegation)
-    # Includes specialized agents: android_agent, coding_agent, web_agent, task_agent, social_agent
-    if node_type in ('aiAgent', 'chatAgent', 'android_agent', 'coding_agent', 'web_agent', 'task_agent', 'social_agent', 'travel_agent', 'tool_agent', 'productivity_agent', 'payments_agent', 'consumer_agent'):
+    # Includes specialized agents: android_agent, coding_agent, web_agent, task_agent, social_agent, autonomous_agent
+    if node_type in ('aiAgent', 'chatAgent', 'android_agent', 'coding_agent', 'web_agent', 'task_agent', 'social_agent', 'travel_agent', 'tool_agent', 'productivity_agent', 'payments_agent', 'consumer_agent', 'autonomous_agent', 'orchestrator_agent'):
         return await _execute_delegated_agent(tool_args, config)
 
     # Generic fallback for unknown node types

@@ -120,6 +120,8 @@ class NodeExecutor:
             'productivity_agent': partial(handle_chat_agent, ai_service=self.ai_service, database=self.database),
             'payments_agent': partial(handle_chat_agent, ai_service=self.ai_service, database=self.database),
             'consumer_agent': partial(handle_chat_agent, ai_service=self.ai_service, database=self.database),
+            'autonomous_agent': partial(handle_chat_agent, ai_service=self.ai_service, database=self.database),
+            'orchestrator_agent': partial(handle_chat_agent, ai_service=self.ai_service, database=self.database),
             'simpleMemory': handle_simple_memory,
             # Maps
             'gmaps_create': partial(handle_create_map, maps_service=self.maps_service),

@@ -2323,6 +2323,8 @@ class AIService:
             'productivity_agent': 'delegate_to_productivity_agent',
             'payments_agent': 'delegate_to_payments_agent',
             'consumer_agent': 'delegate_to_consumer_agent',
+            'autonomous_agent': 'delegate_to_autonomous_agent',
+            'orchestrator_agent': 'delegate_to_orchestrator_agent',
             # Android service nodes (direct tool usage)
             'batteryMonitor': 'android_battery',
             'networkMonitor': 'android_network',
@@ -2370,6 +2372,8 @@ class AIService:
             'productivity_agent': 'ONE-SHOT delegation to Productivity Agent. Call ONCE per task, returns task_id. Agent works in background - do NOT re-call.',
             'payments_agent': 'ONE-SHOT delegation to Payments Agent. Call ONCE per task, returns task_id. Agent works in background - do NOT re-call.',
             'consumer_agent': 'ONE-SHOT delegation to Consumer Agent. Call ONCE per task, returns task_id. Agent works in background - do NOT re-call.',
+            'autonomous_agent': 'ONE-SHOT delegation to Autonomous Agent. Call ONCE per task, returns task_id. Agent works in background using Code Mode patterns - do NOT re-call.',
+            'orchestrator_agent': 'ONE-SHOT delegation to Orchestrator Agent. Call ONCE per task, returns task_id. Coordinates multiple agents - do NOT re-call.',
             # Android service nodes (direct tool usage)
             'batteryMonitor': 'Monitor Android battery status, level, charging state, temperature, and health.',
             'networkMonitor': 'Monitor Android network connectivity, type, and internet availability.',
@@ -2929,7 +2933,7 @@ class AIService:
             return CheckDelegatedTasksSchema
 
         # AI Agent delegation schema (fire-and-forget async delegation)
-        if node_type in ('aiAgent', 'chatAgent', 'android_agent', 'coding_agent', 'web_agent', 'task_agent', 'social_agent', 'travel_agent', 'tool_agent', 'productivity_agent', 'payments_agent', 'consumer_agent'):
+        if node_type in ('aiAgent', 'chatAgent', 'android_agent', 'coding_agent', 'web_agent', 'task_agent', 'social_agent', 'travel_agent', 'tool_agent', 'productivity_agent', 'payments_agent', 'consumer_agent', 'autonomous_agent', 'orchestrator_agent'):
             agent_label = params.get('label', node_type)
 
             class DelegateToAgentSchema(BaseModel):

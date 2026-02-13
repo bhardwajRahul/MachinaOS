@@ -10,6 +10,7 @@ export interface WorkflowSettings {
   sidebarDefaultOpen: boolean;
   componentPaletteDefaultOpen: boolean;
   consolePanelDefaultOpen: boolean;
+  memoryWindowSize: number;
 }
 
 export const defaultSettings: WorkflowSettings = {
@@ -18,6 +19,7 @@ export const defaultSettings: WorkflowSettings = {
   sidebarDefaultOpen: true,
   componentPaletteDefaultOpen: true,
   consolePanelDefaultOpen: false,
+  memoryWindowSize: 100,
 };
 
 interface SettingsPanelProps {
@@ -57,6 +59,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
           sidebarDefaultOpen: dbSettings.sidebar_default_open ?? defaultSettings.sidebarDefaultOpen,
           componentPaletteDefaultOpen: dbSettings.component_palette_default_open ?? defaultSettings.componentPaletteDefaultOpen,
           consolePanelDefaultOpen: dbSettings.console_panel_default_open ?? defaultSettings.consolePanelDefaultOpen,
+          memoryWindowSize: dbSettings.memory_window_size ?? defaultSettings.memoryWindowSize,
         });
       }
     } catch (error) {
@@ -76,6 +79,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
           sidebar_default_open: newSettings.sidebarDefaultOpen,
           component_palette_default_open: newSettings.componentPaletteDefaultOpen,
           console_panel_default_open: newSettings.consolePanelDefaultOpen,
+          memory_window_size: newSettings.memoryWindowSize,
         }
       });
       if (showMessage) {
@@ -390,6 +394,31 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 />
               </div>
             )}
+          </div>
+
+          {/* Memory Settings */}
+          <div style={sectionStyle}>
+            <div style={sectionHeaderStyle}>
+              <div style={{ ...sectionIconStyle, backgroundColor: `${theme.dracula.purple}20` }}>{'\uD83E\uDDE0'}</div>
+              <div style={sectionTitleStyle}>Memory</div>
+            </div>
+
+            <div style={settingRowStyle}>
+              <div style={settingLabelStyle}>
+                <div style={labelTextStyle}>Default Window Size</div>
+                <div style={descriptionStyle}>Number of message pairs to keep in short-term memory (1-100)</div>
+              </div>
+              <InputNumber
+                size="small"
+                min={1}
+                max={100}
+                step={1}
+                value={settings.memoryWindowSize}
+                onChange={(value) => handleChange('memoryWindowSize', value ?? 100)}
+                disabled={isSaving}
+                style={{ width: 80 }}
+              />
+            </div>
           </div>
         </div>
 

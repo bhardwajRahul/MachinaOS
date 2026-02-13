@@ -66,28 +66,29 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
       { id: 'input-tools', label: 'Tool', position: '75%' },
     ],
     leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '55%' },
+      { id: 'input-memory', label: 'Memory', position: '65%' },
       { id: 'input-task', label: 'Task', position: '85%' },
     ],
     topOutputHandle: { id: 'output-top', label: 'Output' },
     width: 260,
-    height: 160,
+    height: 200,
   },
   chatAgent: {
     icon: <span style={{ fontSize: '28px' }}>🧞</span>,
     title: 'Zeenie',
-    subtitle: 'Your Personal Assistant',
+    subtitle: 'Personal Assistant',
     themeColorKey: 'cyan',
     bottomHandles: [
       { id: 'input-skill', label: 'Skill', position: '25%' },
       { id: 'input-tools', label: 'Tool', position: '75%' },
     ],
     leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '55%' },
+      { id: 'input-memory', label: 'Memory', position: '65%' },
       { id: 'input-task', label: 'Task', position: '85%' },
     ],
+    topOutputHandle: { id: 'output-top', label: 'Output' },
     width: 260,
-    height: 160,
+    height: 200,
   },
   socialReceive: {
     icon: <SocialReceiveIcon />,
@@ -122,7 +123,7 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
   },
   android_agent: {
     icon: <span style={{ fontSize: '28px' }}>📱</span>,
-    title: 'Android Control Agent',
+    title: 'Android Agent',
     subtitle: 'Device Control',
     themeColorKey: 'green',
     bottomHandles: [
@@ -130,12 +131,12 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
       { id: 'input-tools', label: 'Tool', position: '75%' },
     ],
     leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '55%' },
+      { id: 'input-memory', label: 'Memory', position: '65%' },
       { id: 'input-task', label: 'Task', position: '85%' },
     ],
     topOutputHandle: { id: 'output-top', label: 'Output' },
     width: 260,
-    height: 160,
+    height: 200,
   },
   coding_agent: {
     icon: <span style={{ fontSize: '28px' }}>💻</span>,
@@ -147,16 +148,16 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
       { id: 'input-tools', label: 'Tool', position: '75%' },
     ],
     leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '55%' },
+      { id: 'input-memory', label: 'Memory', position: '65%' },
       { id: 'input-task', label: 'Task', position: '85%' },
     ],
     topOutputHandle: { id: 'output-top', label: 'Output' },
     width: 260,
-    height: 160,
+    height: 200,
   },
   web_agent: {
     icon: <span style={{ fontSize: '28px' }}>🌐</span>,
-    title: 'Web Control Agent',
+    title: 'Web Agent',
     subtitle: 'Browser Automation',
     themeColorKey: 'pink',
     bottomHandles: [
@@ -164,16 +165,16 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
       { id: 'input-tools', label: 'Tool', position: '75%' },
     ],
     leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '55%' },
+      { id: 'input-memory', label: 'Memory', position: '65%' },
       { id: 'input-task', label: 'Task', position: '85%' },
     ],
     topOutputHandle: { id: 'output-top', label: 'Output' },
     width: 260,
-    height: 160,
+    height: 200,
   },
   task_agent: {
     icon: <span style={{ fontSize: '28px' }}>📋</span>,
-    title: 'Task Management Agent',
+    title: 'Task Agent',
     subtitle: 'Task Automation',
     themeColorKey: 'purple',
     bottomHandles: [
@@ -181,16 +182,16 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
       { id: 'input-tools', label: 'Tool', position: '75%' },
     ],
     leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '55%' },
+      { id: 'input-memory', label: 'Memory', position: '65%' },
       { id: 'input-task', label: 'Task', position: '85%' },
     ],
     topOutputHandle: { id: 'output-top', label: 'Output' },
     width: 260,
-    height: 160,
+    height: 200,
   },
   social_agent: {
     icon: <span style={{ fontSize: '28px' }}>📱</span>,
-    title: 'Social Media Agent',
+    title: 'Social Agent',
     subtitle: 'Social Messaging',
     themeColorKey: 'green',
     bottomHandles: [
@@ -198,12 +199,12 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
       { id: 'input-tools', label: 'Tool', position: '75%' },
     ],
     leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '55%' },
+      { id: 'input-memory', label: 'Memory', position: '65%' },
       { id: 'input-task', label: 'Task', position: '85%' },
     ],
     topOutputHandle: { id: 'output-top', label: 'Output' },
     width: 260,
-    height: 160,
+    height: 200,
   },
   travel_agent: {
     icon: <span style={{ fontSize: '28px' }}>✈️</span>,
@@ -215,12 +216,12 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
       { id: 'input-tools', label: 'Tool', position: '75%' },
     ],
     leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '55%' },
+      { id: 'input-memory', label: 'Memory', position: '65%' },
       { id: 'input-task', label: 'Task', position: '85%' },
     ],
     topOutputHandle: { id: 'output-top', label: 'Output' },
     width: 260,
-    height: 160,
+    height: 200,
   },
   tool_agent: {
     icon: <span style={{ fontSize: '28px' }}>🔧</span>,
@@ -232,29 +233,29 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
       { id: 'input-tools', label: 'Tool', position: '75%' },
     ],
     leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '55%' },
+      { id: 'input-memory', label: 'Memory', position: '65%' },
       { id: 'input-task', label: 'Task', position: '85%' },
     ],
     topOutputHandle: { id: 'output-top', label: 'Output' },
     width: 260,
-    height: 160,
+    height: 200,
   },
   productivity_agent: {
     icon: <span style={{ fontSize: '28px' }}>⏰</span>,
     title: 'Productivity Agent',
-    subtitle: 'Productivity',
+    subtitle: 'Workflows',
     themeColorKey: 'cyan',
     bottomHandles: [
       { id: 'input-skill', label: 'Skill', position: '25%' },
       { id: 'input-tools', label: 'Tool', position: '75%' },
     ],
     leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '55%' },
+      { id: 'input-memory', label: 'Memory', position: '65%' },
       { id: 'input-task', label: 'Task', position: '85%' },
     ],
     topOutputHandle: { id: 'output-top', label: 'Output' },
     width: 260,
-    height: 160,
+    height: 200,
   },
   payments_agent: {
     icon: <span style={{ fontSize: '28px' }}>💳</span>,
@@ -266,12 +267,12 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
       { id: 'input-tools', label: 'Tool', position: '75%' },
     ],
     leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '55%' },
+      { id: 'input-memory', label: 'Memory', position: '65%' },
       { id: 'input-task', label: 'Task', position: '85%' },
     ],
     topOutputHandle: { id: 'output-top', label: 'Output' },
     width: 260,
-    height: 160,
+    height: 200,
   },
   consumer_agent: {
     icon: <span style={{ fontSize: '28px' }}>🛒</span>,
@@ -283,12 +284,46 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
       { id: 'input-tools', label: 'Tool', position: '75%' },
     ],
     leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '55%' },
+      { id: 'input-memory', label: 'Memory', position: '65%' },
       { id: 'input-task', label: 'Task', position: '85%' },
     ],
     topOutputHandle: { id: 'output-top', label: 'Output' },
     width: 260,
-    height: 160,
+    height: 200,
+  },
+  autonomous_agent: {
+    icon: <span style={{ fontSize: '28px' }}>🎯</span>,
+    title: 'Autonomous Agent',
+    subtitle: 'Autonomous Ops',
+    themeColorKey: 'purple',
+    bottomHandles: [
+      { id: 'input-skill', label: 'Skill', position: '25%' },
+      { id: 'input-tools', label: 'Tool', position: '75%' },
+    ],
+    leftHandles: [
+      { id: 'input-memory', label: 'Memory', position: '65%' },
+      { id: 'input-task', label: 'Task', position: '85%' },
+    ],
+    topOutputHandle: { id: 'output-top', label: 'Output' },
+    width: 260,
+    height: 200,
+  },
+  orchestrator_agent: {
+    icon: <span style={{ fontSize: '28px' }}>🎼</span>,
+    title: 'Orchestrator Agent',
+    subtitle: 'Agent Coordination',
+    themeColorKey: 'cyan',
+    bottomHandles: [
+      { id: 'input-skill', label: 'Skill', position: '25%' },
+      { id: 'input-tools', label: 'Tool', position: '75%' },
+    ],
+    leftHandles: [
+      { id: 'input-memory', label: 'Memory', position: '65%' },
+      { id: 'input-task', label: 'Task', position: '85%' },
+    ],
+    topOutputHandle: { id: 'output-top', label: 'Output' },
+    width: 260,
+    height: 200,
   },
 };
 

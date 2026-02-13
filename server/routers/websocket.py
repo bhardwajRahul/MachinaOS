@@ -1146,6 +1146,7 @@ async def handle_android_relay_connect(data: Dict[str, Any], websocket: WebSocke
     try:
         client, error = await get_relay_client(url, api_key)
         if client:
+            logger.info(f"[WebSocket] Android relay connect success, qr_data present: {bool(client.qr_data)}, session_token: {client.session_token}")
             return {
                 "success": True,
                 "connected": True,
@@ -1636,8 +1637,8 @@ async def handle_get_skill_content(data: Dict[str, Any], websocket: WebSocket) -
     skill_name = data["skill_name"]
     skill_loader = get_skill_loader()
 
-    # Try to load the skill
-    skill = skill_loader.load_skill(skill_name)
+    # Use load_skill_async which checks both filesystem and database
+    skill = await skill_loader.load_skill_async(skill_name)
     if skill:
         return {
             "success": True,
@@ -1646,20 +1647,6 @@ async def handle_get_skill_content(data: Dict[str, Any], websocket: WebSocket) -
             "description": skill.metadata.description,
             "allowed_tools": skill.metadata.allowed_tools,
             "is_builtin": skill.metadata.path is not None,
-            "timestamp": time.time()
-        }
-
-    # Try loading from database for user skills
-    database = container.database()
-    user_skill = await database.get_user_skill(skill_name)
-    if user_skill:
-        return {
-            "success": True,
-            "skill_name": skill_name,
-            "instructions": user_skill.instructions,
-            "description": user_skill.description,
-            "allowed_tools": user_skill.allowed_tools.split(',') if user_skill.allowed_tools else [],
-            "is_builtin": False,
             "timestamp": time.time()
         }
 
@@ -1894,7 +1881,8 @@ async def handle_delete_user_skill(data: Dict[str, Any], websocket: WebSocket) -
             "name": data["name"],
             "timestamp": time.time()
         })
-        return {"deleted": True, "name": data["name"], "timestamp": time.time()}
+        logger.info(f"[Skills] Deleted user skill: {data['name']}")
+        return {"success": True, "deleted": True, "name": data["name"], "timestamp": time.time()}
     return {"success": False, "error": f"Skill '{data['name']}' not found"}
 
 
@@ -2009,6 +1997,41 @@ async def handle_save_user_settings(data: Dict[str, Any], websocket: WebSocket) 
         return {"settings": settings}
     else:
         return {"success": False, "error": "Failed to save settings"}
+
+
+# ============================================================================
+# Provider Defaults Handlers
+# ============================================================================
+
+@ws_handler()
+async def handle_get_provider_defaults(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Get default parameters for a provider."""
+    database = container.database()
+    provider = data.get("provider", "").lower()
+    defaults = await database.get_provider_defaults(provider)
+
+    # Return defaults or standard fallback values
+    return {
+        "provider": provider,
+        "defaults": defaults or {
+            "temperature": 0.7,
+            "max_tokens": 1000,
+            "thinking_enabled": False,
+            "thinking_budget": 2048,
+            "reasoning_effort": "medium",
+            "reasoning_format": "parsed",
+        }
+    }
+
+
+@ws_handler()
+async def handle_save_provider_defaults(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Save default parameters for a provider."""
+    database = container.database()
+    provider = data.get("provider", "").lower()
+    defaults = data.get("defaults", {})
+    success = await database.save_provider_defaults(provider, defaults)
+    return {"success": success, "provider": provider}
 
 
 # ============================================================================
@@ -2164,6 +2187,10 @@ MESSAGE_HANDLERS: Dict[str, MessageHandler] = {
     # User Settings
     "get_user_settings": handle_get_user_settings,
     "save_user_settings": handle_save_user_settings,
+
+    # Provider Defaults
+    "get_provider_defaults": handle_get_provider_defaults,
+    "save_provider_defaults": handle_save_provider_defaults,
 
     # Compaction
     "get_compaction_stats": handle_get_compaction_stats,

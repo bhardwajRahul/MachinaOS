@@ -69,7 +69,8 @@ export const AI_AGENT_PROPERTIES: INodeProperties[] = [
       { name: 'Anthropic (Claude)', value: 'anthropic' },
       { name: 'Google (Gemini)', value: 'gemini' },
       { name: 'Groq', value: 'groq' },
-      { name: 'OpenRouter', value: 'openrouter' }
+      { name: 'OpenRouter', value: 'openrouter' },
+      { name: 'Cerebras', value: 'cerebras' }
     ],
     default: 'openai',
     description: 'The AI provider to use (configure API keys in Credentials)'
@@ -124,8 +125,8 @@ export const AI_AGENT_PROPERTIES: INodeProperties[] = [
         displayName: 'Maximum Tokens',
         name: 'maxTokens',
         type: 'number',
-        default: 1000,
-        typeOptions: { minValue: 1, maxValue: 8192 },
+        default: 4096,
+        typeOptions: { minValue: 1, maxValue: 128000 },
         description: 'Maximum number of tokens to generate'
       },
       {
@@ -314,6 +315,36 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
     inputs: AI_AGENT_INPUTS,
     outputs: AI_AGENT_OUTPUTS,
     properties: AI_AGENT_PROPERTIES
+  },
+
+  // Autonomous Agent - AI Agent for autonomous operations with Code Mode patterns
+  autonomous_agent: {
+    displayName: 'Autonomous Agent',
+    name: 'autonomous_agent',
+    icon: '🎯',
+    group: ['agent', 'ai'],
+    version: 1,
+    subtitle: 'Autonomous Operations',
+    description: 'AI Agent specialized for autonomous operations. Uses Code Mode patterns (81-98% token savings), agentic loops, progressive discovery, error recovery, and multi-tool orchestration.',
+    defaults: { name: 'Autonomous Agent', color: dracula.purple },
+    inputs: AI_AGENT_INPUTS,
+    outputs: AI_AGENT_OUTPUTS,
+    properties: AI_AGENT_PROPERTIES
+  },
+
+  // Orchestrator Agent - Coordinates multiple agents for complex workflows
+  orchestrator_agent: {
+    displayName: 'Orchestrator Agent',
+    name: 'orchestrator_agent',
+    icon: '🎼',
+    group: ['agent', 'ai'],
+    version: 1,
+    subtitle: 'Agent Coordination',
+    description: 'AI Agent specialized for orchestrating multiple agents. Coordinates complex multi-agent workflows by delegating tasks to specialized agents and synthesizing their results.',
+    defaults: { name: 'Orchestrator Agent', color: dracula.cyan },
+    inputs: AI_AGENT_INPUTS,
+    outputs: AI_AGENT_OUTPUTS,
+    properties: AI_AGENT_PROPERTIES
   }
 };
 
@@ -322,4 +353,4 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
 // ============================================================================
 
 // List of specialized agent node types for identification
-export const SPECIALIZED_AGENT_TYPES = ['android_agent', 'coding_agent', 'web_agent', 'task_agent', 'social_agent', 'travel_agent', 'tool_agent', 'productivity_agent', 'payments_agent', 'consumer_agent'];
+export const SPECIALIZED_AGENT_TYPES = ['android_agent', 'coding_agent', 'web_agent', 'task_agent', 'social_agent', 'travel_agent', 'tool_agent', 'productivity_agent', 'payments_agent', 'consumer_agent', 'autonomous_agent', 'orchestrator_agent'];

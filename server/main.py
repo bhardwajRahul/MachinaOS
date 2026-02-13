@@ -132,6 +132,10 @@ async def lifespan(app: FastAPI):
             from services.temporal import TemporalClientWrapper, TemporalExecutor
             from services.temporal.worker import TemporalWorkerManager
 
+            # Check if temporal is actually available (temporalio installed)
+            if TemporalClientWrapper is None:
+                raise ImportError("temporalio not installed")
+
             logger.info(
                 "Initializing Temporal integration",
                 server_address=settings.temporal_server_address,
@@ -141,6 +145,8 @@ async def lifespan(app: FastAPI):
 
             # Connect Temporal client
             temporal_client_wrapper = container.temporal_client()
+            if temporal_client_wrapper is None:
+                raise ImportError("temporalio not installed")
             temporal_client = await temporal_client_wrapper.connect()
 
             # Create and set the Temporal executor on WorkflowService
@@ -178,7 +184,9 @@ async def lifespan(app: FastAPI):
     # Disconnect Temporal client if connected
     if settings.temporal_enabled:
         try:
-            await container.temporal_client().disconnect()
+            temporal_client_wrapper = container.temporal_client()
+            if temporal_client_wrapper is not None:
+                await temporal_client_wrapper.disconnect()
         except Exception:
             pass
 
@@ -285,9 +293,11 @@ async def health_check():
     }
     if settings.temporal_enabled:
         try:
-            temporal_status["connected"] = container.temporal_client().is_connected
-            temporal_status["server_address"] = settings.temporal_server_address
-            temporal_status["task_queue"] = settings.temporal_task_queue
+            temporal_client_wrapper = container.temporal_client()
+            if temporal_client_wrapper is not None:
+                temporal_status["connected"] = temporal_client_wrapper.is_connected
+                temporal_status["server_address"] = settings.temporal_server_address
+                temporal_status["task_queue"] = settings.temporal_task_queue
         except Exception:
             pass
 

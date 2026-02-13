@@ -18,6 +18,35 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+def _extract_text_from_response(content) -> str:
+    """Extract text content from various LLM response formats.
+
+    Handles:
+    - String content (OpenAI, Anthropic)
+    - List of content blocks (Gemini format: [{"type": "text", "text": "..."}])
+    - Other complex formats
+    """
+    # Handle list content (Gemini format)
+    if isinstance(content, list):
+        text_parts = []
+        for block in content:
+            if isinstance(block, dict):
+                if block.get('type') == 'text' and block.get('text'):
+                    text_parts.append(block['text'])
+                elif 'text' in block:
+                    text_parts.append(str(block['text']))
+            elif isinstance(block, str):
+                text_parts.append(block)
+        return '\n'.join(text_parts)
+
+    # Handle string content
+    if isinstance(content, str):
+        return content
+
+    # Fallback
+    return str(content) if content else ""
+
+
 class CompactionConfig(BaseModel):
     """Provider-agnostic compaction configuration."""
     enabled: bool = True
@@ -161,7 +190,8 @@ Provide a concise but complete summary."""
 
             from langchain_core.messages import HumanMessage
             response = await llm.ainvoke([HumanMessage(content=prompt)])
-            summary = response.content if hasattr(response, 'content') else str(response)
+            raw_content = response.content if hasattr(response, 'content') else str(response)
+            summary = _extract_text_from_response(raw_content)
 
             new_memory = f"# Conversation Summary (Compacted)\n*Generated: {datetime.now(timezone.utc).isoformat()}*\n\n{summary}"
 

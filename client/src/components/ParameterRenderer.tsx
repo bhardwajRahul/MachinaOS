@@ -768,6 +768,8 @@ interface ParameterRendererProps {
   onParameterChange?: (paramName: string, value: any) => void;
   onClosePanel?: () => void;
   isLoadingParameters?: boolean;
+  /** For memory nodes: the connected agent's node ID for auto-session display */
+  connectedAgentId?: string | null;
 }
 
 // Type guard to check if parameter is INodeProperties
@@ -782,6 +784,7 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
   allParameters,
   onParameterChange,
   isLoadingParameters = false,
+  connectedAgentId,
 }) => {
   const theme = useAppTheme();
   // Don't use default while loading - wait for actual saved value to load
@@ -1376,6 +1379,44 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
               groupId={groupId}
+            />
+          );
+        }
+
+        // Special case for sessionId parameter - show auto-derived session ID in placeholder
+        if (parameter.name === 'sessionId' && connectedAgentId) {
+          const effectivePlaceholder = connectedAgentId;
+
+          return (
+            <input
+              type="text"
+              value={currentValue || ''}
+              onChange={(e) => onChange(e.target.value)}
+              placeholder={effectivePlaceholder}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                border: isDragOver ? `2px solid ${theme.accent.cyan}` : `1px solid ${theme.colors.border}`,
+                borderRadius: '6px',
+                fontSize: '14px',
+                backgroundColor: isDragOver ? `${theme.accent.cyan}10` : theme.colors.backgroundAlt,
+                color: currentValue && currentValue.includes('{{') ? theme.accent.yellow : theme.colors.text,
+                outline: 'none',
+                transition: 'all 0.2s ease',
+                fontFamily: currentValue && currentValue.includes('{{') ? 'monospace' : 'system-ui, sans-serif',
+                boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.05)'
+              }}
+              onFocus={(e) => {
+                e.target.style.borderColor = theme.accent.cyan;
+                e.target.style.boxShadow = `0 0 0 3px ${theme.accent.cyan}20, inset 0 1px 2px rgba(0,0,0,0.05)`;
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = theme.colors.border;
+                e.target.style.boxShadow = 'inset 0 1px 2px rgba(0,0,0,0.05)';
+              }}
             />
           );
         }

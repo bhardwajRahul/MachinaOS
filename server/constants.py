@@ -32,6 +32,8 @@ AI_AGENT_TYPES: FrozenSet[str] = frozenset([
     'productivity_agent',
     'payments_agent',
     'consumer_agent',
+    'autonomous_agent',
+    'orchestrator_agent',
 ])
 
 AI_MEMORY_TYPES: FrozenSet[str] = frozenset([
@@ -48,16 +50,9 @@ AI_TOOL_TYPES: FrozenSet[str] = frozenset([
 
 # Skill node types (connect to Zeenie's input-skill handle)
 # Skills provide SKILL.md context/instructions, not executed as workflow nodes
+# masterSkill: Aggregates built-in skills and user-created skills with inline editing
 SKILL_NODE_TYPES: FrozenSet[str] = frozenset([
-    'assistantPersonality',
-    'whatsappSkill',
-    'memorySkill',
-    'mapsSkill',
-    'httpSkill',
-    'schedulerSkill',
-    'androidSkill',
-    'codeSkill',
-    'customSkill',
+    'masterSkill',
 ])
 
 # Toolkit node types (aggregate sub-nodes, n8n Sub-Node pattern)

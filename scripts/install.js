@@ -120,6 +120,9 @@ function installUv(pythonCmd) {
   } else if (isMac) {
     // Use pip on macOS (no PEP 668 issues with Homebrew Python)
     run(`${pythonCmd} -m pip install uv`);
+  } else if (runSilent('apk --version')) {
+    // Alpine: use pip (apk doesn't have uv package)
+    run(`${pythonCmd} -m pip install uv --break-system-packages`);
   } else {
     // Linux: use official installer (avoids PEP 668 externally-managed-environment)
     run('curl -LsSf https://astral.sh/uv/install.sh | sh');
@@ -219,7 +222,11 @@ try {
   // Install Python dependencies (always needed - venv not included in package)
   step++;
   console.log(`[${step}/${totalSteps}] Installing Python dependencies...`);
-  run('uv venv', serverDir);  // 5 min default
+  // Check if .venv exists, skip creation if it does
+  const venvPath = resolve(serverDir, '.venv');
+  if (!existsSync(venvPath)) {
+    run('uv venv', serverDir);  // 5 min default
+  }
   run('uv sync', serverDir, 600000);  // 10 min timeout
 
   // WhatsApp RPC is now an npm dependency - binary downloaded via postinstall
