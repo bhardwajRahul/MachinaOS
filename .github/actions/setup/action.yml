@@ -6,9 +6,10 @@
 #   - uses: ./.github/actions/setup
 #     with:
 #       node-version: '22'
+#       python-version: '3.11'
 
 name: 'Setup MachinaOS Environment'
-description: 'Setup Node.js, Python, and uv.'
+description: 'Setup Node.js, Python, and uv for cross-platform builds.'
 
 inputs:
   node-version:
@@ -34,3 +35,11 @@ runs:
 
     - name: Install uv
       uses: astral-sh/setup-uv@v4
+
+    - name: Verify installations
+      shell: bash
+      run: |
+        echo "Node.js: $(node --version)"
+        echo "npm: $(npm --version)"
+        echo "Python: $(python --version)"
+        echo "uv: $(uv --version)"

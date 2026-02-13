@@ -16,11 +16,17 @@ jobs:
       - name: Setup environment
         uses: ./.github/actions/setup
 
+      - name: Install dependencies
+        run: npm install
+
       - name: Build all services
         run: npm run build
 
       - name: Lint client
         run: cd client && npm run lint
+
+      - name: TypeScript check
+        run: cd client && npx tsc --noEmit
 
   docker-build:
     runs-on: ubuntu-latest
@@ -106,6 +112,13 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         node-version: [20, 22]
+        python-version: ['3.11', '3.12']
+        exclude:
+          # Reduce matrix size - test Python 3.11 only on ubuntu, 3.12 on all
+          - os: macos-latest
+            python-version: '3.11'
+          - os: windows-latest
+            python-version: '3.11'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -115,6 +128,10 @@ jobs:
         uses: ./.github/actions/setup
         with:
           node-version: ${{ matrix.node-version }}
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install root dependencies
+        run: npm install --ignore-scripts
 
       - name: Pack npm package
         run: npm pack
@@ -124,6 +141,7 @@ jobs:
         run: |
           npm install -g machinaos-*.tgz
           machinaos --help
+          machinaos --version
 
       - name: Build (install client deps, build client, setup Python venv)
         shell: bash
@@ -135,22 +153,63 @@ jobs:
           INSTALL_PATH=$(npm root -g)/machinaos
           echo "Installed to: $INSTALL_PATH"
 
-          test -f "$INSTALL_PATH/.env" && echo ".env exists"
-          test -d "$INSTALL_PATH/client/dist" && echo "client/dist/ built"
-          test -d "$INSTALL_PATH/server/.venv" && echo "server/.venv/ created"
+          # Check essential files exist
+          test -f "$INSTALL_PATH/.env" && echo ".env exists" || echo ".env missing"
+          test -d "$INSTALL_PATH/client/dist" && echo "client/dist/ built" || (echo "client/dist/ missing" && exit 1)
+          test -d "$INSTALL_PATH/server/.venv" && echo "server/.venv/ created" || (echo "server/.venv/ missing" && exit 1)
 
-      - name: Test machinaos start
+          # Verify Python venv is functional
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            "$INSTALL_PATH/server/.venv/Scripts/python" --version
+          else
+            "$INSTALL_PATH/server/.venv/bin/python" --version
+          fi
+
+      - name: Test machinaos start (Unix)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           machinaos start &
           PID=$!
 
-          sleep 10
+          # Wait for services to start
+          for i in {1..15}; do
+            if curl -sf http://localhost:3010/health > /dev/null 2>&1; then
+              echo "Backend healthy after $((i*2))s"
+              break
+            fi
+            sleep 2
+          done
 
           if kill -0 $PID 2>/dev/null; then
             echo "machinaos start: OK - process running"
-            kill $PID 2>/dev/null || true
+            machinaos stop || kill $PID 2>/dev/null || true
           else
             echo "machinaos start: FAILED - process exited"
             exit 1
           fi
+
+      - name: Test machinaos start (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $job = Start-Job -ScriptBlock { machinaos start }
+          Start-Sleep -Seconds 15
+
+          # Check if backend is responding
+          try {
+            $response = Invoke-WebRequest -Uri "http://localhost:3010/health" -UseBasicParsing -TimeoutSec 5
+            Write-Host "Backend healthy: $($response.StatusCode)"
+          } catch {
+            Write-Host "Backend not responding (may still be starting)"
+          }
+
+          if ($job.State -eq "Running") {
+            Write-Host "machinaos start: OK - process running"
+            Stop-Job $job
+            Remove-Job $job
+          } else {
+            Write-Host "machinaos start: FAILED - job state: $($job.State)"
+            Receive-Job $job
+            exit 1
+          }
