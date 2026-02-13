@@ -15,6 +15,7 @@ const START_TIME = Date.now();
 // Parse command line arguments
 const args = process.argv.slice(2);
 const isDaemonMode = args.includes('--daemon');
+const skipWhatsApp = args.includes('--skip-whatsapp') || process.env.CI === 'true';
 
 // ============================================================================
 // Platform Detection
@@ -165,6 +166,7 @@ log(`Platform: ${getPlatformName()}`);
 log(`Mode: ${isDaemonMode ? 'Daemon (Gunicorn)' : 'Development (uvicorn)'}`);
 log(`Ports: ${config.ports.join(', ')}`);
 log(`Temporal: ${config.temporalEnabled ? 'enabled' : 'disabled'}`);
+log(`WhatsApp: ${skipWhatsApp ? 'skipped (CI mode)' : 'enabled'}`);
 
 // Create .env if not exists
 const envPath = resolve(ROOT, '.env');
@@ -227,8 +229,10 @@ if (isProduction) {
 // Python backend: use gunicorn in daemon mode, uvicorn in development
 services.push(isDaemonMode ? 'npm:python:daemon' : 'npm:python:start');
 
-// WhatsApp RPC service - npm handles package availability
-services.push('npm:whatsapp:api');
+// WhatsApp RPC service - skip in CI (binary download is disabled in CI)
+if (!skipWhatsApp) {
+  services.push('npm:whatsapp:api');
+}
 
 if (config.temporalEnabled) {
   services.push('npm:temporal:worker');
