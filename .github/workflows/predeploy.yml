@@ -193,7 +193,13 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $job = Start-Job -ScriptBlock { machinaos start }
+          # Get the npm global bin path and pass it to the job
+          $npmBin = npm prefix -g
+          $job = Start-Job -ScriptBlock {
+            param($binPath)
+            $env:PATH = "$binPath;$env:PATH"
+            machinaos start
+          } -ArgumentList $npmBin
           Start-Sleep -Seconds 15
 
           # Check if backend is responding

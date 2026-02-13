@@ -3,8 +3,10 @@
 import { spawn, execSync } from 'child_process';
 import { dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
+import { readFileSync } from 'fs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const PKG = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf-8'));
 
 const COMMANDS = {
   start: 'Start the development server',
@@ -16,6 +18,7 @@ const COMMANDS = {
   'docker:build': 'Build Docker images',
   'docker:logs': 'View Docker logs',
   help: 'Show this help message',
+  version: 'Show version number',
 };
 
 function printHelp() {
@@ -114,6 +117,8 @@ const cmd = process.argv[2] || 'help';
 
 if (cmd === 'help' || cmd === '--help' || cmd === '-h') {
   printHelp();
+} else if (cmd === 'version' || cmd === '--version' || cmd === '-v') {
+  console.log(`machinaos v${PKG.version}`);
 } else if (cmd === 'start' || cmd === 'build') {
   checkDeps();
   run(cmd);
