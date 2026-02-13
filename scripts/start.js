@@ -15,7 +15,7 @@ const START_TIME = Date.now();
 // Parse command line arguments
 const args = process.argv.slice(2);
 const isDaemonMode = args.includes('--daemon');
-const skipWhatsApp = args.includes('--skip-whatsapp');
+const skipWhatsApp = args.includes('--skip-whatsapp') || process.env.CI === 'true';
 
 // ============================================================================
 // Platform Detection
