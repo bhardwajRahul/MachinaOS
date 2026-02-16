@@ -1,6 +1,6 @@
 # MachinaOS
 
-Open-source Platform to Build Your Own Personal AI Assistant, mashup of clawdbot and n8n, but More Powerful.
+Open-source Platform to Build Your Own Personal AI Assistant, mashup of clawdbot/Openclaw and N8N, but Better UI and Proper Visibility of each Action and Restricted Control Access.
 
 # Full Capabilities.
 
