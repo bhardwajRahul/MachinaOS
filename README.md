@@ -1,8 +1,8 @@
 # MachinaOS
 
-[![npm version](https://img.shields.io/npm/v/machinaos.svg)](https://www.npmjs.com/package/machinaos)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Discord](https://img.shields.io/badge/Discord-Join-7289da?logo=discord&logoColor=white)](https://discord.gg/NHUEQVSC)
+<a href="https://www.npmjs.com/package/machinaos" target="_blank"><img src="https://img.shields.io/npm/v/machinaos.svg" alt="npm version"></a>
+<a href="https://opensource.org/licenses/MIT" target="_blank"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+<a href="https://discord.gg/NHUEQVSC" target="_blank"><img src="https://img.shields.io/badge/Discord-Join-7289da?logo=discord&logoColor=white" alt="Discord"></a>
 
 Open-source platform to build your own personal AI assistant. A mashup of Claude Code and n8n with better UI, full visibility of each action, and restricted control access.
 
