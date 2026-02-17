@@ -1,5 +1,5 @@
 # Reusable validation workflow called by ci.yml, release.yml, and docker-build.yml
-# Jobs: build-and-lint, docker-build, docker-compose-test, test-install (cross-platform)
+# Jobs: build-and-lint, docker-build, docker-compose-test, test-build-start
 
 name: Predeploy
 
@@ -116,37 +116,8 @@ jobs:
         if: always()
         run: docker compose -f docker-compose.prod.yml down -v
 
-  # Build client once on Ubuntu, upload as artifact for test-install jobs
-  build-client:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup environment
-        uses: ./.github/actions/setup
-
-      - name: Install and build client
-        run: |
-          cd client
-          npm install
-          npm run build
-
-      - name: Pack npm package with pre-built client
-        env:
-          CI: false
-          GITHUB_ACTIONS: false
-        run: npm pack
-
-      - name: Upload package artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: npm-package
-          path: machinaos-*.tgz
-          retention-days: 1
-
-  test-install:
-    needs: build-client
+  # Test build and start from source (cross-platform)
+  test-build-start:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -159,54 +130,23 @@ jobs:
       - name: Setup environment
         uses: ./.github/actions/setup
 
-      - name: Download package artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: npm-package
-
-      - name: Test global install
-        shell: bash
-        env:
-          CI: false
-          GITHUB_ACTIONS: false
-        run: |
-          npm install -g machinaos-*.tgz
-          machinaos --help
-          machinaos --version
-
-      - name: Setup Python venv only
-        shell: bash
-        run: |
-          INSTALL_PATH=$(npm root -g)/machinaos
-          cd "$INSTALL_PATH/server"
-          uv venv
-          uv sync
+      - name: Build
+        run: npm run build
 
       - name: Verify build artifacts
         shell: bash
         run: |
-          INSTALL_PATH=$(npm root -g)/machinaos
-          echo "Installed to: $INSTALL_PATH"
+          test -d "client/dist" && echo "client/dist/ exists" || (echo "client/dist/ missing" && exit 1)
+          test -d "server/.venv" && echo "server/.venv/ exists" || (echo "server/.venv/ missing" && exit 1)
+          test -d "node_modules/whatsapp-rpc/bin" && echo "whatsapp-rpc/bin/ exists" || (echo "whatsapp-rpc/bin/ missing" && exit 1)
 
-          # Check essential files exist
-          test -d "$INSTALL_PATH/client/dist" && echo "client/dist/ exists" || (echo "client/dist/ missing" && exit 1)
-          test -d "$INSTALL_PATH/server/.venv" && echo "server/.venv/ created" || (echo "server/.venv/ missing" && exit 1)
-
-          # Verify Python venv is functional
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            "$INSTALL_PATH/server/.venv/Scripts/python" --version
-          else
-            "$INSTALL_PATH/server/.venv/bin/python" --version
-          fi
-
-      - name: Test machinaos start (Unix)
+      - name: Test start (Unix)
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          machinaos start &
+          npm run start &
           PID=$!
 
-          # Wait for services to start
           for i in {1..15}; do
             if curl -sf http://localhost:3010/health > /dev/null 2>&1; then
               echo "Backend healthy after $((i*2))s"
@@ -216,33 +156,36 @@ jobs:
           done
 
           if kill -0 $PID 2>/dev/null; then
-            echo "machinaos start: OK - process running"
-            machinaos stop || kill $PID 2>/dev/null || true
+            echo "npm run start: OK"
+            npm run stop || kill $PID 2>/dev/null || true
           else
-            echo "machinaos start: FAILED - process exited"
+            echo "npm run start: FAILED"
             exit 1
           fi
 
-      - name: Test machinaos start (Windows)
+      - name: Test start (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $job = Start-Job -ScriptBlock { machinaos start }
+          $job = Start-Job -ScriptBlock {
+            Set-Location $using:PWD
+            npm run start
+          }
           Start-Sleep -Seconds 15
 
           try {
             $response = Invoke-WebRequest -Uri "http://localhost:3010/health" -UseBasicParsing -TimeoutSec 5
             Write-Host "Backend healthy: $($response.StatusCode)"
           } catch {
-            Write-Host "Backend not responding (may still be starting)"
+            Write-Host "Backend not responding"
           }
 
           if ($job.State -eq "Running") {
-            Write-Host "machinaos start: OK - process running"
+            Write-Host "npm run start: OK"
             Stop-Job $job
             Remove-Job $job
           } else {
-            Write-Host "machinaos start: FAILED - job state: $($job.State)"
+            Write-Host "npm run start: FAILED"
             Receive-Job $job
             exit 1
-          }
+          fi

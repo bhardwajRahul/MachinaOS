@@ -1,0 +1,217 @@
+# Test user installation scenarios
+# Runs on: manual trigger, after release publish
+
+name: Test Install
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  # Test npm install from registry (post-release)
+  test-npm-install:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install machinaos from npm
+        run: npm install -g machinaos
+
+      - name: Verify installation
+        shell: bash
+        run: |
+          machinaos --help
+          machinaos --version
+
+      - name: Check whatsapp-rpc binary
+        shell: bash
+        run: |
+          INSTALL_PATH=$(npm root -g)/machinaos
+          echo "Install path: $INSTALL_PATH"
+          ls -la "$INSTALL_PATH/node_modules/whatsapp-rpc/bin/" || echo "whatsapp-rpc bin/ not found"
+
+      - name: Setup Python venv
+        shell: bash
+        run: |
+          INSTALL_PATH=$(npm root -g)/machinaos
+          cd "$INSTALL_PATH/server"
+          uv venv
+          uv sync
+
+      - name: Test start (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          machinaos start &
+          PID=$!
+
+          for i in {1..15}; do
+            if curl -sf http://localhost:3010/health > /dev/null 2>&1; then
+              echo "Backend healthy after $((i*2))s"
+              break
+            fi
+            sleep 2
+          done
+
+          if kill -0 $PID 2>/dev/null; then
+            echo "machinaos start: OK"
+            machinaos stop || kill $PID 2>/dev/null || true
+          else
+            echo "machinaos start: FAILED"
+            exit 1
+          fi
+
+      - name: Test start (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $job = Start-Job -ScriptBlock { machinaos start }
+          Start-Sleep -Seconds 15
+
+          try {
+            $response = Invoke-WebRequest -Uri "http://localhost:3010/health" -UseBasicParsing -TimeoutSec 5
+            Write-Host "Backend healthy: $($response.StatusCode)"
+          } catch {
+            Write-Host "Backend not responding"
+          }
+
+          if ($job.State -eq "Running") {
+            Write-Host "machinaos start: OK"
+            Stop-Job $job
+            Remove-Job $job
+          } else {
+            Write-Host "machinaos start: FAILED"
+            Receive-Job $job
+            exit 1
+          }
+
+  # Test git clone + npm run build
+  test-git-clone:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Clone repository
+        run: git clone https://github.com/trohitg/MachinaOS.git
+
+      - name: Build
+        shell: bash
+        working-directory: MachinaOS
+        run: npm run build
+
+      - name: Check whatsapp-rpc binary
+        shell: bash
+        working-directory: MachinaOS
+        run: |
+          ls -la node_modules/whatsapp-rpc/bin/ || echo "whatsapp-rpc bin/ not found"
+
+      - name: Test start (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        working-directory: MachinaOS
+        run: |
+          npm run start &
+          PID=$!
+
+          for i in {1..15}; do
+            if curl -sf http://localhost:3010/health > /dev/null 2>&1; then
+              echo "Backend healthy after $((i*2))s"
+              break
+            fi
+            sleep 2
+          done
+
+          if kill -0 $PID 2>/dev/null; then
+            echo "npm run start: OK"
+            npm run stop || kill $PID 2>/dev/null || true
+          else
+            echo "npm run start: FAILED"
+            exit 1
+          fi
+
+      - name: Test start (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        working-directory: MachinaOS
+        run: |
+          $job = Start-Job -ScriptBlock {
+            Set-Location $using:PWD
+            npm run start
+          }
+          Start-Sleep -Seconds 15
+
+          try {
+            $response = Invoke-WebRequest -Uri "http://localhost:3010/health" -UseBasicParsing -TimeoutSec 5
+            Write-Host "Backend healthy: $($response.StatusCode)"
+          } catch {
+            Write-Host "Backend not responding"
+          }
+
+          if ($job.State -eq "Running") {
+            Write-Host "npm run start: OK"
+            Stop-Job $job
+            Remove-Job $job
+          } else {
+            Write-Host "npm run start: FAILED"
+            Receive-Job $job
+            exit 1
+          }
+
+  # Test install.sh script (Linux/macOS)
+  test-install-script-unix:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: Run install script
+        run: curl -fsSL https://raw.githubusercontent.com/trohitg/MachinaOS/main/install.sh | bash
+
+      - name: Verify installation
+        run: |
+          machinaos --help
+          machinaos --version
+
+  # Test install.ps1 script (Windows)
+  test-install-script-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Run install script
+        shell: pwsh
+        run: iwr -useb https://raw.githubusercontent.com/trohitg/MachinaOS/main/install.ps1 | iex
+
+      - name: Verify installation
+        run: |
+          machinaos --help
+          machinaos --version

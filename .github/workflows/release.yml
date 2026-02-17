@@ -1,4 +1,4 @@
-# Release workflow - predeploy gate then publish
+# Release workflow - predeploy gate, publish, then test install
 
 name: Release
 
@@ -114,3 +114,8 @@ jobs:
         run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Test user installation after publishing
+  test-install:
+    needs: [publish-npm, publish-github-packages]
+    uses: ./.github/workflows/test-install.yml
