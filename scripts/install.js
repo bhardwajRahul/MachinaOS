@@ -20,9 +20,6 @@ process.env.MACHINAOS_INSTALLING = 'true';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 
-const isWindows = process.platform === 'win32';
-const isMac = process.platform === 'darwin';
-
 process.env.PYTHONUTF8 = '1';
 
 function run(cmd, cwd = ROOT, timeoutMs = 300000) {
@@ -72,62 +69,18 @@ function checkUv() {
   return getVersion('uv --version');
 }
 
-function installPython() {
-  console.log('Installing Python 3.11+...');
-  if (isWindows) {
-    // choco is pre-installed on GitHub Actions Windows runners
-    // winget is only on windows-2025, not windows-2022 (windows-latest)
-    if (runSilent('choco --version')) {
-      run('choco install python312 -y');
-    } else if (runSilent('winget --version')) {
-      run('winget install Python.Python.3.12 --accept-package-agreements --accept-source-agreements --disable-interactivity');
-    } else {
-      console.log('ERROR: Cannot auto-install Python. Please install manually:');
-      console.log('  https://python.org/downloads/');
-      process.exit(1);
-    }
-  } else if (isMac) {
-    if (runSilent('brew --version')) {
-      run('brew install python@3.12');
-    } else {
-      console.log('ERROR: Homebrew not found. Install it first:');
-      console.log('  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"');
-      process.exit(1);
-    }
-  } else {
-    // Linux - try package managers
-    if (runSilent('apt-get --version')) {
-      run('apt-get update && apt-get install -y python3 python3-venv python3-pip curl');
-    } else if (runSilent('dnf --version')) {
-      run('dnf install -y python3 python3-pip');
-    } else if (runSilent('pacman --version')) {
-      run('pacman -S --noconfirm python python-pip');
-    } else if (runSilent('apk --version')) {
-      run('apk add --no-cache python3 py3-pip');
-    } else {
-      console.log('ERROR: Cannot auto-install Python. Please install manually:');
-      console.log('  https://python.org/downloads/');
-      process.exit(1);
-    }
+function ensurePip(pythonCmd) {
+  // Check if pip exists, install via ensurepip if missing
+  if (!runSilent(`${pythonCmd} -m pip --version`)) {
+    console.log('Installing pip via ensurepip...');
+    run(`${pythonCmd} -m ensurepip --upgrade`);
   }
 }
 
 function installUv(pythonCmd) {
-  console.log('Installing uv...');
-  if (isWindows) {
-    // Use pip on Windows (no PEP 668 issues)
-    run(`${pythonCmd} -m pip install uv`);
-  } else if (isMac) {
-    // Use pip on macOS (no PEP 668 issues with Homebrew Python)
-    run(`${pythonCmd} -m pip install uv`);
-  } else if (runSilent('apk --version')) {
-    // Alpine: use pip (apk doesn't have uv package)
-    run(`${pythonCmd} -m pip install uv --break-system-packages`);
-  } else {
-    // Linux: use official installer (avoids PEP 668 externally-managed-environment)
-    run('curl -LsSf https://astral.sh/uv/install.sh | sh');
-    process.env.PATH = `${process.env.HOME}/.local/bin:${process.env.PATH}`;
-  }
+  ensurePip(pythonCmd);
+  console.log('Installing uv via pip...');
+  run(`${pythonCmd} -m pip install uv`);
 }
 
 // ============================================================================
@@ -140,19 +93,14 @@ console.log('');
 console.log(`  Node.js: ${getVersion('node --version')}`);
 console.log(`  npm: ${getVersion('npm --version')}`);
 
-// Check/Install Python
+// Check Python (required, user must install)
 let python = checkPython();
 if (python) {
   console.log(`  Python: ${python.version}`);
 } else {
-  installPython();
-  python = checkPython();
-  if (python) {
-    console.log(`  Python: ${python.version}`);
-  } else {
-    console.log('ERROR: Python installation failed');
-    process.exit(1);
-  }
+  console.log('ERROR: Python 3.11+ is required.');
+  console.log('  Install from: https://python.org/downloads/');
+  process.exit(1);
 }
 
 // Check/Install uv
@@ -168,14 +116,6 @@ if (uvVersion) {
     console.log('ERROR: uv installation failed');
     process.exit(1);
   }
-}
-
-// Go is optional (whatsapp-rpc uses pre-built binaries via npm)
-const goVersion = getVersion('go version');
-if (goVersion) {
-  console.log(`  Go: ${goVersion.match(/go\d+\.\d+(\.\d+)?/)?.[0] || 'installed'} (optional)`);
-} else {
-  console.log('  Go: not installed (optional - whatsapp-rpc uses pre-built binaries)');
 }
 
 console.log('');

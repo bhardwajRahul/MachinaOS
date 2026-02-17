@@ -16,10 +16,6 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 
-// Platform detection
-const isWindows = process.platform === 'win32';
-const isMac = process.platform === 'darwin';
-
 // Environment detection
 // - postinstall: npm already installed root deps, skip to avoid infinite loop
 // - CI: GitHub Actions handles build separately, skip postinstall entirely
@@ -61,69 +57,22 @@ function npmInstall(cwd = ROOT) {
 }
 
 // ============================================================================
-// Auto-install missing dependencies
+// Install dependencies via pip
 // ============================================================================
 
-function installPython() {
-  console.log('  Installing Python 3.11+...');
-  if (isWindows) {
-    if (runSilent('winget --version')) {
-      run('winget install Python.Python.3.12 --accept-package-agreements --accept-source-agreements');
-    } else if (runSilent('choco --version')) {
-      run('choco install python312 -y');
-    } else {
-      console.log('  Error: Please install Python manually from https://python.org/');
-      console.log('  Or install winget/chocolatey first.');
-      process.exit(1);
-    }
-  } else if (isMac) {
-    if (runSilent('brew --version')) {
-      run('brew install python@3.12');
-    } else {
-      console.log('  Error: Please install Homebrew first: https://brew.sh/');
-      process.exit(1);
-    }
-  } else {
-    // Linux package managers
-    if (runSilent('apk --version')) {
-      // Alpine Linux
-      run('apk add --no-cache python3 py3-pip');
-    } else if (runSilent('apt --version')) {
-      run('sudo apt update && sudo apt install -y python3.12 python3.12-venv');
-    } else if (runSilent('dnf --version')) {
-      run('sudo dnf install -y python3.12');
-    } else if (runSilent('pacman --version')) {
-      run('sudo pacman -S --noconfirm python');
-    } else {
-      console.log('  Error: Please install Python manually from https://python.org/');
-      process.exit(1);
-    }
+function ensurePip(pythonCmd) {
+  // Check if pip exists, install via ensurepip if missing
+  if (!runSilent(`${pythonCmd} -m pip --version`)) {
+    console.log('  Installing pip via ensurepip...');
+    run(`${pythonCmd} -m ensurepip --upgrade`);
   }
 }
 
 function installUv(pythonCmd) {
-  console.log('  Installing uv...');
-  if (isWindows) {
-    // Windows: use pip (simple and works)
-    run(`${pythonCmd} -m pip install uv`);
-  } else if (isMac) {
-    // macOS: use pip (no PEP 668 issues with Homebrew Python)
-    run(`${pythonCmd} -m pip install uv`);
-  } else if (runSilent('apk --version')) {
-    // Alpine: use pip with --break-system-packages
-    run(`${pythonCmd} -m pip install uv --break-system-packages`);
-  } else {
-    // Other Linux: try pip first, fall back to curl installer
-    if (runSilent(`${pythonCmd} -m pip install uv --break-system-packages`)) {
-      // pip worked
-    } else {
-      run('curl -LsSf https://astral.sh/uv/install.sh | sh');
-      process.env.PATH = `${process.env.HOME}/.local/bin:${process.env.PATH}`;
-    }
-  }
+  ensurePip(pythonCmd);
+  console.log('  Installing uv via pip...');
+  run(`${pythonCmd} -m pip install uv`);
 }
-
-// Go is no longer required - whatsapp-rpc is an npm package with pre-built binaries
 
 // ============================================================================
 // Check and Install Dependencies
@@ -137,7 +86,7 @@ console.log(`  Node.js: ${nodeVersion}`);
 const npmVersion = getVersion('npm --version');
 console.log(`  npm: ${npmVersion}`);
 
-// Python
+// Python (required, user must install)
 let pyCmd = null;
 if (runSilent('python --version')) {
   pyCmd = 'python';
@@ -154,13 +103,14 @@ if (pyCmd) {
       console.log(`  ${pyVersion}`);
     } else {
       console.log(`  ${pyVersion} (too old, need 3.11+)`);
-      installPython();
+      console.log('  Error: Please install Python 3.11+ from https://python.org/');
+      process.exit(1);
     }
   }
 } else {
-  installPython();
-  pyCmd = runSilent('python --version') ? 'python' : 'python3';
-  console.log(`  ${getVersion(`${pyCmd} --version`)}`);
+  console.log('  Error: Python 3.11+ is required.');
+  console.log('  Install from: https://python.org/downloads/');
+  process.exit(1);
 }
 
 // uv
@@ -177,15 +127,6 @@ if (uvVersion) {
     console.log('  https://docs.astral.sh/uv/getting-started/installation/');
     process.exit(1);
   }
-}
-
-// Go is optional (whatsapp-rpc uses pre-built binaries)
-const goVersionFull = getVersion('go version');
-if (goVersionFull) {
-  const goVersion = goVersionFull.match(/go\d+\.\d+(\.\d+)?/)?.[0] || 'go';
-  console.log(`  Go: ${goVersion} (optional)`);
-} else {
-  console.log('  Go: not installed (optional - whatsapp-rpc uses pre-built binaries)');
 }
 
 console.log('\nAll dependencies ready.\n');
