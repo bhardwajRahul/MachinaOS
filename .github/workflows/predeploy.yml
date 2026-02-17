@@ -188,4 +188,4 @@ jobs:
             Write-Host "npm run start: FAILED"
             Receive-Job $job
             exit 1
-          fi
+          }
