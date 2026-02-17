@@ -72,11 +72,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: network=host
+
       - name: Create .env from template
         run: cp .env.template .env
 
-      - name: Build with Docker Compose
-        run: docker compose -f docker-compose.prod.yml build
+      - name: Build with cache (reuses docker-build cache)
+        run: |
+          docker buildx build --load --cache-from type=gha \
+            -t machinaos-frontend:latest -f client/Dockerfile --target production client
+          docker buildx build --load --cache-from type=gha \
+            -t machinaos-backend:latest -f server/Dockerfile server
+          docker buildx build --load --cache-from type=gha \
+            -t machinaos-whatsapp:latest -f docker/Dockerfile.whatsapp docker
 
       - name: Start services
         run: docker compose -f docker-compose.prod.yml up -d
@@ -105,7 +116,37 @@ jobs:
         if: always()
         run: docker compose -f docker-compose.prod.yml down -v
 
+  # Build client once on Ubuntu, upload as artifact for test-install jobs
+  build-client:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup environment
+        uses: ./.github/actions/setup
+
+      - name: Install and build client
+        run: |
+          cd client
+          npm install
+          npm run build
+
+      - name: Pack npm package with pre-built client
+        env:
+          CI: false
+          GITHUB_ACTIONS: false
+        run: npm pack
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-package
+          path: machinaos-*.tgz
+          retention-days: 1
+
   test-install:
+    needs: build-client
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -115,26 +156,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Python and uv needed because postinstall.js skips in CI
       - name: Setup environment
         uses: ./.github/actions/setup
 
-      - name: Install root dependencies
-        run: npm install --ignore-scripts
-
-      - name: Pack npm package
-        run: npm pack
+      - name: Download package artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: npm-package
 
       - name: Test global install
         shell: bash
+        env:
+          CI: false
+          GITHUB_ACTIONS: false
         run: |
           npm install -g machinaos-*.tgz
           machinaos --help
           machinaos --version
 
-      - name: Build (install client deps, build client, setup Python venv)
+      - name: Setup Python venv only
         shell: bash
-        run: machinaos build
+        run: |
+          INSTALL_PATH=$(npm root -g)/machinaos
+          cd "$INSTALL_PATH/server"
+          uv venv
+          uv sync
 
       - name: Verify build artifacts
         shell: bash
@@ -143,8 +189,7 @@ jobs:
           echo "Installed to: $INSTALL_PATH"
 
           # Check essential files exist
-          test -f "$INSTALL_PATH/.env" && echo ".env exists" || echo ".env missing"
-          test -d "$INSTALL_PATH/client/dist" && echo "client/dist/ built" || (echo "client/dist/ missing" && exit 1)
+          test -d "$INSTALL_PATH/client/dist" && echo "client/dist/ exists" || (echo "client/dist/ missing" && exit 1)
           test -d "$INSTALL_PATH/server/.venv" && echo "server/.venv/ created" || (echo "server/.venv/ missing" && exit 1)
 
           # Verify Python venv is functional
@@ -182,16 +227,9 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          # Get the npm global bin path and pass it to the job
-          $npmBin = npm prefix -g
-          $job = Start-Job -ScriptBlock {
-            param($binPath)
-            $env:PATH = "$binPath;$env:PATH"
-            machinaos start
-          } -ArgumentList $npmBin
+          $job = Start-Job -ScriptBlock { machinaos start }
           Start-Sleep -Seconds 15
 
-          # Check if backend is responding
           try {
             $response = Invoke-WebRequest -Uri "http://localhost:3010/health" -UseBasicParsing -TimeoutSec 5
             Write-Host "Backend healthy: $($response.StatusCode)"
