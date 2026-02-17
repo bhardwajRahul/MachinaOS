@@ -42,6 +42,15 @@ curl -fsSL https://raw.githubusercontent.com/trohitg/MachinaOS/main/install.sh |
 iwr -useb https://raw.githubusercontent.com/trohitg/MachinaOS/main/install.ps1 | iex
 ```
 
+## Clone & Run
+
+```bash
+git clone https://github.com/trohitg/MachinaOS.git
+cd MachinaOS
+npm run build
+npm run start
+```
+
 ## Features
 
 ### AI Integration (6 Providers)
@@ -116,18 +125,6 @@ iwr -useb https://raw.githubusercontent.com/trohitg/MachinaOS/main/install.ps1 |
 **Environment:** Copy `.env.template` to `.env` and customize ports, auth settings, database location.
 
 ## Other Install Options
-
-<details>
-<summary><b>Clone & Run</b></summary>
-
-```bash
-git clone https://github.com/trohitg/MachinaOS.git
-cd MachinaOS
-npm run build
-npm run start
-```
-
-</details>
 
 <details>
 <summary><b>Docker</b></summary>
