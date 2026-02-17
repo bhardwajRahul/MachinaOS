@@ -70,20 +70,20 @@ function checkDeps() {
 
   // Node.js version check
   const nodeVersion = parseInt(process.version.slice(1));
-  if (nodeVersion < 20) {
-    errors.push(`Node.js 20+ required (found ${process.version})`);
+  if (nodeVersion < 22) {
+    errors.push(`Node.js 22+ required (found ${process.version})`);
   }
 
   // Python version check
   let pyVersion = getVersion('python --version') || getVersion('python3 --version');
   if (!pyVersion) {
-    errors.push('Python 3.11+ - https://python.org/');
+    errors.push('Python 3.12+ - https://python.org/');
   } else {
     const match = pyVersion.match(/Python (\d+)\.(\d+)/);
     if (match) {
       const [, major, minor] = match.map(Number);
-      if (major < 3 || (major === 3 && minor < 11)) {
-        errors.push(`Python 3.11+ required (found ${pyVersion})`);
+      if (major < 3 || (major === 3 && minor < 12)) {
+        errors.push(`Python 3.12+ required (found ${pyVersion})`);
       }
     }
   }

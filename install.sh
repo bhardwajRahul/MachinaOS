@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # MachinaOS Installer
-# Prerequisites: Node.js 20+, Python 3.11+
+# Prerequisites: Node.js 22+, Python 3.12+
 #
 # Usage: curl -fsSL https://raw.githubusercontent.com/trohitg/MachinaOS/main/install.sh | bash
 
@@ -11,7 +11,7 @@ echo ""
 
 # Check Node.js
 if ! command -v node &> /dev/null; then
-  echo "Error: Node.js 20+ is required"
+  echo "Error: Node.js 22+ is required"
   echo "  Install from: https://nodejs.org/"
   exit 1
 fi
@@ -23,7 +23,7 @@ if command -v python3 &> /dev/null; then
 elif command -v python &> /dev/null; then
   PY=python
 else
-  echo "Error: Python 3.11+ is required"
+  echo "Error: Python 3.12+ is required"
   echo "  Install from: https://python.org/"
   exit 1
 fi

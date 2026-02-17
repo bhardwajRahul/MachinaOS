@@ -56,7 +56,7 @@ function checkPython() {
       const match = version.match(/Python (\d+)\.(\d+)/);
       if (match) {
         const [, major, minor] = match.map(Number);
-        if (major >= 3 && minor >= 11) {
+        if (major >= 3 && minor >= 12) {
           return { cmd, version };
         }
       }
@@ -98,7 +98,7 @@ let python = checkPython();
 if (python) {
   console.log(`  Python: ${python.version}`);
 } else {
-  console.log('ERROR: Python 3.11+ is required.');
+  console.log('ERROR: Python 3.12+ is required.');
   console.log('  Install from: https://python.org/downloads/');
   process.exit(1);
 }

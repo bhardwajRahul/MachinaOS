@@ -14,7 +14,7 @@ description: 'Setup Node.js, Python, and uv for cross-platform builds.'
 inputs:
   node-version:
     description: 'Node.js version'
-    default: '20'
+    default: '22'
   python-version:
     description: 'Python version'
     default: '3.12'

@@ -1,8 +1,12 @@
 # MachinaOS
 
-Open-source Platform to Build Your Own Personal AI Assistant, mashup of clawdbot/Openclaw and N8N, but Better UI and Proper Visibility of each Action and Restricted Control Access.
+[![npm version](https://img.shields.io/npm/v/machinaos.svg)](https://www.npmjs.com/package/machinaos)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Discord](https://img.shields.io/discord/1234567890?color=7289da&label=Discord&logo=discord&logoColor=white)](https://discord.gg/NHUEQVSC)
 
-# Full Capabilities.
+Open-source platform to build your own personal AI assistant. A mashup of Claude Code and n8n with better UI, full visibility of each action, and restricted control access.
+
+## Full Capabilities
 
 <img width="1280" height="671" alt="func_img" src="https://github.com/user-attachments/assets/2f14b6c8-3995-4ccc-b076-e40749a83df2" />
 
@@ -110,10 +114,9 @@ npm run docker:up
 
 The install script handles these automatically, but for manual installation:
 
-- **Node.js 18+** - https://nodejs.org/
-- **Python 3.11+** - https://python.org/
-- **uv** - `curl -LsSf https://astral.sh/uv/install.sh | sh`
-- **Go 1.21+** - https://go.dev/dl/ (for WhatsApp service)
+- **Node.js 22+** - https://nodejs.org/
+- **Python 3.12+** - https://python.org/
+- **uv** - auto-installed via pip
 
 ## CLI Commands
 
@@ -167,7 +170,7 @@ MachinaOS/
 ## Tech Stack
 
 - **Frontend:** React 19, TypeScript, React Flow, Zustand
-- **Backend:** Python 3.11+, FastAPI, SQLite, LangChain/LangGraph
+- **Backend:** Python 3.12+, FastAPI, SQLite, LangChain/LangGraph
 - **Services:** WhatsApp (Go + whatsmeow), WebSocket relay
 - **Package Manager:** uv (Python), npm (Node.js)
 

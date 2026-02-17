@@ -29,7 +29,7 @@ Open http://localhost:3000
 
 ### Local Development (from source)
 
-**Prerequisites:** Node.js 18+, Python 3.11+, uv, Go 1.21+
+**Prerequisites:** Node.js 22+, Python 3.12+, uv, 
 
 ```bash
 git clone https://github.com/trohitg/MachinaOS.git

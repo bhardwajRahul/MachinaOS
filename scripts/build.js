@@ -4,9 +4,8 @@
  * Works on: Windows, macOS, Linux, WSL, Git Bash
  *
  * Automatically installs missing dependencies:
- * - Python 3.11+ (via winget/brew/apt)
+ * - Python 3.12+ (via pip)
  * - uv (Python package manager)
- * - Go (for WhatsApp service)
  */
 import { execSync } from 'child_process';
 import { existsSync, copyFileSync } from 'fs';
@@ -99,16 +98,16 @@ if (pyCmd) {
   const match = pyVersion?.match(/Python (\d+)\.(\d+)/);
   if (match) {
     const [, major, minor] = match.map(Number);
-    if (major >= 3 && minor >= 11) {
+    if (major >= 3 && minor >= 12) {
       console.log(`  ${pyVersion}`);
     } else {
-      console.log(`  ${pyVersion} (too old, need 3.11+)`);
-      console.log('  Error: Please install Python 3.11+ from https://python.org/');
+      console.log(`  ${pyVersion} (too old, need 3.12+)`);
+      console.log('  Error: Please install Python 3.12+ from https://python.org/');
       process.exit(1);
     }
   }
 } else {
-  console.log('  Error: Python 3.11+ is required.');
+  console.log('  Error: Python 3.12+ is required.');
   console.log('  Install from: https://python.org/downloads/');
   process.exit(1);
 }
