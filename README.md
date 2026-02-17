@@ -2,7 +2,7 @@
 
 <a href="https://www.npmjs.com/package/machinaos" target="_blank"><img src="https://img.shields.io/npm/v/machinaos.svg" alt="npm version"></a>
 <a href="https://opensource.org/licenses/MIT" target="_blank"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
-<a href="https://discord.gg/NHUEQVSC" target="_blank"><img src="https://img.shields.io/badge/Discord-Join-7289da?logo=discord&logoColor=white" alt="Discord"></a>
+<a href="https://discord.gg/NHUEQVSC" target="_blank"><img src="https://img.shields.io/discord/1455977012308086895?logo=discord&logoColor=white&label=Discord" alt="Discord"></a>
 
 Open-source platform to build your own personal AI assistant. A mashup of Claude Code and n8n with better UI, full visibility of each action, and restricted control access.
 
@@ -14,7 +14,12 @@ Open-source platform to build your own personal AI assistant. A mashup of Claude
 
 <img width="1280" height="671" alt="func_img" src="https://github.com/user-attachments/assets/2f14b6c8-3995-4ccc-b076-e40749a83df2" />
 
-**60 nodes** | **6 AI providers** | **WebSocket-first** | **Self-hosted**
+**77 nodes** | **6 AI providers** | **12 specialized agents** | **WebSocket-first** | **Self-hosted**
+
+## Prerequisites
+
+- **Node.js 22+** - https://nodejs.org/
+- **Python 3.12+** - https://python.org/
 
 ## Quick Start
 
@@ -25,10 +30,7 @@ machinaos start
 
 Open http://localhost:3000
 
-<details>
-<summary><b>Other Install Options</b></summary>
-
-### One-Line Install (auto-installs all dependencies)
+## One-Line Install (auto-installs dependencies)
 
 **Linux/macOS:**
 ```bash
@@ -39,25 +41,6 @@ curl -fsSL https://raw.githubusercontent.com/trohitg/MachinaOS/main/install.sh |
 ```powershell
 iwr -useb https://raw.githubusercontent.com/trohitg/MachinaOS/main/install.ps1 | iex
 ```
-
-### Clone & Run
-
-```bash
-git clone https://github.com/trohitg/MachinaOS.git
-cd MachinaOS
-npm run build
-npm run start
-```
-
-### Docker
-
-```bash
-git clone https://github.com/trohitg/MachinaOS.git
-cd MachinaOS
-npm run docker:up
-```
-
-</details>
 
 ## Features
 
@@ -76,8 +59,8 @@ npm run docker:up
 
 - **AI Agent** - LangGraph-powered with tool calling and iterative reasoning
 - **Chat Agent** - Conversational agent with skill support for multi-turn chat
-- **10 Skills** - WhatsApp, Maps, HTTP, Scheduler, Android, Code, Memory, Web Search, Custom
-- **4 Tools** - Calculator, Current Time, Web Search, Android Toolkit
+- **12 Specialized Agents** - Android, Coding, Web, Task, Social, Travel, Tool, Productivity, Payments, Consumer, Autonomous, Orchestrator
+- **11 Skills** - WhatsApp, Maps, HTTP, Scheduler, Android, Code, Memory, Web Search, Custom
 - **Simple Memory** - Markdown-based conversation history with vector storage
 
 ### Platform Integrations
@@ -102,25 +85,17 @@ npm run docker:up
 |----------|-------|-------------|
 | AI Models | 6 | OpenAI, Anthropic, Google, OpenRouter, Groq, Cerebras |
 | AI Agents | 3 | AI Agent, Chat Agent, Simple Memory |
-| AI Skills | 10 | WhatsApp, Maps, HTTP, Scheduler, Android, Code, etc. |
-| AI Tools | 4 | Calculator, Time, Search, Android Toolkit |
+| Specialized Agents | 12 | Android, Coding, Web, Task, Social, Travel, etc. |
+| AI Skills | 11 | WhatsApp, Maps, HTTP, Scheduler, Android, Code, etc. |
+| AI Tools | 9 | Calculator, Time, Search, Android Toolkit, Code Executors |
 | WhatsApp | 3 | Send, Receive, Database |
 | Android | 16 | Device control and monitoring |
 | Documents | 6 | RAG pipeline nodes |
 | Utilities | 5 | HTTP, Webhooks, Chat Trigger, Console |
 | Location | 3 | Google Maps integration |
-| Code | 2 | Python and JavaScript executors |
-| Workflow | 1 | Start node |
+| Workflow | 3 | Start, Timer, Cron Scheduler |
 
-**Total: 60 nodes**
-
-## Prerequisites
-
-The install script handles these automatically, but for manual installation:
-
-- **Node.js 22+** - https://nodejs.org/
-- **Python 3.12+** - https://python.org/
-- **uv** - auto-installed via pip
+**Total: 77 nodes**
 
 ## CLI Commands
 
@@ -140,23 +115,38 @@ The install script handles these automatically, but for manual installation:
 
 **Environment:** Copy `.env.template` to `.env` and customize ports, auth settings, database location.
 
-## Docker Commands
+## Other Install Options
 
-| Command | Description |
-|---------|-------------|
-| `machinaos docker:up` | Start containers (detached) |
-| `machinaos docker:down` | Stop containers |
-| `machinaos docker:build` | Rebuild images |
-| `machinaos docker:logs` | View logs (follows) |
+<details>
+<summary><b>Clone & Run</b></summary>
 
-**Redis (optional):** Set `REDIS_ENABLED=true` in `.env`
+```bash
+git clone https://github.com/trohitg/MachinaOS.git
+cd MachinaOS
+npm run build
+npm run start
+```
 
-### Production Docker
+</details>
 
+<details>
+<summary><b>Docker</b></summary>
+
+```bash
+git clone https://github.com/trohitg/MachinaOS.git
+cd MachinaOS
+npm run docker:up
+```
+
+**Production Docker:**
 ```bash
 npm run docker:prod:build
 npm run docker:prod:up
 ```
+
+**Redis (optional):** Set `REDIS_ENABLED=true` in `.env`
+
+</details>
 
 ## Project Structure
 
@@ -177,16 +167,6 @@ MachinaOS/
 - **Services:** WhatsApp (whatsapp-rpc npm package), WebSocket relay
 - **Package Manager:** uv (Python), npm (Node.js)
 
-## Documentation
-
-Full documentation available at: https://docs.machinaos.dev
-
-- [Installation Guide](https://docs.machinaos.dev/installation)
-- [Quick Start](https://docs.machinaos.dev/quickstart)
-- [Node Catalog](https://docs.machinaos.dev/nodes/overview)
-- [AI Models](https://docs.machinaos.dev/nodes/ai-models)
-- [AI Agents](https://docs.machinaos.dev/nodes/ai-agent)
-
 ## Troubleshooting
 
 **Port already in use:**
@@ -205,6 +185,10 @@ machinaos build  # Install all dependencies
 machinaos clean  # Remove node_modules, .venv, dist
 machinaos build  # Reinstall everything
 ```
+
+## Documentation
+
+Full documentation: https://docs.machinaos.dev
 
 ## Contributing
 
