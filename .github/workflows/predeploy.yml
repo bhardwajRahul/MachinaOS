@@ -138,13 +138,13 @@ jobs:
         run: |
           test -d "client/dist" && echo "client/dist/ exists" || (echo "client/dist/ missing" && exit 1)
           test -d "server/.venv" && echo "server/.venv/ exists" || (echo "server/.venv/ missing" && exit 1)
-          test -d "node_modules/whatsapp-rpc/bin" && echo "whatsapp-rpc/bin/ exists" || (echo "whatsapp-rpc/bin/ missing" && exit 1)
+          # whatsapp-rpc binary checked in test-install.yml (CI skips binary download)
 
       - name: Test start (Unix)
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          npm run start &
+          npm run start -- --skip-whatsapp &
           PID=$!
 
           for i in {1..15}; do
@@ -169,7 +169,7 @@ jobs:
         run: |
           $job = Start-Job -ScriptBlock {
             Set-Location $using:PWD
-            npm run start
+            npm run start -- --skip-whatsapp
           }
           Start-Sleep -Seconds 15
 
