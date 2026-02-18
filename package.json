@@ -35,6 +35,7 @@
   "files": [
     "bin/",
     "scripts/",
+    "workflows/",
     "client/src/",
     "client/public/",
     "client/dist/",

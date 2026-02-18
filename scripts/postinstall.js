@@ -8,9 +8,35 @@
 import { spawn } from 'child_process';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { existsSync, chmodSync } from 'fs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
+
+// Fix executable permissions on Unix (npm doesn't preserve them from git)
+function fixPermissions() {
+  if (process.platform === 'win32') return;
+
+  const files = [
+    resolve(ROOT, 'bin/cli.js'),
+    resolve(ROOT, 'scripts/start.js'),
+    resolve(ROOT, 'scripts/stop.js'),
+    resolve(ROOT, 'scripts/build.js'),
+    resolve(ROOT, 'scripts/clean.js'),
+    resolve(ROOT, 'scripts/install.js'),
+    resolve(ROOT, 'install.sh'),
+  ];
+
+  for (const file of files) {
+    if (existsSync(file)) {
+      try {
+        chmodSync(file, 0o755);
+      } catch (e) {
+        // Ignore permission errors
+      }
+    }
+  }
+}
 
 const isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
 
@@ -46,6 +72,9 @@ function runScript(scriptPath) {
 
 async function main() {
   try {
+    // Fix executable permissions on Unix
+    fixPermissions();
+
     // Run full installation
     console.log('Installing dependencies...');
     await runScript(resolve(__dirname, 'install.js'));

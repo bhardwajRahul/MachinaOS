@@ -57,29 +57,52 @@ is_wsl() {
   [[ -n "$WSL_DISTRO_NAME" ]] || [[ -n "$WSL_INTEROP" ]] || grep -qi microsoft /proc/version 2>/dev/null
 }
 
-# Configure npm for WSL (use Linux-native path instead of Windows mount)
+# Configure npm for WSL (fix nvm conflicts and Windows paths)
 setup_wsl_npm() {
-  if is_wsl; then
-    local npm_prefix
-    npm_prefix=$(npm config get prefix 2>/dev/null || echo "")
+  if ! is_wsl; then
+    return 0
+  fi
 
-    # Check if npm is using Windows path (/mnt/c/...)
-    if [[ "$npm_prefix" == /mnt/* ]]; then
-      info "WSL detected: Configuring npm to use Linux-native path..."
-      mkdir -p "$HOME/.npm-global"
-      npm config set prefix "$HOME/.npm-global"
-      export PATH="$HOME/.npm-global/bin:$PATH"
+  info "WSL detected: Checking npm configuration..."
 
-      # Add to .bashrc if not already there
-      if ! grep -q 'npm-global' "$HOME/.bashrc" 2>/dev/null; then
-        echo '' >> "$HOME/.bashrc"
-        echo '# npm global packages (WSL)' >> "$HOME/.bashrc"
-        echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >> "$HOME/.bashrc"
-        info "Added npm-global to PATH in ~/.bashrc"
-      fi
-
-      success "npm configured for WSL"
+  # If using nvm, remove any conflicting prefix from .npmrc
+  if [[ -n "$NVM_DIR" ]] || [[ -d "$HOME/.nvm" ]]; then
+    if grep -q '^prefix=' "$HOME/.npmrc" 2>/dev/null; then
+      info "Removing conflicting npm prefix (nvm detected)..."
+      sed -i '/^prefix=/d' "$HOME/.npmrc"
+      # Also remove globalconfig if present
+      sed -i '/^globalconfig=/d' "$HOME/.npmrc" 2>/dev/null || true
     fi
+
+    # Source nvm to ensure proper paths
+    export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+    if [[ -s "$NVM_DIR/nvm.sh" ]]; then
+      source "$NVM_DIR/nvm.sh"
+    fi
+
+    success "npm configured for nvm on WSL"
+    return 0
+  fi
+
+  # No nvm - check if npm is using Windows path
+  local npm_prefix
+  npm_prefix=$(npm config get prefix 2>/dev/null || echo "")
+
+  if [[ "$npm_prefix" == /mnt/* ]]; then
+    info "Configuring npm to use Linux-native path..."
+    mkdir -p "$HOME/.npm-global"
+    npm config set prefix "$HOME/.npm-global"
+    export PATH="$HOME/.npm-global/bin:$PATH"
+
+    # Add to .bashrc if not already there
+    if ! grep -q 'npm-global' "$HOME/.bashrc" 2>/dev/null; then
+      echo '' >> "$HOME/.bashrc"
+      echo '# npm global packages (WSL)' >> "$HOME/.bashrc"
+      echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >> "$HOME/.bashrc"
+      info "Added npm-global to PATH in ~/.bashrc"
+    fi
+
+    success "npm configured for WSL"
   fi
 }
 
