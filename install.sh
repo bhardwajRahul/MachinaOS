@@ -111,6 +111,9 @@ setup_wsl_npm() {
 # =============================================================================
 
 check_node() {
+  # Clear command hash to ensure we find the latest node binary
+  hash -r 2>/dev/null || true
+
   if command -v node &> /dev/null; then
     version=$(node --version | tr -d 'v')
     major=$(echo "$version" | cut -d. -f1)
@@ -130,6 +133,8 @@ install_node() {
     macos)
       if command -v brew &> /dev/null; then
         brew install node@22
+        # Add node@22 to PATH (brew doesn't link it by default)
+        export PATH="/opt/homebrew/opt/node@22/bin:/usr/local/opt/node@22/bin:$PATH"
       else
         error_exit "Please install Homebrew first: https://brew.sh/"
       fi
