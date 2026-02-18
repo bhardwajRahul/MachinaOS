@@ -104,7 +104,7 @@ install_node() {
 check_python() {
   for cmd in python3 python; do
     if command -v "$cmd" &> /dev/null; then
-      version=$($cmd --version 2>&1 | grep -oP '\d+\.\d+' | head -1)
+      version=$($cmd --version 2>&1 | sed -n 's/.*Python \([0-9]*\.[0-9]*\).*/\1/p')
       major=$(echo "$version" | cut -d. -f1)
       minor=$(echo "$version" | cut -d. -f2)
       if [ "$major" -ge 3 ] && [ "$minor" -ge "$MIN_PYTHON_VERSION_MINOR" ]; then
