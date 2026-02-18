@@ -52,6 +52,37 @@ detect_os() {
 
 OS=$(detect_os)
 
+# Detect WSL
+is_wsl() {
+  [[ -n "$WSL_DISTRO_NAME" ]] || [[ -n "$WSL_INTEROP" ]] || grep -qi microsoft /proc/version 2>/dev/null
+}
+
+# Configure npm for WSL (use Linux-native path instead of Windows mount)
+setup_wsl_npm() {
+  if is_wsl; then
+    local npm_prefix
+    npm_prefix=$(npm config get prefix 2>/dev/null || echo "")
+
+    # Check if npm is using Windows path (/mnt/c/...)
+    if [[ "$npm_prefix" == /mnt/* ]]; then
+      info "WSL detected: Configuring npm to use Linux-native path..."
+      mkdir -p "$HOME/.npm-global"
+      npm config set prefix "$HOME/.npm-global"
+      export PATH="$HOME/.npm-global/bin:$PATH"
+
+      # Add to .bashrc if not already there
+      if ! grep -q 'npm-global' "$HOME/.bashrc" 2>/dev/null; then
+        echo '' >> "$HOME/.bashrc"
+        echo '# npm global packages (WSL)' >> "$HOME/.bashrc"
+        echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >> "$HOME/.bashrc"
+        info "Added npm-global to PATH in ~/.bashrc"
+      fi
+
+      success "npm configured for WSL"
+    fi
+  fi
+}
+
 # =============================================================================
 # Dependency Checks and Installation
 # =============================================================================
@@ -191,6 +222,9 @@ main() {
   check_node || install_node
   check_python || install_python
   check_uv || install_uv
+
+  # Configure npm for WSL before installing
+  setup_wsl_npm
 
   echo ""
   info "Installing MachinaOS..."
