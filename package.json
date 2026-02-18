@@ -96,7 +96,7 @@
     "postinstall": "node scripts/postinstall.js"
   },
   "dependencies": {
-    "whatsapp-rpc": "^0.0.8",
+    "whatsapp-rpc": "^0.0.10",
     "concurrently": "^9.2.1",
     "cross-env": "^7.0.3",
     "rimraf": "^6.0.1"
