@@ -38,7 +38,7 @@ interface TeamStatus {
 const TeamMonitorNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectable, selected }) => {
   const theme = useAppTheme();
   const { setSelectedNode } = useAppStore();
-  const { sendMessage, subscribeToMessage } = useWebSocket();
+  const { sendRequest } = useWebSocket();
   const edges = useEdges();
   const nodes = useNodes();
 
@@ -70,7 +70,7 @@ const TeamMonitorNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConn
     setIsLoading(true);
     try {
       // Request team status - backend will find the active team for the workflow
-      const response = await sendMessage('get_team_status', {
+      const response = await sendRequest<{ status?: any }>('get_team_status', {
         team_id: teamId,
         team_lead_node_id: connectedTeamLead?.id
       });
@@ -93,20 +93,7 @@ const TeamMonitorNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConn
     } finally {
       setIsLoading(false);
     }
-  }, [data?.teamId, connectedTeamLead, sendMessage]);
-
-  // Subscribe to team events for real-time updates
-  useEffect(() => {
-    const unsubscribe = subscribeToMessage('team_event', (message: any) => {
-      // Refresh on any team event if we have a connected team lead
-      if (message.data?.team_id === data?.teamId ||
-          message.data?.team_id === teamStatus?.team_id ||
-          connectedTeamLead) {
-        fetchTeamStatus();
-      }
-    });
-    return () => unsubscribe?.();
-  }, [data?.teamId, teamStatus?.team_id, connectedTeamLead, subscribeToMessage, fetchTeamStatus]);
+  }, [data?.teamId, connectedTeamLead, sendRequest]);
 
   // Auto-refresh when connected to a team lead
   useEffect(() => {

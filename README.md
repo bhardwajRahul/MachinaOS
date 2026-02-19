@@ -14,7 +14,7 @@ Open-source platform to build your own personal AI assistant. A mashup of Claude
 
 <img width="1280" height="671" alt="func_img" src="https://github.com/user-attachments/assets/2f14b6c8-3995-4ccc-b076-e40749a83df2" />
 
-**77 nodes** | **6 AI providers** | **12 specialized agents** | **WebSocket-first** | **Self-hosted**
+**83 nodes** | **6 AI providers** | **13 specialized agents** | **Agent Teams** | **WebSocket-first** | **Self-hosted**
 
 ## Prerequisites
 
@@ -68,16 +68,41 @@ npm run start
 
 - **AI Agent** - LangGraph-powered with tool calling and iterative reasoning
 - **Chat Agent** - Conversational agent with skill support for multi-turn chat
-- **12 Specialized Agents** - Android, Coding, Web, Task, Social, Travel, Tool, Productivity, Payments, Consumer, Autonomous, Orchestrator
+- **AI Employee** - Team lead for intelligent task delegation to specialized agents
+- **13 Specialized Agents** - Android, Coding, Web, Task, Social, Travel, Tool, Productivity, Payments, Consumer, Autonomous, Orchestrator
+- **Agent Teams** - Multi-agent coordination with shared task management and delegation tools
 - **11 Skills** - WhatsApp, Maps, HTTP, Scheduler, Android, Code, Memory, Web Search, Custom
 - **Simple Memory** - Markdown-based conversation history with vector storage
 
 ### Platform Integrations
 
 - **WhatsApp** - Send/receive messages with QR pairing, filters, group support
+- **Twitter/X** - Send tweets, search, user lookup with OAuth 2.0 authentication
 - **Android** - 16 service nodes for device control (battery, WiFi, Bluetooth, apps, camera, sensors)
 - **HTTP/Webhooks** - REST API integration with event-driven triggers
 - **Google Maps** - Geocoding, nearby places, directions
+
+### Agent Teams (Multi-Agent Coordination)
+
+Build teams of specialized agents that work together on complex tasks:
+
+```
+                    +------------------+
+                    |   AI Employee    |
+                    |   (Team Lead)    |
+                    +--------+---------+
+                             | input-teammates
+           +-----------------+------------------+
+           |                 |                  |
+    +------v------+   +------v------+   +-------v-----+
+    | Coding Agent|   |  Web Agent  |   | Task Agent  |
+    +-------------+   +-------------+   +-------------+
+```
+
+- **Team Lead** (AI Employee/Orchestrator) coordinates multiple agents
+- **Intelligent Delegation** - AI decides when to delegate based on task
+- **Delegation Tools** - Connected agents become `delegate_to_*` tools
+- **Team Monitor** - Real-time visualization of team operations
 
 ### Document Processing (RAG Pipeline)
 
@@ -93,18 +118,19 @@ npm run start
 | Category | Count | Description |
 |----------|-------|-------------|
 | AI Models | 6 | OpenAI, Anthropic, Google, OpenRouter, Groq, Cerebras |
-| AI Agents | 3 | AI Agent, Chat Agent, Simple Memory |
-| Specialized Agents | 12 | Android, Coding, Web, Task, Social, Travel, etc. |
+| AI Agents | 4 | AI Agent, Chat Agent, AI Employee, Simple Memory |
+| Specialized Agents | 13 | Android, Coding, Web, Task, Social, Travel, Orchestrator, etc. |
 | AI Skills | 11 | WhatsApp, Maps, HTTP, Scheduler, Android, Code, etc. |
 | AI Tools | 9 | Calculator, Time, Search, Android Toolkit, Code Executors |
 | WhatsApp | 3 | Send, Receive, Database |
+| Twitter | 3 | Send, Search, User |
 | Android | 16 | Device control and monitoring |
 | Documents | 6 | RAG pipeline nodes |
-| Utilities | 5 | HTTP, Webhooks, Chat Trigger, Console |
+| Utilities | 6 | HTTP, Webhooks, Chat Trigger, Console, Team Monitor |
 | Location | 3 | Google Maps integration |
 | Workflow | 3 | Start, Timer, Cron Scheduler |
 
-**Total: 77 nodes**
+**Total: 83 nodes**
 
 ## CLI Commands
 
