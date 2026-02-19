@@ -142,18 +142,37 @@ install_node() {
     debian)
       curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
       sudo apt-get install -y nodejs
+      # Force rehash PATH to find newly installed node
+      hash -r 2>/dev/null || true
+      # Source profile to update PATH if needed
+      [ -f /etc/profile ] && source /etc/profile 2>/dev/null || true
       ;;
     redhat)
       curl -fsSL https://rpm.nodesource.com/setup_22.x | sudo bash -
       sudo dnf install -y nodejs
+      hash -r 2>/dev/null || true
       ;;
     arch)
       sudo pacman -S --noconfirm nodejs npm
+      hash -r 2>/dev/null || true
       ;;
     *)
       error_exit "Please install Node.js 22+ manually from https://nodejs.org/"
       ;;
   esac
+
+  # Clear hash and verify using full path as fallback
+  hash -r 2>/dev/null || true
+
+  # Check using direct path first (NodeSource installs to /usr/bin/node)
+  if [ -x /usr/bin/node ]; then
+    version=$(/usr/bin/node --version | tr -d 'v')
+    major=$(echo "$version" | cut -d. -f1)
+    if [ "$major" -ge "$MIN_NODE_VERSION" ]; then
+      success "Node.js v$version installed"
+      return 0
+    fi
+  fi
 
   if ! check_node; then
     error_exit "Failed to install Node.js. Please install manually."
