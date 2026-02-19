@@ -1,6 +1,6 @@
 {
-  "id": "workflow-1770568399727-b5zkjpuda",
-  "name": "Zeenie",
+  "id": "example_workflow-1770568399727-b5zkjpuda",
+  "name": "Zeenie Agent",
   "nodes": [
     {
       "id": "chatAgent-1770207244010",
@@ -12,8 +12,8 @@
       "data": {
         "label": "Zeenie"
       },
-      "width": 260,
-      "height": 160,
+      "width": 300,
+      "height": 200,
       "selected": false,
       "positionAbsolute": {
         "x": 260,
@@ -58,25 +58,6 @@
         "y": 300
       },
       "dragging": true
-    },
-    {
-      "id": "whatsappSend-1770207695172",
-      "type": "whatsappSend",
-      "position": {
-        "x": 760,
-        "y": 140
-      },
-      "data": {
-        "label": "WhatsApp Send"
-      },
-      "width": 87,
-      "height": 82,
-      "selected": false,
-      "positionAbsolute": {
-        "x": 760,
-        "y": 140
-      },
-      "dragging": false
     },
     {
       "id": "whatsappReceive-1770207696316",
@@ -437,23 +418,9 @@
       "targetHandle": "input-main",
       "id": "reactflow__edge-chatAgent-1770207244010output-main-console-1770207687094input-main",
       "selected": false
-    },
-    {
-      "type": "smoothstep",
-      "animated": true,
-      "style": {
-        "stroke": "#8be9fd",
-        "strokeWidth": 3
-      },
-      "source": "chatAgent-1770207244010",
-      "sourceHandle": "output-main",
-      "target": "whatsappSend-1770207695172",
-      "targetHandle": "input-main",
-      "id": "reactflow__edge-chatAgent-1770207244010output-main-whatsappSend-1770207695172input-main",
-      "selected": false
     }
   ],
-  "createdAt": "2026-02-08T16:33:19.727Z",
-  "lastModified": "2026-02-08T16:35:36.239Z",
-  "version": "0.0.10"
+  "createdAt": "2026-02-12T00:55:03.815Z",
+  "lastModified": "2026-02-19T14:28:36.210Z",
+  "version": "0.0.22"
 }
