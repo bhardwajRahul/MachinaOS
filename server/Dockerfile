@@ -1,21 +1,20 @@
-# Python FastAPI Backend (CPU-only, no CUDA)
+# Python FastAPI Backend
 FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies and uv
 RUN apt-get update && apt-get install -y \
     curl \
     gcc \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install uv
 
-# Copy requirements first for better caching
-# Use requirements-docker.txt which excludes CUDA-heavy dependencies
-COPY requirements-docker.txt .
+# Copy dependency files first for better caching
+COPY pyproject.toml .
 
-# Install Python dependencies (CPU-only)
-# This avoids sentence-transformers/PyTorch CUDA which adds ~5GB to image
-RUN pip install --no-cache-dir -r requirements-docker.txt
+# Install Python dependencies using uv
+RUN uv pip install --system -e .
 
 # Copy application code
 COPY . .
@@ -24,19 +23,15 @@ COPY . .
 RUN mkdir -p /app/data
 
 # Compile Python files to optimized bytecode for faster imports
-# Keep .py files since Python imports require them or __pycache__/*.pyc
-# -O: optimize (remove assert statements)
-# -q: quiet mode
-# -f: force rebuild
 RUN python -O -m compileall -q -f .
 
 # Default port (overridden by environment)
 ENV PORT=3010
 
-# Expose default port (actual port set via environment)
+# Expose default port
 EXPOSE 3010
 
-# Health check using shell for variable expansion
+# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD sh -c "curl -f http://localhost:\${PORT}/health || exit 1"
 
