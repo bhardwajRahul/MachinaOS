@@ -41,6 +41,13 @@ class StatusBroadcaster:
                 "device_id": None,
                 "qr": None
             },
+            "twitter": {
+                "connected": False,
+                "username": None,
+                "user_id": None,
+                "name": None,
+                "profile_image_url": None
+            },
             "api_keys": {},  # provider -> validation status
             "nodes": {},  # node_id -> node status
             "variables": {},  # variable_name -> value
@@ -72,6 +79,9 @@ class StatusBroadcaster:
         # Fetch fresh WhatsApp status before sending initial_status
         # This ensures client sees actual connection state (especially after auto-connect)
         await self._refresh_whatsapp_status()
+
+        # Fetch Twitter status from stored OAuth tokens
+        await self._refresh_twitter_status()
 
         # Auto-reconnect Android relay if there's a stored session
         await self._auto_reconnect_android_relay()
@@ -227,6 +237,56 @@ class StatusBroadcaster:
         except Exception as e:
             # Don't fail client connection if WhatsApp service is down
             logger.debug(f"[StatusBroadcaster] Could not refresh WhatsApp status: {e}")
+
+    async def _refresh_twitter_status(self):
+        """Fetch Twitter status from stored OAuth tokens in database.
+
+        Called on client connect to check if user is authenticated with Twitter.
+        """
+        try:
+            from core.container import container
+            auth_service = container.auth_service()
+
+            # Check for stored access token
+            access_token = await auth_service.get_api_key("twitter_access_token")
+            if not access_token:
+                self._status["twitter"] = {
+                    "connected": False,
+                    "username": None,
+                    "user_id": None,
+                    "name": None,
+                    "profile_image_url": None
+                }
+                return
+
+            # Get stored user info
+            user_info_str = await auth_service.get_api_key("twitter_user_info")
+            if user_info_str:
+                # Format: "user_id:username:name"
+                parts = user_info_str.split(":", 2)
+                user_id = parts[0] if len(parts) > 0 else None
+                username = parts[1] if len(parts) > 1 else None
+                name = parts[2] if len(parts) > 2 else None
+
+                self._status["twitter"] = {
+                    "connected": True,
+                    "username": username,
+                    "user_id": user_id,
+                    "name": name,
+                    "profile_image_url": None  # Could fetch fresh if needed
+                }
+                logger.debug(f"[StatusBroadcaster] Twitter status: connected as @{username}")
+            else:
+                # Has token but no user info - still connected
+                self._status["twitter"] = {
+                    "connected": True,
+                    "username": None,
+                    "user_id": None,
+                    "name": None,
+                    "profile_image_url": None
+                }
+        except Exception as e:
+            logger.debug(f"[StatusBroadcaster] Could not refresh Twitter status: {e}")
 
     async def _auto_reconnect_android_relay(self):
         """Auto-reconnect to Android relay if there's a stored pairing session.
@@ -753,6 +813,25 @@ class StatusBroadcaster:
         self._status["terminal_logs"] = []
         await self.broadcast({
             "type": "terminal_logs_cleared"
+        })
+
+    # =========================================================================
+    # Agent Team Updates
+    # =========================================================================
+
+    async def broadcast_team_event(self, team_id: str, event_type: str, data: Dict[str, Any]):
+        """Broadcast a team-related event to all connected clients.
+
+        Args:
+            team_id: The team ID
+            event_type: Event type (team_created, task_added, task_claimed, etc.)
+            data: Event data
+        """
+        await self.broadcast({
+            "type": "team_event",
+            "team_id": team_id,
+            "event_type": event_type,
+            "data": data
         })
 
     # =========================================================================

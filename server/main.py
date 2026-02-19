@@ -27,7 +27,7 @@ from fastapi.responses import ORJSONResponse
 from core.container import container
 from core.config import Settings
 from core.logging import configure_logging, get_logger, setup_websocket_logging, shutdown_websocket_logging
-from routers import workflow, database, maps, nodejs_compat, android, websocket, webhook, auth
+from routers import workflow, database, maps, nodejs_compat, android, websocket, webhook, auth, twitter
 
 # Initialize settings and logging
 settings = Settings()
@@ -61,6 +61,7 @@ async def lifespan(app: FastAPI):
         "routers.websocket",
         "routers.webhook",
         "routers.auth",
+        "routers.twitter",
         "middleware.auth"
     ])
 
@@ -121,6 +122,12 @@ async def lifespan(app: FastAPI):
     compaction_svc = container.compaction_service()  # Trigger singleton initialization
     compaction_svc.set_ai_service(container.ai_service())
     logger.info("Compaction service initialized")
+
+    # Initialize agent team service
+    from services.agent_team import init_agent_team_service
+    from services.status_broadcaster import get_status_broadcaster
+    init_agent_team_service(container.database(), get_status_broadcaster())
+    logger.info("Agent team service initialized")
 
     # Record startup time for health reporting
     set_startup_time()
@@ -268,6 +275,7 @@ app.include_router(maps.router)
 app.include_router(android.router)
 app.include_router(websocket.router)
 app.include_router(webhook.router)
+app.include_router(twitter.router)  # Twitter/X OAuth routes
 
 
 @app.get("/health")

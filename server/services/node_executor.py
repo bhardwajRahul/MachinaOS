@@ -30,12 +30,13 @@ from services.handlers import (
     handle_create_map, handle_add_locations, handle_nearby_places,
     handle_text_generator, handle_file_handler,
     handle_chat_send, handle_chat_history,
-    handle_start, handle_cron_scheduler, handle_timer, handle_console,
+    handle_start, handle_cron_scheduler, handle_timer, handle_console, handle_team_monitor,
     handle_whatsapp_send, handle_whatsapp_db,
     handle_social_receive, handle_social_send,
     handle_http_scraper, handle_file_downloader, handle_document_parser,
     handle_text_chunker, handle_embedding_generator, handle_vector_store,
     handle_task_manager,
+    handle_twitter_send, handle_twitter_search, handle_twitter_user,
 )
 
 if TYPE_CHECKING:
@@ -122,6 +123,7 @@ class NodeExecutor:
             'consumer_agent': partial(handle_chat_agent, ai_service=self.ai_service, database=self.database),
             'autonomous_agent': partial(handle_chat_agent, ai_service=self.ai_service, database=self.database),
             'orchestrator_agent': partial(handle_chat_agent, ai_service=self.ai_service, database=self.database),
+            'ai_employee': partial(handle_chat_agent, ai_service=self.ai_service, database=self.database),
             'simpleMemory': handle_simple_memory,
             # Maps
             'gmaps_create': partial(handle_create_map, maps_service=self.maps_service),
@@ -133,6 +135,10 @@ class NodeExecutor:
             # WhatsApp
             'whatsappSend': handle_whatsapp_send,
             'whatsappDb': handle_whatsapp_db,
+            # Twitter/X
+            'twitterSend': handle_twitter_send,
+            'twitterSearch': handle_twitter_search,
+            'twitterUser': handle_twitter_user,
             # Social (unified messaging)
             # Note: socialReceive handled in _dispatch with connected_outputs
             'socialSend': handle_social_send,
@@ -150,6 +156,8 @@ class NodeExecutor:
             'vectorStore': handle_vector_store,
             # Task management
             'taskManager': handle_task_manager,
+            # Team monitoring
+            'teamMonitor': handle_team_monitor,
             # Note: 'console' handled in _dispatch with connected_outputs
         }
 
@@ -227,6 +235,12 @@ class NodeExecutor:
                     await self._output_store(session_id, node_id, "output_contact", output_data.get('contact', {}))
                     await self._output_store(session_id, node_id, "output_metadata", output_data.get('metadata', {}))
 
+                # Store with multiple keys for different handle IDs used by frontend components:
+                # - output_main: SquareNode, GenericNode, TriggerNode, StartNode
+                # - output_top: AIAgentNode (agents use top output handle)
+                # - output_0: backward compatibility
+                await self._output_store(session_id, node_id, "output_main", output_data)
+                await self._output_store(session_id, node_id, "output_top", output_data)
                 await self._output_store(session_id, node_id, "output_0", output_data)
 
             return result

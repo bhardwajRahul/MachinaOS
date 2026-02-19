@@ -71,6 +71,9 @@ email-validator>=2.0.0
 # Timezone support
 pytz>=2024.1
 
+# Twitter/X API
+xdk>=0.1.0
+
 # Document Processing Nodes
 beautifulsoup4>=4.12.0
 langchain-text-splitters>=0.3.0

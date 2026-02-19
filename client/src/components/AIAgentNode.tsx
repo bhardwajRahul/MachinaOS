@@ -70,7 +70,7 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
       { id: 'input-task', label: 'Task', position: '85%' },
     ],
     topOutputHandle: { id: 'output-top', label: 'Output' },
-    width: 260,
+    width: 300,
     height: 200,
   },
   chatAgent: {
@@ -87,7 +87,7 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
       { id: 'input-task', label: 'Task', position: '85%' },
     ],
     topOutputHandle: { id: 'output-top', label: 'Output' },
-    width: 260,
+    width: 300,
     height: 200,
   },
   socialReceive: {
@@ -135,7 +135,7 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
       { id: 'input-task', label: 'Task', position: '85%' },
     ],
     topOutputHandle: { id: 'output-top', label: 'Output' },
-    width: 260,
+    width: 300,
     height: 200,
   },
   coding_agent: {
@@ -152,7 +152,7 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
       { id: 'input-task', label: 'Task', position: '85%' },
     ],
     topOutputHandle: { id: 'output-top', label: 'Output' },
-    width: 260,
+    width: 300,
     height: 200,
   },
   web_agent: {
@@ -169,7 +169,7 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
       { id: 'input-task', label: 'Task', position: '85%' },
     ],
     topOutputHandle: { id: 'output-top', label: 'Output' },
-    width: 260,
+    width: 300,
     height: 200,
   },
   task_agent: {
@@ -186,7 +186,7 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
       { id: 'input-task', label: 'Task', position: '85%' },
     ],
     topOutputHandle: { id: 'output-top', label: 'Output' },
-    width: 260,
+    width: 300,
     height: 200,
   },
   social_agent: {
@@ -203,7 +203,7 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
       { id: 'input-task', label: 'Task', position: '85%' },
     ],
     topOutputHandle: { id: 'output-top', label: 'Output' },
-    width: 260,
+    width: 300,
     height: 200,
   },
   travel_agent: {
@@ -220,7 +220,7 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
       { id: 'input-task', label: 'Task', position: '85%' },
     ],
     topOutputHandle: { id: 'output-top', label: 'Output' },
-    width: 260,
+    width: 300,
     height: 200,
   },
   tool_agent: {
@@ -237,7 +237,7 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
       { id: 'input-task', label: 'Task', position: '85%' },
     ],
     topOutputHandle: { id: 'output-top', label: 'Output' },
-    width: 260,
+    width: 300,
     height: 200,
   },
   productivity_agent: {
@@ -254,7 +254,7 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
       { id: 'input-task', label: 'Task', position: '85%' },
     ],
     topOutputHandle: { id: 'output-top', label: 'Output' },
-    width: 260,
+    width: 300,
     height: 200,
   },
   payments_agent: {
@@ -271,7 +271,7 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
       { id: 'input-task', label: 'Task', position: '85%' },
     ],
     topOutputHandle: { id: 'output-top', label: 'Output' },
-    width: 260,
+    width: 300,
     height: 200,
   },
   consumer_agent: {
@@ -288,7 +288,7 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
       { id: 'input-task', label: 'Task', position: '85%' },
     ],
     topOutputHandle: { id: 'output-top', label: 'Output' },
-    width: 260,
+    width: 300,
     height: 200,
   },
   autonomous_agent: {
@@ -305,7 +305,7 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
       { id: 'input-task', label: 'Task', position: '85%' },
     ],
     topOutputHandle: { id: 'output-top', label: 'Output' },
-    width: 260,
+    width: 300,
     height: 200,
   },
   orchestrator_agent: {
@@ -314,15 +314,34 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
     subtitle: 'Agent Coordination',
     themeColorKey: 'cyan',
     bottomHandles: [
-      { id: 'input-skill', label: 'Skill', position: '25%' },
-      { id: 'input-tools', label: 'Tool', position: '75%' },
+      { id: 'input-skill', label: 'Skill', position: '20%' },
+      { id: 'input-tools', label: 'Tool', position: '50%' },
+      { id: 'input-teammates', label: 'Team', position: '80%' },
     ],
     leftHandles: [
       { id: 'input-memory', label: 'Memory', position: '65%' },
       { id: 'input-task', label: 'Task', position: '85%' },
     ],
     topOutputHandle: { id: 'output-top', label: 'Output' },
-    width: 260,
+    width: 300,
+    height: 200,
+  },
+  ai_employee: {
+    icon: <span style={{ fontSize: '28px' }}>👥</span>,
+    title: 'AI Employee',
+    subtitle: 'Team Orchestration',
+    themeColorKey: 'purple',
+    bottomHandles: [
+      { id: 'input-skill', label: 'Skill', position: '20%' },
+      { id: 'input-tools', label: 'Tool', position: '50%' },
+      { id: 'input-teammates', label: 'Team', position: '80%' },
+    ],
+    leftHandles: [
+      { id: 'input-memory', label: 'Memory', position: '65%' },
+      { id: 'input-task', label: 'Task', position: '85%' },
+    ],
+    topOutputHandle: { id: 'output-top', label: 'Output' },
+    width: 300,
     height: 200,
   },
 };

@@ -1045,6 +1045,163 @@ async def handle_claude_oauth_status(data: Dict[str, Any], websocket: WebSocket)
     return get_claude_credentials()
 
 
+# ============================================================================
+# Twitter OAuth Handlers
+# ============================================================================
+
+@ws_handler()
+async def handle_twitter_oauth_login(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """
+    Initiate Twitter OAuth 2.0 with PKCE flow.
+
+    Opens browser to Twitter authorization page. After user authorizes,
+    Twitter redirects to /api/twitter/callback which stores tokens.
+    """
+    import webbrowser
+    from services.twitter_oauth import TwitterOAuth
+
+    auth_service = container.auth_service()
+
+    # Get stored client credentials (configured via Credentials Modal)
+    client_id = await auth_service.get_api_key("twitter_client_id")
+    client_secret = await auth_service.get_api_key("twitter_client_secret")
+
+    if not client_id:
+        return {
+            "success": False,
+            "error": "Twitter Client ID not configured. Add your Twitter API credentials first."
+        }
+
+    # Create OAuth instance and generate authorization URL
+    oauth = TwitterOAuth(
+        client_id=client_id,
+        client_secret=client_secret,
+        redirect_uri="http://localhost:3010/api/twitter/callback",
+    )
+
+    auth_data = oauth.generate_authorization_url()
+
+    # Open browser to authorization URL
+    webbrowser.open(auth_data["url"])
+
+    return {
+        "success": True,
+        "message": "Opening Twitter authorization in browser...",
+        "state": auth_data["state"],
+    }
+
+
+@ws_handler()
+async def handle_twitter_oauth_status(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """
+    Check Twitter OAuth connection status.
+
+    Returns connection status and user info if connected.
+    """
+    from services.twitter_oauth import TwitterOAuth
+
+    auth_service = container.auth_service()
+
+    # Check for stored access token
+    access_token = await auth_service.get_api_key("twitter_access_token")
+
+    if not access_token:
+        return {
+            "connected": False,
+            "username": None,
+            "user_id": None,
+        }
+
+    # Get client credentials for API calls
+    client_id = await auth_service.get_api_key("twitter_client_id") or ""
+    client_secret = await auth_service.get_api_key("twitter_client_secret")
+
+    oauth = TwitterOAuth(
+        client_id=client_id,
+        client_secret=client_secret,
+        redirect_uri="http://localhost:3010/api/twitter/callback",
+    )
+
+    # Verify token by getting user info
+    user_info = await oauth.get_user_info(access_token)
+
+    if not user_info.get("success"):
+        # Try to refresh token
+        refresh_token = await auth_service.get_api_key("twitter_refresh_token")
+        if refresh_token:
+            refresh_result = await oauth.refresh_access_token(refresh_token)
+            if refresh_result.get("success"):
+                # Store new tokens
+                await auth_service.store_api_key(
+                    provider="twitter_access_token",
+                    api_key=refresh_result["access_token"],
+                    models=[],
+                    session_id="default"
+                )
+                if refresh_result.get("refresh_token"):
+                    await auth_service.store_api_key(
+                        provider="twitter_refresh_token",
+                        api_key=refresh_result["refresh_token"],
+                        models=[],
+                        session_id="default"
+                    )
+                # Retry user info
+                user_info = await oauth.get_user_info(refresh_result["access_token"])
+
+    if not user_info.get("success"):
+        return {
+            "connected": False,
+            "username": None,
+            "user_id": None,
+            "error": user_info.get("error"),
+        }
+
+    return {
+        "connected": True,
+        "username": user_info.get("username"),
+        "user_id": user_info.get("id"),
+        "name": user_info.get("name"),
+        "profile_image_url": user_info.get("profile_image_url"),
+        "verified": user_info.get("verified"),
+    }
+
+
+@ws_handler()
+async def handle_twitter_logout(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """
+    Disconnect Twitter by revoking tokens and clearing stored credentials.
+    """
+    from services.twitter_oauth import TwitterOAuth
+
+    auth_service = container.auth_service()
+
+    # Get stored tokens
+    access_token = await auth_service.get_api_key("twitter_access_token")
+    refresh_token = await auth_service.get_api_key("twitter_refresh_token")
+    client_id = await auth_service.get_api_key("twitter_client_id") or ""
+    client_secret = await auth_service.get_api_key("twitter_client_secret")
+
+    # Revoke tokens if we have them
+    if access_token or refresh_token:
+        oauth = TwitterOAuth(
+            client_id=client_id,
+            client_secret=client_secret,
+            redirect_uri="http://localhost:3010/api/twitter/callback",
+        )
+
+        if access_token:
+            await oauth.revoke_token(access_token, "access_token")
+        if refresh_token:
+            await oauth.revoke_token(refresh_token, "refresh_token")
+
+    # Clear stored credentials
+    await auth_service.remove_api_key("twitter_access_token")
+    await auth_service.remove_api_key("twitter_refresh_token")
+    await auth_service.remove_api_key("twitter_user_info")
+
+    return {"success": True, "message": "Twitter disconnected"}
+
+
 @ws_handler("url")
 async def handle_test_ai_proxy(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
     """Test connectivity to an AI proxy server."""
@@ -2059,6 +2216,149 @@ async def handle_configure_compaction(data: Dict[str, Any], websocket: WebSocket
     return {"success": success}
 
 
+@ws_handler()
+async def handle_get_provider_usage_summary(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Get aggregated token usage and cost by provider for Credentials Modal."""
+    database = container.database()
+    providers = await database.get_provider_usage_summary()
+    return {"success": True, "providers": providers}
+
+
+# ============================================================================
+# Agent Team Handlers
+# ============================================================================
+
+@ws_handler("workflow_id", "team_lead_node_id")
+async def handle_create_team(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Create a new agent team."""
+    from services.agent_team import get_agent_team_service
+    service = get_agent_team_service()
+    team = await service.create_team(
+        team_lead_node_id=data["team_lead_node_id"],
+        teammate_node_ids=data.get("teammates", []),
+        workflow_id=data["workflow_id"],
+        config=data.get("config")
+    )
+    return {"team": team} if team else {"success": False, "error": "Failed to create team"}
+
+
+@ws_handler("team_id")
+async def handle_get_team(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Get team info."""
+    database = container.database()
+    team = await database.get_team(data["team_id"])
+    return {"team": team} if team else {"success": False, "error": "Team not found"}
+
+
+@ws_handler()
+async def handle_get_team_status(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Get team status with stats.
+
+    Can provide team_id directly, or team_lead_node_id to find active team.
+    """
+    from services.agent_team import get_agent_team_service
+
+    try:
+        service = get_agent_team_service()
+    except RuntimeError:
+        # Service not initialized - no active teams
+        return {"status": {"members": [], "task_count": 0, "completed_count": 0, "active_count": 0, "pending_count": 0, "failed_count": 0, "active_tasks": []}}
+
+    team_id = data.get("team_id")
+
+    # If no team_id, try to find by team_lead_node_id
+    if not team_id and data.get("team_lead_node_id"):
+        # Look up active team for this workflow (most recent)
+        # This is a simple approach - check if there's an active team with this lead
+        # For now, return empty status - teams are created when AI Employee runs
+        return {"status": {"members": [], "task_count": 0, "completed_count": 0, "active_count": 0, "pending_count": 0, "failed_count": 0, "active_tasks": [], "message": "No active team yet"}}
+
+    if not team_id:
+        return {"status": {"members": [], "task_count": 0, "completed_count": 0, "active_count": 0, "pending_count": 0, "failed_count": 0, "active_tasks": [], "message": "No team connected"}}
+
+    status = await service.get_team_status(team_id)
+    return {"status": status}
+
+
+@ws_handler("team_id")
+async def handle_dissolve_team(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Dissolve a team."""
+    from services.agent_team import get_agent_team_service
+    service = get_agent_team_service()
+    success = await service.dissolve_team(data["team_id"], data.get("workflow_id"))
+    return {"success": success}
+
+
+@ws_handler("team_id", "title", "created_by")
+async def handle_add_team_task(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Add task to team."""
+    from services.agent_team import get_agent_team_service
+    service = get_agent_team_service()
+    task = await service.add_task(
+        team_id=data["team_id"],
+        title=data["title"],
+        created_by=data["created_by"],
+        description=data.get("description"),
+        priority=data.get("priority", 3),
+        depends_on=data.get("depends_on")
+    )
+    return {"task": task} if task else {"success": False, "error": "Failed to add task"}
+
+
+@ws_handler("team_id", "task_id", "agent_node_id")
+async def handle_claim_team_task(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Claim a task."""
+    from services.agent_team import get_agent_team_service
+    service = get_agent_team_service()
+    task = await service.claim_task(data["team_id"], data["task_id"], data["agent_node_id"])
+    return {"task": task} if task else {"success": False, "error": "Task unavailable"}
+
+
+@ws_handler("team_id", "task_id")
+async def handle_complete_team_task(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Complete a task."""
+    from services.agent_team import get_agent_team_service
+    service = get_agent_team_service()
+    success = await service.complete_task(data["team_id"], data["task_id"], data.get("result"))
+    return {"success": success}
+
+
+@ws_handler("team_id")
+async def handle_get_team_tasks(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Get team tasks."""
+    database = container.database()
+    tasks = await database.get_team_tasks(data["team_id"], data.get("status"))
+    return {"tasks": tasks}
+
+
+@ws_handler("team_id", "from_agent", "content")
+async def handle_send_team_message(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Send message in team."""
+    from services.agent_team import get_agent_team_service
+    service = get_agent_team_service()
+    msg = await service.send_message(
+        team_id=data["team_id"],
+        from_agent=data["from_agent"],
+        content=data["content"],
+        to_agent=data.get("to_agent"),
+        message_type=data.get("message_type", "direct")
+    )
+    return {"message": msg} if msg else {"success": False, "error": "Failed to send message"}
+
+
+@ws_handler("team_id")
+async def handle_get_team_messages(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Get team messages."""
+    from services.agent_team import get_agent_team_service
+    service = get_agent_team_service()
+    messages = await service.get_messages(
+        team_id=data["team_id"],
+        agent_node_id=data.get("agent_node_id"),
+        unread_only=data.get("unread_only", False)
+    )
+    return {"messages": messages}
+
+
 # ============================================================================
 # Message Router
 # ============================================================================
@@ -2122,6 +2422,11 @@ MESSAGE_HANDLERS: Dict[str, MessageHandler] = {
     # Claude OAuth operations
     "claude_oauth_login": handle_claude_oauth_login,
     "claude_oauth_status": handle_claude_oauth_status,
+
+    # Twitter OAuth operations
+    "twitter_oauth_login": handle_twitter_oauth_login,
+    "twitter_oauth_status": handle_twitter_oauth_status,
+    "twitter_logout": handle_twitter_logout,
 
     # Android operations
     "get_android_devices": handle_get_android_devices,
@@ -2195,6 +2500,21 @@ MESSAGE_HANDLERS: Dict[str, MessageHandler] = {
     # Compaction
     "get_compaction_stats": handle_get_compaction_stats,
     "configure_compaction": handle_configure_compaction,
+
+    # Provider Usage Summary
+    "get_provider_usage_summary": handle_get_provider_usage_summary,
+
+    # Agent Teams
+    "create_team": handle_create_team,
+    "get_team": handle_get_team,
+    "get_team_status": handle_get_team_status,
+    "dissolve_team": handle_dissolve_team,
+    "add_team_task": handle_add_team_task,
+    "claim_team_task": handle_claim_team_task,
+    "complete_team_task": handle_complete_team_task,
+    "get_team_tasks": handle_get_team_tasks,
+    "send_team_message": handle_send_team_message,
+    "get_team_messages": handle_get_team_messages,
 }
 
 

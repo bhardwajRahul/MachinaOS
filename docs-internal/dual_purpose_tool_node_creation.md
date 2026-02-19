@@ -94,7 +94,7 @@ Nodes that work BOTH as workflow nodes AND as AI tools.
 - NOT in `AI_TOOL_TYPES` (would break workflow execution)
 - Dynamically excluded when connected to `input-tools` handle
 
-**Examples:** `whatsappSend`, `whatsappDb`, `httpRequest`, `pythonExecutor`, `javascriptExecutor`, `addLocations`, `showNearbyPlaces`
+**Examples:** `whatsappSend`, `whatsappDb`, `twitterSend`, `twitterSearch`, `twitterUser`, `httpRequest`, `pythonExecutor`, `javascriptExecutor`, `addLocations`, `showNearbyPlaces`
 
 ### Comparison Table
 
@@ -691,6 +691,301 @@ Query WhatsApp database - contacts, groups, messages.
   "operation": "get_group_info",
   "group_id": "120363123456789@g.us"
 }
+```
+```
+
+---
+
+## Complete Example: Twitter/X Nodes
+
+The `twitterSend`, `twitterSearch`, and `twitterUser` nodes are examples of dual-purpose tools using OAuth 2.0 authentication and the XDK Python SDK.
+
+### Frontend Definition (twitterNodes.ts)
+
+```typescript
+twitterSend: {
+  displayName: 'Twitter Send',
+  name: 'twitterSend',
+  icon: TWITTER_ICON,
+  group: ['social', 'tool'],  // Include 'tool' for dual-purpose
+  version: 1,
+  subtitle: 'Post to Twitter/X',
+  description: 'Post tweets, reply, retweet, like/unlike, delete',
+  defaults: { name: 'Twitter Send', color: '#000000' },
+
+  // Main input for workflow
+  inputs: [{
+    name: 'main',
+    displayName: 'Input',
+    type: 'main' as NodeConnectionType,
+    description: 'Trigger input'
+  }],
+
+  // Both outputs
+  outputs: [
+    {
+      name: 'main',
+      displayName: 'Output',
+      type: 'main' as NodeConnectionType,
+      description: 'Action result'
+    },
+    {
+      name: 'tool',
+      displayName: 'Tool',
+      type: 'main' as NodeConnectionType,
+      description: 'Connect to AI Agent tool handle'
+    }
+  ],
+
+  properties: [
+    {
+      displayName: 'Action',
+      name: 'action',
+      type: 'options',
+      default: 'tweet',
+      options: [
+        { name: 'Post Tweet', value: 'tweet' },
+        { name: 'Reply', value: 'reply' },
+        { name: 'Retweet', value: 'retweet' },
+        { name: 'Like', value: 'like' },
+        { name: 'Unlike', value: 'unlike' },
+        { name: 'Delete', value: 'delete' }
+      ]
+    },
+    {
+      displayName: 'Text',
+      name: 'text',
+      type: 'string',
+      typeOptions: { rows: 4 },
+      default: '',
+      description: 'Tweet text (max 280 characters)',
+      displayOptions: { show: { action: ['tweet', 'reply'] } }
+    },
+    {
+      displayName: 'Tweet ID',
+      name: 'tweet_id',
+      type: 'string',
+      default: '',
+      description: 'Target tweet ID',
+      displayOptions: { show: { action: ['retweet', 'like', 'unlike', 'delete'] } }
+    },
+    {
+      displayName: 'Reply To ID',
+      name: 'reply_to_id',
+      type: 'string',
+      default: '',
+      description: 'Tweet ID to reply to',
+      displayOptions: { show: { action: ['reply'] } }
+    }
+  ]
+}
+```
+
+### Backend Schema (ai.py)
+
+```python
+if node_type == 'twitterSend':
+    class TwitterSendSchema(BaseModel):
+        """Post tweets, reply, retweet, like/unlike, and delete on Twitter/X."""
+        action: str = Field(
+            default="tweet",
+            description="Action: 'tweet', 'reply', 'retweet', 'like', 'unlike', 'delete'"
+        )
+        text: Optional[str] = Field(
+            default=None,
+            description="Tweet text (max 280 chars). Required for 'tweet' and 'reply'"
+        )
+        tweet_id: Optional[str] = Field(
+            default=None,
+            description="Target tweet ID. Required for 'retweet', 'like', 'unlike', 'delete'"
+        )
+        reply_to_id: Optional[str] = Field(
+            default=None,
+            description="Tweet ID to reply to. Required for 'reply'"
+        )
+    return TwitterSendSchema
+
+if node_type == 'twitterSearch':
+    class TwitterSearchSchema(BaseModel):
+        """Search recent tweets on Twitter/X."""
+        query: str = Field(
+            description="Search query (supports operators: from:, to:, #, @, OR, -exclude, lang:, has:links, has:media)"
+        )
+        max_results: int = Field(
+            default=10,
+            description="Maximum results (10-100)"
+        )
+    return TwitterSearchSchema
+
+if node_type == 'twitterUser':
+    class TwitterUserSchema(BaseModel):
+        """Look up Twitter/X user profiles and social connections."""
+        operation: str = Field(
+            default="me",
+            description="Operation: 'me', 'by_username', 'by_id', 'followers', 'following'"
+        )
+        username: Optional[str] = Field(
+            default=None,
+            description="Twitter username without @ (for 'by_username')"
+        )
+        user_id: Optional[str] = Field(
+            default=None,
+            description="Twitter user ID (for 'by_id', 'followers', 'following')"
+        )
+        max_results: int = Field(
+            default=100,
+            description="Max results for followers/following (1-1000)"
+        )
+    return TwitterUserSchema
+```
+
+### Backend Handler (tools.py)
+
+```python
+async def _execute_twitter_send(args: Dict[str, Any], node_params: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute Twitter send actions."""
+    from services.handlers.twitter import handle_twitter_send
+
+    parameters = {
+        'action': args.get('action', 'tweet'),
+        'text': args.get('text', ''),
+        'tweet_id': args.get('tweet_id', ''),
+        'reply_to_id': args.get('reply_to_id', ''),
+    }
+
+    action = parameters['action']
+    if action in ('tweet', 'reply') and not parameters['text']:
+        return {"error": "Text is required for tweet/reply actions"}
+    if action in ('retweet', 'like', 'unlike', 'delete') and not parameters['tweet_id']:
+        return {"error": "tweet_id is required for this action"}
+    if action == 'reply' and not parameters['reply_to_id']:
+        return {"error": "reply_to_id is required for reply action"}
+
+    result = await handle_twitter_send(
+        node_id="tool_twitter_send",
+        node_type="twitterSend",
+        parameters=parameters,
+        context={}
+    )
+
+    if result.get('success'):
+        return {"success": True, "action": action, "result": result.get('result', {})}
+    return {"error": result.get('error', 'Twitter action failed')}
+
+
+async def _execute_twitter_search(args: Dict[str, Any], node_params: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute Twitter search."""
+    from services.handlers.twitter import handle_twitter_search
+
+    parameters = {
+        'query': args.get('query', ''),
+        'max_results': min(args.get('max_results', 10), 100),
+    }
+
+    if not parameters['query']:
+        return {"error": "Search query is required"}
+
+    result = await handle_twitter_search(
+        node_id="tool_twitter_search",
+        node_type="twitterSearch",
+        parameters=parameters,
+        context={}
+    )
+
+    if result.get('success'):
+        return result.get('result', {})
+    return {"error": result.get('error', 'Search failed')}
+
+
+async def _execute_twitter_user(args: Dict[str, Any], node_params: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute Twitter user lookup."""
+    from services.handlers.twitter import handle_twitter_user
+
+    parameters = {
+        'operation': args.get('operation', 'me'),
+        'username': args.get('username', ''),
+        'user_id': args.get('user_id', ''),
+        'max_results': min(args.get('max_results', 100), 1000),
+    }
+
+    operation = parameters['operation']
+    if operation == 'by_username' and not parameters['username']:
+        return {"error": "Username is required for by_username operation"}
+    if operation == 'by_id' and not parameters['user_id']:
+        return {"error": "user_id is required for by_id operation"}
+
+    result = await handle_twitter_user(
+        node_id="tool_twitter_user",
+        node_type="twitterUser",
+        parameters=parameters,
+        context={}
+    )
+
+    if result.get('success'):
+        return result.get('result', {})
+    return {"error": result.get('error', 'User lookup failed')}
+```
+
+### XDK SDK Authentication Pattern
+
+Twitter nodes use OAuth 2.0 PKCE authentication stored via `auth_service`:
+
+```python
+# In server/services/handlers/twitter.py
+async def _get_twitter_client() -> Client:
+    """Get authenticated Twitter client from stored OAuth 2.0 credentials."""
+    from core.container import container
+    auth_service = container.auth_service()
+    access_token = await auth_service.get_api_key("twitter_access_token")
+    if not access_token:
+        raise ValueError("Twitter not connected. Please authenticate via Credentials.")
+    # OAuth 2.0 user token (not bearer_token which is app-only)
+    return Client(access_token=access_token)
+```
+
+### Skill Documentation (SKILL.md)
+
+```markdown
+---
+name: twitter-send-skill
+description: Post tweets, reply, retweet, like/unlike, delete on Twitter/X.
+allowed-tools: twitter_send
+metadata:
+  author: machina
+  version: "1.0"
+  category: social
+---
+
+# Twitter Send Tool
+
+## twitter_send
+
+Post and interact with tweets on Twitter/X.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| action | string | Yes | 'tweet', 'reply', 'retweet', 'like', 'unlike', 'delete' |
+| text | string | If tweet/reply | Tweet text (max 280 chars) |
+| tweet_id | string | If retweet/like/unlike/delete | Target tweet ID |
+| reply_to_id | string | If reply | Tweet ID to reply to |
+
+### Examples
+
+**Post a tweet:**
+```json
+{"action": "tweet", "text": "Hello from AI!"}
+```
+
+**Reply to a tweet:**
+```json
+{"action": "reply", "text": "Great point!", "reply_to_id": "1234567890"}
+```
+
+**Like a tweet:**
+```json
+{"action": "like", "tweet_id": "1234567890"}
 ```
 ```
 

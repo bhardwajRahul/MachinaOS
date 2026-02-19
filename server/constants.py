@@ -34,6 +34,7 @@ AI_AGENT_TYPES: FrozenSet[str] = frozenset([
     'consumer_agent',
     'autonomous_agent',
     'orchestrator_agent',
+    'ai_employee',
 ])
 
 AI_MEMORY_TYPES: FrozenSet[str] = frozenset([
@@ -149,6 +150,24 @@ WHATSAPP_TYPES: FrozenSet[str] = frozenset([
 ])
 
 # =============================================================================
+# TWITTER NODE TYPES
+# =============================================================================
+
+TWITTER_TYPES: FrozenSet[str] = frozenset([
+    'twitterSend',
+    'twitterReceive',
+    'twitterSearch',
+    'twitterUser',
+])
+
+# Dual-purpose Twitter nodes (workflow node + AI tool)
+TWITTER_TOOL_TYPES: FrozenSet[str] = frozenset([
+    'twitterSend',
+    'twitterSearch',
+    'twitterUser',
+])
+
+# =============================================================================
 # SOCIAL NODE TYPES (unified messaging)
 # =============================================================================
 
@@ -207,6 +226,7 @@ WORKFLOW_CONTROL_TYPES: FrozenSet[str] = frozenset([
 EVENT_TRIGGER_TYPES: FrozenSet[str] = frozenset([
     'webhookTrigger',
     'whatsappReceive',
+    'twitterReceive',
     'workflowTrigger',
     'chatTrigger',
     'taskTrigger',

@@ -110,6 +110,11 @@ TRIGGER_REGISTRY: Dict[str, TriggerConfig] = {
         event_type='task_completed',
         display_name='Task Completed'
     ),
+    'twitterReceive': TriggerConfig(
+        node_type='twitterReceive',
+        event_type='twitter_event_received',
+        display_name='Twitter Event'
+    ),
     # Future triggers - just add to registry:
     # 'emailTrigger': TriggerConfig('emailTrigger', 'email_received', 'Email'),
     # 'mqttTrigger': TriggerConfig('mqttTrigger', 'mqtt_message', 'MQTT Message'),
@@ -336,12 +341,48 @@ def build_task_completed_filter(params: Dict) -> Callable[[Dict], bool]:
     return matches
 
 
+def build_twitter_filter(params: Dict) -> Callable[[Dict], bool]:
+    """Build filter function for Twitter events.
+
+    Filters by:
+    - trigger_type: 'mentions', 'search', 'user_timeline'
+    - search_query: Search query for 'search' trigger type
+    - user_id: User ID for 'user_timeline' trigger type
+
+    Args:
+        params: Node parameters
+
+    Returns:
+        Filter function that checks if event matches criteria
+    """
+    trigger_type = params.get('trigger_type', 'mentions')
+    search_query = params.get('search_query', '')
+    user_id = params.get('user_id', '')
+
+    def matches(data: Dict) -> bool:
+        event_type = data.get('trigger_type', '')
+        if trigger_type != 'all' and event_type != trigger_type:
+            return False
+        if trigger_type == 'search' and search_query:
+            # Check if search query matches
+            event_query = data.get('query', '')
+            if search_query.lower() not in event_query.lower():
+                return False
+        if trigger_type == 'user_timeline' and user_id:
+            if data.get('user_id') != user_id:
+                return False
+        return True
+
+    return matches
+
+
 # Registry of filter builders per trigger type
 FILTER_BUILDERS: Dict[str, Callable[[Dict], Callable[[Dict], bool]]] = {
     'whatsappReceive': build_whatsapp_filter,
     'webhookTrigger': build_webhook_filter,
     'chatTrigger': build_chat_filter,
     'taskTrigger': build_task_completed_filter,
+    'twitterReceive': build_twitter_filter,
 }
 
 

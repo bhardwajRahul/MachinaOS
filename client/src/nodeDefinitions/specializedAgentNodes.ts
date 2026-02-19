@@ -342,9 +342,65 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
     subtitle: 'Agent Coordination',
     description: 'AI Agent specialized for orchestrating multiple agents. Coordinates complex multi-agent workflows by delegating tasks to specialized agents and synthesizing their results.',
     defaults: { name: 'Orchestrator Agent', color: dracula.cyan },
-    inputs: AI_AGENT_INPUTS,
+    inputs: [
+      ...AI_AGENT_INPUTS,
+      { name: 'teammates', displayName: 'Team', type: 'main' as NodeConnectionType, description: 'Connect teammate agents for team mode' }
+    ],
     outputs: AI_AGENT_OUTPUTS,
-    properties: AI_AGENT_PROPERTIES
+    properties: [
+      ...AI_AGENT_PROPERTIES,
+      {
+        displayName: 'Team Mode',
+        name: 'teamMode',
+        type: 'options',
+        options: [
+          { name: 'Disabled', value: '' },
+          { name: 'Parallel', value: 'parallel' },
+          { name: 'Sequential', value: 'sequential' }
+        ],
+        default: '',
+        description: 'Enable team mode to coordinate connected teammate agents'
+      }
+    ]
+  },
+
+  // AI Employee - Team lead node for coordinating multiple agents
+  ai_employee: {
+    displayName: 'AI Employee',
+    name: 'ai_employee',
+    icon: '👥',
+    group: ['agent', 'ai'],
+    version: 1,
+    subtitle: 'Team Orchestration',
+    description: 'AI Employee for coordinating multiple AI agents. Connect teammate agents to enable shared task lists, messaging, and coordinated execution.',
+    defaults: { name: 'AI Employee', color: dracula.purple },
+    inputs: [
+      ...AI_AGENT_INPUTS,
+      { name: 'teammates', displayName: 'Team', type: 'main' as NodeConnectionType, description: 'Connect teammate agents' }
+    ],
+    outputs: AI_AGENT_OUTPUTS,
+    properties: [
+      ...AI_AGENT_PROPERTIES,
+      {
+        displayName: 'Team Mode',
+        name: 'teamMode',
+        type: 'options',
+        options: [
+          { name: 'Parallel', value: 'parallel' },
+          { name: 'Sequential', value: 'sequential' }
+        ],
+        default: 'parallel',
+        description: 'How teammates process tasks'
+      },
+      {
+        displayName: 'Max Concurrent',
+        name: 'maxConcurrent',
+        type: 'number',
+        default: 5,
+        typeOptions: { minValue: 1, maxValue: 20 },
+        description: 'Maximum concurrent task executions'
+      }
+    ]
   }
 };
 
@@ -353,4 +409,4 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
 // ============================================================================
 
 // List of specialized agent node types for identification
-export const SPECIALIZED_AGENT_TYPES = ['android_agent', 'coding_agent', 'web_agent', 'task_agent', 'social_agent', 'travel_agent', 'tool_agent', 'productivity_agent', 'payments_agent', 'consumer_agent', 'autonomous_agent', 'orchestrator_agent'];
+export const SPECIALIZED_AGENT_TYPES = ['android_agent', 'coding_agent', 'web_agent', 'task_agent', 'social_agent', 'travel_agent', 'tool_agent', 'productivity_agent', 'payments_agent', 'consumer_agent', 'autonomous_agent', 'orchestrator_agent', 'ai_employee'];

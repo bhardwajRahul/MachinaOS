@@ -26,22 +26,25 @@ This guide explains how to create new nodes for MachinaOs, covering frontend def
 
 ## Node Types Overview
 
-MachinaOs supports 58 nodes across 15 categories:
+MachinaOs supports 79 nodes across 16 categories:
 
 | Category | Visual Component | Example Nodes | Count |
 |----------|-----------------|---------------|-------|
-| **Workflow** | StartNode | start | 1 |
+| **Workflow** | StartNode | start, taskTrigger | 2 |
 | **Scheduler** | SquareNode | timer, cronScheduler | 2 |
 | **AI Chat Models** | SquareNode | openaiChatModel, anthropicChatModel, geminiChatModel, openrouterChatModel, groqChatModel, cerebrasChatModel | 6 |
 | **AI Agents** | AIAgentNode | aiAgent, chatAgent | 2 |
+| **Specialized Agents** | AIAgentNode | android_agent, coding_agent, web_agent, task_agent, social_agent, travel_agent, tool_agent, productivity_agent, payments_agent, consumer_agent, autonomous_agent, orchestrator_agent | 12 |
 | **AI Memory** | SquareNode | simpleMemory | 1 |
-| **AI Skills** | SquareNode | claudeSkill, whatsappSkill, memorySkill, mapsSkill, httpSkill, schedulerSkill, androidSkill, codeSkill, customSkill | 9 |
+| **AI Skills** | SquareNode | masterSkill, customSkill + 9 individual skills | 11 |
 | **AI Tools** | SquareNode | calculatorTool, currentTimeTool, webSearchTool, androidTool | 4 |
-| **Triggers** | TriggerNode | whatsappReceive, webhookTrigger, chatTrigger | 3 |
-| **Android** | SquareNode | batteryMonitor, wifiAutomation, location, cameraControl (16 services + 1 setup) | 17 |
-| **WhatsApp** | SquareNode | whatsappSend, whatsappConnect, whatsappReceive, whatsappDb | 4 |
+| **Triggers** | TriggerNode | whatsappReceive, webhookTrigger, chatTrigger, twitterReceive | 4 |
+| **Android** | SquareNode | batteryMonitor, wifiAutomation, location, cameraControl (16 services) | 16 |
+| **WhatsApp** | SquareNode | whatsappSend, whatsappReceive, whatsappDb | 3 |
+| **Twitter/X** | SquareNode | twitterSend, twitterSearch, twitterUser, twitterReceive | 4 |
+| **Social** | SquareNode | socialReceive, socialSend | 2 |
 | **Location/Maps** | SquareNode | createMap, addLocations, showNearbyPlaces | 3 |
-| **Utility** | SquareNode | httpRequest, webhookResponse, console | 3 |
+| **Utility** | SquareNode | httpRequest, webhookTrigger, webhookResponse, chatTrigger, console | 5 |
 | **Code** | SquareNode | pythonExecutor, javascriptExecutor | 2 |
 | **Chat** | SquareNode | chatSend, chatHistory | 2 |
 | **Document** | SquareNode | httpScraper, fileDownloader, documentParser, textChunker, embeddingGenerator, vectorStore | 6 |

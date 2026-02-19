@@ -278,7 +278,51 @@ export const utilityNodes: Record<string, INodeTypeDescription> = {
         description: 'Output format for the log'
       }
     ]
+  },
+
+  teamMonitor: {
+    displayName: 'Team Monitor',
+    name: 'teamMonitor',
+    icon: '📊',
+    group: ['utility', 'agent'],
+    version: 1,
+    description: 'Monitor agent team operations, tasks, and messages in real-time',
+    defaults: { name: 'Team Monitor', color: '#8b5cf6' },
+    inputs: [{ name: 'team', displayName: 'Team', type: 'main' as NodeConnectionType, description: 'Connect to AI Employee or Orchestrator Agent node' }],
+    outputs: [{ name: 'main', displayName: 'Events', type: 'main' as NodeConnectionType, description: 'task_completed, task_failed, message_received, team_status' }],
+    properties: [
+      {
+        displayName: 'Auto-Refresh Interval',
+        name: 'refreshInterval',
+        type: 'number',
+        default: 1000,
+        typeOptions: { minValue: 100, maxValue: 10000 },
+        description: 'Refresh interval in milliseconds (0 = WebSocket only)'
+      },
+      {
+        displayName: 'Show Task History',
+        name: 'showTaskHistory',
+        type: 'boolean',
+        default: true,
+        description: 'Display completed/failed tasks in history'
+      },
+      {
+        displayName: 'Show Messages',
+        name: 'showMessages',
+        type: 'boolean',
+        default: true,
+        description: 'Display inter-agent messages'
+      },
+      {
+        displayName: 'Max History Items',
+        name: 'maxHistoryItems',
+        type: 'number',
+        default: 50,
+        typeOptions: { minValue: 10, maxValue: 200 },
+        description: 'Maximum items to show in history'
+      }
+    ]
   }
 };
 
-export const UTILITY_NODE_TYPES = ['httpRequest', 'webhookTrigger', 'webhookResponse', 'chatTrigger', 'console'];
+export const UTILITY_NODE_TYPES = ['httpRequest', 'webhookTrigger', 'webhookResponse', 'chatTrigger', 'console', 'teamMonitor'];

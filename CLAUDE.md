@@ -15,6 +15,7 @@ This is a React Flow-based workflow automation platform implementing n8n-inspire
 | **[Dual-Purpose Tool Guide](./docs-internal/dual_purpose_tool_node_creation.md)** | Guide for nodes that work as both workflow nodes AND AI Agent tools (e.g., whatsappSend) |
 | **[Agent Architecture](./docs-internal/agent_architecture.md)** | How AI Agent and Chat Agent discover skills/tools, inject them into LLM prompts, and execute via LangGraph |
 | **[Agent Delegation](./docs-internal/agent_delegation.md)** | How memory, parameters, and execution context flow when one AI agent delegates work to another agent connected as a tool |
+| **[Agent Teams](./docs-internal/agent_teams.md)** | Claude SDK Agent Teams pattern - AI Employee and Orchestrator nodes with input-teammates handle for multi-agent coordination |
 | **[Memory Compaction](./docs-internal/memory_compaction.md)** | Token tracking and memory compaction service using native provider APIs (Anthropic, OpenAI) |
 | **[CI/CD Pipeline](./docs-internal/ci_cd.md)** | GitHub Actions workflows, predeploy validation, release publishing, and composite setup action |
 | **[Workflow Schema](./docs-internal/workflow-schema.md)** | JSON schema for workflows, edge handle conventions, config node architecture |
@@ -58,6 +59,7 @@ server/services/
 ├── workflow.py              # Facade (~460 lines) - thin coordinator
 ├── node_executor.py         # Single node execution with registry pattern
 ├── parameter_resolver.py    # Template variable resolution
+├── agent_team.py            # AgentTeamService for multi-agent coordination
 ├── deployment/              # Event-driven deployment lifecycle
 │   ├── __init__.py
 │   ├── state.py             # DeploymentState, TriggerInfo dataclasses
@@ -87,7 +89,7 @@ server/core/
 server/models/
 ├── cache.py                 # CacheEntry SQLModel for SQLite cache
 ├── auth.py                  # User model with bcrypt
-└── database.py              # ConversationMessage, NodeParameter, ToolSchema, ChatMessage, TokenUsageMetric, CompactionEvent, SessionTokenState, UserSettings, ProviderDefaults tables
+└── database.py              # ConversationMessage, NodeParameter, ToolSchema, ChatMessage, TokenUsageMetric, CompactionEvent, SessionTokenState, UserSettings, ProviderDefaults, AgentTeam, TeamMember, TeamTask, AgentMessage tables
 ```
 
 ### Polyglot Server Integration (Optional)
@@ -290,14 +292,14 @@ class CacheEntry(SQLModel, table=True):
 
 ## Codebase Summary
 - **Hybrid architecture**: Node.js + Python + React TypeScript
-- **77 implemented workflow nodes** with clean service separation (6 AI models + 3 AI agents/memory + 12 specialized agents + 11 skills + 3 dedicated tools + 6 dual-purpose tools + 16 Android + 3 WhatsApp + 2 Social + 3 Location + 2 Code + 5 Utility + 6 Document + 2 Chat + 2 Scheduler + 1 Workflow)
-- **WebSocket-First Architecture**: WebSocket as primary frontend-backend communication (86 message handlers)
+- **83 implemented workflow nodes** with clean service separation (6 AI models + 3 AI agents/memory + 13 specialized agents + 11 skills + 3 dedicated tools + 6 dual-purpose tools + 16 Android + 3 WhatsApp + 4 Twitter + 2 Social + 3 Location + 2 Code + 6 Utility + 6 Document + 2 Chat + 2 Scheduler + 1 Workflow)
+- **WebSocket-First Architecture**: WebSocket as primary frontend-backend communication (87 message handlers)
 - **Recent optimizations**: REST APIs replaced with WebSocket, AI endpoints migrated to Python, Android automation integrated
 
 ## Architecture Refactoring
 The project was completely refactored from schema-based node definitions to explicit INodeProperties interface system inspired by n8n architecture. Key changes:
 - **Pure INodeProperties System**: Removed all backward compatibility layers
-- **75 Implemented Node Components**: AI models, agents, skills, location services, Android automation, WhatsApp, social, code execution, HTTP/Webhook utilities, document processing, chat, and schedulers
+- **79 Implemented Node Components**: AI models, agents, skills, location services, Android automation, WhatsApp, Twitter/X, social, code execution, HTTP/Webhook utilities, document processing, chat, and schedulers
 - **WebSocket-First Communication**: 86 WebSocket message handlers replace most REST API calls
 - **Resource-Operation Pattern**: Organized by functional categories (AI, Location, Android, WhatsApp)
 - **TypeScript-First**: Full type safety with proper interface alignment
@@ -320,6 +322,7 @@ The project was completely refactored from schema-based node definitions to expl
 - `src/nodeDefinitions/androidServiceNodes.ts` - 16 Android service nodes (monitoring, apps, automation, sensors, media)
 - `src/nodeDefinitions/locationNodes.ts` - Google Maps and location services
 - `src/nodeDefinitions/whatsappNodes.ts` - WhatsApp messaging integration (3 nodes)
+- `src/nodeDefinitions/twitterNodes.ts` - Twitter/X integration (4 nodes: send, search, user, receive)
 - `src/nodeDefinitions/socialNodes.ts` - Unified social messaging nodes (socialReceive, socialSend)
 - `src/nodeDefinitions/codeNodes.ts` - Python and JavaScript code execution nodes
 - `src/nodeDefinitions/utilityNodes.ts` - HTTP, Webhook, chatTrigger, and console nodes
@@ -437,11 +440,11 @@ React Flow edges use dynamic Dracula colors via `getEdgeStyles(theme.dracula)`:
 ### WebSocket-First Architecture
 The project uses WebSocket as the primary communication method between frontend and backend, replacing most REST API calls:
 - `src/contexts/WebSocketContext.tsx` - Central WebSocket context with request/response pattern
-- `server/routers/websocket.py` - WebSocket endpoint with 86 message handlers
+- `server/routers/websocket.py` - WebSocket endpoint with 87 message handlers
 - `server/services/status_broadcaster.py` - Connection management and broadcasting
 
 ## Implemented Node Types
-The following 75 nodes are currently implemented and functional:
+The following 79 nodes are currently implemented and functional:
 
 ### AI Chat Models (6 nodes)
 - **openaiChatModel**: OpenAI GPT models with response format options. O-series models (o1, o3, o4) support reasoning effort parameter.
@@ -479,6 +482,11 @@ server/skills/
 ├── android/                              # Android device control skills
 │   ├── personality/SKILL.md
 │   └── skill/SKILL.md
+├── social_agent/                         # Social media platform skills
+│   ├── twitter-send-skill/SKILL.md       # Post tweets, reply, retweet, like/unlike, delete
+│   ├── twitter-search-skill/SKILL.md     # Search tweets with query operators
+│   ├── twitter-user-skill/SKILL.md       # User profile and followers/following lookup
+│   └── whatsapp-send-skill/SKILL.md      # WhatsApp messaging skill
 └── autonomous/                           # Autonomous agent patterns (Code Mode research)
     ├── code-mode-skill/SKILL.md          # Generate code instead of tool calls (81-98% token savings)
     ├── agentic-loop-skill/SKILL.md       # OBSERVE-THINK-ACT-REFLECT-DECIDE pattern
@@ -610,7 +618,7 @@ if skill_type == 'masterSkill':
 - **currentTimeTool**: Get current date/time with timezone support
 - **webSearchTool**: Web search via DuckDuckGo (free, uses `ddgs` library) or Serper API with configurable max results
 
-### Specialized AI Agents (12 nodes)
+### Specialized AI Agents (13 nodes)
 Specialized agents are AI Agents pre-configured for specific domains. They inherit full AI Agent functionality (provider, model, prompt, system message, thinking/reasoning) while being tailored for specific capabilities. All specialized agents route to `handle_chat_agent` in the backend and support the same input handles. Node colors use centralized dracula theme constants imported from `client/src/styles/theme.ts`.
 
 **Input Handles:**
@@ -632,7 +640,8 @@ Specialized agents are AI Agents pre-configured for specific domains. They inher
 - **payments_agent**: Payments Agent - AI agent for payment processing. Connect payment, invoice, and financial tool nodes.
 - **consumer_agent**: Consumer Agent - AI agent for consumer interactions. Connect customer support, product, and order management tools.
 - **autonomous_agent**: Autonomous Agent - AI agent for autonomous operations using Code Mode patterns. Uses agentic loops, progressive discovery, error recovery, and multi-tool orchestration for 81-98% token savings. Connect autonomous skills via Master Skill.
-- **orchestrator_agent**: Orchestrator Agent - AI agent for coordinating multiple agents in complex multi-agent workflows. Delegates tasks to specialized agents and synthesizes their results.
+- **orchestrator_agent**: Orchestrator Agent - Team lead agent for coordinating multiple agents. Connect specialized agents via `input-teammates` handle; they become `delegate_to_*` tools the AI can invoke.
+- **ai_employee**: AI Employee - Team lead agent similar to orchestrator_agent. Connect specialized agents via `input-teammates` handle for intelligent task delegation.
 
 **Backend Routing:**
 Specialized agents are detected by `SPECIALIZED_AGENT_TYPES` and routed to `handle_chat_agent`:
@@ -641,8 +650,27 @@ Specialized agents are detected by `SPECIALIZED_AGENT_TYPES` and routed to `hand
 SPECIALIZED_AGENT_TYPES = {
     'android_agent', 'coding_agent', 'web_agent', 'task_agent', 'social_agent',
     'travel_agent', 'tool_agent', 'productivity_agent', 'payments_agent', 'consumer_agent',
-    'autonomous_agent', 'orchestrator_agent'
+    'autonomous_agent', 'orchestrator_agent', 'ai_employee'
 }
+```
+
+**Team Lead Types (Agent Teams Pattern):**
+Team leads (`orchestrator_agent`, `ai_employee`) have a special `input-teammates` handle. Agents connected to this handle become delegation tools:
+```python
+# In handlers/ai.py
+TEAM_LEAD_TYPES = {'orchestrator_agent', 'ai_employee'}
+
+# Teammates become delegate_to_* tools automatically
+if node_type in TEAM_LEAD_TYPES:
+    teammates = await _collect_teammate_connections(node_id, context, database)
+    if teammates:
+        for tm in teammates:
+            tool_data.append({
+                'node_id': tm['node_id'],
+                'node_type': tm['node_type'],  # e.g., 'coding_agent'
+                'label': tm['label'],
+            })
+        # AI now has delegate_to_coding_agent, delegate_to_web_agent, etc.
 ```
 
 **Direct Android Service Tools:**
@@ -741,6 +769,72 @@ Unified social messaging nodes for multi-platform communication. Supports WhatsA
 - **socialReceive**: Normalizes messages from platform triggers into unified format. Multiple outputs: Message, Media, Contact, Metadata. Filters by channel, message type, sender.
 - **socialSend**: **Dual-purpose node** - Send messages to any supported platform. Works as workflow node OR AI Agent tool. Supports text, image, video, audio, document, sticker, location, contact, poll, buttons, list message types.
 
+### Twitter/X Nodes (4 nodes)
+Twitter/X integration using the official XDK Python SDK with OAuth 2.0 PKCE authentication.
+
+- **twitterSend**: **Dual-purpose node** - Post tweets, reply, retweet, like/unlike, and delete tweets. Works as workflow node OR AI Agent tool. Group: `['social', 'tool']`. Actions: `tweet`, `reply`, `retweet`, `like`, `unlike`, `delete`. Parameters: action, text (280 char max), tweet_id, reply_to_id.
+- **twitterSearch**: **Dual-purpose node** - Search recent tweets using query operators. Works as workflow node OR AI Agent tool. Group: `['social', 'tool']`. Supports X API v2 query syntax: keywords, hashtags (#), mentions (@), from:user, to:user, -exclude, OR, lang:, has:links, has:media, is:retweet, -is:retweet.
+- **twitterUser**: **Dual-purpose node** - Look up user profiles and social connections. Works as workflow node OR AI Agent tool. Group: `['social', 'tool']`. Operations: `me` (get authenticated user), `by_username`, `by_id`, `followers`, `following`.
+- **twitterReceive**: Event-driven trigger that waits for incoming Twitter events (mentions, DMs, timeline updates). Group: `['social', 'trigger']`. Polling-based since X API free tier lacks webhooks.
+
+#### Twitter OAuth 2.0 Authentication
+Authentication is handled via OAuth 2.0 PKCE flow in the Credentials Modal:
+1. User clicks "Login with Twitter" button
+2. Backend generates PKCE code challenge and authorization URL
+3. Browser opens Twitter authorization page
+4. User grants permission, Twitter redirects with auth code
+5. Backend exchanges code for access_token + refresh_token
+6. Tokens stored in database via auth_service
+
+**Key Files:**
+| File | Description |
+|------|-------------|
+| `server/services/twitter_oauth.py` | OAuth 2.0 PKCE flow implementation |
+| `server/routers/twitter.py` | OAuth callback endpoint, token exchange |
+| `server/services/handlers/twitter.py` | Node handlers using XDK SDK |
+| `client/src/nodeDefinitions/twitterNodes.ts` | 4 node definitions |
+| `client/src/components/CredentialsModal.tsx` | Twitter panel with OAuth button |
+| `server/skills/social_agent/twitter-*-skill/` | 3 Twitter skills for AI agents |
+
+**XDK SDK API Patterns:**
+```python
+from xdk import Client
+
+# Create client with OAuth 2.0 user token
+client = Client(access_token=access_token)
+
+# Post tweet
+client.posts.create(body={"text": "Hello world!"})
+
+# Reply to tweet
+client.posts.create(body={"text": "Reply", "reply": {"in_reply_to_tweet_id": "123"}})
+
+# Retweet
+client.users.repost_post(user_id, body={"tweet_id": "123"})
+
+# Like/Unlike
+client.users.like_post(user_id, body={"tweet_id": "123"})
+client.users.unlike_post(user_id, tweet_id="123")
+
+# Delete
+client.posts.delete(tweet_id)
+
+# Search
+client.posts.search_recent(query="...", max_results=100, tweet_fields=["author_id", "created_at"])
+
+# User lookup
+client.users.get_me(user_fields=["created_at", "description"])
+client.users.get_by_usernames(usernames=["user1"], user_fields=["description"])
+client.users.get_followers(user_id, max_results=100, user_fields=["created_at"])
+```
+
+**Environment Variables:**
+```bash
+TWITTER_CLIENT_ID=your_client_id
+TWITTER_CLIENT_SECRET=your_client_secret
+TWITTER_REDIRECT_URI=http://localhost:3010/api/twitter/callback
+```
+
 ### Workflow Nodes (2 nodes)
 - **start**: Manual workflow trigger to start workflow execution
 - **taskTrigger**: Event-driven trigger that fires when a delegated child agent completes its task (success or error). Filters by task_id, agent_name, status (all/completed/error), and parent_node_id. Output includes task_id, status, agent_name, result/error, workflow_id.
@@ -749,12 +843,13 @@ Unified social messaging nodes for multi-platform communication. Supports WhatsA
 - **pythonExecutor**: **Dual-purpose node** - Execute Python code with syntax-highlighted editor, input_data access, and console output. Works as workflow node OR AI Agent tool (`python_code`). Available libraries: math, json, datetime, timedelta, re, random, Counter, defaultdict.
 - **javascriptExecutor**: **Dual-purpose node** - Execute JavaScript code with syntax-highlighted editor and console output. Works as workflow node OR AI Agent tool (`javascript_code`).
 
-### Utility Nodes (5 nodes)
+### Utility Nodes (6 nodes)
 - **httpRequest**: Make HTTP requests to external APIs (GET, POST, PUT, DELETE, PATCH) with configurable headers, body, and timeout
 - **webhookTrigger**: Event-driven trigger that waits for incoming HTTP requests at `/webhook/{path}` with method filtering and authentication options
 - **webhookResponse**: Send custom response back to webhook caller with configurable status code, body, and content type
 - **chatTrigger**: Trigger node that receives messages from the Console Panel chat interface
 - **console**: Console output node for logging workflow execution data
+- **teamMonitor**: Real-time monitoring of Agent Team operations. Connect to AI Employee or Orchestrator to display team status, active tasks, and event stream
 
 ### Document Processing Nodes (6 nodes)
 RAG pipeline nodes for document ingestion, processing, and vector storage. Supports multiple providers and backends.
@@ -966,7 +1061,7 @@ See **[Scripts Reference](./docs-internal/SCRIPTS.md)** for full documentation.
 
 ## Current Status
 ✅ **INodeProperties System**: Fully implemented with 75 functional node components
-✅ **WebSocket-First Architecture**: 86 message handlers replacing REST APIs
+✅ **WebSocket-First Architecture**: 87 message handlers replacing REST APIs
 ✅ **Code Editor**: Python executor with syntax-highlighted editor (react-simple-code-editor + prismjs) and console output
 ✅ **Component Palette**: Emoji icons with distinct dracula-themed category colors, localStorage persistence for collapsed sections
 ✅ **Android Integration**: 16 Android service nodes with ADB automation and remote WebSocket support
@@ -1707,11 +1802,15 @@ The system supports specialized agent variants that inherit from the base AI Age
 | Consumer | `consumer_agent` | cart | purple |
 | Autonomous | `autonomous_agent` | target | purple |
 | Orchestrator | `orchestrator_agent` | conductor | cyan |
+| AI Employee | `ai_employee` | briefcase | purple |
 
 All specialized agents share the same handle configuration:
 - **Left**: `input-main` (Input, 30%), `input-memory` (Memory, 55%), `input-task` (Task, 85%)
 - **Bottom**: `input-skill` (Skill, 25%), `input-tools` (Tool, 75%)
 - **Top**: `output-top` (Output)
+
+**Team Lead Agents** (`orchestrator_agent`, `ai_employee`) have an additional handle:
+- **Bottom**: `input-teammates` (Teammates, 50%) - Connect specialized agents here for delegation
 
 The `AIAgentNode.tsx` component uses `AGENT_CONFIGS` to render all agent types with their specific icons, titles, and theme colors.
 
@@ -2595,17 +2694,18 @@ I don't have access to real-time weather data...
 - **Window + Archive**: Short-term (recent messages) + long-term (semantic retrieval) memory pattern
 - **Auto-Save**: AI Agent automatically saves updated markdown content to node parameters
 
-## Memory Compaction and Token Tracking
+## Memory Compaction, Token Tracking, and Cost Calculation
 
 ### Overview
-The compaction service enables automatic memory compaction and token tracking for specialized agents. It uses a hybrid approach: native compaction APIs for Anthropic/OpenAI, with tracking for all providers. Inspired by Claude Code's compaction pattern with a default 100,000 token threshold.
+The compaction service enables automatic memory compaction, token tracking, and **cost calculation** for all LLM providers. Cost is calculated using official pricing (per 1M tokens) and stored alongside token metrics. The Credentials Modal displays per-provider usage and costs.
 
 ### Architecture
 ```
 AI Agent Execution
        ↓
-CompactionService.track() → Save token metrics to DB
-       ↓                   → Update cumulative session state
+CompactionService.track() → PricingService.calculate_cost()
+       ↓                   → Save token metrics + cost to DB
+       ↓                   → Update cumulative state + cost
        ↓                   → Check if threshold exceeded
        ↓
 If needs_compaction:
@@ -2649,23 +2749,25 @@ compaction_control = {
 | File | Description |
 |------|-------------|
 | `server/services/compaction.py` | CompactionService with track(), record(), stats(), configure(), compact_context() methods |
+| `server/services/pricing.py` | PricingService with official pricing registry for all 6 providers |
 | `server/services/ai.py` | `_track_token_usage()` with automatic compaction triggering |
-| `server/models/database.py` | TokenUsageMetric, CompactionEvent, SessionTokenState tables |
-| `server/core/database.py` | CRUD methods for token metrics and compaction events |
+| `server/models/database.py` | TokenUsageMetric, CompactionEvent, SessionTokenState tables (with cost fields) |
+| `server/core/database.py` | CRUD methods for token metrics, compaction events, and `get_provider_usage_summary()` |
 | `server/core/config.py` | compaction_enabled, compaction_threshold settings |
 | `server/core/container.py` | Dependency injection for compaction_service |
 | `server/main.py` | Wires AI service to compaction service at startup |
-| `server/routers/websocket.py` | get_compaction_stats, configure_compaction handlers |
-| `client/src/components/parameterPanel/MiddleSection.tsx` | Token Usage UI with editable threshold |
+| `server/routers/websocket.py` | get_compaction_stats, configure_compaction, get_provider_usage_summary handlers |
+| `client/src/hooks/useApiKeys.ts` | `getProviderUsageSummary()` hook method |
+| `client/src/components/CredentialsModal.tsx` | Usage & Costs collapsible section per provider |
 
 ### Database Models
 
-**TokenUsageMetric** - Per-execution token usage:
+**TokenUsageMetric** - Per-execution token usage and cost:
 ```python
 class TokenUsageMetric(SQLModel, table=True):
     session_id: str          # Memory session identifier
     node_id: str             # Agent node ID
-    provider: str            # openai, anthropic, gemini, groq, etc.
+    provider: str            # openai, anthropic, gemini, groq, cerebras, openrouter
     model: str               # Model name
     input_tokens: int        # Input token count
     output_tokens: int       # Output token count
@@ -2673,6 +2775,11 @@ class TokenUsageMetric(SQLModel, table=True):
     cache_creation_tokens: int  # Anthropic cache creation
     cache_read_tokens: int      # Anthropic cache read
     reasoning_tokens: int       # OpenAI o-series reasoning
+    # Cost fields (USD)
+    input_cost: float        # Cost for input tokens
+    output_cost: float       # Cost for output tokens
+    cache_cost: float        # Cost for cache tokens
+    total_cost: float        # Total cost
 ```
 
 **SessionTokenState** - Cumulative state per session:
@@ -2683,6 +2790,10 @@ class SessionTokenState(SQLModel, table=True):
     custom_threshold: int        # Per-session threshold override
     compaction_count: int        # Number of compactions
     last_compaction_at: datetime # Last compaction timestamp
+    # Cumulative cost fields (USD)
+    cumulative_input_cost: float
+    cumulative_output_cost: float
+    cumulative_total_cost: float
 ```
 
 **CompactionEvent** - Compaction history:
@@ -2714,7 +2825,7 @@ result = await svc.track(
     model="claude-3-5-sonnet",
     usage={"input_tokens": 5000, "output_tokens": 1000, "total_tokens": 6000}
 )
-# result: {"total": 6000, "threshold": 100000, "needs_compaction": False}
+# result: {"total": 6000, "total_cost": 0.021, "threshold": 100000, "needs_compaction": False}
 
 # Record compaction event after native API handles it
 await svc.record(
@@ -2741,6 +2852,41 @@ await svc.configure("user-123", threshold=50000, enabled=True)
 |---------|-------------|
 | `get_compaction_stats` | Get token statistics for a session |
 | `configure_compaction` | Update threshold/enabled settings for a session |
+| `get_provider_usage_summary` | Get aggregated usage and cost by provider for Credentials Modal |
+
+### PricingService
+
+Calculates cost based on official pricing (USD per 1M tokens):
+
+```python
+from services.pricing import get_pricing_service
+
+pricing = get_pricing_service()
+
+# Calculate cost for token usage
+cost = pricing.calculate_cost(
+    provider="anthropic",
+    model="claude-3-5-sonnet",
+    input_tokens=5000,
+    output_tokens=1000,
+    cache_read_tokens=500
+)
+# cost: {"input_cost": 0.015, "output_cost": 0.015, "cache_cost": 0.00015, "total_cost": 0.03015}
+
+# Get pricing for a model (supports partial matching)
+pricing_info = pricing.get_pricing("anthropic", "claude-3-5-sonnet-20241022")
+# pricing_info: ModelPricing(input_per_mtok=3.0, output_per_mtok=15.0, cache_read_per_mtok=0.30)
+```
+
+**Supported Providers & Pricing** (February 2026):
+| Provider | Example Models | Input $/MTok | Output $/MTok |
+|----------|---------------|--------------|---------------|
+| OpenAI | gpt-5, gpt-4o, o3 | 1.25-15.00 | 10.00-60.00 |
+| Anthropic | claude-opus-4.6, claude-sonnet-4 | 3.00-5.00 | 15.00-25.00 |
+| Gemini | gemini-2.5-pro, gemini-2.0-flash | 0.10-1.25 | 0.40-10.00 |
+| Groq | llama-4-scout, qwen3-32b | 0.05-0.59 | 0.08-0.79 |
+| Cerebras | llama-3.1-70b | 0.10-0.60 | 0.10-0.60 |
+| OpenRouter | Pass-through | Varies | Varies |
 
 ### Configuration
 
@@ -4087,7 +4233,7 @@ This function:
 - **Performance**: Fast HMR updates and clean TypeScript compilation
 - **AI Architecture**: 5-layer system with factory pattern and secure credential management
 - **Android Architecture**: Factory-based node creation with ADB integration for device automation
-- **WebSocket-First Architecture**: 86 message handlers replace REST APIs for parameters, execution, API keys, Android, WhatsApp, and skill operations
+- **WebSocket-First Architecture**: 87 message handlers replace REST APIs for parameters, execution, API keys, Android, WhatsApp, and skill operations
 - **WebSocket Hooks**: Dedicated React hooks (useWhatsApp, useExecution, useApiKeys, useAndroidOperations, useParameterPanel) for clean component integration
 - **WebSocket Support**: Persistent remote Android device connections via WebSocket proxy with background tasks
   - Connection stays alive across multiple API requests until switched to local ADB

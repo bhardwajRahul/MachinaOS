@@ -2917,6 +2917,49 @@ class AIService:
 
             return TaskManagerSchema
 
+        # Twitter Send tool schema (dual-purpose: workflow node + AI tool)
+        if node_type == 'twitterSend':
+            class TwitterSendSchema(BaseModel):
+                """Post tweets, replies, retweets, and likes on Twitter/X."""
+                action: str = Field(
+                    default="tweet",
+                    description="Action: tweet, reply, retweet, like, unlike, delete"
+                )
+                text: Optional[str] = Field(
+                    default=None,
+                    description="Tweet text (max 280 chars). Required for tweet/reply."
+                )
+                tweet_id: Optional[str] = Field(
+                    default=None,
+                    description="Tweet ID for reply/retweet/like/unlike/delete actions."
+                )
+                reply_to_id: Optional[str] = Field(
+                    default=None,
+                    description="Tweet ID to reply to (alias for tweet_id when action=reply)."
+                )
+
+            return TwitterSendSchema
+
+        # Twitter Search tool schema (dual-purpose: workflow node + AI tool)
+        if node_type == 'twitterSearch':
+            class TwitterSearchSchema(BaseModel):
+                """Search recent tweets on Twitter/X."""
+                query: str = Field(description="Search query (supports X search operators)")
+                max_results: int = Field(default=10, description="Max results (10-100)")
+
+            return TwitterSearchSchema
+
+        # Twitter User tool schema (dual-purpose: workflow node + AI tool)
+        if node_type == 'twitterUser':
+            class TwitterUserSchema(BaseModel):
+                """Look up Twitter/X user profiles and social connections."""
+                operation: str = Field(default="me", description="Operation: me, by_username, by_id, followers, following")
+                username: Optional[str] = Field(default=None, description="Twitter username (without @) for by_username")
+                user_id: Optional[str] = Field(default=None, description="Twitter user ID for by_id/followers/following")
+                max_results: int = Field(default=100, description="Max results for followers/following (1-1000)")
+
+            return TwitterUserSchema
+
         # Check delegated tasks schema (built-in tool for result retrieval)
         if node_type == '_builtin_check_delegated_tasks':
             class CheckDelegatedTasksSchema(BaseModel):

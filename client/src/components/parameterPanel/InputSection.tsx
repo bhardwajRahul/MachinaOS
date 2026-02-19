@@ -252,6 +252,31 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                 body: 'string',
                 json: 'object'
               },
+              // Twitter node output schemas
+              twitter: {
+                tweet_id: 'string',
+                text: 'string',
+                author_id: 'string',
+                created_at: 'string',
+                action: 'string'
+              },
+              twitterSearch: {
+                tweets: [{
+                  id: 'string',
+                  text: 'string',
+                  author_id: 'string',
+                  created_at: 'string'
+                }],
+                count: 'number',
+                query: 'string'
+              },
+              twitterUser: {
+                id: 'string',
+                username: 'string',
+                name: 'string',
+                profile_image_url: 'string',
+                verified: 'boolean'
+              },
               httpRequest: {
                 status: 'number',
                 data: 'any',

@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from typing import Dict, Any, Optional, TYPE_CHECKING
 
 from core.logging import get_logger
+from services.pricing import get_pricing_service
 
 if TYPE_CHECKING:
     from core.database import Database
@@ -92,20 +93,54 @@ class CompactionService:
         return {"context_management": {"compact_threshold": threshold or self._config.threshold}}
 
     async def track(self, session_id: str, node_id: str, provider: str, model: str, usage: Dict[str, int]) -> Dict[str, Any]:
-        """Track token usage and return compaction status."""
-        await self._db.save_token_metric({"session_id": session_id, "node_id": node_id, "provider": provider, "model": model, **usage})
+        """Track token usage and cost, return compaction status."""
+        # Calculate cost using PricingService
+        pricing_service = get_pricing_service()
+        cost = pricing_service.calculate_cost(
+            provider=provider,
+            model=model,
+            input_tokens=usage.get("input_tokens", 0),
+            output_tokens=usage.get("output_tokens", 0),
+            cache_read_tokens=usage.get("cache_read_tokens", 0),
+            cache_creation_tokens=usage.get("cache_creation_tokens", 0),
+            reasoning_tokens=usage.get("reasoning_tokens", 0)
+        )
+
+        # Save token metric with cost fields
+        await self._db.save_token_metric({
+            "session_id": session_id,
+            "node_id": node_id,
+            "provider": provider,
+            "model": model,
+            **usage,
+            "input_cost": cost["input_cost"],
+            "output_cost": cost["output_cost"],
+            "cache_cost": cost["cache_cost"],
+            "total_cost": cost["total_cost"]
+        })
 
         state = await self._db.get_or_create_session_token_state(session_id)
         new_total = state["cumulative_total"] + usage.get("total_tokens", 0)
+        new_total_cost = state.get("cumulative_total_cost", 0.0) + cost["total_cost"]
 
+        # Update cumulative state with cost
         await self._db.update_session_token_state(session_id, {
             "cumulative_input_tokens": state["cumulative_input_tokens"] + usage.get("input_tokens", 0),
             "cumulative_output_tokens": state["cumulative_output_tokens"] + usage.get("output_tokens", 0),
-            "cumulative_total": new_total
+            "cumulative_total": new_total,
+            "cumulative_input_cost": state.get("cumulative_input_cost", 0.0) + cost["input_cost"],
+            "cumulative_output_cost": state.get("cumulative_output_cost", 0.0) + cost["output_cost"],
+            "cumulative_total_cost": new_total_cost
         })
 
         threshold = state.get("custom_threshold") or self._config.threshold
-        return {"total": new_total, "threshold": threshold, "needs_compaction": self._config.enabled and new_total >= threshold}
+        return {
+            "total": new_total,
+            "total_cost": new_total_cost,
+            "cost": cost,
+            "threshold": threshold,
+            "needs_compaction": self._config.enabled and new_total >= threshold
+        }
 
     async def record(self, session_id: str, node_id: str, provider: str, model: str, tokens_before: int, tokens_after: int, summary: Optional[str] = None) -> None:
         """Record compaction event after native API handles it."""

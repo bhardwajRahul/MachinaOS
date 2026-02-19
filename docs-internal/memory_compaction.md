@@ -1,11 +1,12 @@
-# Memory Compaction and Token Tracking Service
+# Memory Compaction, Token Tracking, and Cost Calculation Service
 
 ## Overview
 
-The compaction service enables automatic memory compaction and token tracking for MachinaOs specialized agents. It uses a hybrid approach leveraging native provider APIs (Anthropic, OpenAI) when available, with comprehensive token tracking for all providers.
+The compaction service enables automatic memory compaction, token tracking, and **cost calculation** for MachinaOs specialized agents. It uses a hybrid approach leveraging native provider APIs (Anthropic, OpenAI) when available, with comprehensive token and cost tracking for all providers.
 
 **Inspired by:** Claude Code's compaction pattern from the Anthropic SDK
 **Default Threshold:** 100,000 tokens (configurable per session)
+**Cost Calculation:** Official pricing from each provider (per 1M tokens)
 
 ## Architecture
 

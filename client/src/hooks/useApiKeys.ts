@@ -23,6 +23,31 @@ export interface ProviderDefaults {
   reasoning_format: 'parsed' | 'hidden';
 }
 
+export interface ModelUsageSummary {
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  input_cost: number;
+  output_cost: number;
+  cache_cost: number;
+  total_cost: number;
+  execution_count: number;
+}
+
+export interface ProviderUsageSummary {
+  provider: string;
+  total_input_tokens: number;
+  total_output_tokens: number;
+  total_tokens: number;
+  total_input_cost: number;
+  total_output_cost: number;
+  total_cache_cost: number;
+  total_cost: number;
+  execution_count: number;
+  models: ModelUsageSummary[];
+}
+
 export interface UseApiKeysResult {
   // Validate and store API key
   validateApiKey: (provider: string, apiKey: string) => Promise<ApiKeyValidationResult>;
@@ -51,6 +76,9 @@ export interface UseApiKeysResult {
   // Provider defaults
   getProviderDefaults: (provider: string) => Promise<ProviderDefaults>;
   saveProviderDefaults: (provider: string, defaults: ProviderDefaults) => Promise<boolean>;
+
+  // Provider usage summary
+  getProviderUsageSummary: () => Promise<ProviderUsageSummary[]>;
 
   // State
   isValidating: boolean;
@@ -280,6 +308,21 @@ export const useApiKeys = (): UseApiKeysResult => {
     }
   }, [sendRequest, isConnected]);
 
+  /**
+   * Get aggregated usage and cost summary by provider
+   */
+  const getProviderUsageSummary = useCallback(async (): Promise<ProviderUsageSummary[]> => {
+    if (!isConnected) return [];
+
+    try {
+      const response = await sendRequest<{ providers: ProviderUsageSummary[] }>('get_provider_usage_summary', {});
+      return response?.providers || [];
+    } catch (error) {
+      console.warn('Error fetching provider usage summary:', error);
+      return [];
+    }
+  }, [sendRequest, isConnected]);
+
   return {
     validateApiKey,
     saveApiKey,
@@ -291,6 +334,7 @@ export const useApiKeys = (): UseApiKeysResult => {
     getAiModels,
     getProviderDefaults,
     saveProviderDefaults,
+    getProviderUsageSummary,
     isValidating,
     validationError,
     isConnected

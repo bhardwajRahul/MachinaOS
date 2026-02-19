@@ -10,6 +10,9 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
+# Team lead types that can create teams
+TEAM_LEAD_TYPES = {'orchestrator_agent', 'ai_employee'}
+
 
 async def _collect_agent_connections(
     node_id: str,
@@ -302,6 +305,50 @@ async def _collect_agent_connections(
     return memory_data, skill_data, tool_data, input_data, task_data
 
 
+async def _collect_teammate_connections(
+    node_id: str,
+    context: Dict[str, Any],
+    database: "Database"
+) -> List[Dict[str, Any]]:
+    """Collect agents connected via input-teammates handle for team mode.
+
+    Args:
+        node_id: The team lead node ID
+        context: Execution context with nodes, edges
+        database: Database instance
+
+    Returns:
+        List of teammate node info dicts
+    """
+    nodes = context.get('nodes', [])
+    edges = context.get('edges', [])
+    teammates = []
+
+    for edge in edges:
+        if edge.get('target') != node_id or edge.get('targetHandle') != 'input-teammates':
+            continue
+
+        source_id = edge.get('source')
+        source_node = next((n for n in nodes if n.get('id') == source_id), None)
+        if not source_node:
+            continue
+
+        node_type = source_node.get('type', '')
+        if node_type not in AI_AGENT_TYPES:
+            continue
+
+        params = await database.get_node_parameters(source_id) or {}
+        teammates.append({
+            'node_id': source_id,
+            'node_type': node_type,
+            'label': source_node.get('data', {}).get('label', node_type),
+            'parameters': params
+        })
+        logger.debug(f"[Teams] Found teammate: {node_type} ({source_id})")
+
+    return teammates
+
+
 def _format_task_context(task_data: Dict[str, Any]) -> str:
     """Format task completion data as context for the agent.
 
@@ -485,7 +532,24 @@ async def handle_chat_agent(
     from services.status_broadcaster import get_status_broadcaster
     broadcaster = get_status_broadcaster()
 
-    # Execute Chat Agent with memory, skills and tools
+    # Team mode detection for orchestrator_agent and ai_employee nodes
+    # Teammates connected via input-teammates become delegation tools
+    if node_type in TEAM_LEAD_TYPES:
+        teammates = await _collect_teammate_connections(node_id, context, database)
+
+        if teammates:
+            # Add teammates as delegation tools (they become delegate_to_* tools)
+            tool_data = tool_data or []
+            for tm in teammates:
+                tool_data.append({
+                    'node_id': tm['node_id'],
+                    'node_type': tm['node_type'],
+                    'label': tm['label'],
+                    'parameters': tm.get('parameters', {}),
+                })
+            logger.info(f"[Teams] Added {len(teammates)} teammates as delegation tools")
+
+    # Standard execution (no team mode)
     return await ai_service.execute_chat_agent(
         node_id,
         parameters,
@@ -494,7 +558,7 @@ async def handle_chat_agent(
         tool_data=tool_data if tool_data else None,
         broadcaster=broadcaster,
         workflow_id=workflow_id,
-        context=context  # Pass context for nested agent delegation
+        context=context
     )
 
 

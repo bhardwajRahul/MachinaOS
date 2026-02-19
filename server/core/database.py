@@ -12,7 +12,8 @@ from core.config import Settings
 from models.database import (
     NodeParameter, Workflow, Execution, APIKey, APIKeyValidation, NodeOutput,
     ConversationMessage, ToolSchema, UserSkill, ChatMessage, UserSettings,
-    TokenUsageMetric, CompactionEvent, SessionTokenState, ProviderDefaults
+    TokenUsageMetric, CompactionEvent, SessionTokenState, ProviderDefaults,
+    AgentTeam, TeamMember, TeamTask, AgentMessage
 )
 from models.cache import CacheEntry  # SQLite-backed cache for Redis alternative
 from models.auth import User  # Import User model to ensure table creation
@@ -87,6 +88,29 @@ class Database:
                         "ALTER TABLE user_settings ADD COLUMN examples_loaded BOOLEAN DEFAULT 0"
                     ))
                     logger.info("Added examples_loaded column to user_settings")
+
+                # Migrate token_usage_metrics table - add cost columns
+                result = await conn.execute(text("PRAGMA table_info(token_usage_metrics)"))
+                columns = {row[1] for row in result.fetchall()}
+
+                for col in ["input_cost", "output_cost", "cache_cost", "total_cost"]:
+                    if col not in columns:
+                        await conn.execute(text(
+                            f"ALTER TABLE token_usage_metrics ADD COLUMN {col} REAL DEFAULT 0.0"
+                        ))
+                        logger.info(f"Added {col} column to token_usage_metrics")
+
+                # Migrate session_token_states table - add cumulative cost columns
+                result = await conn.execute(text("PRAGMA table_info(session_token_states)"))
+                columns = {row[1] for row in result.fetchall()}
+
+                for col in ["cumulative_input_cost", "cumulative_output_cost", "cumulative_total_cost"]:
+                    if col not in columns:
+                        await conn.execute(text(
+                            f"ALTER TABLE session_token_states ADD COLUMN {col} REAL DEFAULT 0.0"
+                        ))
+                        logger.info(f"Added {col} column to session_token_states")
+
         except Exception as e:
             logger.warning(f"Migration check failed (table may not exist yet): {e}")
 
@@ -1568,7 +1592,12 @@ class Database:
                     reasoning_tokens=metric.get("reasoning_tokens", 0),
                     iteration=metric.get("iteration", 1),
                     execution_id=metric.get("execution_id"),
-                    created_at=datetime.now(timezone.utc)
+                    created_at=datetime.now(timezone.utc),
+                    # Cost fields
+                    input_cost=metric.get("input_cost", 0.0),
+                    output_cost=metric.get("output_cost", 0.0),
+                    cache_cost=metric.get("cache_cost", 0.0),
+                    total_cost=metric.get("total_cost", 0.0)
                 )
                 session.add(entry)
                 await session.commit()
@@ -1612,6 +1641,97 @@ class Database:
                 ]
         except Exception as e:
             logger.error("Failed to get token metrics", session_id=session_id, error=str(e))
+            return []
+
+    async def get_provider_usage_summary(self) -> List[Dict[str, Any]]:
+        """Get aggregated token usage and cost by provider.
+
+        Returns a list of provider summaries with:
+        - provider: Provider name (openai, anthropic, etc.)
+        - total_input_tokens: Sum of input tokens
+        - total_output_tokens: Sum of output tokens
+        - total_tokens: Sum of all tokens
+        - total_input_cost: Sum of input costs (USD)
+        - total_output_cost: Sum of output costs (USD)
+        - total_cost: Sum of all costs (USD)
+        - execution_count: Number of executions
+        - models: Breakdown by model (list of dicts)
+        """
+        try:
+            async with self.get_session() as session:
+                from sqlalchemy import func
+
+                # First get per-model breakdown
+                model_stmt = (
+                    select(
+                        TokenUsageMetric.provider,
+                        TokenUsageMetric.model,
+                        func.sum(TokenUsageMetric.input_tokens).label("input_tokens"),
+                        func.sum(TokenUsageMetric.output_tokens).label("output_tokens"),
+                        func.sum(TokenUsageMetric.total_tokens).label("total_tokens"),
+                        func.sum(TokenUsageMetric.input_cost).label("input_cost"),
+                        func.sum(TokenUsageMetric.output_cost).label("output_cost"),
+                        func.sum(TokenUsageMetric.cache_cost).label("cache_cost"),
+                        func.sum(TokenUsageMetric.total_cost).label("total_cost"),
+                        func.count().label("execution_count")
+                    )
+                    .group_by(TokenUsageMetric.provider, TokenUsageMetric.model)
+                    .order_by(TokenUsageMetric.provider, TokenUsageMetric.model)
+                )
+                result = await session.execute(model_stmt)
+                rows = result.all()
+
+                # Aggregate by provider
+                providers: Dict[str, Dict] = {}
+                for row in rows:
+                    provider = row.provider or "unknown"
+                    if provider not in providers:
+                        providers[provider] = {
+                            "provider": provider,
+                            "total_input_tokens": 0,
+                            "total_output_tokens": 0,
+                            "total_tokens": 0,
+                            "total_input_cost": 0.0,
+                            "total_output_cost": 0.0,
+                            "total_cache_cost": 0.0,
+                            "total_cost": 0.0,
+                            "execution_count": 0,
+                            "models": []
+                        }
+
+                    p = providers[provider]
+                    p["total_input_tokens"] += row.input_tokens or 0
+                    p["total_output_tokens"] += row.output_tokens or 0
+                    p["total_tokens"] += row.total_tokens or 0
+                    p["total_input_cost"] += float(row.input_cost or 0)
+                    p["total_output_cost"] += float(row.output_cost or 0)
+                    p["total_cache_cost"] += float(row.cache_cost or 0)
+                    p["total_cost"] += float(row.total_cost or 0)
+                    p["execution_count"] += row.execution_count or 0
+
+                    p["models"].append({
+                        "model": row.model,
+                        "input_tokens": row.input_tokens or 0,
+                        "output_tokens": row.output_tokens or 0,
+                        "total_tokens": row.total_tokens or 0,
+                        "input_cost": round(float(row.input_cost or 0), 6),
+                        "output_cost": round(float(row.output_cost or 0), 6),
+                        "cache_cost": round(float(row.cache_cost or 0), 6),
+                        "total_cost": round(float(row.total_cost or 0), 6),
+                        "execution_count": row.execution_count or 0
+                    })
+
+                # Round provider totals
+                for p in providers.values():
+                    p["total_input_cost"] = round(p["total_input_cost"], 6)
+                    p["total_output_cost"] = round(p["total_output_cost"], 6)
+                    p["total_cache_cost"] = round(p["total_cache_cost"], 6)
+                    p["total_cost"] = round(p["total_cost"], 6)
+
+                return list(providers.values())
+
+        except Exception as e:
+            logger.error("Failed to get provider usage summary", error=str(e))
             return []
 
     # ============================================================================
@@ -1787,3 +1907,323 @@ class Database:
         except Exception as e:
             logger.error("Failed to get compaction history", session_id=session_id, error=str(e))
             return []
+
+    # ============================================================================
+    # Agent Teams - CRUD Operations
+    # ============================================================================
+
+    async def create_team(self, team_id: str, workflow_id: str, team_lead_node_id: str,
+                          config: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+        """Create a new agent team."""
+        try:
+            async with self.get_session() as session:
+                team = AgentTeam(
+                    id=team_id, workflow_id=workflow_id, team_lead_node_id=team_lead_node_id,
+                    config=config or {}, created_at=datetime.now(timezone.utc)
+                )
+                session.add(team)
+                await session.commit()
+                logger.info(f"[Teams] Created team {team_id}")
+                return {"id": team.id, "workflow_id": team.workflow_id, "status": team.status}
+        except Exception as e:
+            logger.error(f"Failed to create team: {e}")
+            return None
+
+    async def get_team(self, team_id: str) -> Optional[Dict[str, Any]]:
+        """Get team by ID."""
+        try:
+            async with self.get_session() as session:
+                result = await session.execute(select(AgentTeam).where(AgentTeam.id == team_id))
+                team = result.scalar_one_or_none()
+                if not team:
+                    return None
+                return {
+                    "id": team.id, "workflow_id": team.workflow_id, "team_lead_node_id": team.team_lead_node_id,
+                    "status": team.status, "config": team.config,
+                    "created_at": team.created_at.isoformat() if team.created_at else None
+                }
+        except Exception as e:
+            logger.error(f"Failed to get team: {e}")
+            return None
+
+    async def update_team_status(self, team_id: str, status: str) -> bool:
+        """Update team status."""
+        try:
+            async with self.get_session() as session:
+                result = await session.execute(select(AgentTeam).where(AgentTeam.id == team_id))
+                team = result.scalar_one_or_none()
+                if not team:
+                    return False
+                team.status = status
+                if status in ("completed", "failed", "dissolved"):
+                    team.completed_at = datetime.now(timezone.utc)
+                await session.commit()
+                return True
+        except Exception as e:
+            logger.error(f"Failed to update team status: {e}")
+            return False
+
+    async def add_team_member(self, team_id: str, agent_node_id: str, agent_type: str,
+                               role: str = "teammate", agent_label: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """Add member to team."""
+        try:
+            async with self.get_session() as session:
+                member = TeamMember(
+                    team_id=team_id, agent_node_id=agent_node_id, agent_type=agent_type,
+                    agent_label=agent_label, role=role, joined_at=datetime.now(timezone.utc)
+                )
+                session.add(member)
+                await session.commit()
+                return {"id": member.id, "agent_node_id": agent_node_id, "role": role}
+        except Exception as e:
+            logger.error(f"Failed to add team member: {e}")
+            return None
+
+    async def get_team_members(self, team_id: str) -> List[Dict[str, Any]]:
+        """Get all team members."""
+        try:
+            async with self.get_session() as session:
+                result = await session.execute(
+                    select(TeamMember).where(TeamMember.team_id == team_id)
+                )
+                return [
+                    {"id": m.id, "agent_node_id": m.agent_node_id, "agent_type": m.agent_type,
+                     "agent_label": m.agent_label, "role": m.role, "status": m.status}
+                    for m in result.scalars().all()
+                ]
+        except Exception as e:
+            logger.error(f"Failed to get team members: {e}")
+            return []
+
+    async def update_member_status(self, team_id: str, agent_node_id: str, status: str) -> bool:
+        """Update member status (idle, working, offline)."""
+        try:
+            async with self.get_session() as session:
+                result = await session.execute(
+                    select(TeamMember).where(
+                        TeamMember.team_id == team_id, TeamMember.agent_node_id == agent_node_id
+                    )
+                )
+                member = result.scalar_one_or_none()
+                if not member:
+                    return False
+                member.status = status
+                await session.commit()
+                return True
+        except Exception as e:
+            logger.error(f"Failed to update member status: {e}")
+            return False
+
+    async def add_team_task(self, task_id: str, team_id: str, title: str, created_by: str,
+                            description: Optional[str] = None, priority: int = 3,
+                            depends_on: Optional[List[str]] = None) -> Optional[Dict[str, Any]]:
+        """Add task to team's shared list."""
+        try:
+            async with self.get_session() as session:
+                task = TeamTask(
+                    id=task_id, team_id=team_id, title=title, description=description,
+                    priority=priority, created_by=created_by,
+                    depends_on={"task_ids": depends_on} if depends_on else None,
+                    created_at=datetime.now(timezone.utc)
+                )
+                session.add(task)
+                await session.commit()
+                return {"id": task.id, "title": title, "status": "pending"}
+        except Exception as e:
+            logger.error(f"Failed to add team task: {e}")
+            return None
+
+    async def get_team_tasks(self, team_id: str, status: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get team tasks, optionally filtered by status."""
+        try:
+            async with self.get_session() as session:
+                query = select(TeamTask).where(TeamTask.team_id == team_id)
+                if status:
+                    query = query.where(TeamTask.status == status)
+                query = query.order_by(TeamTask.priority.asc(), TeamTask.created_at.asc())
+                result = await session.execute(query)
+                return [
+                    {"id": t.id, "title": t.title, "description": t.description, "status": t.status,
+                     "priority": t.priority, "assigned_to": t.assigned_to, "progress": t.progress,
+                     "depends_on": t.depends_on.get("task_ids", []) if t.depends_on else []}
+                    for t in result.scalars().all()
+                ]
+        except Exception as e:
+            logger.error(f"Failed to get team tasks: {e}")
+            return []
+
+    async def claim_task(self, task_id: str, agent_node_id: str) -> Optional[Dict[str, Any]]:
+        """Claim a pending task. Returns None if already claimed."""
+        try:
+            async with self.get_session() as session:
+                result = await session.execute(
+                    select(TeamTask).where(
+                        TeamTask.id == task_id, TeamTask.status == "pending", TeamTask.assigned_to.is_(None)
+                    )
+                )
+                task = result.scalar_one_or_none()
+                if not task:
+                    return None
+                task.assigned_to = agent_node_id
+                task.status = "in_progress"
+                task.started_at = datetime.now(timezone.utc)
+                await session.commit()
+                return {"id": task.id, "title": task.title, "assigned_to": agent_node_id}
+        except Exception as e:
+            logger.error(f"Failed to claim task: {e}")
+            return None
+
+    async def complete_task(self, task_id: str, result_data: Optional[Dict[str, Any]] = None) -> bool:
+        """Mark task as completed."""
+        try:
+            async with self.get_session() as session:
+                result = await session.execute(select(TeamTask).where(TeamTask.id == task_id))
+                task = result.scalar_one_or_none()
+                if not task:
+                    return False
+                task.status = "completed"
+                task.result = result_data
+                task.progress = 100
+                task.completed_at = datetime.now(timezone.utc)
+                await session.commit()
+                return True
+        except Exception as e:
+            logger.error(f"Failed to complete task: {e}")
+            return False
+
+    async def fail_task(self, task_id: str, error: str) -> bool:
+        """Mark task as failed."""
+        try:
+            async with self.get_session() as session:
+                result = await session.execute(select(TeamTask).where(TeamTask.id == task_id))
+                task = result.scalar_one_or_none()
+                if not task:
+                    return False
+                task.error = error
+                task.retry_count += 1
+                if task.retry_count < task.max_retries:
+                    task.status = "pending"
+                    task.assigned_to = None
+                else:
+                    task.status = "failed"
+                    task.completed_at = datetime.now(timezone.utc)
+                await session.commit()
+                return True
+        except Exception as e:
+            logger.error(f"Failed to fail task: {e}")
+            return False
+
+    async def get_claimable_tasks(self, team_id: str) -> List[Dict[str, Any]]:
+        """Get pending tasks with resolved dependencies."""
+        try:
+            async with self.get_session() as session:
+                result = await session.execute(select(TeamTask).where(TeamTask.team_id == team_id))
+                tasks = result.scalars().all()
+                completed_ids = {t.id for t in tasks if t.status == "completed"}
+                claimable = []
+                for t in tasks:
+                    if t.status != "pending" or t.assigned_to:
+                        continue
+                    deps = t.depends_on.get("task_ids", []) if t.depends_on else []
+                    if all(d in completed_ids for d in deps):
+                        claimable.append({"id": t.id, "title": t.title, "priority": t.priority})
+                return claimable
+        except Exception as e:
+            logger.error(f"Failed to get claimable tasks: {e}")
+            return []
+
+    async def add_agent_message(self, team_id: str, from_agent: str, content: str,
+                                 message_type: str = "direct", to_agent: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """Add message between agents."""
+        try:
+            async with self.get_session() as session:
+                msg = AgentMessage(
+                    team_id=team_id, from_agent=from_agent, to_agent=to_agent,
+                    message_type=message_type, content=content, created_at=datetime.now(timezone.utc)
+                )
+                session.add(msg)
+                await session.commit()
+                return {"id": msg.id, "from_agent": from_agent, "to_agent": to_agent}
+        except Exception as e:
+            logger.error(f"Failed to add agent message: {e}")
+            return None
+
+    async def get_agent_messages(self, team_id: str, agent_node_id: Optional[str] = None,
+                                  unread_only: bool = False) -> List[Dict[str, Any]]:
+        """Get messages for team or specific agent."""
+        try:
+            async with self.get_session() as session:
+                from sqlalchemy import or_
+                query = select(AgentMessage).where(AgentMessage.team_id == team_id)
+                if agent_node_id:
+                    query = query.where(or_(
+                        AgentMessage.to_agent == agent_node_id,
+                        AgentMessage.to_agent.is_(None)
+                    ))
+                if unread_only:
+                    query = query.where(AgentMessage.read == False)
+                query = query.order_by(AgentMessage.created_at.asc()).limit(100)
+                result = await session.execute(query)
+                return [
+                    {"id": m.id, "from_agent": m.from_agent, "to_agent": m.to_agent,
+                     "message_type": m.message_type, "content": m.content, "read": m.read,
+                     "created_at": m.created_at.isoformat() if m.created_at else None}
+                    for m in result.scalars().all()
+                ]
+        except Exception as e:
+            logger.error(f"Failed to get agent messages: {e}")
+            return []
+
+    async def mark_messages_read(self, team_id: str, agent_node_id: str) -> int:
+        """Mark all messages as read for an agent."""
+        try:
+            async with self.get_session() as session:
+                from sqlalchemy import or_
+                result = await session.execute(
+                    select(AgentMessage).where(
+                        AgentMessage.team_id == team_id,
+                        AgentMessage.read == False,
+                        or_(AgentMessage.to_agent == agent_node_id, AgentMessage.to_agent.is_(None))
+                    )
+                )
+                messages = result.scalars().all()
+                for m in messages:
+                    m.read = True
+                await session.commit()
+                return len(messages)
+        except Exception as e:
+            logger.error(f"Failed to mark messages read: {e}")
+            return 0
+
+    async def get_team_stats(self, team_id: str) -> Dict[str, Any]:
+        """Get team statistics."""
+        try:
+            async with self.get_session() as session:
+                # Get counts in simple queries
+                team_result = await session.execute(select(AgentTeam).where(AgentTeam.id == team_id))
+                team = team_result.scalar_one_or_none()
+                if not team:
+                    return {"error": "Team not found"}
+
+                members_result = await session.execute(select(TeamMember).where(TeamMember.team_id == team_id))
+                members = members_result.scalars().all()
+
+                tasks_result = await session.execute(select(TeamTask).where(TeamTask.team_id == team_id))
+                tasks = tasks_result.scalars().all()
+
+                return {
+                    "team_id": team_id,
+                    "status": team.status,
+                    "member_count": len(members),
+                    "task_total": len(tasks),
+                    "task_pending": sum(1 for t in tasks if t.status == "pending"),
+                    "task_in_progress": sum(1 for t in tasks if t.status == "in_progress"),
+                    "task_completed": sum(1 for t in tasks if t.status == "completed"),
+                    "task_failed": sum(1 for t in tasks if t.status == "failed"),
+                    "members": [{"id": m.agent_node_id, "type": m.agent_type, "status": m.status} for m in members],
+                    "active_tasks": [{"id": t.id, "title": t.title, "assigned_to": t.assigned_to, "progress": t.progress}
+                                     for t in tasks if t.status == "in_progress"]
+                }
+        except Exception as e:
+            logger.error(f"Failed to get team stats: {e}")
+            return {"error": str(e)}

@@ -5,6 +5,7 @@ import { CODE_NODE_TYPES } from '../nodeDefinitions/codeNodes';
 import { UTILITY_NODE_TYPES } from '../nodeDefinitions/utilityNodes';
 import { DOCUMENT_NODE_TYPES } from '../nodeDefinitions/documentNodes';
 import { SPECIALIZED_AGENT_TYPES } from '../nodeDefinitions/specializedAgentNodes';
+import { TWITTER_NODE_TYPES } from '../nodeDefinitions/twitterNodes';
 import { Node, Edge } from 'reactflow';
 import { INodeExecutionData } from '../types/INodeProperties';
 import { API_CONFIG } from '../config/api';
@@ -223,7 +224,9 @@ export class ExecutionService {
       // Utility Nodes (HTTP, Webhooks)
       ...UTILITY_NODE_TYPES,
       // Document Processing Nodes
-      ...DOCUMENT_NODE_TYPES
+      ...DOCUMENT_NODE_TYPES,
+      // Twitter/X Nodes
+      ...TWITTER_NODE_TYPES
     ];
 
     return supportedTypes.includes(nodeType);

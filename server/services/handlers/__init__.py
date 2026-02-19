@@ -57,12 +57,20 @@ from .utility import (
     handle_cron_scheduler,
     handle_timer,
     handle_console,
+    handle_team_monitor,
 )
 
 # WhatsApp handlers
 from .whatsapp import (
     handle_whatsapp_send,
     handle_whatsapp_db,
+)
+
+# Twitter handlers
+from .twitter import (
+    handle_twitter_send,
+    handle_twitter_search,
+    handle_twitter_user,
 )
 
 # Social handlers (unified messaging)
@@ -115,9 +123,14 @@ __all__ = [
     'handle_cron_scheduler',
     'handle_timer',
     'handle_console',
+    'handle_team_monitor',
     # WhatsApp
     'handle_whatsapp_send',
     'handle_whatsapp_db',
+    # Twitter
+    'handle_twitter_send',
+    'handle_twitter_search',
+    'handle_twitter_user',
     # Social
     'handle_social_receive',
     'handle_social_send',

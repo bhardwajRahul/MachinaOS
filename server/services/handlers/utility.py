@@ -820,3 +820,94 @@ def _format_console_output(data: Any, format_type: str) -> str:
                 return json.dumps(data, indent=2, default=str, ensure_ascii=False)
         case _:
             return str(data)
+
+
+# =============================================================================
+# TEAM MONITOR HANDLER
+# =============================================================================
+
+async def handle_team_monitor(
+    node_id: str,
+    node_type: str,
+    parameters: Dict[str, Any],
+    context: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Handle team monitor node - returns team status snapshot.
+
+    Args:
+        node_id: The node ID
+        node_type: The node type (teamMonitor)
+        parameters: Resolved parameters
+        context: Execution context with team_id from connected team node
+
+    Returns:
+        Execution result dict with team status
+    """
+    from services.agent_team import get_agent_team_service
+    start_time = time.time()
+
+    try:
+        # Get team_id from context (set by connected team lead node)
+        team_id = context.get('team_id')
+
+        # Try to get from connected node outputs
+        if not team_id:
+            outputs = context.get('outputs', {})
+            for output in outputs.values():
+                if isinstance(output, dict) and output.get('team_id'):
+                    team_id = output.get('team_id')
+                    break
+
+        if not team_id:
+            return {
+                "success": True,
+                "node_id": node_id,
+                "node_type": "teamMonitor",
+                "result": {
+                    "message": "No team connected",
+                    "team_id": None,
+                    "members": [],
+                    "tasks": {"total": 0, "completed": 0, "active": 0, "pending": 0, "failed": 0},
+                    "active_tasks": [],
+                    "recent_events": []
+                },
+                "execution_time": time.time() - start_time,
+                "timestamp": datetime.now().isoformat()
+            }
+
+        team_service = get_agent_team_service()
+        status = await team_service.get_team_status(team_id)
+
+        max_history = parameters.get('maxHistoryItems', 50)
+
+        return {
+            "success": True,
+            "node_id": node_id,
+            "node_type": "teamMonitor",
+            "result": {
+                "team_id": team_id,
+                "members": status.get('members', []),
+                "tasks": {
+                    "total": status.get('task_count', 0),
+                    "completed": status.get('completed_count', 0),
+                    "active": status.get('active_count', 0),
+                    "pending": status.get('pending_count', 0),
+                    "failed": status.get('failed_count', 0)
+                },
+                "active_tasks": status.get('active_tasks', []),
+                "recent_events": status.get('recent_events', [])[-max_history:]
+            },
+            "execution_time": time.time() - start_time,
+            "timestamp": datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        logger.error("[TeamMonitor] Failed", node_id=node_id, error=str(e))
+        return {
+            "success": False,
+            "node_id": node_id,
+            "node_type": "teamMonitor",
+            "error": str(e),
+            "execution_time": time.time() - start_time,
+            "timestamp": datetime.now().isoformat()
+        }

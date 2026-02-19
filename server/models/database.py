@@ -1,7 +1,7 @@
 """SQLModel database models and tables."""
 
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from sqlmodel import SQLModel, Field, Column, DateTime, JSON
 from sqlalchemy import func
 
@@ -315,6 +315,11 @@ class TokenUsageMetric(SQLModel, table=True):
     iteration: int = Field(default=1)
     execution_id: Optional[str] = Field(default=None, max_length=255)
     created_at: Optional[datetime] = Field(default=None)
+    # Cost fields (USD)
+    input_cost: float = Field(default=0.0)
+    output_cost: float = Field(default=0.0)
+    cache_cost: float = Field(default=0.0)
+    total_cost: float = Field(default=0.0)
 
 
 class CompactionEvent(SQLModel, table=True):
@@ -357,3 +362,108 @@ class SessionTokenState(SQLModel, table=True):
     custom_threshold: Optional[int] = Field(default=None)
     compaction_enabled: bool = Field(default=True)
     updated_at: Optional[datetime] = Field(default=None)
+    # Cumulative cost fields (USD)
+    cumulative_input_cost: float = Field(default=0.0)
+    cumulative_output_cost: float = Field(default=0.0)
+    cumulative_total_cost: float = Field(default=0.0)
+
+
+# =============================================================================
+# Agent Teams - Claude SDK Agent Teams Pattern
+# =============================================================================
+
+
+class AgentTeam(SQLModel, table=True):
+    """Agent team for multi-agent collaboration.
+
+    Implements Claude SDK Agent Teams pattern where a team lead coordinates
+    multiple teammate agents working on shared tasks.
+    """
+
+    __tablename__ = "agent_teams"
+
+    id: str = Field(primary_key=True, max_length=255)
+    workflow_id: str = Field(index=True, max_length=255)
+    team_lead_node_id: str = Field(max_length=255)
+    status: str = Field(default="active", max_length=20)  # active, completed, failed, dissolved
+    config: Dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(DateTime(timezone=True), server_default=func.now())
+    )
+    completed_at: Optional[datetime] = Field(default=None)
+
+
+class TeamMember(SQLModel, table=True):
+    """Agent team membership.
+
+    Tracks which agents belong to which team and their current status.
+    """
+
+    __tablename__ = "team_members"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    team_id: str = Field(index=True, max_length=255)
+    agent_node_id: str = Field(index=True, max_length=255)
+    agent_type: str = Field(max_length=100)  # orchestrator_agent, android_agent, etc.
+    agent_label: Optional[str] = Field(default=None, max_length=255)  # User-defined label
+    role: str = Field(default="teammate", max_length=20)  # team_lead, teammate
+    status: str = Field(default="idle", max_length=20)  # idle, working, offline
+    capabilities: Optional[Dict[str, Any]] = Field(default=None, sa_column=Column(JSON))
+    joined_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(DateTime(timezone=True), server_default=func.now())
+    )
+
+
+class TeamTask(SQLModel, table=True):
+    """Shared task in agent team task list.
+
+    Tasks are created by the team lead and claimed by teammates.
+    Supports dependencies between tasks.
+    """
+
+    __tablename__ = "team_tasks"
+
+    id: str = Field(primary_key=True, max_length=255)
+    team_id: str = Field(index=True, max_length=255)
+    title: str = Field(max_length=500)
+    description: Optional[str] = Field(default=None, max_length=5000)
+    status: str = Field(default="pending", max_length=20)  # pending, in_progress, completed, failed, skipped
+    priority: int = Field(default=3)  # 1-5, lower = higher priority
+    created_by: str = Field(max_length=255)  # agent_node_id
+    assigned_to: Optional[str] = Field(default=None, max_length=255)
+    depends_on: Optional[Dict[str, Any]] = Field(default=None, sa_column=Column(JSON))  # List of task_ids
+    result: Optional[Dict[str, Any]] = Field(default=None, sa_column=Column(JSON))
+    error: Optional[str] = Field(default=None, max_length=2000)
+    retry_count: int = Field(default=0)
+    max_retries: int = Field(default=3)
+    progress: int = Field(default=0)  # 0-100 percentage
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(DateTime(timezone=True), server_default=func.now())
+    )
+    started_at: Optional[datetime] = Field(default=None)
+    completed_at: Optional[datetime] = Field(default=None)
+
+
+class AgentMessage(SQLModel, table=True):
+    """Inter-agent messages within a team.
+
+    Supports direct messages between agents and broadcasts to all team members.
+    """
+
+    __tablename__ = "agent_messages"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    team_id: str = Field(index=True, max_length=255)
+    from_agent: str = Field(max_length=255)  # node_id
+    to_agent: Optional[str] = Field(default=None, max_length=255)  # None = broadcast
+    message_type: str = Field(max_length=50)  # direct, broadcast, task_assignment, task_update, task_complete
+    content: str = Field(max_length=10000)
+    extra_data: Optional[Dict[str, Any]] = Field(default=None, sa_column=Column(JSON))
+    read: bool = Field(default=False)
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(DateTime(timezone=True), server_default=func.now())
+    )

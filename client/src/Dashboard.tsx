@@ -18,6 +18,7 @@ import ModelNode from './components/ModelNode';
 import SquareNode from './components/SquareNode';
 import TriggerNode from './components/TriggerNode';
 import ToolkitNode from './components/ToolkitNode';
+import TeamMonitorNode from './components/TeamMonitorNode';
 import ConditionalEdge from './components/ConditionalEdge';
 import NodeContextMenu from './components/ui/NodeContextMenu';
 import { nodeDefinitions } from './nodeDefinitions';
@@ -65,7 +66,7 @@ const createNodeTypes = (): Record<string, React.ComponentType<any>> => {
   const types: Record<string, React.ComponentType<any>> = {};
 
   // Trigger nodes (no input handles) - check by group or specific types
-  const TRIGGER_NODE_TYPES = ['start', 'cronScheduler', 'webhookTrigger', 'whatsappReceive', 'chatTrigger', 'taskTrigger'];
+  const TRIGGER_NODE_TYPES = ['start', 'cronScheduler', 'webhookTrigger', 'whatsappReceive', 'twitterReceive', 'chatTrigger', 'taskTrigger'];
 
   // Pre-register specialized agent nodes explicitly to ensure they're always available
   // This handles cases where nodeDefinitions iteration order might miss them
@@ -90,6 +91,9 @@ const createNodeTypes = (): Record<string, React.ComponentType<any>> => {
     } else if (type === 'whatsappSend' || type === 'whatsappDb') {
       // WhatsApp action nodes use SquareNode (whatsappReceive is a trigger)
       types[type] = SquareNode;
+    } else if (type === 'twitterSend' || type === 'twitterSearch' || type === 'twitterUser') {
+      // Twitter action nodes use SquareNode (twitterReceive is a trigger)
+      types[type] = SquareNode;
     } else if (ANDROID_SERVICE_NODE_TYPES.includes(type)) {
       // Android service nodes use SquareNode component
       types[type] = SquareNode;
@@ -103,9 +107,12 @@ const createNodeTypes = (): Record<string, React.ComponentType<any>> => {
       // Code execution nodes use SquareNode component
       types[type] = SquareNode;
     } else if (UTILITY_NODE_TYPES.includes(type)) {
-      // Utility nodes (HTTP, Webhooks) use SquareNode component
-      // Note: webhookTrigger is already handled as trigger above
+      // Utility nodes (HTTP, Webhooks, Team Monitor) use SquareNode component
+      // Note: webhookTrigger and chatTrigger are already handled as triggers above
       types[type] = SquareNode;
+    } else if (type === 'teamMonitor') {
+      // Team Monitor node uses custom component with live display
+      types[type] = TeamMonitorNode;
     } else if (SPECIALIZED_AGENT_TYPES.includes(type)) {
       // Specialized agent nodes use AIAgentNode (rectangular card with bottom handles)
       types[type] = AIAgentNode;
@@ -651,8 +658,8 @@ const DashboardContent: React.FC = () => {
     if (!currentWorkflow) return;
 
     // Check if there's at least one trigger node (workflow entry points)
-    // Trigger types: start, cronScheduler, webhookTrigger, whatsappReceive, workflowTrigger, chatTrigger, taskTrigger
-    const triggerTypes = ['start', 'cronScheduler', 'webhookTrigger', 'whatsappReceive', 'workflowTrigger', 'chatTrigger', 'taskTrigger'];
+    // Trigger types: start, cronScheduler, webhookTrigger, whatsappReceive, twitterReceive, workflowTrigger, chatTrigger, taskTrigger
+    const triggerTypes = ['start', 'cronScheduler', 'webhookTrigger', 'whatsappReceive', 'twitterReceive', 'workflowTrigger', 'chatTrigger', 'taskTrigger'];
     const hasTriggerNode = nodes.some(node => triggerTypes.includes(node.type || ''));
     if (!hasTriggerNode) {
       alert('No trigger node found in workflow.\n\nAdd a trigger node (Cron Scheduler, WhatsApp Receive, Webhook, Chat Trigger, etc.) to begin deployment.');

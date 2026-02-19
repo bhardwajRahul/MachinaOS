@@ -5,17 +5,20 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Button, Tag, Alert, Descriptions, Space, InputNumber, Switch, Input } from 'antd';
+import { Button, Tag, Alert, Descriptions, Space, InputNumber, Switch, Input, Collapse, Statistic, Spin } from 'antd';
 import {
   CheckCircleOutlined,
   SafetyOutlined,
+  ReloadOutlined,
+  DollarOutlined,
+  TwitterOutlined,
 } from '@ant-design/icons';
 import Modal from './ui/Modal';
 import QRCodeDisplay from './ui/QRCodeDisplay';
 import ApiKeyInput from './ui/ApiKeyInput';
-import { useApiKeys, ProviderDefaults } from '../hooks/useApiKeys';
+import { useApiKeys, ProviderDefaults, ProviderUsageSummary } from '../hooks/useApiKeys';
 import { useAppTheme } from '../hooks/useAppTheme';
-import { useWhatsAppStatus, useAndroidStatus, useWebSocket, RateLimitConfig, RateLimitStats } from '../contexts/WebSocketContext';
+import { useWhatsAppStatus, useAndroidStatus, useTwitterStatus, useWebSocket, RateLimitConfig, RateLimitStats } from '../contexts/WebSocketContext';
 import { useWhatsApp } from '../hooks/useWhatsApp';
 import {
   OpenAIIcon, ClaudeIcon, GeminiIcon, GroqIcon, OpenRouterIcon, CerebrasIcon,
@@ -44,6 +47,10 @@ const WhatsAppIcon = () => (
   </svg>
 );
 
+const XIcon = () => (
+  <TwitterOutlined style={{ fontSize: 20, color: '#000000' }} />
+);
+
 // ============================================================================
 // TYPES & DATA
 // ============================================================================
@@ -57,7 +64,7 @@ interface CredentialItem {
   Icon?: React.FC<{ size?: number }>;
   CustomIcon?: React.FC;
   isSpecial?: boolean;
-  panelType?: 'whatsapp' | 'android';
+  panelType?: 'whatsapp' | 'android' | 'twitter';
 }
 
 interface Category {
@@ -84,6 +91,7 @@ const CATEGORIES: Category[] = [
     label: 'Social Media',
     items: [
       { id: 'whatsapp_personal', name: 'WhatsApp Personal', placeholder: '', color: '#25D366', desc: 'Connect via QR code pairing', CustomIcon: WhatsAppIcon, isSpecial: true, panelType: 'whatsapp' },
+      { id: 'twitter', name: 'Twitter/X', placeholder: '', color: '#000000', desc: 'Post tweets, search, user lookup', CustomIcon: XIcon, isSpecial: true, panelType: 'twitter' },
     ],
   },
   {
@@ -114,9 +122,10 @@ interface Props {
 
 const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
   const theme = useAppTheme();
-  const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey, validateGoogleMapsKey, getProviderDefaults, saveProviderDefaults, isConnected } = useApiKeys();
+  const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey, validateGoogleMapsKey, getProviderDefaults, saveProviderDefaults, getProviderUsageSummary, isConnected } = useApiKeys();
   const whatsappStatus = useWhatsAppStatus();
   const androidStatus = useAndroidStatus();
+  const twitterStatus = useTwitterStatus();
 
 
   // Tag style helper - consistent theming for status tags
@@ -142,6 +151,11 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
   const [providerDefaults, setProviderDefaults] = useState<Record<string, ProviderDefaults>>({});
   const [defaultsLoading, setDefaultsLoading] = useState<Record<string, boolean>>({});
   const [defaultsDirty, setDefaultsDirty] = useState<Record<string, boolean>>({});
+
+  // Usage & Costs state
+  const [usageSummary, setUsageSummary] = useState<ProviderUsageSummary[]>([]);
+  const [usageLoading, setUsageLoading] = useState(false);
+  const [usageExpanded, setUsageExpanded] = useState(false);
 
   // Load stored keys and proxy URLs
   const loadKeys = useCallback(async () => {
@@ -218,6 +232,27 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
     setDefaultsLoading(l => ({ ...l, [provider]: false }));
   };
 
+  // Load usage summary when expanded
+  const loadUsageSummary = useCallback(async () => {
+    if (!isConnected) return;
+    setUsageLoading(true);
+    try {
+      const summary = await getProviderUsageSummary();
+      setUsageSummary(summary);
+    } catch (error) {
+      console.warn('Error loading usage summary:', error);
+    } finally {
+      setUsageLoading(false);
+    }
+  }, [getProviderUsageSummary, isConnected]);
+
+  // Load usage when section is expanded
+  useEffect(() => {
+    if (usageExpanded && isConnected) {
+      loadUsageSummary();
+    }
+  }, [usageExpanded, isConnected, loadUsageSummary]);
+
   const handleValidate = async (id: string) => {
     const key = keys[id];
     if (!key?.trim()) return;
@@ -250,6 +285,9 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
     }
     if (item.panelType === 'android') {
       return { connected: androidStatus.paired, label: androidStatus.paired ? 'Paired' : 'Not Paired' };
+    }
+    if (item.panelType === 'twitter') {
+      return { connected: twitterStatus.connected, label: twitterStatus.connected ? `@${twitterStatus.username}` : 'Not Connected' };
     }
     return null;
   };
@@ -374,6 +412,13 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
   const [whatsappLoading, setWhatsappLoading] = useState<string | null>(null);
   const [whatsappError, setWhatsappError] = useState<string | null>(null);
 
+  // Twitter state
+  const [twitterClientId, setTwitterClientId] = useState('');
+  const [twitterClientSecret, setTwitterClientSecret] = useState('');
+  const [twitterCredentialsStored, setTwitterCredentialsStored] = useState<boolean | null>(null);
+  const [twitterLoading, setTwitterLoading] = useState<string | null>(null);
+  const [twitterError, setTwitterError] = useState<string | null>(null);
+
   // Rate limit state
   const [rateLimitConfig, setRateLimitConfig] = useState<RateLimitConfig | null>(null);
   const [rateLimitStats, setRateLimitStats] = useState<RateLimitStats | null>(null);
@@ -393,6 +438,85 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
       });
     }
   }, [visible, hasStoredKey, getStoredApiKey]);
+
+  // Load Twitter credentials on mount
+  useEffect(() => {
+    if (visible) {
+      // Check if client_id is stored
+      hasStoredKey('twitter_client_id').then(async (has) => {
+        setTwitterCredentialsStored(has);
+        if (has) {
+          const clientId = await getStoredApiKey('twitter_client_id');
+          const clientSecret = await getStoredApiKey('twitter_client_secret');
+          if (clientId) setTwitterClientId(clientId);
+          if (clientSecret) setTwitterClientSecret(clientSecret);
+        }
+      });
+    }
+  }, [visible, hasStoredKey, getStoredApiKey]);
+
+  // Twitter handlers
+  const handleTwitterSaveCredentials = async () => {
+    if (!twitterClientId.trim()) {
+      setTwitterError('Client ID is required');
+      return;
+    }
+    setTwitterLoading('save');
+    setTwitterError(null);
+    try {
+      await saveApiKey('twitter_client_id', twitterClientId.trim());
+      if (twitterClientSecret.trim()) {
+        await saveApiKey('twitter_client_secret', twitterClientSecret.trim());
+      }
+      setTwitterCredentialsStored(true);
+    } catch (err: any) {
+      setTwitterError(err.message || 'Failed to save credentials');
+    } finally {
+      setTwitterLoading(null);
+    }
+  };
+
+  const handleTwitterLogin = async () => {
+    setTwitterLoading('login');
+    setTwitterError(null);
+    try {
+      const response = await sendRequest('twitter_oauth_login', {});
+      if (!response.success) {
+        setTwitterError(response.error || 'Failed to start OAuth');
+      }
+    } catch (err: any) {
+      setTwitterError(err.message || 'Failed to start OAuth');
+    } finally {
+      setTwitterLoading(null);
+    }
+  };
+
+  const handleTwitterLogout = async () => {
+    setTwitterLoading('logout');
+    setTwitterError(null);
+    try {
+      const response = await sendRequest('twitter_logout', {});
+      if (!response.success) {
+        setTwitterError(response.error || 'Failed to disconnect');
+      }
+    } catch (err: any) {
+      setTwitterError(err.message || 'Failed to disconnect');
+    } finally {
+      setTwitterLoading(null);
+    }
+  };
+
+  const handleTwitterRefreshStatus = async () => {
+    setTwitterLoading('refresh');
+    setTwitterError(null);
+    try {
+      await sendRequest('twitter_oauth_status', {});
+    } catch (err: any) {
+      setTwitterError(err.message || 'Failed to refresh status');
+    } finally {
+      setTwitterLoading(null);
+    }
+  };
 
   // Android handlers
   const handleAndroidSaveKey = async () => {
@@ -1077,6 +1201,202 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
       );
     }
 
+    // Twitter panel
+    if (selectedItem.panelType === 'twitter') {
+      return (
+        <div style={{ padding: theme.spacing.xl, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+          <Descriptions
+            title={<Space><XIcon /> Twitter/X</Space>}
+            bordered
+            column={1}
+            size="small"
+            style={{
+              marginBottom: theme.spacing.xl,
+              background: theme.colors.backgroundAlt,
+              borderRadius: theme.borderRadius.md,
+            }}
+            styles={{
+              label: {
+                backgroundColor: theme.colors.backgroundPanel,
+                color: theme.colors.textSecondary,
+                fontWeight: theme.fontWeight.medium,
+              },
+              content: {
+                backgroundColor: theme.colors.background,
+                color: theme.colors.text,
+              },
+            }}
+          >
+            <Descriptions.Item label="Status">
+              <Tag style={getTagStyle(twitterStatus.connected ? 'success' : 'error')}>
+                {twitterStatus.connected ? 'Connected' : 'Not Connected'}
+              </Tag>
+            </Descriptions.Item>
+            <Descriptions.Item label="API Credentials">
+              <Tag style={getTagStyle(twitterCredentialsStored ? 'success' : 'error')}>
+                {twitterCredentialsStored === null ? 'Checking...' : twitterCredentialsStored ? 'Configured' : 'Not configured'}
+              </Tag>
+            </Descriptions.Item>
+            {twitterStatus.connected && twitterStatus.username && (
+              <Descriptions.Item label="Account">
+                <Space>
+                  {twitterStatus.profile_image_url && (
+                    <img
+                      src={twitterStatus.profile_image_url}
+                      alt={twitterStatus.username}
+                      style={{ width: 24, height: 24, borderRadius: '50%' }}
+                    />
+                  )}
+                  <span style={{ fontFamily: 'monospace', fontSize: theme.fontSize.sm }}>@{twitterStatus.username}</span>
+                  {twitterStatus.name && <span style={{ color: theme.colors.textSecondary }}>({twitterStatus.name})</span>}
+                </Space>
+              </Descriptions.Item>
+            )}
+          </Descriptions>
+
+          {/* API Credentials Input - Only show if not connected */}
+          {!twitterStatus.connected && (
+            <div style={{ marginBottom: theme.spacing.xl }}>
+              <label style={{
+                display: 'block',
+                fontSize: theme.fontSize.sm,
+                fontWeight: theme.fontWeight.medium,
+                color: theme.colors.text,
+                marginBottom: theme.spacing.sm,
+              }}>
+                Twitter API Credentials
+              </label>
+              <div style={{ marginBottom: theme.spacing.md }}>
+                <Input
+                  value={twitterClientId}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTwitterClientId(e.target.value)}
+                  placeholder="Client ID (from X Developer Portal)"
+                  style={{
+                    marginBottom: theme.spacing.sm,
+                    backgroundColor: theme.colors.background,
+                    borderColor: theme.colors.border,
+                    color: theme.colors.text,
+                    fontFamily: 'monospace',
+                    fontSize: theme.fontSize.sm,
+                  }}
+                />
+                <Input.Password
+                  value={twitterClientSecret}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTwitterClientSecret(e.target.value)}
+                  placeholder="Client Secret (optional for PKCE)"
+                  style={{
+                    backgroundColor: theme.colors.background,
+                    borderColor: theme.colors.border,
+                    color: theme.colors.text,
+                    fontFamily: 'monospace',
+                    fontSize: theme.fontSize.sm,
+                  }}
+                />
+              </div>
+              <Button
+                onClick={handleTwitterSaveCredentials}
+                loading={twitterLoading === 'save'}
+                disabled={!twitterClientId.trim()}
+                style={{
+                  backgroundColor: `${theme.dracula.purple}25`,
+                  borderColor: `${theme.dracula.purple}60`,
+                  color: theme.dracula.purple,
+                }}
+              >
+                Save Credentials
+              </Button>
+              <div style={{
+                fontSize: theme.fontSize.xs,
+                color: theme.colors.textMuted,
+                marginTop: theme.spacing.sm,
+                lineHeight: 1.5,
+              }}>
+                Get credentials from the X Developer Portal. Create an app with OAuth 2.0 enabled.
+                <br />
+                Callback URL: <code style={{ fontSize: theme.fontSize.xs, color: theme.dracula.cyan }}>http://localhost:3010/api/twitter/callback</code>
+              </div>
+            </div>
+          )}
+
+          {twitterError && (
+            <Alert type="error" message={twitterError} showIcon style={{ marginBottom: theme.spacing.lg }} />
+          )}
+
+          {/* Info box */}
+          <div style={{
+            padding: theme.spacing.md,
+            borderRadius: theme.borderRadius.md,
+            backgroundColor: `${theme.dracula.cyan}10`,
+            border: `1px solid ${theme.dracula.cyan}30`,
+            marginBottom: theme.spacing.xl,
+            flex: 1,
+          }}>
+            <div style={{
+              fontSize: theme.fontSize.sm,
+              color: theme.colors.textSecondary,
+              lineHeight: 1.5,
+            }}>
+              {twitterStatus.connected ? (
+                <>Your Twitter account is connected. You can now use Twitter nodes in your workflows.</>
+              ) : twitterCredentialsStored ? (
+                <>Click Login with Twitter to authorize. A browser window will open for authentication.</>
+              ) : (
+                <>Enter your Twitter API credentials above to get started.</>
+              )}
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div style={{
+            display: 'flex',
+            gap: theme.spacing.sm,
+            justifyContent: 'center',
+            paddingTop: theme.spacing.md,
+            borderTop: `1px solid ${theme.colors.border}`,
+          }}>
+            {!twitterStatus.connected ? (
+              <Button
+                onClick={handleTwitterLogin}
+                loading={twitterLoading === 'login'}
+                disabled={!twitterCredentialsStored}
+                style={{
+                  backgroundColor: `${theme.dracula.green}25`,
+                  borderColor: `${theme.dracula.green}60`,
+                  color: theme.dracula.green,
+                }}
+              >
+                Login with Twitter
+              </Button>
+            ) : (
+              <Button
+                onClick={handleTwitterLogout}
+                loading={twitterLoading === 'logout'}
+                style={{
+                  backgroundColor: `${theme.dracula.pink}25`,
+                  borderColor: `${theme.dracula.pink}60`,
+                  color: theme.dracula.pink,
+                }}
+              >
+                Disconnect
+              </Button>
+            )}
+            <Button
+              onClick={handleTwitterRefreshStatus}
+              loading={twitterLoading === 'refresh'}
+              icon={<ReloadOutlined />}
+              style={{
+                backgroundColor: `${theme.dracula.cyan}25`,
+                borderColor: `${theme.dracula.cyan}60`,
+                color: theme.dracula.cyan,
+              }}
+            >
+              Refresh
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
     const item = selectedItem;
     const isValid = validKeys[item.id];
     const Icon = item.Icon;
@@ -1366,6 +1686,131 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
                 Save Defaults
               </Button>
             </div>
+          </div>
+        )}
+
+        {/* Usage & Costs Section - Only for AI providers */}
+        {CATEGORIES.find(c => c.key === 'ai')?.items.some(i => i.id === item.id) && (
+          <div style={{ marginBottom: theme.spacing.xl }}>
+            <Collapse
+              ghost
+              onChange={(keys) => setUsageExpanded(keys.includes('usage'))}
+              items={[{
+                key: 'usage',
+                label: (
+                  <span style={{ fontSize: theme.fontSize.sm, fontWeight: theme.fontWeight.medium, color: theme.colors.text }}>
+                    <DollarOutlined style={{ marginRight: theme.spacing.sm }} />
+                    Usage & Costs
+                  </span>
+                ),
+                children: usageLoading ? (
+                  <div style={{ textAlign: 'center', padding: theme.spacing.lg }}>
+                    <Spin size="small" />
+                  </div>
+                ) : (() => {
+                  const providerData = usageSummary.find(p => p.provider === item.id);
+                  if (!providerData || providerData.execution_count === 0) {
+                    return (
+                      <Alert
+                        message={`No usage data yet for ${item.name}`}
+                        type="info"
+                        showIcon
+                        style={{ marginBottom: theme.spacing.md }}
+                      />
+                    );
+                  }
+                  return (
+                    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                      {/* Summary Stats */}
+                      <div style={{ display: 'flex', gap: theme.spacing.lg, flexWrap: 'wrap' }}>
+                        <Statistic
+                          title="Total Tokens"
+                          value={providerData.total_tokens}
+                          valueStyle={{ color: theme.dracula.cyan, fontSize: theme.fontSize.lg }}
+                        />
+                        <Statistic
+                          title="Total Cost"
+                          value={providerData.total_cost}
+                          precision={4}
+                          prefix="$"
+                          valueStyle={{ color: theme.dracula.green, fontSize: theme.fontSize.lg }}
+                        />
+                        <Statistic
+                          title="Executions"
+                          value={providerData.execution_count}
+                          valueStyle={{ color: theme.dracula.purple, fontSize: theme.fontSize.lg }}
+                        />
+                      </div>
+
+                      {/* Token Breakdown */}
+                      <Descriptions size="small" column={2} bordered>
+                        <Descriptions.Item label="Input Tokens">
+                          {providerData.total_input_tokens.toLocaleString()}
+                          <span style={{ color: theme.dracula.green, marginLeft: 8 }}>
+                            (${providerData.total_input_cost.toFixed(4)})
+                          </span>
+                        </Descriptions.Item>
+                        <Descriptions.Item label="Output Tokens">
+                          {providerData.total_output_tokens.toLocaleString()}
+                          <span style={{ color: theme.dracula.green, marginLeft: 8 }}>
+                            (${providerData.total_output_cost.toFixed(4)})
+                          </span>
+                        </Descriptions.Item>
+                        {providerData.total_cache_cost > 0 && (
+                          <Descriptions.Item label="Cache Cost" span={2}>
+                            <span style={{ color: theme.dracula.green }}>
+                              ${providerData.total_cache_cost.toFixed(4)}
+                            </span>
+                          </Descriptions.Item>
+                        )}
+                      </Descriptions>
+
+                      {/* Model Breakdown */}
+                      {providerData.models.length > 1 && (
+                        <div>
+                          <div style={{ fontSize: theme.fontSize.xs, color: theme.colors.textMuted, marginBottom: theme.spacing.sm }}>
+                            By Model
+                          </div>
+                          <div style={{
+                            maxHeight: 120,
+                            overflow: 'auto',
+                            backgroundColor: theme.colors.backgroundAlt,
+                            borderRadius: theme.borderRadius.sm,
+                            padding: theme.spacing.sm,
+                          }}>
+                            {providerData.models.map((model, idx) => (
+                              <div key={idx} style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                padding: `${theme.spacing.xs} 0`,
+                                fontSize: theme.fontSize.sm,
+                                borderBottom: idx < providerData.models.length - 1 ? `1px solid ${theme.colors.border}` : 'none',
+                              }}>
+                                <span style={{ fontFamily: 'monospace', fontSize: theme.fontSize.xs, color: theme.colors.text }}>
+                                  {model.model}
+                                </span>
+                                <span style={{ color: theme.dracula.green }}>
+                                  ${model.total_cost.toFixed(4)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <Button
+                        size="small"
+                        icon={<ReloadOutlined />}
+                        onClick={loadUsageSummary}
+                        loading={usageLoading}
+                      >
+                        Refresh
+                      </Button>
+                    </Space>
+                  );
+                })()
+              }]}
+            />
           </div>
         )}
 

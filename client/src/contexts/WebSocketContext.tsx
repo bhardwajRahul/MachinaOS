@@ -90,6 +90,15 @@ export interface WhatsAppStatus {
   timestamp?: number;
 }
 
+export interface TwitterStatus {
+  connected: boolean;
+  username: string | null;
+  user_id: string | null;
+  name?: string;
+  profile_image_url?: string;
+  verified?: boolean;
+}
+
 // WhatsApp Rate Limit types (from Go RPC schema)
 export interface RateLimitConfig {
   enabled: boolean;
@@ -203,6 +212,7 @@ interface WebSocketContextValue {
   androidStatus: AndroidStatus;
   setAndroidStatus: React.Dispatch<React.SetStateAction<AndroidStatus>>;
   whatsappStatus: WhatsAppStatus;
+  twitterStatus: TwitterStatus;
   whatsappMessages: WhatsAppMessage[];  // History of received messages
   lastWhatsAppMessage: WhatsAppMessage | null;  // Most recent message
   apiKeyStatuses: Record<string, ApiKeyStatus>;
@@ -322,6 +332,12 @@ const defaultWhatsAppStatus: WhatsAppStatus = {
   pairing: false
 };
 
+const defaultTwitterStatus: TwitterStatus = {
+  connected: false,
+  username: null,
+  user_id: null,
+};
+
 const WebSocketContext = createContext<WebSocketContextValue | null>(null);
 
 // WebSocket URL (convert http to ws)
@@ -355,6 +371,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [reconnecting, setReconnecting] = useState(false);
   const [androidStatus, setAndroidStatus] = useState<AndroidStatus>(defaultAndroidStatus);
   const [whatsappStatus, setWhatsappStatus] = useState<WhatsAppStatus>(defaultWhatsAppStatus);
+  const [twitterStatus, setTwitterStatus] = useState<TwitterStatus>(defaultTwitterStatus);
   const [whatsappMessages, setWhatsappMessages] = useState<WhatsAppMessage[]>([]);
   const [lastWhatsAppMessage, setLastWhatsAppMessage] = useState<WhatsAppMessage | null>(null);
   const [apiKeyStatuses, setApiKeyStatuses] = useState<Record<string, ApiKeyStatus>>({});
@@ -469,6 +486,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           if (data) {
             if (data.android) setAndroidStatus(data.android);
             if (data.whatsapp) setWhatsappStatus(data.whatsapp);
+            if (data.twitter) setTwitterStatus(data.twitter);
             if (data.api_keys) setApiKeyStatuses(data.api_keys);
             // Node statuses from initial_status - group by workflow_id (n8n pattern)
             if (data.nodes) {
@@ -521,6 +539,19 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
         case 'whatsapp_status':
           setWhatsappStatus(data || defaultWhatsAppStatus);
+          break;
+
+        case 'twitter_oauth_complete':
+          // Handle Twitter OAuth completion broadcast from backend
+          if (data?.success) {
+            setTwitterStatus({
+              connected: true,
+              username: data.username || null,
+              user_id: data.user_id || null,
+              name: data.name,
+              profile_image_url: data.profile_image_url,
+            });
+          }
           break;
 
         case 'whatsapp_message_received':
@@ -1959,6 +1990,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     androidStatus,
     setAndroidStatus,
     whatsappStatus,
+    twitterStatus,
     whatsappMessages,
     lastWhatsAppMessage,
     apiKeyStatuses,
@@ -2087,6 +2119,12 @@ export const useApiKeyStatus = (provider: string): ApiKeyStatus | undefined => {
 export const useWhatsAppStatus = (): WhatsAppStatus => {
   const { whatsappStatus } = useWebSocket();
   return whatsappStatus;
+};
+
+// Hook specifically for Twitter status
+export const useTwitterStatus = (): TwitterStatus => {
+  const { twitterStatus } = useWebSocket();
+  return twitterStatus;
 };
 
 // Hook specifically for deployment status

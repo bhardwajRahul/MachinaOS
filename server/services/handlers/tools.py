@@ -107,6 +107,18 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
     if node_type == 'whatsappDb':
         return await _execute_whatsapp_db(tool_args, config.get('parameters', {}))
 
+    # Twitter Send (dual-purpose: workflow node + AI tool)
+    if node_type == 'twitterSend':
+        return await _execute_twitter_send(tool_args, config.get('parameters', {}))
+
+    # Twitter Search (dual-purpose: workflow node + AI tool)
+    if node_type == 'twitterSearch':
+        return await _execute_twitter_search(tool_args, config.get('parameters', {}))
+
+    # Twitter User (dual-purpose: workflow node + AI tool)
+    if node_type == 'twitterUser':
+        return await _execute_twitter_user(tool_args, config.get('parameters', {}))
+
     # Android toolkit - routes to connected service nodes
     if node_type == 'androidTool':
         return await _execute_android_toolkit(tool_args, config)
@@ -1116,6 +1128,78 @@ async def _execute_nearby_places(args: Dict[str, Any],
     except Exception as e:
         logger.error(f"[Nearby Places Tool] Error: {e}")
         return {"error": f"Nearby places search failed: {str(e)}"}
+
+
+async def _execute_twitter_send(args: Dict[str, Any],
+                                 node_params: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute Twitter send action via XDK SDK.
+
+    Args:
+        args: LLM-provided arguments (action, text, tweet_id, reply_to_id)
+        node_params: Node parameters
+
+    Returns:
+        Twitter API result
+    """
+    from services.handlers.twitter import handle_twitter_send
+
+    parameters = {**node_params, **args}
+    # Handle reply_to_id alias
+    if args.get('reply_to_id') and not args.get('tweet_id'):
+        parameters['tweet_id'] = args['reply_to_id']
+
+    return await handle_twitter_send(
+        node_id="tool_twitter_send",
+        node_type="twitterSend",
+        parameters=parameters,
+        context={}
+    )
+
+
+async def _execute_twitter_search(args: Dict[str, Any],
+                                   node_params: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute Twitter search via XDK SDK.
+
+    Args:
+        args: LLM-provided arguments (query, max_results)
+        node_params: Node parameters
+
+    Returns:
+        Search results
+    """
+    from services.handlers.twitter import handle_twitter_search
+
+    parameters = {**node_params, **args}
+
+    return await handle_twitter_search(
+        node_id="tool_twitter_search",
+        node_type="twitterSearch",
+        parameters=parameters,
+        context={}
+    )
+
+
+async def _execute_twitter_user(args: Dict[str, Any],
+                                 node_params: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute Twitter user lookup via XDK SDK.
+
+    Args:
+        args: LLM-provided arguments (operation, username, user_id, max_results)
+        node_params: Node parameters
+
+    Returns:
+        User data
+    """
+    from services.handlers.twitter import handle_twitter_user
+
+    parameters = {**node_params, **args}
+
+    return await handle_twitter_user(
+        node_id="tool_twitter_user",
+        node_type="twitterUser",
+        parameters=parameters,
+        context={}
+    )
 
 
 async def _execute_generic(args: Dict[str, Any],

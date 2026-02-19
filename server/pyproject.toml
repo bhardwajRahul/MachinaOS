@@ -54,6 +54,9 @@ dependencies = [
 
     # Web Search
     "ddgs>=9.0.0",
+
+    # Twitter/X API
+    "xdk>=0.1.0",
 ]
 
 [project.optional-dependencies]
