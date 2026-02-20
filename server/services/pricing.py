@@ -1,147 +1,121 @@
-"""LLM pricing service for token cost calculation.
+"""Unified pricing service for LLM tokens and API costs.
 
-Provides cost calculation for all supported LLM providers based on official pricing.
-Pricing is in USD per million tokens (MTok).
+Provides cost calculation for:
+- LLM providers (OpenAI, Anthropic, Gemini, Groq, Cerebras, OpenRouter)
+- API services (Twitter/X, Google Maps, etc.)
+
+Pricing is loaded from config/pricing.json for user editability.
+LLM pricing is in USD per million tokens (MTok).
+API pricing is per resource/request.
 """
 
+import json
 from dataclasses import dataclass
-from typing import Dict, Optional
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, Optional
+
 from core.logging import get_logger
 
 logger = get_logger(__name__)
 
+# Path to pricing configuration file
+CONFIG_PATH = Path(__file__).parent.parent / "config" / "pricing.json"
+
 
 @dataclass
 class ModelPricing:
-    """Pricing for a specific model."""
+    """Pricing for a specific LLM model."""
     input_per_mtok: float   # USD per 1M input tokens
     output_per_mtok: float  # USD per 1M output tokens
     cache_read_per_mtok: Optional[float] = None  # USD per 1M cache read tokens (Anthropic)
     reasoning_per_mtok: Optional[float] = None   # USD per 1M reasoning tokens (OpenAI o-series)
 
 
-# Official pricing as of February 2026
-# Sources: openai.com/api/pricing, anthropic.com/pricing, ai.google.dev/pricing,
-#          groq.com/pricing, cerebras.ai/pricing
-PRICING_REGISTRY: Dict[str, Dict[str, ModelPricing]] = {
-    'openai': {
-        # GPT-5 series
-        'gpt-5.2': ModelPricing(1.75, 14.00),
-        'gpt-5.1': ModelPricing(1.25, 10.00),
-        'gpt-5': ModelPricing(1.25, 10.00),
-        'gpt-5-mini': ModelPricing(0.25, 2.00),
-        'gpt-5-nano': ModelPricing(0.05, 0.40),
-        'gpt-5-pro': ModelPricing(15.00, 120.00),
-        # O-series (reasoning models)
-        'o3': ModelPricing(2.00, 8.00, reasoning_per_mtok=8.00),
-        'o3-mini': ModelPricing(1.10, 4.40, reasoning_per_mtok=4.40),
-        'o3-pro': ModelPricing(20.00, 80.00, reasoning_per_mtok=80.00),
-        'o4-mini': ModelPricing(1.10, 4.40, reasoning_per_mtok=4.40),
-        'o1': ModelPricing(15.00, 60.00, reasoning_per_mtok=60.00),
-        'o1-mini': ModelPricing(1.10, 4.40, reasoning_per_mtok=4.40),
-        # GPT-4 series
-        'gpt-4o': ModelPricing(2.50, 10.00),
-        'gpt-4o-mini': ModelPricing(0.15, 0.60),
-        'gpt-4.1': ModelPricing(2.00, 8.00),
-        'gpt-4.1-mini': ModelPricing(0.40, 1.60),
-        'gpt-4.1-nano': ModelPricing(0.10, 0.40),
-        'gpt-4-turbo': ModelPricing(10.00, 30.00),
-        'gpt-4': ModelPricing(30.00, 60.00),
-        # GPT-3.5
-        'gpt-3.5-turbo': ModelPricing(0.50, 1.50),
-        # Default fallback
-        '_default': ModelPricing(2.50, 10.00),
-    },
-    'anthropic': {
-        # Claude 4.x series
-        'claude-opus-4.6': ModelPricing(5.00, 25.00, cache_read_per_mtok=0.50),
-        'claude-opus-4.5': ModelPricing(5.00, 25.00, cache_read_per_mtok=0.50),
-        'claude-opus-4.1': ModelPricing(15.00, 75.00, cache_read_per_mtok=1.50),
-        'claude-opus-4': ModelPricing(15.00, 75.00, cache_read_per_mtok=1.50),
-        'claude-sonnet-4.6': ModelPricing(3.00, 15.00, cache_read_per_mtok=0.30),
-        'claude-sonnet-4.5': ModelPricing(3.00, 15.00, cache_read_per_mtok=0.30),
-        'claude-sonnet-4': ModelPricing(3.00, 15.00, cache_read_per_mtok=0.30),
-        'claude-haiku-4.5': ModelPricing(1.00, 5.00, cache_read_per_mtok=0.10),
-        # Claude 3.x series (legacy)
-        'claude-3-opus': ModelPricing(15.00, 75.00, cache_read_per_mtok=1.50),
-        'claude-3-5-sonnet': ModelPricing(3.00, 15.00, cache_read_per_mtok=0.30),
-        'claude-3-sonnet': ModelPricing(3.00, 15.00, cache_read_per_mtok=0.30),
-        'claude-3-haiku': ModelPricing(0.25, 1.25, cache_read_per_mtok=0.03),
-        'claude-3.5-haiku': ModelPricing(0.80, 4.00, cache_read_per_mtok=0.08),
-        # Partial matches (for model names like claude-3-5-sonnet-20241022)
-        'claude-opus': ModelPricing(5.00, 25.00, cache_read_per_mtok=0.50),
-        'claude-sonnet': ModelPricing(3.00, 15.00, cache_read_per_mtok=0.30),
-        'claude-haiku': ModelPricing(1.00, 5.00, cache_read_per_mtok=0.10),
-        # Default fallback
-        '_default': ModelPricing(3.00, 15.00, cache_read_per_mtok=0.30),
-    },
-    'gemini': {
-        # Gemini 3.x series
-        'gemini-3-pro': ModelPricing(2.00, 12.00),
-        'gemini-3-flash': ModelPricing(0.50, 3.00),
-        # Gemini 2.5 series
-        'gemini-2.5-pro': ModelPricing(1.25, 10.00),
-        'gemini-2.5-flash': ModelPricing(0.30, 2.50),
-        'gemini-2.5-flash-lite': ModelPricing(0.10, 0.40),
-        # Gemini 2.0 series
-        'gemini-2.0-flash': ModelPricing(0.10, 0.40),
-        'gemini-2.0-flash-lite': ModelPricing(0.08, 0.30),
-        # Gemini 1.x series (legacy)
-        'gemini-1.5-pro': ModelPricing(1.25, 5.00),
-        'gemini-1.5-flash': ModelPricing(0.075, 0.30),
-        'gemini-pro': ModelPricing(0.50, 1.50),
-        # Default fallback
-        '_default': ModelPricing(0.50, 2.50),
-    },
-    'groq': {
-        # Llama 4 series
-        'llama-4-scout': ModelPricing(0.11, 0.34),
-        'llama-4-maverick': ModelPricing(0.20, 0.60),
-        # Llama 3.x series
-        'llama-3.3-70b': ModelPricing(0.59, 0.79),
-        'llama-3.1-70b': ModelPricing(0.59, 0.79),
-        'llama-3.1-8b': ModelPricing(0.05, 0.08),
-        'llama3-70b': ModelPricing(0.59, 0.79),
-        'llama3-8b': ModelPricing(0.05, 0.08),
-        # Qwen series
-        'qwen3-32b': ModelPricing(0.29, 0.59),
-        'qwen-qwq-32b': ModelPricing(0.29, 0.59),
-        # Mixtral
-        'mixtral-8x7b': ModelPricing(0.24, 0.24),
-        # GPT OSS
-        'gpt-oss-20b': ModelPricing(0.075, 0.30),
-        'gpt-oss-120b': ModelPricing(0.15, 0.60),
-        # Default fallback
-        '_default': ModelPricing(0.29, 0.59),
-    },
-    'cerebras': {
-        # Llama series
-        'llama-3.1-8b': ModelPricing(0.10, 0.10),
-        'llama-3.1-70b': ModelPricing(0.60, 0.60),
-        'llama-3.1-405b': ModelPricing(6.00, 12.00),
-        'llama3.1-8b': ModelPricing(0.10, 0.10),
-        'llama3.1-70b': ModelPricing(0.60, 0.60),
-        # Qwen
-        'qwen-3-32b': ModelPricing(0.20, 0.20),
-        # Default fallback
-        '_default': ModelPricing(0.60, 0.60),
-    },
-    'openrouter': {
-        # OpenRouter passes through provider pricing
-        # These are approximate defaults; actual cost depends on underlying provider
-        '_default': ModelPricing(1.00, 5.00),
-    },
-}
-
-
 class PricingService:
-    """Service for calculating LLM token costs."""
+    """Unified service for calculating LLM token costs and API costs."""
 
     def __init__(self):
-        self._registry = PRICING_REGISTRY
+        self._config: Dict[str, Any] = {}
+        self._llm_registry: Dict[str, Dict[str, ModelPricing]] = {}
+        self._load_config()
+
+    def _load_config(self) -> None:
+        """Load pricing config from JSON file."""
+        if CONFIG_PATH.exists():
+            try:
+                with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+                    self._config = json.load(f)
+                self._build_llm_registry()
+                logger.info(f"[Pricing] Loaded pricing config v{self._config.get('version', 'unknown')}")
+            except Exception as e:
+                logger.error(f"[Pricing] Failed to load config: {e}")
+                self._config = {"llm": {}, "api": {}, "operation_map": {}}
+                self._llm_registry = {}
+        else:
+            logger.warning(f"[Pricing] Config not found: {CONFIG_PATH}")
+            self._config = {"llm": {}, "api": {}, "operation_map": {}}
+            self._llm_registry = {}
+
+    def _build_llm_registry(self) -> None:
+        """Build ModelPricing objects from JSON config."""
+        self._llm_registry = {}
+        llm_config = self._config.get("llm", {})
+
+        for provider, models in llm_config.items():
+            self._llm_registry[provider] = {}
+            for model_name, pricing_data in models.items():
+                if isinstance(pricing_data, dict):
+                    self._llm_registry[provider][model_name] = ModelPricing(
+                        input_per_mtok=pricing_data.get("input", 1.0),
+                        output_per_mtok=pricing_data.get("output", 5.0),
+                        cache_read_per_mtok=pricing_data.get("cache_read"),
+                        reasoning_per_mtok=pricing_data.get("reasoning"),
+                    )
+
+    def reload(self) -> None:
+        """Reload pricing config from disk (for live updates)."""
+        self._load_config()
+
+    def get_config(self) -> Dict[str, Any]:
+        """Get full pricing config for frontend display/editing."""
+        return self._config
+
+    def save_config(self, config: Dict[str, Any]) -> bool:
+        """Save updated pricing config to JSON file.
+
+        Args:
+            config: New pricing configuration dict
+
+        Returns:
+            True if saved successfully, False otherwise
+        """
+        try:
+            # Update last_updated timestamp
+            config["last_updated"] = datetime.utcnow().strftime("%Y-%m-%d")
+
+            # Ensure config directory exists
+            CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+            with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
+                json.dump(config, f, indent=2)
+
+            # Reload the config into memory
+            self._config = config
+            self._build_llm_registry()
+
+            logger.info(f"[Pricing] Saved pricing config v{config.get('version', 'unknown')}")
+            return True
+        except Exception as e:
+            logger.error(f"[Pricing] Failed to save config: {e}")
+            return False
+
+    # =========================================================================
+    # LLM Token Pricing (existing functionality)
+    # =========================================================================
 
     def get_pricing(self, provider: str, model: str) -> ModelPricing:
-        """Get pricing for a specific model.
+        """Get pricing for a specific LLM model.
 
         Uses partial matching: 'claude-3-5-sonnet-20241022' matches 'claude-3-5-sonnet'.
         Falls back to '_default' if no match found.
@@ -156,7 +130,7 @@ class PricingService:
         provider_lower = provider.lower()
         model_lower = model.lower() if model else ''
 
-        provider_pricing = self._registry.get(provider_lower, {})
+        provider_pricing = self._llm_registry.get(provider_lower, {})
 
         # Try exact match first
         if model_lower in provider_pricing:
@@ -191,7 +165,7 @@ class PricingService:
         cache_creation_tokens: int = 0,
         reasoning_tokens: int = 0
     ) -> Dict[str, float]:
-        """Calculate cost for token usage.
+        """Calculate cost for LLM token usage.
 
         Args:
             provider: LLM provider name
@@ -240,13 +214,13 @@ class PricingService:
         }
 
     def get_all_pricing(self) -> Dict[str, Dict[str, Dict[str, float]]]:
-        """Get all pricing data for frontend display.
+        """Get all LLM pricing data for frontend display.
 
         Returns:
             Nested dict: {provider: {model: {input, output, cache_read, reasoning}}}
         """
         result = {}
-        for provider, models in self._registry.items():
+        for provider, models in self._llm_registry.items():
             result[provider] = {}
             for model, pricing in models.items():
                 result[provider][model] = {
@@ -256,6 +230,91 @@ class PricingService:
                     'reasoning': pricing.reasoning_per_mtok,
                 }
         return result
+
+    # =========================================================================
+    # API Service Pricing (new functionality)
+    # =========================================================================
+
+    def get_api_price(self, service: str, operation: str) -> float:
+        """Get price for an API operation.
+
+        Args:
+            service: Service name (e.g., 'twitter', 'google_maps')
+            operation: Operation key (e.g., 'posts_read', 'content_create')
+
+        Returns:
+            USD cost per resource/request
+        """
+        api_config = self._config.get('api', {})
+        service_config = api_config.get(service, {})
+        return service_config.get(operation, 0.0)
+
+    def get_api_pricing(self, service: str) -> Dict[str, float]:
+        """Get all pricing for an API service.
+
+        Args:
+            service: Service name (e.g., 'twitter')
+
+        Returns:
+            Dict of {operation: price} for the service
+        """
+        api_config = self._config.get('api', {})
+        service_config = api_config.get(service, {})
+        # Filter out metadata keys starting with _
+        return {k: v for k, v in service_config.items() if not k.startswith('_') and isinstance(v, (int, float))}
+
+    def map_action_to_operation(self, service: str, action: str) -> Optional[str]:
+        """Map handler action to pricing operation.
+
+        Args:
+            service: Service name (e.g., 'twitter')
+            action: Handler action (e.g., 'tweet', 'search', 'like')
+
+        Returns:
+            Pricing operation key or None if no mapping
+        """
+        operation_map = self._config.get('operation_map', {})
+        service_map = operation_map.get(service, {})
+        return service_map.get(action)
+
+    def calculate_api_cost(
+        self,
+        service: str,
+        action: str,
+        resource_count: int = 1
+    ) -> Dict[str, Any]:
+        """Calculate cost for API usage.
+
+        Args:
+            service: Service name (e.g., 'twitter')
+            action: Handler action (e.g., 'tweet', 'search')
+            resource_count: Number of resources fetched or requests made
+
+        Returns:
+            Dict with cost breakdown:
+            - operation: Pricing operation key
+            - unit_cost: USD per resource/request
+            - resource_count: Number of resources
+            - total_cost: Total USD cost
+        """
+        operation = self.map_action_to_operation(service, action)
+        if not operation:
+            return {
+                'operation': action,
+                'unit_cost': 0.0,
+                'resource_count': resource_count,
+                'total_cost': 0.0
+            }
+
+        unit_cost = self.get_api_price(service, operation)
+        total_cost = unit_cost * resource_count
+
+        return {
+            'operation': operation,
+            'unit_cost': unit_cost,
+            'resource_count': resource_count,
+            'total_cost': round(total_cost, 6)
+        }
 
 
 # Singleton instance

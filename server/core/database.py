@@ -111,6 +111,29 @@ class Database:
                         ))
                         logger.info(f"Added {col} column to session_token_states")
 
+                # Create api_usage_metrics table if not exists
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS api_usage_metrics (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        session_id TEXT NOT NULL,
+                        node_id TEXT NOT NULL,
+                        workflow_id TEXT,
+                        service TEXT NOT NULL,
+                        operation TEXT NOT NULL,
+                        endpoint TEXT NOT NULL,
+                        resource_count INTEGER DEFAULT 1,
+                        cost REAL DEFAULT 0.0
+                    )
+                """))
+                await conn.execute(text(
+                    "CREATE INDEX IF NOT EXISTS idx_api_usage_session ON api_usage_metrics(session_id)"
+                ))
+                await conn.execute(text(
+                    "CREATE INDEX IF NOT EXISTS idx_api_usage_service ON api_usage_metrics(service)"
+                ))
+                logger.info("Ensured api_usage_metrics table exists")
+
         except Exception as e:
             logger.warning(f"Migration check failed (table may not exist yet): {e}")
 
@@ -1732,6 +1755,106 @@ class Database:
 
         except Exception as e:
             logger.error("Failed to get provider usage summary", error=str(e))
+            return []
+
+    # ============================================================================
+    # API Usage Metrics (Twitter, Google Maps, etc.)
+    # ============================================================================
+
+    async def save_api_usage_metric(self, metric: Dict[str, Any]) -> bool:
+        """Save an API usage metric record.
+
+        Args:
+            metric: Dict with session_id, node_id, service, operation, endpoint, resource_count, cost
+        """
+        try:
+            from models.database import APIUsageMetric
+
+            async with self.get_session() as session:
+                entry = APIUsageMetric(
+                    session_id=metric.get("session_id", "default"),
+                    node_id=metric.get("node_id", ""),
+                    workflow_id=metric.get("workflow_id"),
+                    service=metric.get("service", ""),
+                    operation=metric.get("operation", ""),
+                    endpoint=metric.get("endpoint", ""),
+                    resource_count=metric.get("resource_count", 1),
+                    cost=metric.get("cost", 0.0)
+                )
+                session.add(entry)
+                await session.commit()
+                return True
+        except Exception as e:
+            logger.error("Failed to save API usage metric", error=str(e))
+            return False
+
+    async def get_api_usage_summary(self, service: str = None) -> List[Dict[str, Any]]:
+        """Get aggregated API usage and cost by service.
+
+        Args:
+            service: Optional service name to filter (e.g., 'twitter')
+
+        Returns a list of service summaries with:
+        - service: Service name (twitter, google_maps, etc.)
+        - total_resources: Sum of resources fetched/requests made
+        - total_cost: Sum of costs (USD)
+        - execution_count: Number of API calls
+        - operations: Breakdown by operation (list of dicts)
+        """
+        try:
+            from models.database import APIUsageMetric
+            from sqlalchemy import func
+
+            async with self.get_session() as session:
+                # Build query with optional service filter
+                query = select(
+                    APIUsageMetric.service,
+                    APIUsageMetric.operation,
+                    func.sum(APIUsageMetric.resource_count).label("resource_count"),
+                    func.sum(APIUsageMetric.cost).label("cost"),
+                    func.count().label("execution_count")
+                ).group_by(APIUsageMetric.service, APIUsageMetric.operation)
+
+                if service:
+                    query = query.where(APIUsageMetric.service == service)
+
+                query = query.order_by(APIUsageMetric.service, APIUsageMetric.operation)
+                result = await session.execute(query)
+                rows = result.all()
+
+                # Aggregate by service
+                services: Dict[str, Dict] = {}
+                for row in rows:
+                    svc = row.service or "unknown"
+                    if svc not in services:
+                        services[svc] = {
+                            "service": svc,
+                            "total_resources": 0,
+                            "total_cost": 0.0,
+                            "execution_count": 0,
+                            "operations": []
+                        }
+
+                    s = services[svc]
+                    s["total_resources"] += row.resource_count or 0
+                    s["total_cost"] += float(row.cost or 0)
+                    s["execution_count"] += row.execution_count or 0
+
+                    s["operations"].append({
+                        "operation": row.operation,
+                        "resource_count": row.resource_count or 0,
+                        "total_cost": round(float(row.cost or 0), 6),
+                        "execution_count": row.execution_count or 0
+                    })
+
+                # Round service totals
+                for s in services.values():
+                    s["total_cost"] = round(s["total_cost"], 6)
+
+                return list(services.values())
+
+        except Exception as e:
+            logger.error("Failed to get API usage summary", error=str(e))
             return []
 
     # ============================================================================

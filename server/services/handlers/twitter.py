@@ -5,8 +5,50 @@ from typing import Dict, Any
 from xdk import Client
 
 from core.logging import get_logger
+from services.pricing import get_pricing_service
 
 logger = get_logger(__name__)
+
+
+async def _track_twitter_usage(
+    node_id: str,
+    action: str,
+    resource_count: int = 1,
+    workflow_id: str = None,
+    session_id: str = "default"
+) -> Dict[str, float]:
+    """Track Twitter API usage for cost calculation.
+
+    Args:
+        node_id: The node executing the Twitter action
+        action: Action name (tweet, search, followers, etc.)
+        resource_count: Number of resources fetched (for paginated results)
+        workflow_id: Optional workflow context
+        session_id: Session for aggregation
+
+    Returns:
+        Cost breakdown dict with operation, unit_cost, resource_count, total_cost
+    """
+    from core.container import container
+
+    pricing = get_pricing_service()
+    cost_data = pricing.calculate_api_cost('twitter', action, resource_count)
+
+    # Save to database
+    db = container.database()
+    await db.save_api_usage_metric({
+        'session_id': session_id,
+        'node_id': node_id,
+        'workflow_id': workflow_id,
+        'service': 'twitter',
+        'operation': cost_data.get('operation', action),
+        'endpoint': action,
+        'resource_count': resource_count,
+        'cost': cost_data.get('total_cost', 0.0)
+    })
+
+    logger.debug(f"[Twitter] Tracked usage: {action} x{resource_count} = ${cost_data.get('total_cost', 0):.6f}")
+    return cost_data
 
 
 async def _get_twitter_client() -> Client:
@@ -41,6 +83,10 @@ async def handle_twitter_send(
     try:
         client = await _get_twitter_client()
 
+        # Extract workflow context for tracking
+        workflow_id = context.get('workflow_id')
+        session_id = context.get('session_id', 'default')
+
         match action:
             case 'tweet':
                 text = parameters.get('text', '')
@@ -49,6 +95,8 @@ async def handle_twitter_send(
                 # XDK API: client.posts.create(body={"text": "..."})
                 payload = {"text": text[:280]}
                 result = client.posts.create(body=payload)
+                # Track: content_create $0.010
+                await _track_twitter_usage(node_id, 'tweet', 1, workflow_id, session_id)
                 return _success(_format_response(result), "tweet_sent", start_time)
 
             case 'reply':
@@ -62,6 +110,8 @@ async def handle_twitter_send(
                     "reply": {"in_reply_to_tweet_id": reply_to}
                 }
                 result = client.posts.create(body=payload)
+                # Track: content_create $0.010
+                await _track_twitter_usage(node_id, 'reply', 1, workflow_id, session_id)
                 return _success(_format_response(result), "reply_sent", start_time)
 
             case 'retweet':
@@ -72,6 +122,8 @@ async def handle_twitter_send(
                 # XDK API: client.users.repost_post(user_id, body={"tweet_id": "..."})
                 payload = {"tweet_id": tweet_id}
                 result = client.users.repost_post(user_id, body=payload)
+                # Track: user_interaction_create $0.015
+                await _track_twitter_usage(node_id, 'retweet', 1, workflow_id, session_id)
                 return _success(_format_response(result), "retweeted", start_time)
 
             case 'like':
@@ -82,6 +134,8 @@ async def handle_twitter_send(
                 # XDK API: client.users.like_post(user_id, body={"tweet_id": "..."})
                 payload = {"tweet_id": tweet_id}
                 result = client.users.like_post(user_id, body=payload)
+                # Track: user_interaction_create $0.015
+                await _track_twitter_usage(node_id, 'like', 1, workflow_id, session_id)
                 return _success(_format_response(result), "liked", start_time)
 
             case 'unlike':
@@ -91,6 +145,8 @@ async def handle_twitter_send(
                 user_id = await _get_my_user_id(client)
                 # XDK API: client.users.unlike_post(user_id, tweet_id=post_id)
                 result = client.users.unlike_post(user_id, tweet_id=tweet_id)
+                # Track: interaction_delete $0.010
+                await _track_twitter_usage(node_id, 'unlike', 1, workflow_id, session_id)
                 return _success(_format_response(result), "unliked", start_time)
 
             case 'delete':
@@ -99,6 +155,8 @@ async def handle_twitter_send(
                     raise ValueError("tweet_id is required")
                 # XDK API: client.posts.delete(post_id)
                 result = client.posts.delete(tweet_id)
+                # Track: content_manage $0.005
+                await _track_twitter_usage(node_id, 'delete', 1, workflow_id, session_id)
                 return _success(_format_response(result), "deleted", start_time)
 
             case _:
@@ -126,6 +184,10 @@ async def handle_twitter_search(
         if not query:
             raise ValueError("Search query is required")
 
+        # Extract workflow context for tracking
+        workflow_id = context.get('workflow_id')
+        session_id = context.get('session_id', 'default')
+
         tweets = []
         # XDK API: client.posts.search_recent(query=..., max_results=..., tweet_fields=[...])
         for page in client.posts.search_recent(
@@ -136,6 +198,10 @@ async def handle_twitter_search(
             page_data = getattr(page, 'data', []) or []
             tweets.extend([_format_tweet(t) for t in page_data])
             break  # Only first page
+
+        # Track: posts_read $0.005 per tweet fetched
+        if tweets:
+            await _track_twitter_usage(node_id, 'search', len(tweets), workflow_id, session_id)
 
         return {
             "success": True,
@@ -161,10 +227,16 @@ async def handle_twitter_user(
     try:
         client = await _get_twitter_client()
 
+        # Extract workflow context for tracking
+        workflow_id = context.get('workflow_id')
+        session_id = context.get('session_id', 'default')
+
         match operation:
             case 'me':
                 # XDK API: client.users.get_me(user_fields=[...])
                 result = client.users.get_me(user_fields=["created_at", "description"])
+                # Track: user_read $0.010
+                await _track_twitter_usage(node_id, 'me', 1, workflow_id, session_id)
                 return _success(_format_user_data(result.data), "user", start_time)
 
             case 'by_username':
@@ -179,6 +251,8 @@ async def handle_twitter_user(
                 users = getattr(result, 'data', []) or []
                 if not users:
                     raise ValueError(f"User @{username} not found")
+                # Track: user_read $0.010
+                await _track_twitter_usage(node_id, 'by_username', 1, workflow_id, session_id)
                 return _success(_format_user_data(users[0]), "user", start_time)
 
             case 'by_id':
@@ -193,6 +267,8 @@ async def handle_twitter_user(
                 users = getattr(result, 'data', []) or []
                 if not users:
                     raise ValueError(f"User ID {user_id} not found")
+                # Track: user_read $0.010
+                await _track_twitter_usage(node_id, 'by_id', 1, workflow_id, session_id)
                 return _success(_format_user_data(users[0]), "user", start_time)
 
             case 'followers':
@@ -210,6 +286,9 @@ async def handle_twitter_user(
                     page_data = getattr(page, 'data', []) or []
                     users.extend([_format_user_data(u) for u in page_data])
                     break  # Only first page
+                # Track: followers_read $0.010 per user
+                if users:
+                    await _track_twitter_usage(node_id, 'followers', len(users), workflow_id, session_id)
                 return _success({"users": users, "count": len(users)}, "followers", start_time)
 
             case 'following':
@@ -227,6 +306,9 @@ async def handle_twitter_user(
                     page_data = getattr(page, 'data', []) or []
                     users.extend([_format_user_data(u) for u in page_data])
                     break  # Only first page
+                # Track: following_read $0.010 per user
+                if users:
+                    await _track_twitter_usage(node_id, 'following', len(users), workflow_id, session_id)
                 return _success({"users": users, "count": len(users)}, "following", start_time)
 
             case _:

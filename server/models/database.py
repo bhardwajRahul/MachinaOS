@@ -368,6 +368,32 @@ class SessionTokenState(SQLModel, table=True):
     cumulative_total_cost: float = Field(default=0.0)
 
 
+class APIUsageMetric(SQLModel, table=True):
+    """API service usage for cost tracking (Twitter, Google Maps, etc.)."""
+
+    __tablename__ = "api_usage_metrics"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    timestamp: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(DateTime(timezone=True), server_default=func.now())
+    )
+    session_id: str = Field(index=True, max_length=255)
+    node_id: str = Field(max_length=255)
+    workflow_id: Optional[str] = Field(default=None, max_length=255)
+
+    # Service identification
+    service: str = Field(index=True, max_length=50)  # twitter, google_maps, etc.
+    operation: str = Field(max_length=100)  # posts_read, content_create, etc.
+    endpoint: str = Field(max_length=100)  # Handler action (tweet, search, like)
+
+    # Usage counts
+    resource_count: int = Field(default=1)
+
+    # Cost in USD
+    cost: float = Field(default=0.0)
+
+
 # =============================================================================
 # Agent Teams - Claude SDK Agent Teams Pattern
 # =============================================================================

@@ -1,0 +1,138 @@
+{
+  "version": "2026.02",
+  "last_updated": "2026-02-20",
+
+  "llm": {
+    "openai": {
+      "gpt-5.2": {"input": 1.75, "output": 14.00},
+      "gpt-5.1": {"input": 1.25, "output": 10.00},
+      "gpt-5": {"input": 1.25, "output": 10.00},
+      "gpt-5-mini": {"input": 0.25, "output": 2.00},
+      "gpt-5-nano": {"input": 0.05, "output": 0.40},
+      "gpt-5-pro": {"input": 15.00, "output": 120.00},
+      "o3": {"input": 2.00, "output": 8.00, "reasoning": 8.00},
+      "o3-mini": {"input": 1.10, "output": 4.40, "reasoning": 4.40},
+      "o3-pro": {"input": 20.00, "output": 80.00, "reasoning": 80.00},
+      "o4-mini": {"input": 1.10, "output": 4.40, "reasoning": 4.40},
+      "o1": {"input": 15.00, "output": 60.00, "reasoning": 60.00},
+      "o1-mini": {"input": 1.10, "output": 4.40, "reasoning": 4.40},
+      "gpt-4o": {"input": 2.50, "output": 10.00},
+      "gpt-4o-mini": {"input": 0.15, "output": 0.60},
+      "gpt-4.1": {"input": 2.00, "output": 8.00},
+      "gpt-4.1-mini": {"input": 0.40, "output": 1.60},
+      "gpt-4.1-nano": {"input": 0.10, "output": 0.40},
+      "gpt-4-turbo": {"input": 10.00, "output": 30.00},
+      "gpt-4": {"input": 30.00, "output": 60.00},
+      "gpt-3.5-turbo": {"input": 0.50, "output": 1.50},
+      "_default": {"input": 2.50, "output": 10.00}
+    },
+    "anthropic": {
+      "claude-opus-4.6": {"input": 5.00, "output": 25.00, "cache_read": 0.50},
+      "claude-opus-4.5": {"input": 5.00, "output": 25.00, "cache_read": 0.50},
+      "claude-opus-4.1": {"input": 15.00, "output": 75.00, "cache_read": 1.50},
+      "claude-opus-4": {"input": 15.00, "output": 75.00, "cache_read": 1.50},
+      "claude-sonnet-4.6": {"input": 3.00, "output": 15.00, "cache_read": 0.30},
+      "claude-sonnet-4.5": {"input": 3.00, "output": 15.00, "cache_read": 0.30},
+      "claude-sonnet-4": {"input": 3.00, "output": 15.00, "cache_read": 0.30},
+      "claude-haiku-4.5": {"input": 1.00, "output": 5.00, "cache_read": 0.10},
+      "claude-3-opus": {"input": 15.00, "output": 75.00, "cache_read": 1.50},
+      "claude-3-5-sonnet": {"input": 3.00, "output": 15.00, "cache_read": 0.30},
+      "claude-3-sonnet": {"input": 3.00, "output": 15.00, "cache_read": 0.30},
+      "claude-3-haiku": {"input": 0.25, "output": 1.25, "cache_read": 0.03},
+      "claude-3.5-haiku": {"input": 0.80, "output": 4.00, "cache_read": 0.08},
+      "claude-opus": {"input": 5.00, "output": 25.00, "cache_read": 0.50},
+      "claude-sonnet": {"input": 3.00, "output": 15.00, "cache_read": 0.30},
+      "claude-haiku": {"input": 1.00, "output": 5.00, "cache_read": 0.10},
+      "_default": {"input": 3.00, "output": 15.00, "cache_read": 0.30}
+    },
+    "gemini": {
+      "gemini-3-pro": {"input": 2.00, "output": 12.00},
+      "gemini-3-flash": {"input": 0.50, "output": 3.00},
+      "gemini-2.5-pro": {"input": 1.25, "output": 10.00},
+      "gemini-2.5-flash": {"input": 0.30, "output": 2.50},
+      "gemini-2.5-flash-lite": {"input": 0.10, "output": 0.40},
+      "gemini-2.0-flash": {"input": 0.10, "output": 0.40},
+      "gemini-2.0-flash-lite": {"input": 0.08, "output": 0.30},
+      "gemini-1.5-pro": {"input": 1.25, "output": 5.00},
+      "gemini-1.5-flash": {"input": 0.075, "output": 0.30},
+      "gemini-pro": {"input": 0.50, "output": 1.50},
+      "_default": {"input": 0.50, "output": 2.50}
+    },
+    "groq": {
+      "llama-4-scout": {"input": 0.11, "output": 0.34},
+      "llama-4-maverick": {"input": 0.20, "output": 0.60},
+      "llama-3.3-70b": {"input": 0.59, "output": 0.79},
+      "llama-3.1-70b": {"input": 0.59, "output": 0.79},
+      "llama-3.1-8b": {"input": 0.05, "output": 0.08},
+      "llama3-70b": {"input": 0.59, "output": 0.79},
+      "llama3-8b": {"input": 0.05, "output": 0.08},
+      "qwen3-32b": {"input": 0.29, "output": 0.59},
+      "qwen-qwq-32b": {"input": 0.29, "output": 0.59},
+      "mixtral-8x7b": {"input": 0.24, "output": 0.24},
+      "gpt-oss-20b": {"input": 0.075, "output": 0.30},
+      "gpt-oss-120b": {"input": 0.15, "output": 0.60},
+      "_default": {"input": 0.29, "output": 0.59}
+    },
+    "cerebras": {
+      "llama-3.1-8b": {"input": 0.10, "output": 0.10},
+      "llama-3.1-70b": {"input": 0.60, "output": 0.60},
+      "llama-3.1-405b": {"input": 6.00, "output": 12.00},
+      "llama3.1-8b": {"input": 0.10, "output": 0.10},
+      "llama3.1-70b": {"input": 0.60, "output": 0.60},
+      "qwen-3-32b": {"input": 0.20, "output": 0.20},
+      "_default": {"input": 0.60, "output": 0.60}
+    },
+    "openrouter": {
+      "_default": {"input": 1.00, "output": 5.00}
+    }
+  },
+
+  "api": {
+    "twitter": {
+      "_description": "X/Twitter Pay-Per-Use API pricing (per resource/request)",
+      "_source": "https://developer.x.com/#pricing",
+      "posts_read": 0.005,
+      "user_read": 0.010,
+      "dm_event_read": 0.010,
+      "list_read": 0.005,
+      "space_read": 0.005,
+      "community_read": 0.005,
+      "note_read": 0.005,
+      "followers_read": 0.010,
+      "following_read": 0.010,
+      "media_read": 0.005,
+      "analytics_read": 0.005,
+      "trend_read": 0.010,
+      "counts_recent": 0.005,
+      "counts_all": 0.010,
+      "content_create": 0.010,
+      "dm_create": 0.015,
+      "user_interaction_create": 0.015,
+      "interaction_delete": 0.010,
+      "content_manage": 0.005,
+      "list_create": 0.010,
+      "list_manage": 0.005,
+      "bookmark": 0.005,
+      "media_metadata": 0.005,
+      "privacy_update": 0.010,
+      "mute_delete": 0.005
+    }
+  },
+
+  "operation_map": {
+    "twitter": {
+      "tweet": "content_create",
+      "reply": "content_create",
+      "retweet": "user_interaction_create",
+      "like": "user_interaction_create",
+      "unlike": "interaction_delete",
+      "delete": "content_manage",
+      "search": "posts_read",
+      "me": "user_read",
+      "by_username": "user_read",
+      "by_id": "user_read",
+      "followers": "followers_read",
+      "following": "following_read"
+    }
+  }
+}

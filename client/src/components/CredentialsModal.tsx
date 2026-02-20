@@ -16,7 +16,7 @@ import {
 import Modal from './ui/Modal';
 import QRCodeDisplay from './ui/QRCodeDisplay';
 import ApiKeyInput from './ui/ApiKeyInput';
-import { useApiKeys, ProviderDefaults, ProviderUsageSummary } from '../hooks/useApiKeys';
+import { useApiKeys, ProviderDefaults, ProviderUsageSummary, APIUsageSummary } from '../hooks/useApiKeys';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { useWhatsAppStatus, useAndroidStatus, useTwitterStatus, useWebSocket, RateLimitConfig, RateLimitStats } from '../contexts/WebSocketContext';
 import { useWhatsApp } from '../hooks/useWhatsApp';
@@ -122,7 +122,7 @@ interface Props {
 
 const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
   const theme = useAppTheme();
-  const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey, validateGoogleMapsKey, getProviderDefaults, saveProviderDefaults, getProviderUsageSummary, isConnected } = useApiKeys();
+  const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey, validateGoogleMapsKey, getProviderDefaults, saveProviderDefaults, getProviderUsageSummary, getAPIUsageSummary, isConnected } = useApiKeys();
   const whatsappStatus = useWhatsAppStatus();
   const androidStatus = useAndroidStatus();
   const twitterStatus = useTwitterStatus();
@@ -152,10 +152,14 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
   const [defaultsLoading, setDefaultsLoading] = useState<Record<string, boolean>>({});
   const [defaultsDirty, setDefaultsDirty] = useState<Record<string, boolean>>({});
 
-  // Usage & Costs state
+  // Usage & Costs state (LLM providers)
   const [usageSummary, setUsageSummary] = useState<ProviderUsageSummary[]>([]);
   const [usageLoading, setUsageLoading] = useState(false);
   const [usageExpanded, setUsageExpanded] = useState(false);
+
+  // Twitter API usage state
+  const [twitterUsage, setTwitterUsage] = useState<APIUsageSummary | null>(null);
+  const [twitterUsageLoading, setTwitterUsageLoading] = useState(false);
 
   // Load stored keys and proxy URLs
   const loadKeys = useCallback(async () => {
@@ -252,6 +256,27 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
       loadUsageSummary();
     }
   }, [usageExpanded, isConnected, loadUsageSummary]);
+
+  // Load Twitter API usage when Twitter panel is selected
+  const loadTwitterUsage = useCallback(async () => {
+    if (!isConnected) return;
+    setTwitterUsageLoading(true);
+    try {
+      const services = await getAPIUsageSummary('twitter');
+      const twitter = services.find(s => s.service === 'twitter') || null;
+      setTwitterUsage(twitter);
+    } catch (error) {
+      console.warn('Error loading Twitter usage:', error);
+    } finally {
+      setTwitterUsageLoading(false);
+    }
+  }, [getAPIUsageSummary, isConnected]);
+
+  useEffect(() => {
+    if (selectedItem?.panelType === 'twitter' && isConnected) {
+      loadTwitterUsage();
+    }
+  }, [selectedItem, isConnected, loadTwitterUsage]);
 
   const handleValidate = async (id: string) => {
     const key = keys[id];
@@ -1321,6 +1346,112 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
           {twitterError && (
             <Alert type="error" message={twitterError} showIcon style={{ marginBottom: theme.spacing.lg }} />
           )}
+
+          {/* API Usage Stats */}
+          <Collapse
+            style={{ marginBottom: theme.spacing.lg, background: 'transparent' }}
+            items={[{
+              key: 'twitter-usage',
+              label: (
+                <Space>
+                  <DollarOutlined style={{ color: theme.dracula.yellow }} />
+                  <span>API Usage & Costs</span>
+                  {twitterUsage && (
+                    <Tag style={{
+                      backgroundColor: `${theme.dracula.green}25`,
+                      borderColor: `${theme.dracula.green}60`,
+                      color: theme.dracula.green,
+                    }}>
+                      ${twitterUsage.total_cost.toFixed(4)}
+                    </Tag>
+                  )}
+                </Space>
+              ),
+              children: twitterUsageLoading ? (
+                <div style={{ textAlign: 'center', padding: 16 }}><Spin size="small" /></div>
+              ) : twitterUsage ? (
+                <div>
+                  {/* Summary stats */}
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(3, 1fr)',
+                    gap: theme.spacing.md,
+                    marginBottom: theme.spacing.md,
+                  }}>
+                    <Statistic
+                      title="Total Cost"
+                      value={twitterUsage.total_cost}
+                      precision={4}
+                      prefix="$"
+                      valueStyle={{ color: theme.dracula.green, fontSize: 18 }}
+                    />
+                    <Statistic
+                      title="API Calls"
+                      value={twitterUsage.execution_count}
+                      valueStyle={{ color: theme.dracula.cyan, fontSize: 18 }}
+                    />
+                    <Statistic
+                      title="Resources"
+                      value={twitterUsage.total_resources}
+                      valueStyle={{ color: theme.dracula.purple, fontSize: 18 }}
+                    />
+                  </div>
+                  {/* Operations breakdown */}
+                  {twitterUsage.operations && twitterUsage.operations.length > 0 && (
+                    <div style={{
+                      borderTop: `1px solid ${theme.colors.border}`,
+                      paddingTop: theme.spacing.md,
+                    }}>
+                      <div style={{
+                        fontSize: theme.fontSize.xs,
+                        color: theme.colors.textSecondary,
+                        marginBottom: theme.spacing.sm,
+                      }}>
+                        Operations Breakdown
+                      </div>
+                      {twitterUsage.operations.map(op => (
+                        <div
+                          key={op.operation}
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            padding: '4px 0',
+                            borderBottom: `1px solid ${theme.colors.border}`,
+                          }}
+                        >
+                          <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{op.operation}</span>
+                          <Space size="small">
+                            <Tag style={{ margin: 0 }}>{op.resource_count} resources</Tag>
+                            <Tag style={{
+                              margin: 0,
+                              backgroundColor: `${theme.dracula.green}15`,
+                              color: theme.dracula.green,
+                              border: 'none',
+                            }}>
+                              ${op.total_cost.toFixed(4)}
+                            </Tag>
+                          </Space>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <Button
+                    size="small"
+                    icon={<ReloadOutlined />}
+                    onClick={loadTwitterUsage}
+                    style={{ marginTop: theme.spacing.md }}
+                  >
+                    Refresh
+                  </Button>
+                </div>
+              ) : (
+                <div style={{ color: theme.colors.textSecondary, textAlign: 'center', padding: 16 }}>
+                  No usage data yet. Use Twitter nodes in your workflows to track costs.
+                </div>
+              ),
+            }]}
+          />
 
           {/* Info box */}
           <div style={{

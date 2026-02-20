@@ -48,6 +48,22 @@ export interface ProviderUsageSummary {
   models: ModelUsageSummary[];
 }
 
+// API Usage interfaces (for Twitter, Google Maps, etc.)
+export interface APIOperationSummary {
+  operation: string;
+  resource_count: number;
+  total_cost: number;
+  execution_count: number;
+}
+
+export interface APIUsageSummary {
+  service: string;
+  total_resources: number;
+  total_cost: number;
+  execution_count: number;
+  operations: APIOperationSummary[];
+}
+
 export interface UseApiKeysResult {
   // Validate and store API key
   validateApiKey: (provider: string, apiKey: string) => Promise<ApiKeyValidationResult>;
@@ -77,8 +93,11 @@ export interface UseApiKeysResult {
   getProviderDefaults: (provider: string) => Promise<ProviderDefaults>;
   saveProviderDefaults: (provider: string, defaults: ProviderDefaults) => Promise<boolean>;
 
-  // Provider usage summary
+  // Provider usage summary (LLM tokens)
   getProviderUsageSummary: () => Promise<ProviderUsageSummary[]>;
+
+  // API usage summary (Twitter, etc.)
+  getAPIUsageSummary: (service?: string) => Promise<APIUsageSummary[]>;
 
   // State
   isValidating: boolean;
@@ -309,7 +328,7 @@ export const useApiKeys = (): UseApiKeysResult => {
   }, [sendRequest, isConnected]);
 
   /**
-   * Get aggregated usage and cost summary by provider
+   * Get aggregated usage and cost summary by provider (LLM tokens)
    */
   const getProviderUsageSummary = useCallback(async (): Promise<ProviderUsageSummary[]> => {
     if (!isConnected) return [];
@@ -319,6 +338,27 @@ export const useApiKeys = (): UseApiKeysResult => {
       return response?.providers || [];
     } catch (error) {
       console.warn('Error fetching provider usage summary:', error);
+      return [];
+    }
+  }, [sendRequest, isConnected]);
+
+  /**
+   * Get aggregated API usage and cost by service (Twitter, etc.)
+   * Optionally filter by service name.
+   */
+  const getAPIUsageSummary = useCallback(async (
+    service?: string
+  ): Promise<APIUsageSummary[]> => {
+    if (!isConnected) return [];
+
+    try {
+      const response = await sendRequest<{ success: boolean; services: APIUsageSummary[] }>(
+        'get_api_usage_summary',
+        { service }
+      );
+      return response?.services || [];
+    } catch (error) {
+      console.warn('Error fetching API usage summary:', error);
       return [];
     }
   }, [sendRequest, isConnected]);
@@ -335,6 +375,7 @@ export const useApiKeys = (): UseApiKeysResult => {
     getProviderDefaults,
     saveProviderDefaults,
     getProviderUsageSummary,
+    getAPIUsageSummary,
     isValidating,
     validationError,
     isConnected
