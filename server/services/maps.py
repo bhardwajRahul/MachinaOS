@@ -8,8 +8,50 @@ from typing import Dict, Any
 from core.config import Settings
 from core.logging import get_logger, log_execution_time
 from services.auth import AuthService
+from services.pricing import get_pricing_service
 
 logger = get_logger(__name__)
+
+
+async def _track_maps_usage(
+    node_id: str,
+    action: str,
+    resource_count: int = 1,
+    workflow_id: str = None,
+    session_id: str = "default"
+) -> Dict[str, float]:
+    """Track Google Maps API usage for cost calculation.
+
+    Args:
+        node_id: The node executing the Maps action
+        action: Action name (geocode, nearby_search, etc.)
+        resource_count: Number of resources (usually 1 per request)
+        workflow_id: Optional workflow context
+        session_id: Session for aggregation
+
+    Returns:
+        Cost breakdown dict with operation, unit_cost, resource_count, total_cost
+    """
+    from core.container import container
+
+    pricing = get_pricing_service()
+    cost_data = pricing.calculate_api_cost('google_maps', action, resource_count)
+
+    # Save to database
+    db = container.database()
+    await db.save_api_usage_metric({
+        'session_id': session_id,
+        'node_id': node_id,
+        'workflow_id': workflow_id,
+        'service': 'google_maps',
+        'operation': cost_data.get('operation', action),
+        'endpoint': action,
+        'resource_count': resource_count,
+        'cost': cost_data.get('total_cost', 0.0)
+    })
+
+    logger.debug(f"[Maps] Tracked usage: {action} x{resource_count} = ${cost_data.get('total_cost', 0):.6f}")
+    return cost_data
 
 
 class MapsService:
@@ -27,9 +69,10 @@ class MapsService:
         """Validate Google Maps zoom level."""
         return 0 <= zoom <= 21
 
-    async def create_map(self, node_id: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
+    async def create_map(self, node_id: str, parameters: Dict[str, Any], context: Dict[str, Any] = None) -> Dict[str, Any]:
         """Create Google Maps configuration."""
         start_time = time.time()
+        context = context or {}
 
         try:
             api_key = parameters.get('api_key') or self.settings.google_maps_api_key
@@ -59,6 +102,12 @@ class MapsService:
                 "status": "OK"
             }
 
+            # Track: static_map $0.002
+            await _track_maps_usage(
+                node_id, 'static_map', 1,
+                context.get('workflow_id'), context.get('session_id', 'default')
+            )
+
             log_execution_time(logger, "create_map", start_time, time.time())
 
             return {
@@ -82,9 +131,10 @@ class MapsService:
                 "timestamp": datetime.now().isoformat()
             }
 
-    async def geocode_location(self, node_id: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
+    async def geocode_location(self, node_id: str, parameters: Dict[str, Any], context: Dict[str, Any] = None) -> Dict[str, Any]:
         """Geocode addresses or reverse geocode coordinates."""
         start_time = time.time()
+        context = context or {}
 
         try:
             api_key = parameters.get('api_key') or self.settings.google_maps_api_key
@@ -106,6 +156,11 @@ class MapsService:
                     "results": geocode_result,
                     "status": "OK" if geocode_result else "ZERO_RESULTS"
                 }
+                # Track: geocode $0.005
+                await _track_maps_usage(
+                    node_id, 'geocode', 1,
+                    context.get('workflow_id'), context.get('session_id', 'default')
+                )
 
             elif service_type == 'reverse_geocode':
                 lat = float(parameters.get('lat', 0))
@@ -121,6 +176,11 @@ class MapsService:
                     "results": reverse_result,
                     "status": "OK" if reverse_result else "ZERO_RESULTS"
                 }
+                # Track: reverse_geocode $0.005
+                await _track_maps_usage(
+                    node_id, 'reverse_geocode', 1,
+                    context.get('workflow_id'), context.get('session_id', 'default')
+                )
 
             else:
                 raise ValueError(f"Unsupported service type: {service_type}")
@@ -159,9 +219,10 @@ class MapsService:
                 "timestamp": datetime.now().isoformat()
             }
 
-    async def find_nearby_places(self, node_id: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
+    async def find_nearby_places(self, node_id: str, parameters: Dict[str, Any], context: Dict[str, Any] = None) -> Dict[str, Any]:
         """Find nearby places using Google Places API."""
         start_time = time.time()
+        context = context or {}
 
         try:
             api_key = parameters.get('api_key') or self.settings.google_maps_api_key
@@ -234,6 +295,12 @@ class MapsService:
 
             nearby_result = gmaps.places_nearby(**search_params)
             results = nearby_result.get('results', [])[:page_size]
+
+            # Track: nearby_search $0.032
+            await _track_maps_usage(
+                node_id, 'nearby_search', 1,
+                context.get('workflow_id'), context.get('session_id', 'default')
+            )
 
             result = {
                 "search_parameters": {

@@ -64,7 +64,7 @@ interface CredentialItem {
   Icon?: React.FC<{ size?: number }>;
   CustomIcon?: React.FC;
   isSpecial?: boolean;
-  panelType?: 'whatsapp' | 'android' | 'twitter';
+  panelType?: 'whatsapp' | 'android' | 'twitter' | 'google_maps';
 }
 
 interface Category {
@@ -105,7 +105,7 @@ const CATEGORIES: Category[] = [
     key: 'services',
     label: 'Services',
     items: [
-      { id: 'google_maps', name: 'Google Maps', placeholder: 'AIza...', color: '#EA4335', desc: 'Geocoding, Places, Directions', CustomIcon: GoogleMapsIcon },
+      { id: 'google_maps', name: 'Google Maps', placeholder: 'AIza...', color: '#EA4335', desc: 'Geocoding, Places, Directions', CustomIcon: GoogleMapsIcon, panelType: 'google_maps' },
     ],
   },
 ];
@@ -157,9 +157,9 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
   const [usageLoading, setUsageLoading] = useState(false);
   const [usageExpanded, setUsageExpanded] = useState(false);
 
-  // Twitter API usage state
-  const [twitterUsage, setTwitterUsage] = useState<APIUsageSummary | null>(null);
-  const [twitterUsageLoading, setTwitterUsageLoading] = useState(false);
+  // API usage state (for Twitter, Google Maps, etc.)
+  const [apiUsage, setApiUsage] = useState<Record<string, APIUsageSummary | null>>({});
+  const [apiUsageLoading, setApiUsageLoading] = useState<Record<string, boolean>>({});
 
   // Load stored keys and proxy URLs
   const loadKeys = useCallback(async () => {
@@ -257,26 +257,29 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
     }
   }, [usageExpanded, isConnected, loadUsageSummary]);
 
-  // Load Twitter API usage when Twitter panel is selected
-  const loadTwitterUsage = useCallback(async () => {
+  // Load API usage for services (Twitter, Google Maps, etc.)
+  const loadApiUsage = useCallback(async (service: string) => {
     if (!isConnected) return;
-    setTwitterUsageLoading(true);
+    setApiUsageLoading(l => ({ ...l, [service]: true }));
     try {
-      const services = await getAPIUsageSummary('twitter');
-      const twitter = services.find(s => s.service === 'twitter') || null;
-      setTwitterUsage(twitter);
+      const services = await getAPIUsageSummary(service);
+      const usage = services.find(s => s.service === service) || null;
+      setApiUsage(u => ({ ...u, [service]: usage }));
     } catch (error) {
-      console.warn('Error loading Twitter usage:', error);
+      console.warn(`Error loading ${service} usage:`, error);
     } finally {
-      setTwitterUsageLoading(false);
+      setApiUsageLoading(l => ({ ...l, [service]: false }));
     }
   }, [getAPIUsageSummary, isConnected]);
 
   useEffect(() => {
-    if (selectedItem?.panelType === 'twitter' && isConnected) {
-      loadTwitterUsage();
+    const panelType = selectedItem?.panelType;
+    if (panelType === 'twitter' && isConnected) {
+      loadApiUsage('twitter');
+    } else if (panelType === 'google_maps' && isConnected) {
+      loadApiUsage('google_maps');
     }
-  }, [selectedItem, isConnected, loadTwitterUsage]);
+  }, [selectedItem, isConnected, loadApiUsage]);
 
   const handleValidate = async (id: string) => {
     const key = keys[id];
@@ -709,6 +712,112 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
       loadRateLimits();
     }
   }, [selectedItem, whatsappStatus.connected, rateLimitExpanded, loadRateLimits]);
+
+  // Render API usage panel for services (Twitter, Google Maps, etc.)
+  const renderApiUsagePanel = (service: string, serviceName: string) => (
+    <Collapse
+      style={{ marginBottom: theme.spacing.lg, background: 'transparent' }}
+      items={[{
+        key: `${service}-usage`,
+        label: (
+          <Space>
+            <DollarOutlined style={{ color: theme.dracula.yellow }} />
+            <span>API Usage & Costs</span>
+            {apiUsage[service] && (
+              <Tag style={{
+                backgroundColor: `${theme.dracula.green}25`,
+                borderColor: `${theme.dracula.green}60`,
+                color: theme.dracula.green,
+              }}>
+                ${apiUsage[service]!.total_cost.toFixed(4)}
+              </Tag>
+            )}
+          </Space>
+        ),
+        children: apiUsageLoading[service] ? (
+          <div style={{ textAlign: 'center', padding: 16 }}><Spin size="small" /></div>
+        ) : apiUsage[service] ? (
+          <div>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: theme.spacing.md,
+              marginBottom: theme.spacing.md,
+            }}>
+              <Statistic
+                title="Total Cost"
+                value={apiUsage[service]!.total_cost}
+                precision={4}
+                prefix="$"
+                valueStyle={{ color: theme.dracula.green, fontSize: 18 }}
+              />
+              <Statistic
+                title="API Calls"
+                value={apiUsage[service]!.execution_count}
+                valueStyle={{ color: theme.dracula.cyan, fontSize: 18 }}
+              />
+              <Statistic
+                title="Resources"
+                value={apiUsage[service]!.total_resources}
+                valueStyle={{ color: theme.dracula.purple, fontSize: 18 }}
+              />
+            </div>
+            {apiUsage[service]!.operations?.length > 0 && (
+              <div style={{
+                borderTop: `1px solid ${theme.colors.border}`,
+                paddingTop: theme.spacing.md,
+              }}>
+                <div style={{
+                  fontSize: theme.fontSize.xs,
+                  color: theme.colors.textSecondary,
+                  marginBottom: theme.spacing.sm,
+                }}>
+                  Operations Breakdown
+                </div>
+                {apiUsage[service]!.operations.map(op => (
+                  <div
+                    key={op.operation}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '4px 0',
+                      borderBottom: `1px solid ${theme.colors.border}`,
+                    }}
+                  >
+                    <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{op.operation}</span>
+                    <Space size="small">
+                      <Tag style={{ margin: 0 }}>{op.resource_count} resources</Tag>
+                      <Tag style={{
+                        margin: 0,
+                        backgroundColor: `${theme.dracula.green}15`,
+                        color: theme.dracula.green,
+                        border: 'none',
+                      }}>
+                        ${op.total_cost.toFixed(4)}
+                      </Tag>
+                    </Space>
+                  </div>
+                ))}
+              </div>
+            )}
+            <Button
+              size="small"
+              icon={<ReloadOutlined />}
+              onClick={() => loadApiUsage(service)}
+              style={{ marginTop: theme.spacing.md }}
+            >
+              Refresh
+            </Button>
+          </div>
+        ) : (
+          <div style={{ color: theme.colors.textSecondary, textAlign: 'center', padding: 16 }}>
+            No usage data yet. Use {serviceName} nodes in your workflows to track costs.
+          </div>
+        ),
+      }]}
+    />
+  );
 
   // Render detail panel for selected item
   const renderDetailPanel = () => {
@@ -1348,110 +1457,7 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
           )}
 
           {/* API Usage Stats */}
-          <Collapse
-            style={{ marginBottom: theme.spacing.lg, background: 'transparent' }}
-            items={[{
-              key: 'twitter-usage',
-              label: (
-                <Space>
-                  <DollarOutlined style={{ color: theme.dracula.yellow }} />
-                  <span>API Usage & Costs</span>
-                  {twitterUsage && (
-                    <Tag style={{
-                      backgroundColor: `${theme.dracula.green}25`,
-                      borderColor: `${theme.dracula.green}60`,
-                      color: theme.dracula.green,
-                    }}>
-                      ${twitterUsage.total_cost.toFixed(4)}
-                    </Tag>
-                  )}
-                </Space>
-              ),
-              children: twitterUsageLoading ? (
-                <div style={{ textAlign: 'center', padding: 16 }}><Spin size="small" /></div>
-              ) : twitterUsage ? (
-                <div>
-                  {/* Summary stats */}
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(3, 1fr)',
-                    gap: theme.spacing.md,
-                    marginBottom: theme.spacing.md,
-                  }}>
-                    <Statistic
-                      title="Total Cost"
-                      value={twitterUsage.total_cost}
-                      precision={4}
-                      prefix="$"
-                      valueStyle={{ color: theme.dracula.green, fontSize: 18 }}
-                    />
-                    <Statistic
-                      title="API Calls"
-                      value={twitterUsage.execution_count}
-                      valueStyle={{ color: theme.dracula.cyan, fontSize: 18 }}
-                    />
-                    <Statistic
-                      title="Resources"
-                      value={twitterUsage.total_resources}
-                      valueStyle={{ color: theme.dracula.purple, fontSize: 18 }}
-                    />
-                  </div>
-                  {/* Operations breakdown */}
-                  {twitterUsage.operations && twitterUsage.operations.length > 0 && (
-                    <div style={{
-                      borderTop: `1px solid ${theme.colors.border}`,
-                      paddingTop: theme.spacing.md,
-                    }}>
-                      <div style={{
-                        fontSize: theme.fontSize.xs,
-                        color: theme.colors.textSecondary,
-                        marginBottom: theme.spacing.sm,
-                      }}>
-                        Operations Breakdown
-                      </div>
-                      {twitterUsage.operations.map(op => (
-                        <div
-                          key={op.operation}
-                          style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            padding: '4px 0',
-                            borderBottom: `1px solid ${theme.colors.border}`,
-                          }}
-                        >
-                          <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{op.operation}</span>
-                          <Space size="small">
-                            <Tag style={{ margin: 0 }}>{op.resource_count} resources</Tag>
-                            <Tag style={{
-                              margin: 0,
-                              backgroundColor: `${theme.dracula.green}15`,
-                              color: theme.dracula.green,
-                              border: 'none',
-                            }}>
-                              ${op.total_cost.toFixed(4)}
-                            </Tag>
-                          </Space>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <Button
-                    size="small"
-                    icon={<ReloadOutlined />}
-                    onClick={loadTwitterUsage}
-                    style={{ marginTop: theme.spacing.md }}
-                  >
-                    Refresh
-                  </Button>
-                </div>
-              ) : (
-                <div style={{ color: theme.colors.textSecondary, textAlign: 'center', padding: 16 }}>
-                  No usage data yet. Use Twitter nodes in your workflows to track costs.
-                </div>
-              ),
-            }]}
-          />
+          {renderApiUsagePanel('twitter', 'Twitter')}
 
           {/* Info box */}
           <div style={{
@@ -1944,6 +1950,9 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
             />
           </div>
         )}
+
+        {/* Usage & Costs Section - For Google Maps */}
+        {item.id === 'google_maps' && renderApiUsagePanel('google_maps', 'Google Maps')}
 
         {/* Models list */}
         {models[item.id]?.length > 0 && (

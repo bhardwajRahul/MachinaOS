@@ -88,6 +88,21 @@
   },
 
   "api": {
+    "google_maps": {
+      "_description": "Google Maps Platform pricing per request (USD, Tier 1: 0-100K/month)",
+      "_source": "https://developers.google.com/maps/billing-and-pricing/pricing",
+      "_updated": "2026-02",
+      "geocode": 0.005,
+      "reverse_geocode": 0.005,
+      "nearby_search": 0.032,
+      "place_details": 0.005,
+      "autocomplete": 0.00283,
+      "text_search": 0.032,
+      "directions": 0.005,
+      "distance_matrix": 0.005,
+      "static_map": 0.002,
+      "_default": 0.005
+    },
     "twitter": {
       "_description": "X/Twitter Pay-Per-Use API pricing (per resource/request)",
       "_source": "https://developer.x.com/#pricing",
@@ -120,6 +135,19 @@
   },
 
   "operation_map": {
+    "google_maps": {
+      "geocode": "geocode",
+      "reverse_geocode": "reverse_geocode",
+      "nearby_search": "nearby_search",
+      "nearby_places": "nearby_search",
+      "place_details": "place_details",
+      "autocomplete": "autocomplete",
+      "text_search": "text_search",
+      "directions": "directions",
+      "distance_matrix": "distance_matrix",
+      "static_map": "static_map",
+      "create_map": "static_map"
+    },
     "twitter": {
       "tweet": "content_create",
       "reply": "content_create",
@@ -133,6 +161,22 @@
       "by_id": "user_read",
       "followers": "followers_read",
       "following": "following_read"
+    }
+  },
+
+  "url_patterns": {
+    "twitter": {
+      "base": "https?://api\\.(twitter|x)\\.com",
+      "actions": {
+        "/2/tweets$": {"action": "content_create", "method": "POST"},
+        "/2/tweets/search": {"action": "posts_read", "method": "GET", "count_path": "data.length"},
+        "/2/users/.*/following": {"action": "following_read", "method": "GET", "count_path": "data.length"},
+        "/2/users/.*/followers": {"action": "followers_read", "method": "GET", "count_path": "data.length"},
+        "/2/users/.*/likes$": {"action": "user_interaction_create", "method": "POST"},
+        "/2/users/by": {"action": "user_read", "method": "GET", "count_path": "data.length"},
+        "/2/users/me": {"action": "user_read", "method": "GET"},
+        "/2/users/\\d+$": {"action": "user_read", "method": "GET"}
+      }
     }
   }
 }

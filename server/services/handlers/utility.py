@@ -38,7 +38,7 @@ async def handle_create_map(
         Execution result dict
     """
     logger.info("[Maps Execution] Executing gmaps_create", node_id=node_id)
-    result = await maps_service.create_map(node_id, parameters)
+    result = await maps_service.create_map(node_id, parameters, context)
     logger.info("[Maps Execution] gmaps_create result", success=result.get('success'),
                has_result='result' in result,
                result_keys=list(result.get('result', {}).keys()) if isinstance(result.get('result'), dict) else 'not_dict')
@@ -65,7 +65,7 @@ async def handle_add_locations(
         Execution result dict
     """
     logger.info("[Maps Execution] Executing gmaps_locations", node_id=node_id)
-    result = await maps_service.geocode_location(node_id, parameters)
+    result = await maps_service.geocode_location(node_id, parameters, context)
     logger.info("[Maps Execution] gmaps_locations result", success=result.get('success'),
                has_result='result' in result,
                result_keys=list(result.get('result', {}).keys()) if isinstance(result.get('result'), dict) else 'not_dict')
@@ -92,7 +92,7 @@ async def handle_nearby_places(
         Execution result dict
     """
     logger.info("[Maps Execution] Executing gmaps_nearby_places", node_id=node_id)
-    result = await maps_service.find_nearby_places(node_id, parameters)
+    result = await maps_service.find_nearby_places(node_id, parameters, context)
     logger.info("[Maps Execution] gmaps_nearby_places result", success=result.get('success'),
                has_result='result' in result,
                result_keys=list(result.get('result', {}).keys()) if isinstance(result.get('result'), dict) else 'not_dict')
