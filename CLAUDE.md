@@ -17,6 +17,7 @@ This is a React Flow-based workflow automation platform implementing n8n-inspire
 | **[Agent Delegation](./docs-internal/agent_delegation.md)** | How memory, parameters, and execution context flow when one AI agent delegates work to another agent connected as a tool |
 | **[Agent Teams](./docs-internal/agent_teams.md)** | Claude SDK Agent Teams pattern - AI Employee and Orchestrator nodes with input-teammates handle for multi-agent coordination |
 | **[Memory Compaction](./docs-internal/memory_compaction.md)** | Token tracking and memory compaction service using native provider APIs (Anthropic, OpenAI) |
+| **[Pricing Service](./docs-internal/pricing_service.md)** | Centralized cost tracking for LLM tokens and API services (Twitter, Google Maps) with HTTPX event hooks |
 | **[CI/CD Pipeline](./docs-internal/ci_cd.md)** | GitHub Actions workflows, predeploy validation, release publishing, and composite setup action |
 | **[Workflow Schema](./docs-internal/workflow-schema.md)** | JSON schema for workflows, edge handle conventions, config node architecture |
 | **[Execution Engine Design](./docs-internal/DESIGN.md)** | Architecture patterns, design standards, and implementation details for the workflow execution engine |
@@ -60,6 +61,9 @@ server/services/
 ├── node_executor.py         # Single node execution with registry pattern
 ├── parameter_resolver.py    # Template variable resolution
 ├── agent_team.py            # AgentTeamService for multi-agent coordination
+├── nodejs_client.py         # HTTP client for Node.js code executor
+├── pricing.py               # LLM and API cost calculation (loads config/pricing.json)
+├── tracked_http.py          # HTTPX event hooks for automatic API cost tracking
 ├── deployment/              # Event-driven deployment lifecycle
 │   ├── __init__.py
 │   ├── state.py             # DeploymentState, TriggerInfo dataclasses
@@ -89,7 +93,17 @@ server/core/
 server/models/
 ├── cache.py                 # CacheEntry SQLModel for SQLite cache
 ├── auth.py                  # User model with bcrypt
-└── database.py              # ConversationMessage, NodeParameter, ToolSchema, ChatMessage, TokenUsageMetric, CompactionEvent, SessionTokenState, UserSettings, ProviderDefaults, AgentTeam, TeamMember, TeamTask, AgentMessage tables
+└── database.py              # ConversationMessage, NodeParameter, ToolSchema, ChatMessage, TokenUsageMetric, APIUsageMetric, CompactionEvent, SessionTokenState, UserSettings, ProviderDefaults, AgentTeam, TeamMember, TeamTask, AgentMessage tables
+
+server/config/
+└── pricing.json             # User-editable pricing config for LLM models and API services
+
+server/nodejs/                   # Persistent Node.js server for JS/TS execution
+├── package.json                 # Dependencies: express, tsx
+├── tsconfig.json                # TypeScript config (ES2024)
+├── src/
+│   └── index.ts                 # Express server (/execute, /health, /packages/*)
+└── user-packages/               # User-installed npm packages
 ```
 
 ### Polyglot Server Integration (Optional)
@@ -178,6 +192,59 @@ POLYGLOT_SERVER_URL=http://localhost:8080  # polyglot-server address
 ```
 
 **Current Status**: Standalone integration files created. Not wired into NodeExecutor to avoid disturbing existing workflow execution flow. Future integration will add polyglot node types to handler registry via `functools.partial` pattern.
+
+### Node.js Code Executor
+Persistent Node.js server for JavaScript/TypeScript code execution, replacing subprocess spawning per execution.
+
+**Architecture:**
+```
+┌─────────────────────────────────────────────────────────────┐
+│                  Python Backend (port 3010)                  │
+│  ┌────────────────┐     HTTP/JSON      ┌──────────────────┐ │
+│  │ NodeJSClient   │◄──────────────────►│  Node.js Server  │ │
+│  │ (aiohttp)      │   localhost:3020   │  (Express + tsx) │ │
+│  └────────────────┘                    └──────────────────┘ │
+│         ▲                                                    │
+│         │                                                    │
+│  ┌──────┴─────────┐                                         │
+│  │ code.py        │                                         │
+│  │ handlers       │                                         │
+│  └────────────────┘                                         │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Files:**
+```
+server/nodejs/
+├── package.json              # Dependencies: express, tsx
+├── tsconfig.json             # TypeScript config (ES2024)
+├── src/
+│   └── index.ts              # Express server with /execute, /health, /packages/*
+└── user-packages/            # User npm packages directory
+    └── package.json
+
+server/services/
+├── nodejs_client.py          # Async HTTP client for Node.js server
+└── handlers/
+    └── code.py               # handle_javascript_executor, handle_typescript_executor
+```
+
+**Endpoints:**
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check with Node.js version |
+| `/execute` | POST | Execute JS/TS code with input_data and timeout |
+| `/packages/install` | POST | Install npm packages to user-packages |
+| `/packages` | GET | List installed packages |
+
+**Environment Variables:**
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `NODEJS_EXECUTOR_URL` | `http://localhost:3020` | Server URL for Python client |
+| `NODEJS_EXECUTOR_TIMEOUT` | `30` | Request timeout in seconds |
+| `NODEJS_EXECUTOR_PORT` | `3020` | Server port |
+| `NODEJS_EXECUTOR_HOST` | `localhost` | Server host |
+| `NODEJS_EXECUTOR_BODY_LIMIT` | `10mb` | Max request body size |
 
 **Key Modules:**
 
@@ -292,7 +359,7 @@ class CacheEntry(SQLModel, table=True):
 
 ## Codebase Summary
 - **Hybrid architecture**: Node.js + Python + React TypeScript
-- **83 implemented workflow nodes** with clean service separation (6 AI models + 3 AI agents/memory + 13 specialized agents + 11 skills + 3 dedicated tools + 6 dual-purpose tools + 16 Android + 3 WhatsApp + 4 Twitter + 2 Social + 3 Location + 2 Code + 6 Utility + 6 Document + 2 Chat + 2 Scheduler + 1 Workflow)
+- **84 implemented workflow nodes** with clean service separation (6 AI models + 3 AI agents/memory + 13 specialized agents + 11 skills + 3 dedicated tools + 6 dual-purpose tools + 16 Android + 3 WhatsApp + 4 Twitter + 2 Social + 3 Location + 3 Code + 6 Utility + 6 Document + 2 Chat + 2 Scheduler + 1 Workflow)
 - **WebSocket-First Architecture**: WebSocket as primary frontend-backend communication (87 message handlers)
 - **Recent optimizations**: REST APIs replaced with WebSocket, AI endpoints migrated to Python, Android automation integrated
 
@@ -324,7 +391,7 @@ The project was completely refactored from schema-based node definitions to expl
 - `src/nodeDefinitions/whatsappNodes.ts` - WhatsApp messaging integration (3 nodes)
 - `src/nodeDefinitions/twitterNodes.ts` - Twitter/X integration (4 nodes: send, search, user, receive)
 - `src/nodeDefinitions/socialNodes.ts` - Unified social messaging nodes (socialReceive, socialSend)
-- `src/nodeDefinitions/codeNodes.ts` - Python and JavaScript code execution nodes
+- `src/nodeDefinitions/codeNodes.ts` - Python, JavaScript, and TypeScript code execution nodes
 - `src/nodeDefinitions/utilityNodes.ts` - HTTP, Webhook, chatTrigger, and console nodes
 - `src/nodeDefinitions/documentNodes.ts` - Document processing nodes (httpScraper, fileDownloader, documentParser, textChunker, embeddingGenerator, vectorStore)
 - `src/nodeDefinitions/chatNodes.ts` - Chat send and history nodes
@@ -690,7 +757,8 @@ Nodes that work BOTH as standalone workflow nodes AND as AI Agent tools. When co
 - **whatsappSend**: Send WhatsApp messages (text, media, location, contact). Full schema for all message types.
 - **whatsappDb**: Query WhatsApp database - chat history, contacts, groups with filtering and pagination.
 - **pythonExecutor**: Execute Python code for calculations, data processing, and automation. Tool name: `python_code`. Available: math, json, datetime, Counter, defaultdict, random.
-- **javascriptExecutor**: Execute JavaScript code for calculations, data processing, and JSON manipulation. Tool name: `javascript_code`.
+- **javascriptExecutor**: Execute JavaScript code via persistent Node.js server for calculations, data processing, and JSON manipulation. Tool name: `javascript_code`.
+- **typescriptExecutor**: Execute TypeScript code via persistent Node.js server with type safety. Tool name: `typescript_code`.
 - **gmaps_locations**: Google Maps Geocoding service for address-to-coordinates conversion. Tool name: `geocode`.
 - **gmaps_nearby_places**: Google Places API nearbySearch. Tool name: `nearby_places`.
 
@@ -839,9 +907,10 @@ TWITTER_REDIRECT_URI=http://localhost:3010/api/twitter/callback
 - **start**: Manual workflow trigger to start workflow execution
 - **taskTrigger**: Event-driven trigger that fires when a delegated child agent completes its task (success or error). Filters by task_id, agent_name, status (all/completed/error), and parent_node_id. Output includes task_id, status, agent_name, result/error, workflow_id.
 
-### Code Nodes (2 nodes)
+### Code Nodes (3 nodes)
 - **pythonExecutor**: **Dual-purpose node** - Execute Python code with syntax-highlighted editor, input_data access, and console output. Works as workflow node OR AI Agent tool (`python_code`). Available libraries: math, json, datetime, timedelta, re, random, Counter, defaultdict.
-- **javascriptExecutor**: **Dual-purpose node** - Execute JavaScript code with syntax-highlighted editor and console output. Works as workflow node OR AI Agent tool (`javascript_code`).
+- **javascriptExecutor**: **Dual-purpose node** - Execute JavaScript code via persistent Node.js server with syntax-highlighted editor and console output. Works as workflow node OR AI Agent tool (`javascript_code`).
+- **typescriptExecutor**: **Dual-purpose node** - Execute TypeScript code via persistent Node.js server with type safety, syntax-highlighted editor and console output. Works as workflow node OR AI Agent tool (`typescript_code`).
 
 ### Utility Nodes (6 nodes)
 - **httpRequest**: Make HTTP requests to external APIs (GET, POST, PUT, DELETE, PATCH) with configurable headers, body, and timeout
@@ -1062,7 +1131,8 @@ See **[Scripts Reference](./docs-internal/SCRIPTS.md)** for full documentation.
 ## Current Status
 ✅ **INodeProperties System**: Fully implemented with 75 functional node components
 ✅ **WebSocket-First Architecture**: 87 message handlers replacing REST APIs
-✅ **Code Editor**: Python executor with syntax-highlighted editor (react-simple-code-editor + prismjs) and console output
+✅ **Code Editor**: Python, JavaScript, and TypeScript executors with syntax-highlighted editor (react-simple-code-editor + prismjs) and console output
+✅ **Node.js Executor**: Persistent Node.js server (Express + tsx) for fast JS/TS execution, replacing subprocess spawning
 ✅ **Component Palette**: Emoji icons with distinct dracula-themed category colors, localStorage persistence for collapsed sections
 ✅ **Android Integration**: 16 Android service nodes with ADB automation and remote WebSocket support
 ✅ **Conditional Parameter Display**: Dynamic UI rendering based on parameter values (displayOptions.show)
@@ -1893,11 +1963,13 @@ The project deploys using Docker Compose with nginx reverse proxy.
 - Size: ~54 MB
 
 **Backend (`server/Dockerfile`):**
-- Python 3.12-slim base
+- Python 3.12-slim base with Node.js 22.x for JS/TS execution
+- Includes persistent Node.js server (Express + tsx) on port 3020
 - Optimized bytecode compilation (`python -O -m compileall`)
 - Health check endpoint on port 3010
+- Startup script (`start.sh`) runs both Python and Node.js servers
 - Depends on: redis, whatsapp
-- Size: ~528 MB
+- Size: ~600 MB
 
 **WhatsApp (`docker/Dockerfile.whatsapp`):**
 - Uses npm package `whatsapp-rpc` with pre-built binaries
@@ -2980,6 +3052,47 @@ compaction_svc.set_ai_service(container.ai_service())
 - **Per-Session State**: Each memory session has independent token tracking and thresholds
 - **100K Threshold**: Matches Claude Code's default (configurable per session)
 - **Singleton Pattern**: Service accessible via `get_compaction_service()`
+
+## API Cost Tracking
+
+Centralized cost tracking for third-party API services (Twitter/X, Google Maps). See [Pricing Service](./docs-internal/pricing_service.md) for full documentation.
+
+### Two Tracking Methods
+
+**1. Manual Tracking** - For services using native SDKs:
+```python
+# server/services/handlers/twitter.py
+await _track_twitter_usage(node_id, 'tweet', 1, workflow_id, session_id)
+
+# server/services/maps.py
+await _track_maps_usage(node_id, 'geocode', 1, workflow_id, session_id)
+```
+
+**2. Automatic HTTPX Tracking** - For services using httpx client:
+```python
+from services.tracked_http import get_tracked_client, set_tracking_context
+
+set_tracking_context(node_id="twitter-1", session_id="user-123")
+client = get_tracked_client()
+response = await client.post("https://api.twitter.com/2/tweets", json={...})
+# Automatically tracked via HTTPX response event hook!
+```
+
+### Pricing Configuration
+
+All pricing in `server/config/pricing.json` (user-editable):
+- `llm`: Per-model token pricing (USD/MTok)
+- `api`: Per-service operation pricing (USD/request)
+- `operation_map`: Maps handler actions to pricing operations
+- `url_patterns`: Regex patterns for automatic HTTPX tracking
+
+### Database Storage
+
+`APIUsageMetric` table stores: service, operation, endpoint, resource_count, cost (USD)
+
+### Frontend Display
+
+`CredentialsModal.renderApiUsagePanel()` shows per-service usage and costs.
 
 ## AI Agent Tool System
 
@@ -4319,4 +4432,5 @@ This function:
 - **Workflow Export Sanitization**: `exportWorkflow()` in `useWorkflow.ts` strips transient fields (`selected`, `dragging`, `width`, `height`, `measured`, `positionAbsolute`) from nodes and edges before export. Only `id`, `type`, `position`, `data.label` are included per node.
 - **Skill System Architecture**: Skills organized in `server/skills/<folder>/` subfolders. Each folder appears in Master Skill dropdown. DB is source of truth for skill instructions (seeded from SKILL.md on first load). Icon resolution: node definition (SVG) > SKILL.md metadata (emoji) > fallback. Native DOM keydown handler prevents React Flow from intercepting Ctrl shortcuts in skill editor.
 - **Example Workflows**: Auto-load example workflows from `workflows/` folder on first use. Uses `UserSettings.examples_loaded` flag to track import status. Supports anonymous users (`user_id="default"`). Reuses existing `database.save_workflow()` for import. See "Example Workflows" section for details.
+- **Node.js Code Executor**: Persistent Node.js server (Express + tsx) at port 3020 for JavaScript/TypeScript execution, replacing subprocess spawning per execution. Handlers in `server/services/handlers/code.py` call `NodeJSClient` which makes HTTP requests to the Node.js server. All config via environment variables (`NODEJS_EXECUTOR_URL`, `NODEJS_EXECUTOR_PORT`, etc.).
 - never use emojis in prints

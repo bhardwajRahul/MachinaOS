@@ -27,6 +27,11 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/api/twitter", tags=["twitter"])
 
 
+def get_settings():
+    """Get application settings."""
+    return container.settings()
+
+
 def get_auth_service():
     """Get auth service for API key storage."""
     return container.auth_service()
@@ -45,9 +50,8 @@ def get_twitter_oauth() -> TwitterOAuth:
     client_id = loop.run_until_complete(auth_service.get_api_key("twitter_client_id")) or ""
     client_secret = loop.run_until_complete(auth_service.get_api_key("twitter_client_secret"))
 
-    # Redirect URI is determined by the server host
-    # Default to localhost for development
-    redirect_uri = "http://localhost:3010/api/twitter/callback"
+    settings = get_settings()
+    redirect_uri = settings.twitter_redirect_uri
 
     return TwitterOAuth(
         client_id=client_id,
@@ -104,6 +108,7 @@ async def twitter_oauth_callback(
         )
 
     # Get stored client credentials to create OAuth instance
+    settings = get_settings()
     auth_service = get_auth_service()
     client_id = await auth_service.get_api_key("twitter_client_id") or ""
     client_secret = await auth_service.get_api_key("twitter_client_secret")
@@ -111,7 +116,7 @@ async def twitter_oauth_callback(
     oauth = TwitterOAuth(
         client_id=client_id,
         client_secret=client_secret,
-        redirect_uri="http://localhost:3010/api/twitter/callback",
+        redirect_uri=settings.twitter_redirect_uri,
     )
 
     # Exchange code for tokens
@@ -211,13 +216,14 @@ async def get_twitter_status():
         }
 
     # Get stored client credentials
+    settings = get_settings()
     client_id = await auth_service.get_api_key("twitter_client_id") or ""
     client_secret = await auth_service.get_api_key("twitter_client_secret")
 
     oauth = TwitterOAuth(
         client_id=client_id,
         client_secret=client_secret,
-        redirect_uri="http://localhost:3010/api/twitter/callback",
+        redirect_uri=settings.twitter_redirect_uri,
     )
 
     # Verify token is still valid by getting user info
@@ -282,10 +288,11 @@ async def twitter_logout():
 
     # Revoke tokens if we have them
     if access_token or refresh_token:
+        settings = get_settings()
         oauth = TwitterOAuth(
             client_id=client_id,
             client_secret=client_secret,
-            redirect_uri="http://localhost:3010/api/twitter/callback",
+            redirect_uri=settings.twitter_redirect_uri,
         )
 
         if access_token:

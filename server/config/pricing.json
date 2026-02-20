@@ -103,6 +103,24 @@
       "static_map": 0.002,
       "_default": 0.005
     },
+    "gmail": {
+      "_description": "Gmail API (free tier with generous rate limits)",
+      "_source": "https://developers.google.com/gmail/api/reference/quota",
+      "_note": "Free API - costs are $0. Rate limit: 250 quota units/user/second",
+      "message_send": 0.0,
+      "message_read": 0.0,
+      "message_list": 0.0,
+      "message_search": 0.0,
+      "message_modify": 0.0,
+      "message_delete": 0.0,
+      "label_list": 0.0,
+      "label_manage": 0.0,
+      "thread_read": 0.0,
+      "thread_list": 0.0,
+      "draft_create": 0.0,
+      "attachment_read": 0.0,
+      "_default": 0.0
+    },
     "twitter": {
       "_description": "X/Twitter Pay-Per-Use API pricing (per resource/request)",
       "_source": "https://developer.x.com/#pricing",
@@ -161,6 +179,18 @@
       "by_id": "user_read",
       "followers": "followers_read",
       "following": "following_read"
+    },
+    "gmail": {
+      "send": "message_send",
+      "read": "message_read",
+      "list": "message_list",
+      "search": "message_search",
+      "modify": "message_modify",
+      "delete": "message_delete",
+      "labels": "label_list",
+      "threads": "thread_list",
+      "draft": "draft_create",
+      "attachment": "attachment_read"
     }
   },
 

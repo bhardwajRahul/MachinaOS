@@ -62,12 +62,20 @@ class Settings(BaseSettings):
     # WhatsApp Service URL (Flask service)
     whatsapp_service_url: str = Field(default="http://localhost:5000", env="WHATSAPP_SERVICE_URL")
 
+    # Node.js Executor Configuration
+    nodejs_executor_url: str = Field(default="http://localhost:3020", env="NODEJS_EXECUTOR_URL")
+    nodejs_executor_timeout: int = Field(default=30, env="NODEJS_EXECUTOR_TIMEOUT", ge=5, le=300)
+
     # AI Proxy Configuration (Ollama-style proxy)
     ai_proxy_default_port: int = Field(default=11434, env="AI_PROXY_DEFAULT_PORT")
 
     # WebSocket Configuration
     websocket_url: str = Field(default="", env="WEBSOCKET_URL")
     websocket_api_key: Optional[str] = Field(default=None, env="WEBSOCKET_API_KEY")
+
+    # OAuth Redirect URIs
+    gmail_redirect_uri: str = Field(default="http://localhost:3010/api/gmail/callback", env="GMAIL_REDIRECT_URI")
+    twitter_redirect_uri: str = Field(default="http://localhost:3010/api/twitter/callback", env="TWITTER_REDIRECT_URI")
 
     # Android Relay Configuration (passed to Vite frontend)
     vite_android_relay_url: Optional[str] = Field(default=None, env="VITE_ANDROID_RELAY_URL")

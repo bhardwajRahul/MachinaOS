@@ -119,6 +119,18 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
     if node_type == 'twitterUser':
         return await _execute_twitter_user(tool_args, config.get('parameters', {}))
 
+    # Gmail Send (dual-purpose: workflow node + AI tool)
+    if node_type == 'gmailSend':
+        return await _execute_gmail_send(tool_args, config.get('parameters', {}))
+
+    # Gmail Search (dual-purpose: workflow node + AI tool)
+    if node_type == 'gmailSearch':
+        return await _execute_gmail_search(tool_args, config.get('parameters', {}))
+
+    # Gmail Read (dual-purpose: workflow node + AI tool)
+    if node_type == 'gmailRead':
+        return await _execute_gmail_read(tool_args, config.get('parameters', {}))
+
     # Android toolkit - routes to connected service nodes
     if node_type == 'androidTool':
         return await _execute_android_toolkit(tool_args, config)
@@ -1197,6 +1209,75 @@ async def _execute_twitter_user(args: Dict[str, Any],
     return await handle_twitter_user(
         node_id="tool_twitter_user",
         node_type="twitterUser",
+        parameters=parameters,
+        context={}
+    )
+
+
+async def _execute_gmail_send(args: Dict[str, Any],
+                              node_params: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute Gmail send action via Google API.
+
+    Args:
+        args: LLM-provided arguments (to, subject, body, cc, bcc, body_type)
+        node_params: Node parameters (may include account_mode, customer_id)
+
+    Returns:
+        Gmail API result with message_id and thread_id
+    """
+    from services.handlers.gmail import handle_gmail_send
+
+    parameters = {**node_params, **args}
+
+    return await handle_gmail_send(
+        node_id="tool_gmail_send",
+        node_type="gmailSend",
+        parameters=parameters,
+        context={}
+    )
+
+
+async def _execute_gmail_search(args: Dict[str, Any],
+                                node_params: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute Gmail search via Google API.
+
+    Args:
+        args: LLM-provided arguments (query, max_results, include_body)
+        node_params: Node parameters (may include account_mode, customer_id)
+
+    Returns:
+        Search results with message list
+    """
+    from services.handlers.gmail import handle_gmail_search
+
+    parameters = {**node_params, **args}
+
+    return await handle_gmail_search(
+        node_id="tool_gmail_search",
+        node_type="gmailSearch",
+        parameters=parameters,
+        context={}
+    )
+
+
+async def _execute_gmail_read(args: Dict[str, Any],
+                              node_params: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute Gmail read via Google API.
+
+    Args:
+        args: LLM-provided arguments (message_id, format)
+        node_params: Node parameters (may include account_mode, customer_id)
+
+    Returns:
+        Full message content
+    """
+    from services.handlers.gmail import handle_gmail_read
+
+    parameters = {**node_params, **args}
+
+    return await handle_gmail_read(
+        node_id="tool_gmail_read",
+        node_type="gmailRead",
         parameters=parameters,
         context={}
     )

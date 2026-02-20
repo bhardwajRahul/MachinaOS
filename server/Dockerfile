@@ -1,12 +1,14 @@
-# Python FastAPI Backend
+# Python FastAPI Backend with Node.js for JS/TS execution
 FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install system dependencies and uv
+# Install system dependencies, uv, and Node.js
 RUN apt-get update && apt-get install -y \
     curl \
     gcc \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/* \
     && pip install uv
 
@@ -22,18 +24,31 @@ COPY . .
 # Create data directory for SQLite database
 RUN mkdir -p /app/data
 
+# Install Node.js executor dependencies
+RUN cd /app/nodejs && npm install
+
+# Create user-packages directory for npm packages
+RUN mkdir -p /app/nodejs/user-packages && \
+    cd /app/nodejs/user-packages && \
+    npm init -y
+
 # Compile Python files to optimized bytecode for faster imports
 RUN python -O -m compileall -q -f .
 
-# Default port (overridden by environment)
+# Default ports (overridden by environment)
 ENV PORT=3010
+ENV NODEJS_EXECUTOR_PORT=3020
+ENV NODEJS_EXECUTOR_HOST=localhost
 
-# Expose default port
-EXPOSE 3010
+# Expose default ports
+EXPOSE 3010 3020
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD sh -c "curl -f http://localhost:\${PORT}/health || exit 1"
 
-# Run the application
-CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "3010"]
+# Make startup script executable
+RUN chmod +x /app/start.sh
+
+# Run both Python and Node.js servers
+CMD ["/app/start.sh"]

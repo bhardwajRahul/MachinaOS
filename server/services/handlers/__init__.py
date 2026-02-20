@@ -31,6 +31,7 @@ from .android import (
 from .code import (
     handle_python_executor,
     handle_javascript_executor,
+    handle_typescript_executor,
 )
 
 # HTTP handlers
@@ -73,6 +74,13 @@ from .twitter import (
     handle_twitter_user,
 )
 
+# Gmail handlers
+from .gmail import (
+    handle_gmail_send,
+    handle_gmail_search,
+    handle_gmail_read,
+)
+
 # Social handlers (unified messaging)
 from .social import (
     handle_social_receive,
@@ -106,6 +114,7 @@ __all__ = [
     # Code
     'handle_python_executor',
     'handle_javascript_executor',
+    'handle_typescript_executor',
     # HTTP
     'handle_http_request',
     'handle_webhook_response',
@@ -131,6 +140,10 @@ __all__ = [
     'handle_twitter_send',
     'handle_twitter_search',
     'handle_twitter_user',
+    # Gmail
+    'handle_gmail_send',
+    'handle_gmail_search',
+    'handle_gmail_read',
     # Social
     'handle_social_receive',
     'handle_social_send',

@@ -18,6 +18,7 @@ import { skillNodes, SKILL_NODE_TYPES } from './nodeDefinitions/skillNodes';
 import { documentNodes, DOCUMENT_NODE_TYPES } from './nodeDefinitions/documentNodes';
 import { socialNodes, SOCIAL_NODE_TYPES } from './nodeDefinitions/socialNodes';
 import { twitterNodes, TWITTER_NODE_TYPES } from './nodeDefinitions/twitterNodes';
+import { gmailNodes, GMAIL_NODE_TYPES } from './nodeDefinitions/gmailNodes';
 
 // ============================================================================
 // MAIN NODE REGISTRY - Combining all modular definitions
@@ -40,7 +41,8 @@ export const nodeDefinitions: Record<string, INodeTypeDescription> = {
   ...skillNodes,
   ...documentNodes,
   ...socialNodes,
-  ...twitterNodes
+  ...twitterNodes,
+  ...gmailNodes
 };
 
 // ============================================================================
@@ -114,6 +116,10 @@ export const SOCIAL_NODES = [
 
 export const TWITTER_NODES = [
   ...TWITTER_NODE_TYPES
+];
+
+export const GMAIL_NODES = [
+  ...GMAIL_NODE_TYPES
 ];
 
 // Re-export types and utilities from modular files for external access

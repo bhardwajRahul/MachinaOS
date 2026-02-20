@@ -2960,6 +2960,66 @@ class AIService:
 
             return TwitterUserSchema
 
+        # Gmail Send tool schema (dual-purpose: workflow node + AI tool)
+        if node_type == 'gmailSend':
+            class GmailSendSchema(BaseModel):
+                """Send emails via Gmail. Supports text and HTML body types."""
+                to: str = Field(
+                    description="Recipient email address(es), comma-separated for multiple"
+                )
+                subject: str = Field(
+                    description="Email subject line"
+                )
+                body: str = Field(
+                    description="Email body content"
+                )
+                cc: Optional[str] = Field(
+                    default=None,
+                    description="CC recipients, comma-separated"
+                )
+                bcc: Optional[str] = Field(
+                    default=None,
+                    description="BCC recipients, comma-separated"
+                )
+                body_type: str = Field(
+                    default="text",
+                    description="Body type: 'text' (plain text) or 'html'"
+                )
+
+            return GmailSendSchema
+
+        # Gmail Search tool schema (dual-purpose: workflow node + AI tool)
+        if node_type == 'gmailSearch':
+            class GmailSearchSchema(BaseModel):
+                """Search emails in Gmail inbox using Gmail query syntax."""
+                query: str = Field(
+                    description="Gmail search query (same syntax as Gmail web). Examples: 'from:user@example.com', 'subject:meeting', 'is:unread', 'has:attachment'"
+                )
+                max_results: int = Field(
+                    default=10,
+                    description="Maximum number of messages to return (1-100)"
+                )
+                include_body: bool = Field(
+                    default=False,
+                    description="Whether to fetch full message body (slower but more complete)"
+                )
+
+            return GmailSearchSchema
+
+        # Gmail Read tool schema (dual-purpose: workflow node + AI tool)
+        if node_type == 'gmailRead':
+            class GmailReadSchema(BaseModel):
+                """Read a specific email message by its ID."""
+                message_id: str = Field(
+                    description="The Gmail message ID to read"
+                )
+                format: str = Field(
+                    default="full",
+                    description="Format: 'full' (complete message), 'minimal' (IDs only), 'raw' (RFC 2822), 'metadata' (headers only)"
+                )
+
+            return GmailReadSchema
+
         # Check delegated tasks schema (built-in tool for result retrieval)
         if node_type == '_builtin_check_delegated_tasks':
             class CheckDelegatedTasksSchema(BaseModel):

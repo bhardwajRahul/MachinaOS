@@ -3,10 +3,22 @@
 import json
 import time
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from core.logging import get_logger
+from services.nodejs_client import NodeJSClient
 
 logger = get_logger(__name__)
+
+# Module-level client instance (initialized on first use)
+_nodejs_client: Optional[NodeJSClient] = None
+
+
+def get_nodejs_client(base_url: str, timeout: int) -> NodeJSClient:
+    """Get or create Node.js client instance."""
+    global _nodejs_client
+    if _nodejs_client is None:
+        _nodejs_client = NodeJSClient(base_url, timeout)
+    return _nodejs_client
 
 
 async def handle_python_executor(
@@ -121,11 +133,13 @@ async def handle_javascript_executor(
     node_type: str,
     parameters: Dict[str, Any],
     context: Dict[str, Any],
-    connected_outputs: Dict[str, Any] = None
+    connected_outputs: Dict[str, Any] = None,
+    nodejs_url: str = None,
+    nodejs_timeout: int = None
 ) -> Dict[str, Any]:
     """Handle JavaScript executor node execution.
 
-    Executes JavaScript code using Node.js subprocess with sandboxing.
+    Executes JavaScript code via persistent Node.js server.
 
     Args:
         node_id: The node ID
@@ -133,20 +147,17 @@ async def handle_javascript_executor(
         parameters: Resolved parameters
         context: Execution context
         connected_outputs: Outputs from connected nodes
+        nodejs_url: Node.js server URL (from settings)
+        nodejs_timeout: Request timeout in seconds (from settings)
 
     Returns:
         Execution result dict with output and console output
     """
-    import subprocess
-    import tempfile
-    import os
-
     start_time = time.time()
-    console_output = ""
 
     try:
         code = parameters.get('code', '')
-        timeout = int(parameters.get('timeout', 30))
+        timeout_ms = int(parameters.get('timeout', 30)) * 1000  # Convert to milliseconds
 
         if not code.strip():
             return {
@@ -162,109 +173,45 @@ async def handle_javascript_executor(
         # Get input data from connected nodes
         input_data = connected_outputs or {}
 
-        # Wrapper script that provides input_data and captures output
-        wrapper_code = f'''
-const input_data = {json.dumps(input_data)};
-let output = null;
+        # Get Node.js client
+        client = get_nodejs_client(
+            nodejs_url or "http://localhost:3020",
+            nodejs_timeout or 30
+        )
 
-// Capture console.log
-const logs = [];
-const originalLog = console.log;
-const originalError = console.error;
-const originalWarn = console.warn;
+        # Execute via Node.js server
+        result = await client.execute(
+            code=code,
+            input_data=input_data,
+            timeout=timeout_ms,
+            language="javascript"
+        )
 
-console.log = (...args) => {{
-    logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
-}};
-console.error = (...args) => {{
-    logs.push('[ERROR] ' + args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
-}};
-console.warn = (...args) => {{
-    logs.push('[WARN] ' + args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
-}};
-
-try {{
-    {code}
-}} catch (e) {{
-    console.error(e.message);
-    throw e;
-}}
-
-// Output result
-console.log = originalLog;
-process.stdout.write(JSON.stringify({{
-    __output__: output,
-    __logs__: logs
-}}));
-'''
-
-        # Write to temp file and execute with Node.js
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.js', delete=False, encoding='utf-8') as f:
-            f.write(wrapper_code)
-            temp_file = f.name
-
-        try:
-            result = subprocess.run(
-                ['node', temp_file],
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                cwd=tempfile.gettempdir()
-            )
-
-            if result.returncode != 0:
-                error_msg = result.stderr.strip() if result.stderr else "JavaScript execution failed"
-                return {
-                    "success": False,
-                    "node_id": node_id,
-                    "node_type": "javascriptExecutor",
-                    "error": error_msg,
-                    "console_output": result.stdout,
-                    "execution_time": time.time() - start_time,
-                    "timestamp": datetime.now().isoformat()
-                }
-
-            # Parse output
-            stdout = result.stdout.strip()
-            if stdout:
-                output_data = json.loads(stdout)
-                output = output_data.get('__output__')
-                console_output = '\n'.join(output_data.get('__logs__', []))
-            else:
-                output = None
-                console_output = ""
-
+        if result.get("success"):
             return {
                 "success": True,
                 "node_id": node_id,
                 "node_type": "javascriptExecutor",
                 "result": {
-                    "output": output,
-                    "console_output": console_output,
+                    "output": result.get("output"),
+                    "console_output": result.get("console_output", ""),
                     "timestamp": datetime.now().isoformat()
                 },
-                "console_output": console_output,
+                "console_output": result.get("console_output", ""),
                 "execution_time": time.time() - start_time,
                 "timestamp": datetime.now().isoformat()
             }
-        finally:
-            # Clean up temp file
-            try:
-                os.unlink(temp_file)
-            except:
-                pass
+        else:
+            return {
+                "success": False,
+                "node_id": node_id,
+                "node_type": "javascriptExecutor",
+                "error": result.get("error", "Unknown error"),
+                "console_output": result.get("console_output", ""),
+                "execution_time": time.time() - start_time,
+                "timestamp": datetime.now().isoformat()
+            }
 
-    except subprocess.TimeoutExpired:
-        logger.error("JavaScript execution timed out", node_id=node_id, timeout=timeout)
-        return {
-            "success": False,
-            "node_id": node_id,
-            "node_type": "javascriptExecutor",
-            "error": f"Execution timed out after {timeout} seconds",
-            "console_output": console_output,
-            "execution_time": time.time() - start_time,
-            "timestamp": datetime.now().isoformat()
-        }
     except Exception as e:
         logger.error("JavaScript execution failed", node_id=node_id, error=str(e))
         return {
@@ -272,7 +219,101 @@ process.stdout.write(JSON.stringify({{
             "node_id": node_id,
             "node_type": "javascriptExecutor",
             "error": str(e),
-            "console_output": console_output,
+            "console_output": "",
+            "execution_time": time.time() - start_time,
+            "timestamp": datetime.now().isoformat()
+        }
+
+
+async def handle_typescript_executor(
+    node_id: str,
+    node_type: str,
+    parameters: Dict[str, Any],
+    context: Dict[str, Any],
+    connected_outputs: Dict[str, Any] = None,
+    nodejs_url: str = None,
+    nodejs_timeout: int = None
+) -> Dict[str, Any]:
+    """Handle TypeScript executor node execution.
+
+    Executes TypeScript code via persistent Node.js server.
+
+    Args:
+        node_id: The node ID
+        node_type: The node type (typescriptExecutor)
+        parameters: Resolved parameters
+        context: Execution context
+        connected_outputs: Outputs from connected nodes
+        nodejs_url: Node.js server URL (from settings)
+        nodejs_timeout: Request timeout in seconds (from settings)
+
+    Returns:
+        Execution result dict with output and console output
+    """
+    start_time = time.time()
+
+    try:
+        code = parameters.get('code', '')
+        timeout_ms = int(parameters.get('timeout', 30)) * 1000
+
+        if not code.strip():
+            return {
+                "success": False,
+                "node_id": node_id,
+                "node_type": "typescriptExecutor",
+                "error": "No code provided",
+                "console_output": "",
+                "execution_time": time.time() - start_time,
+                "timestamp": datetime.now().isoformat()
+            }
+
+        input_data = connected_outputs or {}
+
+        client = get_nodejs_client(
+            nodejs_url or "http://localhost:3020",
+            nodejs_timeout or 30
+        )
+
+        result = await client.execute(
+            code=code,
+            input_data=input_data,
+            timeout=timeout_ms,
+            language="typescript"
+        )
+
+        if result.get("success"):
+            return {
+                "success": True,
+                "node_id": node_id,
+                "node_type": "typescriptExecutor",
+                "result": {
+                    "output": result.get("output"),
+                    "console_output": result.get("console_output", ""),
+                    "timestamp": datetime.now().isoformat()
+                },
+                "console_output": result.get("console_output", ""),
+                "execution_time": time.time() - start_time,
+                "timestamp": datetime.now().isoformat()
+            }
+        else:
+            return {
+                "success": False,
+                "node_id": node_id,
+                "node_type": "typescriptExecutor",
+                "error": result.get("error", "Unknown error"),
+                "console_output": result.get("console_output", ""),
+                "execution_time": time.time() - start_time,
+                "timestamp": datetime.now().isoformat()
+            }
+
+    except Exception as e:
+        logger.error("TypeScript execution failed", node_id=node_id, error=str(e))
+        return {
+            "success": False,
+            "node_id": node_id,
+            "node_type": "typescriptExecutor",
+            "error": str(e),
+            "console_output": "",
             "execution_time": time.time() - start_time,
             "timestamp": datetime.now().isoformat()
         }

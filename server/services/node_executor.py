@@ -25,7 +25,7 @@ from services import event_waiter
 from services.handlers import (
     handle_ai_agent, handle_chat_agent, handle_ai_chat_model, handle_simple_memory,
     handle_android_service,
-    handle_python_executor, handle_javascript_executor,
+    handle_python_executor, handle_javascript_executor, handle_typescript_executor,
     handle_http_request, handle_webhook_response, handle_trigger_node,
     handle_create_map, handle_add_locations, handle_nearby_places,
     handle_text_generator, handle_file_handler,
@@ -37,6 +37,7 @@ from services.handlers import (
     handle_text_chunker, handle_embedding_generator, handle_vector_store,
     handle_task_manager,
     handle_twitter_send, handle_twitter_search, handle_twitter_user,
+    handle_gmail_send, handle_gmail_search, handle_gmail_read,
 )
 
 if TYPE_CHECKING:
@@ -139,6 +140,10 @@ class NodeExecutor:
             'twitterSend': handle_twitter_send,
             'twitterSearch': handle_twitter_search,
             'twitterUser': handle_twitter_user,
+            # Gmail
+            'gmailSend': handle_gmail_send,
+            'gmailSearch': handle_gmail_search,
+            'gmailRead': handle_gmail_read,
             # Social (unified messaging)
             # Note: socialReceive handled in _dispatch with connected_outputs
             'socialSend': handle_social_send,
@@ -304,7 +309,7 @@ class NodeExecutor:
             return await handler(node_id, node_type, params, context)
 
         # Special handlers needing connected outputs
-        if node_type in ('pythonExecutor', 'javascriptExecutor', 'webhookResponse', 'console', 'socialReceive'):
+        if node_type in ('pythonExecutor', 'javascriptExecutor', 'typescriptExecutor', 'webhookResponse', 'console', 'socialReceive'):
             logger.debug(f"[_dispatch] Getting connected outputs for {node_type} node_id={node_id}")
             outputs, source_nodes = await self._get_connected_outputs_with_info(context, node_id)
             logger.debug(f"[_dispatch] Got {len(outputs)} outputs for {node_type}: keys={list(outputs.keys())}")
@@ -315,6 +320,7 @@ class NodeExecutor:
             handlers = {
                 'pythonExecutor': handle_python_executor,
                 'javascriptExecutor': handle_javascript_executor,
+                'typescriptExecutor': handle_typescript_executor,
                 'webhookResponse': handle_webhook_response,
             }
             return await handlers[node_type](node_id, node_type, params, context, outputs)

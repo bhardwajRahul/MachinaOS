@@ -14,6 +14,7 @@ import { nodeDefinitions } from '../nodeDefinitions';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { useWebSocket, useWhatsAppStatus } from '../contexts/WebSocketContext';
 import { PlayCircleFilled, ScheduleOutlined } from '@ant-design/icons';
+import { Google } from '@lobehub/icons';
 
 const TriggerNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectable, selected }) => {
   const theme = useAppTheme();
@@ -150,6 +151,16 @@ const TriggerNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
 
   // Helper to render icon
   const renderIcon = (icon: string) => {
+    // Handle component markers (e.g., 'component:Gmail')
+    if (icon.startsWith('component:')) {
+      const componentName = icon.replace('component:', '');
+      if (componentName === 'Gmail') {
+        return <Google.Color size={28} />;
+      }
+      // Fallback for unknown component markers
+      return '⚡';
+    }
+
     if (icon.startsWith('http') || icon.startsWith('data:') || icon.startsWith('/')) {
       return (
         <img

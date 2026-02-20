@@ -66,7 +66,7 @@ const createNodeTypes = (): Record<string, React.ComponentType<any>> => {
   const types: Record<string, React.ComponentType<any>> = {};
 
   // Trigger nodes (no input handles) - check by group or specific types
-  const TRIGGER_NODE_TYPES = ['start', 'cronScheduler', 'webhookTrigger', 'whatsappReceive', 'twitterReceive', 'chatTrigger', 'taskTrigger'];
+  const TRIGGER_NODE_TYPES = ['start', 'cronScheduler', 'webhookTrigger', 'whatsappReceive', 'twitterReceive', 'gmailReceive', 'chatTrigger', 'taskTrigger'];
 
   // Pre-register specialized agent nodes explicitly to ensure they're always available
   // This handles cases where nodeDefinitions iteration order might miss them
@@ -93,6 +93,9 @@ const createNodeTypes = (): Record<string, React.ComponentType<any>> => {
       types[type] = SquareNode;
     } else if (type === 'twitterSend' || type === 'twitterSearch' || type === 'twitterUser') {
       // Twitter action nodes use SquareNode (twitterReceive is a trigger)
+      types[type] = SquareNode;
+    } else if (type === 'gmailSend' || type === 'gmailSearch' || type === 'gmailRead') {
+      // Gmail action nodes use SquareNode (gmailReceive is a trigger)
       types[type] = SquareNode;
     } else if (ANDROID_SERVICE_NODE_TYPES.includes(type)) {
       // Android service nodes use SquareNode component

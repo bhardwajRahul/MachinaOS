@@ -493,3 +493,35 @@ class AgentMessage(SQLModel, table=True):
         default_factory=lambda: datetime.now(timezone.utc),
         sa_column=Column(DateTime(timezone=True), server_default=func.now())
     )
+
+
+class GmailConnection(SQLModel, table=True):
+    """Gmail OAuth connections for customer access mode.
+
+    Stores OAuth tokens for each connected Gmail account, supporting both:
+    - Owner mode: Single account stored via auth_service (credentials modal)
+    - Customer mode: Multiple customer accounts stored here with customer_id
+
+    This enables apps to access customer Gmail (like CRM apps, email clients).
+    """
+
+    __tablename__ = "gmail_connections"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    customer_id: str = Field(index=True, max_length=255)  # Your app's customer identifier
+    email: str = Field(max_length=255)  # Connected Gmail address
+    name: Optional[str] = Field(default=None, max_length=255)  # User's display name
+    access_token: str = Field(max_length=2000)  # Encrypted OAuth access token
+    refresh_token: str = Field(max_length=2000)  # Encrypted OAuth refresh token
+    token_expiry: Optional[datetime] = Field(default=None)  # When access token expires
+    scopes: str = Field(max_length=1000)  # Comma-separated granted scopes
+    is_active: bool = Field(default=True)  # Whether connection is active
+    last_used_at: Optional[datetime] = Field(default=None)  # Last API call timestamp
+    connected_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(DateTime(timezone=True), server_default=func.now())
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(DateTime(timezone=True), onupdate=func.now())
+    )

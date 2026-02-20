@@ -99,6 +99,13 @@ export interface TwitterStatus {
   verified?: boolean;
 }
 
+export interface GmailStatus {
+  connected: boolean;
+  email: string | null;
+  name?: string;
+  profile_image_url?: string;
+}
+
 // WhatsApp Rate Limit types (from Go RPC schema)
 export interface RateLimitConfig {
   enabled: boolean;
@@ -213,6 +220,7 @@ interface WebSocketContextValue {
   setAndroidStatus: React.Dispatch<React.SetStateAction<AndroidStatus>>;
   whatsappStatus: WhatsAppStatus;
   twitterStatus: TwitterStatus;
+  gmailStatus: GmailStatus;
   whatsappMessages: WhatsAppMessage[];  // History of received messages
   lastWhatsAppMessage: WhatsAppMessage | null;  // Most recent message
   apiKeyStatuses: Record<string, ApiKeyStatus>;
@@ -338,6 +346,11 @@ const defaultTwitterStatus: TwitterStatus = {
   user_id: null,
 };
 
+const defaultGmailStatus: GmailStatus = {
+  connected: false,
+  email: null,
+};
+
 const WebSocketContext = createContext<WebSocketContextValue | null>(null);
 
 // WebSocket URL (convert http to ws)
@@ -372,6 +385,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [androidStatus, setAndroidStatus] = useState<AndroidStatus>(defaultAndroidStatus);
   const [whatsappStatus, setWhatsappStatus] = useState<WhatsAppStatus>(defaultWhatsAppStatus);
   const [twitterStatus, setTwitterStatus] = useState<TwitterStatus>(defaultTwitterStatus);
+  const [gmailStatus, setGmailStatus] = useState<GmailStatus>(defaultGmailStatus);
   const [whatsappMessages, setWhatsappMessages] = useState<WhatsAppMessage[]>([]);
   const [lastWhatsAppMessage, setLastWhatsAppMessage] = useState<WhatsAppMessage | null>(null);
   const [apiKeyStatuses, setApiKeyStatuses] = useState<Record<string, ApiKeyStatus>>({});
@@ -487,6 +501,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             if (data.android) setAndroidStatus(data.android);
             if (data.whatsapp) setWhatsappStatus(data.whatsapp);
             if (data.twitter) setTwitterStatus(data.twitter);
+            if (data.gmail) setGmailStatus(data.gmail);
             if (data.api_keys) setApiKeyStatuses(data.api_keys);
             // Node statuses from initial_status - group by workflow_id (n8n pattern)
             if (data.nodes) {
@@ -548,6 +563,18 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
               connected: true,
               username: data.username || null,
               user_id: data.user_id || null,
+              name: data.name,
+              profile_image_url: data.profile_image_url,
+            });
+          }
+          break;
+
+        case 'gmail_oauth_complete':
+          // Handle Gmail OAuth completion broadcast from backend
+          if (data?.success) {
+            setGmailStatus({
+              connected: true,
+              email: data.email || null,
               name: data.name,
               profile_image_url: data.profile_image_url,
             });
@@ -1991,6 +2018,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setAndroidStatus,
     whatsappStatus,
     twitterStatus,
+    gmailStatus,
     whatsappMessages,
     lastWhatsAppMessage,
     apiKeyStatuses,
@@ -2125,6 +2153,12 @@ export const useWhatsAppStatus = (): WhatsAppStatus => {
 export const useTwitterStatus = (): TwitterStatus => {
   const { twitterStatus } = useWebSocket();
   return twitterStatus;
+};
+
+// Hook specifically for Gmail status
+export const useGmailStatus = (): GmailStatus => {
+  const { gmailStatus } = useWebSocket();
+  return gmailStatus;
 };
 
 // Hook specifically for deployment status

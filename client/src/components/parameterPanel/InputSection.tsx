@@ -277,6 +277,42 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                 profile_image_url: 'string',
                 verified: 'boolean'
               },
+              // Gmail node output schemas
+              gmail: {
+                message_id: 'string',
+                thread_id: 'string',
+                to: 'string',
+                subject: 'string',
+                label_ids: 'array'
+              },
+              gmailSearch: {
+                messages: [{
+                  message_id: 'string',
+                  thread_id: 'string',
+                  from: 'string',
+                  to: 'string',
+                  subject: 'string',
+                  date: 'string',
+                  snippet: 'string',
+                  labels: 'array'
+                }],
+                count: 'number',
+                query: 'string',
+                result_size_estimate: 'number'
+              },
+              gmailRead: {
+                message_id: 'string',
+                thread_id: 'string',
+                from: 'string',
+                to: 'string',
+                cc: 'string',
+                subject: 'string',
+                date: 'string',
+                snippet: 'string',
+                body: 'string',
+                labels: 'array',
+                attachments: 'array'
+              },
               httpRequest: {
                 status: 'number',
                 data: 'any',
@@ -527,6 +563,9 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
             const isTaskTrigger = nodeType === 'taskTrigger';
             const isSocialReceive = nodeType === 'socialReceive';
             const isSocialSend = nodeType === 'socialSend';
+            const isGmailSend = nodeType === 'gmailSend';
+            const isGmailSearch = nodeType === 'gmailSearch';
+            const isGmailRead = nodeType === 'gmailRead';
 
             // Document processing node detection
             const documentNodeTypes = ['httpScraper', 'fileDownloader', 'documentParser', 'textChunker', 'embeddingGenerator', 'vectorStore'];
@@ -561,6 +600,9 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                             isFile ? sampleSchemas.file :
                             isWhatsAppDb ? sampleSchemas.whatsappDb :
                             isWhatsApp ? sampleSchemas.whatsapp :
+                            isGmailSend ? sampleSchemas.gmail :
+                            isGmailSearch ? sampleSchemas.gmailSearch :
+                            isGmailRead ? sampleSchemas.gmailRead :
                             isWebhook ? sampleSchemas.webhook :
                             isHttpRequest ? sampleSchemas.httpRequest :
                             isCodeExecutor ? sampleSchemas.python :

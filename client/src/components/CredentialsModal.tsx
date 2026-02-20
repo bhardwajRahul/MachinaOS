@@ -12,13 +12,14 @@ import {
   ReloadOutlined,
   DollarOutlined,
   TwitterOutlined,
+  GoogleOutlined,
 } from '@ant-design/icons';
 import Modal from './ui/Modal';
 import QRCodeDisplay from './ui/QRCodeDisplay';
 import ApiKeyInput from './ui/ApiKeyInput';
 import { useApiKeys, ProviderDefaults, ProviderUsageSummary, APIUsageSummary } from '../hooks/useApiKeys';
 import { useAppTheme } from '../hooks/useAppTheme';
-import { useWhatsAppStatus, useAndroidStatus, useTwitterStatus, useWebSocket, RateLimitConfig, RateLimitStats } from '../contexts/WebSocketContext';
+import { useWhatsAppStatus, useAndroidStatus, useTwitterStatus, useGmailStatus, useWebSocket, RateLimitConfig, RateLimitStats } from '../contexts/WebSocketContext';
 import { useWhatsApp } from '../hooks/useWhatsApp';
 import {
   OpenAIIcon, ClaudeIcon, GeminiIcon, GroqIcon, OpenRouterIcon, CerebrasIcon,
@@ -51,6 +52,10 @@ const XIcon = () => (
   <TwitterOutlined style={{ fontSize: 20, color: '#000000' }} />
 );
 
+const GmailIcon = () => (
+  <GoogleOutlined style={{ fontSize: 20, color: '#EA4335' }} />
+);
+
 // ============================================================================
 // TYPES & DATA
 // ============================================================================
@@ -64,7 +69,7 @@ interface CredentialItem {
   Icon?: React.FC<{ size?: number }>;
   CustomIcon?: React.FC;
   isSpecial?: boolean;
-  panelType?: 'whatsapp' | 'android' | 'twitter' | 'google_maps';
+  panelType?: 'whatsapp' | 'android' | 'twitter' | 'gmail' | 'google_maps';
 }
 
 interface Category {
@@ -92,6 +97,7 @@ const CATEGORIES: Category[] = [
     items: [
       { id: 'whatsapp_personal', name: 'WhatsApp Personal', placeholder: '', color: '#25D366', desc: 'Connect via QR code pairing', CustomIcon: WhatsAppIcon, isSpecial: true, panelType: 'whatsapp' },
       { id: 'twitter', name: 'Twitter/X', placeholder: '', color: '#000000', desc: 'Post tweets, search, user lookup', CustomIcon: XIcon, isSpecial: true, panelType: 'twitter' },
+      { id: 'gmail', name: 'Gmail', placeholder: '', color: '#EA4335', desc: 'Send, search, read emails', CustomIcon: GmailIcon, isSpecial: true, panelType: 'gmail' },
     ],
   },
   {
@@ -126,6 +132,7 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
   const whatsappStatus = useWhatsAppStatus();
   const androidStatus = useAndroidStatus();
   const twitterStatus = useTwitterStatus();
+  const gmailStatus = useGmailStatus();
 
 
   // Tag style helper - consistent theming for status tags
@@ -276,6 +283,8 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
     const panelType = selectedItem?.panelType;
     if (panelType === 'twitter' && isConnected) {
       loadApiUsage('twitter');
+    } else if (panelType === 'gmail' && isConnected) {
+      loadApiUsage('gmail');
     } else if (panelType === 'google_maps' && isConnected) {
       loadApiUsage('google_maps');
     }
@@ -316,6 +325,9 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
     }
     if (item.panelType === 'twitter') {
       return { connected: twitterStatus.connected, label: twitterStatus.connected ? `@${twitterStatus.username}` : 'Not Connected' };
+    }
+    if (item.panelType === 'gmail') {
+      return { connected: gmailStatus.connected, label: gmailStatus.connected ? gmailStatus.email : 'Not Connected' };
     }
     return null;
   };
@@ -447,6 +459,13 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
   const [twitterLoading, setTwitterLoading] = useState<string | null>(null);
   const [twitterError, setTwitterError] = useState<string | null>(null);
 
+  // Gmail state
+  const [gmailClientId, setGmailClientId] = useState('');
+  const [gmailClientSecret, setGmailClientSecret] = useState('');
+  const [gmailCredentialsStored, setGmailCredentialsStored] = useState<boolean | null>(null);
+  const [gmailLoading, setGmailLoading] = useState<string | null>(null);
+  const [gmailError, setGmailError] = useState<string | null>(null);
+
   // Rate limit state
   const [rateLimitConfig, setRateLimitConfig] = useState<RateLimitConfig | null>(null);
   const [rateLimitStats, setRateLimitStats] = useState<RateLimitStats | null>(null);
@@ -478,6 +497,21 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
           const clientSecret = await getStoredApiKey('twitter_client_secret');
           if (clientId) setTwitterClientId(clientId);
           if (clientSecret) setTwitterClientSecret(clientSecret);
+        }
+      });
+    }
+  }, [visible, hasStoredKey, getStoredApiKey]);
+
+  // Load Gmail credentials on mount
+  useEffect(() => {
+    if (visible) {
+      hasStoredKey('gmail_client_id').then(async (has) => {
+        setGmailCredentialsStored(has);
+        if (has) {
+          const clientId = await getStoredApiKey('gmail_client_id');
+          const clientSecret = await getStoredApiKey('gmail_client_secret');
+          if (clientId) setGmailClientId(clientId);
+          if (clientSecret) setGmailClientSecret(clientSecret);
         }
       });
     }
@@ -543,6 +577,71 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
       setTwitterError(err.message || 'Failed to refresh status');
     } finally {
       setTwitterLoading(null);
+    }
+  };
+
+  // Gmail handlers
+  const handleGmailSaveCredentials = async () => {
+    if (!gmailClientId.trim()) {
+      setGmailError('Client ID is required');
+      return;
+    }
+    if (!gmailClientSecret.trim()) {
+      setGmailError('Client Secret is required');
+      return;
+    }
+    setGmailLoading('save');
+    setGmailError(null);
+    try {
+      await saveApiKey('gmail_client_id', gmailClientId.trim());
+      await saveApiKey('gmail_client_secret', gmailClientSecret.trim());
+      setGmailCredentialsStored(true);
+    } catch (err: any) {
+      setGmailError(err.message || 'Failed to save credentials');
+    } finally {
+      setGmailLoading(null);
+    }
+  };
+
+  const handleGmailLogin = async () => {
+    setGmailLoading('login');
+    setGmailError(null);
+    try {
+      const response = await sendRequest('gmail_oauth_login', {});
+      if (!response.success) {
+        setGmailError(response.error || 'Failed to start OAuth');
+      }
+    } catch (err: any) {
+      setGmailError(err.message || 'Failed to start OAuth');
+    } finally {
+      setGmailLoading(null);
+    }
+  };
+
+  const handleGmailLogout = async () => {
+    setGmailLoading('logout');
+    setGmailError(null);
+    try {
+      const response = await sendRequest('gmail_logout', {});
+      if (!response.success) {
+        setGmailError(response.error || 'Failed to disconnect');
+      }
+    } catch (err: any) {
+      setGmailError(err.message || 'Failed to disconnect');
+    } finally {
+      setGmailLoading(null);
+    }
+  };
+
+  const handleGmailRefreshStatus = async () => {
+    setGmailLoading('refresh');
+    setGmailError(null);
+    try {
+      await sendRequest('gmail_oauth_status', {});
+    } catch (err: any) {
+      setGmailError(err.message || 'Failed to refresh status');
+    } finally {
+      setGmailLoading(null);
     }
   };
 
@@ -1520,6 +1619,204 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
             <Button
               onClick={handleTwitterRefreshStatus}
               loading={twitterLoading === 'refresh'}
+              icon={<ReloadOutlined />}
+              style={{
+                backgroundColor: `${theme.dracula.cyan}25`,
+                borderColor: `${theme.dracula.cyan}60`,
+                color: theme.dracula.cyan,
+              }}
+            >
+              Refresh
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    // Gmail panel
+    if (selectedItem.panelType === 'gmail') {
+      return (
+        <div style={{ padding: theme.spacing.xl, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+          <Descriptions
+            title={<Space><GmailIcon /> Gmail</Space>}
+            bordered
+            column={1}
+            size="small"
+            style={{
+              marginBottom: theme.spacing.lg,
+              borderRadius: theme.borderRadius.md,
+            }}
+            styles={{
+              label: {
+                backgroundColor: theme.colors.backgroundPanel,
+                color: theme.colors.textSecondary,
+                fontWeight: theme.fontWeight.medium,
+              },
+              content: {
+                backgroundColor: theme.colors.background,
+                color: theme.colors.text,
+              },
+            }}
+          >
+            <Descriptions.Item label="Status">
+              <Tag style={getTagStyle(gmailStatus.connected ? 'success' : 'error')}>
+                {gmailStatus.connected ? 'Connected' : 'Not Connected'}
+              </Tag>
+            </Descriptions.Item>
+            <Descriptions.Item label="API Credentials">
+              <Tag style={getTagStyle(gmailCredentialsStored ? 'success' : 'error')}>
+                {gmailCredentialsStored === null ? 'Checking...' : gmailCredentialsStored ? 'Configured' : 'Not configured'}
+              </Tag>
+            </Descriptions.Item>
+            {gmailStatus.connected && gmailStatus.email && (
+              <Descriptions.Item label="Account">
+                <Space>
+                  {gmailStatus.profile_image_url && (
+                    <img
+                      src={gmailStatus.profile_image_url}
+                      alt={gmailStatus.email}
+                      style={{ width: 24, height: 24, borderRadius: '50%' }}
+                    />
+                  )}
+                  <span style={{ fontFamily: theme.fontFamily.mono, fontSize: theme.fontSize.sm }}>{gmailStatus.email}</span>
+                  {gmailStatus.name && <span style={{ color: theme.colors.textSecondary }}>({gmailStatus.name})</span>}
+                </Space>
+              </Descriptions.Item>
+            )}
+          </Descriptions>
+
+          {/* API Credentials Input - Only show if not connected */}
+          {!gmailStatus.connected && (
+            <div style={{ marginBottom: theme.spacing.xl }}>
+              <label style={{
+                display: 'block',
+                fontSize: theme.fontSize.sm,
+                fontWeight: theme.fontWeight.medium,
+                color: theme.colors.text,
+                marginBottom: theme.spacing.sm,
+              }}>
+                Gmail API Credentials
+              </label>
+              <div style={{ marginBottom: theme.spacing.md }}>
+                <Input
+                  value={gmailClientId}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setGmailClientId(e.target.value)}
+                  placeholder="Client ID (from Google Cloud Console)"
+                  style={{
+                    marginBottom: theme.spacing.sm,
+                    backgroundColor: theme.colors.background,
+                    borderColor: theme.colors.border,
+                    color: theme.colors.text,
+                    fontFamily: theme.fontFamily.mono,
+                    fontSize: theme.fontSize.sm,
+                  }}
+                />
+                <Input.Password
+                  value={gmailClientSecret}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setGmailClientSecret(e.target.value)}
+                  placeholder="Client Secret (required)"
+                  style={{
+                    backgroundColor: theme.colors.background,
+                    borderColor: theme.colors.border,
+                    color: theme.colors.text,
+                    fontFamily: theme.fontFamily.mono,
+                    fontSize: theme.fontSize.sm,
+                  }}
+                />
+              </div>
+              <Button
+                onClick={handleGmailSaveCredentials}
+                loading={gmailLoading === 'save'}
+                disabled={!gmailClientId.trim() || !gmailClientSecret.trim()}
+                style={{
+                  backgroundColor: `${theme.dracula.purple}25`,
+                  borderColor: `${theme.dracula.purple}60`,
+                  color: theme.dracula.purple,
+                }}
+              >
+                Save Credentials
+              </Button>
+              <div style={{
+                fontSize: theme.fontSize.xs,
+                color: theme.colors.textMuted,
+                marginTop: theme.spacing.sm,
+                lineHeight: 1.5,
+              }}>
+                Get credentials from Google Cloud Console. Enable the Gmail API and create OAuth 2.0 credentials.
+                <br />
+                Callback URL: <code style={{ fontSize: theme.fontSize.xs, color: theme.dracula.cyan }}>http://localhost:3010/api/gmail/callback</code>
+              </div>
+            </div>
+          )}
+
+          {gmailError && (
+            <Alert type="error" message={gmailError} showIcon style={{ marginBottom: theme.spacing.lg }} />
+          )}
+
+          {/* API Usage Stats */}
+          {renderApiUsagePanel('gmail', 'Gmail')}
+
+          {/* Info box */}
+          <div style={{
+            padding: theme.spacing.md,
+            borderRadius: theme.borderRadius.md,
+            backgroundColor: `${theme.dracula.cyan}10`,
+            border: `1px solid ${theme.dracula.cyan}30`,
+            marginBottom: theme.spacing.xl,
+            flex: 1,
+          }}>
+            <div style={{
+              fontSize: theme.fontSize.sm,
+              color: theme.colors.textSecondary,
+              lineHeight: 1.5,
+            }}>
+              {gmailStatus.connected ? (
+                <>Your Gmail account is connected. You can now use Gmail nodes in your workflows.</>
+              ) : gmailCredentialsStored ? (
+                <>Click Login with Google to authorize. A browser window will open for authentication.</>
+              ) : (
+                <>Enter your Gmail API credentials above to get started.</>
+              )}
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div style={{
+            display: 'flex',
+            gap: theme.spacing.sm,
+            justifyContent: 'center',
+            paddingTop: theme.spacing.md,
+            borderTop: `1px solid ${theme.colors.border}`,
+          }}>
+            {!gmailStatus.connected ? (
+              <Button
+                onClick={handleGmailLogin}
+                loading={gmailLoading === 'login'}
+                disabled={!gmailCredentialsStored}
+                style={{
+                  backgroundColor: `${theme.dracula.green}25`,
+                  borderColor: `${theme.dracula.green}60`,
+                  color: theme.dracula.green,
+                }}
+              >
+                Login with Google
+              </Button>
+            ) : (
+              <Button
+                onClick={handleGmailLogout}
+                loading={gmailLoading === 'logout'}
+                style={{
+                  backgroundColor: `${theme.dracula.pink}25`,
+                  borderColor: `${theme.dracula.pink}60`,
+                  color: theme.dracula.pink,
+                }}
+              >
+                Disconnect
+              </Button>
+            )}
+            <Button
+              onClick={handleGmailRefreshStatus}
+              loading={gmailLoading === 'refresh'}
               icon={<ReloadOutlined />}
               style={{
                 backgroundColor: `${theme.dracula.cyan}25`,

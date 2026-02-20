@@ -48,7 +48,31 @@ export const codeNodes: Record<string, INodeTypeDescription> = {
         placeholder: '// Write your JavaScript code here...'
       }
     ]
+  },
+
+  typescriptExecutor: {
+    displayName: 'TypeScript Executor',
+    name: 'typescriptExecutor',
+    icon: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/typescript/typescript-original.svg',
+    group: ['code', 'tool'],
+    version: 1,
+    subtitle: 'Run TypeScript Code',
+    description: 'Execute TypeScript code with input data access and type safety',
+    defaults: { name: 'TypeScript Executor', color: '#3178C6' },
+    inputs: [{ name: 'main', displayName: 'Input', type: 'main' as NodeConnectionType, description: 'Input data as input_data variable' }],
+    outputs: [{ name: 'main', displayName: 'Output', type: 'main' as NodeConnectionType, description: 'TypeScript execution result' }],
+    properties: [
+      {
+        displayName: 'Code',
+        name: 'code',
+        type: 'string',
+        default: '// TypeScript Executor - Transform and process data with type safety\n//\n// Available:\n//   input_data - object with connected node outputs\n//   console.log() - for debugging\n//\n// Set the "output" variable with your result\n\ninterface Result {\n    message: string;\n    input_received: unknown;\n    processed: boolean;\n}\n\n// Example: Get data from connected node\nconst data = input_data?.start || input_data || {};\n\n// Process data with type safety\nconst result: Result = {\n    message: "Hello from TypeScript!",\n    input_received: data,\n    processed: true\n};\n\n// Set output (required)\noutput = result;',
+        required: true,
+        typeOptions: { rows: 5, editor: 'code', editorLanguage: 'typescript' },
+        placeholder: '// Write your TypeScript code here...'
+      }
+    ]
   }
 };
 
-export const CODE_NODE_TYPES = ['pythonExecutor', 'javascriptExecutor'];
+export const CODE_NODE_TYPES = ['pythonExecutor', 'javascriptExecutor', 'typescriptExecutor'];

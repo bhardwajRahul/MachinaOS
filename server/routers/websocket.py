@@ -1202,6 +1202,129 @@ async def handle_twitter_logout(data: Dict[str, Any], websocket: WebSocket) -> D
     return {"success": True, "message": "Twitter disconnected"}
 
 
+# ============================================================================
+# Gmail OAuth Handlers
+# ============================================================================
+
+@ws_handler()
+async def handle_gmail_oauth_login(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """
+    Initiate Gmail OAuth 2.0 flow.
+
+    Opens browser to Google authorization page. After user authorizes,
+    Google redirects to /api/gmail/callback which stores tokens.
+    """
+    import webbrowser
+    from services.gmail_oauth import GmailOAuth
+
+    auth_service = container.auth_service()
+    settings = container.settings()
+
+    client_id = await auth_service.get_api_key("gmail_client_id")
+    client_secret = await auth_service.get_api_key("gmail_client_secret")
+
+    if not client_id or not client_secret:
+        return {
+            "success": False,
+            "error": "Gmail Client ID and Secret not configured. Add your Google API credentials first."
+        }
+
+    oauth = GmailOAuth(
+        client_id=client_id,
+        client_secret=client_secret,
+        redirect_uri=settings.gmail_redirect_uri,
+    )
+
+    auth_data = oauth.generate_authorization_url()
+
+    webbrowser.open(auth_data["url"])
+
+    return {
+        "success": True,
+        "message": "Opening Google authorization in browser...",
+        "state": auth_data["state"],
+    }
+
+
+@ws_handler()
+async def handle_gmail_oauth_status(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """
+    Check Gmail OAuth connection status.
+
+    Returns connection status and user info if connected.
+    """
+    from services.gmail_oauth import GmailOAuth
+
+    auth_service = container.auth_service()
+    settings = container.settings()
+
+    access_token = await auth_service.get_api_key("gmail_access_token")
+
+    if not access_token:
+        return {
+            "connected": False,
+            "email": None,
+            "name": None,
+        }
+
+    user_info_str = await auth_service.get_api_key("gmail_user_info")
+    email, name = None, None
+    if user_info_str:
+        parts = user_info_str.split(":", 1)
+        email = parts[0] if parts else None
+        name = parts[1] if len(parts) > 1 else None
+
+    # Verify token is valid by checking if we can build service
+    try:
+        client_id = await auth_service.get_api_key("gmail_client_id") or ""
+        client_secret = await auth_service.get_api_key("gmail_client_secret") or ""
+        refresh_token = await auth_service.get_api_key("gmail_refresh_token")
+
+        # Try to refresh if needed
+        if refresh_token and client_id and client_secret:
+            refreshed = GmailOAuth.refresh_credentials(
+                refresh_token=refresh_token,
+                client_id=client_id,
+                client_secret=client_secret,
+            )
+            if refreshed.get("success") and refreshed.get("access_token"):
+                # Store new access token
+                await auth_service.store_api_key(
+                    provider="gmail_access_token",
+                    api_key=refreshed["access_token"],
+                    models=[],
+                    session_id="default"
+                )
+
+        return {
+            "connected": True,
+            "email": email,
+            "name": name,
+        }
+    except Exception as e:
+        logger.warning(f"Gmail token validation failed: {e}")
+        return {
+            "connected": False,
+            "email": None,
+            "name": None,
+            "error": str(e),
+        }
+
+
+@ws_handler()
+async def handle_gmail_logout(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """
+    Disconnect Gmail by clearing stored credentials.
+    """
+    auth_service = container.auth_service()
+
+    await auth_service.remove_api_key("gmail_access_token")
+    await auth_service.remove_api_key("gmail_refresh_token")
+    await auth_service.remove_api_key("gmail_user_info")
+
+    return {"success": True, "message": "Gmail disconnected"}
+
+
 @ws_handler("url")
 async def handle_test_ai_proxy(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
     """Test connectivity to an AI proxy server."""
@@ -2462,6 +2585,11 @@ MESSAGE_HANDLERS: Dict[str, MessageHandler] = {
     "twitter_oauth_login": handle_twitter_oauth_login,
     "twitter_oauth_status": handle_twitter_oauth_status,
     "twitter_logout": handle_twitter_logout,
+
+    # Gmail OAuth operations
+    "gmail_oauth_login": handle_gmail_oauth_login,
+    "gmail_oauth_status": handle_gmail_oauth_status,
+    "gmail_logout": handle_gmail_logout,
 
     # Android operations
     "get_android_devices": handle_get_android_devices,

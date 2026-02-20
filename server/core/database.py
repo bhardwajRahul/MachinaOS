@@ -13,7 +13,7 @@ from models.database import (
     NodeParameter, Workflow, Execution, APIKey, APIKeyValidation, NodeOutput,
     ConversationMessage, ToolSchema, UserSkill, ChatMessage, UserSettings,
     TokenUsageMetric, CompactionEvent, SessionTokenState, ProviderDefaults,
-    AgentTeam, TeamMember, TeamTask, AgentMessage
+    AgentTeam, TeamMember, TeamTask, AgentMessage, GmailConnection
 )
 from models.cache import CacheEntry  # SQLite-backed cache for Redis alternative
 from models.auth import User  # Import User model to ensure table creation
@@ -2350,3 +2350,156 @@ class Database:
         except Exception as e:
             logger.error(f"Failed to get team stats: {e}")
             return {"error": str(e)}
+
+    # ============================================================================
+    # Gmail Connections - Customer Mode OAuth Storage
+    # ============================================================================
+
+    async def save_gmail_connection(
+        self,
+        customer_id: str,
+        email: str,
+        access_token: str,
+        refresh_token: str,
+        scopes: str,
+        name: Optional[str] = None,
+    ) -> bool:
+        """Save or update a Gmail connection for a customer."""
+        try:
+            async with self.get_session() as session:
+                # Check if connection exists
+                result = await session.execute(
+                    select(GmailConnection).where(GmailConnection.customer_id == customer_id)
+                )
+                existing = result.scalar_one_or_none()
+
+                now = datetime.now(timezone.utc)
+                if existing:
+                    # Update existing connection
+                    existing.email = email
+                    existing.name = name
+                    existing.access_token = access_token
+                    existing.refresh_token = refresh_token
+                    existing.scopes = scopes
+                    existing.is_active = True
+                    existing.updated_at = now
+                else:
+                    # Create new connection
+                    connection = GmailConnection(
+                        customer_id=customer_id,
+                        email=email,
+                        name=name,
+                        access_token=access_token,
+                        refresh_token=refresh_token,
+                        scopes=scopes,
+                        is_active=True,
+                        connected_at=now,
+                        updated_at=now,
+                    )
+                    session.add(connection)
+
+                await session.commit()
+                logger.info(f"Saved Gmail connection for customer {customer_id}")
+                return True
+        except Exception as e:
+            logger.error(f"Failed to save Gmail connection: {e}")
+            return False
+
+    async def get_gmail_connection(self, customer_id: str) -> Optional[GmailConnection]:
+        """Get Gmail connection for a customer."""
+        try:
+            async with self.get_session() as session:
+                result = await session.execute(
+                    select(GmailConnection).where(
+                        GmailConnection.customer_id == customer_id,
+                        GmailConnection.is_active == True
+                    )
+                )
+                return result.scalar_one_or_none()
+        except Exception as e:
+            logger.error(f"Failed to get Gmail connection: {e}")
+            return None
+
+    async def delete_gmail_connection(self, customer_id: str) -> bool:
+        """Delete Gmail connection for a customer."""
+        try:
+            async with self.get_session() as session:
+                result = await session.execute(
+                    select(GmailConnection).where(GmailConnection.customer_id == customer_id)
+                )
+                connection = result.scalar_one_or_none()
+                if connection:
+                    await session.delete(connection)
+                    await session.commit()
+                    logger.info(f"Deleted Gmail connection for customer {customer_id}")
+                return True
+        except Exception as e:
+            logger.error(f"Failed to delete Gmail connection: {e}")
+            return False
+
+    async def list_gmail_connections(self, limit: int = 100) -> List[Dict[str, Any]]:
+        """List all Gmail connections."""
+        try:
+            async with self.get_session() as session:
+                result = await session.execute(
+                    select(GmailConnection)
+                    .where(GmailConnection.is_active == True)
+                    .order_by(GmailConnection.connected_at.desc())
+                    .limit(limit)
+                )
+                connections = result.scalars().all()
+                return [
+                    {
+                        "customer_id": c.customer_id,
+                        "email": c.email,
+                        "name": c.name,
+                        "connected_at": c.connected_at.isoformat() if c.connected_at else None,
+                        "last_used_at": c.last_used_at.isoformat() if c.last_used_at else None,
+                    }
+                    for c in connections
+                ]
+        except Exception as e:
+            logger.error(f"Failed to list Gmail connections: {e}")
+            return []
+
+    async def update_gmail_connection_tokens(
+        self,
+        customer_id: str,
+        access_token: str,
+        refresh_token: Optional[str] = None,
+    ) -> bool:
+        """Update tokens for a Gmail connection (after refresh)."""
+        try:
+            async with self.get_session() as session:
+                result = await session.execute(
+                    select(GmailConnection).where(GmailConnection.customer_id == customer_id)
+                )
+                connection = result.scalar_one_or_none()
+                if connection:
+                    connection.access_token = access_token
+                    if refresh_token:
+                        connection.refresh_token = refresh_token
+                    connection.updated_at = datetime.now(timezone.utc)
+                    await session.commit()
+                    return True
+                return False
+        except Exception as e:
+            logger.error(f"Failed to update Gmail tokens: {e}")
+            return False
+
+    async def update_gmail_last_used(self, customer_id: str) -> bool:
+        """Update last_used_at timestamp for a Gmail connection."""
+        try:
+            async with self.get_session() as session:
+                result = await session.execute(
+                    select(GmailConnection).where(GmailConnection.customer_id == customer_id)
+                )
+                connection = result.scalar_one_or_none()
+                if connection:
+                    connection.last_used_at = datetime.now(timezone.utc)
+                    await session.commit()
+                    return True
+                return False
+        except Exception as e:
+            logger.error(f"Failed to update Gmail last used: {e}")
+            return False
