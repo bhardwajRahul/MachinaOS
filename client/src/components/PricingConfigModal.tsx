@@ -211,7 +211,7 @@ const PricingConfigModal: React.FC<Props> = ({ visible, onClose }) => {
       if (!updated.llm[provider][model]) {
         updated.llm[provider][model] = { input: 0, output: 0 };
       }
-      (updated.llm[provider][model] as Record<string, number | undefined>)[field] = value;
+      updated.llm[provider][model] = { ...updated.llm[provider][model], [field]: value };
       return updated;
     });
     setIsDirty(true);
