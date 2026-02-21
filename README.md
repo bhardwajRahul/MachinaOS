@@ -4,7 +4,7 @@
 <a href="https://opensource.org/licenses/MIT" target="_blank"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
 <a href="https://discord.gg/NHUEQVSC" target="_blank"><img src="https://img.shields.io/discord/1455977012308086895?logo=discord&logoColor=white&label=Discord" alt="Discord"></a>
 
-Open-source platform to build your own personal AI assistant. A mashup of openclaw and n8n with better UI, full visibility of each action, and restricted control access.
+Open-source platform to build your own personal AI assistant. A mashup of clawdbot/openclaw and n8n with better UI, full visibility of each action, and restricted control access.
 
 ## Demo
 
