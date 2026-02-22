@@ -4,17 +4,13 @@
 <a href="https://opensource.org/licenses/MIT" target="_blank"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
 <a href="https://discord.gg/NHUEQVSC" target="_blank"><img src="https://img.shields.io/discord/1455977012308086895?logo=discord&logoColor=white&label=Discord" alt="Discord"></a>
 
-Open-source platform to build your own personal AI assistant. A mashup of clawdbot/openclaw and n8n with better UI, full visibility of each action, and restricted control access.
+Build your personal AI assistant. Connect AI to your email, calendar, messages, phone, and more.
 
-## Demo Video ↓
+## See It In Action
 
 [![MachinaOS Demo](https://img.youtube.com/vi/z_TEyGmeuyQ/maxresdefault.jpg)](https://www.youtube.com/watch?v=z_TEyGmeuyQ)
 
-## Full Capabilities
-
-<img width="1280" height="671" alt="func_img" src="https://github.com/user-attachments/assets/2f14b6c8-3995-4ccc-b076-e40749a83df2" />
-
-**109 nodes** | **6 AI providers** | **13 specialized agents** | **Agent Teams** | **WebSocket-first** | **Self-hosted**
+<img width="1280" height="671" alt="Full Capabilities" src="https://github.com/user-attachments/assets/2f14b6c8-3995-4ccc-b076-e40749a83df2" />
 
 ## Prerequisites
 
@@ -30,7 +26,8 @@ machinaos start
 
 Open http://localhost:3000
 
-## One-Line Install (auto-installs dependencies)
+<details>
+<summary><b>One-Line Install (auto-installs dependencies)</b></summary>
 
 **Linux/macOS:**
 ```bash
@@ -42,7 +39,10 @@ curl -fsSL https://raw.githubusercontent.com/trohitg/MachinaOS/main/install.sh |
 iwr -useb https://raw.githubusercontent.com/trohitg/MachinaOS/main/install.ps1 | iex
 ```
 
-## Clone & Run
+</details>
+
+<details>
+<summary><b>Clone & Run (for developers)</b></summary>
 
 ```bash
 git clone https://github.com/trohitg/MachinaOS.git
@@ -51,177 +51,56 @@ npm run build
 npm run start
 ```
 
-## Features
+</details>
 
-### AI Integration (6 Providers)
+## What You Can Build
 
-| Provider | Models | Features |
-|----------|--------|----------|
-| **OpenAI** | GPT-5, GPT-4o, o1, o3, o4 | 128K output, reasoning effort |
-| **Anthropic** | Claude Opus 4.6, Sonnet 4.5 | 128K output, extended thinking |
-| **Google** | Gemini 3.0, 2.5 Pro/Flash | 65K output, 1M context |
-| **OpenRouter** | 200+ models | Unified API for all providers |
-| **Groq** | Llama, Qwen | Ultra-fast inference |
-| **Cerebras** | Llama, Qwen | Ultra-fast on custom hardware |
+### Personal AI Assistants
+Create AI agents that remember conversations, use tools, and work together. Choose from OpenAI, Claude, Gemini, Groq, and 200+ models via OpenRouter.
 
-### AI Agents & Skills
+### Automate Your Google Workspace
+- Send and search emails
+- Create calendar events
+- Upload files to Drive
+- Update spreadsheets
+- Manage tasks and contacts
 
-- **AI Agent** - LangGraph-powered with tool calling and iterative reasoning
-- **Chat Agent** - Conversational agent with skill support for multi-turn chat
-- **AI Employee** - Team lead for intelligent task delegation to specialized agents
-- **13 Specialized Agents** - Android, Coding, Web, Task, Social, Travel, Tool, Productivity, Payments, Consumer, Autonomous, Orchestrator
-- **Agent Teams** - Multi-agent coordination with shared task management and delegation tools
-- **11 Skills** - WhatsApp, Maps, HTTP, Scheduler, Android, Code, Memory, Web Search, Custom
-- **Simple Memory** - Markdown-based conversation history with vector storage
+### Control Your Devices
+- Send WhatsApp messages automatically
+- Post to Twitter/X
+- Control your Android phone (WiFi, Bluetooth, apps, camera)
+- Schedule tasks and reminders
 
-### Platform Integrations
+### Process Documents
+- Scrape websites
+- Parse PDFs and documents
+- Search your files with AI
 
-- **Google Workspace** - Gmail, Calendar, Drive, Sheets, Tasks, Contacts with unified OAuth
-- **WhatsApp** - Send/receive messages with QR pairing, filters, group support
-- **Twitter/X** - Send tweets, search, user lookup with OAuth 2.0 authentication
-- **Android** - 16 service nodes for device control (battery, WiFi, Bluetooth, apps, camera, sensors)
-- **HTTP/Webhooks** - REST API integration with event-driven triggers
-- **Google Maps** - Geocoding, nearby places, directions
+### Build Agent Teams
+Create teams of specialized agents that delegate tasks to each other - a coding agent, a web agent, and a task agent working together.
 
-### Agent Teams (Multi-Agent Coordination)
+## Visual Workflow Builder
 
-Build teams of specialized agents that work together on complex tasks:
-
-```
-                    +------------------+
-                    |   AI Employee    |
-                    |   (Team Lead)    |
-                    +--------+---------+
-                             | input-teammates
-           +-----------------+------------------+
-           |                 |                  |
-    +------v------+   +------v------+   +-------v-----+
-    | Coding Agent|   |  Web Agent  |   | Task Agent  |
-    +-------------+   +-------------+   +-------------+
-```
-
-- **Team Lead** (AI Employee/Orchestrator) coordinates multiple agents
-- **Intelligent Delegation** - AI decides when to delegate based on task
-- **Delegation Tools** - Connected agents become `delegate_to_*` tools
-- **Team Monitor** - Real-time visualization of team operations
-
-### Document Processing (RAG Pipeline)
-
-- **HTTP Scraper** - Scrape URLs with pagination and date ranges
-- **File Downloader** - Parallel downloads with semaphore concurrency
-- **Document Parser** - PyPDF, Marker (OCR), Unstructured, BeautifulSoup
-- **Text Chunker** - Recursive, markdown, or token-based splitting
-- **Embedding Generator** - HuggingFace, OpenAI, Ollama embeddings
-- **Vector Store** - ChromaDB, Qdrant, Pinecone backends
-
-## Node Categories
-
-| Category | Count | Description |
-|----------|-------|-------------|
-| AI Models | 6 | OpenAI, Anthropic, Google, OpenRouter, Groq, Cerebras |
-| AI Agents | 4 | AI Agent, Chat Agent, AI Employee, Simple Memory |
-| Specialized Agents | 13 | Android, Coding, Web, Task, Social, Travel, Orchestrator, etc. |
-| AI Skills | 11 | WhatsApp, Maps, HTTP, Scheduler, Android, Code, etc. |
-| AI Tools | 9 | Calculator, Time, Search, Android Toolkit, Code Executors |
-| Google Workspace | 26 | Gmail, Calendar, Drive, Sheets, Tasks, Contacts |
-| WhatsApp | 3 | Send, Receive, Database |
-| Twitter | 4 | Send, Search, User, Receive |
-| Android | 16 | Device control and monitoring |
-| Documents | 6 | RAG pipeline nodes |
-| Utilities | 6 | HTTP, Webhooks, Chat Trigger, Console, Team Monitor |
-| Location | 3 | Google Maps integration |
-| Workflow | 2 | Start, Task Trigger |
-
-**Total: 109 nodes**
-
-## CLI Commands
-
-| Command | Description |
-|---------|-------------|
-| `machinaos start` | Start all services (frontend, backend, WhatsApp) |
-| `machinaos stop` | Stop all running services |
-| `machinaos build` | Build for production |
-| `machinaos clean` | Remove build artifacts and dependencies |
-| `machinaos docker:up` | Start with Docker Compose |
-| `machinaos docker:down` | Stop Docker containers |
-| `machinaos help` | Show all available commands |
+Drag-and-drop interface to connect AI models, services, and triggers. No code required.
 
 ## Configuration
 
-**API Keys:** Click **Credentials** button in toolbar to add API keys for OpenAI, Claude, Google Maps, etc.
-
-**Environment:** Copy `.env.template` to `.env` and customize ports, auth settings, database location.
-
-## Other Install Options
-
-<details>
-<summary><b>Docker</b></summary>
-
-```bash
-git clone https://github.com/trohitg/MachinaOS.git
-cd MachinaOS
-npm run docker:up
-```
-
-**Production Docker:**
-```bash
-npm run docker:prod:build
-npm run docker:prod:up
-```
-
-**Redis (optional):** Set `REDIS_ENABLED=true` in `.env`
-
-</details>
-
-## Project Structure
-
-```
-MachinaOS/
-├── client/           # React frontend (localhost:3000)
-├── server/           # Python FastAPI backend (localhost:3010)
-│   ├── services/     # Workflow execution, AI, handlers
-│   └── routers/      # API endpoints, WebSocket
-├── scripts/          # Cross-platform Node.js scripts
-└── bin/cli.js        # CLI entry point
-```
-
-## Tech Stack
-
-- **Frontend:** React 19, TypeScript, React Flow, Zustand
-- **Backend:** Python 3.12+, FastAPI, SQLite, LangChain/LangGraph
-- **Services:** WhatsApp (whatsapp-rpc npm package), WebSocket relay
-- **Package Manager:** uv (Python), npm (Node.js)
-
-## Troubleshooting
-
-**Port already in use:**
-```bash
-machinaos stop   # Kill all services
-machinaos start  # Restart
-```
-
-**Missing dependencies:**
-```bash
-machinaos build  # Install all dependencies
-```
-
-**Clean install:**
-```bash
-machinaos clean  # Remove node_modules, .venv, dist
-machinaos build  # Reinstall everything
-```
+Click **Credentials** in the toolbar to add your API keys for AI providers, Google, WhatsApp, and Twitter.
 
 ## Documentation
 
-Full documentation: https://docs.machinaos.dev
+Full docs: https://docs.machinaos.dev
+
+## Community
+
+Join our [Discord](https://discord.gg/NHUEQVSC) for help, feedback, and updates.
 
 ## Contributing
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Run tests and linting
-5. Submit a pull request
+4. Submit a pull request
 
 ## License
 
