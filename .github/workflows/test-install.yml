@@ -127,7 +127,13 @@ jobs:
       - name: Build
         shell: bash
         working-directory: MachinaOS
-        run: npm run build
+        run: |
+          # Retry up to 3 times for transient GitHub CDN failures (HTTP 502)
+          for i in 1 2 3; do
+            npm run build && break
+            echo "Attempt $i failed, retrying in 10s..."
+            sleep 10
+          done
 
       - name: Check whatsapp-rpc binary
         shell: bash
