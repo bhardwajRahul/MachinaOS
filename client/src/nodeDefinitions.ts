@@ -19,6 +19,11 @@ import { documentNodes, DOCUMENT_NODE_TYPES } from './nodeDefinitions/documentNo
 import { socialNodes, SOCIAL_NODE_TYPES } from './nodeDefinitions/socialNodes';
 import { twitterNodes, TWITTER_NODE_TYPES } from './nodeDefinitions/twitterNodes';
 import { gmailNodes, GMAIL_NODE_TYPES } from './nodeDefinitions/gmailNodes';
+import { calendarNodes, CALENDAR_NODE_TYPES } from './nodeDefinitions/calendarNodes';
+import { driveNodes, DRIVE_NODE_TYPES } from './nodeDefinitions/driveNodes';
+import { sheetsNodes, SHEETS_NODE_TYPES } from './nodeDefinitions/sheetsNodes';
+import { tasksNodes, TASKS_NODE_TYPES } from './nodeDefinitions/tasksNodes';
+import { contactsNodes, CONTACTS_NODE_TYPES } from './nodeDefinitions/contactsNodes';
 
 // ============================================================================
 // MAIN NODE REGISTRY - Combining all modular definitions
@@ -42,7 +47,12 @@ export const nodeDefinitions: Record<string, INodeTypeDescription> = {
   ...documentNodes,
   ...socialNodes,
   ...twitterNodes,
-  ...gmailNodes
+  ...gmailNodes,
+  ...calendarNodes,
+  ...driveNodes,
+  ...sheetsNodes,
+  ...tasksNodes,
+  ...contactsNodes
 };
 
 // ============================================================================
@@ -120,6 +130,26 @@ export const TWITTER_NODES = [
 
 export const GMAIL_NODES = [
   ...GMAIL_NODE_TYPES
+];
+
+export const CALENDAR_NODES = [
+  ...CALENDAR_NODE_TYPES
+];
+
+export const DRIVE_NODES = [
+  ...DRIVE_NODE_TYPES
+];
+
+export const SHEETS_NODES = [
+  ...SHEETS_NODE_TYPES
+];
+
+export const TASKS_NODES = [
+  ...TASKS_NODE_TYPES
+];
+
+export const CONTACTS_NODES = [
+  ...CONTACTS_NODE_TYPES
 ];
 
 // Re-export types and utilities from modular files for external access

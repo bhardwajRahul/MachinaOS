@@ -67,7 +67,7 @@ async def _get_gmail_service(
 
     Supports two modes:
     - Owner mode: Uses tokens from auth_service (Credentials Modal)
-    - Customer mode: Uses tokens from gmail_connections table
+    - Customer mode: Uses tokens from google_connections table
 
     Args:
         parameters: Node parameters (may include account_mode, customer_id)
@@ -86,29 +86,29 @@ async def _get_gmail_service(
             raise ValueError("customer_id required for customer mode")
 
         db = container.database()
-        connection = await db.get_gmail_connection(customer_id)
+        connection = await db.get_google_connection(customer_id)
         if not connection:
-            raise ValueError(f"No Gmail connection for customer: {customer_id}")
+            raise ValueError(f"No Google connection for customer: {customer_id}")
 
         if not connection.is_active:
-            raise ValueError(f"Gmail connection inactive for customer: {customer_id}")
+            raise ValueError(f"Google connection inactive for customer: {customer_id}")
 
         access_token = connection.access_token
         refresh_token = connection.refresh_token
 
-        await db.update_gmail_last_used(customer_id)
+        await db.update_google_last_used(customer_id)
 
     else:
         auth_service = container.auth_service()
-        access_token = await auth_service.get_api_key("gmail_access_token")
-        refresh_token = await auth_service.get_api_key("gmail_refresh_token")
+        access_token = await auth_service.get_api_key("google_access_token")
+        refresh_token = await auth_service.get_api_key("google_refresh_token")
 
         if not access_token:
-            raise ValueError("Gmail not connected. Please authenticate via Credentials.")
+            raise ValueError("Google Workspace not connected. Please authenticate via Credentials.")
 
     auth_service = container.auth_service()
-    client_id = await auth_service.get_api_key("gmail_client_id") or ""
-    client_secret = await auth_service.get_api_key("gmail_client_secret") or ""
+    client_id = await auth_service.get_api_key("google_client_id") or ""
+    client_secret = await auth_service.get_api_key("google_client_secret") or ""
 
     creds = Credentials(
         token=access_token,

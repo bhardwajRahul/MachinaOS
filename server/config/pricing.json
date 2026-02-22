@@ -121,6 +121,70 @@
       "attachment_read": 0.0,
       "_default": 0.0
     },
+    "google_calendar": {
+      "_description": "Google Calendar API (free tier)",
+      "_source": "https://developers.google.com/workspace/calendar/api/guides/quota",
+      "_note": "Free API - costs are $0. Rate limit: 1M requests/min",
+      "event_create": 0.0,
+      "event_read": 0.0,
+      "event_update": 0.0,
+      "event_delete": 0.0,
+      "event_list": 0.0,
+      "calendar_list": 0.0,
+      "freebusy_query": 0.0,
+      "_default": 0.0
+    },
+    "google_drive": {
+      "_description": "Google Drive API (free tier)",
+      "_source": "https://developers.google.com/drive/api/guides/limits",
+      "_note": "Free API - costs are $0. Rate limit: 20K requests/100s",
+      "file_upload": 0.0,
+      "file_download": 0.0,
+      "file_list": 0.0,
+      "file_share": 0.0,
+      "file_copy": 0.0,
+      "file_delete": 0.0,
+      "file_metadata": 0.0,
+      "permission_create": 0.0,
+      "_default": 0.0
+    },
+    "google_sheets": {
+      "_description": "Google Sheets API (free tier)",
+      "_source": "https://developers.google.com/workspace/sheets/api/limits",
+      "_note": "Free API - costs are $0. Rate limit: 300 requests/min",
+      "values_read": 0.0,
+      "values_write": 0.0,
+      "values_append": 0.0,
+      "spreadsheet_create": 0.0,
+      "spreadsheet_get": 0.0,
+      "sheet_add": 0.0,
+      "_default": 0.0
+    },
+    "google_tasks": {
+      "_description": "Google Tasks API (free tier)",
+      "_source": "https://developers.google.com/workspace/tasks/reference/rest",
+      "_note": "Free API - costs are $0. Rate limit: 150K requests/min",
+      "task_create": 0.0,
+      "task_read": 0.0,
+      "task_update": 0.0,
+      "task_delete": 0.0,
+      "task_list": 0.0,
+      "tasklist_create": 0.0,
+      "tasklist_list": 0.0,
+      "_default": 0.0
+    },
+    "google_contacts": {
+      "_description": "Google People API for Contacts (free tier)",
+      "_source": "https://developers.google.com/people/api/rest",
+      "_note": "Free API - costs are $0. Rate limit: 90 requests/min",
+      "contact_create": 0.0,
+      "contact_read": 0.0,
+      "contact_update": 0.0,
+      "contact_delete": 0.0,
+      "contact_list": 0.0,
+      "contact_search": 0.0,
+      "_default": 0.0
+    },
     "twitter": {
       "_description": "X/Twitter Pay-Per-Use API pricing (per resource/request)",
       "_source": "https://developer.x.com/#pricing",
@@ -191,6 +255,51 @@
       "threads": "thread_list",
       "draft": "draft_create",
       "attachment": "attachment_read"
+    },
+    "google_calendar": {
+      "create": "event_create",
+      "read": "event_read",
+      "update": "event_update",
+      "delete": "event_delete",
+      "list": "event_list",
+      "calendars": "calendar_list",
+      "freebusy": "freebusy_query"
+    },
+    "google_drive": {
+      "upload": "file_upload",
+      "download": "file_download",
+      "list": "file_list",
+      "share": "file_share",
+      "copy": "file_copy",
+      "delete": "file_delete",
+      "metadata": "file_metadata",
+      "permission": "permission_create"
+    },
+    "google_sheets": {
+      "read": "values_read",
+      "write": "values_write",
+      "append": "values_append",
+      "create": "spreadsheet_create",
+      "get": "spreadsheet_get",
+      "add_sheet": "sheet_add"
+    },
+    "google_tasks": {
+      "create": "task_create",
+      "read": "task_read",
+      "update": "task_update",
+      "delete": "task_delete",
+      "list": "task_list",
+      "create_list": "tasklist_create",
+      "list_tasklists": "tasklist_list",
+      "complete": "task_update"
+    },
+    "google_contacts": {
+      "create": "contact_create",
+      "read": "contact_read",
+      "update": "contact_update",
+      "delete": "contact_delete",
+      "list": "contact_list",
+      "search": "contact_search"
     }
   },
 

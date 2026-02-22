@@ -313,6 +313,147 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                 labels: 'array',
                 attachments: 'array'
               },
+              // Google Calendar
+              calendarCreate: {
+                event_id: 'string',
+                title: 'string',
+                start: 'string',
+                end: 'string',
+                description: 'string',
+                location: 'string',
+                html_link: 'string',
+                status: 'string'
+              },
+              calendarList: {
+                events: 'array',
+                count: 'number'
+              },
+              calendarUpdate: {
+                event_id: 'string',
+                title: 'string',
+                start: 'string',
+                end: 'string',
+                updated: 'string'
+              },
+              calendarDelete: {
+                deleted: 'boolean',
+                event_id: 'string'
+              },
+              // Google Drive
+              driveUpload: {
+                file_id: 'string',
+                name: 'string',
+                mime_type: 'string',
+                web_view_link: 'string',
+                web_content_link: 'string',
+                size: 'number'
+              },
+              driveDownload: {
+                file_id: 'string',
+                name: 'string',
+                content: 'string',
+                mime_type: 'string',
+                size: 'number'
+              },
+              driveList: {
+                files: 'array',
+                count: 'number',
+                next_page_token: 'string'
+              },
+              driveShare: {
+                file_id: 'string',
+                permission_id: 'string',
+                role: 'string',
+                email: 'string'
+              },
+              // Google Sheets
+              sheetsRead: {
+                values: 'array',
+                range: 'string',
+                rows: 'number',
+                columns: 'number',
+                major_dimension: 'string'
+              },
+              sheetsWrite: {
+                updated_range: 'string',
+                updated_rows: 'number',
+                updated_columns: 'number',
+                updated_cells: 'number'
+              },
+              sheetsAppend: {
+                updated_range: 'string',
+                updated_rows: 'number',
+                updated_columns: 'number',
+                updated_cells: 'number',
+                table_range: 'string'
+              },
+              // Google Tasks
+              tasksCreate: {
+                task_id: 'string',
+                title: 'string',
+                notes: 'string',
+                due: 'string',
+                status: 'string'
+              },
+              tasksList: {
+                tasks: 'array',
+                count: 'number'
+              },
+              tasksComplete: {
+                task_id: 'string',
+                title: 'string',
+                status: 'string',
+                completed: 'string'
+              },
+              tasksUpdate: {
+                task_id: 'string',
+                title: 'string',
+                notes: 'string',
+                due: 'string',
+                status: 'string'
+              },
+              tasksDelete: {
+                deleted: 'boolean',
+                task_id: 'string'
+              },
+              // Google Contacts (People API)
+              contactsCreate: {
+                resource_name: 'string',
+                display_name: 'string',
+                email: 'string',
+                phone: 'string',
+                company: 'string'
+              },
+              contactsList: {
+                contacts: 'array',
+                count: 'number',
+                total_people: 'number',
+                next_page_token: 'string'
+              },
+              contactsSearch: {
+                contacts: 'array',
+                count: 'number'
+              },
+              contactsGet: {
+                resource_name: 'string',
+                display_name: 'string',
+                given_name: 'string',
+                family_name: 'string',
+                email: 'string',
+                phone: 'string',
+                company: 'string',
+                job_title: 'string'
+              },
+              contactsUpdate: {
+                resource_name: 'string',
+                display_name: 'string',
+                email: 'string',
+                phone: 'string'
+              },
+              contactsDelete: {
+                deleted: 'boolean',
+                resource_name: 'string'
+              },
               httpRequest: {
                 status: 'number',
                 data: 'any',
@@ -567,6 +708,16 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
             const isGmailSearch = nodeType === 'gmailSearch';
             const isGmailRead = nodeType === 'gmailRead';
 
+            // Google Workspace nodes detection
+            const googleWorkspaceNodeTypes = [
+              'calendarCreate', 'calendarList', 'calendarUpdate', 'calendarDelete',
+              'driveUpload', 'driveDownload', 'driveList', 'driveShare',
+              'sheetsRead', 'sheetsWrite', 'sheetsAppend',
+              'tasksCreate', 'tasksList', 'tasksComplete', 'tasksUpdate', 'tasksDelete',
+              'contactsCreate', 'contactsList', 'contactsSearch', 'contactsGet', 'contactsUpdate', 'contactsDelete'
+            ];
+            const isGoogleWorkspaceNode = googleWorkspaceNodeTypes.includes(nodeType);
+
             // Document processing node detection
             const documentNodeTypes = ['httpScraper', 'fileDownloader', 'documentParser', 'textChunker', 'embeddingGenerator', 'vectorStore'];
             const isDocumentNode = documentNodeTypes.includes(nodeType);
@@ -592,6 +743,8 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
             } else if (isAndroidNode && sampleSchemas[nodeType as keyof typeof sampleSchemas]) {
               outputSchema = sampleSchemas[nodeType as keyof typeof sampleSchemas];
             } else if (isDocumentNode && sampleSchemas[nodeType as keyof typeof sampleSchemas]) {
+              outputSchema = sampleSchemas[nodeType as keyof typeof sampleSchemas];
+            } else if (isGoogleWorkspaceNode && sampleSchemas[nodeType as keyof typeof sampleSchemas]) {
               outputSchema = sampleSchemas[nodeType as keyof typeof sampleSchemas];
             } else {
               outputSchema = isLocationNode || isGoogleMaps ? sampleSchemas.location :

@@ -8,19 +8,58 @@ Skills are organized in subfolders under `server/skills/`:
 
 ```
 server/skills/
-├── GUIDE.md              # This file
-├── assistant/            # General-purpose assistant skills
+├── GUIDE.md                  # This file
+├── assistant/                # General-purpose assistant skills
 │   ├── assistant-personality/SKILL.md
-│   ├── code-skill/SKILL.md
-│   ├── http-skill/SKILL.md
-│   ├── maps-skill/SKILL.md
+│   ├── compaction-skill/SKILL.md
+│   ├── humanify-skill/SKILL.md
 │   ├── memory-skill/SKILL.md
-│   ├── scheduler-skill/SKILL.md
-│   ├── web-search-skill/SKILL.md
-│   └── whatsapp-skill/SKILL.md
-└── android/              # Android device control skills
-    ├── personality/SKILL.md
-    └── skill/SKILL.md
+│   └── subagent-skill/SKILL.md
+├── android_agent/            # Android device control skills
+│   ├── personality/SKILL.md
+│   ├── battery-skill/SKILL.md
+│   ├── wifi-skill/SKILL.md
+│   ├── bluetooth-skill/SKILL.md
+│   ├── location-skill/SKILL.md
+│   ├── app-launcher-skill/SKILL.md
+│   ├── app-list-skill/SKILL.md
+│   ├── audio-skill/SKILL.md
+│   ├── screen-control-skill/SKILL.md
+│   ├── camera-skill/SKILL.md
+│   ├── motion-skill/SKILL.md
+│   └── environmental-skill/SKILL.md
+├── autonomous/               # Autonomous agent patterns
+│   ├── code-mode-skill/SKILL.md
+│   ├── agentic-loop-skill/SKILL.md
+│   ├── progressive-discovery-skill/SKILL.md
+│   ├── error-recovery-skill/SKILL.md
+│   └── multi-tool-orchestration-skill/SKILL.md
+├── coding_agent/             # Code execution skills
+│   ├── python-skill/SKILL.md
+│   └── javascript-skill/SKILL.md
+├── productivity_agent/       # Google Workspace skills
+│   ├── gmail-skill/SKILL.md
+│   ├── calendar-skill/SKILL.md
+│   ├── drive-skill/SKILL.md
+│   ├── sheets-skill/SKILL.md
+│   ├── tasks-skill/SKILL.md
+│   └── contacts-skill/SKILL.md
+├── social_agent/             # Social messaging skills
+│   ├── whatsapp-send-skill/SKILL.md
+│   ├── whatsapp-db-skill/SKILL.md
+│   ├── twitter-send-skill/SKILL.md
+│   ├── twitter-search-skill/SKILL.md
+│   └── twitter-user-skill/SKILL.md
+├── task_agent/               # Task management skills
+│   ├── timer-skill/SKILL.md
+│   ├── cron-scheduler-skill/SKILL.md
+│   └── task-manager-skill/SKILL.md
+├── travel_agent/             # Location and maps skills
+│   ├── geocoding-skill/SKILL.md
+│   └── nearby-places-skill/SKILL.md
+└── web_agent/                # Web automation skills
+    ├── web-search-skill/SKILL.md
+    └── http-request-skill/SKILL.md
 ```
 
 Each top-level folder (e.g. `assistant`, `android`) appears as an option in the Master Skill node's folder dropdown. Skills inside are discovered recursively via `SKILL.md` files.

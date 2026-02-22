@@ -11,9 +11,11 @@ const ComponentItem: React.FC<ComponentItemProps> = ({ definition, onDragStart }
   const theme = useAppTheme();
   const [isDragging, setIsDragging] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
-  
+
   // Helper to get colors from new interface format
   const getNodeColor = () => definition.defaults.color || '#9E9E9E';
+
+  // Check if icon is an image URL or data URI (including SVG data URIs for Google icons)
   const isImageIcon = () => {
     const icon = definition.icon;
     return icon && (icon.startsWith('data:') || icon.startsWith('http') || icon.startsWith('/'));
@@ -81,7 +83,7 @@ const ComponentItem: React.FC<ComponentItemProps> = ({ definition, onDragStart }
         transition: `opacity ${theme.transitions.fast}`,
         pointerEvents: 'none',
       }} />
-      
+
       {/* Icon */}
       <div
         style={{
@@ -99,16 +101,16 @@ const ComponentItem: React.FC<ComponentItemProps> = ({ definition, onDragStart }
           zIndex: 1,
         }}
       >
-        {definition.icon && (definition.icon.startsWith('data:') || definition.icon.startsWith('http') || definition.icon.startsWith('/')) ? (
+        {isImageIcon() ? (
           <img src={definition.icon} alt="" style={{ width: '20px', height: '20px', objectFit: 'contain' }} />
         ) : (
           definition.icon || '📦'
         )}
       </div>
-      
+
       {/* Content */}
-      <div style={{ 
-        flex: 1, 
+      <div style={{
+        flex: 1,
         overflow: 'hidden',
         position: 'relative',
         zIndex: 1,

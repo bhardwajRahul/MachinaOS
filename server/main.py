@@ -27,7 +27,7 @@ from fastapi.responses import ORJSONResponse
 from core.container import container
 from core.config import Settings
 from core.logging import configure_logging, get_logger, setup_websocket_logging, shutdown_websocket_logging
-from routers import workflow, database, maps, nodejs_compat, android, websocket, webhook, auth, twitter, gmail
+from routers import workflow, database, maps, nodejs_compat, android, websocket, webhook, auth, twitter, google
 
 # Initialize settings and logging
 settings = Settings()
@@ -62,7 +62,7 @@ async def lifespan(app: FastAPI):
         "routers.webhook",
         "routers.auth",
         "routers.twitter",
-        "routers.gmail",
+        "routers.google",
         "middleware.auth"
     ])
 
@@ -277,7 +277,7 @@ app.include_router(android.router)
 app.include_router(websocket.router)
 app.include_router(webhook.router)
 app.include_router(twitter.router)  # Twitter/X OAuth routes
-app.include_router(gmail.router)  # Gmail OAuth routes
+app.include_router(google.router)  # Google Workspace OAuth routes (Gmail, Calendar, Drive, Sheets, Tasks, Contacts)
 
 
 @app.get("/health")

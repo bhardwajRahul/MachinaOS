@@ -97,6 +97,9 @@ const createNodeTypes = (): Record<string, React.ComponentType<any>> => {
     } else if (type === 'gmailSend' || type === 'gmailSearch' || type === 'gmailRead') {
       // Gmail action nodes use SquareNode (gmailReceive is a trigger)
       types[type] = SquareNode;
+    } else if (type.startsWith('calendar') || type.startsWith('drive') || type.startsWith('sheets') || type.startsWith('tasks') || type.startsWith('contacts')) {
+      // Google Workspace nodes (Calendar, Drive, Sheets, Tasks, Contacts) use SquareNode
+      types[type] = SquareNode;
     } else if (ANDROID_SERVICE_NODE_TYPES.includes(type)) {
       // Android service nodes use SquareNode component
       types[type] = SquareNode;

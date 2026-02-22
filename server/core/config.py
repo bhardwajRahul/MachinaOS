@@ -74,7 +74,8 @@ class Settings(BaseSettings):
     websocket_api_key: Optional[str] = Field(default=None, env="WEBSOCKET_API_KEY")
 
     # OAuth Redirect URIs
-    gmail_redirect_uri: str = Field(default="http://localhost:3010/api/gmail/callback", env="GMAIL_REDIRECT_URI")
+    google_redirect_uri: str = Field(default="http://localhost:3010/api/google/callback", env="GOOGLE_REDIRECT_URI")
+    gmail_redirect_uri: str = Field(default="http://localhost:3010/api/gmail/callback", env="GMAIL_REDIRECT_URI")  # Deprecated: use google_redirect_uri
     twitter_redirect_uri: str = Field(default="http://localhost:3010/api/twitter/callback", env="TWITTER_REDIRECT_URI")
 
     # Android Relay Configuration (passed to Vite frontend)

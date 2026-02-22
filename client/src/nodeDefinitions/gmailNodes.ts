@@ -3,20 +3,7 @@ import {
   INodeTypeDescription,
   NodeConnectionType
 } from '../types/INodeProperties';
-import { Google } from '@lobehub/icons';
-import React from 'react';
-
-// ============================================================================
-// GMAIL ICON - Using @lobehub/icons Google brand icon
-// ============================================================================
-
-// Gmail uses Google brand icon from @lobehub/icons (Color variant)
-export const GmailIconComponent: React.FC<{ size?: number }> = ({ size = 28 }) => (
-  React.createElement(Google.Color, { size })
-);
-
-// For node definitions, we use 'component:Gmail' as marker, resolved in SquareNode
-export const GMAIL_ICON = 'component:Gmail';
+import { GMAIL_ICON } from '../assets/icons/google';
 
 // ============================================================================
 // GMAIL NODES

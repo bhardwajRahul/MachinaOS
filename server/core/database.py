@@ -13,7 +13,7 @@ from models.database import (
     NodeParameter, Workflow, Execution, APIKey, APIKeyValidation, NodeOutput,
     ConversationMessage, ToolSchema, UserSkill, ChatMessage, UserSettings,
     TokenUsageMetric, CompactionEvent, SessionTokenState, ProviderDefaults,
-    AgentTeam, TeamMember, TeamTask, AgentMessage, GmailConnection
+    AgentTeam, TeamMember, TeamTask, AgentMessage, GoogleConnection
 )
 from models.cache import CacheEntry  # SQLite-backed cache for Redis alternative
 from models.auth import User  # Import User model to ensure table creation
@@ -133,6 +133,24 @@ class Database:
                     "CREATE INDEX IF NOT EXISTS idx_api_usage_service ON api_usage_metrics(service)"
                 ))
                 logger.info("Ensured api_usage_metrics table exists")
+
+                # Migrate gmail_connections to google_connections
+                # Check if old table exists and new table doesn't
+                result = await conn.execute(text(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='gmail_connections'"
+                ))
+                old_table_exists = result.fetchone() is not None
+
+                result = await conn.execute(text(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='google_connections'"
+                ))
+                new_table_exists = result.fetchone() is not None
+
+                if old_table_exists and not new_table_exists:
+                    await conn.execute(text(
+                        "ALTER TABLE gmail_connections RENAME TO google_connections"
+                    ))
+                    logger.info("Migrated gmail_connections table to google_connections")
 
         except Exception as e:
             logger.warning(f"Migration check failed (table may not exist yet): {e}")
@@ -2352,10 +2370,10 @@ class Database:
             return {"error": str(e)}
 
     # ============================================================================
-    # Gmail Connections - Customer Mode OAuth Storage
+    # Google Connections - Customer Mode OAuth Storage
     # ============================================================================
 
-    async def save_gmail_connection(
+    async def save_google_connection(
         self,
         customer_id: str,
         email: str,
@@ -2364,12 +2382,12 @@ class Database:
         scopes: str,
         name: Optional[str] = None,
     ) -> bool:
-        """Save or update a Gmail connection for a customer."""
+        """Save or update a Google Workspace connection for a customer."""
         try:
             async with self.get_session() as session:
                 # Check if connection exists
                 result = await session.execute(
-                    select(GmailConnection).where(GmailConnection.customer_id == customer_id)
+                    select(GoogleConnection).where(GoogleConnection.customer_id == customer_id)
                 )
                 existing = result.scalar_one_or_none()
 
@@ -2385,7 +2403,7 @@ class Database:
                     existing.updated_at = now
                 else:
                     # Create new connection
-                    connection = GmailConnection(
+                    connection = GoogleConnection(
                         customer_id=customer_id,
                         email=email,
                         name=name,
@@ -2399,52 +2417,52 @@ class Database:
                     session.add(connection)
 
                 await session.commit()
-                logger.info(f"Saved Gmail connection for customer {customer_id}")
+                logger.info(f"Saved Google connection for customer {customer_id}")
                 return True
         except Exception as e:
-            logger.error(f"Failed to save Gmail connection: {e}")
+            logger.error(f"Failed to save Google connection: {e}")
             return False
 
-    async def get_gmail_connection(self, customer_id: str) -> Optional[GmailConnection]:
-        """Get Gmail connection for a customer."""
+    async def get_google_connection(self, customer_id: str) -> Optional[GoogleConnection]:
+        """Get Google Workspace connection for a customer."""
         try:
             async with self.get_session() as session:
                 result = await session.execute(
-                    select(GmailConnection).where(
-                        GmailConnection.customer_id == customer_id,
-                        GmailConnection.is_active == True
+                    select(GoogleConnection).where(
+                        GoogleConnection.customer_id == customer_id,
+                        GoogleConnection.is_active == True
                     )
                 )
                 return result.scalar_one_or_none()
         except Exception as e:
-            logger.error(f"Failed to get Gmail connection: {e}")
+            logger.error(f"Failed to get Google connection: {e}")
             return None
 
-    async def delete_gmail_connection(self, customer_id: str) -> bool:
-        """Delete Gmail connection for a customer."""
+    async def delete_google_connection(self, customer_id: str) -> bool:
+        """Delete Google Workspace connection for a customer."""
         try:
             async with self.get_session() as session:
                 result = await session.execute(
-                    select(GmailConnection).where(GmailConnection.customer_id == customer_id)
+                    select(GoogleConnection).where(GoogleConnection.customer_id == customer_id)
                 )
                 connection = result.scalar_one_or_none()
                 if connection:
                     await session.delete(connection)
                     await session.commit()
-                    logger.info(f"Deleted Gmail connection for customer {customer_id}")
+                    logger.info(f"Deleted Google connection for customer {customer_id}")
                 return True
         except Exception as e:
-            logger.error(f"Failed to delete Gmail connection: {e}")
+            logger.error(f"Failed to delete Google connection: {e}")
             return False
 
-    async def list_gmail_connections(self, limit: int = 100) -> List[Dict[str, Any]]:
-        """List all Gmail connections."""
+    async def list_google_connections(self, limit: int = 100) -> List[Dict[str, Any]]:
+        """List all Google Workspace connections."""
         try:
             async with self.get_session() as session:
                 result = await session.execute(
-                    select(GmailConnection)
-                    .where(GmailConnection.is_active == True)
-                    .order_by(GmailConnection.connected_at.desc())
+                    select(GoogleConnection)
+                    .where(GoogleConnection.is_active == True)
+                    .order_by(GoogleConnection.connected_at.desc())
                     .limit(limit)
                 )
                 connections = result.scalars().all()
@@ -2459,20 +2477,20 @@ class Database:
                     for c in connections
                 ]
         except Exception as e:
-            logger.error(f"Failed to list Gmail connections: {e}")
+            logger.error(f"Failed to list Google connections: {e}")
             return []
 
-    async def update_gmail_connection_tokens(
+    async def update_google_connection_tokens(
         self,
         customer_id: str,
         access_token: str,
         refresh_token: Optional[str] = None,
     ) -> bool:
-        """Update tokens for a Gmail connection (after refresh)."""
+        """Update tokens for a Google Workspace connection (after refresh)."""
         try:
             async with self.get_session() as session:
                 result = await session.execute(
-                    select(GmailConnection).where(GmailConnection.customer_id == customer_id)
+                    select(GoogleConnection).where(GoogleConnection.customer_id == customer_id)
                 )
                 connection = result.scalar_one_or_none()
                 if connection:
@@ -2484,15 +2502,15 @@ class Database:
                     return True
                 return False
         except Exception as e:
-            logger.error(f"Failed to update Gmail tokens: {e}")
+            logger.error(f"Failed to update Google tokens: {e}")
             return False
 
-    async def update_gmail_last_used(self, customer_id: str) -> bool:
-        """Update last_used_at timestamp for a Gmail connection."""
+    async def update_google_last_used(self, customer_id: str) -> bool:
+        """Update last_used_at timestamp for a Google Workspace connection."""
         try:
             async with self.get_session() as session:
                 result = await session.execute(
-                    select(GmailConnection).where(GmailConnection.customer_id == customer_id)
+                    select(GoogleConnection).where(GoogleConnection.customer_id == customer_id)
                 )
                 connection = result.scalar_one_or_none()
                 if connection:
@@ -2501,5 +2519,5 @@ class Database:
                     return True
                 return False
         except Exception as e:
-            logger.error(f"Failed to update Gmail last used: {e}")
+            logger.error(f"Failed to update Google last used: {e}")
             return False

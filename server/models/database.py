@@ -495,21 +495,22 @@ class AgentMessage(SQLModel, table=True):
     )
 
 
-class GmailConnection(SQLModel, table=True):
-    """Gmail OAuth connections for customer access mode.
+class GoogleConnection(SQLModel, table=True):
+    """Google Workspace OAuth connections for customer access mode.
 
-    Stores OAuth tokens for each connected Gmail account, supporting both:
+    Stores OAuth tokens for each connected Google account, supporting both:
     - Owner mode: Single account stored via auth_service (credentials modal)
     - Customer mode: Multiple customer accounts stored here with customer_id
 
-    This enables apps to access customer Gmail (like CRM apps, email clients).
+    This enables apps to access customer Google Workspace services
+    (Gmail, Calendar, Drive, Sheets, Tasks, Contacts).
     """
 
-    __tablename__ = "gmail_connections"
+    __tablename__ = "google_connections"
 
     id: Optional[int] = Field(default=None, primary_key=True)
     customer_id: str = Field(index=True, max_length=255)  # Your app's customer identifier
-    email: str = Field(max_length=255)  # Connected Gmail address
+    email: str = Field(max_length=255)  # Connected Google account email
     name: Optional[str] = Field(default=None, max_length=255)  # User's display name
     access_token: str = Field(max_length=2000)  # Encrypted OAuth access token
     refresh_token: str = Field(max_length=2000)  # Encrypted OAuth refresh token

@@ -6,6 +6,12 @@ import { UTILITY_NODE_TYPES } from '../nodeDefinitions/utilityNodes';
 import { DOCUMENT_NODE_TYPES } from '../nodeDefinitions/documentNodes';
 import { SPECIALIZED_AGENT_TYPES } from '../nodeDefinitions/specializedAgentNodes';
 import { TWITTER_NODE_TYPES } from '../nodeDefinitions/twitterNodes';
+import { GMAIL_NODE_TYPES } from '../nodeDefinitions/gmailNodes';
+import { CALENDAR_NODE_TYPES } from '../nodeDefinitions/calendarNodes';
+import { DRIVE_NODE_TYPES } from '../nodeDefinitions/driveNodes';
+import { SHEETS_NODE_TYPES } from '../nodeDefinitions/sheetsNodes';
+import { TASKS_NODE_TYPES } from '../nodeDefinitions/tasksNodes';
+import { CONTACTS_NODE_TYPES } from '../nodeDefinitions/contactsNodes';
 import { Node, Edge } from 'reactflow';
 import { INodeExecutionData } from '../types/INodeProperties';
 import { API_CONFIG } from '../config/api';
@@ -226,7 +232,14 @@ export class ExecutionService {
       // Document Processing Nodes
       ...DOCUMENT_NODE_TYPES,
       // Twitter/X Nodes
-      ...TWITTER_NODE_TYPES
+      ...TWITTER_NODE_TYPES,
+      // Google Workspace Nodes
+      ...GMAIL_NODE_TYPES,
+      ...CALENDAR_NODE_TYPES,
+      ...DRIVE_NODE_TYPES,
+      ...SHEETS_NODE_TYPES,
+      ...TASKS_NODE_TYPES,
+      ...CONTACTS_NODE_TYPES
     ];
 
     return supportedTypes.includes(nodeType);

@@ -1,17 +1,20 @@
 """
-Gmail OAuth 2.0 callback and API routes.
+Google Workspace OAuth 2.0 callback and API routes.
 
 OAuth flow:
-1. Frontend calls WebSocket 'gmail_oauth_login' handler
+1. Frontend calls WebSocket 'google_oauth_login' handler
 2. Backend generates authorization URL, opens browser
 3. User authorizes on Google
-4. Google redirects to /api/gmail/callback with code
+4. Google redirects to /api/google/callback with code
 5. Backend exchanges code for tokens, stores them via auth_service
-6. Frontend polls WebSocket 'gmail_oauth_status' for completion
+6. Frontend polls WebSocket 'google_oauth_status' for completion
 
 Two access modes:
 - Owner Mode: Tokens stored via auth_service (single account)
-- Customer Mode: Tokens stored in gmail_connections table (multi-account)
+- Customer Mode: Tokens stored in google_connections table (multi-account)
+
+Supports all Google Workspace services:
+- Gmail, Calendar, Drive, Sheets, Tasks, Contacts
 """
 
 from typing import Optional
@@ -21,10 +24,10 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from core.container import container
 from core.logging import get_logger
-from services.gmail_oauth import GmailOAuth, get_pending_state
+from services.google_oauth import GoogleOAuth, get_pending_state
 
 logger = get_logger(__name__)
-router = APIRouter(prefix="/api/gmail", tags=["gmail"])
+router = APIRouter(prefix="/api/google", tags=["google"])
 
 
 def get_settings():
@@ -43,20 +46,20 @@ def get_database():
 
 
 @router.get("/callback")
-async def gmail_oauth_callback(
+async def google_oauth_callback(
     code: Optional[str] = Query(None),
     state: Optional[str] = Query(None),
     error: Optional[str] = Query(None),
     error_description: Optional[str] = Query(None),
 ):
     """
-    Handle Gmail OAuth callback.
+    Handle Google OAuth callback.
 
     Google redirects here after user authorizes (or denies) the app.
     """
     # Handle authorization denied
     if error:
-        logger.warning(f"Gmail OAuth denied: {error} - {error_description}")
+        logger.warning(f"Google OAuth denied: {error} - {error_description}")
         return HTMLResponse(
             content=_callback_html(success=False, error=error_description or error),
             status_code=200,
@@ -64,7 +67,7 @@ async def gmail_oauth_callback(
 
     # Validate required parameters
     if not code or not state:
-        logger.error("Gmail OAuth callback missing code or state")
+        logger.error("Google OAuth callback missing code or state")
         return HTMLResponse(
             content=_callback_html(success=False, error="Missing authorization code or state"),
             status_code=400,
@@ -73,7 +76,7 @@ async def gmail_oauth_callback(
     # Verify state exists (CSRF protection)
     pending_state = get_pending_state(state)
     if not pending_state:
-        logger.error("Gmail OAuth callback with invalid/expired state")
+        logger.error("Google OAuth callback with invalid/expired state")
         return HTMLResponse(
             content=_callback_html(success=False, error="Invalid or expired state. Please try again."),
             status_code=400,
@@ -88,26 +91,26 @@ async def gmail_oauth_callback(
     # Get settings and credentials
     settings = get_settings()
     auth_service = get_auth_service()
-    client_id = await auth_service.get_api_key("gmail_client_id") or ""
-    client_secret = await auth_service.get_api_key("gmail_client_secret") or ""
+    client_id = await auth_service.get_api_key("google_client_id") or ""
+    client_secret = await auth_service.get_api_key("google_client_secret") or ""
 
     if not client_id or not client_secret:
         return HTMLResponse(
-            content=_callback_html(success=False, error="Gmail not configured. Add Client ID and Secret in Credentials."),
+            content=_callback_html(success=False, error="Google not configured. Add Client ID and Secret in Credentials."),
             status_code=400,
         )
 
-    oauth = GmailOAuth(
+    oauth = GoogleOAuth(
         client_id=client_id,
         client_secret=client_secret,
-        redirect_uri=settings.gmail_redirect_uri,
+        redirect_uri=settings.google_redirect_uri,
     )
 
     # Exchange code for tokens
     result = oauth.exchange_code(code=code, state=state)
 
     if not result.get("success"):
-        logger.error(f"Gmail token exchange failed: {result.get('error')}")
+        logger.error(f"Google token exchange failed: {result.get('error')}")
         return HTMLResponse(
             content=_callback_html(success=False, error=result.get("error", "Token exchange failed")),
             status_code=400,
@@ -119,9 +122,9 @@ async def gmail_oauth_callback(
     refresh_token = result.get("refresh_token")
 
     if mode == "customer" and customer_id:
-        # Customer mode: store in gmail_connections table
+        # Customer mode: store in google_connections table
         database = get_database()
-        await database.save_gmail_connection(
+        await database.save_google_connection(
             customer_id=customer_id,
             email=email,
             name=name,
@@ -129,23 +132,23 @@ async def gmail_oauth_callback(
             refresh_token=refresh_token,
             scopes=",".join(result.get("scopes", [])),
         )
-        logger.info(f"Gmail OAuth successful for customer {customer_id}: {email}")
+        logger.info(f"Google OAuth successful for customer {customer_id}: {email}")
 
         if redirect_after:
-            return RedirectResponse(url=f"{redirect_after}?gmail_connected=true&customer={customer_id}&email={email}")
+            return RedirectResponse(url=f"{redirect_after}?google_connected=true&customer={customer_id}&email={email}")
     else:
         # Owner mode: store via auth_service
-        await auth_service.store_api_key(provider="gmail_access_token", api_key=access_token, models=[], session_id="default")
+        await auth_service.store_api_key(provider="google_access_token", api_key=access_token, models=[], session_id="default")
         if refresh_token:
-            await auth_service.store_api_key(provider="gmail_refresh_token", api_key=refresh_token, models=[], session_id="default")
-        await auth_service.store_api_key(provider="gmail_user_info", api_key=f"{email}:{name}", models=[], session_id="default")
-        logger.info(f"Gmail OAuth successful for {email}")
+            await auth_service.store_api_key(provider="google_refresh_token", api_key=refresh_token, models=[], session_id="default")
+        await auth_service.store_api_key(provider="google_user_info", api_key=f"{email}:{name}", models=[], session_id="default")
+        logger.info(f"Google OAuth successful for {email}")
 
     # Broadcast completion event
     from services.status_broadcaster import get_status_broadcaster
     broadcaster = get_status_broadcaster()
     await broadcaster.broadcast({
-        "type": "gmail_oauth_complete",
+        "type": "google_oauth_complete",
         "data": {"success": True, "email": email, "name": name, "mode": mode, "customer_id": customer_id},
     })
 
@@ -153,15 +156,15 @@ async def gmail_oauth_callback(
 
 
 @router.get("/status")
-async def get_gmail_status():
-    """Get Gmail connection status for owner mode."""
+async def get_google_status():
+    """Get Google connection status for owner mode."""
     auth_service = get_auth_service()
-    access_token = await auth_service.get_api_key("gmail_access_token")
+    access_token = await auth_service.get_api_key("google_access_token")
 
     if not access_token:
         return {"connected": False, "email": None}
 
-    user_info_str = await auth_service.get_api_key("gmail_user_info")
+    user_info_str = await auth_service.get_api_key("google_user_info")
     email, name = None, None
     if user_info_str:
         parts = user_info_str.split(":", 1)
@@ -172,41 +175,41 @@ async def get_gmail_status():
 
 
 @router.post("/logout")
-async def gmail_logout():
-    """Disconnect Gmail (owner mode)."""
+async def google_logout():
+    """Disconnect Google (owner mode)."""
     auth_service = get_auth_service()
-    await auth_service.remove_api_key("gmail_access_token")
-    await auth_service.remove_api_key("gmail_refresh_token")
-    await auth_service.remove_api_key("gmail_user_info")
-    logger.info("Gmail disconnected")
-    return {"success": True, "message": "Gmail disconnected"}
+    await auth_service.remove_api_key("google_access_token")
+    await auth_service.remove_api_key("google_refresh_token")
+    await auth_service.remove_api_key("google_user_info")
+    logger.info("Google disconnected")
+    return {"success": True, "message": "Google disconnected"}
 
 
 @router.post("/customer-auth-url")
 async def generate_customer_auth_url(customer_id: str, redirect_after: Optional[str] = None):
-    """Generate OAuth URL for a customer to connect their Gmail."""
+    """Generate OAuth URL for a customer to connect their Google account."""
     settings = get_settings()
     auth_service = get_auth_service()
-    client_id = await auth_service.get_api_key("gmail_client_id") or ""
-    client_secret = await auth_service.get_api_key("gmail_client_secret") or ""
+    client_id = await auth_service.get_api_key("google_client_id") or ""
+    client_secret = await auth_service.get_api_key("google_client_secret") or ""
 
     if not client_id or not client_secret:
-        return {"success": False, "error": "Gmail not configured. Add Client ID and Secret."}
+        return {"success": False, "error": "Google not configured. Add Client ID and Secret."}
 
-    oauth = GmailOAuth(
+    oauth = GoogleOAuth(
         client_id=client_id,
         client_secret=client_secret,
-        redirect_uri=settings.gmail_redirect_uri,
+        redirect_uri=settings.google_redirect_uri,
     )
     result = oauth.generate_authorization_url(state_data={"customer_id": customer_id, "redirect_after": redirect_after, "mode": "customer"})
     return {"success": True, "url": result["url"], "state": result["state"]}
 
 
 @router.get("/customer/{customer_id}/status")
-async def get_customer_gmail_status(customer_id: str):
-    """Get Gmail connection status for a customer."""
+async def get_customer_google_status(customer_id: str):
+    """Get Google connection status for a customer."""
     database = get_database()
-    connection = await database.get_gmail_connection(customer_id)
+    connection = await database.get_google_connection(customer_id)
     if not connection:
         return {"connected": False, "customer_id": customer_id}
     return {
@@ -219,18 +222,18 @@ async def get_customer_gmail_status(customer_id: str):
 
 
 @router.post("/customer/{customer_id}/disconnect")
-async def disconnect_customer_gmail(customer_id: str):
-    """Disconnect a customer's Gmail."""
+async def disconnect_customer_google(customer_id: str):
+    """Disconnect a customer's Google account."""
     database = get_database()
-    await database.delete_gmail_connection(customer_id)
-    logger.info(f"Gmail disconnected for customer {customer_id}")
+    await database.delete_google_connection(customer_id)
+    logger.info(f"Google disconnected for customer {customer_id}")
     return {"success": True, "customer_id": customer_id}
 
 
 def _callback_html(success: bool, email: str = None, error: str = None) -> str:
     """Generate callback HTML page."""
     if success:
-        title, message, color = "Gmail Connected", f"Successfully connected as {email}!", "#34a853"
+        title, message, color = "Google Connected", f"Successfully connected as {email}!", "#34a853"
     else:
         title, message, color = "Connection Failed", error or "Failed to connect", "#ea4335"
 
@@ -253,6 +256,6 @@ p{{font-size:16px;color:rgba(255,255,255,0.8);margin-bottom:20px}}
 <h1>{title}</h1><p>{message}</p><p class="close-text">This window will close automatically...</p>
 </div>
 <script>
-if(window.opener){{window.opener.postMessage({{type:'gmail_oauth_callback',success:{str(success).lower()},{"email:'"+email+"'," if email else ""}{"error:'"+error.replace("'","\\'")+"'," if error else ""}}},'*')}}
+if(window.opener){{window.opener.postMessage({{type:'google_oauth_callback',success:{str(success).lower()},{"email:'"+email+"'," if email else ""}{"error:'"+error.replace("'","\\'")+"'," if error else ""}}},'*')}}
 setTimeout(function(){{window.close()}},2000);
 </script></body></html>"""

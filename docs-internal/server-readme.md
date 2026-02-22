@@ -71,3 +71,46 @@ All API keys should be:
 - `.env.example` - Full example with all options (committed to git)
 - `.env.development` - Development environment (git-ignored)
 - `.env.production` - Production environment (git-ignored)
+
+## Google Workspace Integration
+
+Google Workspace services (Gmail, Calendar, Drive, Sheets, Tasks, Contacts) share a single OAuth connection.
+
+### Setup
+
+1. Create a Google Cloud project and enable the required APIs
+2. Create OAuth 2.0 credentials (Web Application type)
+3. Add credentials via the Credentials Modal in the UI
+4. Click "Login with Google" to authenticate
+
+### Environment Variables (Optional)
+
+```bash
+# Custom OAuth redirect URI (defaults to localhost:3010)
+GOOGLE_REDIRECT_URI=http://localhost:3010/api/google/callback
+```
+
+### Token Storage
+
+All Google tokens use the `google_*` prefix:
+- `google_client_id` - OAuth Client ID
+- `google_client_secret` - OAuth Client Secret
+- `google_access_token` - Access token for API calls
+- `google_refresh_token` - Refresh token for renewal
+- `google_user_info` - Connected user email and name
+
+### API Handlers
+
+| Service | Handler File | Node Types |
+|---------|-------------|------------|
+| Gmail | `handlers/gmail.py` | gmailSend, gmailSearch, gmailRead, gmailReceive |
+| Calendar | `handlers/calendar.py` | calendarCreate, calendarList, calendarUpdate, calendarDelete |
+| Drive | `handlers/drive.py` | driveUpload, driveDownload, driveList, driveShare |
+| Sheets | `handlers/sheets.py` | sheetsRead, sheetsWrite, sheetsAppend |
+| Tasks | `handlers/tasks.py` | tasksCreate, tasksList, tasksComplete |
+| Contacts | `handlers/contacts.py` | contactsCreate, contactsList, contactsSearch |
+
+### AI Agent Skills
+
+Skills for AI agents are in `server/skills/productivity_agent/`:
+- gmail-skill, calendar-skill, drive-skill, sheets-skill, tasks-skill, contacts-skill

@@ -14,7 +14,7 @@ Open-source platform to build your own personal AI assistant. A mashup of clawdb
 
 <img width="1280" height="671" alt="func_img" src="https://github.com/user-attachments/assets/2f14b6c8-3995-4ccc-b076-e40749a83df2" />
 
-**83 nodes** | **6 AI providers** | **13 specialized agents** | **Agent Teams** | **WebSocket-first** | **Self-hosted**
+**109 nodes** | **6 AI providers** | **13 specialized agents** | **Agent Teams** | **WebSocket-first** | **Self-hosted**
 
 ## Prerequisites
 
@@ -76,6 +76,7 @@ npm run start
 
 ### Platform Integrations
 
+- **Google Workspace** - Gmail, Calendar, Drive, Sheets, Tasks, Contacts with unified OAuth
 - **WhatsApp** - Send/receive messages with QR pairing, filters, group support
 - **Twitter/X** - Send tweets, search, user lookup with OAuth 2.0 authentication
 - **Android** - 16 service nodes for device control (battery, WiFi, Bluetooth, apps, camera, sensors)
@@ -122,15 +123,16 @@ Build teams of specialized agents that work together on complex tasks:
 | Specialized Agents | 13 | Android, Coding, Web, Task, Social, Travel, Orchestrator, etc. |
 | AI Skills | 11 | WhatsApp, Maps, HTTP, Scheduler, Android, Code, etc. |
 | AI Tools | 9 | Calculator, Time, Search, Android Toolkit, Code Executors |
+| Google Workspace | 26 | Gmail, Calendar, Drive, Sheets, Tasks, Contacts |
 | WhatsApp | 3 | Send, Receive, Database |
-| Twitter | 3 | Send, Search, User |
+| Twitter | 4 | Send, Search, User, Receive |
 | Android | 16 | Device control and monitoring |
 | Documents | 6 | RAG pipeline nodes |
 | Utilities | 6 | HTTP, Webhooks, Chat Trigger, Console, Team Monitor |
 | Location | 3 | Google Maps integration |
-| Workflow | 3 | Start, Timer, Cron Scheduler |
+| Workflow | 2 | Start, Task Trigger |
 
-**Total: 83 nodes**
+**Total: 109 nodes**
 
 ## CLI Commands
 

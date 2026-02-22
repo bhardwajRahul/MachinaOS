@@ -569,8 +569,8 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           }
           break;
 
-        case 'gmail_oauth_complete':
-          // Handle Gmail OAuth completion broadcast from backend
+        case 'google_oauth_complete':
+          // Handle Google Workspace OAuth completion broadcast from backend
           if (data?.success) {
             setGmailStatus({
               connected: true,

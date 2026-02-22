@@ -26,6 +26,7 @@ This is a React Flow-based workflow automation platform implementing n8n-inspire
 | **[Scripts Reference](./docs-internal/SCRIPTS.md)** | Available npm/shell scripts and their usage |
 | **[Server Documentation](./docs-internal/server-readme.md)** | Python backend architecture and API documentation |
 | **[Skill Creation Guide](./server/skills/GUIDE.md)** | How to create new skills (folder structure, SKILL.md format, metadata, supporting files) |
+| **[New Service Integration](./docs-internal/new_service_integration.md)** | Complete guide for integrating external services (OAuth, database, handlers, nodes, AI tools) - use Google Workspace as reference |
 | **[Polyglot Server](../polyglot-server/ARCHITECTURE.md)** | Plugin registry microservice with MCP gateway (optional integration) |
 
 ## Design Principles & Standards
@@ -359,7 +360,7 @@ class CacheEntry(SQLModel, table=True):
 
 ## Codebase Summary
 - **Hybrid architecture**: Node.js + Python + React TypeScript
-- **84 implemented workflow nodes** with clean service separation (6 AI models + 3 AI agents/memory + 13 specialized agents + 11 skills + 3 dedicated tools + 6 dual-purpose tools + 16 Android + 3 WhatsApp + 4 Twitter + 2 Social + 3 Location + 3 Code + 6 Utility + 6 Document + 2 Chat + 2 Scheduler + 1 Workflow)
+- **104 implemented workflow nodes** with clean service separation (6 AI models + 3 AI agents/memory + 13 specialized agents + 11 skills + 3 dedicated tools + 6 dual-purpose tools + 16 Android + 3 WhatsApp + 4 Twitter + 2 Social + 3 Location + 3 Code + 6 Utility + 6 Document + 2 Chat + 2 Scheduler + 1 Workflow + 26 Google Workspace)
 - **WebSocket-First Architecture**: WebSocket as primary frontend-backend communication (87 message handlers)
 - **Recent optimizations**: REST APIs replaced with WebSocket, AI endpoints migrated to Python, Android automation integrated
 
@@ -388,6 +389,12 @@ The project was completely refactored from schema-based node definitions to expl
 - `src/nodeDefinitions/toolNodes.ts` - AI Agent tool nodes (calculatorTool, currentTimeTool, webSearchTool)
 - `src/nodeDefinitions/androidServiceNodes.ts` - 16 Android service nodes (monitoring, apps, automation, sensors, media)
 - `src/nodeDefinitions/locationNodes.ts` - Google Maps and location services
+- `src/nodeDefinitions/gmailNodes.ts` - Gmail integration (4 nodes)
+- `src/nodeDefinitions/calendarNodes.ts` - Google Calendar integration (4 nodes)
+- `src/nodeDefinitions/driveNodes.ts` - Google Drive integration (4 nodes)
+- `src/nodeDefinitions/sheetsNodes.ts` - Google Sheets integration (3 nodes)
+- `src/nodeDefinitions/tasksNodes.ts` - Google Tasks integration (5 nodes)
+- `src/nodeDefinitions/contactsNodes.ts` - Google Contacts integration (6 nodes)
 - `src/nodeDefinitions/whatsappNodes.ts` - WhatsApp messaging integration (3 nodes)
 - `src/nodeDefinitions/twitterNodes.ts` - Twitter/X integration (4 nodes: send, search, user, receive)
 - `src/nodeDefinitions/socialNodes.ts` - Unified social messaging nodes (socialReceive, socialSend)
@@ -399,6 +406,9 @@ The project was completely refactored from schema-based node definitions to expl
 - `src/nodeDefinitions/workflowNodes.ts` - Workflow start node
 - `src/factories/baseChatModelFactory.ts` - Factory for creating standardized chat models
 - `src/services/executionService.ts` - Node execution engine with routing to Python backend
+
+### Assets
+- `src/assets/icons/google/` - Official Google service SVG icons (Gmail, Calendar, Drive, Sheets, Tasks, Contacts) using n8n pattern with data URI exports
 
 ### UI Components
 - `src/components/ParameterRenderer.tsx` - Universal parameter renderer (dual interface support)
@@ -511,7 +521,7 @@ The project uses WebSocket as the primary communication method between frontend 
 - `server/services/status_broadcaster.py` - Connection management and broadcasting
 
 ## Implemented Node Types
-The following 79 nodes are currently implemented and functional:
+The following 104 nodes are currently implemented and functional:
 
 ### AI Chat Models (6 nodes)
 - **openaiChatModel**: OpenAI GPT models with response format options. O-series models (o1, o3, o4) support reasoning effort parameter.
@@ -539,27 +549,47 @@ server/skills/
 ├── GUIDE.md                              # Skill creation guide
 ├── assistant/                            # General-purpose assistant skills
 │   ├── assistant-personality/SKILL.md
-│   ├── code-skill/SKILL.md
-│   ├── http-skill/SKILL.md
-│   ├── maps-skill/SKILL.md
+│   ├── compaction-skill/SKILL.md
+│   ├── humanify-skill/SKILL.md
 │   ├── memory-skill/SKILL.md
-│   ├── scheduler-skill/SKILL.md
-│   ├── web-search-skill/SKILL.md
-│   └── whatsapp-skill/SKILL.md
-├── android/                              # Android device control skills
+│   └── subagent-skill/SKILL.md
+├── android_agent/                        # Android device control skills
 │   ├── personality/SKILL.md
-│   └── skill/SKILL.md
+│   ├── battery-skill/SKILL.md
+│   ├── wifi-skill/SKILL.md
+│   └── ... (12 skills total)
+├── autonomous/                           # Autonomous agent patterns
+│   ├── code-mode-skill/SKILL.md
+│   ├── agentic-loop-skill/SKILL.md
+│   ├── progressive-discovery-skill/SKILL.md
+│   ├── error-recovery-skill/SKILL.md
+│   └── multi-tool-orchestration-skill/SKILL.md
+├── coding_agent/                         # Code execution skills
+│   ├── python-skill/SKILL.md
+│   └── javascript-skill/SKILL.md
+├── productivity_agent/                   # Google Workspace skills
+│   ├── gmail-skill/SKILL.md              # Send, search, read emails
+│   ├── calendar-skill/SKILL.md           # Create, list, update, delete events
+│   ├── drive-skill/SKILL.md              # Upload, download, list, share files
+│   ├── sheets-skill/SKILL.md             # Read, write, append spreadsheet data
+│   ├── tasks-skill/SKILL.md              # Create, list, complete tasks
+│   └── contacts-skill/SKILL.md           # Create, list, search contacts
 ├── social_agent/                         # Social media platform skills
-│   ├── twitter-send-skill/SKILL.md       # Post tweets, reply, retweet, like/unlike, delete
-│   ├── twitter-search-skill/SKILL.md     # Search tweets with query operators
-│   ├── twitter-user-skill/SKILL.md       # User profile and followers/following lookup
-│   └── whatsapp-send-skill/SKILL.md      # WhatsApp messaging skill
-└── autonomous/                           # Autonomous agent patterns (Code Mode research)
-    ├── code-mode-skill/SKILL.md          # Generate code instead of tool calls (81-98% token savings)
-    ├── agentic-loop-skill/SKILL.md       # OBSERVE-THINK-ACT-REFLECT-DECIDE pattern
-    ├── progressive-discovery-skill/SKILL.md  # Load tools on-demand (98.7% token savings)
-    ├── error-recovery-skill/SKILL.md     # Retry strategies, graceful degradation
-    └── multi-tool-orchestration-skill/SKILL.md  # Coordinate multiple tools for complex tasks
+│   ├── twitter-send-skill/SKILL.md
+│   ├── twitter-search-skill/SKILL.md
+│   ├── twitter-user-skill/SKILL.md
+│   ├── whatsapp-send-skill/SKILL.md
+│   └── whatsapp-db-skill/SKILL.md
+├── task_agent/                           # Task management skills
+│   ├── timer-skill/SKILL.md
+│   ├── cron-scheduler-skill/SKILL.md
+│   └── task-manager-skill/SKILL.md
+├── travel_agent/                         # Location and maps skills
+│   ├── geocoding-skill/SKILL.md
+│   └── nearby-places-skill/SKILL.md
+└── web_agent/                            # Web automation skills
+    ├── web-search-skill/SKILL.md
+    └── http-request-skill/SKILL.md
 ```
 
 **SKILL.md Format:**
@@ -902,6 +932,133 @@ TWITTER_CLIENT_ID=your_client_id
 TWITTER_CLIENT_SECRET=your_client_secret
 TWITTER_REDIRECT_URI=http://localhost:3010/api/twitter/callback
 ```
+
+### Google Workspace Nodes (26 nodes)
+Unified Google Workspace integration supporting Gmail, Calendar, Drive, Sheets, Tasks, and Contacts. All services share a single OAuth connection with combined scopes. All nodes are execution-ready with Run button in parameter panel.
+
+#### Gmail Nodes (4 nodes)
+- **gmailSend**: **Dual-purpose node** - Send emails with attachments. Works as workflow node OR AI Agent tool.
+- **gmailSearch**: **Dual-purpose node** - Search emails using Gmail query syntax.
+- **gmailRead**: **Dual-purpose node** - Read email content by message ID.
+- **gmailReceive**: Event-driven trigger for incoming emails.
+
+#### Calendar Nodes (4 nodes)
+- **calendarCreate**: **Dual-purpose node** - Create calendar events with title, time, description, attendees, location.
+- **calendarList**: **Dual-purpose node** - List events in date range with filtering.
+- **calendarUpdate**: **Dual-purpose node** - Update existing events.
+- **calendarDelete**: **Dual-purpose node** - Delete events by ID.
+
+#### Drive Nodes (4 nodes)
+- **driveUpload**: **Dual-purpose node** - Upload files from URL or path.
+- **driveDownload**: **Dual-purpose node** - Download files by ID.
+- **driveList**: **Dual-purpose node** - List files in folder with query.
+- **driveShare**: **Dual-purpose node** - Share files with users.
+
+#### Sheets Nodes (3 nodes)
+- **sheetsRead**: **Dual-purpose node** - Read data from spreadsheet range.
+- **sheetsWrite**: **Dual-purpose node** - Write data to specific range.
+- **sheetsAppend**: **Dual-purpose node** - Append rows to sheet.
+
+#### Tasks Nodes (5 nodes)
+- **tasksCreate**: **Dual-purpose node** - Create tasks with title, notes, due date.
+- **tasksList**: **Dual-purpose node** - List tasks with filters.
+- **tasksComplete**: **Dual-purpose node** - Mark task as complete.
+- **tasksUpdate**: **Dual-purpose node** - Update existing task.
+- **tasksDelete**: **Dual-purpose node** - Delete task by ID.
+
+#### Contacts Nodes (6 nodes)
+- **contactsCreate**: **Dual-purpose node** - Create contact with name, email, phone.
+- **contactsList**: **Dual-purpose node** - List contacts with pagination.
+- **contactsSearch**: **Dual-purpose node** - Search contacts by query.
+- **contactsGet**: **Dual-purpose node** - Get contact details by resource name.
+- **contactsUpdate**: **Dual-purpose node** - Update existing contact.
+- **contactsDelete**: **Dual-purpose node** - Delete contact.
+
+#### Google Workspace OAuth 2.0 Authentication
+Authentication is handled via OAuth 2.0 flow in the Credentials Modal:
+1. User enters Google Cloud Client ID and Secret (OAuth 2.0 credentials)
+2. User clicks "Login with Google"
+3. Consent screen shows all requested scopes (Gmail, Calendar, Drive, etc.)
+4. User grants permission, Google redirects with auth code
+5. Backend exchanges code for access_token + refresh_token
+6. Tokens stored via auth_service (owner mode) or google_connections table (customer mode)
+
+**Combined OAuth Scopes:**
+```python
+GOOGLE_WORKSPACE_SCOPES = [
+    # User Info
+    "openid",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/userinfo.profile",
+    # Gmail
+    "https://www.googleapis.com/auth/gmail.send",
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/gmail.modify",
+    # Calendar
+    "https://www.googleapis.com/auth/calendar",
+    "https://www.googleapis.com/auth/calendar.events",
+    # Drive
+    "https://www.googleapis.com/auth/drive",
+    "https://www.googleapis.com/auth/drive.file",
+    # Sheets
+    "https://www.googleapis.com/auth/spreadsheets",
+    # Tasks
+    "https://www.googleapis.com/auth/tasks",
+    # Contacts
+    "https://www.googleapis.com/auth/contacts",
+    "https://www.googleapis.com/auth/contacts.readonly",
+]
+```
+
+**Key Files:**
+| File | Description |
+|------|-------------|
+| `server/services/google_oauth.py` | Unified OAuth 2.0 implementation |
+| `server/config/google_apis.json` | API endpoints and scopes config |
+| `server/routers/google.py` | OAuth callback and status endpoints |
+| `server/services/handlers/gmail.py` | Gmail handlers |
+| `server/services/handlers/calendar.py` | Calendar handlers |
+| `server/services/handlers/drive.py` | Drive handlers |
+| `server/services/handlers/sheets.py` | Sheets handlers |
+| `server/services/handlers/tasks.py` | Tasks handlers |
+| `server/services/handlers/contacts.py` | Contacts handlers |
+| `server/models/database.py` | `GoogleConnection` model |
+| `server/skills/productivity_agent/` | Google Workspace skills for AI agents |
+| `client/src/nodeDefinitions/gmailNodes.ts` | Gmail node definitions |
+| `client/src/nodeDefinitions/calendarNodes.ts` | Calendar node definitions |
+| `client/src/nodeDefinitions/driveNodes.ts` | Drive node definitions |
+| `client/src/nodeDefinitions/sheetsNodes.ts` | Sheets node definitions |
+| `client/src/nodeDefinitions/tasksNodes.ts` | Tasks node definitions |
+| `client/src/nodeDefinitions/contactsNodes.ts` | Contacts node definitions |
+| `client/src/assets/icons/google/` | Official Google service SVG icons (n8n pattern) |
+| `client/src/components/CredentialsModal.tsx` | Google Workspace panel |
+
+**Token Storage (Unified `google_*` prefix):**
+| Token Key | Description |
+|-----------|-------------|
+| `google_client_id` | OAuth 2.0 Client ID |
+| `google_client_secret` | OAuth 2.0 Client Secret |
+| `google_access_token` | Access token for API calls |
+| `google_refresh_token` | Refresh token for token renewal |
+| `google_user_info` | Connected user email and name |
+
+**AI Agent Skills (productivity_agent folder):**
+| Skill | Tools | Description |
+|-------|-------|-------------|
+| `gmail-skill` | `gmail_send`, `gmail_search`, `gmail_read` | Send, search, read emails |
+| `calendar-skill` | `calendar_create`, `calendar_list`, `calendar_update`, `calendar_delete` | Manage calendar events |
+| `drive-skill` | `drive_upload`, `drive_download`, `drive_list`, `drive_share` | Manage Drive files |
+| `sheets-skill` | `sheets_read`, `sheets_write`, `sheets_append` | Read/write spreadsheet data |
+| `tasks-skill` | `tasks_create`, `tasks_list`, `tasks_complete` | Manage Google Tasks |
+| `contacts-skill` | `contacts_create`, `contacts_list`, `contacts_search` | Manage contacts |
+
+**Environment Variables:**
+```bash
+# OAuth redirect (optional, defaults to localhost:3010)
+GOOGLE_REDIRECT_URI=http://localhost:3010/api/google/callback
+```
+
+**Google API Pricing:** All Google Workspace APIs are free with rate limits. See `server/config/pricing.json` for configured limits.
 
 ### Workflow Nodes (2 nodes)
 - **start**: Manual workflow trigger to start workflow execution
@@ -1540,11 +1697,12 @@ def create_model(self, provider: str, api_key: str, model: str,
 - **Models**: Automatic discovery and caching of available models per provider
 - **Expiration**: 30-day validation period with automatic cleanup
 
-### Execution Flow (`src/services/executionService.ts:387`)
+### Execution Flow (`src/services/executionService.ts`)
 - **Detection**: `isAIModelNode()` identifies AI chat models for Python routing
 - **Enhancement**: `injectStoredApiKeys()` auto-injects stored credentials and models
 - **Routing**: AI nodes → Python Flask backend, other nodes → Node.js backend
 - **Logging**: Comprehensive debug output for API key injection and model selection
+- **Supported Types**: `isNodeTypeSupported()` controls which nodes show Run button - includes AI models, agents, Android, WhatsApp, Twitter, Google Workspace, code executors, schedulers, utilities, and document processing nodes
 
 ### Parameter System Integration
 - **Template Variables**: Support for `{{nodeId.output}}` syntax in all text parameters

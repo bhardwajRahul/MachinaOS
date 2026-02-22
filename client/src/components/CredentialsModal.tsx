@@ -52,8 +52,8 @@ const XIcon = () => (
   <TwitterOutlined style={{ fontSize: 20, color: '#000000' }} />
 );
 
-const GmailIcon = () => (
-  <GoogleOutlined style={{ fontSize: 20, color: '#EA4335' }} />
+const GoogleWorkspaceIcon = () => (
+  <GoogleOutlined style={{ fontSize: 20, color: '#4285F4' }} />
 );
 
 // ============================================================================
@@ -97,7 +97,7 @@ const CATEGORIES: Category[] = [
     items: [
       { id: 'whatsapp_personal', name: 'WhatsApp Personal', placeholder: '', color: '#25D366', desc: 'Connect via QR code pairing', CustomIcon: WhatsAppIcon, isSpecial: true, panelType: 'whatsapp' },
       { id: 'twitter', name: 'Twitter/X', placeholder: '', color: '#000000', desc: 'Post tweets, search, user lookup', CustomIcon: XIcon, isSpecial: true, panelType: 'twitter' },
-      { id: 'gmail', name: 'Gmail', placeholder: '', color: '#EA4335', desc: 'Send, search, read emails', CustomIcon: GmailIcon, isSpecial: true, panelType: 'gmail' },
+      { id: 'gmail', name: 'Google Workspace', placeholder: '', color: '#4285F4', desc: 'Gmail, Calendar, Drive, Sheets, Tasks, Contacts', CustomIcon: GoogleWorkspaceIcon, isSpecial: true, panelType: 'gmail' },
     ],
   },
   {
@@ -502,14 +502,14 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
     }
   }, [visible, hasStoredKey, getStoredApiKey]);
 
-  // Load Gmail credentials on mount
+  // Load Google Workspace credentials on mount
   useEffect(() => {
     if (visible) {
-      hasStoredKey('gmail_client_id').then(async (has) => {
+      hasStoredKey('google_client_id').then(async (has) => {
         setGmailCredentialsStored(has);
         if (has) {
-          const clientId = await getStoredApiKey('gmail_client_id');
-          const clientSecret = await getStoredApiKey('gmail_client_secret');
+          const clientId = await getStoredApiKey('google_client_id');
+          const clientSecret = await getStoredApiKey('google_client_secret');
           if (clientId) setGmailClientId(clientId);
           if (clientSecret) setGmailClientSecret(clientSecret);
         }
@@ -593,8 +593,9 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
     setGmailLoading('save');
     setGmailError(null);
     try {
-      await saveApiKey('gmail_client_id', gmailClientId.trim());
-      await saveApiKey('gmail_client_secret', gmailClientSecret.trim());
+      // Save with google_ prefix (new standard)
+      await saveApiKey('google_client_id', gmailClientId.trim());
+      await saveApiKey('google_client_secret', gmailClientSecret.trim());
       setGmailCredentialsStored(true);
     } catch (err: any) {
       setGmailError(err.message || 'Failed to save credentials');
@@ -607,7 +608,7 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
     setGmailLoading('login');
     setGmailError(null);
     try {
-      const response = await sendRequest('gmail_oauth_login', {});
+      const response = await sendRequest('google_oauth_login', {});
       if (!response.success) {
         setGmailError(response.error || 'Failed to start OAuth');
       }
@@ -622,7 +623,7 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
     setGmailLoading('logout');
     setGmailError(null);
     try {
-      const response = await sendRequest('gmail_logout', {});
+      const response = await sendRequest('google_logout', {});
       if (!response.success) {
         setGmailError(response.error || 'Failed to disconnect');
       }
@@ -637,7 +638,7 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
     setGmailLoading('refresh');
     setGmailError(null);
     try {
-      await sendRequest('gmail_oauth_status', {});
+      await sendRequest('google_oauth_status', {});
     } catch (err: any) {
       setGmailError(err.message || 'Failed to refresh status');
     } finally {
@@ -1633,12 +1634,12 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
       );
     }
 
-    // Gmail panel
+    // Google Workspace panel (Gmail, Calendar, Drive, Sheets, Tasks, Contacts)
     if (selectedItem.panelType === 'gmail') {
       return (
         <div style={{ padding: theme.spacing.xl, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
           <Descriptions
-            title={<Space><GmailIcon /> Gmail</Space>}
+            title={<Space><GoogleWorkspaceIcon /> Google Workspace</Space>}
             bordered
             column={1}
             size="small"
@@ -1683,6 +1684,18 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
                 </Space>
               </Descriptions.Item>
             )}
+            {gmailStatus.connected && (
+              <Descriptions.Item label="Services">
+                <Space wrap size={[4, 4]}>
+                  <Tag style={{ backgroundColor: `${theme.dracula.green}15`, borderColor: `${theme.dracula.green}40`, color: theme.dracula.green }}>Gmail</Tag>
+                  <Tag style={{ backgroundColor: `${theme.dracula.cyan}15`, borderColor: `${theme.dracula.cyan}40`, color: theme.dracula.cyan }}>Calendar</Tag>
+                  <Tag style={{ backgroundColor: `${theme.dracula.purple}15`, borderColor: `${theme.dracula.purple}40`, color: theme.dracula.purple }}>Drive</Tag>
+                  <Tag style={{ backgroundColor: `${theme.dracula.orange}15`, borderColor: `${theme.dracula.orange}40`, color: theme.dracula.orange }}>Sheets</Tag>
+                  <Tag style={{ backgroundColor: `${theme.dracula.pink}15`, borderColor: `${theme.dracula.pink}40`, color: theme.dracula.pink }}>Tasks</Tag>
+                  <Tag style={{ backgroundColor: `${theme.dracula.yellow}15`, borderColor: `${theme.dracula.yellow}40`, color: theme.dracula.yellow }}>Contacts</Tag>
+                </Space>
+              </Descriptions.Item>
+            )}
           </Descriptions>
 
           {/* API Credentials Input - Only show if not connected */}
@@ -1695,7 +1708,7 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
                 color: theme.colors.text,
                 marginBottom: theme.spacing.sm,
               }}>
-                Gmail API Credentials
+                Google Workspace API Credentials
               </label>
               <div style={{ marginBottom: theme.spacing.md }}>
                 <Input
@@ -1742,9 +1755,9 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
                 marginTop: theme.spacing.sm,
                 lineHeight: 1.5,
               }}>
-                Get credentials from Google Cloud Console. Enable the Gmail API and create OAuth 2.0 credentials.
+                Get credentials from Google Cloud Console. Enable Gmail, Calendar, Drive, Sheets, Tasks, and People APIs.
                 <br />
-                Callback URL: <code style={{ fontSize: theme.fontSize.xs, color: theme.dracula.cyan }}>http://localhost:3010/api/gmail/callback</code>
+                Callback URL: <code style={{ fontSize: theme.fontSize.xs, color: theme.dracula.cyan }}>http://localhost:3010/api/google/callback</code>
               </div>
             </div>
           )}
@@ -1754,7 +1767,7 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
           )}
 
           {/* API Usage Stats */}
-          {renderApiUsagePanel('gmail', 'Gmail')}
+          {renderApiUsagePanel('google_workspace', 'Google Workspace')}
 
           {/* Info box */}
           <div style={{
@@ -1771,11 +1784,11 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
               lineHeight: 1.5,
             }}>
               {gmailStatus.connected ? (
-                <>Your Gmail account is connected. You can now use Gmail nodes in your workflows.</>
+                <>Your Google Workspace account is connected. You can now use Gmail, Calendar, Drive, Sheets, Tasks, and Contacts nodes in your workflows.</>
               ) : gmailCredentialsStored ? (
                 <>Click Login with Google to authorize. A browser window will open for authentication.</>
               ) : (
-                <>Enter your Gmail API credentials above to get started.</>
+                <>Enter your Google Workspace API credentials above to get started.</>
               )}
             </div>
           </div>

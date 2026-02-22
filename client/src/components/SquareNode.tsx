@@ -9,7 +9,6 @@ import { useWebSocket, useWhatsAppStatus } from '../contexts/WebSocketContext';
 import { useApiKeys } from '../hooks/useApiKeys';
 import { getAIProviderIcon } from './icons/AIProviderIcons';
 import { PlayCircleFilled, ScheduleOutlined } from '@ant-design/icons';
-import { Google } from '@lobehub/icons';
 
 // Android service nodes that can connect to Android Toolkit as tools
 const ANDROID_TOOL_CAPABLE_NODES = ANDROID_SERVICE_NODE_TYPES;
@@ -458,19 +457,9 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
     return emojiRegex.test(str);
   };
 
-  // Helper to render icon (handles URLs, emojis, component markers, and icon names)
+  // Helper to render icon (handles URLs, emojis, and icon names)
   const renderIcon = (icon: string) => {
-    // Handle component markers (e.g., 'component:Gmail')
-    if (icon.startsWith('component:')) {
-      const componentName = icon.replace('component:', '');
-      if (componentName === 'Gmail') {
-        return <Google.Color size={28} />;
-      }
-      // Fallback for unknown component markers
-      return '📦';
-    }
-
-    // Handle image URLs
+    // Handle image URLs and data URIs (including SVG data URIs for Google icons)
     if (icon.startsWith('http') || icon.startsWith('data:') || icon.startsWith('/')) {
       return (
         <img
