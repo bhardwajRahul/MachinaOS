@@ -6,7 +6,7 @@
 
 Open-source platform to build your own personal AI assistant. A mashup of clawdbot/openclaw and n8n with better UI, full visibility of each action, and restricted control access.
 
-## Demo
+## Demo Video ↓
 
 [![MachinaOS Demo](https://img.youtube.com/vi/z_TEyGmeuyQ/maxresdefault.jpg)](https://www.youtube.com/watch?v=z_TEyGmeuyQ)
 
