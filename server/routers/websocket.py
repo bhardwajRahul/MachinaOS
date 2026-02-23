@@ -1617,6 +1617,7 @@ async def handle_validate_maps_key(data: Dict[str, Any], websocket: WebSocket) -
 
 from routers.whatsapp import (
     handle_whatsapp_status as _wa_status,
+    handle_whatsapp_connected_phone as _wa_connected_phone,
     handle_whatsapp_qr as _wa_qr,
     handle_whatsapp_send as _wa_send,
     handle_whatsapp_start as _wa_start,
@@ -1630,6 +1631,11 @@ from routers.whatsapp import (
 
 async def handle_whatsapp_status(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
     return await _wa_status()
+
+
+async def handle_whatsapp_connected_phone(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Get the connected WhatsApp phone number."""
+    return await _wa_connected_phone()
 
 
 async def handle_whatsapp_qr(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
@@ -2603,6 +2609,7 @@ MESSAGE_HANDLERS: Dict[str, MessageHandler] = {
 
     # WhatsApp operations
     "whatsapp_status": handle_whatsapp_status,
+    "whatsapp_connected_phone": handle_whatsapp_connected_phone,
     "whatsapp_qr": handle_whatsapp_qr,
     "whatsapp_send": handle_whatsapp_send,
     "whatsapp_start": handle_whatsapp_start,

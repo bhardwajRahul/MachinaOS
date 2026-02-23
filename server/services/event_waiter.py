@@ -208,6 +208,17 @@ def build_whatsapp_filter(params: Dict) -> Callable[[Dict], bool]:
             return False
 
         # Sender filter - for contact filter, use actual phone number
+        if sender_filter == 'self':
+            # Only accept messages in self-chat (notes to self)
+            # Must be from me AND in a chat with myself (not replies to others)
+            if not m.get('is_from_me'):
+                return False
+            # Check chat_id matches sender (self-chat)
+            chat_id = m.get('chat_id', '')
+            sender = m.get('sender', '')
+            if chat_id != sender:
+                return False
+
         if sender_filter == 'any_contact':
             # Only accept non-group messages (individual/contact messages)
             if is_group:
@@ -233,8 +244,8 @@ def build_whatsapp_filter(params: Dict) -> Callable[[Dict], bool]:
             if not any(kw in text for kw in keywords):
                 return False
 
-        # Ignore own messages (schema field: is_from_me)
-        if ignore_own and m.get('is_from_me'):
+        # Ignore own messages (schema field: is_from_me) - but not when filtering for 'self'
+        if ignore_own and sender_filter != 'self' and m.get('is_from_me'):
             return False
 
         # Forwarded message filter (schema field: is_forwarded)

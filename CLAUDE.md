@@ -851,7 +851,7 @@ Android device connection is configured via the Credentials Modal (Android panel
 - **mediaControl**: Media playback control - volume control, playback control, play media files
 
 ### WhatsApp Nodes (3 nodes)
-- **whatsappSend**: **Dual-purpose node** - Send WhatsApp messages (text, image, video, audio, document, sticker, location, contact). Works as workflow node OR AI Agent tool. Group: `['whatsapp', 'tool']`. Full parameter schema for recipient type, message type, media URL, location coordinates, contact vCard.
+- **whatsappSend**: **Dual-purpose node** - Send WhatsApp messages (text, image, video, audio, document, sticker, location, contact). Works as workflow node OR AI Agent tool. Group: `['whatsapp', 'tool']`. Recipient types: Self (connected phone), Phone Number, Group. Full parameter schema for message type, media URL, location coordinates, contact vCard.
 - **whatsappDb**: **Dual-purpose node** - Comprehensive WhatsApp database query node with 6 operations. Works as workflow node OR AI Agent tool. Group: `['whatsapp', 'tool']`. Operations:
   - `chat_history`: Retrieve messages from individual or group chats with filtering and pagination
   - `search_groups`: Search groups by name
@@ -859,7 +859,7 @@ Android device connection is configured via the Credentials Modal (Android panel
   - `get_contact_info`: Get full contact info (name, phone, profile picture) for sending/replying
   - `list_contacts`: List all contacts with saved names
   - `check_contacts`: Check WhatsApp registration status for phone numbers
-- **whatsappReceive**: Event-driven trigger that waits for incoming WhatsApp messages with filters (message type, sender, group, keywords, forwarded status). Marked with `['whatsapp', 'trigger']` group for n8n-style trigger identification. Stores group/sender names alongside JID/phone for display persistence. The Go RPC resolves LIDs to phone numbers before sending events - `sender_phone` field is already resolved. Filter options: All Messages, From Any Contact (Non-Group), From Specific Contact, From Specific Group, Contains Keywords
+- **whatsappReceive**: Event-driven trigger that waits for incoming WhatsApp messages with filters (message type, sender, group, keywords, forwarded status). Marked with `['whatsapp', 'trigger']` group for n8n-style trigger identification. Stores group/sender names alongside JID/phone for display persistence. The Go RPC resolves LIDs to phone numbers before sending events - `sender_phone` field is already resolved. Filter options: All Messages, From Self (notes to self chat only), From Any Contact (Non-Group), From Specific Contact, From Specific Group, Contains Keywords
 
 ### Social Nodes (2 nodes)
 Unified social messaging nodes for multi-platform communication. Supports WhatsApp, Telegram, Discord, Slack, Signal, SMS, Webchat, Email, Matrix, Teams.

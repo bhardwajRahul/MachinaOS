@@ -137,7 +137,6 @@ export const useParameterPanel = () => {
   }, [originalParameters, setSelectedNode]);
 
   const nodeDefinition = selectedNode?.type ? nodeDefinitions[selectedNode.type] : null;
-  console.log('[useParameterPanel] selectedNode.type:', selectedNode?.type, 'nodeDefinition.name:', nodeDefinition?.name);
 
   return {
     selectedNode,

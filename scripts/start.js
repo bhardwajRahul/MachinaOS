@@ -4,7 +4,7 @@
  * Works on: Windows, macOS, Linux, WSL, Git Bash
  */
 import { spawn } from 'child_process';
-import { readFileSync, existsSync, copyFileSync } from 'fs';
+import { readFileSync, existsSync, copyFileSync, rmSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import findProcess from 'find-process';
@@ -116,6 +116,17 @@ async function main() {
       log(`  Port ${port}: ${result.freed ? 'Freed' : 'Warning - could not free'} (PIDs: ${result.pids.join(', ')})`);
     } else {
       log(`  Port ${port}: Already free`);
+    }
+  }
+
+  // Clear Vite dependency cache to prevent "Outdated Optimize Dep" errors
+  const viteCachePath = resolve(ROOT, 'client', 'node_modules', '.vite');
+  if (existsSync(viteCachePath)) {
+    try {
+      rmSync(viteCachePath, { recursive: true, force: true });
+      log('Cleared Vite cache');
+    } catch (err) {
+      log(`Warning: Could not clear Vite cache: ${err.message}`);
     }
   }
 

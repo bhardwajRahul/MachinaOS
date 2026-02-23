@@ -112,11 +112,12 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         name: 'recipient_type',
         type: 'options',
         options: [
+          { name: 'Self (Connected Phone)', value: 'self' },
           { name: 'Phone Number', value: 'phone' },
           { name: 'Group', value: 'group' }
         ],
-        default: 'phone',
-        description: 'Send to individual or group'
+        default: 'self',
+        description: 'Send to self, individual, or group'
       },
       {
         displayName: 'Phone Number',
@@ -429,6 +430,7 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         type: 'options',
         options: [
           { name: 'All Messages', value: 'all' },
+          { name: 'From Self (Connected Phone)', value: 'self' },
           { name: 'From Any Contact (Non-Group)', value: 'any_contact' },
           { name: 'From Specific Contact', value: 'contact' },
           { name: 'From Specific Group', value: 'group' },
@@ -491,7 +493,10 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         name: 'ignoreOwnMessages',
         type: 'boolean',
         default: true,
-        description: 'Do not trigger on messages sent by this device'
+        description: 'Do not trigger on messages sent by this device',
+        displayOptions: {
+          show: { filter: ['all', 'any_contact', 'contact', 'group', 'keywords'] }
+        }
       },
       {
         displayName: 'Forwarded Messages',

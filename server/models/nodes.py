@@ -143,8 +143,13 @@ class WhatsAppReceiveParams(BaseNodeParams):
     type: Literal["whatsappReceive"]
     message_type_filter: str = Field(default="all", alias="messageTypeFilter")
     sender_filter: str = Field(default="all", alias="filter")
+    contact_phone: str = Field(default="", alias="contactPhone")
+    group_id: str = Field(default="", alias="group_id")
+    sender_number: str = Field(default="", alias="senderNumber")
+    keywords: str = Field(default="")
     ignore_own: bool = Field(default=True, alias="ignoreOwnMessages")
     include_media: bool = Field(default=False, alias="includeMediaData")
+    forwarded_filter: str = Field(default="all", alias="forwardedFilter")
 
 
 class WhatsAppDbParams(BaseNodeParams):

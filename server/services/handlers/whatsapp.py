@@ -34,13 +34,21 @@ async def handle_whatsapp_send(
 
     try:
         # Determine recipient (snake_case parameters)
-        recipient_type = parameters.get('recipient_type', 'phone')
-        group_id = parameters.get('group_id')
-        recipient = parameters.get('phone') if recipient_type == 'phone' else group_id
+        recipient_type = parameters.get('recipient_type', 'self')
         message_type = parameters.get('message_type', 'text')
 
-        if not recipient:
-            raise ValueError(f"{'Phone number' if recipient_type == 'phone' else 'Group ID'} is required")
+        # Determine recipient based on type
+        if recipient_type == 'self':
+            # Self will be resolved by the router using connected phone
+            recipient = 'self'
+        elif recipient_type == 'group':
+            recipient = parameters.get('group_id')
+            if not recipient:
+                raise ValueError("Group ID is required")
+        else:  # phone
+            recipient = parameters.get('phone')
+            if not recipient:
+                raise ValueError("Phone number is required")
 
         # For text messages, validate message content
         if message_type == 'text' and not parameters.get('message'):

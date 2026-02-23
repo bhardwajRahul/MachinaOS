@@ -86,6 +86,7 @@ export interface WhatsAppStatus {
   running: boolean;
   pairing: boolean;
   device_id?: string;
+  connected_phone?: string;
   qr?: string;
   timestamp?: number;
 }

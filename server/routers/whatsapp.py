@@ -36,6 +36,27 @@ logger = logging.getLogger(__name__)
 WHATSAPP_RPC_URL = os.getenv("WHATSAPP_RPC_URL", "ws://localhost:9400/ws/rpc")
 
 
+def extract_phone_from_jid(jid: str | None) -> str | None:
+    """Extract phone number from WhatsApp JID.
+
+    Args:
+        jid: WhatsApp JID like '1234567890@s.whatsapp.net' or '1234567890:0@s.whatsapp.net'
+
+    Returns:
+        Phone number string or None if invalid
+    """
+    if not jid:
+        return None
+    # Remove the @s.whatsapp.net or @c.us suffix
+    phone_part = jid.split('@')[0]
+    # Handle device ID suffix like '1234567890:0'
+    phone = phone_part.split(':')[0]
+    # Return only if it looks like a phone number (digits only)
+    if phone.isdigit():
+        return phone
+    return None
+
+
 # Inline RPC Client with async event handling
 class RPCClient:
     def __init__(self, url: str):
@@ -315,11 +336,15 @@ async def handle_whatsapp_status() -> dict:
             qr=None  # QR code comes from event.qr_code events
         )
 
+        device_id = status_data.get("device_id")
+        connected_phone = extract_phone_from_jid(device_id)
+
         return {
             "success": True,
             "data": status_data,
             "connected": status_data.get("connected", False),
-            "device_id": status_data.get("device_id"),
+            "device_id": device_id,
+            "connected_phone": connected_phone,
             "timestamp": time.time()
         }
     except Exception as e:
@@ -331,6 +356,43 @@ async def handle_whatsapp_status() -> dict:
             "error": str(e),
             "connected": False,
             "running": False,
+            "timestamp": time.time()
+        }
+
+
+async def handle_whatsapp_connected_phone() -> dict:
+    """Get the connected WhatsApp phone number.
+
+    Returns the phone number of the currently connected WhatsApp account,
+    extracted from the device JID.
+    """
+    try:
+        client = await get_client()
+        status_data = await client.call("status")
+
+        if not status_data.get("connected"):
+            return {
+                "success": False,
+                "error": "WhatsApp not connected",
+                "connected_phone": None,
+                "timestamp": time.time()
+            }
+
+        device_id = status_data.get("device_id")
+        connected_phone = extract_phone_from_jid(device_id)
+
+        return {
+            "success": True,
+            "connected_phone": connected_phone,
+            "device_id": device_id,
+            "timestamp": time.time()
+        }
+    except Exception as e:
+        logger.error(f"WhatsApp connected phone check failed: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "connected_phone": None,
             "timestamp": time.time()
         }
 
@@ -387,7 +449,7 @@ async def handle_whatsapp_send(params: dict) -> dict:
     Uses _send_lock to serialize sends - Go service processes sequentially.
 
     Params from frontend node (snake_case):
-    - recipient_type: 'phone' or 'group'
+    - recipient_type: 'self', 'phone', or 'group'
     - phone: recipient phone number (if recipient_type='phone')
     - group_id: group JID (if recipient_type='group')
     - message_type: text, image, video, audio, document, sticker, location, contact
@@ -405,12 +467,21 @@ async def handle_whatsapp_send(params: dict) -> dict:
             rpc_params: dict[str, Any] = {}
 
             # Recipient (snake_case)
-            recipient_type = params.get("recipient_type", "phone")
+            recipient_type = params.get("recipient_type", "self")
             if recipient_type == "group":
                 group_id = params.get("group_id")
                 if not group_id:
                     return {"success": False, "error": "group_id is required"}
                 rpc_params["group_id"] = group_id
+            elif recipient_type == "self":
+                # Send to connected phone (self)
+                client = await get_client()
+                status = await client.call("status")
+                device_id = status.get("device_id")
+                phone = extract_phone_from_jid(device_id)
+                if not phone:
+                    return {"success": False, "error": "WhatsApp not connected - cannot send to self"}
+                rpc_params["phone"] = phone
             else:
                 phone = params.get("phone")
                 if not phone:
