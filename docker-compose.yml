@@ -30,6 +30,7 @@ services:
     volumes:
       - ./server:/app
       - backend-data:/app/data
+      - credentials-data:/app/credentials  # Encrypted credentials database (separate volume)
     networks:
       - app-network
     restart: unless-stopped
@@ -46,6 +47,7 @@ services:
       - PORT=${PYTHON_BACKEND_PORT:-3010}
       - REDIS_URL=redis://redis:6379
       - WHATSAPP_RPC_URL=ws://whatsapp:${WHATSAPP_RPC_PORT:-9400}/ws/rpc
+      - CREDENTIALS_DB_PATH=/app/credentials/credentials.db
       - TZ=UTC
     depends_on:
       whatsapp:
@@ -99,6 +101,8 @@ volumes:
   redis-data:
     driver: local
   backend-data:
+    driver: local
+  credentials-data:
     driver: local
   whatsapp-data:
     driver: local

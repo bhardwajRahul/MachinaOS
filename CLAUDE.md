@@ -89,7 +89,10 @@ server/core/
 ├── database.py              # SQLite database with cache CRUD methods
 ├── cache.py                 # CacheService with Redis/SQLite/Memory fallback
 ├── config.py                # Application configuration
-└── logging.py               # Logging configuration
+├── logging.py               # Logging configuration
+├── encryption.py            # Fernet encryption with PBKDF2 key derivation
+├── credentials_database.py  # Async SQLite for encrypted API keys and OAuth tokens
+└── credential_backends.py   # Multi-backend abstraction (Fernet, Keyring, AWS)
 
 server/models/
 ├── cache.py                 # CacheEntry SQLModel for SQLite cache
@@ -97,7 +100,8 @@ server/models/
 └── database.py              # ConversationMessage, NodeParameter, ToolSchema, ChatMessage, TokenUsageMetric, APIUsageMetric, CompactionEvent, SessionTokenState, UserSettings, ProviderDefaults, AgentTeam, TeamMember, TeamTask, AgentMessage tables
 
 server/config/
-└── pricing.json             # User-editable pricing config for LLM models and API services
+├── llm_defaults.json        # Default models per provider (edit to change defaults)
+└── pricing.json             # LLM and API pricing config
 
 server/nodejs/                   # Persistent Node.js server for JS/TS execution
 ├── package.json                 # Dependencies: express, tsx
@@ -2526,11 +2530,213 @@ useEffect(() => {
 
 ### Dependencies
 ```
-# server/requirements.txt
+# server/pyproject.toml
 bcrypt>=4.1.0
 python-jose[cryptography]>=3.3.0
 email-validator>=2.0.0
 ```
+
+## Encrypted Credentials System
+
+### Overview
+API keys and OAuth tokens are stored in a separate encrypted database (`credentials.db`) using Fernet encryption (AES-128-CBC + HMAC-SHA256). The encryption key is derived from the user's login password using PBKDF2, ensuring credentials are only accessible during an authenticated session.
+
+### Security Architecture
+```
+User Login (password)
+       ↓
+PBKDF2HMAC (SHA256, 600K iterations) + Salt
+       ↓
+Fernet Key (in-memory only)
+       ↓
+EncryptionService.encrypt()/decrypt()
+       ↓
+credentials.db (encrypted ciphertext)
+```
+
+**Key Security Properties:**
+- Encryption key derived from user password (never stored)
+- Key exists only in memory during authenticated session
+- Cleared on logout via `EncryptionService.clear()`
+- Salt stored in credentials database (not the main database)
+- OWASP 2024 compliant: 600,000 PBKDF2 iterations
+
+### Single Point of Access Pattern
+**IMPORTANT**: All credential operations MUST go through `AuthService`. Routers should NEVER access `CredentialsDatabase` directly.
+
+```python
+# Correct: Use auth_service
+auth_service = get_auth_service()
+await auth_service.store_oauth_tokens(provider="google", ...)
+tokens = await auth_service.get_oauth_tokens("google", customer_id="owner")
+
+# Wrong: Direct database access
+credentials_db = get_credentials_db()  # Don't do this in routers
+await credentials_db.save_oauth_tokens(...)  # Don't do this
+```
+
+### Backend Implementation
+
+#### EncryptionService (`server/core/encryption.py`)
+```python
+class EncryptionService:
+    """Fernet encryption with PBKDF2 key derivation."""
+
+    def initialize(self, password: str, salt: bytes) -> None:
+        """Derive key from password using PBKDF2HMAC."""
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=salt,
+            iterations=600_000,  # OWASP 2024 recommendation
+        )
+        key = base64.urlsafe_b64encode(kdf.derive(password.encode()))
+        self._fernet = Fernet(key)
+
+    def encrypt(self, plaintext: str) -> str:
+        """Encrypt and return base64 ciphertext."""
+
+    def decrypt(self, ciphertext: str) -> str:
+        """Decrypt base64 ciphertext."""
+
+    def clear(self) -> None:
+        """Clear encryption key from memory."""
+
+    def is_initialized(self) -> bool:
+        """Check if encryption is ready."""
+```
+
+#### CredentialsDatabase (`server/core/credentials_database.py`)
+```python
+class CredentialsDatabase:
+    """Async SQLite database for encrypted credentials."""
+
+    async def initialize(self) -> bytes:
+        """Initialize database, create tables, return salt."""
+
+    async def save_api_key(self, provider: str, key: str, metadata: Dict = None) -> bool
+    async def get_api_key(self, provider: str) -> Optional[str]
+    async def delete_api_key(self, provider: str) -> bool
+
+    async def save_oauth_tokens(self, provider, access_token, refresh_token, ...) -> bool
+    async def get_oauth_tokens(self, provider, customer_id="owner") -> Optional[Dict]
+    async def delete_oauth_tokens(self, provider, customer_id="owner") -> bool
+```
+
+#### AuthService OAuth Methods (`server/services/auth.py`)
+```python
+class AuthService:
+    """Single point of access for all credentials."""
+
+    # Memory-only cache for decrypted credentials
+    _api_key_cache: Dict[str, str] = {}
+    _oauth_cache: Dict[str, Dict[str, Any]] = {}
+
+    async def store_api_key(self, provider: str, key: str) -> bool
+    async def get_api_key(self, provider: str) -> Optional[str]
+    async def delete_api_key(self, provider: str) -> bool
+
+    async def store_oauth_tokens(self, provider, access_token, refresh_token, ...) -> bool
+    async def get_oauth_tokens(self, provider, customer_id="owner") -> Optional[Dict]
+    async def remove_oauth_tokens(self, provider, customer_id="owner") -> bool
+
+    def clear_cache(self) -> None:
+        """Clear all cached credentials."""
+```
+
+#### UserAuthService Integration (`server/services/user_auth.py`)
+```python
+async def login(self, email: str, password: str):
+    # ... verify credentials ...
+    # Initialize encryption with user's password
+    await self._initialize_encryption(password)
+    return user, None
+
+async def _initialize_encryption(self, password: str) -> None:
+    salt = await self.credentials_db.initialize()
+    self.encryption.initialize(password, salt)
+
+def logout(self) -> None:
+    self.encryption.clear()  # Clear key from memory
+```
+
+### Multi-Backend Support
+
+For deployment flexibility, credentials can be stored in different backends:
+
+#### Backend Options
+| Backend | Use Case | Configuration |
+|---------|----------|---------------|
+| **Fernet** (default) | Local development, single-server | `CREDENTIAL_BACKEND=fernet` |
+| **Keyring** | Desktop apps (OS-native storage) | `CREDENTIAL_BACKEND=keyring` |
+| **AWS Secrets Manager** | Cloud deployments | `CREDENTIAL_BACKEND=aws` |
+
+#### credential_backends.py
+```python
+class CredentialBackend(ABC):
+    async def store(self, key: str, value: str, metadata: Dict = None) -> bool
+    async def retrieve(self, key: str) -> Optional[str]
+    async def delete(self, key: str) -> bool
+    def is_available(self) -> bool
+
+class FernetBackend(CredentialBackend):
+    """Default: Fernet-encrypted SQLite."""
+
+class KeyringBackend(CredentialBackend):
+    """OS-native: Windows Credential Locker, macOS Keychain, Linux Secret Service."""
+    SERVICE_NAME = "MachinaOS"
+
+class AWSSecretsBackend(CredentialBackend):
+    """AWS Secrets Manager for cloud deployments."""
+
+def create_backend(settings, credentials_db=None) -> CredentialBackend:
+    """Factory with automatic fallback to Fernet."""
+```
+
+### Configuration
+
+Environment variables in `.env`:
+```bash
+# Credentials Database
+CREDENTIALS_DB_PATH=credentials.db
+
+# Backend Selection
+CREDENTIAL_BACKEND=fernet    # fernet, keyring, or aws
+
+# AWS Secrets Manager (when CREDENTIAL_BACKEND=aws)
+AWS_SECRET_ARN=arn:aws:secretsmanager:us-east-1:123456789:secret:machinaos-creds
+AWS_REGION=us-east-1
+```
+
+### Key Files
+| File | Description |
+|------|-------------|
+| `server/core/encryption.py` | Fernet encryption with PBKDF2 key derivation |
+| `server/core/credentials_database.py` | Async SQLite for encrypted credentials |
+| `server/core/credential_backends.py` | Multi-backend abstraction (Fernet, Keyring, AWS) |
+| `server/services/auth.py` | AuthService with OAuth methods (single point of access) |
+| `server/services/user_auth.py` | Encryption initialization on login/logout |
+| `server/core/config.py` | credential_backend, aws_secret_arn settings |
+
+### Dependencies
+```toml
+# server/pyproject.toml
+[project]
+dependencies = [
+    "cryptography>=44.0.0",  # Fernet encryption
+]
+
+[project.optional-dependencies]
+keyring = ["keyring>=25.0.0"]  # OS-native credential storage
+aws = ["boto3>=1.34.0"]        # AWS Secrets Manager
+```
+
+### Design Decisions
+- **No Migration**: Users re-enter API keys after upgrade (simpler, more secure)
+- **Memory-Only Cache**: Decrypted credentials never written to disk/Redis
+- **Separate Database**: `credentials.db` isolated from main `machina.db`
+- **Password-Derived Key**: Encryption key not stored anywhere
+- **Single Point of Access**: AuthService prevents direct database access from routers
 
 ## Example Workflows
 

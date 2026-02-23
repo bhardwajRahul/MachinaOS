@@ -21,8 +21,8 @@ RUN uv pip install --system -e .
 # Copy application code
 COPY . .
 
-# Create data directory for SQLite database
-RUN mkdir -p /app/data
+# Create data directories for SQLite databases
+RUN mkdir -p /app/data /app/credentials
 
 # Install Node.js executor dependencies
 RUN cd /app/nodejs && npm install
