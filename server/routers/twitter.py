@@ -143,32 +143,16 @@ async def twitter_oauth_callback(
     else:
         username = user_info.get("username", "Unknown")
 
-    # Store tokens in database via auth_service (same pattern as other API keys)
-    # Access token stored with provider='twitter_access_token'
-    await auth_service.store_api_key(
-        provider="twitter_access_token",
-        api_key=access_token,
-        models=[],  # No models for OAuth tokens
-        session_id="default"
+    # Store encrypted OAuth tokens via auth_service
+    await auth_service.store_oauth_tokens(
+        provider="twitter",
+        access_token=access_token,
+        refresh_token=refresh_token or "",
+        email=f"@{username}",  # Use @username as identifier (Twitter doesn't provide email)
+        name=user_info.get("name", "") if user_info.get("success") else "",
+        scopes=",".join(result.get("scope", "").split()) if result.get("scope") else "",
+        customer_id="owner",
     )
-
-    # Refresh token stored with provider='twitter_refresh_token'
-    if refresh_token:
-        await auth_service.store_api_key(
-            provider="twitter_refresh_token",
-            api_key=refresh_token,
-            models=[],
-            session_id="default"
-        )
-
-    # Store user info for display purposes
-    if user_info.get("success"):
-        await auth_service.store_api_key(
-            provider="twitter_user_info",
-            api_key=f"{user_info.get('id')}:{username}:{user_info.get('name', '')}",
-            models=[],
-            session_id="default"
-        )
 
     # Broadcast completion event to frontend
     from services.status_broadcaster import get_status_broadcaster
@@ -205,17 +189,20 @@ async def get_twitter_status():
     """
     auth_service = get_auth_service()
 
-    # Try to get stored access token
-    access_token = await auth_service.get_api_key("twitter_access_token")
+    # Try to get stored tokens via auth_service
+    tokens = await auth_service.get_oauth_tokens("twitter", customer_id="owner")
 
-    if not access_token:
+    if not tokens:
         return {
             "connected": False,
             "username": None,
             "user_id": None,
         }
 
-    # Get stored client credentials
+    access_token = tokens.get("access_token")
+    refresh_token = tokens.get("refresh_token")
+
+    # Get stored client credentials (these remain in auth_service as they're app-level)
     settings = get_settings()
     client_id = await auth_service.get_api_key("twitter_client_id") or ""
     client_secret = await auth_service.get_api_key("twitter_client_secret")
@@ -231,24 +218,19 @@ async def get_twitter_status():
 
     if not user_info.get("success"):
         # Token may be expired, try to refresh
-        refresh_token = await auth_service.get_api_key("twitter_refresh_token")
         if refresh_token:
             refresh_result = await oauth.refresh_access_token(refresh_token)
             if refresh_result.get("success"):
                 # Store new tokens via auth_service
-                await auth_service.store_api_key(
-                    provider="twitter_access_token",
-                    api_key=refresh_result["access_token"],
-                    models=[],
-                    session_id="default"
+                await auth_service.store_oauth_tokens(
+                    provider="twitter",
+                    access_token=refresh_result["access_token"],
+                    refresh_token=refresh_result.get("refresh_token") or refresh_token,
+                    email=tokens.get("email"),
+                    name=tokens.get("name"),
+                    scopes=tokens.get("scopes"),
+                    customer_id="owner",
                 )
-                if refresh_result.get("refresh_token"):
-                    await auth_service.store_api_key(
-                        provider="twitter_refresh_token",
-                        api_key=refresh_result["refresh_token"],
-                        models=[],
-                        session_id="default"
-                    )
 
                 # Retry user info
                 user_info = await oauth.get_user_info(refresh_result["access_token"])
@@ -278,16 +260,17 @@ async def twitter_logout():
     """
     auth_service = get_auth_service()
 
-    # Get stored tokens
-    access_token = await auth_service.get_api_key("twitter_access_token")
-    refresh_token = await auth_service.get_api_key("twitter_refresh_token")
+    # Get stored tokens via auth_service
+    tokens = await auth_service.get_oauth_tokens("twitter", customer_id="owner")
 
-    # Get client credentials for revocation
-    client_id = await auth_service.get_api_key("twitter_client_id") or ""
-    client_secret = await auth_service.get_api_key("twitter_client_secret")
+    if tokens:
+        access_token = tokens.get("access_token")
+        refresh_token = tokens.get("refresh_token")
 
-    # Revoke tokens if we have them
-    if access_token or refresh_token:
+        # Get client credentials for revocation (app-level, in auth_service)
+        client_id = await auth_service.get_api_key("twitter_client_id") or ""
+        client_secret = await auth_service.get_api_key("twitter_client_secret")
+
         settings = get_settings()
         oauth = TwitterOAuth(
             client_id=client_id,
@@ -295,6 +278,7 @@ async def twitter_logout():
             redirect_uri=settings.twitter_redirect_uri,
         )
 
+        # Revoke tokens
         if access_token:
             await oauth.revoke_token(access_token, "access_token")
 
@@ -302,9 +286,7 @@ async def twitter_logout():
             await oauth.revoke_token(refresh_token, "refresh_token")
 
     # Clear stored credentials via auth_service
-    await auth_service.remove_api_key("twitter_access_token")
-    await auth_service.remove_api_key("twitter_refresh_token")
-    await auth_service.remove_api_key("twitter_user_info")
+    await auth_service.remove_oauth_tokens("twitter", customer_id="owner")
 
     logger.info("Twitter disconnected and tokens revoked")
 

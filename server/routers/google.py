@@ -41,8 +41,10 @@ def get_auth_service():
 
 
 def get_database():
-    """Get database for customer connections."""
+    """Get database for customer connections (non-sensitive data only)."""
     return container.database()
+
+
 
 
 @router.get("/callback")
@@ -121,27 +123,35 @@ async def google_oauth_callback(
     access_token = result.get("access_token")
     refresh_token = result.get("refresh_token")
 
+    # Store tokens via auth_service (single point of access for credentials)
+    auth_service = get_auth_service()
+
     if mode == "customer" and customer_id:
-        # Customer mode: store in google_connections table
-        database = get_database()
-        await database.save_google_connection(
-            customer_id=customer_id,
-            email=email,
-            name=name,
+        # Customer mode: store encrypted tokens via auth_service
+        await auth_service.store_oauth_tokens(
+            provider="google",
             access_token=access_token,
             refresh_token=refresh_token,
+            email=email,
+            name=name,
             scopes=",".join(result.get("scopes", [])),
+            customer_id=customer_id,
         )
         logger.info(f"Google OAuth successful for customer {customer_id}: {email}")
 
         if redirect_after:
             return RedirectResponse(url=f"{redirect_after}?google_connected=true&customer={customer_id}&email={email}")
     else:
-        # Owner mode: store via auth_service
-        await auth_service.store_api_key(provider="google_access_token", api_key=access_token, models=[], session_id="default")
-        if refresh_token:
-            await auth_service.store_api_key(provider="google_refresh_token", api_key=refresh_token, models=[], session_id="default")
-        await auth_service.store_api_key(provider="google_user_info", api_key=f"{email}:{name}", models=[], session_id="default")
+        # Owner mode: store encrypted tokens via auth_service
+        await auth_service.store_oauth_tokens(
+            provider="google",
+            access_token=access_token,
+            refresh_token=refresh_token,
+            email=email,
+            name=name,
+            scopes=",".join(result.get("scopes", [])),
+            customer_id="owner",
+        )
         logger.info(f"Google OAuth successful for {email}")
 
     # Broadcast completion event
@@ -159,28 +169,23 @@ async def google_oauth_callback(
 async def get_google_status():
     """Get Google connection status for owner mode."""
     auth_service = get_auth_service()
-    access_token = await auth_service.get_api_key("google_access_token")
+    tokens = await auth_service.get_oauth_tokens("google", customer_id="owner")
 
-    if not access_token:
+    if not tokens:
         return {"connected": False, "email": None}
 
-    user_info_str = await auth_service.get_api_key("google_user_info")
-    email, name = None, None
-    if user_info_str:
-        parts = user_info_str.split(":", 1)
-        email = parts[0] if parts else None
-        name = parts[1] if len(parts) > 1 else None
-
-    return {"connected": True, "email": email, "name": name}
+    return {
+        "connected": True,
+        "email": tokens.get("email"),
+        "name": tokens.get("name"),
+    }
 
 
 @router.post("/logout")
 async def google_logout():
     """Disconnect Google (owner mode)."""
     auth_service = get_auth_service()
-    await auth_service.remove_api_key("google_access_token")
-    await auth_service.remove_api_key("google_refresh_token")
-    await auth_service.remove_api_key("google_user_info")
+    await auth_service.remove_oauth_tokens("google", customer_id="owner")
     logger.info("Google disconnected")
     return {"success": True, "message": "Google disconnected"}
 
@@ -208,24 +213,23 @@ async def generate_customer_auth_url(customer_id: str, redirect_after: Optional[
 @router.get("/customer/{customer_id}/status")
 async def get_customer_google_status(customer_id: str):
     """Get Google connection status for a customer."""
-    database = get_database()
-    connection = await database.get_google_connection(customer_id)
-    if not connection:
+    auth_service = get_auth_service()
+    tokens = await auth_service.get_oauth_tokens("google", customer_id=customer_id)
+    if not tokens:
         return {"connected": False, "customer_id": customer_id}
     return {
-        "connected": connection.is_active,
+        "connected": True,
         "customer_id": customer_id,
-        "email": connection.email,
-        "name": connection.name,
-        "connected_at": connection.connected_at.isoformat() if connection.connected_at else None,
+        "email": tokens.get("email"),
+        "name": tokens.get("name"),
     }
 
 
 @router.post("/customer/{customer_id}/disconnect")
 async def disconnect_customer_google(customer_id: str):
     """Disconnect a customer's Google account."""
-    database = get_database()
-    await database.delete_google_connection(customer_id)
+    auth_service = get_auth_service()
+    await auth_service.remove_oauth_tokens("google", customer_id=customer_id)
     logger.info(f"Google disconnected for customer {customer_id}")
     return {"success": True, "customer_id": customer_id}
 

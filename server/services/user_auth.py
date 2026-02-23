@@ -1,4 +1,4 @@
-"""User authentication service with JWT handling."""
+"""User authentication service with JWT handling and encryption initialization."""
 
 import logging
 from datetime import datetime, timezone, timedelta
@@ -9,17 +9,32 @@ from sqlmodel import select
 
 from core.config import Settings
 from core.database import Database
+from core.encryption import EncryptionService
+from core.credentials_database import CredentialsDatabase
 from models.auth import User
 
 logger = logging.getLogger(__name__)
 
 
 class UserAuthService:
-    """Handles user authentication, registration, and JWT token management."""
+    """Handles user authentication, registration, and JWT token management.
 
-    def __init__(self, database: Database, settings: Settings):
+    On login, this service initializes the EncryptionService with a key derived
+    from the user's password. This enables decryption of API keys and OAuth tokens
+    stored in the separate credentials database.
+    """
+
+    def __init__(
+        self,
+        database: Database,
+        settings: Settings,
+        encryption: EncryptionService,
+        credentials_db: CredentialsDatabase,
+    ):
         self.database = database
         self.settings = settings
+        self.encryption = encryption
+        self.credentials_db = credentials_db
         self._algorithm = "HS256"
 
     async def get_user_count(self) -> int:
@@ -39,9 +54,7 @@ class UserAuthService:
     async def get_user_by_id(self, user_id: int) -> Optional[User]:
         """Get user by ID."""
         async with self.database.get_session() as session:
-            result = await session.execute(
-                select(User).where(User.id == user_id)
-            )
+            result = await session.execute(select(User).where(User.id == user_id))
             return result.scalars().first()
 
     async def can_register(self) -> bool:
@@ -75,14 +88,16 @@ class UserAuthService:
             return None, "Password must be at least 8 characters"
 
         # Determine if this is the owner (first user in single-owner mode)
-        is_owner = self.settings.auth_mode == "single" and await self.get_user_count() == 0
+        is_owner = (
+            self.settings.auth_mode == "single" and await self.get_user_count() == 0
+        )
 
         # Create user
         user = User.create(
             email=email,
             password=password,
             display_name=display_name,
-            is_owner=is_owner
+            is_owner=is_owner,
         )
 
         async with self.database.get_session() as session:
@@ -91,6 +106,11 @@ class UserAuthService:
             await session.refresh(user)
 
         logger.info(f"User registered: {email} (owner={is_owner})")
+
+        # Initialize encryption for the new user
+        # This ensures credentials can be saved immediately after registration
+        await self._initialize_encryption(password)
+
         return user, None
 
     async def login(
@@ -99,6 +119,9 @@ class UserAuthService:
         """
         Authenticate user and return user object.
         Returns (user, None) on success, (None, error_message) on failure.
+
+        On successful login, initializes the EncryptionService with a key
+        derived from the user's password for decrypting stored credentials.
         """
         user = await self.get_user_by_email(email)
         if not user:
@@ -112,29 +135,58 @@ class UserAuthService:
 
         # Update last login
         async with self.database.get_session() as session:
-            result = await session.execute(
-                select(User).where(User.id == user.id)
-            )
+            result = await session.execute(select(User).where(User.id == user.id))
             db_user = result.scalars().first()
             if db_user:
                 db_user.last_login = datetime.now(timezone.utc)
                 await session.commit()
 
+        # Initialize encryption with user's password
+        await self._initialize_encryption(password)
+
         logger.info(f"User logged in: {email}")
         return user, None
 
+    async def _initialize_encryption(self, password: str) -> None:
+        """
+        Initialize encryption service with key derived from password.
+
+        Gets or creates the salt from the credentials database and uses it
+        with the password to derive the encryption key via PBKDF2.
+        """
+        # Ensure credentials database is initialized and get salt
+        salt = await self.credentials_db.initialize()
+
+        # Initialize encryption service with derived key
+        self.encryption.initialize(password, salt)
+        logger.debug("Encryption service initialized for user session")
+
+    def logout(self) -> None:
+        """
+        Clear encryption key on logout.
+
+        Clears the encryption service's in-memory key to ensure credentials
+        cannot be decrypted after user logout.
+        """
+        self.encryption.clear()
+        logger.debug("Encryption service cleared on logout")
+
     def create_access_token(self, user: User) -> str:
         """Create JWT access token for user."""
-        expire = datetime.now(timezone.utc) + timedelta(minutes=self.settings.jwt_expire_minutes)
+        expire = datetime.now(timezone.utc) + timedelta(
+            minutes=self.settings.jwt_expire_minutes
+        )
         payload = {
             "sub": str(user.id),
             "email": user.email,
             "display_name": user.display_name,
             "is_owner": user.is_owner,
             "exp": expire,
-            "iat": datetime.now(timezone.utc)
+            "iat": datetime.now(timezone.utc),
         }
-        return jwt.encode(payload, self.settings.jwt_secret_key, algorithm=self._algorithm)
+        return jwt.encode(
+            payload, self.settings.jwt_secret_key, algorithm=self._algorithm
+        )
 
     def verify_token(self, token: str) -> Optional[Dict[str, Any]]:
         """
@@ -143,9 +195,7 @@ class UserAuthService:
         """
         try:
             payload = jwt.decode(
-                token,
-                self.settings.jwt_secret_key,
-                algorithms=[self._algorithm]
+                token, self.settings.jwt_secret_key, algorithms=[self._algorithm]
             )
             return payload
         except JWTError as e:
@@ -168,5 +218,9 @@ class UserAuthService:
         """Get authentication status and mode info."""
         return {
             "auth_mode": self.settings.auth_mode,
-            "registration_enabled": self.settings.auth_mode == "multi"
+            "registration_enabled": self.settings.auth_mode == "multi",
         }
+
+    def is_encryption_initialized(self) -> bool:
+        """Check if encryption is ready for use."""
+        return self.encryption.is_initialized()

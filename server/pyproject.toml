@@ -35,6 +35,9 @@ dependencies = [
     "python-jose[cryptography]>=3.3.0",
     "email-validator>=2.0.0",
 
+    # Credential Encryption
+    "cryptography>=44.0.0",
+
     # AI - All providers (directly imported in ai.py)
     "langchain-core>=0.3.0",
     "langchain-openai>=0.2.0",
@@ -79,6 +82,12 @@ extra-ai = [
 docs = [
     "beautifulsoup4>=4.12.0",
     "pypdf>=5.0.0",
+]
+keyring = [
+    "keyring>=25.0.0",  # OS-native credential storage (Windows/macOS/Linux)
+]
+aws = [
+    "boto3>=1.34.0",  # AWS Secrets Manager
 ]
 
 [tool.uv]
