@@ -1,0 +1,32 @@
+{
+  "version": "2026.02",
+  "last_updated": "2026-02-23",
+  "_description": "Default models and settings for each LLM provider. Edit this file to change defaults.",
+
+  "providers": {
+    "openai": {
+      "default_model": "gpt-5.2",
+      "detection_patterns": ["gpt", "openai", "o1", "o3", "o4"]
+    },
+    "anthropic": {
+      "default_model": "claude-opus-4.6",
+      "detection_patterns": ["claude", "anthropic"]
+    },
+    "gemini": {
+      "default_model": "gemini-2.5-flash",
+      "detection_patterns": ["gemini", "google"]
+    },
+    "openrouter": {
+      "default_model": "anthropic/claude-opus-4.6",
+      "detection_patterns": ["openrouter"]
+    },
+    "groq": {
+      "default_model": "llama-4-maverick",
+      "detection_patterns": ["groq"]
+    },
+    "cerebras": {
+      "default_model": "llama3.1-8b",
+      "detection_patterns": ["cerebras", "llama3.1", "llama-3.3", "qwen-3", "qwen3", "gpt-oss"]
+    }
+  }
+}

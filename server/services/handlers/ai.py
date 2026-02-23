@@ -461,7 +461,8 @@ async def handle_ai_agent(
         tool_data=tool_data if tool_data else None,
         broadcaster=broadcaster,
         workflow_id=workflow_id,
-        context=context  # Pass context for nested agent delegation
+        context=context,  # Pass context for nested agent delegation
+        database=database  # Pass database for default model lookup
     )
 
 
@@ -558,7 +559,8 @@ async def handle_chat_agent(
         tool_data=tool_data if tool_data else None,
         broadcaster=broadcaster,
         workflow_id=workflow_id,
-        context=context
+        context=context,
+        database=database
     )
 
 

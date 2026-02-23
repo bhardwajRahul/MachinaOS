@@ -796,7 +796,7 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
 
   const { selectedNode } = useAppStore();
   const { getNodeParameters } = useWebSocket();
-  const { getStoredApiKey, hasStoredKey, getStoredModels } = useApiKeys();
+  const { getStoredApiKey, hasStoredKey, getStoredModels, getProviderDefaults } = useApiKeys();
 
   // Don't render hidden parameters
   if (parameter.type === 'hidden') {
@@ -877,19 +877,31 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
               const modelOptions = DynamicParameterService.createModelOptions(models);
               DynamicParameterService.updateParameterOptions(selectedNode.id, 'model', modelOptions);
 
+              // Get the configured default model for this provider
+              const providerDefaults = await getProviderDefaults(provider);
+              const configuredDefaultModel = providerDefaults?.default_model || '';
+
               // Extract model ID (handles both string and object formats)
               const getModelId = (model: any) => typeof model === 'string' ? model : model.id;
-              const firstModelId = getModelId(models[0]);
 
-              // When user actively changes provider, reset to first model
+              // Find the default model in the available models list, or fall back to first model
+              let defaultModelToUse = getModelId(models[0]);
+              if (configuredDefaultModel) {
+                const matchingModel = models.find(m => getModelId(m) === configuredDefaultModel);
+                if (matchingModel) {
+                  defaultModelToUse = getModelId(matchingModel);
+                }
+              }
+
+              // When user actively changes provider, reset to default model
               // to prevent mismatched provider/model combinations (e.g., OpenAI model with Anthropic provider)
               if (isActualProviderChange) {
-                onChange(firstModelId);
+                onChange(defaultModelToUse);
               } else {
                 // Initial load or no provider change - only auto-select if no saved model exists
                 const savedModel = value || allParameters?.model;
                 if (!savedModel || savedModel === '') {
-                  onChange(firstModelId);
+                  onChange(defaultModelToUse);
                 }
                 // If saved model exists, keep it (don't call onChange)
               }
@@ -912,7 +924,7 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
     };
 
     loadStoredKeyForProvider();
-  }, [allParameters?.provider, parameter.name, hasStoredKey, getStoredApiKey, getStoredModels, selectedNode?.id, selectedNode?.type, onChange, isLoadingParameters, value, allParameters?.model]);
+  }, [allParameters?.provider, parameter.name, hasStoredKey, getStoredApiKey, getStoredModels, getProviderDefaults, selectedNode?.id, selectedNode?.type, onChange, isLoadingParameters, value, allParameters?.model]);
 
   // Merge database params with current form params (current takes precedence)
   const resolvedParameters = { ...nodeParameters, ...allParameters };

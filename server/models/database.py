@@ -274,6 +274,7 @@ class ProviderDefaults(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
     provider: str = Field(unique=True, index=True, max_length=50)  # openai, anthropic, gemini, etc.
+    default_model: str = Field(default="", max_length=100)  # Default model for this provider
     temperature: float = Field(default=0.7)
     max_tokens: int = Field(default=1000)
     thinking_enabled: bool = Field(default=False)

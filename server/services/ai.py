@@ -15,12 +15,14 @@ from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, BaseMessage, ToolMessage
 
 # Conditional import for Cerebras (requires Python <3.13)
+CEREBRAS_IMPORT_ERROR = None
 try:
     from langchain_cerebras import ChatCerebras
     CEREBRAS_AVAILABLE = True
-except ImportError:
+except ImportError as e:
     ChatCerebras = None
     CEREBRAS_AVAILABLE = False
+    CEREBRAS_IMPORT_ERROR = str(e)
 from langchain_core.tools import StructuredTool
 from langgraph.graph import StateGraph, END
 from pydantic import BaseModel, Field, create_model
@@ -179,15 +181,40 @@ def _cerebras_headers(api_key: str) -> dict:
     return {'Authorization': f'Bearer {api_key}'}
 
 
-# Provider configurations
+# =============================================================================
+# LLM DEFAULTS CONFIGURATION - Load from config/llm_defaults.json
+# =============================================================================
+
+def _load_llm_defaults() -> Dict[str, Any]:
+    """Load LLM provider defaults from config/llm_defaults.json."""
+    from pathlib import Path
+    config_path = Path(__file__).parent.parent / "config" / "llm_defaults.json"
+    try:
+        with open(config_path, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        logger.warning(f"Could not load llm_defaults.json: {e}")
+        return {"providers": {}}
+
+
+_LLM_DEFAULTS = _load_llm_defaults()
+
+
+def _get_default_model(provider: str, fallback: str) -> str:
+    """Get default model for a provider from config, with fallback."""
+    providers = _LLM_DEFAULTS.get("providers", {})
+    return providers.get(provider, {}).get("default_model", fallback)
+
+
+# Provider configurations - defaults from config/llm_defaults.json
 PROVIDER_CONFIGS: Dict[str, ProviderConfig] = {
     'openai': ProviderConfig(
         name='openai',
         model_class=ChatOpenAI,
         api_key_param='openai_api_key',
         max_tokens_param='max_tokens',
-        detection_patterns=('gpt', 'openai', 'o1'),
-        default_model='gpt-4o-mini',
+        detection_patterns=('gpt', 'openai', 'o1', 'o3', 'o4'),
+        default_model=_get_default_model('openai', 'gpt-5.2'),
         models_endpoint='https://api.openai.com/v1/models',
         models_header_fn=_openai_headers
     ),
@@ -197,7 +224,7 @@ PROVIDER_CONFIGS: Dict[str, ProviderConfig] = {
         api_key_param='anthropic_api_key',
         max_tokens_param='max_tokens',
         detection_patterns=('claude', 'anthropic'),
-        default_model='claude-3-5-sonnet-20241022',
+        default_model=_get_default_model('anthropic', 'claude-opus-4.6'),
         models_endpoint='https://api.anthropic.com/v1/models',
         models_header_fn=_anthropic_headers
     ),
@@ -207,17 +234,17 @@ PROVIDER_CONFIGS: Dict[str, ProviderConfig] = {
         api_key_param='google_api_key',
         max_tokens_param='max_output_tokens',
         detection_patterns=('gemini', 'google'),
-        default_model='gemini-1.5-pro',
+        default_model=_get_default_model('gemini', 'gemini-2.5-flash'),
         models_endpoint='https://generativelanguage.googleapis.com/v1beta/models',
         models_header_fn=_gemini_headers
     ),
     'openrouter': ProviderConfig(
         name='openrouter',
-        model_class=ChatOpenAI,  # OpenRouter is OpenAI API compatible
-        api_key_param='api_key',  # ChatOpenAI accepts 'api_key' as alias
+        model_class=ChatOpenAI,
+        api_key_param='api_key',
         max_tokens_param='max_tokens',
         detection_patterns=('openrouter',),
-        default_model='openai/gpt-4o-mini',
+        default_model=_get_default_model('openrouter', 'anthropic/claude-opus-4.6'),
         models_endpoint='https://openrouter.ai/api/v1/models',
         models_header_fn=_openrouter_headers
     ),
@@ -227,7 +254,7 @@ PROVIDER_CONFIGS: Dict[str, ProviderConfig] = {
         api_key_param='api_key',
         max_tokens_param='max_tokens',
         detection_patterns=('groq',),
-        default_model='llama-3.3-70b-versatile',
+        default_model=_get_default_model('groq', 'llama-4-maverick'),
         models_endpoint='https://api.groq.com/openai/v1/models',
         models_header_fn=_groq_headers
     ),
@@ -240,11 +267,14 @@ if CEREBRAS_AVAILABLE:
         model_class=ChatCerebras,
         api_key_param='api_key',
         max_tokens_param='max_tokens',
-        detection_patterns=('cerebras',),
-        default_model='llama-3.3-70b',
+        detection_patterns=('cerebras', 'llama3.1', 'llama-3.3', 'qwen-3', 'qwen3', 'gpt-oss'),
+        default_model=_get_default_model('cerebras', 'llama3.1-8b'),
         models_endpoint='https://api.cerebras.ai/v1/models',
         models_header_fn=_cerebras_headers
     )
+    logger.info("Cerebras provider enabled")
+else:
+    logger.warning(f"Cerebras provider not available: {CEREBRAS_IMPORT_ERROR or 'langchain-cerebras import failed'}")
 
 
 def detect_provider_from_model(model: str) -> str:
@@ -266,9 +296,27 @@ def is_model_valid_for_provider(model: str, provider: str) -> bool:
 
 
 def get_default_model(provider: str) -> str:
-    """Get default model for a provider."""
+    """Get default model for a provider from JSON config."""
     config = PROVIDER_CONFIGS.get(provider)
     return config.default_model if config else 'gpt-4o-mini'
+
+
+async def get_default_model_async(provider: str, database) -> str:
+    """Get default model for a provider, checking database first then JSON config.
+
+    Priority: database user setting > JSON config file > fallback
+    """
+    # Check database for user-configured default
+    if database:
+        try:
+            db_defaults = await database.get_provider_defaults(provider)
+            if db_defaults and db_defaults.get("default_model"):
+                return db_defaults["default_model"]
+        except Exception as e:
+            logger.warning(f"Failed to get DB defaults for {provider}: {e}")
+
+    # Fall back to JSON config
+    return get_default_model(provider)
 
 
 # =============================================================================
@@ -989,6 +1037,11 @@ class AIService:
         """
         config = PROVIDER_CONFIGS.get(provider)
         if not config:
+            # Provide helpful error for Cerebras if import failed
+            if provider == 'cerebras' and not CEREBRAS_AVAILABLE:
+                error_msg = f"Cerebras provider not available: {CEREBRAS_IMPORT_ERROR or 'langchain-cerebras package not installed'}"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
             raise ValueError(f"Unsupported provider: {provider}")
 
         # Build kwargs dynamically from registry config
@@ -1205,6 +1258,8 @@ class AIService:
                 return sorted(models)
 
             elif provider == 'cerebras':
+                if not CEREBRAS_AVAILABLE:
+                    raise ValueError(f"Cerebras provider not available: {CEREBRAS_IMPORT_ERROR or 'langchain-cerebras package not installed'}")
                 response = await client.get(
                     'https://api.cerebras.ai/v1/models',
                     headers={'Authorization': f'Bearer {api_key}'}
@@ -1222,6 +1277,9 @@ class AIService:
                 return sorted(models)
 
             else:
+                # Provide helpful error for Cerebras if import failed
+                if provider == 'cerebras' and not CEREBRAS_AVAILABLE:
+                    raise ValueError(f"Cerebras provider not available: {CEREBRAS_IMPORT_ERROR or 'langchain-cerebras package not installed'}")
                 raise ValueError(f"Unsupported provider: {provider}")
 
     async def execute_chat(self, node_id: str, node_type: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
@@ -1369,7 +1427,8 @@ class AIService:
                             tool_data: Optional[List[Dict[str, Any]]] = None,
                             broadcaster = None,
                             workflow_id: Optional[str] = None,
-                            context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                            context: Optional[Dict[str, Any]] = None,
+                            database = None) -> Dict[str, Any]:
         """Execute AI Agent using LangGraph state machine.
 
         This method uses LangGraph for structured agent execution with:
@@ -1453,10 +1512,10 @@ class AIService:
 
             logger.debug(f"[LangGraph] Agent: {provider}/{model}, tools={len(tool_data) if tool_data else 0}")
 
-            # If no model specified or model doesn't match provider, use default from registry
+            # If no model specified or model doesn't match provider, use default (DB > config)
             if not model or not is_model_valid_for_provider(model, provider):
                 old_model = model
-                model = get_default_model(provider)
+                model = await get_default_model_async(provider, database)
                 if old_model:
                     logger.warning(f"Model '{old_model}' invalid for provider '{provider}', using default: {model}")
                 else:
@@ -1829,7 +1888,8 @@ class AIService:
                                   tool_data: Optional[List[Dict[str, Any]]] = None,
                                   broadcaster=None,
                                   workflow_id: Optional[str] = None,
-                                  context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                                  context: Optional[Dict[str, Any]] = None,
+                                  database=None) -> Dict[str, Any]:
         """Execute Chat Agent - conversational AI with memory, skills, and tool calling.
 
         Chat Agent supports:
@@ -1942,10 +2002,10 @@ class AIService:
 
             logger.debug(f"[ChatAgent] Provider: {provider}, Model: {model}")
 
-            # Validate model for provider
+            # Validate model for provider - use default (DB > config)
             if not model or not is_model_valid_for_provider(model, provider):
                 old_model = model
-                model = get_default_model(provider)
+                model = await get_default_model_async(provider, database)
                 if old_model:
                     logger.warning(f"Model '{old_model}' invalid for provider '{provider}', using default: {model}")
                 else:

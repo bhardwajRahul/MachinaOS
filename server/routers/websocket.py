@@ -2292,14 +2292,25 @@ async def handle_save_user_settings(data: Dict[str, Any], websocket: WebSocket) 
 @ws_handler()
 async def handle_get_provider_defaults(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
     """Get default parameters for a provider."""
+    from services.ai import get_default_model
     database = container.database()
     provider = data.get("provider", "").lower()
     defaults = await database.get_provider_defaults(provider)
 
-    # Return defaults or standard fallback values
+    # Get default model from JSON config as fallback
+    config_default_model = get_default_model(provider)
+
+    if defaults:
+        # If DB record exists but default_model is empty, use config default
+        if not defaults.get("default_model"):
+            defaults["default_model"] = config_default_model
+        return {"provider": provider, "defaults": defaults}
+
+    # No DB record - return standard fallback values
     return {
         "provider": provider,
-        "defaults": defaults or {
+        "defaults": {
+            "default_model": config_default_model,
             "temperature": 0.7,
             "max_tokens": 1000,
             "thinking_enabled": False,

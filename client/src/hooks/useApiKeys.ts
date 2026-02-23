@@ -15,6 +15,7 @@ export interface ApiKeyValidationResult {
 }
 
 export interface ProviderDefaults {
+  default_model: string;
   temperature: number;
   max_tokens: number;
   thinking_enabled: boolean;
@@ -290,6 +291,7 @@ export const useApiKeys = (): UseApiKeysResult => {
     provider: string
   ): Promise<ProviderDefaults> => {
     const defaultValues: ProviderDefaults = {
+      default_model: '',
       temperature: 0.7,
       max_tokens: 4096,
       thinking_enabled: false,

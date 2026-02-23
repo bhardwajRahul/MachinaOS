@@ -80,6 +80,45 @@ async function killByPattern(pattern) {
   return pids;
 }
 
+// Normalize path for cross-platform comparison
+function normalizePath(p) {
+  return p?.toLowerCase().replace(/\\/g, '/') || '';
+}
+
+// Kill orphaned MachinaOs processes that may hold database locks
+async function killOrphanedMachinaProcesses() {
+  const killed = [];
+  const rootNorm = normalizePath(ROOT);
+
+  // Find Python processes running from MachinaOs directory
+  const pythonProcs = await findProcess('name', 'python');
+  for (const proc of pythonProcs) {
+    const cmd = normalizePath(proc.cmd);
+    // Only kill if command includes our project path AND is uvicorn/main:app
+    if (cmd.includes(rootNorm) && (cmd.includes('uvicorn') || cmd.includes('main:app'))) {
+      try {
+        process.kill(proc.pid, 'SIGKILL');
+        killed.push(proc.pid);
+      } catch {}
+    }
+  }
+
+  // Find Node processes running from MachinaOs directory (vite, nodejs executor)
+  const nodeProcs = await findProcess('name', 'node');
+  for (const proc of nodeProcs) {
+    const cmd = normalizePath(proc.cmd);
+    // Only kill if command includes our project path AND is vite or nodejs executor
+    if (cmd.includes(rootNorm) && (cmd.includes('vite') || cmd.includes('nodejs/src'))) {
+      try {
+        process.kill(proc.pid, 'SIGKILL');
+        killed.push(proc.pid);
+      } catch {}
+    }
+  }
+
+  return killed;
+}
+
 async function main() {
   const config = loadConfig();
 
@@ -109,6 +148,14 @@ async function main() {
     if (temporalPids.length > 0) {
       console.log(`[OK] Temporal: Killed ${temporalPids.length} process(es)`);
     }
+  }
+
+  // Kill orphaned MachinaOs processes (may hold DB locks after crash)
+  const orphanedPids = await killOrphanedMachinaProcesses();
+  if (orphanedPids.length > 0) {
+    await sleep(200);
+    console.log(`[OK] Orphaned: Killed ${orphanedPids.length} MachinaOs process(es)`);
+    console.log(`    PIDs: ${orphanedPids.join(', ')}`);
   }
 
   console.log('');

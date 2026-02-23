@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Button, Tag, Alert, Descriptions, Space, InputNumber, Switch, Input, Collapse, Statistic, Spin } from 'antd';
+import { Button, Tag, Alert, Descriptions, Space, InputNumber, Switch, Input, Collapse, Statistic, Spin, Select } from 'antd';
 import {
   CheckCircleOutlined,
   SafetyOutlined,
@@ -128,7 +128,7 @@ interface Props {
 
 const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
   const theme = useAppTheme();
-  const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey, validateGoogleMapsKey, getProviderDefaults, saveProviderDefaults, getProviderUsageSummary, getAPIUsageSummary, isConnected } = useApiKeys();
+  const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey, validateGoogleMapsKey, getProviderDefaults, saveProviderDefaults, getProviderUsageSummary, getAPIUsageSummary, getStoredModels, isConnected } = useApiKeys();
   const whatsappStatus = useWhatsAppStatus();
   const androidStatus = useAndroidStatus();
   const twitterStatus = useTwitterStatus();
@@ -207,11 +207,11 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
     }
   }, [visible, isConnected, loadKeys]);
 
-  // Load provider defaults when AI provider is selected
+  // Load provider defaults and models when AI provider is selected
   useEffect(() => {
     const isAIProvider = CATEGORIES.find(c => c.key === 'ai')?.items.some(i => i.id === selectedItem?.id);
     if (selectedItem && !selectedItem.isSpecial && isAIProvider && isConnected) {
-      // Only load if we don't already have defaults for this provider
+      // Load defaults if not already loaded
       if (!providerDefaults[selectedItem.id]) {
         const loadDefaults = async () => {
           setDefaultsLoading(l => ({ ...l, [selectedItem.id]: true }));
@@ -221,8 +221,18 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
         };
         loadDefaults();
       }
+      // Load models if not already loaded
+      if (!models[selectedItem.id]) {
+        const loadModels = async () => {
+          const storedModels = await getStoredModels(selectedItem.id);
+          if (storedModels && storedModels.length > 0) {
+            setModels(m => ({ ...m, [selectedItem.id]: storedModels }));
+          }
+        };
+        loadModels();
+      }
     }
-  }, [selectedItem, isConnected, getProviderDefaults, providerDefaults]);
+  }, [selectedItem, isConnected, getProviderDefaults, providerDefaults, getStoredModels, models]);
 
   // Handler to update a single default value
   const updateProviderDefault = (provider: string, key: keyof ProviderDefaults, value: number | boolean | string) => {
@@ -1927,58 +1937,6 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
           />
         </div>
 
-        {/* Claude Code OAuth - Alternative auth for Anthropic */}
-        {item.id === 'anthropic' && (
-          <div style={{ marginBottom: theme.spacing.xl }}>
-            <label style={{
-              display: 'block',
-              fontSize: theme.fontSize.sm,
-              fontWeight: theme.fontWeight.medium,
-              color: theme.colors.text,
-              marginBottom: theme.spacing.sm,
-            }}>
-              Or use Claude Code CLI
-            </label>
-            <div style={{ display: 'flex', gap: theme.spacing.sm }}>
-              <Input
-                readOnly
-                value="Isolated OAuth session"
-                style={{
-                  flex: 1,
-                  backgroundColor: theme.colors.background,
-                  borderColor: theme.colors.border,
-                  color: theme.colors.textSecondary,
-                  fontFamily: 'monospace',
-                }}
-              />
-              <Button
-                onClick={async () => {
-                  const result = await sendRequest('claude_oauth_login', {});
-                  if (result.success) {
-                    alert('OAuth login started. Complete authentication in the browser window that opened.');
-                  } else {
-                    alert(`Failed: ${result.error || 'Unknown error'}`);
-                  }
-                }}
-                style={{
-                  backgroundColor: `${theme.dracula.cyan}25`,
-                  borderColor: `${theme.dracula.cyan}60`,
-                  color: theme.dracula.cyan,
-                }}
-              >
-                OAuth Login
-              </Button>
-            </div>
-            <div style={{
-              fontSize: theme.fontSize.xs,
-              color: theme.colors.textMuted,
-              marginTop: theme.spacing.sm,
-            }}>
-              Opens browser login without affecting your main Claude Code session.
-            </div>
-          </div>
-        )}
-
         {/* Proxy URL Input - Only for AI providers */}
         {CATEGORIES.find(c => c.key === 'ai')?.items.some(i => i.id === item.id) && (
           <div style={{ marginBottom: theme.spacing.xl }}>
@@ -2052,6 +2010,31 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
               border: `1px solid ${theme.colors.border}`,
               opacity: defaultsLoading[item.id] ? 0.6 : 1,
             }}>
+              {/* Default Model */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: theme.spacing.md }}>
+                <div>
+                  <div style={{ fontSize: theme.fontSize.sm, fontWeight: theme.fontWeight.medium, color: theme.colors.text }}>Default Model</div>
+                  <div style={{ fontSize: theme.fontSize.xs, color: theme.colors.textSecondary }}>Model used when none specified</div>
+                </div>
+                <Select
+                  size="small"
+                  showSearch
+                  value={providerDefaults[item.id]?.default_model || undefined}
+                  onChange={(v) => updateProviderDefault(item.id, 'default_model', v)}
+                  placeholder="Select model"
+                  style={{ width: 200 }}
+                  options={(models[item.id] || []).map(m => ({ label: m, value: m }))}
+                  filterOption={(input, option) =>
+                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                  }
+                  notFoundContent={models[item.id] ? 'No models found' : 'Validate API key first'}
+                  virtual={false}
+                  popupMatchSelectWidth={false}
+                  getPopupContainer={(trigger) => trigger.parentElement || document.body}
+                  listHeight={300}
+                />
+              </div>
+
               {/* Temperature */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: theme.spacing.md }}>
                 <div>

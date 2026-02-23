@@ -111,6 +111,15 @@ class Database:
                         ))
                         logger.info(f"Added {col} column to session_token_states")
 
+                # Migrate provider_defaults table - add default_model column
+                result = await conn.execute(text("PRAGMA table_info(provider_defaults)"))
+                columns = {row[1] for row in result.fetchall()}
+                if columns and "default_model" not in columns:
+                    await conn.execute(text(
+                        "ALTER TABLE provider_defaults ADD COLUMN default_model TEXT DEFAULT ''"
+                    ))
+                    logger.info("Added default_model column to provider_defaults")
+
                 # Create api_usage_metrics table if not exists
                 await conn.execute(text("""
                     CREATE TABLE IF NOT EXISTS api_usage_metrics (
@@ -1498,6 +1507,7 @@ class Database:
                     "sidebar_default_open": settings.sidebar_default_open,
                     "component_palette_default_open": settings.component_palette_default_open,
                     "console_panel_default_open": settings.console_panel_default_open,
+                    "examples_loaded": settings.examples_loaded,
                     "created_at": settings.created_at.isoformat() if settings.created_at else None,
                     "updated_at": settings.updated_at.isoformat() if settings.updated_at else None
                 }
@@ -1527,6 +1537,8 @@ class Database:
                         existing.component_palette_default_open = settings_data["component_palette_default_open"]
                     if "console_panel_default_open" in settings_data:
                         existing.console_panel_default_open = settings_data["console_panel_default_open"]
+                    if "examples_loaded" in settings_data:
+                        existing.examples_loaded = settings_data["examples_loaded"]
                 else:
                     # Create new settings
                     existing = UserSettings(
@@ -1535,7 +1547,8 @@ class Database:
                         auto_save_interval=settings_data.get("auto_save_interval", 30),
                         sidebar_default_open=settings_data.get("sidebar_default_open", True),
                         component_palette_default_open=settings_data.get("component_palette_default_open", True),
-                        console_panel_default_open=settings_data.get("console_panel_default_open", False)
+                        console_panel_default_open=settings_data.get("console_panel_default_open", False),
+                        examples_loaded=settings_data.get("examples_loaded", False)
                     )
                     session.add(existing)
 
@@ -1561,6 +1574,7 @@ class Database:
                 if not record:
                     return None
                 return {
+                    "default_model": record.default_model,
                     "temperature": record.temperature,
                     "max_tokens": record.max_tokens,
                     "thinking_enabled": record.thinking_enabled,
@@ -1582,6 +1596,7 @@ class Database:
 
                 now = datetime.now(timezone.utc)
                 if record:
+                    record.default_model = defaults.get("default_model", record.default_model)
                     record.temperature = defaults.get("temperature", record.temperature)
                     record.max_tokens = defaults.get("max_tokens", record.max_tokens)
                     record.thinking_enabled = defaults.get("thinking_enabled", record.thinking_enabled)
@@ -1592,6 +1607,7 @@ class Database:
                 else:
                     record = ProviderDefaults(
                         provider=provider.lower(),
+                        default_model=defaults.get("default_model", ""),
                         temperature=defaults.get("temperature", 0.7),
                         max_tokens=defaults.get("max_tokens", 1000),
                         thinking_enabled=defaults.get("thinking_enabled", False),
