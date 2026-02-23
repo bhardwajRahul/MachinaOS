@@ -8,6 +8,7 @@ from core.container import container
 from core.config import Settings
 from core.logging import get_logger
 from services.user_auth import UserAuthService
+from services.auth import AuthService
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -37,6 +38,10 @@ def get_user_auth_service() -> UserAuthService:
 
 def get_settings() -> Settings:
     return container.settings()
+
+
+def get_auth_service() -> AuthService:
+    return container.auth_service()
 
 
 @router.get("/status")
@@ -163,11 +168,25 @@ async def login(
 @router.post("/logout")
 async def logout(
     response: Response,
+    user_auth: UserAuthService = Depends(get_user_auth_service),
+    auth_service: AuthService = Depends(get_auth_service),
     settings: Settings = Depends(get_settings)
 ):
     """
-    Logout by clearing the auth cookie.
+    Logout by clearing the auth cookie, encryption key, and memory caches.
+
+    Clears:
+    - Auth cookie
+    - Encryption service key (prevents credential decryption)
+    - API key memory cache (removes decrypted keys from memory)
     """
+    # Clear encryption key from memory
+    user_auth.logout()
+
+    # Clear API key memory cache
+    auth_service.clear_cache()
+
+    # Delete auth cookie
     response.delete_cookie(
         key=settings.jwt_cookie_name,
         httponly=True,

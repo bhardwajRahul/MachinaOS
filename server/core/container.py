@@ -6,6 +6,8 @@ from dependency_injector.wiring import Provide, inject
 from core.config import Settings
 from core.database import Database
 from core.cache import CacheService
+from core.encryption import EncryptionService
+from core.credentials_database import CredentialsDatabase
 from services.ai import AIService
 from services.maps import MapsService
 from services.workflow import WorkflowService
@@ -55,6 +57,18 @@ class Container(containers.DeclarativeContainer):
         database=database
     )
 
+    # Encryption service for credentials (initialized on user login)
+    encryption_service = providers.Singleton(
+        EncryptionService
+    )
+
+    # Credentials database (separate encrypted database for API keys and OAuth tokens)
+    credentials_database = providers.Singleton(
+        CredentialsDatabase,
+        db_path=settings.provided.credentials_db_path,
+        encryption=encryption_service
+    )
+
     # Temporal client (lazy - returns None if temporalio not installed)
     temporal_client = providers.Singleton(
         _create_temporal_client,
@@ -65,6 +79,7 @@ class Container(containers.DeclarativeContainer):
     # Services
     auth_service = providers.Factory(
         AuthService,
+        credentials_db=credentials_database,
         cache=cache,
         database=database,
         settings=settings
@@ -73,7 +88,9 @@ class Container(containers.DeclarativeContainer):
     user_auth_service = providers.Factory(
         UserAuthService,
         database=database,
-        settings=settings
+        settings=settings,
+        encryption=encryption_service,
+        credentials_db=credentials_database
     )
 
     ai_service = providers.Factory(

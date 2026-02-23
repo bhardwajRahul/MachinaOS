@@ -88,6 +88,15 @@ class Settings(BaseSettings):
     api_key_encryption_key: str = Field(env="API_KEY_ENCRYPTION_KEY", min_length=32)
     api_key_cache_ttl: int = Field(default=2592000, env="API_KEY_CACHE_TTL", ge=3600)
 
+    # Credentials Database (separate encrypted database for API keys and OAuth tokens)
+    credentials_db_path: str = Field(default="credentials.db", env="CREDENTIALS_DB_PATH")
+
+    # Credential Backend Selection
+    # Options: fernet (default), keyring (OS-native), aws (AWS Secrets Manager)
+    credential_backend: Literal["fernet", "keyring", "aws"] = Field(default="fernet", env="CREDENTIAL_BACKEND")
+    aws_secret_arn: Optional[str] = Field(default=None, env="AWS_SECRET_ARN")
+    aws_region: Optional[str] = Field(default=None, env="AWS_REGION")
+
     # Logging
     log_level: str = Field(default="INFO", env="LOG_LEVEL")
     log_format: str = Field(default="json", env="LOG_FORMAT")
