@@ -2152,7 +2152,7 @@ async def handle_get_user_skill(data: Dict[str, Any], websocket: WebSocket) -> D
     return {"success": False, "error": f"Skill '{data['name']}' not found"}
 
 
-@ws_handler("name", "display_name", "description", "instructions")
+@ws_handler("name", "display_name", "instructions")
 async def handle_create_user_skill(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
     """Create a new user skill."""
     database = container.database()
@@ -2161,7 +2161,7 @@ async def handle_create_user_skill(data: Dict[str, Any], websocket: WebSocket) -
     skill = await database.create_user_skill(
         name=data["name"],
         display_name=data["display_name"],
-        description=data["description"],
+        description=data.get("description", ""),
         instructions=data["instructions"],
         allowed_tools=data.get("allowed_tools"),
         category=data.get("category", "custom"),

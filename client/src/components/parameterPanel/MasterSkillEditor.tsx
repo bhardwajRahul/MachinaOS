@@ -272,27 +272,6 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
     );
   }, [availableSkills, searchQuery]);
 
-  // Clean up skillsConfig - remove skills that no longer exist in availableSkills
-  useEffect(() => {
-    if (availableSkills.length === 0) return; // Wait for skills to load
-
-    const availableSkillNames = new Set(availableSkills.map(s => s.skillName));
-    const configSkillNames = Object.keys(skillsConfig);
-    const staleSkills = configSkillNames.filter(name => !availableSkillNames.has(name));
-
-    if (staleSkills.length > 0) {
-      console.log('[MasterSkillEditor] Removing stale skills from config:', staleSkills);
-      const cleanedConfig = { ...skillsConfig };
-      staleSkills.forEach(name => delete cleanedConfig[name]);
-      onConfigChange(cleanedConfig);
-
-      // Clear selection if selected skill was stale
-      if (selectedSkillName && staleSkills.includes(selectedSkillName)) {
-        setSelectedSkillName(null);
-        setPendingSkillData(null);
-      }
-    }
-  }, [availableSkills, skillsConfig, onConfigChange, selectedSkillName]);
 
   // Auto-select first skill
   useEffect(() => {
