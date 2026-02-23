@@ -32,6 +32,7 @@ import { SPECIALIZED_AGENT_TYPES } from './nodeDefinitions/specializedAgentNodes
 import { SKILL_NODE_TYPES } from './nodeDefinitions/skillNodes';
 import { DOCUMENT_NODE_TYPES } from './nodeDefinitions/documentNodes';
 import { SOCIAL_NODE_TYPES } from './nodeDefinitions/socialNodes';
+import { APIFY_NODE_TYPES } from './nodeDefinitions/apifyNodes';
 import ParameterPanel from './ParameterPanel';
 import LocationParameterPanel from './components/LocationParameterPanel';
 import { useAppStore } from './store/useAppStore';
@@ -129,6 +130,9 @@ const createNodeTypes = (): Record<string, React.ComponentType<any>> => {
       types[type] = ToolkitNode;
     } else if (DOCUMENT_NODE_TYPES.includes(type)) {
       // Document processing nodes use SquareNode component
+      types[type] = SquareNode;
+    } else if (APIFY_NODE_TYPES.includes(type)) {
+      // Apify web scraping nodes use SquareNode component
       types[type] = SquareNode;
     } else if (SOCIAL_NODE_TYPES.includes(type)) {
       // Social nodes use AIAgentNode for multiple output handles support

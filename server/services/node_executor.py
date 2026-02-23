@@ -39,6 +39,7 @@ from services.handlers import (
     handle_twitter_send, handle_twitter_search, handle_twitter_user,
     handle_gmail_send, handle_gmail_search, handle_gmail_read,
 )
+from services.handlers.apify import handle_apify_actor
 from services.handlers.calendar import (
     handle_calendar_create, handle_calendar_list, handle_calendar_update, handle_calendar_delete,
 )
@@ -206,6 +207,8 @@ class NodeExecutor:
             'taskManager': handle_task_manager,
             # Team monitoring
             'teamMonitor': handle_team_monitor,
+            # Apify web scraping
+            'apifyActor': handle_apify_actor,
             # Note: 'console' handled in _dispatch with connected_outputs
         }
 

@@ -286,6 +286,9 @@ interface WebSocketContextValue {
   // Maps Operations
   validateMapsKey: (apiKey: string) => Promise<{ valid: boolean; message?: string }>;
 
+  // Apify Operations
+  validateApifyKey: (apiKey: string) => Promise<{ valid: boolean; message?: string; username?: string }>;
+
   // WhatsApp Operations
   getWhatsAppStatus: () => Promise<{ connected: boolean; deviceId?: string; data?: any }>;
   getWhatsAppQR: () => Promise<{ connected: boolean; qr?: string; message?: string }>;
@@ -1755,6 +1758,26 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, [sendRequest]);
 
   // =========================================================================
+  // Apify Operations
+  // =========================================================================
+
+  const validateApifyKeyAsync = useCallback(async (
+    apiKey: string
+  ): Promise<{ valid: boolean; message?: string; username?: string }> => {
+    try {
+      const response = await sendRequest<any>('validate_apify_key', { api_key: apiKey });
+      return {
+        valid: response.valid || false,
+        message: response.message,
+        username: response.username
+      };
+    } catch (error) {
+      console.error('[WebSocket] Failed to validate Apify key:', error);
+      return { valid: false, message: 'Validation failed' };
+    }
+  }, [sendRequest]);
+
+  // =========================================================================
   // WhatsApp Operations
   // =========================================================================
 
@@ -2082,6 +2105,9 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     executeAndroidAction: executeAndroidActionAsync,
     // Maps Operations
     validateMapsKey: validateMapsKeyAsync,
+
+    // Apify Operations
+    validateApifyKey: validateApifyKeyAsync,
 
     // WhatsApp Operations
     getWhatsAppStatus: getWhatsAppStatusAsync,

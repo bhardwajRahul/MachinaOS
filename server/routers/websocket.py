@@ -1612,6 +1612,66 @@ async def handle_validate_maps_key(data: Dict[str, Any], websocket: WebSocket) -
 
 
 # ============================================================================
+# Apify Handlers
+# ============================================================================
+
+async def handle_validate_apify_key(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Validate Apify API token and save to database if valid."""
+    from services.handlers.apify import validate_apify_token
+
+    broadcaster = get_status_broadcaster()
+    auth_service = container.auth_service()
+
+    api_key = data.get("api_key", "").strip()
+    session_id = data.get("session_id", "default")
+
+    if not api_key:
+        return {"success": False, "valid": False, "error": "api_key required"}
+
+    try:
+        result = await validate_apify_token(api_key)
+
+        if result.get("valid"):
+            # Save the validated key to database
+            await auth_service.store_api_key(
+                provider="apify",
+                api_key=api_key,
+                models=[],
+                session_id=session_id
+            )
+            await broadcaster.update_api_key_status(
+                provider="apify",
+                valid=True,
+                message=f"Apify token validated - user: {result.get('username', 'unknown')}"
+            )
+            return {
+                "success": True,
+                "valid": True,
+                "message": f"Apify API token is valid",
+                "username": result.get("username"),
+                "email": result.get("email"),
+                "plan": result.get("plan")
+            }
+        else:
+            error_msg = result.get("error", "Invalid API token")
+            await broadcaster.update_api_key_status(
+                provider="apify",
+                valid=False,
+                message=error_msg
+            )
+            return {"success": True, "valid": False, "message": error_msg}
+
+    except Exception as e:
+        logger.error("Apify key validation failed", error=str(e))
+        await broadcaster.update_api_key_status(
+            provider="apify",
+            valid=False,
+            message=str(e)
+        )
+        return {"success": False, "valid": False, "error": str(e)}
+
+
+# ============================================================================
 # WhatsApp Handlers - Wrappers for routers.whatsapp functions
 # ============================================================================
 
@@ -2617,6 +2677,9 @@ MESSAGE_HANDLERS: Dict[str, MessageHandler] = {
 
     # Maps operations
     "validate_maps_key": handle_validate_maps_key,
+
+    # Apify operations
+    "validate_apify_key": handle_validate_apify_key,
 
     # WhatsApp operations
     "whatsapp_status": handle_whatsapp_status,

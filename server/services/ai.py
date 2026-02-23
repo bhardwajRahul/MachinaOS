@@ -3622,6 +3622,34 @@ class AIService:
 
             return DelegateToAgentSchema
 
+        # Apify Actor tool schema (dual-purpose: workflow node + AI tool)
+        if node_type == 'apifyActor':
+            class ApifyActorSchema(BaseModel):
+                """Run Apify web scrapers for social media, websites, and search engines.
+
+                Popular actors:
+                - apify/instagram-scraper: Scrape Instagram profiles, posts, hashtags
+                - clockworks/tiktok-scraper: Scrape TikTok profiles and hashtags
+                - apidojo/tweet-scraper: Scrape Twitter/X tweets and users
+                - curious_coder/linkedin-profile-scraper: Scrape LinkedIn profiles
+                - apify/facebook-posts-scraper: Scrape Facebook posts
+                - apify/google-search-scraper: Scrape Google search results
+                - apify/website-content-crawler: Crawl any website
+                """
+                actor_id: str = Field(
+                    description="Apify actor ID (e.g., 'apify/instagram-scraper', 'clockworks/tiktok-scraper', 'apidojo/tweet-scraper', 'apify/google-search-scraper', 'apify/website-content-crawler')"
+                )
+                input_json: str = Field(
+                    default="{}",
+                    description="Actor input as JSON string. Examples: Instagram: {\"directUrls\": [\"https://instagram.com/username\"]}, TikTok: {\"profiles\": [\"username\"]}, Google: {\"searchQuery\": \"AI tools\"}, Crawler: {\"startUrls\": [{\"url\": \"https://example.com\"}]}"
+                )
+                max_results: int = Field(
+                    default=100,
+                    description="Maximum items to return from the dataset (1-10000)"
+                )
+
+            return ApifyActorSchema
+
         # Generic schema for other nodes
         class GenericToolSchema(BaseModel):
             """Generic schema for tool arguments."""

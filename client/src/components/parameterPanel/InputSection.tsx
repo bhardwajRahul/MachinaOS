@@ -682,6 +682,18 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                 matches: 'array',
                 collection_name: 'string',
                 backend: 'string'
+              },
+              // Apify web scraping schema
+              apify: {
+                run_id: 'string',
+                actor_id: 'string',
+                status: 'string',
+                dataset_id: 'string',
+                items: 'array',
+                item_count: 'number',
+                compute_units: 'number',
+                started_at: 'string',
+                finished_at: 'string'
               }
             };
 
@@ -737,6 +749,9 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
             const isLocationNode = nodeType.includes('location') && !isAndroidLocation;
             const isGoogleMaps = nodeType === 'gmaps_create' || nodeType === 'gmaps_locations' || nodeType === 'gmaps_nearby_places';
 
+            // Apify web scraping node detection
+            const isApify = nodeType === 'apifyActor';
+
             // Select appropriate schema
             if (isAndroidLocation) {
               outputSchema = sampleSchemas.androidLocation;
@@ -764,6 +779,7 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                             isTaskTrigger ? sampleSchemas.taskTrigger :
                             isSocialReceive ? sampleSchemas.social :
                             isSocialSend ? sampleSchemas.socialSend :
+                            isApify ? sampleSchemas.apify :
                             { data: 'any' };
             }
 

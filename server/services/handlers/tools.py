@@ -209,6 +209,10 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
     if node_type == 'taskManager':
         return await _execute_task_manager(tool_args, config)
 
+    # Apify Actor (dual-purpose: workflow node + AI tool)
+    if node_type == 'apifyActor':
+        return await _execute_apify_actor(tool_args, config.get('parameters', {}))
+
     # Built-in: Check delegated task results
     # Auto-injected when parent has delegation tools
     if node_type == '_builtin_check_delegated_tasks':
@@ -1668,6 +1672,42 @@ async def _execute_contacts_delete(args: Dict[str, Any],
     return await handle_contacts_delete(
         node_id="tool_contacts_delete",
         node_type="contactsDelete",
+        parameters=parameters,
+        context={}
+    )
+
+
+async def _execute_apify_actor(args: Dict[str, Any],
+                               node_params: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute Apify actor via official SDK.
+
+    Args:
+        args: LLM-provided arguments (actor_id, input_json, max_results)
+        node_params: Node parameters
+
+    Returns:
+        Apify actor run results
+    """
+    from services.handlers.apify import handle_apify_actor
+
+    # Parse input_json string to dict if provided
+    input_json = args.get('input_json', '{}')
+    if isinstance(input_json, str):
+        try:
+            input_json = json.loads(input_json) if input_json.strip() else {}
+        except json.JSONDecodeError:
+            input_json = {}
+
+    parameters = {
+        **node_params,
+        'actorId': args.get('actor_id', node_params.get('actorId', '')),
+        'actorInput': input_json,
+        'maxResults': args.get('max_results', node_params.get('maxResults', 100)),
+    }
+
+    return await handle_apify_actor(
+        node_id="tool_apify_actor",
+        node_type="apifyActor",
         parameters=parameters,
         context={}
     )

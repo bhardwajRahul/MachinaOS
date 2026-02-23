@@ -24,6 +24,7 @@ import { useWhatsApp } from '../hooks/useWhatsApp';
 import {
   OpenAIIcon, ClaudeIcon, GeminiIcon, GroqIcon, OpenRouterIcon, CerebrasIcon,
 } from './icons/AIProviderIcons';
+import { ApifyIcons } from '../assets/icons/apify';
 
 // ============================================================================
 // SERVICE ICONS
@@ -54,6 +55,10 @@ const XIcon = () => (
 
 const GoogleWorkspaceIcon = () => (
   <GoogleOutlined style={{ fontSize: 20, color: '#4285F4' }} />
+);
+
+const ApifyIcon = () => (
+  <div dangerouslySetInnerHTML={{ __html: ApifyIcons.apify }} style={{ width: 20, height: 20 }} />
 );
 
 // ============================================================================
@@ -112,6 +117,7 @@ const CATEGORIES: Category[] = [
     label: 'Services',
     items: [
       { id: 'google_maps', name: 'Google Maps', placeholder: 'AIza...', color: '#EA4335', desc: 'Geocoding, Places, Directions', CustomIcon: GoogleMapsIcon, panelType: 'google_maps' },
+      { id: 'apify', name: 'Apify', placeholder: 'apify_api_...', color: '#246DFF', desc: 'Web scraping, social media extraction', CustomIcon: ApifyIcon },
     ],
   },
 ];
@@ -128,7 +134,7 @@ interface Props {
 
 const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
   const theme = useAppTheme();
-  const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey, validateGoogleMapsKey, getProviderDefaults, saveProviderDefaults, getProviderUsageSummary, getAPIUsageSummary, getStoredModels, isConnected } = useApiKeys();
+const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey, validateGoogleMapsKey, validateApifyKey, getProviderDefaults, saveProviderDefaults, getProviderUsageSummary, getAPIUsageSummary, getStoredModels, isConnected } = useApiKeys();
   const whatsappStatus = useWhatsAppStatus();
   const androidStatus = useAndroidStatus();
   const twitterStatus = useTwitterStatus();
@@ -307,9 +313,11 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
     setLoading(l => ({ ...l, [id]: true }));
     const result = id === 'google_maps'
       ? await validateGoogleMapsKey(key)
-      : id === 'android_remote'
-        ? await saveApiKey(id, key)
-        : await validateApiKey(id, key);
+      : id === 'apify'
+        ? await validateApifyKey(key)
+        : id === 'android_remote'
+          ? await saveApiKey(id, key)
+          : await validateApiKey(id, key);
     setLoading(l => ({ ...l, [id]: false }));
 
     if (result.isValid) {

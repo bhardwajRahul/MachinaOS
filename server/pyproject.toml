@@ -62,6 +62,9 @@ dependencies = [
     # Twitter/X API
     "xdk>=0.1.0",
 
+    # Apify Web Scraping
+    "apify-client>=1.8.0",
+
     # Gmail API
     "google-api-python-client>=2.100.0",
     "google-auth>=2.27.0",

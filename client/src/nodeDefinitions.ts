@@ -18,6 +18,7 @@ import { skillNodes, SKILL_NODE_TYPES } from './nodeDefinitions/skillNodes';
 import { documentNodes, DOCUMENT_NODE_TYPES } from './nodeDefinitions/documentNodes';
 import { socialNodes, SOCIAL_NODE_TYPES } from './nodeDefinitions/socialNodes';
 import { twitterNodes, TWITTER_NODE_TYPES } from './nodeDefinitions/twitterNodes';
+import { apifyNodes, APIFY_NODE_TYPES } from './nodeDefinitions/apifyNodes';
 import { gmailNodes, GMAIL_NODE_TYPES } from './nodeDefinitions/gmailNodes';
 import { calendarNodes, CALENDAR_NODE_TYPES } from './nodeDefinitions/calendarNodes';
 import { driveNodes, DRIVE_NODE_TYPES } from './nodeDefinitions/driveNodes';
@@ -47,6 +48,7 @@ export const nodeDefinitions: Record<string, INodeTypeDescription> = {
   ...documentNodes,
   ...socialNodes,
   ...twitterNodes,
+  ...apifyNodes,
   ...gmailNodes,
   ...calendarNodes,
   ...driveNodes,
@@ -126,6 +128,10 @@ export const SOCIAL_NODES = [
 
 export const TWITTER_NODES = [
   ...TWITTER_NODE_TYPES
+];
+
+export const APIFY_NODES = [
+  ...APIFY_NODE_TYPES
 ];
 
 export const GMAIL_NODES = [

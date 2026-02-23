@@ -87,6 +87,9 @@ export interface UseApiKeysResult {
   // Validate Google Maps API key
   validateGoogleMapsKey: (apiKey: string) => Promise<ApiKeyValidationResult>;
 
+  // Validate Apify API key
+  validateApifyKey: (apiKey: string) => Promise<ApiKeyValidationResult>;
+
   // Get AI models for a provider
   getAiModels: (provider: string, apiKey: string) => Promise<string[]>;
 
@@ -113,6 +116,7 @@ export const useApiKeys = (): UseApiKeysResult => {
     saveApiKey: wsSaveApiKey,
     deleteApiKey: wsDeleteApiKey,
     validateMapsKey: wsValidateMapsKey,
+    validateApifyKey: wsValidateApifyKey,
     getAiModels: wsGetAiModels,
     sendRequest,
     isConnected
@@ -270,6 +274,38 @@ export const useApiKeys = (): UseApiKeysResult => {
   }, [wsValidateMapsKey]);
 
   /**
+   * Validate Apify API key
+   */
+  const validateApifyKey = useCallback(async (
+    apiKey: string
+  ): Promise<ApiKeyValidationResult> => {
+    setIsValidating(true);
+    setValidationError(null);
+
+    try {
+      const result = await wsValidateApifyKey(apiKey);
+
+      if (!result.valid) {
+        setValidationError(result.message || 'Validation failed');
+      }
+
+      return {
+        isValid: result.valid,
+        error: result.message
+      };
+    } catch (error: any) {
+      const errorMsg = error.message || 'Validation failed';
+      setValidationError(errorMsg);
+      return {
+        isValid: false,
+        error: errorMsg
+      };
+    } finally {
+      setIsValidating(false);
+    }
+  }, [wsValidateApifyKey]);
+
+  /**
    * Get available AI models for a provider
    */
   const getAiModels = useCallback(async (
@@ -373,6 +409,7 @@ export const useApiKeys = (): UseApiKeysResult => {
     getStoredModels,
     removeApiKey,
     validateGoogleMapsKey,
+    validateApifyKey,
     getAiModels,
     getProviderDefaults,
     saveProviderDefaults,
