@@ -4,83 +4,25 @@
  * Works on: Windows, macOS, Linux, WSL, Git Bash
  */
 import { spawn } from 'child_process';
-import { readFileSync, existsSync, copyFileSync, rmSync } from 'fs';
-import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
-import findProcess from 'find-process';
+import { existsSync, rmSync } from 'fs';
+import { resolve } from 'path';
+import {
+  ROOT,
+  getPlatformName,
+  loadEnvConfig,
+  ensureEnvFile,
+  killPort,
+  createLogger,
+} from './utils.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const ROOT = resolve(__dirname, '..');
 const START_TIME = Date.now();
+const log = createLogger(START_TIME);
 
 // Parse command line arguments
 const args = process.argv.slice(2);
 const isDaemonMode = args.includes('--daemon');
 const skipWhatsApp = args.includes('--skip-whatsapp');
 
-// Platform detection
-const isWindows = process.platform === 'win32';
-const isGitBash = isWindows && (process.env.MSYSTEM || process.env.SHELL?.includes('bash'));
-
-function getPlatformName() {
-  if (isGitBash) return 'Git Bash';
-  if (isWindows) return 'Windows';
-  if (process.platform === 'darwin') return 'macOS';
-  return 'Linux';
-}
-
-// Utilities
-const elapsed = () => `${((Date.now() - START_TIME) / 1000).toFixed(2)}s`;
-const log = (msg) => console.log(`[${elapsed()}] ${msg}`);
-const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-
-function loadConfig() {
-  const envPath = existsSync(resolve(ROOT, '.env'))
-    ? resolve(ROOT, '.env')
-    : resolve(ROOT, '.env.template');
-
-  const env = {};
-  if (existsSync(envPath)) {
-    for (const line of readFileSync(envPath, 'utf-8').split('\n')) {
-      const match = line.match(/^([^#=]+)=(.*)$/);
-      if (match) {
-        env[match[1].trim()] = match[2].trim().replace(/^["']|["']$/g, '');
-      }
-    }
-  }
-
-  return {
-    ports: [
-      parseInt(env.VITE_CLIENT_PORT) || 3000,
-      parseInt(env.PYTHON_BACKEND_PORT) || 3010,
-      parseInt(env.WHATSAPP_RPC_PORT) || 9400
-    ],
-    temporalEnabled: env.TEMPORAL_ENABLED?.toLowerCase() === 'true'
-  };
-}
-
-// Port Management using find-process (cross-platform)
-async function freePort(port) {
-  const procs = await findProcess('port', port);
-  if (procs.length === 0) return { freed: true, pids: [] };
-
-  const pids = procs.map(p => p.pid);
-  for (const pid of pids) {
-    try { process.kill(pid, 'SIGTERM'); } catch {}
-  }
-  await sleep(300);
-
-  // Force kill if still running
-  for (const pid of pids) {
-    try { process.kill(pid, 'SIGKILL'); } catch {}
-  }
-  await sleep(200);
-
-  const remaining = await findProcess('port', port);
-  return { freed: remaining.length === 0, pids };
-}
-
-// Main
 async function main() {
   // Check if build has been run
   const rootNodeModules = resolve(ROOT, 'node_modules');
@@ -90,30 +32,27 @@ async function main() {
     process.exit(1);
   }
 
-  const config = loadConfig();
+  const config = loadEnvConfig();
   process.env.PYTHONUTF8 = '1';
 
   console.log('\n=== MachinaOS Starting ===\n');
   log(`Platform: ${getPlatformName()}`);
   log(`Mode: ${isDaemonMode ? 'Daemon (Gunicorn)' : 'Development (uvicorn)'}`);
-  log(`Ports: ${config.ports.join(', ')}`);
+  log(`Ports: ${config.allPorts.join(', ')}`);
   log(`Temporal: ${config.temporalEnabled ? 'enabled' : 'disabled'}`);
   log(`WhatsApp: ${skipWhatsApp ? 'skipped' : 'enabled'}`);
 
   // Create .env if not exists
-  const envPath = resolve(ROOT, '.env');
-  const templatePath = resolve(ROOT, '.env.template');
-  if (!existsSync(envPath) && existsSync(templatePath)) {
-    copyFileSync(templatePath, envPath);
-    log('Created .env from template');
+  if (ensureEnvFile()) {
+    log('Ensured .env file exists');
   }
 
-  // Free ports using find-process (cross-platform)
+  // Free ports
   log('Freeing ports...');
-  for (const port of config.ports) {
-    const result = await freePort(port);
-    if (result.pids.length > 0) {
-      log(`  Port ${port}: ${result.freed ? 'Freed' : 'Warning - could not free'} (PIDs: ${result.pids.join(', ')})`);
+  for (const port of config.allPorts) {
+    const result = await killPort(port);
+    if (result.killed.length > 0) {
+      log(`  Port ${port}: ${result.portFree ? 'Freed' : 'Warning - could not free'} (PIDs: ${result.killed.join(', ')})`);
     } else {
       log(`  Port ${port}: Already free`);
     }

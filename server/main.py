@@ -70,6 +70,10 @@ async def lifespan(app: FastAPI):
     await container.database().startup()
     await container.cache().startup()
 
+    # Initialize credentials database (creates tables if not exist)
+    await container.credentials_database().initialize()
+    logger.info("Credentials database initialized")
+
     # Initialize event waiter with cache service for Redis Streams support
     from services import event_waiter
     event_waiter.set_cache_service(container.cache())

@@ -4,43 +4,12 @@
  * Usage: node scripts/docker.js <command> [args...]
  * Commands: up, down, build, logs, restart
  */
-
 import { spawn } from 'child_process';
-import { readFileSync, existsSync, copyFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, resolve } from 'path';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const ROOT = resolve(__dirname, '..');
-
-// Create .env from template if it doesn't exist
-function ensureEnvFile() {
-  const envPath = resolve(ROOT, '.env');
-  if (existsSync(envPath)) return true;
-
-  const templatePath = resolve(ROOT, '.env.template');
-  if (existsSync(templatePath)) {
-    console.log('[Docker] Creating .env from .env.template');
-    copyFileSync(templatePath, envPath);
-    return true;
-  }
-
-  console.warn('[Docker] Warning: No .env or .env.template found');
-  return false;
-}
-
-// Read .env file and check REDIS_ENABLED
-function isRedisEnabled() {
-  const envPath = resolve(ROOT, '.env');
-  if (!existsSync(envPath)) return false;
-
-  const content = readFileSync(envPath, 'utf8');
-  const match = content.match(/^REDIS_ENABLED\s*=\s*(.+)$/m);
-  if (!match) return false;
-
-  const value = match[1].trim().toLowerCase();
-  return value === 'true' || value === '1' || value === 'yes';
-}
+import {
+  ROOT,
+  loadEnvConfig,
+  ensureEnvFile,
+} from './utils.js';
 
 // Get command and args
 const [,, command, ...args] = process.argv;
@@ -52,13 +21,18 @@ if (!command) {
 }
 
 // Ensure .env exists (create from template if needed)
-ensureEnvFile();
+if (ensureEnvFile()) {
+  console.log('[Docker] Ensured .env file exists');
+}
+
+// Load config
+const config = loadEnvConfig();
 
 // Build docker-compose command
 const composeArgs = [];
 
 // Add Redis profile if enabled in .env
-if (isRedisEnabled()) {
+if (config.redisEnabled) {
   composeArgs.push('--profile', 'redis');
   console.log('[Docker] Redis profile enabled (REDIS_ENABLED=true in .env)');
 } else {

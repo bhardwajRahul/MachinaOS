@@ -44,6 +44,7 @@ dependencies = [
     "langchain-anthropic>=0.3.0",
     "langchain-google-genai>=2.0.0",
     "langchain-groq>=0.2.0",
+    "langchain-cerebras>=0.1.0",
     "langgraph>=0.2.0",
 
     # Dependency Injection
@@ -75,9 +76,6 @@ dev = [
 ]
 temporal = [
     "temporalio>=1.7.0",
-]
-extra-ai = [
-    "langchain-cerebras>=0.1.0",
 ]
 docs = [
     "beautifulsoup4>=4.12.0",

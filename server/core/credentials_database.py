@@ -41,7 +41,7 @@ class CredentialsMetadata(SQLModel, table=True):
 class EncryptedAPIKey(SQLModel, table=True):
     """API keys with encrypted storage."""
 
-    __tablename__ = "api_keys"
+    __tablename__ = "encrypted_api_keys"
 
     id: str = Field(primary_key=True, max_length=255)  # {session_id}_{provider}
     provider: str = Field(max_length=50, index=True)
