@@ -119,75 +119,22 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
     if node_type == 'twitterUser':
         return await _execute_twitter_user(tool_args, config.get('parameters', {}))
 
-    # Gmail Send (dual-purpose: workflow node + AI tool)
-    if node_type == 'gmailSend':
-        return await _execute_gmail_send(tool_args, config.get('parameters', {}))
-
-    # Gmail Search (dual-purpose: workflow node + AI tool)
-    if node_type == 'gmailSearch':
-        return await _execute_gmail_search(tool_args, config.get('parameters', {}))
-
-    # Gmail Read (dual-purpose: workflow node + AI tool)
-    if node_type == 'gmailRead':
-        return await _execute_gmail_read(tool_args, config.get('parameters', {}))
-
     # ========================================================================
-    # GOOGLE WORKSPACE TOOLS (Calendar, Drive, Sheets, Tasks, Contacts)
+    # GOOGLE WORKSPACE TOOLS (consolidated: gmail, calendar, drive, sheets, tasks, contacts)
     # ========================================================================
 
-    # Google Calendar tools
-    if node_type == 'calendarCreate':
-        return await _execute_calendar_create(tool_args, config.get('parameters', {}))
-    if node_type == 'calendarList':
-        return await _execute_calendar_list(tool_args, config.get('parameters', {}))
-    if node_type == 'calendarUpdate':
-        return await _execute_calendar_update(tool_args, config.get('parameters', {}))
-    if node_type == 'calendarDelete':
-        return await _execute_calendar_delete(tool_args, config.get('parameters', {}))
-
-    # Google Drive tools
-    if node_type == 'driveUpload':
-        return await _execute_drive_upload(tool_args, config.get('parameters', {}))
-    if node_type == 'driveDownload':
-        return await _execute_drive_download(tool_args, config.get('parameters', {}))
-    if node_type == 'driveList':
-        return await _execute_drive_list(tool_args, config.get('parameters', {}))
-    if node_type == 'driveShare':
-        return await _execute_drive_share(tool_args, config.get('parameters', {}))
-
-    # Google Sheets tools
-    if node_type == 'sheetsRead':
-        return await _execute_sheets_read(tool_args, config.get('parameters', {}))
-    if node_type == 'sheetsWrite':
-        return await _execute_sheets_write(tool_args, config.get('parameters', {}))
-    if node_type == 'sheetsAppend':
-        return await _execute_sheets_append(tool_args, config.get('parameters', {}))
-
-    # Google Tasks tools
-    if node_type == 'tasksCreate':
-        return await _execute_tasks_create(tool_args, config.get('parameters', {}))
-    if node_type == 'tasksList':
-        return await _execute_tasks_list(tool_args, config.get('parameters', {}))
-    if node_type == 'tasksComplete':
-        return await _execute_tasks_complete(tool_args, config.get('parameters', {}))
-    if node_type == 'tasksUpdate':
-        return await _execute_tasks_update(tool_args, config.get('parameters', {}))
-    if node_type == 'tasksDelete':
-        return await _execute_tasks_delete(tool_args, config.get('parameters', {}))
-
-    # Google Contacts tools
-    if node_type == 'contactsCreate':
-        return await _execute_contacts_create(tool_args, config.get('parameters', {}))
-    if node_type == 'contactsList':
-        return await _execute_contacts_list(tool_args, config.get('parameters', {}))
-    if node_type == 'contactsSearch':
-        return await _execute_contacts_search(tool_args, config.get('parameters', {}))
-    if node_type == 'contactsGet':
-        return await _execute_contacts_get(tool_args, config.get('parameters', {}))
-    if node_type == 'contactsUpdate':
-        return await _execute_contacts_update(tool_args, config.get('parameters', {}))
-    if node_type == 'contactsDelete':
-        return await _execute_contacts_delete(tool_args, config.get('parameters', {}))
+    if node_type == 'gmail':
+        return await _execute_google_gmail(tool_args, config.get('parameters', {}))
+    if node_type == 'calendar':
+        return await _execute_google_calendar(tool_args, config.get('parameters', {}))
+    if node_type == 'drive':
+        return await _execute_google_drive(tool_args, config.get('parameters', {}))
+    if node_type == 'sheets':
+        return await _execute_google_sheets(tool_args, config.get('parameters', {}))
+    if node_type == 'tasks':
+        return await _execute_google_tasks(tool_args, config.get('parameters', {}))
+    if node_type == 'contacts':
+        return await _execute_google_contacts(tool_args, config.get('parameters', {}))
 
     # Android toolkit - routes to connected service nodes
     if node_type == 'androidTool':
@@ -1288,402 +1235,89 @@ async def _execute_twitter_user(args: Dict[str, Any],
     )
 
 
-async def _execute_gmail_send(args: Dict[str, Any],
-                              node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Gmail send action via Google API.
-
-    Args:
-        args: LLM-provided arguments (to, subject, body, cc, bcc, body_type)
-        node_params: Node parameters (may include account_mode, customer_id)
-
-    Returns:
-        Gmail API result with message_id and thread_id
-    """
-    from services.handlers.gmail import handle_gmail_send
-
-    parameters = {**node_params, **args}
-
-    return await handle_gmail_send(
-        node_id="tool_gmail_send",
-        node_type="gmailSend",
-        parameters=parameters,
-        context={}
-    )
-
-
-async def _execute_gmail_search(args: Dict[str, Any],
+async def _execute_google_gmail(args: Dict[str, Any],
                                 node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Gmail search via Google API.
-
-    Args:
-        args: LLM-provided arguments (query, max_results, include_body)
-        node_params: Node parameters (may include account_mode, customer_id)
-
-    Returns:
-        Search results with message list
-    """
-    from services.handlers.gmail import handle_gmail_search
+    """Execute Gmail operations via consolidated dispatcher."""
+    from services.handlers.gmail import handle_google_gmail
 
     parameters = {**node_params, **args}
-
-    return await handle_gmail_search(
-        node_id="tool_gmail_search",
-        node_type="gmailSearch",
-        parameters=parameters,
-        context={}
-    )
-
-
-async def _execute_gmail_read(args: Dict[str, Any],
-                              node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Gmail read via Google API.
-
-    Args:
-        args: LLM-provided arguments (message_id, format)
-        node_params: Node parameters (may include account_mode, customer_id)
-
-    Returns:
-        Full message content
-    """
-    from services.handlers.gmail import handle_gmail_read
-
-    parameters = {**node_params, **args}
-
-    return await handle_gmail_read(
-        node_id="tool_gmail_read",
-        node_type="gmailRead",
+    return await handle_google_gmail(
+        node_id="tool_google_gmail",
+        node_type="gmail",
         parameters=parameters,
         context={}
     )
 
 
 # ============================================================================
-# GOOGLE WORKSPACE TOOL HANDLERS (Calendar, Drive, Sheets, Tasks, Contacts)
+# GOOGLE WORKSPACE CONSOLIDATED TOOL HANDLERS
 # ============================================================================
 
-# ---------------------------------------------------------------------------
-# Google Calendar Tools
-# ---------------------------------------------------------------------------
-
-async def _execute_calendar_create(args: Dict[str, Any],
+async def _execute_google_calendar(args: Dict[str, Any],
                                    node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Calendar create event via Google API."""
-    from services.handlers.calendar import handle_calendar_create
+    """Execute Google Calendar operations via consolidated dispatcher."""
+    from services.handlers.calendar import handle_google_calendar
 
     parameters = {**node_params, **args}
-    return await handle_calendar_create(
-        node_id="tool_calendar_create",
-        node_type="calendarCreate",
+    return await handle_google_calendar(
+        node_id="tool_google_calendar",
+        node_type="calendar",
         parameters=parameters,
         context={}
     )
 
 
-async def _execute_calendar_list(args: Dict[str, Any],
+async def _execute_google_drive(args: Dict[str, Any],
+                                node_params: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute Google Drive operations via consolidated dispatcher."""
+    from services.handlers.drive import handle_google_drive
+
+    parameters = {**node_params, **args}
+    return await handle_google_drive(
+        node_id="tool_google_drive",
+        node_type="drive",
+        parameters=parameters,
+        context={}
+    )
+
+
+async def _execute_google_sheets(args: Dict[str, Any],
                                  node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Calendar list events via Google API."""
-    from services.handlers.calendar import handle_calendar_list
+    """Execute Google Sheets operations via consolidated dispatcher."""
+    from services.handlers.sheets import handle_google_sheets
 
     parameters = {**node_params, **args}
-    return await handle_calendar_list(
-        node_id="tool_calendar_list",
-        node_type="calendarList",
+    return await handle_google_sheets(
+        node_id="tool_google_sheets",
+        node_type="sheets",
         parameters=parameters,
         context={}
     )
 
 
-async def _execute_calendar_update(args: Dict[str, Any],
-                                   node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Calendar update event via Google API."""
-    from services.handlers.calendar import handle_calendar_update
-
-    parameters = {**node_params, **args}
-    return await handle_calendar_update(
-        node_id="tool_calendar_update",
-        node_type="calendarUpdate",
-        parameters=parameters,
-        context={}
-    )
-
-
-async def _execute_calendar_delete(args: Dict[str, Any],
-                                   node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Calendar delete event via Google API."""
-    from services.handlers.calendar import handle_calendar_delete
-
-    parameters = {**node_params, **args}
-    return await handle_calendar_delete(
-        node_id="tool_calendar_delete",
-        node_type="calendarDelete",
-        parameters=parameters,
-        context={}
-    )
-
-
-# ---------------------------------------------------------------------------
-# Google Drive Tools
-# ---------------------------------------------------------------------------
-
-async def _execute_drive_upload(args: Dict[str, Any],
+async def _execute_google_tasks(args: Dict[str, Any],
                                 node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Drive upload file via Google API."""
-    from services.handlers.drive import handle_drive_upload
+    """Execute Google Tasks operations via consolidated dispatcher."""
+    from services.handlers.tasks import handle_google_tasks
 
     parameters = {**node_params, **args}
-    return await handle_drive_upload(
-        node_id="tool_drive_upload",
-        node_type="driveUpload",
+    return await handle_google_tasks(
+        node_id="tool_google_tasks",
+        node_type="tasks",
         parameters=parameters,
         context={}
     )
 
 
-async def _execute_drive_download(args: Dict[str, Any],
-                                  node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Drive download file via Google API."""
-    from services.handlers.drive import handle_drive_download
-
-    parameters = {**node_params, **args}
-    return await handle_drive_download(
-        node_id="tool_drive_download",
-        node_type="driveDownload",
-        parameters=parameters,
-        context={}
-    )
-
-
-async def _execute_drive_list(args: Dict[str, Any],
-                              node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Drive list files via Google API."""
-    from services.handlers.drive import handle_drive_list
-
-    parameters = {**node_params, **args}
-    return await handle_drive_list(
-        node_id="tool_drive_list",
-        node_type="driveList",
-        parameters=parameters,
-        context={}
-    )
-
-
-async def _execute_drive_share(args: Dict[str, Any],
-                               node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Drive share file via Google API."""
-    from services.handlers.drive import handle_drive_share
-
-    parameters = {**node_params, **args}
-    return await handle_drive_share(
-        node_id="tool_drive_share",
-        node_type="driveShare",
-        parameters=parameters,
-        context={}
-    )
-
-
-# ---------------------------------------------------------------------------
-# Google Sheets Tools
-# ---------------------------------------------------------------------------
-
-async def _execute_sheets_read(args: Dict[str, Any],
-                               node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Sheets read data via Google API."""
-    from services.handlers.sheets import handle_sheets_read
-
-    parameters = {**node_params, **args}
-    return await handle_sheets_read(
-        node_id="tool_sheets_read",
-        node_type="sheetsRead",
-        parameters=parameters,
-        context={}
-    )
-
-
-async def _execute_sheets_write(args: Dict[str, Any],
-                                node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Sheets write data via Google API."""
-    from services.handlers.sheets import handle_sheets_write
-
-    parameters = {**node_params, **args}
-    return await handle_sheets_write(
-        node_id="tool_sheets_write",
-        node_type="sheetsWrite",
-        parameters=parameters,
-        context={}
-    )
-
-
-async def _execute_sheets_append(args: Dict[str, Any],
-                                 node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Sheets append rows via Google API."""
-    from services.handlers.sheets import handle_sheets_append
-
-    parameters = {**node_params, **args}
-    return await handle_sheets_append(
-        node_id="tool_sheets_append",
-        node_type="sheetsAppend",
-        parameters=parameters,
-        context={}
-    )
-
-
-# ---------------------------------------------------------------------------
-# Google Tasks Tools
-# ---------------------------------------------------------------------------
-
-async def _execute_tasks_create(args: Dict[str, Any],
-                                node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Tasks create via Google API."""
-    from services.handlers.tasks import handle_tasks_create
-
-    parameters = {**node_params, **args}
-    return await handle_tasks_create(
-        node_id="tool_tasks_create",
-        node_type="tasksCreate",
-        parameters=parameters,
-        context={}
-    )
-
-
-async def _execute_tasks_list(args: Dict[str, Any],
-                              node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Tasks list via Google API."""
-    from services.handlers.tasks import handle_tasks_list
-
-    parameters = {**node_params, **args}
-    return await handle_tasks_list(
-        node_id="tool_tasks_list",
-        node_type="tasksList",
-        parameters=parameters,
-        context={}
-    )
-
-
-async def _execute_tasks_complete(args: Dict[str, Any],
-                                  node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Tasks complete via Google API."""
-    from services.handlers.tasks import handle_tasks_complete
-
-    parameters = {**node_params, **args}
-    return await handle_tasks_complete(
-        node_id="tool_tasks_complete",
-        node_type="tasksComplete",
-        parameters=parameters,
-        context={}
-    )
-
-
-async def _execute_tasks_update(args: Dict[str, Any],
-                                node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Tasks update via Google API."""
-    from services.handlers.tasks import handle_tasks_update
-
-    parameters = {**node_params, **args}
-    return await handle_tasks_update(
-        node_id="tool_tasks_update",
-        node_type="tasksUpdate",
-        parameters=parameters,
-        context={}
-    )
-
-
-async def _execute_tasks_delete(args: Dict[str, Any],
-                                node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Tasks delete via Google API."""
-    from services.handlers.tasks import handle_tasks_delete
-
-    parameters = {**node_params, **args}
-    return await handle_tasks_delete(
-        node_id="tool_tasks_delete",
-        node_type="tasksDelete",
-        parameters=parameters,
-        context={}
-    )
-
-
-# ---------------------------------------------------------------------------
-# Google Contacts Tools
-# ---------------------------------------------------------------------------
-
-async def _execute_contacts_create(args: Dict[str, Any],
+async def _execute_google_contacts(args: Dict[str, Any],
                                    node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Contacts create via Google People API."""
-    from services.handlers.contacts import handle_contacts_create
+    """Execute Google Contacts operations via consolidated dispatcher."""
+    from services.handlers.contacts import handle_google_contacts
 
     parameters = {**node_params, **args}
-    return await handle_contacts_create(
-        node_id="tool_contacts_create",
-        node_type="contactsCreate",
-        parameters=parameters,
-        context={}
-    )
-
-
-async def _execute_contacts_list(args: Dict[str, Any],
-                                 node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Contacts list via Google People API."""
-    from services.handlers.contacts import handle_contacts_list
-
-    parameters = {**node_params, **args}
-    return await handle_contacts_list(
-        node_id="tool_contacts_list",
-        node_type="contactsList",
-        parameters=parameters,
-        context={}
-    )
-
-
-async def _execute_contacts_search(args: Dict[str, Any],
-                                   node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Contacts search via Google People API."""
-    from services.handlers.contacts import handle_contacts_search
-
-    parameters = {**node_params, **args}
-    return await handle_contacts_search(
-        node_id="tool_contacts_search",
-        node_type="contactsSearch",
-        parameters=parameters,
-        context={}
-    )
-
-
-async def _execute_contacts_get(args: Dict[str, Any],
-                                node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Contacts get via Google People API."""
-    from services.handlers.contacts import handle_contacts_get
-
-    parameters = {**node_params, **args}
-    return await handle_contacts_get(
-        node_id="tool_contacts_get",
-        node_type="contactsGet",
-        parameters=parameters,
-        context={}
-    )
-
-
-async def _execute_contacts_update(args: Dict[str, Any],
-                                   node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Contacts update via Google People API."""
-    from services.handlers.contacts import handle_contacts_update
-
-    parameters = {**node_params, **args}
-    return await handle_contacts_update(
-        node_id="tool_contacts_update",
-        node_type="contactsUpdate",
-        parameters=parameters,
-        context={}
-    )
-
-
-async def _execute_contacts_delete(args: Dict[str, Any],
-                                   node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Contacts delete via Google People API."""
-    from services.handlers.contacts import handle_contacts_delete
-
-    parameters = {**node_params, **args}
-    return await handle_contacts_delete(
-        node_id="tool_contacts_delete",
-        node_type="contactsDelete",
+    return await handle_google_contacts(
+        node_id="tool_google_contacts",
+        node_type="contacts",
         parameters=parameters,
         context={}
     )

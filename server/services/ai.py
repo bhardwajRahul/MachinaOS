@@ -2405,6 +2405,13 @@ class AIService:
             'environmentalSensors': 'android_environmental_sensors',
             'cameraControl': 'android_camera',
             'mediaControl': 'android_media',
+            # Google Workspace (consolidated nodes)
+            'gmail': 'google_gmail',
+            'calendar': 'google_calendar',
+            'drive': 'google_drive',
+            'sheets': 'google_sheets',
+            'tasks': 'google_tasks',
+            'contacts': 'google_contacts',
         }
         DEFAULT_TOOL_DESCRIPTIONS = {
             'calculatorTool': 'Perform mathematical calculations. Operations: add, subtract, multiply, divide, power, sqrt, mod, abs',
@@ -2457,6 +2464,13 @@ class AIService:
             'environmentalSensors': 'Read Android environmental sensors - temperature, humidity, pressure, light.',
             'cameraControl': 'Control Android camera - get info, take photos, camera capabilities.',
             'mediaControl': 'Control Android media playback - volume, playback control, play media files.',
+            # Google Workspace (consolidated nodes)
+            'gmail': 'Send, search, and read emails via Gmail. Operations: send (compose email), search (find emails by query), read (get email by ID).',
+            'calendar': 'Manage Google Calendar events. Operations: create (new event), list (events in date range), update (modify event), delete (remove event).',
+            'drive': 'Manage Google Drive files. Operations: upload (add file from URL), download (get file by ID), list (find files), share (share with user).',
+            'sheets': 'Read and write Google Sheets data. Operations: read (get range), write (set range), append (add rows).',
+            'tasks': 'Manage Google Tasks. Operations: create (new task), list (find tasks), complete (mark done), update (modify task), delete (remove task).',
+            'contacts': 'Manage Google Contacts. Operations: create (new contact), list (browse), search (find by name/email/phone), get (details by resource name), update (modify), delete (remove).',
         }
 
         try:
@@ -3050,571 +3064,186 @@ class AIService:
 
             return TwitterUserSchema
 
-        # Gmail Send tool schema (dual-purpose: workflow node + AI tool)
-        if node_type == 'gmailSend':
-            class GmailSendSchema(BaseModel):
-                """Send emails via Gmail. Supports text and HTML body types."""
-                to: str = Field(
-                    description="Recipient email address(es), comma-separated for multiple"
-                )
-                subject: str = Field(
-                    description="Email subject line"
-                )
-                body: str = Field(
-                    description="Email body content"
-                )
-                cc: Optional[str] = Field(
-                    default=None,
-                    description="CC recipients, comma-separated"
-                )
-                bcc: Optional[str] = Field(
-                    default=None,
-                    description="BCC recipients, comma-separated"
-                )
-                body_type: str = Field(
-                    default="text",
-                    description="Body type: 'text' (plain text) or 'html'"
-                )
-
-            return GmailSendSchema
-
-        # Gmail Search tool schema (dual-purpose: workflow node + AI tool)
-        if node_type == 'gmailSearch':
-            class GmailSearchSchema(BaseModel):
-                """Search emails in Gmail inbox using Gmail query syntax."""
-                query: str = Field(
-                    description="Gmail search query (same syntax as Gmail web). Examples: 'from:user@example.com', 'subject:meeting', 'is:unread', 'has:attachment'"
-                )
-                max_results: int = Field(
-                    default=10,
-                    description="Maximum number of messages to return (1-100)"
-                )
-                include_body: bool = Field(
-                    default=False,
-                    description="Whether to fetch full message body (slower but more complete)"
-                )
-
-            return GmailSearchSchema
-
-        # Gmail Read tool schema (dual-purpose: workflow node + AI tool)
-        if node_type == 'gmailRead':
-            class GmailReadSchema(BaseModel):
-                """Read a specific email message by its ID."""
-                message_id: str = Field(
-                    description="The Gmail message ID to read"
-                )
-                format: str = Field(
-                    default="full",
-                    description="Format: 'full' (complete message), 'minimal' (IDs only), 'raw' (RFC 2822), 'metadata' (headers only)"
-                )
-
-            return GmailReadSchema
-
         # ============================================================================
-        # GOOGLE CALENDAR TOOL SCHEMAS
+        # GOOGLE WORKSPACE CONSOLIDATED TOOL SCHEMAS
         # ============================================================================
 
-        # Calendar Create tool schema (dual-purpose: workflow node + AI tool)
-        if node_type == 'calendarCreate':
-            class CalendarCreateSchema(BaseModel):
-                """Create a new event in Google Calendar."""
-                title: str = Field(
-                    description="Event title/summary"
-                )
-                start_time: str = Field(
-                    description="Start time in ISO 8601 format (e.g., '2026-02-22T14:00:00') or date only for all-day (e.g., '2026-02-22')"
-                )
-                end_time: str = Field(
-                    description="End time in ISO 8601 format or date only for all-day events"
-                )
-                description: Optional[str] = Field(
-                    default=None,
-                    description="Event description/notes"
-                )
-                location: Optional[str] = Field(
-                    default=None,
-                    description="Event location (address or place name)"
-                )
-                attendees: Optional[str] = Field(
-                    default=None,
-                    description="Comma-separated list of attendee email addresses"
-                )
-                timezone: str = Field(
-                    default="UTC",
-                    description="Timezone for the event (e.g., 'America/New_York', 'Europe/London')"
-                )
-                calendar_id: str = Field(
-                    default="primary",
-                    description="Calendar ID (use 'primary' for main calendar)"
-                )
-                send_updates: str = Field(
-                    default="none",
-                    description="Send update notifications: 'all', 'externalOnly', or 'none'"
-                )
+        if node_type == 'gmail':
+            class GoogleGmailSchema(BaseModel):
+                """Send, search, and read emails via Gmail.
 
-            return CalendarCreateSchema
+                - send: Compose and send an email (requires to, subject, body)
+                - search: Find emails by query (requires query)
+                - read: Get email by message ID (requires message_id)
+                """
+                operation: str = Field(
+                    description="Operation: 'send', 'search', or 'read'"
+                )
+                # send fields
+                to: Optional[str] = Field(default=None, description="[send] Recipient email(s), comma-separated")
+                subject: Optional[str] = Field(default=None, description="[send] Email subject line")
+                body: Optional[str] = Field(default=None, description="[send] Email body content")
+                cc: Optional[str] = Field(default=None, description="[send] CC recipients, comma-separated")
+                bcc: Optional[str] = Field(default=None, description="[send] BCC recipients, comma-separated")
+                body_type: str = Field(default="text", description="[send] Body type: 'text' or 'html'")
+                # search fields
+                query: Optional[str] = Field(default=None, description="[search] Gmail search query (e.g., 'from:user@example.com', 'subject:meeting', 'is:unread')")
+                max_results: int = Field(default=10, description="[search] Max messages to return (1-100)")
+                include_body: bool = Field(default=False, description="[search] Fetch full message body")
+                # read fields
+                message_id: Optional[str] = Field(default=None, description="[read] Gmail message ID to read")
+                format: str = Field(default="full", description="[read] Format: 'full', 'minimal', 'raw', 'metadata'")
 
-        # Calendar List tool schema (dual-purpose: workflow node + AI tool)
-        if node_type == 'calendarList':
-            class CalendarListSchema(BaseModel):
-                """List events from Google Calendar within a date range."""
-                start_date: str = Field(
-                    description="Start date in ISO 8601 format (e.g., '2026-02-22' or '2026-02-22T00:00:00Z')"
-                )
-                end_date: str = Field(
-                    description="End date in ISO 8601 format"
-                )
-                calendar_id: str = Field(
-                    default="primary",
-                    description="Calendar ID (use 'primary' for main calendar)"
-                )
-                max_results: int = Field(
-                    default=50,
-                    description="Maximum number of events to return (1-2500)"
-                )
-                query: Optional[str] = Field(
-                    default=None,
-                    description="Free text search query to filter events"
-                )
+            return GoogleGmailSchema
 
-            return CalendarListSchema
+        if node_type == 'calendar':
+            class GoogleCalendarSchema(BaseModel):
+                """Manage Google Calendar events.
 
-        # Calendar Update tool schema (dual-purpose: workflow node + AI tool)
-        if node_type == 'calendarUpdate':
-            class CalendarUpdateSchema(BaseModel):
-                """Update an existing Google Calendar event."""
-                event_id: str = Field(
-                    description="The event ID to update"
+                - create: Create new event (requires title, start_time, end_time)
+                - list: List events in date range (requires start_date, end_date)
+                - update: Update existing event (requires event_id)
+                - delete: Delete event (requires event_id)
+                """
+                operation: str = Field(
+                    description="Operation: 'create', 'list', 'update', or 'delete'"
                 )
-                title: Optional[str] = Field(
-                    default=None,
-                    description="New event title (leave empty to keep current)"
-                )
-                start_time: Optional[str] = Field(
-                    default=None,
-                    description="New start time in ISO 8601 format (leave empty to keep current)"
-                )
-                end_time: Optional[str] = Field(
-                    default=None,
-                    description="New end time in ISO 8601 format (leave empty to keep current)"
-                )
-                description: Optional[str] = Field(
-                    default=None,
-                    description="New description (leave empty to keep current)"
-                )
-                location: Optional[str] = Field(
-                    default=None,
-                    description="New location (leave empty to keep current)"
-                )
-                calendar_id: str = Field(
-                    default="primary",
-                    description="Calendar ID"
-                )
-                send_updates: str = Field(
-                    default="none",
-                    description="Send update notifications: 'all', 'externalOnly', or 'none'"
-                )
+                calendar_id: str = Field(default="primary", description="Calendar ID ('primary' for main calendar)")
+                # create/update fields
+                title: Optional[str] = Field(default=None, description="[create/update] Event title")
+                start_time: Optional[str] = Field(default=None, description="[create/update] Start time ISO 8601 (e.g., '2026-02-22T14:00:00')")
+                end_time: Optional[str] = Field(default=None, description="[create/update] End time ISO 8601")
+                description: Optional[str] = Field(default=None, description="[create/update] Event description")
+                location: Optional[str] = Field(default=None, description="[create/update] Event location")
+                attendees: Optional[str] = Field(default=None, description="[create] Comma-separated attendee emails")
+                timezone: str = Field(default="UTC", description="[create] Timezone (e.g., 'America/New_York')")
+                send_updates: str = Field(default="none", description="[create/update/delete] Notifications: 'all', 'externalOnly', 'none'")
+                # list fields
+                start_date: Optional[str] = Field(default=None, description="[list] Start date ISO 8601")
+                end_date: Optional[str] = Field(default=None, description="[list] End date ISO 8601")
+                max_results: int = Field(default=50, description="[list] Max events (1-2500)")
+                query: Optional[str] = Field(default=None, description="[list] Text search query")
+                # update/delete fields
+                event_id: Optional[str] = Field(default=None, description="[update/delete] Event ID")
 
-            return CalendarUpdateSchema
+            return GoogleCalendarSchema
 
-        # Calendar Delete tool schema (dual-purpose: workflow node + AI tool)
-        if node_type == 'calendarDelete':
-            class CalendarDeleteSchema(BaseModel):
-                """Delete an event from Google Calendar."""
-                event_id: str = Field(
-                    description="The event ID to delete"
-                )
-                calendar_id: str = Field(
-                    default="primary",
-                    description="Calendar ID"
-                )
-                send_updates: str = Field(
-                    default="none",
-                    description="Send cancellation notifications: 'all', 'externalOnly', or 'none'"
-                )
+        if node_type == 'drive':
+            class GoogleDriveSchema(BaseModel):
+                """Manage Google Drive files.
 
-            return CalendarDeleteSchema
+                - upload: Upload file from URL (requires file_url)
+                - download: Download file (requires file_id)
+                - list: List/search files
+                - share: Share file with user (requires file_id, email)
+                """
+                operation: str = Field(
+                    description="Operation: 'upload', 'download', 'list', or 'share'"
+                )
+                # upload fields
+                file_url: Optional[str] = Field(default=None, description="[upload] URL of file to upload")
+                filename: Optional[str] = Field(default=None, description="[upload] Custom filename (auto-detected from URL)")
+                mime_type: Optional[str] = Field(default=None, description="[upload] MIME type (auto-detected if omitted)")
+                # upload/list fields
+                folder_id: Optional[str] = Field(default=None, description="[upload/list] Folder ID (omit for root)")
+                # download/share fields
+                file_id: Optional[str] = Field(default=None, description="[download/share] Drive file ID")
+                # list fields
+                query: Optional[str] = Field(default=None, description="[list] Drive search query")
+                max_results: int = Field(default=100, description="[list] Max files (1-1000)")
+                file_types: Optional[str] = Field(default=None, description="[list] Filter: 'documents', 'spreadsheets', 'images', etc.")
+                # share fields
+                email: Optional[str] = Field(default=None, description="[share] Email to share with")
+                role: str = Field(default="reader", description="[share] Role: 'reader', 'writer', 'commenter'")
+                send_notification: bool = Field(default=True, description="[share] Send email notification")
 
-        # ============================================================================
-        # GOOGLE DRIVE TOOL SCHEMAS
-        # ============================================================================
+            return GoogleDriveSchema
 
-        # Drive Upload tool schema (dual-purpose: workflow node + AI tool)
-        if node_type == 'driveUpload':
-            class DriveUploadSchema(BaseModel):
-                """Upload a file to Google Drive."""
-                file_url: str = Field(
-                    description="URL of the file to upload (will be downloaded and uploaded to Drive)"
-                )
-                filename: Optional[str] = Field(
-                    default=None,
-                    description="Custom filename for the uploaded file (optional, auto-detected from URL)"
-                )
-                folder_id: Optional[str] = Field(
-                    default=None,
-                    description="Parent folder ID (omit for root Drive folder)"
-                )
-                mime_type: Optional[str] = Field(
-                    default=None,
-                    description="MIME type (e.g., 'application/pdf'). Auto-detected if not specified."
-                )
+        if node_type == 'sheets':
+            class GoogleSheetsSchema(BaseModel):
+                """Read and write Google Sheets data.
 
-            return DriveUploadSchema
+                - read: Read data from range (requires spreadsheet_id, range)
+                - write: Write data to range (requires spreadsheet_id, range, values)
+                - append: Append rows (requires spreadsheet_id, range, values)
+                """
+                operation: str = Field(
+                    description="Operation: 'read', 'write', or 'append'"
+                )
+                spreadsheet_id: str = Field(description="Spreadsheet ID (from URL between /d/ and /edit)")
+                range: str = Field(description="A1 notation range (e.g., 'Sheet1!A1:D10')")
+                # write/append fields
+                values: Optional[str] = Field(default=None, description="[write/append] 2D array as JSON string (e.g., '[[\"Name\",\"Age\"],[\"Alice\",25]]')")
+                value_input_option: str = Field(default="USER_ENTERED", description="[write/append] Input mode: 'USER_ENTERED' or 'RAW'")
+                # read fields
+                value_render_option: str = Field(default="FORMATTED_VALUE", description="[read] Render: 'FORMATTED_VALUE', 'UNFORMATTED_VALUE', 'FORMULA'")
+                major_dimension: str = Field(default="ROWS", description="[read] Dimension: 'ROWS' or 'COLUMNS'")
+                # append fields
+                insert_data_option: str = Field(default="INSERT_ROWS", description="[append] Insert mode: 'INSERT_ROWS' or 'OVERWRITE'")
 
-        # Drive Download tool schema (dual-purpose: workflow node + AI tool)
-        if node_type == 'driveDownload':
-            class DriveDownloadSchema(BaseModel):
-                """Download a file from Google Drive."""
-                file_id: str = Field(
-                    description="The Drive file ID to download"
-                )
+            return GoogleSheetsSchema
 
-            return DriveDownloadSchema
+        if node_type == 'tasks':
+            class GoogleTasksSchema(BaseModel):
+                """Manage Google Tasks.
 
-        # Drive List tool schema (dual-purpose: workflow node + AI tool)
-        if node_type == 'driveList':
-            class DriveListSchema(BaseModel):
-                """List files in Google Drive."""
-                folder_id: Optional[str] = Field(
-                    default=None,
-                    description="Folder ID to list files from (omit for root or all files)"
+                - create: Create new task (requires title)
+                - list: List tasks from a task list
+                - complete: Mark task as done (requires task_id)
+                - update: Update task (requires task_id)
+                - delete: Delete task (requires task_id)
+                """
+                operation: str = Field(
+                    description="Operation: 'create', 'list', 'complete', 'update', or 'delete'"
                 )
-                query: Optional[str] = Field(
-                    default=None,
-                    description="Drive search query (e.g., \"name contains 'report'\" or \"mimeType='application/pdf'\")"
-                )
-                max_results: int = Field(
-                    default=100,
-                    description="Maximum number of files to return (1-1000)"
-                )
-                file_types: Optional[str] = Field(
-                    default=None,
-                    description="Filter by file type: 'documents', 'spreadsheets', 'presentations', 'pdfs', 'images', 'videos'"
-                )
+                tasklist_id: str = Field(default="@default", description="Task list ID ('@default' for default list)")
+                # create/update fields
+                title: Optional[str] = Field(default=None, description="[create/update] Task title")
+                notes: Optional[str] = Field(default=None, description="[create/update] Task notes/description")
+                due_date: Optional[str] = Field(default=None, description="[create/update] Due date ISO 8601 (e.g., '2026-02-25')")
+                # complete/update/delete fields
+                task_id: Optional[str] = Field(default=None, description="[complete/update/delete] Task ID")
+                # update fields
+                status: Optional[str] = Field(default=None, description="[update] Status: 'needsAction' or 'completed'")
+                # list fields
+                show_completed: bool = Field(default=False, description="[list] Include completed tasks")
+                show_hidden: bool = Field(default=False, description="[list] Include hidden tasks")
+                max_results: int = Field(default=100, description="[list] Max tasks to return")
 
-            return DriveListSchema
+            return GoogleTasksSchema
 
-        # Drive Share tool schema (dual-purpose: workflow node + AI tool)
-        if node_type == 'driveShare':
-            class DriveShareSchema(BaseModel):
-                """Share a Google Drive file with someone."""
-                file_id: str = Field(
-                    description="The Drive file ID to share"
-                )
-                email: str = Field(
-                    description="Email address to share with"
-                )
-                role: str = Field(
-                    default="reader",
-                    description="Permission role: 'reader', 'writer', or 'commenter'"
-                )
-                send_notification: bool = Field(
-                    default=True,
-                    description="Whether to send an email notification to the user"
-                )
+        if node_type == 'contacts':
+            class GoogleContactsSchema(BaseModel):
+                """Manage Google Contacts.
 
-            return DriveShareSchema
+                - create: Create contact (requires first_name)
+                - list: Browse contacts with pagination
+                - search: Find contacts by name/email/phone (requires query)
+                - get: Get contact details (requires resource_name)
+                - update: Update contact (requires resource_name)
+                - delete: Delete contact (requires resource_name)
+                """
+                operation: str = Field(
+                    description="Operation: 'create', 'list', 'search', 'get', 'update', or 'delete'"
+                )
+                # create/update fields
+                first_name: Optional[str] = Field(default=None, description="[create/update] First name")
+                last_name: Optional[str] = Field(default=None, description="[create/update] Last name")
+                email: Optional[str] = Field(default=None, description="[create/update] Email address")
+                phone: Optional[str] = Field(default=None, description="[create/update] Phone number")
+                company: Optional[str] = Field(default=None, description="[create/update] Company name")
+                job_title: Optional[str] = Field(default=None, description="[create/update] Job title")
+                notes: Optional[str] = Field(default=None, description="[create] Notes about the contact")
+                # get/update/delete fields
+                resource_name: Optional[str] = Field(default=None, description="[get/update/delete] Contact resource name (e.g., 'people/c12345678')")
+                # search fields
+                query: Optional[str] = Field(default=None, description="[search] Search query (name, email, phone)")
+                # list/search fields
+                page_size: int = Field(default=100, description="[list/search] Number of results (1-1000)")
+                sort_order: str = Field(default="LAST_MODIFIED_DESCENDING", description="[list] Sort: 'LAST_MODIFIED_DESCENDING', 'FIRST_NAME_ASCENDING', etc.")
+                page_token: Optional[str] = Field(default=None, description="[list] Pagination token")
 
-        # ============================================================================
-        # GOOGLE SHEETS TOOL SCHEMAS
-        # ============================================================================
-
-        # Sheets Read tool schema (dual-purpose: workflow node + AI tool)
-        if node_type == 'sheetsRead':
-            class SheetsReadSchema(BaseModel):
-                """Read data from a Google Sheets spreadsheet."""
-                spreadsheet_id: str = Field(
-                    description="Spreadsheet ID (from the URL, between /d/ and /edit)"
-                )
-                range: str = Field(
-                    description="A1 notation range (e.g., 'Sheet1!A1:D10' or 'A:D' for entire columns)"
-                )
-                value_render_option: str = Field(
-                    default="FORMATTED_VALUE",
-                    description="How values are rendered: 'FORMATTED_VALUE', 'UNFORMATTED_VALUE', or 'FORMULA'"
-                )
-                major_dimension: str = Field(
-                    default="ROWS",
-                    description="Whether to return rows or columns first: 'ROWS' or 'COLUMNS'"
-                )
-
-            return SheetsReadSchema
-
-        # Sheets Write tool schema (dual-purpose: workflow node + AI tool)
-        if node_type == 'sheetsWrite':
-            class SheetsWriteSchema(BaseModel):
-                """Write data to a Google Sheets spreadsheet."""
-                spreadsheet_id: str = Field(
-                    description="Spreadsheet ID (from the URL)"
-                )
-                range: str = Field(
-                    description="Starting cell in A1 notation (e.g., 'Sheet1!A1')"
-                )
-                values: str = Field(
-                    description="2D array of values as JSON string (e.g., '[[\"Name\", \"Age\"], [\"Alice\", 25]]')"
-                )
-                value_input_option: str = Field(
-                    default="USER_ENTERED",
-                    description="How input is interpreted: 'USER_ENTERED' (parses formulas) or 'RAW'"
-                )
-
-            return SheetsWriteSchema
-
-        # Sheets Append tool schema (dual-purpose: workflow node + AI tool)
-        if node_type == 'sheetsAppend':
-            class SheetsAppendSchema(BaseModel):
-                """Append rows to a Google Sheets spreadsheet."""
-                spreadsheet_id: str = Field(
-                    description="Spreadsheet ID (from the URL)"
-                )
-                range: str = Field(
-                    description="Table range in A1 notation (e.g., 'Sheet1!A:D')"
-                )
-                values: str = Field(
-                    description="2D array of rows to append as JSON string (e.g., '[[\"Alice\", 25, \"alice@email.com\"]]')"
-                )
-                value_input_option: str = Field(
-                    default="USER_ENTERED",
-                    description="How input is interpreted: 'USER_ENTERED' or 'RAW'"
-                )
-                insert_data_option: str = Field(
-                    default="INSERT_ROWS",
-                    description="How data is inserted: 'INSERT_ROWS' or 'OVERWRITE'"
-                )
-
-            return SheetsAppendSchema
-
-        # ============================================================================
-        # GOOGLE TASKS TOOL SCHEMAS
-        # ============================================================================
-
-        # Tasks Create tool schema (dual-purpose: workflow node + AI tool)
-        if node_type == 'tasksCreate':
-            class TasksCreateSchema(BaseModel):
-                """Create a new task in Google Tasks."""
-                title: str = Field(
-                    description="Task title (required)"
-                )
-                notes: Optional[str] = Field(
-                    default=None,
-                    description="Task notes/description"
-                )
-                due_date: Optional[str] = Field(
-                    default=None,
-                    description="Due date in ISO 8601 format (e.g., '2026-02-25' or '2026-02-25T14:00:00Z')"
-                )
-                tasklist_id: str = Field(
-                    default="@default",
-                    description="Task list ID (use '@default' for the default list)"
-                )
-
-            return TasksCreateSchema
-
-        # Tasks List tool schema (dual-purpose: workflow node + AI tool)
-        if node_type == 'tasksList':
-            class TasksListSchema(BaseModel):
-                """List tasks from Google Tasks."""
-                tasklist_id: str = Field(
-                    default="@default",
-                    description="Task list ID (use '@default' for the default list)"
-                )
-                show_completed: bool = Field(
-                    default=False,
-                    description="Include completed tasks"
-                )
-                show_hidden: bool = Field(
-                    default=False,
-                    description="Include hidden tasks"
-                )
-                max_results: int = Field(
-                    default=100,
-                    description="Maximum number of tasks to return"
-                )
-
-            return TasksListSchema
-
-        # Tasks Complete tool schema (dual-purpose: workflow node + AI tool)
-        if node_type == 'tasksComplete':
-            class TasksCompleteSchema(BaseModel):
-                """Mark a Google Task as completed."""
-                task_id: str = Field(
-                    description="The task ID to mark as completed"
-                )
-                tasklist_id: str = Field(
-                    default="@default",
-                    description="Task list ID"
-                )
-
-            return TasksCompleteSchema
-
-        # Tasks Update tool schema (dual-purpose: workflow node + AI tool)
-        if node_type == 'tasksUpdate':
-            class TasksUpdateSchema(BaseModel):
-                """Update an existing Google Task."""
-                task_id: str = Field(
-                    description="The task ID to update"
-                )
-                tasklist_id: str = Field(
-                    default="@default",
-                    description="Task list ID"
-                )
-                title: Optional[str] = Field(
-                    default=None,
-                    description="New task title (leave empty to keep current)"
-                )
-                notes: Optional[str] = Field(
-                    default=None,
-                    description="New task notes (leave empty to keep current)"
-                )
-                due_date: Optional[str] = Field(
-                    default=None,
-                    description="New due date in ISO 8601 format (leave empty to keep current)"
-                )
-                status: Optional[str] = Field(
-                    default=None,
-                    description="New status: 'needsAction' or 'completed'"
-                )
-
-            return TasksUpdateSchema
-
-        # Tasks Delete tool schema (dual-purpose: workflow node + AI tool)
-        if node_type == 'tasksDelete':
-            class TasksDeleteSchema(BaseModel):
-                """Delete a task from Google Tasks."""
-                task_id: str = Field(
-                    description="The task ID to delete"
-                )
-                tasklist_id: str = Field(
-                    default="@default",
-                    description="Task list ID"
-                )
-
-            return TasksDeleteSchema
-
-        # ============================================================================
-        # GOOGLE CONTACTS (PEOPLE API) TOOL SCHEMAS
-        # ============================================================================
-
-        # Contacts Create tool schema (dual-purpose: workflow node + AI tool)
-        if node_type == 'contactsCreate':
-            class ContactsCreateSchema(BaseModel):
-                """Create a new contact in Google Contacts."""
-                first_name: str = Field(
-                    description="Contact's first name (required)"
-                )
-                last_name: Optional[str] = Field(
-                    default=None,
-                    description="Contact's last name"
-                )
-                email: Optional[str] = Field(
-                    default=None,
-                    description="Email address"
-                )
-                phone: Optional[str] = Field(
-                    default=None,
-                    description="Phone number"
-                )
-                company: Optional[str] = Field(
-                    default=None,
-                    description="Company/organization name"
-                )
-                job_title: Optional[str] = Field(
-                    default=None,
-                    description="Job title"
-                )
-                notes: Optional[str] = Field(
-                    default=None,
-                    description="Notes about the contact"
-                )
-
-            return ContactsCreateSchema
-
-        # Contacts List tool schema (dual-purpose: workflow node + AI tool)
-        if node_type == 'contactsList':
-            class ContactsListSchema(BaseModel):
-                """List contacts from Google Contacts."""
-                page_size: int = Field(
-                    default=100,
-                    description="Number of contacts to return (1-1000)"
-                )
-                sort_order: str = Field(
-                    default="LAST_MODIFIED_DESCENDING",
-                    description="Sort order: 'LAST_MODIFIED_DESCENDING', 'LAST_MODIFIED_ASCENDING', 'FIRST_NAME_ASCENDING', 'LAST_NAME_ASCENDING'"
-                )
-                page_token: Optional[str] = Field(
-                    default=None,
-                    description="Token for pagination (from previous request)"
-                )
-
-            return ContactsListSchema
-
-        # Contacts Search tool schema (dual-purpose: workflow node + AI tool)
-        if node_type == 'contactsSearch':
-            class ContactsSearchSchema(BaseModel):
-                """Search contacts in Google Contacts by name, email, or phone."""
-                query: str = Field(
-                    description="Search query (name, email, or phone number)"
-                )
-                page_size: int = Field(
-                    default=30,
-                    description="Maximum number of results (1-100)"
-                )
-
-            return ContactsSearchSchema
-
-        # Contacts Get tool schema (dual-purpose: workflow node + AI tool)
-        if node_type == 'contactsGet':
-            class ContactsGetSchema(BaseModel):
-                """Get a specific contact by resource name."""
-                resource_name: str = Field(
-                    description="Contact resource name (e.g., 'people/c12345678')"
-                )
-
-            return ContactsGetSchema
-
-        # Contacts Update tool schema (dual-purpose: workflow node + AI tool)
-        if node_type == 'contactsUpdate':
-            class ContactsUpdateSchema(BaseModel):
-                """Update an existing contact in Google Contacts."""
-                resource_name: str = Field(
-                    description="Contact resource name to update (e.g., 'people/c12345678')"
-                )
-                first_name: Optional[str] = Field(
-                    default=None,
-                    description="New first name (leave empty to keep current)"
-                )
-                last_name: Optional[str] = Field(
-                    default=None,
-                    description="New last name (leave empty to keep current)"
-                )
-                email: Optional[str] = Field(
-                    default=None,
-                    description="New email (leave empty to keep current)"
-                )
-                phone: Optional[str] = Field(
-                    default=None,
-                    description="New phone (leave empty to keep current)"
-                )
-                company: Optional[str] = Field(
-                    default=None,
-                    description="New company (leave empty to keep current)"
-                )
-                job_title: Optional[str] = Field(
-                    default=None,
-                    description="New job title (leave empty to keep current)"
-                )
-
-            return ContactsUpdateSchema
-
-        # Contacts Delete tool schema (dual-purpose: workflow node + AI tool)
-        if node_type == 'contactsDelete':
-            class ContactsDeleteSchema(BaseModel):
-                """Delete a contact from Google Contacts."""
-                resource_name: str = Field(
-                    description="Contact resource name to delete (e.g., 'people/c12345678')"
-                )
-
-            return ContactsDeleteSchema
+            return GoogleContactsSchema
 
         # Check delegated tasks schema (built-in tool for result retrieval)
         if node_type == '_builtin_check_delegated_tasks':

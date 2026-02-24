@@ -19,13 +19,9 @@ import { documentNodes, DOCUMENT_NODE_TYPES } from './nodeDefinitions/documentNo
 import { socialNodes, SOCIAL_NODE_TYPES } from './nodeDefinitions/socialNodes';
 import { twitterNodes, TWITTER_NODE_TYPES } from './nodeDefinitions/twitterNodes';
 import { apifyNodes, APIFY_NODE_TYPES } from './nodeDefinitions/apifyNodes';
-import { gmailNodes, GMAIL_NODE_TYPES } from './nodeDefinitions/gmailNodes';
-import { calendarNodes, CALENDAR_NODE_TYPES } from './nodeDefinitions/calendarNodes';
-import { driveNodes, DRIVE_NODE_TYPES } from './nodeDefinitions/driveNodes';
-import { sheetsNodes, SHEETS_NODE_TYPES } from './nodeDefinitions/sheetsNodes';
-import { tasksNodes, TASKS_NODE_TYPES } from './nodeDefinitions/tasksNodes';
-import { contactsNodes, CONTACTS_NODE_TYPES } from './nodeDefinitions/contactsNodes';
 import { searchNodes, SEARCH_NODE_TYPES } from './nodeDefinitions/searchNodes';
+// Consolidated Google Workspace nodes (replaces gmailNodes, calendarNodes, driveNodes, sheetsNodes, tasksNodes, contactsNodes)
+import { googleWorkspaceNodes, GOOGLE_WORKSPACE_NODE_TYPES } from './nodeDefinitions/googleWorkspaceNodes';
 
 // ============================================================================
 // MAIN NODE REGISTRY - Combining all modular definitions
@@ -50,13 +46,8 @@ export const nodeDefinitions: Record<string, INodeTypeDescription> = {
   ...socialNodes,
   ...twitterNodes,
   ...apifyNodes,
-  ...gmailNodes,
-  ...calendarNodes,
-  ...driveNodes,
-  ...sheetsNodes,
-  ...tasksNodes,
-  ...contactsNodes,
-  ...searchNodes
+  ...searchNodes,
+  ...googleWorkspaceNodes
 };
 
 // ============================================================================
@@ -136,28 +127,9 @@ export const APIFY_NODES = [
   ...APIFY_NODE_TYPES
 ];
 
-export const GMAIL_NODES = [
-  ...GMAIL_NODE_TYPES
-];
-
-export const CALENDAR_NODES = [
-  ...CALENDAR_NODE_TYPES
-];
-
-export const DRIVE_NODES = [
-  ...DRIVE_NODE_TYPES
-];
-
-export const SHEETS_NODES = [
-  ...SHEETS_NODE_TYPES
-];
-
-export const TASKS_NODES = [
-  ...TASKS_NODE_TYPES
-];
-
-export const CONTACTS_NODES = [
-  ...CONTACTS_NODE_TYPES
+// Consolidated Google Workspace nodes (gmail, gmailReceive, calendar, drive, sheets, tasks, contacts)
+export const GOOGLE_WORKSPACE_NODES = [
+  ...GOOGLE_WORKSPACE_NODE_TYPES
 ];
 
 export const SEARCH_NODES = [

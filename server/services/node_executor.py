@@ -37,26 +37,16 @@ from services.handlers import (
     handle_text_chunker, handle_embedding_generator, handle_vector_store,
     handle_task_manager,
     handle_twitter_send, handle_twitter_search, handle_twitter_user,
-    handle_gmail_send, handle_gmail_search, handle_gmail_read,
     handle_brave_search, handle_serper_search, handle_perplexity_search,
 )
 from services.handlers.apify import handle_apify_actor
-from services.handlers.calendar import (
-    handle_calendar_create, handle_calendar_list, handle_calendar_update, handle_calendar_delete,
-)
-from services.handlers.drive import (
-    handle_drive_upload, handle_drive_download, handle_drive_list, handle_drive_share,
-)
-from services.handlers.sheets import (
-    handle_sheets_read, handle_sheets_write, handle_sheets_append,
-)
-from services.handlers.tasks import (
-    handle_tasks_create, handle_tasks_list, handle_tasks_complete, handle_tasks_update, handle_tasks_delete,
-)
-from services.handlers.contacts import (
-    handle_contacts_create, handle_contacts_list, handle_contacts_search,
-    handle_contacts_get, handle_contacts_update, handle_contacts_delete,
-)
+# Consolidated Google Workspace handlers (6 services with operation dispatchers)
+from services.handlers.gmail import handle_google_gmail
+from services.handlers.calendar import handle_google_calendar
+from services.handlers.drive import handle_google_drive
+from services.handlers.sheets import handle_google_sheets
+from services.handlers.tasks import handle_google_tasks
+from services.handlers.contacts import handle_google_contacts
 
 if TYPE_CHECKING:
     from core.config import Settings
@@ -158,37 +148,14 @@ class NodeExecutor:
             'twitterSend': handle_twitter_send,
             'twitterSearch': handle_twitter_search,
             'twitterUser': handle_twitter_user,
-            # Gmail
-            'gmailSend': handle_gmail_send,
-            'gmailSearch': handle_gmail_search,
-            'gmailRead': handle_gmail_read,
-            # Google Calendar
-            'calendarCreate': handle_calendar_create,
-            'calendarList': handle_calendar_list,
-            'calendarUpdate': handle_calendar_update,
-            'calendarDelete': handle_calendar_delete,
-            # Google Drive
-            'driveUpload': handle_drive_upload,
-            'driveDownload': handle_drive_download,
-            'driveList': handle_drive_list,
-            'driveShare': handle_drive_share,
-            # Google Sheets
-            'sheetsRead': handle_sheets_read,
-            'sheetsWrite': handle_sheets_write,
-            'sheetsAppend': handle_sheets_append,
-            # Google Tasks
-            'tasksCreate': handle_tasks_create,
-            'tasksList': handle_tasks_list,
-            'tasksComplete': handle_tasks_complete,
-            'tasksUpdate': handle_tasks_update,
-            'tasksDelete': handle_tasks_delete,
-            # Google Contacts (People API)
-            'contactsCreate': handle_contacts_create,
-            'contactsList': handle_contacts_list,
-            'contactsSearch': handle_contacts_search,
-            'contactsGet': handle_contacts_get,
-            'contactsUpdate': handle_contacts_update,
-            'contactsDelete': handle_contacts_delete,
+            # Google Workspace (consolidated with operation dispatchers)
+            # Note: gmailReceive is a trigger node, handled by event_waiter
+            'gmail': handle_google_gmail,
+            'calendar': handle_google_calendar,
+            'drive': handle_google_drive,
+            'sheets': handle_google_sheets,
+            'tasks': handle_google_tasks,
+            'contacts': handle_google_contacts,
             # Search
             'braveSearch': handle_brave_search,
             'serperSearch': handle_serper_search,

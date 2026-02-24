@@ -414,3 +414,36 @@ def _extract_attachments(payload: Dict[str, Any]) -> list:
             attachments.extend(nested)
 
     return attachments
+
+
+# ============================================================================
+# CONSOLIDATED DISPATCHER
+# ============================================================================
+
+async def handle_google_gmail(
+    node_id: str,
+    node_type: str,
+    parameters: Dict[str, Any],
+    context: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Consolidated Gmail handler with operation dispatcher.
+
+    Routes to appropriate handler based on 'operation' parameter:
+    - send: Send email
+    - search: Search emails
+    - read: Read specific email by ID
+    """
+    operation = parameters.get('operation', 'send')
+
+    if operation == 'send':
+        return await handle_gmail_send(node_id, node_type, parameters, context)
+    elif operation == 'search':
+        return await handle_gmail_search(node_id, node_type, parameters, context)
+    elif operation == 'read':
+        return await handle_gmail_read(node_id, node_type, parameters, context)
+    else:
+        return {
+            "success": False,
+            "error": f"Unknown Gmail operation: {operation}. Supported: send, search, read",
+            "execution_time": 0
+        }

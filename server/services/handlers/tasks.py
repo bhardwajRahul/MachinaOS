@@ -442,3 +442,53 @@ async def handle_tasks_delete(
     except Exception as e:
         logger.error(f"Tasks delete error: {e}")
         return {"success": False, "error": str(e), "execution_time": time.time() - start_time}
+
+
+# ============================================================================
+# CONSOLIDATED DISPATCHER
+# ============================================================================
+
+async def handle_google_tasks(
+    node_id: str,
+    node_type: str,
+    parameters: Dict[str, Any],
+    context: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Consolidated Tasks handler with operation dispatcher.
+
+    Routes to appropriate handler based on 'operation' parameter:
+    - create: Create new task
+    - list: List tasks
+    - complete: Mark task as complete
+    - update: Update existing task
+    - delete: Delete task
+    """
+    operation = parameters.get('operation', 'create')
+
+    # Map update_* parameters to standard names for update operation
+    if operation == 'update':
+        if parameters.get('update_title'):
+            parameters['title'] = parameters['update_title']
+        if parameters.get('update_notes'):
+            parameters['notes'] = parameters['update_notes']
+        if parameters.get('update_due_date'):
+            parameters['due_date'] = parameters['update_due_date']
+        if parameters.get('update_status'):
+            parameters['status'] = parameters['update_status']
+
+    if operation == 'create':
+        return await handle_tasks_create(node_id, node_type, parameters, context)
+    elif operation == 'list':
+        return await handle_tasks_list(node_id, node_type, parameters, context)
+    elif operation == 'complete':
+        return await handle_tasks_complete(node_id, node_type, parameters, context)
+    elif operation == 'update':
+        return await handle_tasks_update(node_id, node_type, parameters, context)
+    elif operation == 'delete':
+        return await handle_tasks_delete(node_id, node_type, parameters, context)
+    else:
+        return {
+            "success": False,
+            "error": f"Unknown Tasks operation: {operation}. Supported: create, list, complete, update, delete",
+            "execution_time": 0
+        }

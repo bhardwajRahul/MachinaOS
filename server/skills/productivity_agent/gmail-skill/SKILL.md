@@ -1,7 +1,7 @@
 ---
 name: gmail-skill
 description: Send, search, and read Gmail emails. Supports composing emails with attachments, searching by query, and reading email content.
-allowed-tools: gmail_send gmail_search gmail_read
+allowed-tools: google_gmail
 metadata:
   author: machina
   version: "1.0"
@@ -14,24 +14,34 @@ metadata:
 
 Send, search, and read emails using Gmail API.
 
-## Available Tools
+## Tool: google_gmail
 
-### gmail_send
+Consolidated Gmail tool with `operation` parameter.
 
-Send an email message.
+### Operations
+
+| Operation | Description | Required Fields |
+|-----------|-------------|-----------------|
+| `send` | Send an email | to, subject, body |
+| `search` | Search emails by query | query |
+| `read` | Read email by ID | message_id |
+
+### send - Send an email
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| operation | string | Yes | Must be `"send"` |
 | to | string | Yes | Recipient email address |
 | subject | string | Yes | Email subject line |
 | body | string | Yes | Email body (plain text or HTML) |
 | cc | string | No | CC recipients (comma-separated) |
 | bcc | string | No | BCC recipients (comma-separated) |
-| is_html | boolean | No | Set true for HTML body (default: false) |
+| body_type | string | No | `"text"` or `"html"` (default: text) |
 
 **Example - Send plain text email:**
 ```json
 {
+  "operation": "send",
   "to": "recipient@example.com",
   "subject": "Meeting Tomorrow",
   "body": "Hi,\n\nJust a reminder about our meeting tomorrow at 2pm.\n\nBest regards"
@@ -41,21 +51,22 @@ Send an email message.
 **Example - Send HTML email:**
 ```json
 {
+  "operation": "send",
   "to": "recipient@example.com",
   "subject": "Weekly Report",
   "body": "<h1>Weekly Report</h1><p>Here are the highlights...</p>",
-  "is_html": true
+  "body_type": "html"
 }
 ```
 
-### gmail_search
-
-Search emails using Gmail query syntax.
+### search - Search emails
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| operation | string | Yes | Must be `"search"` |
 | query | string | Yes | Gmail search query |
 | max_results | integer | No | Maximum results (default: 10, max: 100) |
+| include_body | boolean | No | Fetch full message body (default: false) |
 
 **Query Syntax Examples:**
 - `from:sender@example.com` - Emails from specific sender
@@ -72,57 +83,25 @@ Search emails using Gmail query syntax.
 **Example:**
 ```json
 {
+  "operation": "search",
   "query": "from:client@example.com has:attachment after:2024/01/01",
   "max_results": 20
 }
 ```
 
-**Response:**
-```json
-{
-  "emails": [
-    {
-      "id": "abc123",
-      "thread_id": "thread456",
-      "subject": "Project Files",
-      "from": "client@example.com",
-      "to": "you@example.com",
-      "date": "2024-01-15T10:30:00Z",
-      "snippet": "Please find attached..."
-    }
-  ],
-  "count": 1
-}
-```
-
-### gmail_read
-
-Read full email content by ID.
+### read - Read email content
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| email_id | string | Yes | Email ID from search results |
+| operation | string | Yes | Must be `"read"` |
+| message_id | string | Yes | Gmail message ID from search results |
+| format | string | No | `"full"`, `"minimal"`, `"raw"`, `"metadata"` (default: full) |
 
 **Example:**
 ```json
 {
-  "email_id": "abc123"
-}
-```
-
-**Response:**
-```json
-{
-  "id": "abc123",
-  "thread_id": "thread456",
-  "subject": "Project Files",
-  "from": "client@example.com",
-  "to": "you@example.com",
-  "date": "2024-01-15T10:30:00Z",
-  "body": "Full email body content...",
-  "attachments": [
-    {"filename": "report.pdf", "mime_type": "application/pdf", "size": 102400}
-  ]
+  "operation": "read",
+  "message_id": "abc123"
 }
 ```
 
@@ -135,6 +114,6 @@ Read full email content by ID.
 
 ## Setup Requirements
 
-1. Connect Gmail nodes to AI Agent's `input-tools` handle
+1. Connect Gmail node to AI Agent's `input-tools` handle
 2. Authenticate with Google Workspace in Credentials Modal
 3. Ensure Gmail API scopes are authorized
