@@ -1255,35 +1255,30 @@ async def handle_google_oauth_status(data: Dict[str, Any], websocket: WebSocket)
     Check Google Workspace OAuth connection status.
 
     Returns connection status and user info if connected.
+    Also updates broadcaster status so all clients stay in sync.
     """
     from services.google_oauth import GoogleOAuth
+    from services.status_broadcaster import get_status_broadcaster
 
     auth_service = container.auth_service()
-    settings = container.settings()
+    broadcaster = get_status_broadcaster()
 
-    access_token = await auth_service.get_api_key("google_access_token")
+    tokens = await auth_service.get_oauth_tokens("google", customer_id="owner")
 
-    if not access_token:
-        return {
-            "connected": False,
-            "email": None,
-            "name": None,
-        }
+    if not tokens or not tokens.get("access_token"):
+        status = {"connected": False, "email": None, "name": None}
+        broadcaster._status["google"] = status
+        return status
 
-    user_info_str = await auth_service.get_api_key("google_user_info")
-    email, name = None, None
-    if user_info_str:
-        parts = user_info_str.split(":", 1)
-        email = parts[0] if parts else None
-        name = parts[1] if len(parts) > 1 else None
+    email = tokens.get("email")
+    name = tokens.get("name")
+    refresh_token = tokens.get("refresh_token")
 
-    # Verify token is valid by checking if we can build service
+    # Try to refresh token proactively
     try:
         client_id = await auth_service.get_api_key("google_client_id") or ""
         client_secret = await auth_service.get_api_key("google_client_secret") or ""
-        refresh_token = await auth_service.get_api_key("google_refresh_token")
 
-        # Try to refresh if needed
         if refresh_token and client_id and client_secret:
             refreshed = GoogleOAuth.refresh_credentials(
                 refresh_token=refresh_token,
@@ -1291,26 +1286,28 @@ async def handle_google_oauth_status(data: Dict[str, Any], websocket: WebSocket)
                 client_secret=client_secret,
             )
             if refreshed.get("success") and refreshed.get("access_token"):
-                await auth_service.store_api_key(
-                    provider="google_access_token",
-                    api_key=refreshed["access_token"],
-                    models=[],
-                    session_id="default"
+                await auth_service.store_oauth_tokens(
+                    provider="google",
+                    access_token=refreshed["access_token"],
+                    refresh_token=refresh_token,
+                    email=email,
+                    name=name,
+                    customer_id="owner",
                 )
 
-        return {
-            "connected": True,
-            "email": email,
-            "name": name,
-        }
+        status = {"connected": True, "email": email, "name": name}
+        broadcaster._status["google"] = status
+        # Broadcast so all connected clients update
+        await broadcaster.broadcast({
+            "type": "google_status",
+            "data": status,
+        })
+        return status
     except Exception as e:
         logger.warning(f"Google token validation failed: {e}")
-        return {
-            "connected": False,
-            "email": None,
-            "name": None,
-            "error": str(e),
-        }
+        status = {"connected": False, "email": None, "name": None, "error": str(e)}
+        broadcaster._status["google"] = {"connected": False, "email": None, "name": None}
+        return status
 
 
 @ws_handler()
@@ -1318,11 +1315,19 @@ async def handle_google_logout(data: Dict[str, Any], websocket: WebSocket) -> Di
     """
     Disconnect Google Workspace by clearing stored credentials.
     """
-    auth_service = container.auth_service()
+    from services.status_broadcaster import get_status_broadcaster
 
-    await auth_service.remove_api_key("google_access_token")
-    await auth_service.remove_api_key("google_refresh_token")
-    await auth_service.remove_api_key("google_user_info")
+    auth_service = container.auth_service()
+    broadcaster = get_status_broadcaster()
+
+    await auth_service.remove_oauth_tokens("google", customer_id="owner")
+
+    # Clear broadcaster status and notify all clients
+    broadcaster._status["google"] = {"connected": False, "email": None, "name": None}
+    await broadcaster.broadcast({
+        "type": "google_status",
+        "data": {"connected": False, "email": None, "name": None},
+    })
 
     return {"success": True, "message": "Google Workspace disconnected"}
 

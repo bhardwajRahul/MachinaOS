@@ -364,7 +364,7 @@ class CacheEntry(SQLModel, table=True):
 
 ## Codebase Summary
 - **Hybrid architecture**: Node.js + Python + React TypeScript
-- **108 implemented workflow nodes** with clean service separation (6 AI models + 3 AI agents/memory + 13 specialized agents + 11 skills + 3 dedicated tools + 9 dual-purpose tools + 16 Android + 3 WhatsApp + 4 Twitter + 2 Social + 3 Location + 3 Code + 6 Utility + 6 Document + 2 Chat + 2 Scheduler + 1 Workflow + 26 Google Workspace + 1 Apify + 3 Search)
+- **89 implemented workflow nodes** with clean service separation (6 AI models + 3 AI agents/memory + 13 specialized agents + 11 skills + 3 dedicated tools + 9 dual-purpose tools + 16 Android + 3 WhatsApp + 4 Twitter + 2 Social + 3 Location + 3 Code + 6 Utility + 6 Document + 2 Chat + 2 Scheduler + 1 Workflow + 7 Google Workspace + 1 Apify + 3 Search)
 - **WebSocket-First Architecture**: WebSocket as primary frontend-backend communication (87 message handlers)
 - **Recent optimizations**: REST APIs replaced with WebSocket, AI endpoints migrated to Python, Android automation integrated
 
@@ -394,12 +394,7 @@ The project was completely refactored from schema-based node definitions to expl
 - `src/nodeDefinitions/searchNodes.ts` - Search API nodes (braveSearch, serperSearch, perplexitySearch)
 - `src/nodeDefinitions/androidServiceNodes.ts` - 16 Android service nodes (monitoring, apps, automation, sensors, media)
 - `src/nodeDefinitions/locationNodes.ts` - Google Maps and location services
-- `src/nodeDefinitions/gmailNodes.ts` - Gmail integration (4 nodes)
-- `src/nodeDefinitions/calendarNodes.ts` - Google Calendar integration (4 nodes)
-- `src/nodeDefinitions/driveNodes.ts` - Google Drive integration (4 nodes)
-- `src/nodeDefinitions/sheetsNodes.ts` - Google Sheets integration (3 nodes)
-- `src/nodeDefinitions/tasksNodes.ts` - Google Tasks integration (5 nodes)
-- `src/nodeDefinitions/contactsNodes.ts` - Google Contacts integration (6 nodes)
+- `src/nodeDefinitions/googleWorkspaceNodes.ts` - All Google Workspace nodes (7 consolidated nodes)
 - `src/nodeDefinitions/whatsappNodes.ts` - WhatsApp messaging integration (3 nodes)
 - `src/nodeDefinitions/twitterNodes.ts` - Twitter/X integration (4 nodes: send, search, user, receive)
 - `src/nodeDefinitions/socialNodes.ts` - Unified social messaging nodes (socialReceive, socialSend)
@@ -973,46 +968,19 @@ TWITTER_CLIENT_SECRET=your_client_secret
 TWITTER_REDIRECT_URI=http://localhost:3010/api/twitter/callback
 ```
 
-### Google Workspace Nodes (26 nodes)
-Unified Google Workspace integration supporting Gmail, Calendar, Drive, Sheets, Tasks, and Contacts. All services share a single OAuth connection with combined scopes. All nodes are execution-ready with Run button in parameter panel.
+### Google Workspace Nodes (7 nodes)
+Consolidated Google Workspace integration with 6 unified operation-based nodes + 1 polling trigger. Each service node uses an `operation` parameter to select the action (e.g., gmail with operation: send/search/read). All services share a single OAuth connection with combined scopes.
 
-#### Gmail Nodes (4 nodes)
-- **gmailSend**: **Dual-purpose node** - Send emails with attachments. Works as workflow node OR AI Agent tool.
-- **gmailSearch**: **Dual-purpose node** - Search emails using Gmail query syntax.
-- **gmailRead**: **Dual-purpose node** - Read email content by message ID.
-- **gmailReceive**: Event-driven trigger for incoming emails.
+#### Consolidated Service Nodes (6 nodes)
+- **gmail**: **Dual-purpose node** - Operations: `send`, `search`, `read`. Handler: `handle_google_gmail()` dispatcher.
+- **calendar**: **Dual-purpose node** - Operations: `create`, `list`, `update`, `delete`.
+- **drive**: **Dual-purpose node** - Operations: `upload`, `download`, `list`, `share`.
+- **sheets**: **Dual-purpose node** - Operations: `read`, `write`, `append`.
+- **tasks**: **Dual-purpose node** - Operations: `create`, `list`, `complete`, `update`, `delete`.
+- **contacts**: **Dual-purpose node** - Operations: `create`, `list`, `search`, `get`, `update`, `delete`.
 
-#### Calendar Nodes (4 nodes)
-- **calendarCreate**: **Dual-purpose node** - Create calendar events with title, time, description, attendees, location.
-- **calendarList**: **Dual-purpose node** - List events in date range with filtering.
-- **calendarUpdate**: **Dual-purpose node** - Update existing events.
-- **calendarDelete**: **Dual-purpose node** - Delete events by ID.
-
-#### Drive Nodes (4 nodes)
-- **driveUpload**: **Dual-purpose node** - Upload files from URL or path.
-- **driveDownload**: **Dual-purpose node** - Download files by ID.
-- **driveList**: **Dual-purpose node** - List files in folder with query.
-- **driveShare**: **Dual-purpose node** - Share files with users.
-
-#### Sheets Nodes (3 nodes)
-- **sheetsRead**: **Dual-purpose node** - Read data from spreadsheet range.
-- **sheetsWrite**: **Dual-purpose node** - Write data to specific range.
-- **sheetsAppend**: **Dual-purpose node** - Append rows to sheet.
-
-#### Tasks Nodes (5 nodes)
-- **tasksCreate**: **Dual-purpose node** - Create tasks with title, notes, due date.
-- **tasksList**: **Dual-purpose node** - List tasks with filters.
-- **tasksComplete**: **Dual-purpose node** - Mark task as complete.
-- **tasksUpdate**: **Dual-purpose node** - Update existing task.
-- **tasksDelete**: **Dual-purpose node** - Delete task by ID.
-
-#### Contacts Nodes (6 nodes)
-- **contactsCreate**: **Dual-purpose node** - Create contact with name, email, phone.
-- **contactsList**: **Dual-purpose node** - List contacts with pagination.
-- **contactsSearch**: **Dual-purpose node** - Search contacts by query.
-- **contactsGet**: **Dual-purpose node** - Get contact details by resource name.
-- **contactsUpdate**: **Dual-purpose node** - Update existing contact.
-- **contactsDelete**: **Dual-purpose node** - Delete contact.
+#### Trigger Nodes (1 node)
+- **gmailReceive**: Polling-based trigger for incoming emails. Polls Gmail API at configurable interval (10-3600s). Parameters: `filter_query` (default: `is:unread`), `label_filter` (default: `INBOX`), `mark_as_read`, `poll_interval` (default: 60s). In deployment mode, uses `setup_polling_trigger` with baseline detection to avoid triggering on existing emails.
 
 #### Google Workspace OAuth 2.0 Authentication
 Authentication is handled via OAuth 2.0 flow in the Credentials Modal:
@@ -1053,10 +1021,11 @@ GOOGLE_WORKSPACE_SCOPES = [
 **Key Files:**
 | File | Description |
 |------|-------------|
-| `server/services/google_oauth.py` | Unified OAuth 2.0 implementation |
+| `server/services/google_oauth.py` | OAuth 2.0 flow (authorization URL, token exchange) |
+| `server/services/handlers/google_auth.py` | Shared credential helper (`get_google_credentials()`) used by all 6 handlers |
 | `server/config/google_apis.json` | API endpoints and scopes config |
 | `server/routers/google.py` | OAuth callback and status endpoints |
-| `server/services/handlers/gmail.py` | Gmail handlers |
+| `server/services/handlers/gmail.py` | Gmail handlers + `handle_gmail_receive` polling trigger |
 | `server/services/handlers/calendar.py` | Calendar handlers |
 | `server/services/handlers/drive.py` | Drive handlers |
 | `server/services/handlers/sheets.py` | Sheets handlers |
@@ -1064,23 +1033,26 @@ GOOGLE_WORKSPACE_SCOPES = [
 | `server/services/handlers/contacts.py` | Contacts handlers |
 | `server/models/database.py` | `GoogleConnection` model |
 | `server/skills/productivity_agent/` | Google Workspace skills for AI agents |
-| `client/src/nodeDefinitions/gmailNodes.ts` | Gmail node definitions |
-| `client/src/nodeDefinitions/calendarNodes.ts` | Calendar node definitions |
-| `client/src/nodeDefinitions/driveNodes.ts` | Drive node definitions |
-| `client/src/nodeDefinitions/sheetsNodes.ts` | Sheets node definitions |
-| `client/src/nodeDefinitions/tasksNodes.ts` | Tasks node definitions |
-| `client/src/nodeDefinitions/contactsNodes.ts` | Contacts node definitions |
+| `client/src/nodeDefinitions/googleWorkspaceNodes.ts` | All 7 Google node definitions (consolidated) |
 | `client/src/assets/icons/google/` | Official Google service SVG icons (n8n pattern) |
 | `client/src/components/CredentialsModal.tsx` | Google Workspace panel |
 
-**Token Storage (Unified `google_*` prefix):**
-| Token Key | Description |
-|-----------|-------------|
-| `google_client_id` | OAuth 2.0 Client ID |
-| `google_client_secret` | OAuth 2.0 Client Secret |
-| `google_access_token` | Access token for API calls |
-| `google_refresh_token` | Refresh token for token renewal |
-| `google_user_info` | Connected user email and name |
+**Token Storage (Two Separate Systems):**
+
+Client ID and Secret are stored as API keys (user enters manually):
+| Key | Storage Method | Description |
+|-----|---------------|-------------|
+| `google_client_id` | `auth_service.get_api_key()` / `EncryptedAPIKey` table | OAuth 2.0 Client ID |
+| `google_client_secret` | `auth_service.get_api_key()` / `EncryptedAPIKey` table | OAuth 2.0 Client Secret |
+
+Access and refresh tokens are stored via OAuth system (after Google login):
+| Field | Storage Method | Description |
+|-------|---------------|-------------|
+| `access_token` | `auth_service.get_oauth_tokens("google")` / `EncryptedOAuthToken` table | Access token for API calls |
+| `refresh_token` | `auth_service.get_oauth_tokens("google")` / `EncryptedOAuthToken` table | Refresh token for renewal |
+| `email`, `name` | `auth_service.get_oauth_tokens("google")` / `EncryptedOAuthToken` table | Connected user info |
+
+**IMPORTANT**: All handlers use `get_google_credentials()` from `google_auth.py`, which reads tokens via `get_oauth_tokens()`. Never use `get_api_key("google_access_token")` — that reads from the wrong table.
 
 **AI Agent Skills (productivity_agent folder):**
 | Skill | Tools | Description |
@@ -4435,6 +4407,36 @@ await broadcaster.send_custom_event('task_completed', {
    event_waiter.dispatch('email_received', email_data)
    ```
 
+### Polling Triggers (Gmail, Twitter)
+
+Some triggers require active API polling instead of waiting for externally dispatched events. These use `setup_polling_trigger` in `TriggerManager` instead of `setup_event_trigger`.
+
+**Architecture:**
+```
+setup_polling_trigger() → broadcasts "waiting" status
+       ↓
+   poller task: runs poll_coroutine(queue, is_running_fn)
+       ↓                    ↓
+   polls API at interval → enqueues new items to asyncio.Queue
+       ↓
+   processor task: reads queue → calls on_event → spawns execution run
+```
+
+**Key differences from event triggers:**
+- Event triggers: `event_waiter.register()` + `wait_for_event()` (push-based)
+- Polling triggers: Custom poll coroutine + `asyncio.Queue` (pull-based)
+
+**Routing** (`server/services/deployment/manager.py`):
+```python
+if node_type in POLLING_TRIGGER_TYPES:  # gmailReceive, twitterReceive
+    poll_coroutine = self._create_poll_coroutine(node_type, node_id, params)
+    await trigger_manager.setup_polling_trigger(...)
+```
+
+**Constants** (`server/constants.py`):
+- `POLLING_TRIGGER_TYPES`: `frozenset(['gmailReceive', 'twitterReceive'])`
+- These are also in `WORKFLOW_TRIGGER_TYPES` for trigger node detection
+
 ### Key Design Decisions
 
 - **No Timeout**: Trigger nodes wait indefinitely; users cancel via Cancel button
@@ -4442,6 +4444,7 @@ await broadcaster.send_custom_event('task_completed', {
 - **Generic Architecture**: Same execution flow for all trigger types via registry
 - **Filter Functions**: Each trigger type builds its own filter from node parameters
 - **asyncio.Future**: Simpler than asyncio.Event for single-value resolution
+- **Polling triggers**: Use asyncio.Queue + dedicated poll coroutine for APIs without push support
 
 ## Real-time Status WebSocket System
 

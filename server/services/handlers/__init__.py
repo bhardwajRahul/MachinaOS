@@ -81,7 +81,7 @@ from .twitter import (
 )
 
 # Google Workspace handlers (consolidated)
-from .gmail import handle_google_gmail
+from .gmail import handle_google_gmail, handle_gmail_receive
 from .calendar import handle_google_calendar
 from .drive import handle_google_drive
 from .sheets import handle_google_sheets
@@ -156,6 +156,7 @@ __all__ = [
     'handle_twitter_user',
     # Google Workspace (consolidated)
     'handle_google_gmail',
+    'handle_gmail_receive',
     'handle_google_calendar',
     'handle_google_drive',
     'handle_google_sheets',

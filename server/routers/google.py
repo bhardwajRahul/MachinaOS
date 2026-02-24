@@ -154,9 +154,14 @@ async def google_oauth_callback(
         )
         logger.info(f"Google OAuth successful for {email}")
 
-    # Broadcast completion event
+    # Update persistent status and broadcast completion event
     from services.status_broadcaster import get_status_broadcaster
     broadcaster = get_status_broadcaster()
+    broadcaster._status["google"] = {
+        "connected": True,
+        "email": email,
+        "name": name,
+    }
     await broadcaster.broadcast({
         "type": "google_oauth_complete",
         "data": {"success": True, "email": email, "name": name, "mode": mode, "customer_id": customer_id},

@@ -34,6 +34,7 @@ import { DOCUMENT_NODE_TYPES } from './nodeDefinitions/documentNodes';
 import { SEARCH_NODE_TYPES } from './nodeDefinitions/searchNodes';
 import { SOCIAL_NODE_TYPES } from './nodeDefinitions/socialNodes';
 import { APIFY_NODE_TYPES } from './nodeDefinitions/apifyNodes';
+import { GOOGLE_WORKSPACE_NODE_TYPES } from './nodeDefinitions/googleWorkspaceNodes';
 import ParameterPanel from './ParameterPanel';
 import LocationParameterPanel from './components/LocationParameterPanel';
 import { useAppStore } from './store/useAppStore';
@@ -96,11 +97,8 @@ const createNodeTypes = (): Record<string, React.ComponentType<any>> => {
     } else if (type === 'twitterSend' || type === 'twitterSearch' || type === 'twitterUser') {
       // Twitter action nodes use SquareNode (twitterReceive is a trigger)
       types[type] = SquareNode;
-    } else if (type === 'gmailSend' || type === 'gmailSearch' || type === 'gmailRead') {
-      // Gmail action nodes use SquareNode (gmailReceive is a trigger)
-      types[type] = SquareNode;
-    } else if (type.startsWith('calendar') || type.startsWith('drive') || type.startsWith('sheets') || type.startsWith('tasks') || type.startsWith('contacts')) {
-      // Google Workspace nodes (Calendar, Drive, Sheets, Tasks, Contacts) use SquareNode
+    } else if (GOOGLE_WORKSPACE_NODE_TYPES.includes(type)) {
+      // Google Workspace nodes (gmail, gmailReceive, calendar, drive, sheets, tasks, contacts)
       types[type] = SquareNode;
     } else if (ANDROID_SERVICE_NODE_TYPES.includes(type)) {
       // Android service nodes use SquareNode component
@@ -672,8 +670,8 @@ const DashboardContent: React.FC = () => {
     if (!currentWorkflow) return;
 
     // Check if there's at least one trigger node (workflow entry points)
-    // Trigger types: start, cronScheduler, webhookTrigger, whatsappReceive, twitterReceive, workflowTrigger, chatTrigger, taskTrigger
-    const triggerTypes = ['start', 'cronScheduler', 'webhookTrigger', 'whatsappReceive', 'twitterReceive', 'workflowTrigger', 'chatTrigger', 'taskTrigger'];
+    // Trigger types: start, cronScheduler, webhookTrigger, whatsappReceive, twitterReceive, gmailReceive, workflowTrigger, chatTrigger, taskTrigger
+    const triggerTypes = ['start', 'cronScheduler', 'webhookTrigger', 'whatsappReceive', 'twitterReceive', 'gmailReceive', 'workflowTrigger', 'chatTrigger', 'taskTrigger'];
     const hasTriggerNode = nodes.some(node => triggerTypes.includes(node.type || ''));
     if (!hasTriggerNode) {
       alert('No trigger node found in workflow.\n\nAdd a trigger node (Cron Scheduler, WhatsApp Receive, Webhook, Chat Trigger, etc.) to begin deployment.');

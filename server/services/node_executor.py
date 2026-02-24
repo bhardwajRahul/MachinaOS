@@ -41,7 +41,7 @@ from services.handlers import (
 )
 from services.handlers.apify import handle_apify_actor
 # Consolidated Google Workspace handlers (6 services with operation dispatchers)
-from services.handlers.gmail import handle_google_gmail
+from services.handlers.gmail import handle_google_gmail, handle_gmail_receive
 from services.handlers.calendar import handle_google_calendar
 from services.handlers.drive import handle_google_drive
 from services.handlers.sheets import handle_google_sheets
@@ -149,8 +149,8 @@ class NodeExecutor:
             'twitterSearch': handle_twitter_search,
             'twitterUser': handle_twitter_user,
             # Google Workspace (consolidated with operation dispatchers)
-            # Note: gmailReceive is a trigger node, handled by event_waiter
             'gmail': handle_google_gmail,
+            'gmailReceive': handle_gmail_receive,  # Polling-based trigger (custom handler)
             'calendar': handle_google_calendar,
             'drive': handle_google_drive,
             'sheets': handle_google_sheets,

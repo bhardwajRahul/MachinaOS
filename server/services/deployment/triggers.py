@@ -185,6 +185,100 @@ class TriggerManager:
         task = asyncio.create_task(combined())
         self._active_listeners[node_id] = task
 
+    async def setup_polling_trigger(self, node_id: str, node_type: str,
+                                     parameters: Dict[str, Any],
+                                     poll_coroutine: Callable,
+                                     on_event: Callable[[Dict], Any],
+                                     broadcaster: Any,
+                                     workflow_id: Optional[str] = None) -> None:
+        """Setup a polling-based trigger with queue-based sequential processing.
+
+        Unlike event triggers that wait for externally dispatched events via
+        event_waiter, polling triggers actively poll an API for new data.
+        Used for Gmail, Twitter, and other APIs that require polling.
+
+        Args:
+            node_id: The trigger node ID
+            node_type: Type of trigger (gmailReceive, twitterReceive, etc.)
+            parameters: Node parameters for filtering
+            poll_coroutine: Async function(queue, is_running_fn) that polls and enqueues events
+            on_event: Callback when event is received
+            broadcaster: Status broadcaster for real-time updates
+            workflow_id: Workflow ID for scoped status updates
+        """
+        event_queue: asyncio.Queue = asyncio.Queue()
+        is_executing = False
+
+        # Broadcast initial "waiting" status immediately
+        config = event_waiter.get_trigger_config(node_type)
+        display_name = config.display_name if config else node_type
+        await broadcaster.update_node_status(node_id, "waiting", {
+            "message": f"Waiting for {display_name} (polling)...",
+            "is_processing": False
+        }, workflow_id=workflow_id)
+
+        async def poller():
+            """Run the polling coroutine to collect events."""
+            try:
+                await poll_coroutine(event_queue, lambda: self._is_running)
+            except asyncio.CancelledError:
+                pass
+            except Exception as e:
+                logger.error("Polling trigger fatal error", node_id=node_id, error=str(e))
+
+        async def processor():
+            """Process events from queue sequentially."""
+            nonlocal is_executing
+            while self._is_running:
+                try:
+                    try:
+                        event_data = await asyncio.wait_for(event_queue.get(), timeout=1.0)
+                    except asyncio.TimeoutError:
+                        continue
+
+                    is_executing = True
+                    config = event_waiter.get_trigger_config(node_type)
+
+                    await broadcaster.update_node_status(node_id, "idle", {
+                        "message": "Graph executing...",
+                        "is_processing": True
+                    }, workflow_id=workflow_id)
+
+                    try:
+                        await on_event(event_data)
+                    except Exception as e:
+                        logger.error("Polling trigger execution error", node_id=node_id, error=str(e))
+
+                    is_executing = False
+
+                    queue_size = event_queue.qsize()
+                    name = config.display_name if config else node_type
+                    msg = f"Waiting for {name} (polling)..." if queue_size == 0 else f"Processing next... ({queue_size} queued)"
+                    await broadcaster.update_node_status(node_id, "waiting", {
+                        "message": msg,
+                        "queue_size": queue_size,
+                        "is_processing": False
+                    }, workflow_id=workflow_id)
+
+                except asyncio.CancelledError:
+                    break
+                except Exception as e:
+                    logger.error("Polling trigger processor error", node_id=node_id, error=str(e))
+                    is_executing = False
+
+        async def combined():
+            poller_task = asyncio.create_task(poller())
+            processor_task = asyncio.create_task(processor())
+            try:
+                await asyncio.gather(poller_task, processor_task)
+            except asyncio.CancelledError:
+                poller_task.cancel()
+                processor_task.cancel()
+                await asyncio.gather(poller_task, processor_task, return_exceptions=True)
+
+        task = asyncio.create_task(combined())
+        self._active_listeners[node_id] = task
+
     async def teardown_all_listeners(self) -> int:
         """Cancel all event listeners."""
         count = 0

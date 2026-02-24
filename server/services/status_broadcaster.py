@@ -48,6 +48,11 @@ class StatusBroadcaster:
                 "name": None,
                 "profile_image_url": None
             },
+            "google": {
+                "connected": False,
+                "email": None,
+                "name": None,
+            },
             "api_keys": {},  # provider -> validation status
             "nodes": {},  # node_id -> node status
             "variables": {},  # variable_name -> value
@@ -82,6 +87,9 @@ class StatusBroadcaster:
 
         # Fetch Twitter status from stored OAuth tokens
         await self._refresh_twitter_status()
+
+        # Fetch Google Workspace status from stored OAuth tokens
+        await self._refresh_google_status()
 
         # Auto-reconnect Android relay if there's a stored session
         await self._auto_reconnect_android_relay()
@@ -287,6 +295,33 @@ class StatusBroadcaster:
                 }
         except Exception as e:
             logger.debug(f"[StatusBroadcaster] Could not refresh Twitter status: {e}")
+
+    async def _refresh_google_status(self):
+        """Fetch Google Workspace status from stored OAuth tokens.
+
+        Called on client connect to check if user is authenticated with Google.
+        """
+        try:
+            from core.container import container
+            auth_service = container.auth_service()
+
+            tokens = await auth_service.get_oauth_tokens("google", customer_id="owner")
+            if not tokens or not tokens.get("access_token"):
+                self._status["google"] = {
+                    "connected": False,
+                    "email": None,
+                    "name": None,
+                }
+                return
+
+            self._status["google"] = {
+                "connected": True,
+                "email": tokens.get("email"),
+                "name": tokens.get("name"),
+            }
+            logger.debug(f"[StatusBroadcaster] Google status: connected as {tokens.get('email')}")
+        except Exception as e:
+            logger.debug(f"[StatusBroadcaster] Could not refresh Google status: {e}")
 
     async def _auto_reconnect_android_relay(self):
         """Auto-reconnect to Android relay if there's a stored pairing session.

@@ -277,30 +277,10 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                 profile_image_url: 'string',
                 verified: 'boolean'
               },
-              // Gmail node output schemas
+              // Google Workspace consolidated node output schemas
+              // Gmail (operation: send, search, read)
               gmail: {
-                message_id: 'string',
-                thread_id: 'string',
-                to: 'string',
-                subject: 'string',
-                label_ids: 'array'
-              },
-              gmailSearch: {
-                messages: [{
-                  message_id: 'string',
-                  thread_id: 'string',
-                  from: 'string',
-                  to: 'string',
-                  subject: 'string',
-                  date: 'string',
-                  snippet: 'string',
-                  labels: 'array'
-                }],
-                count: 'number',
-                query: 'string',
-                result_size_estimate: 'number'
-              },
-              gmailRead: {
+                operation: 'string',
                 message_id: 'string',
                 thread_id: 'string',
                 from: 'string',
@@ -311,10 +291,26 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                 snippet: 'string',
                 body: 'string',
                 labels: 'array',
+                attachments: 'array',
+                messages: 'array',
+                count: 'number'
+              },
+              // Gmail Receive trigger
+              gmailReceive: {
+                message_id: 'string',
+                thread_id: 'string',
+                from: 'string',
+                to: 'string',
+                subject: 'string',
+                date: 'string',
+                snippet: 'string',
+                body: 'string',
+                labels: 'array',
                 attachments: 'array'
               },
-              // Google Calendar
-              calendarCreate: {
+              // Google Calendar (operation: create, list, update, delete)
+              calendar: {
+                operation: 'string',
                 event_id: 'string',
                 title: 'string',
                 start: 'string',
@@ -322,119 +318,58 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                 description: 'string',
                 location: 'string',
                 html_link: 'string',
-                status: 'string'
-              },
-              calendarList: {
+                status: 'string',
                 events: 'array',
-                count: 'number'
+                count: 'number',
+                deleted: 'boolean'
               },
-              calendarUpdate: {
-                event_id: 'string',
-                title: 'string',
-                start: 'string',
-                end: 'string',
-                updated: 'string'
-              },
-              calendarDelete: {
-                deleted: 'boolean',
-                event_id: 'string'
-              },
-              // Google Drive
-              driveUpload: {
+              // Google Drive (operation: upload, download, list, share)
+              drive: {
+                operation: 'string',
                 file_id: 'string',
                 name: 'string',
                 mime_type: 'string',
                 web_view_link: 'string',
                 web_content_link: 'string',
-                size: 'number'
-              },
-              driveDownload: {
-                file_id: 'string',
-                name: 'string',
+                size: 'number',
                 content: 'string',
-                mime_type: 'string',
-                size: 'number'
-              },
-              driveList: {
                 files: 'array',
                 count: 'number',
-                next_page_token: 'string'
-              },
-              driveShare: {
-                file_id: 'string',
+                next_page_token: 'string',
                 permission_id: 'string',
                 role: 'string',
                 email: 'string'
               },
-              // Google Sheets
-              sheetsRead: {
+              // Google Sheets (operation: read, write, append)
+              sheets: {
+                operation: 'string',
                 values: 'array',
                 range: 'string',
                 rows: 'number',
                 columns: 'number',
-                major_dimension: 'string'
-              },
-              sheetsWrite: {
-                updated_range: 'string',
-                updated_rows: 'number',
-                updated_columns: 'number',
-                updated_cells: 'number'
-              },
-              sheetsAppend: {
+                major_dimension: 'string',
                 updated_range: 'string',
                 updated_rows: 'number',
                 updated_columns: 'number',
                 updated_cells: 'number',
                 table_range: 'string'
               },
-              // Google Tasks
-              tasksCreate: {
+              // Google Tasks (operation: create, list, complete, update, delete)
+              tasks: {
+                operation: 'string',
                 task_id: 'string',
                 title: 'string',
                 notes: 'string',
                 due: 'string',
-                status: 'string'
-              },
-              tasksList: {
-                tasks: 'array',
-                count: 'number'
-              },
-              tasksComplete: {
-                task_id: 'string',
-                title: 'string',
                 status: 'string',
-                completed: 'string'
-              },
-              tasksUpdate: {
-                task_id: 'string',
-                title: 'string',
-                notes: 'string',
-                due: 'string',
-                status: 'string'
-              },
-              tasksDelete: {
-                deleted: 'boolean',
-                task_id: 'string'
-              },
-              // Google Contacts (People API)
-              contactsCreate: {
-                resource_name: 'string',
-                display_name: 'string',
-                email: 'string',
-                phone: 'string',
-                company: 'string'
-              },
-              contactsList: {
-                contacts: 'array',
+                completed: 'string',
+                tasks: 'array',
                 count: 'number',
-                total_people: 'number',
-                next_page_token: 'string'
+                deleted: 'boolean'
               },
-              contactsSearch: {
-                contacts: 'array',
-                count: 'number'
-              },
-              contactsGet: {
+              // Google Contacts (operation: create, list, search, get, update, delete)
+              contacts: {
+                operation: 'string',
                 resource_name: 'string',
                 display_name: 'string',
                 given_name: 'string',
@@ -442,17 +377,12 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                 email: 'string',
                 phone: 'string',
                 company: 'string',
-                job_title: 'string'
-              },
-              contactsUpdate: {
-                resource_name: 'string',
-                display_name: 'string',
-                email: 'string',
-                phone: 'string'
-              },
-              contactsDelete: {
-                deleted: 'boolean',
-                resource_name: 'string'
+                job_title: 'string',
+                contacts: 'array',
+                count: 'number',
+                total_people: 'number',
+                next_page_token: 'string',
+                deleted: 'boolean'
               },
               httpRequest: {
                 status: 'number',
@@ -729,19 +659,10 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
             const isTaskTrigger = nodeType === 'taskTrigger';
             const isSocialReceive = nodeType === 'socialReceive';
             const isSocialSend = nodeType === 'socialSend';
-            const isGmailSend = nodeType === 'gmailSend';
-            const isGmailSearch = nodeType === 'gmailSearch';
-            const isGmailRead = nodeType === 'gmailRead';
             const isSearchNode = nodeType === 'braveSearch' || nodeType === 'serperSearch' || nodeType === 'perplexitySearch';
 
-            // Google Workspace nodes detection
-            const googleWorkspaceNodeTypes = [
-              'calendarCreate', 'calendarList', 'calendarUpdate', 'calendarDelete',
-              'driveUpload', 'driveDownload', 'driveList', 'driveShare',
-              'sheetsRead', 'sheetsWrite', 'sheetsAppend',
-              'tasksCreate', 'tasksList', 'tasksComplete', 'tasksUpdate', 'tasksDelete',
-              'contactsCreate', 'contactsList', 'contactsSearch', 'contactsGet', 'contactsUpdate', 'contactsDelete'
-            ];
+            // Google Workspace consolidated nodes detection
+            const googleWorkspaceNodeTypes = ['gmail', 'gmailReceive', 'calendar', 'drive', 'sheets', 'tasks', 'contacts'];
             const isGoogleWorkspaceNode = googleWorkspaceNodeTypes.includes(nodeType);
 
             // Document processing node detection
@@ -782,9 +703,6 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                             isFile ? sampleSchemas.file :
                             isWhatsAppDb ? sampleSchemas.whatsappDb :
                             isWhatsApp ? sampleSchemas.whatsapp :
-                            isGmailSend ? sampleSchemas.gmail :
-                            isGmailSearch ? sampleSchemas.gmailSearch :
-                            isGmailRead ? sampleSchemas.gmailRead :
                             isWebhook ? sampleSchemas.webhook :
                             isHttpRequest ? sampleSchemas.httpRequest :
                             isCodeExecutor ? sampleSchemas.python :

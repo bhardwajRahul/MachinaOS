@@ -19,7 +19,7 @@ import QRCodeDisplay from './ui/QRCodeDisplay';
 import ApiKeyInput from './ui/ApiKeyInput';
 import { useApiKeys, ProviderDefaults, ProviderUsageSummary, APIUsageSummary } from '../hooks/useApiKeys';
 import { useAppTheme } from '../hooks/useAppTheme';
-import { useWhatsAppStatus, useAndroidStatus, useTwitterStatus, useGmailStatus, useWebSocket, RateLimitConfig, RateLimitStats } from '../contexts/WebSocketContext';
+import { useWhatsAppStatus, useAndroidStatus, useTwitterStatus, useGoogleStatus, useWebSocket, RateLimitConfig, RateLimitStats } from '../contexts/WebSocketContext';
 import { useWhatsApp } from '../hooks/useWhatsApp';
 import {
   OpenAIIcon, ClaudeIcon, GeminiIcon, GroqIcon, OpenRouterIcon, CerebrasIcon,
@@ -185,7 +185,7 @@ const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey,
   const whatsappStatus = useWhatsAppStatus();
   const androidStatus = useAndroidStatus();
   const twitterStatus = useTwitterStatus();
-  const gmailStatus = useGmailStatus();
+  const googleStatus = useGoogleStatus();
 
 
   // Tag style helper - consistent theming for status tags
@@ -392,7 +392,7 @@ const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey,
       return { connected: twitterStatus.connected, label: twitterStatus.connected ? `@${twitterStatus.username}` : 'Not Connected' };
     }
     if (item.panelType === 'gmail') {
-      return { connected: gmailStatus.connected, label: gmailStatus.connected ? gmailStatus.email : 'Not Connected' };
+      return { connected: googleStatus.connected, label: googleStatus.connected ? googleStatus.email : 'Not Connected' };
     }
     return null;
   };
@@ -1725,8 +1725,8 @@ const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey,
             }}
           >
             <Descriptions.Item label="Status">
-              <Tag style={getTagStyle(gmailStatus.connected ? 'success' : 'error')}>
-                {gmailStatus.connected ? 'Connected' : 'Not Connected'}
+              <Tag style={getTagStyle(googleStatus.connected ? 'success' : 'error')}>
+                {googleStatus.connected ? 'Connected' : 'Not Connected'}
               </Tag>
             </Descriptions.Item>
             <Descriptions.Item label="API Credentials">
@@ -1734,22 +1734,22 @@ const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey,
                 {gmailCredentialsStored === null ? 'Checking...' : gmailCredentialsStored ? 'Configured' : 'Not configured'}
               </Tag>
             </Descriptions.Item>
-            {gmailStatus.connected && gmailStatus.email && (
+            {googleStatus.connected && googleStatus.email && (
               <Descriptions.Item label="Account">
                 <Space>
-                  {gmailStatus.profile_image_url && (
+                  {googleStatus.profile_image_url && (
                     <img
-                      src={gmailStatus.profile_image_url}
-                      alt={gmailStatus.email}
+                      src={googleStatus.profile_image_url}
+                      alt={googleStatus.email}
                       style={{ width: 24, height: 24, borderRadius: '50%' }}
                     />
                   )}
-                  <span style={{ fontFamily: theme.fontFamily.mono, fontSize: theme.fontSize.sm }}>{gmailStatus.email}</span>
-                  {gmailStatus.name && <span style={{ color: theme.colors.textSecondary }}>({gmailStatus.name})</span>}
+                  <span style={{ fontFamily: theme.fontFamily.mono, fontSize: theme.fontSize.sm }}>{googleStatus.email}</span>
+                  {googleStatus.name && <span style={{ color: theme.colors.textSecondary }}>({googleStatus.name})</span>}
                 </Space>
               </Descriptions.Item>
             )}
-            {gmailStatus.connected && (
+            {googleStatus.connected && (
               <Descriptions.Item label="Services">
                 <Space wrap size={[4, 4]}>
                   <Tag style={{ backgroundColor: `${theme.dracula.green}15`, borderColor: `${theme.dracula.green}40`, color: theme.dracula.green }}>Gmail</Tag>
@@ -1764,7 +1764,7 @@ const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey,
           </Descriptions>
 
           {/* API Credentials Input - Only show if not connected */}
-          {!gmailStatus.connected && (
+          {!googleStatus.connected && (
             <div style={{ marginBottom: theme.spacing.xl }}>
               <label style={{
                 display: 'block',
@@ -1848,7 +1848,7 @@ const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey,
               color: theme.colors.textSecondary,
               lineHeight: 1.5,
             }}>
-              {gmailStatus.connected ? (
+              {googleStatus.connected ? (
                 <>Your Google Workspace account is connected. You can now use Gmail, Calendar, Drive, Sheets, Tasks, and Contacts nodes in your workflows.</>
               ) : gmailCredentialsStored ? (
                 <>Click Login with Google to authorize. A browser window will open for authentication.</>
@@ -1866,7 +1866,7 @@ const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey,
             paddingTop: theme.spacing.md,
             borderTop: `1px solid ${theme.colors.border}`,
           }}>
-            {!gmailStatus.connected ? (
+            {!googleStatus.connected ? (
               <Button
                 onClick={handleGmailLogin}
                 loading={gmailLoading === 'login'}

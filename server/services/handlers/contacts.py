@@ -7,10 +7,10 @@ import asyncio
 import time
 from typing import Any, Dict, List
 
-from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
 from core.logging import get_logger
+from services.handlers.google_auth import get_google_credentials
 from services.pricing import get_pricing_service
 
 logger = get_logger(__name__)
@@ -54,55 +54,13 @@ async def _get_people_service(
     context: Dict[str, Any]
 ):
     """Get authenticated Google People (Contacts) service."""
-    from core.container import container
-
-    account_mode = parameters.get('account_mode', 'owner')
-
-    if account_mode == 'customer':
-        customer_id = parameters.get('customer_id')
-        if not customer_id:
-            raise ValueError("customer_id required for customer mode")
-
-        db = container.database()
-        connection = await db.get_google_connection(customer_id)
-        if not connection:
-            raise ValueError(f"No Google connection for customer: {customer_id}")
-
-        if not connection.is_active:
-            raise ValueError(f"Google connection inactive for customer: {customer_id}")
-
-        access_token = connection.access_token
-        refresh_token = connection.refresh_token
-
-        await db.update_google_last_used(customer_id)
-
-    else:
-        auth_service = container.auth_service()
-        access_token = await auth_service.get_api_key("google_access_token")
-        refresh_token = await auth_service.get_api_key("google_refresh_token")
-
-        if not access_token:
-            raise ValueError("Google not connected. Please authenticate via Credentials.")
-
-    auth_service = container.auth_service()
-    client_id = await auth_service.get_api_key("google_client_id") or ""
-    client_secret = await auth_service.get_api_key("google_client_secret") or ""
-
-    creds = Credentials(
-        token=access_token,
-        refresh_token=refresh_token,
-        token_uri="https://oauth2.googleapis.com/token",
-        client_id=client_id,
-        client_secret=client_secret,
-    )
+    creds = await get_google_credentials(parameters, context)
 
     def build_service():
         return build("people", "v1", credentials=creds)
 
     loop = asyncio.get_event_loop()
-    service = await loop.run_in_executor(None, build_service)
-
-    return service
+    return await loop.run_in_executor(None, build_service)
 
 
 def _format_contact(person: Dict[str, Any]) -> Dict[str, Any]:

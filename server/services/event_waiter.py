@@ -115,8 +115,12 @@ TRIGGER_REGISTRY: Dict[str, TriggerConfig] = {
         event_type='twitter_event_received',
         display_name='Twitter Event'
     ),
+    'gmailReceive': TriggerConfig(
+        node_type='gmailReceive',
+        event_type='gmail_email_received',
+        display_name='Gmail Email'
+    ),
     # Future triggers - just add to registry:
-    # 'emailTrigger': TriggerConfig('emailTrigger', 'email_received', 'Email'),
     # 'mqttTrigger': TriggerConfig('mqttTrigger', 'mqtt_message', 'MQTT Message'),
     # 'telegramTrigger': TriggerConfig('telegramTrigger', 'telegram_message', 'Telegram'),
 }
@@ -387,6 +391,31 @@ def build_twitter_filter(params: Dict) -> Callable[[Dict], bool]:
     return matches
 
 
+def build_gmail_filter(params: Dict) -> Callable[[Dict], bool]:
+    """Build filter function for Gmail email events.
+
+    Filters by label to ensure the event matches the trigger's label filter.
+    The filter_query is applied at the Gmail API level during polling,
+    so this filter only checks labels for events dispatched via event_waiter.
+
+    Args:
+        params: Node parameters with 'label_filter' field
+
+    Returns:
+        Filter function that checks if event labels match
+    """
+    label_filter = params.get('label_filter', 'INBOX')
+
+    def matches(data: Dict) -> bool:
+        if label_filter and label_filter != 'all':
+            labels = data.get('labels', [])
+            if label_filter not in labels:
+                return False
+        return True
+
+    return matches
+
+
 # Registry of filter builders per trigger type
 FILTER_BUILDERS: Dict[str, Callable[[Dict], Callable[[Dict], bool]]] = {
     'whatsappReceive': build_whatsapp_filter,
@@ -394,6 +423,7 @@ FILTER_BUILDERS: Dict[str, Callable[[Dict], Callable[[Dict], bool]]] = {
     'chatTrigger': build_chat_filter,
     'taskTrigger': build_task_completed_filter,
     'twitterReceive': build_twitter_filter,
+    'gmailReceive': build_gmail_filter,
 }
 
 

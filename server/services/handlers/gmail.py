@@ -3,14 +3,15 @@
 import asyncio
 import base64
 import time
+from datetime import datetime
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from typing import Dict, Any
+from typing import Dict, Any, Set
 
-from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
 from core.logging import get_logger
+from services.handlers.google_auth import get_google_credentials
 from services.pricing import get_pricing_service
 
 logger = get_logger(__name__)
@@ -63,68 +64,14 @@ async def _get_gmail_service(
     parameters: Dict[str, Any],
     context: Dict[str, Any]
 ):
-    """Get authenticated Gmail service.
-
-    Supports two modes:
-    - Owner mode: Uses tokens from auth_service (Credentials Modal)
-    - Customer mode: Uses tokens from google_connections table
-
-    Args:
-        parameters: Node parameters (may include account_mode, customer_id)
-        context: Execution context
-
-    Returns:
-        Gmail API service object
-    """
-    from core.container import container
-
-    account_mode = parameters.get('account_mode', 'owner')
-
-    if account_mode == 'customer':
-        customer_id = parameters.get('customer_id')
-        if not customer_id:
-            raise ValueError("customer_id required for customer mode")
-
-        db = container.database()
-        connection = await db.get_google_connection(customer_id)
-        if not connection:
-            raise ValueError(f"No Google connection for customer: {customer_id}")
-
-        if not connection.is_active:
-            raise ValueError(f"Google connection inactive for customer: {customer_id}")
-
-        access_token = connection.access_token
-        refresh_token = connection.refresh_token
-
-        await db.update_google_last_used(customer_id)
-
-    else:
-        auth_service = container.auth_service()
-        access_token = await auth_service.get_api_key("google_access_token")
-        refresh_token = await auth_service.get_api_key("google_refresh_token")
-
-        if not access_token:
-            raise ValueError("Google Workspace not connected. Please authenticate via Credentials.")
-
-    auth_service = container.auth_service()
-    client_id = await auth_service.get_api_key("google_client_id") or ""
-    client_secret = await auth_service.get_api_key("google_client_secret") or ""
-
-    creds = Credentials(
-        token=access_token,
-        refresh_token=refresh_token,
-        token_uri="https://oauth2.googleapis.com/token",
-        client_id=client_id,
-        client_secret=client_secret,
-    )
+    """Get authenticated Gmail service."""
+    creds = await get_google_credentials(parameters, context)
 
     def build_service():
         return build("gmail", "v1", credentials=creds)
 
     loop = asyncio.get_event_loop()
-    service = await loop.run_in_executor(None, build_service)
-
-    return service
+    return await loop.run_in_executor(None, build_service)
 
 
 async def handle_gmail_send(
@@ -414,6 +361,199 @@ def _extract_attachments(payload: Dict[str, Any]) -> list:
             attachments.extend(nested)
 
     return attachments
+
+
+# ============================================================================
+# GMAIL RECEIVE - Polling-based trigger
+# ============================================================================
+
+async def _poll_gmail_ids(service, query: str, max_results: int = 20) -> Set[str]:
+    """Poll Gmail API for message IDs matching query.
+
+    Args:
+        service: Authenticated Gmail API service
+        query: Gmail search query string
+        max_results: Maximum messages to fetch
+
+    Returns:
+        Set of message IDs
+    """
+    def list_messages():
+        return service.users().messages().list(
+            userId='me',
+            q=query,
+            maxResults=max_results
+        ).execute()
+
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(None, list_messages)
+    messages = result.get('messages', [])
+    return {m.get('id') for m in messages if m.get('id')}
+
+
+async def _fetch_email_details(service, message_id: str) -> Dict[str, Any]:
+    """Fetch full email details for a message ID.
+
+    Args:
+        service: Authenticated Gmail API service
+        message_id: Gmail message ID
+
+    Returns:
+        Formatted email data dict
+    """
+    def get_message():
+        return service.users().messages().get(
+            userId='me',
+            id=message_id,
+            format='full',
+            metadataHeaders=['From', 'To', 'Subject', 'Date', 'Cc', 'Bcc']
+        ).execute()
+
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(None, get_message)
+    return _format_message(result, include_body=True)
+
+
+async def _mark_email_as_read(service, message_id: str) -> None:
+    """Mark email as read by removing UNREAD label.
+
+    Args:
+        service: Authenticated Gmail API service
+        message_id: Gmail message ID
+    """
+    def modify_message():
+        return service.users().messages().modify(
+            userId='me',
+            id=message_id,
+            body={'removeLabelIds': ['UNREAD']}
+        ).execute()
+
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, modify_message)
+
+
+async def handle_gmail_receive(
+    node_id: str,
+    node_type: str,
+    parameters: Dict[str, Any],
+    context: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Handle Gmail Receive trigger - polls Gmail API for new emails.
+
+    Unlike push-based triggers (WhatsApp, Webhook), Gmail requires polling.
+    This handler:
+    1. Authenticates with Gmail API using stored OAuth tokens
+    2. Establishes a baseline of existing email IDs
+    3. Polls at the configured interval for new emails
+    4. Returns when a new email is found matching the filter
+    5. Dispatches event via event_waiter for deployment mode listeners
+
+    Parameters:
+        filter_query: Gmail search query (default: 'is:unread')
+        label_filter: Label to filter by (default: 'INBOX')
+        mark_as_read: Mark processed emails as read (default: False)
+        poll_interval: Seconds between polls (default: 60, range: 30-3600)
+    """
+    from services.status_broadcaster import get_status_broadcaster
+    start_time = time.time()
+
+    try:
+        service = await _get_gmail_service(parameters, context)
+
+        poll_interval = max(10, min(3600, parameters.get('poll_interval', 60)))
+        filter_query = parameters.get('filter_query', 'is:unread')
+        label_filter = parameters.get('label_filter', 'INBOX')
+        mark_as_read = parameters.get('mark_as_read', False)
+
+        # Build Gmail query with label filter
+        query = filter_query
+        if label_filter and label_filter != 'all':
+            query = f"label:{label_filter} {query}"
+
+        # Broadcast waiting status
+        broadcaster = get_status_broadcaster()
+        workflow_id = context.get('workflow_id')
+        await broadcaster.update_node_status(node_id, "waiting", {
+            "message": f"Waiting for Gmail email (polling every {poll_interval}s)...",
+            "event_type": "gmail_email_received",
+        }, workflow_id=workflow_id)
+
+        # Get current email IDs to establish baseline (avoid triggering on existing emails)
+        seen_ids: Set[str] = set()
+        try:
+            baseline = await _poll_gmail_ids(service, query)
+            seen_ids.update(baseline)
+            logger.info(f"[GmailReceive] Baseline: {len(seen_ids)} existing emails for query '{query}'")
+        except Exception as e:
+            logger.warning(f"[GmailReceive] Baseline fetch failed (will treat all as new): {e}")
+
+        # Poll loop - check for new emails at configured interval
+        while True:
+            await asyncio.sleep(poll_interval)
+
+            try:
+                current_ids = await _poll_gmail_ids(service, query)
+                new_ids = current_ids - seen_ids
+
+                if new_ids:
+                    # Found new email(s) - process the first one
+                    newest_id = next(iter(new_ids))
+                    seen_ids.update(new_ids)
+
+                    # Fetch full message details
+                    email_data = await _fetch_email_details(service, newest_id)
+
+                    # Mark as read if configured
+                    if mark_as_read:
+                        try:
+                            await _mark_email_as_read(service, newest_id)
+                        except Exception as e:
+                            logger.warning(f"[GmailReceive] Failed to mark as read: {e}")
+
+                    # Track usage
+                    session_id = context.get('session_id', 'default')
+                    await _track_gmail_usage(node_id, 'receive', 1, workflow_id, session_id)
+
+                    # Also dispatch event for deployment mode listeners
+                    from services import event_waiter
+                    event_waiter.dispatch('gmail_email_received', email_data)
+
+                    logger.info(f"[GmailReceive] New email found: {email_data.get('subject', 'no subject')}")
+
+                    return {
+                        "success": True,
+                        "node_id": node_id,
+                        "node_type": node_type,
+                        "result": email_data,
+                        "execution_time": time.time() - start_time,
+                        "timestamp": datetime.now().isoformat()
+                    }
+
+            except asyncio.CancelledError:
+                raise  # Re-raise to outer handler
+            except Exception as e:
+                logger.error(f"[GmailReceive] Poll error (will retry): {e}")
+
+    except asyncio.CancelledError:
+        logger.info(f"[GmailReceive] Cancelled by user: node_id={node_id}")
+        return {
+            "success": False,
+            "node_id": node_id,
+            "node_type": node_type,
+            "error": "Cancelled by user",
+            "execution_time": time.time() - start_time,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"[GmailReceive] Error: {e}")
+        return {
+            "success": False,
+            "node_id": node_id,
+            "node_type": node_type,
+            "error": str(e),
+            "execution_time": time.time() - start_time,
+            "timestamp": datetime.now().isoformat()
+        }
 
 
 # ============================================================================

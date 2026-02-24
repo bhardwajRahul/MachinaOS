@@ -253,6 +253,18 @@ EVENT_TRIGGER_TYPES: FrozenSet[str] = frozenset([
 TRIGGER_TYPES: FrozenSet[str] = EVENT_TRIGGER_TYPES
 
 # =============================================================================
+# POLLING TRIGGER TYPES (require active API polling in deployment mode)
+# =============================================================================
+
+# Polling triggers need to actively poll an external API for new data,
+# unlike push-based triggers (WhatsApp, Webhook) that receive events externally.
+# In deployment mode, these get a dedicated polling loop instead of event_waiter.
+POLLING_TRIGGER_TYPES: FrozenSet[str] = frozenset([
+    'gmailReceive',
+    'twitterReceive',
+])
+
+# =============================================================================
 # ALL TRIGGER NODE TYPES (starting points for workflow graphs)
 # =============================================================================
 
@@ -269,6 +281,8 @@ WORKFLOW_TRIGGER_TYPES: FrozenSet[str] = frozenset([
     'workflowTrigger',
     'chatTrigger',
     'taskTrigger',
+    'twitterReceive',
+    'gmailReceive',
 ])
 
 # =============================================================================

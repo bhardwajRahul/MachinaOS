@@ -100,7 +100,7 @@ export interface TwitterStatus {
   verified?: boolean;
 }
 
-export interface GmailStatus {
+export interface GoogleStatus {
   connected: boolean;
   email: string | null;
   name?: string;
@@ -221,7 +221,7 @@ interface WebSocketContextValue {
   setAndroidStatus: React.Dispatch<React.SetStateAction<AndroidStatus>>;
   whatsappStatus: WhatsAppStatus;
   twitterStatus: TwitterStatus;
-  gmailStatus: GmailStatus;
+  googleStatus: GoogleStatus;
   whatsappMessages: WhatsAppMessage[];  // History of received messages
   lastWhatsAppMessage: WhatsAppMessage | null;  // Most recent message
   apiKeyStatuses: Record<string, ApiKeyStatus>;
@@ -350,7 +350,7 @@ const defaultTwitterStatus: TwitterStatus = {
   user_id: null,
 };
 
-const defaultGmailStatus: GmailStatus = {
+const defaultGoogleStatus: GoogleStatus = {
   connected: false,
   email: null,
 };
@@ -389,7 +389,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [androidStatus, setAndroidStatus] = useState<AndroidStatus>(defaultAndroidStatus);
   const [whatsappStatus, setWhatsappStatus] = useState<WhatsAppStatus>(defaultWhatsAppStatus);
   const [twitterStatus, setTwitterStatus] = useState<TwitterStatus>(defaultTwitterStatus);
-  const [gmailStatus, setGmailStatus] = useState<GmailStatus>(defaultGmailStatus);
+  const [googleStatus, setGoogleStatus] = useState<GoogleStatus>(defaultGoogleStatus);
   const [whatsappMessages, setWhatsappMessages] = useState<WhatsAppMessage[]>([]);
   const [lastWhatsAppMessage, setLastWhatsAppMessage] = useState<WhatsAppMessage | null>(null);
   const [apiKeyStatuses, setApiKeyStatuses] = useState<Record<string, ApiKeyStatus>>({});
@@ -505,7 +505,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             if (data.android) setAndroidStatus(data.android);
             if (data.whatsapp) setWhatsappStatus(data.whatsapp);
             if (data.twitter) setTwitterStatus(data.twitter);
-            if (data.gmail) setGmailStatus(data.gmail);
+            if (data.google) setGoogleStatus(data.google);
             if (data.api_keys) setApiKeyStatuses(data.api_keys);
             // Node statuses from initial_status - group by workflow_id (n8n pattern)
             if (data.nodes) {
@@ -576,11 +576,22 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         case 'google_oauth_complete':
           // Handle Google Workspace OAuth completion broadcast from backend
           if (data?.success) {
-            setGmailStatus({
+            setGoogleStatus({
               connected: true,
               email: data.email || null,
               name: data.name,
               profile_image_url: data.profile_image_url,
+            });
+          }
+          break;
+
+        case 'google_status':
+          // Handle Google Workspace status update (refresh, logout)
+          if (data) {
+            setGoogleStatus({
+              connected: data.connected || false,
+              email: data.email || null,
+              name: data.name,
             });
           }
           break;
@@ -2042,7 +2053,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setAndroidStatus,
     whatsappStatus,
     twitterStatus,
-    gmailStatus,
+    googleStatus,
     whatsappMessages,
     lastWhatsAppMessage,
     apiKeyStatuses,
@@ -2182,10 +2193,10 @@ export const useTwitterStatus = (): TwitterStatus => {
   return twitterStatus;
 };
 
-// Hook specifically for Gmail status
-export const useGmailStatus = (): GmailStatus => {
-  const { gmailStatus } = useWebSocket();
-  return gmailStatus;
+// Hook specifically for Google Workspace status
+export const useGoogleStatus = (): GoogleStatus => {
+  const { googleStatus } = useWebSocket();
+  return googleStatus;
 };
 
 // Hook specifically for deployment status
