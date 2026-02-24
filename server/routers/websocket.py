@@ -987,7 +987,9 @@ async def handle_validate_api_key(data: Dict[str, Any], websocket: WebSocket) ->
     broadcaster = get_status_broadcaster()
     provider, api_key = data["provider"].lower(), data["api_key"].strip()
 
-    models = await ai_service.fetch_models(provider, api_key)
+    # Service-only providers don't have models to fetch
+    AI_PROVIDERS = {'openai', 'anthropic', 'gemini', 'openrouter', 'groq', 'cerebras'}
+    models = await ai_service.fetch_models(provider, api_key) if provider in AI_PROVIDERS else []
     await auth_service.store_api_key(provider=provider, api_key=api_key, models=models,
                                       session_id=data.get("session_id", "default"))
     # Broadcast with hasKey and models so frontend can update reactively

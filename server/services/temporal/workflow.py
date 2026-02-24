@@ -30,8 +30,7 @@ ANDROID_SERVICE_TYPES = {
 
 # Skill node types (connect to Zeenie's input-skill, not executed directly)
 SKILL_NODE_TYPES = {
-    "assistantPersonality", "whatsappSkill", "memorySkill", "mapsSkill",
-    "httpSkill", "schedulerSkill", "androidSkill", "codeSkill", "customSkill",
+    "masterSkill",
 }
 
 @workflow.defn(sandboxed=False)

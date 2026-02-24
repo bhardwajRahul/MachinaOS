@@ -385,12 +385,15 @@ For `androidTool` (toolkit pattern), edges are scanned a second time to find And
 | `calculatorTool` | `calculator` | `CalculatorSchema(operation, a, b)` |
 | `currentTimeTool` | `get_current_time` | `CurrentTimeSchema(timezone)` |
 | `timer` | `timer` | `TimerSchema(delay, unit)` |
-| `webSearchTool` | `web_search` | `WebSearchSchema(query, max_results)` |
+| `duckduckgoSearch` | `web_search` | `DuckDuckGoSearchSchema(query, max_results)` |
 | `pythonExecutor` | `python_code` | `PythonCodeSchema(code)` |
 | `javascriptExecutor` | `javascript_code` | `JavaScriptCodeSchema(code)` |
 | `httpRequest` | `http_request` | `HttpRequestSchema(url, method, body)` |
 | `whatsappSend` | `whatsapp_send` | `WhatsAppSendSchema(recipient_type, phone, message_type, message, ...)` |
 | `whatsappDb` | `whatsapp_db` | `WhatsAppDbSchema(operation, chat_id, query, limit)` |
+| `braveSearch` | `brave_search` | `BraveSearchSchema(query, max_results, country, safe_search)` |
+| `serperSearch` | `serper_search` | `SerperSearchSchema(query, max_results, search_type, country)` |
+| `perplexitySearch` | `perplexity_search` | `PerplexitySearchSchema(query, model, search_recency_filter)` |
 | `gmaps_locations` | `geocode` | `GeocodeSchema(address)` |
 | `gmaps_nearby_places` | `nearby_places` | `NearbyPlacesSchema(location, type, radius)` |
 | `androidTool` | `android_device` | `AndroidToolSchema(service_id, action, parameters)` |
@@ -487,7 +490,10 @@ async def execute_tool(tool_name, tool_args, config):
     elif node_type == 'javascriptExecutor':   return await _execute_javascript_code(tool_args, config['parameters'])
     elif node_type == 'currentTimeTool':      return await _execute_current_time(tool_args)
     elif node_type == 'timer':               return await handle_timer(...)
-    elif node_type == 'webSearchTool':        return await _execute_web_search(tool_args)
+    elif node_type == 'duckduckgoSearch':      return await _execute_duckduckgo_search(tool_args)
+    elif node_type == 'braveSearch':          return await _execute_brave_search_tool(tool_args, config['parameters'])
+    elif node_type == 'serperSearch':         return await _execute_serper_search_tool(tool_args, config['parameters'])
+    elif node_type == 'perplexitySearch':     return await _execute_perplexity_search_tool(tool_args, config['parameters'])
     elif node_type == 'whatsappSend':         return await _execute_whatsapp_send(tool_args)
     elif node_type == 'whatsappDb':           return await _execute_whatsapp_db(tool_args)
     elif node_type == 'androidTool':          return await _execute_android_toolkit(tool_args, config)

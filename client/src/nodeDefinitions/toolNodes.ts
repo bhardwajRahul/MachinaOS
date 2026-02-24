@@ -3,6 +3,7 @@ import {
   INodeTypeDescription,
   NodeConnectionType,
 } from '../types/INodeProperties';
+import { DUCKDUCKGO_ICON } from '../assets/icons/search';
 
 // ============================================================================
 // TOOL NODES - Connect to AI Agent's input-tools handle
@@ -91,16 +92,16 @@ export const toolNodes: Record<string, INodeTypeDescription> = {
     ]
   },
 
-  // Web Search Tool - allows AI Agent to search the web
-  webSearchTool: {
-    displayName: 'Web Search Tool',
-    name: 'webSearchTool',
-    icon: '🔍',
+  // DuckDuckGo Search Tool - allows AI Agent to search the web (free, no API key)
+  duckduckgoSearch: {
+    displayName: 'DuckDuckGo Search',
+    name: 'duckduckgoSearch',
+    icon: DUCKDUCKGO_ICON,
     group: ['tool', 'ai'],
     version: 1,
-    subtitle: 'Web Search',
-    description: 'Allow AI Agent to search the web for information',
-    defaults: { name: 'Web Search', color: '#bd93f9' },
+    subtitle: 'Free Web Search',
+    description: 'Allow AI Agent to search the web for free via DuckDuckGo (no API key required)',
+    defaults: { name: 'DuckDuckGo', color: '#DE5833' },
     inputs: [],
     outputs: [{
       name: 'tool',
@@ -124,30 +125,6 @@ export const toolNodes: Record<string, INodeTypeDescription> = {
         default: 'Search the web for information. Returns relevant search results.',
         typeOptions: { rows: 2 },
         description: 'Describe the tool capabilities for the AI'
-      },
-      {
-        displayName: 'Search Provider',
-        name: 'provider',
-        type: 'options',
-        options: [
-          { name: 'DuckDuckGo (Free)', value: 'duckduckgo' },
-          { name: 'Serper API', value: 'serper' },
-          { name: 'Google Custom Search', value: 'google' }
-        ],
-        default: 'duckduckgo',
-        description: 'Search provider to use'
-      },
-      {
-        displayName: 'API Key',
-        name: 'apiKey',
-        type: 'string',
-        default: '',
-        description: 'API key for Serper or Google (not needed for DuckDuckGo)',
-        displayOptions: {
-          show: {
-            provider: ['serper', 'google']
-          }
-        }
       },
       {
         displayName: 'Max Results',
@@ -252,4 +229,4 @@ export const toolNodes: Record<string, INodeTypeDescription> = {
 // ============================================================================
 
 // List of tool node types for identification
-export const TOOL_NODE_TYPES = ['calculatorTool', 'currentTimeTool', 'webSearchTool', 'taskManager'];
+export const TOOL_NODE_TYPES = ['calculatorTool', 'currentTimeTool', 'duckduckgoSearch', 'taskManager'];

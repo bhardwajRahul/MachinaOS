@@ -14,7 +14,7 @@ import { Edge } from 'reactflow';
 import { SKILL_NODE_TYPES, skillNodes } from '../../nodeDefinitions/skillNodes';
 
 // Tool node types that support schema editing
-const TOOL_NODE_TYPES = ['androidTool', 'calculatorTool', 'currentTimeTool', 'webSearchTool'];
+const TOOL_NODE_TYPES = ['androidTool', 'calculatorTool', 'currentTimeTool', 'duckduckgoSearch'];
 
 // Agent node types that support skills (have input-skill handle)
 const AGENT_WITH_SKILLS_TYPES = [

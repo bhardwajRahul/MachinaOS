@@ -1,8 +1,15 @@
 import React, { useState } from 'react';
+import { Card, List, Tag, Typography, Space } from 'antd';
+import { SearchOutlined, LinkOutlined, StarFilled, QuestionCircleOutlined, BookOutlined, RobotOutlined } from '@ant-design/icons';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { ExecutionResult } from '../../services/executionService';
 import { Node } from 'reactflow';
 import { copyToClipboard } from '../../utils/formatters';
+
+const { Text, Paragraph, Link: AntLink } = Typography;
 
 // Simple JSON syntax highlighter using Dracula colors
 const highlightJSON = (json: string, dracula: any): React.ReactNode => {
@@ -175,7 +182,8 @@ const NodeOutputPanel: React.FC<NodeOutputPanelProps> = ({
   type MapsNearbyOutput = { type: 'maps_nearby'; places: any[]; searchParams: any; total: number };
   type MapsGeocodeOutput = { type: 'maps_geocode'; locations: any[]; total: number };
   type MapsCreateOutput = { type: 'maps_create'; mapUrl: string; center: { lat: number; lng: number }; zoom: number; mapType: string };
-  type StructuredOutput = AndroidOutput | WhatsAppHistoryOutput | MapsNearbyOutput | MapsGeocodeOutput | MapsCreateOutput;
+  type SearchResultsOutput = { type: 'search_results'; query: string; results: any[]; resultCount: number; provider: string; answer?: string; citations?: string[]; searchType?: string; knowledgeGraph?: any; images?: string[]; relatedQuestions?: string[] };
+  type StructuredOutput = AndroidOutput | WhatsAppHistoryOutput | MapsNearbyOutput | MapsGeocodeOutput | MapsCreateOutput | SearchResultsOutput;
 
   // Extract the main response text from execution results
   const getMainResponse = (result: ExecutionResult): string | StructuredOutput | null => {
@@ -202,6 +210,39 @@ const NodeOutputPanel: React.FC<NodeOutputPanelProps> = ({
     }
     if (data?.messages !== undefined && data?.total !== undefined) {
       return { type: 'whatsapp_history', messages: data.messages, total: data.total, count: data.count || data.messages?.length, hasMore: data.has_more };
+    }
+    // Search results output (Brave Search, Serper, Perplexity, DuckDuckGo)
+    // Check nested result structure: { success, result: { query, results, provider } }
+    if (data?.result?.results !== undefined && data?.result?.query !== undefined) {
+      return {
+        type: 'search_results',
+        query: data.result.query,
+        results: data.result.results,
+        resultCount: data.result.result_count || data.result.results.length,
+        provider: data.result.provider || 'search',
+        answer: data.result.answer,
+        citations: data.result.citations,
+        searchType: data.result.search_type,
+        knowledgeGraph: data.result.knowledge_graph,
+        images: data.result.images,
+        relatedQuestions: data.result.related_questions,
+      };
+    }
+    // Search results top-level (tool direct return or unwrapped by useExecution)
+    if (data?.results !== undefined && data?.query !== undefined && Array.isArray(data?.results)) {
+      return {
+        type: 'search_results',
+        query: data.query,
+        results: data.results,
+        resultCount: data.result_count || data.results.length,
+        provider: data.provider || 'search',
+        answer: data.answer,
+        citations: data.citations,
+        searchType: data.search_type,
+        knowledgeGraph: data.knowledge_graph,
+        images: data.images,
+        relatedQuestions: data.related_questions,
+      };
     }
     // Google Maps nearby places output
     // Check nested result structure (from backend: { success, result: { results, search_parameters } })
@@ -986,6 +1027,277 @@ const NodeOutputPanel: React.FC<NodeOutputPanelProps> = ({
               </a>
             </div>
           </div>
+        ) : mainResponse && typeof mainResponse === 'object' && (mainResponse as any).type === 'search_results' ? (
+          /* Search Results Response (Brave, Serper, Perplexity, DuckDuckGo) */
+          (() => {
+            const sr = mainResponse as SearchResultsOutput;
+            const providerColors: Record<string, string> = {
+              brave_search: '#FB542B', serper: '#4285F4', perplexity: '#20808D', duckduckgo: '#DE5833',
+            };
+            const providerLabels: Record<string, string> = {
+              brave_search: 'Brave Search', serper: 'Serper', perplexity: 'Perplexity', duckduckgo: 'DuckDuckGo',
+            };
+            const accent = providerColors[sr.provider] || theme.dracula.cyan;
+            const hasRichResults = sr.results.some((r: any) => r.title || r.snippet);
+            const showResultsList = !sr.answer || hasRichResults;
+            return (
+              <div style={{ marginBottom: theme.spacing.md }}>
+                {/* Header card */}
+                <Card
+                  size="small"
+                  style={{
+                    backgroundColor: theme.colors.backgroundElevated,
+                    border: `1px solid ${accent}40`,
+                    borderLeft: `3px solid ${accent}`,
+                    borderRadius: `${theme.borderRadius.md} ${theme.borderRadius.md} 0 0`,
+                  }}
+                  bodyStyle={{ padding: `${theme.spacing.sm} ${theme.spacing.md}` }}
+                >
+                  <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                    <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+                      <Space size="small">
+                        <SearchOutlined style={{ color: accent }} />
+                        <Text strong style={{ color: accent, fontSize: theme.fontSize.xs, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                          Search Results
+                        </Text>
+                        <Tag color={accent} style={{ margin: 0 }}>
+                          {providerLabels[sr.provider] || sr.provider}
+                        </Tag>
+                      </Space>
+                      <Space size="middle">
+                        <Text type="secondary" style={{ fontSize: theme.fontSize.xs }}>
+                          <Text style={{ color: accent }}>{sr.resultCount}</Text> result{sr.resultCount !== 1 ? 's' : ''}
+                        </Text>
+                        {sr.searchType && sr.searchType !== 'search' && (
+                          <Tag>{sr.searchType}</Tag>
+                        )}
+                      </Space>
+                    </Space>
+                    <Text type="secondary" style={{ fontSize: theme.fontSize.sm }}>
+                      Query: <Text style={{ color: theme.colors.text }}>{sr.query}</Text>
+                    </Text>
+                  </Space>
+                </Card>
+
+                {/* Perplexity AI answer */}
+                {sr.answer && (
+                  <Card
+                    size="small"
+                    style={{
+                      backgroundColor: theme.colors.backgroundElevated,
+                      borderLeft: `3px solid ${accent}`,
+                      border: `1px solid ${accent}40`,
+                      borderTop: 'none',
+                      borderRadius: !showResultsList && !sr.knowledgeGraph ? `0 0 ${theme.borderRadius.md} ${theme.borderRadius.md}` : 0,
+                    }}
+                    bodyStyle={{ padding: theme.spacing.md }}
+                  >
+                    <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                      <Space size="small">
+                        <RobotOutlined style={{ color: accent }} />
+                        <Text strong style={{ color: accent, fontSize: theme.fontSize.xs, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          AI Answer
+                        </Text>
+                      </Space>
+                      <div
+                        className="search-answer-markdown"
+                        style={{ color: theme.colors.text, fontSize: theme.fontSize.sm, lineHeight: 1.6 }}
+                      >
+                        <style>{`
+                          .search-answer-markdown p { margin: 0 0 8px 0; }
+                          .search-answer-markdown p:last-child { margin-bottom: 0; }
+                          .search-answer-markdown h1, .search-answer-markdown h2, .search-answer-markdown h3 {
+                            margin: 12px 0 8px 0; font-weight: 600; color: ${theme.colors.text};
+                          }
+                          .search-answer-markdown h1:first-child, .search-answer-markdown h2:first-child, .search-answer-markdown h3:first-child { margin-top: 0; }
+                          .search-answer-markdown h1 { font-size: 1.2em; }
+                          .search-answer-markdown h2 { font-size: 1.1em; }
+                          .search-answer-markdown h3 { font-size: 1em; }
+                          .search-answer-markdown strong { font-weight: 600; color: ${theme.colors.text}; }
+                          .search-answer-markdown em { font-style: italic; }
+                          .search-answer-markdown ul, .search-answer-markdown ol { margin: 8px 0; padding-left: 20px; }
+                          .search-answer-markdown li { margin: 4px 0; }
+                          .search-answer-markdown code {
+                            background-color: ${theme.isDarkMode ? theme.dracula.currentLine : `${theme.colors.border}50`};
+                            padding: 2px 6px; border-radius: 4px;
+                            font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, monospace;
+                            font-size: 0.9em;
+                          }
+                          .search-answer-markdown pre {
+                            background-color: ${theme.isDarkMode ? theme.dracula.currentLine : theme.colors.backgroundPanel};
+                            padding: 12px; border-radius: 6px; overflow-x: auto; margin: 8px 0;
+                          }
+                          .search-answer-markdown pre code { background: none; padding: 0; }
+                          .search-answer-markdown table { border-collapse: collapse; margin: 8px 0; width: 100%; font-size: 0.9em; }
+                          .search-answer-markdown th, .search-answer-markdown td {
+                            border: 1px solid ${theme.isDarkMode ? theme.dracula.selection : theme.colors.border};
+                            padding: 6px 10px; text-align: left;
+                          }
+                          .search-answer-markdown th {
+                            background-color: ${theme.isDarkMode ? theme.dracula.currentLine : theme.colors.backgroundPanel};
+                            font-weight: 600;
+                          }
+                          .search-answer-markdown blockquote {
+                            border-left: 3px solid ${accent};
+                            margin: 8px 0; padding: 4px 12px; color: ${theme.colors.textSecondary};
+                          }
+                          .search-answer-markdown a { color: ${accent}; text-decoration: none; }
+                          .search-answer-markdown a:hover { text-decoration: underline; }
+                          .search-answer-markdown hr {
+                            border: none;
+                            border-top: 1px solid ${theme.isDarkMode ? theme.dracula.selection : theme.colors.border};
+                            margin: 12px 0;
+                          }
+                        `}</style>
+                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
+                          {sr.answer}
+                        </ReactMarkdown>
+                      </div>
+                      {sr.citations && sr.citations.length > 0 && (
+                        <Space size={[4, 4]} wrap>
+                          {sr.citations.map((url: string, idx: number) => (
+                            <Tag
+                              key={idx}
+                              icon={<LinkOutlined />}
+                              color={accent}
+                              style={{ cursor: 'pointer', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}
+                              onClick={() => window.open(url, '_blank')}
+                              title={url}
+                            >
+                              {(() => { try { return new URL(url).hostname; } catch { return url; } })()}
+                            </Tag>
+                          ))}
+                        </Space>
+                      )}
+                    </Space>
+                  </Card>
+                )}
+
+                {/* Knowledge graph (Serper) */}
+                {sr.knowledgeGraph && (
+                  <Card
+                    size="small"
+                    style={{
+                      backgroundColor: theme.colors.backgroundElevated,
+                      borderLeft: `3px solid ${accent}`,
+                      border: `1px solid ${accent}40`,
+                      borderTop: 'none',
+                      borderRadius: 0,
+                    }}
+                    bodyStyle={{ padding: theme.spacing.md }}
+                  >
+                    <Space direction="vertical" size={2} style={{ width: '100%' }}>
+                      <Space size="small">
+                        <BookOutlined style={{ color: accent }} />
+                        <Text strong style={{ color: accent, fontSize: theme.fontSize.xs, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          Knowledge Graph
+                        </Text>
+                      </Space>
+                      {sr.knowledgeGraph.title && (
+                        <Text strong style={{ color: theme.colors.text }}>{sr.knowledgeGraph.title}</Text>
+                      )}
+                      {sr.knowledgeGraph.type && (
+                        <Text type="secondary" style={{ fontSize: theme.fontSize.xs }}>{sr.knowledgeGraph.type}</Text>
+                      )}
+                      {sr.knowledgeGraph.description && (
+                        <Paragraph style={{ color: theme.colors.textSecondary, fontSize: theme.fontSize.sm, lineHeight: 1.5, marginBottom: 0 }}>
+                          {sr.knowledgeGraph.description}
+                        </Paragraph>
+                      )}
+                    </Space>
+                  </Card>
+                )}
+
+                {/* Results list - skip when answer+citations already cover it (Perplexity returns url-only results) */}
+                {showResultsList && (
+                <List
+                  size="small"
+                  dataSource={sr.results}
+                  locale={{ emptyText: 'No results found' }}
+                  style={{
+                    backgroundColor: theme.colors.backgroundElevated,
+                    border: `1px solid ${accent}40`,
+                    borderTop: 'none',
+                    borderRadius: `0 0 ${theme.borderRadius.md} ${theme.borderRadius.md}`,
+                    maxHeight: 400,
+                    overflow: 'auto',
+                  }}
+                  renderItem={(item: any, idx: number) => (
+                    <List.Item
+                      key={idx}
+                      style={{ padding: `${theme.spacing.sm} ${theme.spacing.md}`, alignItems: 'flex-start' }}
+                    >
+                      <Space direction="vertical" size={2} style={{ width: '100%' }}>
+                        <Space size="small" align="start">
+                          {item.position && (
+                            <Text type="secondary" style={{ fontSize: 10, minWidth: 18 }}>#{item.position}</Text>
+                          )}
+                          {item.title ? (
+                            <AntLink href={item.url || item.imageUrl} target="_blank" style={{ color: accent, fontSize: theme.fontSize.sm, fontWeight: theme.fontWeight.medium }}>
+                              {item.title}
+                            </AntLink>
+                          ) : item.url ? (
+                            <AntLink href={item.url} target="_blank" style={{ color: accent, fontSize: theme.fontSize.sm, wordBreak: 'break-all' }}>
+                              {item.url}
+                            </AntLink>
+                          ) : null}
+                        </Space>
+                        {item.snippet && (
+                          <Text type="secondary" style={{ fontSize: theme.fontSize.xs, lineHeight: 1.4 }}>
+                            {item.snippet}
+                          </Text>
+                        )}
+                        {item.url && item.title && (
+                          <Text type="secondary" style={{ fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
+                            {item.url}
+                          </Text>
+                        )}
+                        {(item.date || item.source || item.address || item.rating != null) && (
+                          <Space size="small">
+                            {item.source && <Tag color="cyan">{item.source}</Tag>}
+                            {item.date && <Text type="secondary" style={{ fontSize: 10 }}>{item.date}</Text>}
+                            {item.address && <Text type="secondary" style={{ fontSize: 10 }}>{item.address}</Text>}
+                            {item.rating != null && (
+                              <Tag icon={<StarFilled />} color="gold">{item.rating}</Tag>
+                            )}
+                          </Space>
+                        )}
+                      </Space>
+                    </List.Item>
+                  )}
+                />
+                )}
+
+                {/* Related questions (Perplexity) */}
+                {sr.relatedQuestions && sr.relatedQuestions.length > 0 && (
+                  <Card
+                    size="small"
+                    style={{
+                      marginTop: theme.spacing.sm,
+                      backgroundColor: theme.colors.backgroundElevated,
+                      border: `1px solid ${accent}30`,
+                      borderRadius: theme.borderRadius.md,
+                    }}
+                    bodyStyle={{ padding: theme.spacing.md }}
+                  >
+                    <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                      <Space size="small">
+                        <QuestionCircleOutlined style={{ color: accent }} />
+                        <Text strong style={{ color: accent, fontSize: theme.fontSize.xs, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          Related Questions
+                        </Text>
+                      </Space>
+                      {sr.relatedQuestions.map((q: string, idx: number) => (
+                        <Tag key={idx} style={{ whiteSpace: 'normal', padding: `${theme.spacing.xs} ${theme.spacing.sm}` }}>
+                          {q}
+                        </Tag>
+                      ))}
+                    </Space>
+                  </Card>
+                )}
+              </div>
+            );
+          })()
         ) : mainResponse && (
           /* Standard Response (AI, etc) */
           <div style={{

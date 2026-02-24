@@ -2,6 +2,7 @@
 // Based on n8n's implementation using SVG files
 
 import braveSvg from './brave.svg?raw';
+import duckduckgoSvg from './duckduckgo.svg?raw';
 import googleSvg from './google.svg?raw';
 import perplexitySvg from './perplexity.svg?raw';
 
@@ -14,12 +15,14 @@ const svgToDataUri = (svg: string): string => {
 };
 
 export const BRAVE_SEARCH_ICON = svgToDataUri(braveSvg);
+export const DUCKDUCKGO_ICON = svgToDataUri(duckduckgoSvg);
 export const SERPER_ICON = svgToDataUri(googleSvg);
 export const PERPLEXITY_ICON = svgToDataUri(perplexitySvg);
 
 // Export raw SVGs for React component usage
 export const SearchIcons = {
   brave: braveSvg,
+  duckduckgo: duckduckgoSvg,
   serper: googleSvg,
   perplexity: perplexitySvg,
 };

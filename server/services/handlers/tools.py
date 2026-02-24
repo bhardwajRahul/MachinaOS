@@ -71,9 +71,9 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
     if node_type == 'currentTimeTool':
         return await _execute_current_time(tool_args, config.get('parameters', {}))
 
-    # Web search tool
-    if node_type == 'webSearchTool':
-        return await _execute_web_search(tool_args, config.get('parameters', {}))
+    # DuckDuckGo search tool (free, no API key)
+    if node_type == 'duckduckgoSearch':
+        return await _execute_duckduckgo_search(tool_args, config.get('parameters', {}))
 
     # Timer tool (dual-purpose: workflow node + AI tool)
     # LLM fills duration/unit via Pydantic schema; calls existing handle_timer handler
@@ -563,7 +563,7 @@ async def _execute_current_time(args: Dict[str, Any],
         return {"error": f"Invalid timezone: {timezone_str}. Error: {str(e)}"}
 
 
-async def _execute_web_search(args: Dict[str, Any],
+async def _execute_duckduckgo_search(args: Dict[str, Any],
                                node_params: Dict[str, Any]) -> Dict[str, Any]:
     """Execute web search.
 

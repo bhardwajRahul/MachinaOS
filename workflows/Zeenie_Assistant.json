@@ -22,14 +22,14 @@
       "dragging": false
     },
     {
-      "id": "webSearchTool-1769755286327",
-      "type": "webSearchTool",
+      "id": "duckduckgoSearch-1769755286327",
+      "type": "duckduckgoSearch",
       "position": {
         "x": 2100,
         "y": 880
       },
       "data": {
-        "label": "Web Search Tool"
+        "label": "DuckDuckGo"
       },
       "width": 91,
       "height": 82,
@@ -818,11 +818,11 @@
         "stroke": "#8be9fd",
         "strokeWidth": 3
       },
-      "source": "webSearchTool-1769755286327",
+      "source": "duckduckgoSearch-1769755286327",
       "sourceHandle": "output-tool",
       "target": "web_agent-1770070863433",
       "targetHandle": "input-tools",
-      "id": "reactflow__edge-webSearchTool-1769755286327output-tool-web_agent-1770070863433input-tools",
+      "id": "reactflow__edge-duckduckgoSearch-1769755286327output-tool-web_agent-1770070863433input-tools",
       "selected": false
     },
     {

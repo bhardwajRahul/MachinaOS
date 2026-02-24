@@ -1,32 +1,43 @@
 ---
-name: web-search-skill
-description: Search the web for current information, news, facts, and real-time data that may not be in your training data.
+name: duckduckgo-search-skill
+description: Search the web using DuckDuckGo for free, privacy-focused results with no API key required.
 allowed-tools: web_search
 metadata:
   author: machina
-  version: "1.0"
+  version: "2.0"
   category: search
-  icon: "🔍"
-  color: "#bd93f9"
+  icon: "🦆"
+  color: "#DE5833"
 ---
 
-# Web Search Skill
+# DuckDuckGo Search Skill
 
-This skill enables you to search the web for current, up-to-date information.
+This skill enables free web search via DuckDuckGo. No API key required.
+
+For premium search providers, see the dedicated skills:
+- **brave-search-skill** - Brave Search API (independent index, privacy-focused)
+- **serper-search-skill** - Serper API (Google-powered, news/images/places)
+- **perplexity-search-skill** - Perplexity Sonar AI (synthesized answers with citations)
 
 ## How It Works
 
-This skill provides instructions and context. To execute web searches, connect the **Web Search Tool** node to the Zeenie's `input-tools` handle.
+This skill provides instructions and context. To execute web searches, connect the **DuckDuckGo Search** node to the agent's `input-tools` handle.
 
 ## web_search Tool
 
-Search the web and get relevant results.
+Search the web using DuckDuckGo and get relevant results.
 
 ### Schema Fields
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | query | string | Yes | The search query to look up on the web |
+
+### Node Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| maxResults | 5 | Number of results to return |
 
 ### Examples
 
@@ -79,9 +90,9 @@ Search the web and get relevant results.
 }
 ```
 
-## When to Use Web Search
+## When to Use DuckDuckGo Search
 
-Use web search when the user asks about:
+Use DuckDuckGo search when the user asks about:
 
 1. **Current events and news** - Recent happenings, breaking news, current affairs
 2. **Real-time data** - Stock prices, weather, sports scores, exchange rates
@@ -91,7 +102,7 @@ Use web search when the user asks about:
 6. **Local information** - Business hours, addresses, phone numbers
 7. **Product information** - Prices, availability, reviews
 
-## When NOT to Use Web Search
+## When NOT to Use DuckDuckGo Search
 
 Avoid searching when:
 
@@ -100,6 +111,17 @@ Avoid searching when:
 3. **Creative tasks** - Writing, brainstorming, analysis
 4. **Personal advice** - Relationship, life decisions
 5. **Subjective opinions** - Preferences, recommendations without factual basis
+
+## Choosing the Right Search Provider
+
+| Need | Recommended Provider | Tool Node |
+|------|---------------------|-----------|
+| Free search, no API key | DuckDuckGo | DuckDuckGo Search |
+| Google-quality results | Serper | Serper Search |
+| News, images, places | Serper | Serper Search |
+| Privacy-focused, independent | Brave | Brave Search |
+| AI-synthesized answers | Perplexity | Perplexity Search |
+| Research with citations | Perplexity | Perplexity Search |
 
 ## Search Query Best Practices
 
@@ -119,7 +141,7 @@ Avoid searching when:
 | Bad Query | Good Query |
 |-----------|------------|
 | "Can you please tell me what the weather is like in London today?" | "London weather today" |
-| "I want to know about the latest iPhone model and its features" | "iPhone 15 Pro specifications" |
+| "I want to know about the latest iPhone model and its features" | "iPhone 16 Pro specifications" |
 | "What is happening in the stock market right now?" | "stock market news today" |
 
 ## Handling Results
@@ -130,27 +152,16 @@ Avoid searching when:
 4. **Suggest follow-up searches** if the initial results are insufficient
 5. **Combine multiple searches** for comprehensive answers
 
-## Provider Information
-
-The Web Search Tool supports multiple providers:
-
-| Provider | API Key Required | Notes |
-|----------|-----------------|-------|
-| DuckDuckGo | No | Free, privacy-focused, good general results |
-| Serper API | Yes | Google-powered, high quality, requires API key |
-| Google Custom Search | Yes | Direct Google results, requires setup |
-
-The default provider (DuckDuckGo) works without any API key.
-
 ## Limitations
 
-- Results depend on the search provider's index
+- DuckDuckGo uses the `ddgs` library (free, no API key)
+- Results depend on DuckDuckGo's index
 - Some recent events may not be indexed immediately
 - Paywalled content may show limited snippets
 - Results are in English by default
 
 ## Setup Requirements
 
-1. Connect this skill to Zeenie's `input-skill` handle
-2. Connect the Web Search Tool node to Zeenie's `input-tools` handle
-3. (Optional) Configure API key in the tool node for Serper or Google
+1. Connect this skill to the agent's `input-skill` handle
+2. Connect the **DuckDuckGo Search** node to the agent's `input-tools` handle
+3. No API key required for DuckDuckGo

@@ -45,7 +45,7 @@ AI_MEMORY_TYPES: FrozenSet[str] = frozenset([
 AI_TOOL_TYPES: FrozenSet[str] = frozenset([
     'calculatorTool',
     'currentTimeTool',
-    'webSearchTool',
+    'duckduckgoSearch',
     'androidTool',
 ])
 

@@ -1951,7 +1951,7 @@ class AIService:
                     logger.debug(f"[ChatAgent] Enhanced system message with {len(skill_names)} skill contexts")
 
             # Build tools from tool_data using same method as AI Agent
-            # This supports ALL tool types: calculatorTool, currentTimeTool, webSearchTool, androidTool, httpRequest
+            # This supports ALL tool types: calculatorTool, currentTimeTool, duckduckgoSearch, androidTool, httpRequest
             all_tools = []
             tool_node_configs = {}  # Map tool name to node config (same as AI Agent's tool_configs)
             if tool_data:
@@ -2357,7 +2357,7 @@ class AIService:
         DEFAULT_TOOL_NAMES = {
             'calculatorTool': 'calculator',
             'currentTimeTool': 'get_current_time',
-            'webSearchTool': 'web_search',
+            'duckduckgoSearch': 'web_search',
             'pythonExecutor': 'python_code',
             'javascriptExecutor': 'javascript_code',
             'androidTool': 'android_device',
@@ -2409,7 +2409,7 @@ class AIService:
         DEFAULT_TOOL_DESCRIPTIONS = {
             'calculatorTool': 'Perform mathematical calculations. Operations: add, subtract, multiply, divide, power, sqrt, mod, abs',
             'currentTimeTool': 'Get the current date and time. Optionally specify timezone.',
-            'webSearchTool': 'Search the web for information. Returns relevant search results.',
+            'duckduckgoSearch': 'Search the web for information using DuckDuckGo. Returns relevant search results. Free, no API key required.',
             'pythonExecutor': 'Execute Python code for calculations, data processing, and automation. Available: math, json, datetime, Counter, defaultdict. Set output variable with result.',
             'javascriptExecutor': 'Execute JavaScript code for calculations, data processing, and JSON manipulation. Set output variable with result.',
             'androidTool': 'Control Android device. Available services are determined by connected nodes.',
@@ -2635,13 +2635,13 @@ class AIService:
 
             return CurrentTimeSchema
 
-        # Web search tool schema
-        if node_type == 'webSearchTool':
-            class WebSearchSchema(BaseModel):
-                """Schema for web search tool arguments."""
+        # DuckDuckGo search tool schema
+        if node_type == 'duckduckgoSearch':
+            class DuckDuckGoSearchSchema(BaseModel):
+                """Search the web using DuckDuckGo (free, no API key)."""
                 query: str = Field(description="Search query to look up on the web")
 
-            return WebSearchSchema
+            return DuckDuckGoSearchSchema
 
         # Brave Search tool schema (dual-purpose: workflow node + AI tool)
         if node_type == 'braveSearch':

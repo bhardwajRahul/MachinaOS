@@ -364,14 +364,14 @@ class CacheEntry(SQLModel, table=True):
 
 ## Codebase Summary
 - **Hybrid architecture**: Node.js + Python + React TypeScript
-- **105 implemented workflow nodes** with clean service separation (6 AI models + 3 AI agents/memory + 13 specialized agents + 11 skills + 3 dedicated tools + 6 dual-purpose tools + 16 Android + 3 WhatsApp + 4 Twitter + 2 Social + 3 Location + 3 Code + 6 Utility + 6 Document + 2 Chat + 2 Scheduler + 1 Workflow + 26 Google Workspace + 1 Apify)
+- **108 implemented workflow nodes** with clean service separation (6 AI models + 3 AI agents/memory + 13 specialized agents + 11 skills + 3 dedicated tools + 9 dual-purpose tools + 16 Android + 3 WhatsApp + 4 Twitter + 2 Social + 3 Location + 3 Code + 6 Utility + 6 Document + 2 Chat + 2 Scheduler + 1 Workflow + 26 Google Workspace + 1 Apify + 3 Search)
 - **WebSocket-First Architecture**: WebSocket as primary frontend-backend communication (87 message handlers)
 - **Recent optimizations**: REST APIs replaced with WebSocket, AI endpoints migrated to Python, Android automation integrated
 
 ## Architecture Refactoring
 The project was completely refactored from schema-based node definitions to explicit INodeProperties interface system inspired by n8n architecture. Key changes:
 - **Pure INodeProperties System**: Removed all backward compatibility layers
-- **79 Implemented Node Components**: AI models, agents, skills, location services, Android automation, WhatsApp, Twitter/X, social, code execution, HTTP/Webhook utilities, document processing, chat, and schedulers
+- **82 Implemented Node Components**: AI models, agents, skills, location services, Android automation, WhatsApp, Twitter/X, social, code execution, HTTP/Webhook utilities, document processing, chat, schedulers, and search
 - **WebSocket-First Communication**: 86 WebSocket message handlers replace most REST API calls
 - **Resource-Operation Pattern**: Organized by functional categories (AI, Location, Android, WhatsApp)
 - **TypeScript-First**: Full type safety with proper interface alignment
@@ -390,7 +390,8 @@ The project was completely refactored from schema-based node definitions to expl
 - `src/nodeDefinitions/aiAgentNodes.ts` - AI agent and processing components
 - `src/nodeDefinitions/skillNodes.ts` - Skill node definitions (11 nodes including masterSkill and customSkill)
 - `src/nodeDefinitions/specializedAgentNodes.ts` - Specialized AI agent definitions (10 nodes) with shared AI_AGENT_PROPERTIES and centralized dracula theming
-- `src/nodeDefinitions/toolNodes.ts` - AI Agent tool nodes (calculatorTool, currentTimeTool, webSearchTool)
+- `src/nodeDefinitions/toolNodes.ts` - AI Agent tool nodes (calculatorTool, currentTimeTool, duckduckgoSearch)
+- `src/nodeDefinitions/searchNodes.ts` - Search API nodes (braveSearch, serperSearch, perplexitySearch)
 - `src/nodeDefinitions/androidServiceNodes.ts` - 16 Android service nodes (monitoring, apps, automation, sensors, media)
 - `src/nodeDefinitions/locationNodes.ts` - Google Maps and location services
 - `src/nodeDefinitions/gmailNodes.ts` - Gmail integration (4 nodes)
@@ -525,7 +526,7 @@ The project uses WebSocket as the primary communication method between frontend 
 - `server/services/status_broadcaster.py` - Connection management and broadcasting
 
 ## Implemented Node Types
-The following 105 nodes are currently implemented and functional:
+The following 108 nodes are currently implemented and functional:
 
 ### AI Chat Models (6 nodes)
 - **openaiChatModel**: OpenAI GPT models with response format options. O-series models (o1, o3, o4) support reasoning effort parameter.
@@ -538,7 +539,7 @@ The following 105 nodes are currently implemented and functional:
 ### AI Agents & Memory (3 nodes)
 - **aiAgent**: Advanced AI agent with tool calling, memory input handle, and iterative reasoning. Uses LangGraph for structured execution. Parameters: Provider, Model, Prompt, System Message, Options.
 - **chatAgent**: Conversational AI agent with memory and skill support for multi-turn chat interactions. Parameters: Provider, Model, Prompt (supports `{{chatTrigger.message}}` template or auto-fallback from connected input), System Message. Behavior extended by connected skills.
-### AI Agent Tool Nodes (5 dedicated + 6 dual-purpose)
+### AI Agent Tool Nodes (5 dedicated + 9 dual-purpose)
 Tool nodes connect to AI Agent's `input-tools` handle to provide capabilities the agent can invoke during reasoning. Both `masterSkill` and `simpleMemory` are in the AI Tools category.
 
 #### Dedicated Tool Nodes (passive, tool-only)
@@ -725,7 +726,34 @@ if skill_type == 'masterSkill':
 #### Other Dedicated Tool Nodes
 - **calculatorTool**: Mathematical operations (add, subtract, multiply, divide, power, sqrt, mod, abs)
 - **currentTimeTool**: Get current date/time with timezone support
-- **webSearchTool**: Web search via DuckDuckGo (free, uses `ddgs` library) or Serper API with configurable max results
+- **duckduckgoSearch**: DuckDuckGo web search (free, uses `ddgs` library, no API key required)
+
+#### Dual-Purpose Search Nodes (workflow node + AI tool)
+Search API nodes that work BOTH as standalone workflow nodes AND as AI Agent tools. When connected to `input-tools`, the LLM fills the node's parameter schema.
+- **braveSearch**: **Dual-purpose node** - Search the web using Brave Search API. Returns web results with titles, snippets, and URLs. Group: `['search', 'tool']`. Parameters: query, maxResults, country, searchLang, safeSearch.
+- **serperSearch**: **Dual-purpose node** - Search the web using Google via Serper API. Supports web, news, images, and places search types with knowledge graph. Group: `['search', 'tool']`. Parameters: query, searchType, maxResults, country, language.
+- **perplexitySearch**: **Dual-purpose node** - AI-powered search using Perplexity Sonar. Returns a markdown-formatted AI answer with inline citation references and source URLs. Group: `['search', 'tool']`. Parameters: query, model (sonar/sonar-pro/sonar-reasoning/sonar-reasoning-pro), searchRecencyFilter, returnImages, returnRelatedQuestions.
+
+**Key Files:**
+| File | Description |
+|------|-------------|
+| `client/src/nodeDefinitions/searchNodes.ts` | 3 dual-purpose search node definitions |
+| `server/services/handlers/search.py` | 3 handler functions with API key fetch + usage tracking |
+| `server/services/handlers/tools.py` | Tool dispatch wrappers for AI Agent tool calling |
+| `server/services/ai.py` | Tool names, descriptions, and Pydantic schemas |
+| `server/constants.py` | `SEARCH_NODE_TYPES` and `SEARCH_TOOL_TYPES` constants |
+| `client/src/assets/icons/search/` | SVG icons for Brave, Serper, Perplexity |
+
+**Search API Authentication:**
+| Provider | Credential Key | Header | API Endpoint |
+|----------|---------------|--------|-------------|
+| Brave Search | `brave_search` | `X-Subscription-Token` | `GET https://api.search.brave.com/res/v1/web/search` |
+| Serper | `serper` | `X-API-KEY` | `POST https://google.serper.dev/search` |
+| Perplexity | `perplexity` | `Authorization: Bearer` | `POST https://api.perplexity.ai/chat/completions` |
+
+**Credentials Modal Layout:**
+- Brave Search and Perplexity in **Search** category
+- Serper in **Scrapers** category (Google SERP scraping)
 
 ### Specialized AI Agents (13 nodes)
 Specialized agents are AI Agents pre-configured for specific domains. They inherit full AI Agent functionality (provider, model, prompt, system message, thinking/reasoning) while being tailored for specific capabilities. All specialized agents route to `handle_chat_agent` in the backend and support the same input handles. Node colors use centralized dracula theme constants imported from `client/src/styles/theme.ts`.
@@ -1932,7 +1960,7 @@ Both AI Agent and Zeenie use the **same tool calling pattern**:
 
 1. **Tool Building**: Both use `_build_tool_from_node()` to create schema-only tools
 2. **Tool Execution**: Both use `execute_tool()` from `handlers/tools.py`
-3. **Supported Tools**: `calculatorTool`, `currentTimeTool`, `webSearchTool`, `androidTool`, `httpRequest`
+3. **Supported Tools**: `calculatorTool`, `currentTimeTool`, `duckduckgoSearch`, `androidTool`, `httpRequest`, `braveSearch`, `serperSearch`, `perplexitySearch`
 
 **Tool Execution Flow:**
 ```
@@ -3513,7 +3541,8 @@ Tool Node (calculatorTool) → (tool output) → AI Agent (input-tools handle)
 ### Key Files
 | File | Description |
 |------|-------------|
-| `client/src/nodeDefinitions/toolNodes.ts` | Tool node definitions (calculatorTool, currentTimeTool, webSearchTool, androidTool) |
+| `client/src/nodeDefinitions/toolNodes.ts` | Tool node definitions (calculatorTool, currentTimeTool, duckduckgoSearch, androidTool) |
+| `client/src/nodeDefinitions/searchNodes.ts` | Search node definitions (braveSearch, serperSearch, perplexitySearch) |
 | `client/src/nodeDefinitions/specializedAgentNodes.ts` | Specialized agent definitions (10 nodes) + AI_AGENT_PROPERTIES + SPECIALIZED_AGENT_TYPES |
 | `server/services/handlers/tools.py` | Tool execution handlers |
 | `server/services/ai.py` | `_get_tool_schema()` - Pydantic schemas for tools |
@@ -3593,7 +3622,10 @@ Tool nodes display execution status via the standard node status system:
 |------|--------|---------|-------------|
 | calculatorTool | CalculatorSchema | `_execute_calculator()` | Math operations |
 | currentTimeTool | CurrentTimeSchema | `_execute_current_time()` | Date/time with timezone |
-| webSearchTool | WebSearchSchema | `_execute_web_search()` | DuckDuckGo/Serper search |
+| duckduckgoSearch | DuckDuckGoSearchSchema | `_execute_duckduckgo_search()` | DuckDuckGo web search (free) |
+| braveSearch | BraveSearchSchema | `handle_brave_search()` | Brave Search API web results |
+| serperSearch | SerperSearchSchema | `handle_serper_search()` | Google SERP via Serper API |
+| perplexitySearch | PerplexitySearchSchema | `handle_perplexity_search()` | AI-powered search with citations |
 | androidTool | AndroidToolSchema | `_execute_android_toolkit()` | Android device control via connected services |
 | Android service nodes | Per-service schema | `_execute_android_service()` | Direct Android service tools (see below) |
 
@@ -3700,17 +3732,24 @@ When no custom schema exists, service-specific defaults are generated:
 ```
 
 ### Web Search Implementation
-Uses `ddgs` library (renamed from `duckduckgo-search`) for actual web results (not the limited Instant Answer API):
+
+#### DuckDuckGo (duckduckgoSearch - free, no API key)
+Uses `ddgs` library for web results:
 ```python
 from ddgs import DDGS
-
 def do_search():
     ddgs = DDGS()
     return list(ddgs.text(query, max_results=max_results))
-
-# Run in thread pool to avoid blocking async
 search_results = await asyncio.get_event_loop().run_in_executor(None, do_search)
 ```
+
+#### Search API Nodes (braveSearch, serperSearch, perplexitySearch)
+Dedicated handlers in `server/services/handlers/search.py` using `httpx.AsyncClient`:
+- **Brave Search**: `GET https://api.search.brave.com/res/v1/web/search` with `X-Subscription-Token` header. Returns `{query, results: [{title, snippet, url}], result_count, provider}`.
+- **Serper**: `POST https://google.serper.dev/search` with `X-API-KEY` header. Supports web/news/images/places search types. Returns `{query, results, result_count, search_type, provider}` with optional `knowledge_graph`.
+- **Perplexity Sonar**: `POST https://api.perplexity.ai/chat/completions` with Bearer token. Returns `{query, answer (markdown), citations: [url], results: [{url}], model, provider}` with optional `images` and `related_questions`.
+
+All handlers fetch API keys via `auth_service.get_api_key()` and track usage via `_track_search_usage()` for cost calculation.
 
 ## Config Node Architecture
 

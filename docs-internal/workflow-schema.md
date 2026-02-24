@@ -97,8 +97,14 @@ Connect to Chat Agent's `input-skill` handle:
 Connect to AI Agent's `input-tools` handle:
 - `calculatorTool` - Mathematical operations
 - `currentTimeTool` - Current date/time with timezone
-- `webSearchTool` - Web search (DuckDuckGo, Serper, Google)
+- `duckduckgoSearch` - DuckDuckGo web search (free, no API key)
 - `androidTool` - Android toolkit aggregator (sub-node pattern)
+
+### Search Nodes (3 nodes)
+Dual-purpose nodes (workflow + AI tool). Defined in `searchNodes.ts`:
+- `braveSearch` - Brave Search API web results
+- `serperSearch` - Google SERP via Serper API (web, news, images, places)
+- `perplexitySearch` - Perplexity Sonar AI-powered search with markdown answer and citations
 
 ### Location Nodes (3 nodes)
 - `createMap` - Google Maps creation with center, zoom, map type

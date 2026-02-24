@@ -5,7 +5,7 @@
 The pricing service provides centralized cost tracking for both LLM tokens and external API services (Twitter/X, Google Maps). It supports:
 
 - **LLM Token Costs**: Per-model pricing with input/output/cache/reasoning token breakdown
-- **API Service Costs**: Per-request/resource pricing for third-party APIs
+- **API Service Costs**: Per-request/resource pricing for third-party APIs (Twitter/X, Google Maps, Search APIs)
 - **Automatic Tracking**: HTTPX event hooks for transparent API call tracking
 - **Manual Tracking**: Helper functions for services that don't use HTTPX
 
@@ -92,6 +92,22 @@ Located at `server/config/pricing.json`. User-editable with hot-reload support.
       "posts_read": 0.005,
       "content_create": 0.010,
       "user_read": 0.010
+    },
+    "brave_search": {
+      "_description": "Brave Search API pricing (per query)",
+      "web_search": 0.003,
+      "_default": 0.003
+    },
+    "serper": {
+      "_description": "Serper Google Search API pricing (per query)",
+      "web_search": 0.001,
+      "_default": 0.001
+    },
+    "perplexity": {
+      "_description": "Perplexity Sonar API pricing (per request)",
+      "sonar_search": 0.005,
+      "sonar_pro_search": 0.005,
+      "_default": 0.005
     }
   },
 
@@ -103,6 +119,15 @@ Located at `server/config/pricing.json`. User-editable with hot-reload support.
     "twitter": {
       "tweet": "content_create",
       "search": "posts_read"
+    },
+    "brave_search": {
+      "web_search": "web_search"
+    },
+    "serper": {
+      "web_search": "web_search"
+    },
+    "perplexity": {
+      "sonar_search": "sonar_search"
     }
   },
 
@@ -241,6 +266,23 @@ async def _track_twitter_usage(node_id, action, resource_count=1, workflow_id=No
 
 # Usage:
 await _track_twitter_usage(node_id, 'tweet', 1, workflow_id, session_id)
+```
+
+### Example: Search Handler
+
+```python
+# server/services/handlers/search.py
+
+async def _track_search_usage(node_id, service, action, resource_count=1, workflow_id=None, session_id="default"):
+    # Same pattern as maps/twitter
+    pricing = get_pricing_service()
+    cost_data = pricing.calculate_api_cost(service, action, resource_count)
+    # ... save to database ...
+
+# Usage in each handler:
+await _track_search_usage(node_id, 'brave_search', 'web_search', 1, workflow_id, session_id)
+await _track_search_usage(node_id, 'serper', 'web_search', 1, workflow_id, session_id)
+await _track_search_usage(node_id, 'perplexity', 'sonar_search', 1, workflow_id, session_id)
 ```
 
 ## Automatic HTTPX Tracking
@@ -457,6 +499,7 @@ await _track_new_service_usage(node_id, 'get_data', len(results), workflow_id)
 | `server/services/tracked_http.py` | HTTPX event hooks for automatic tracking |
 | `server/services/maps.py` | Manual tracking example (`_track_maps_usage`) |
 | `server/services/handlers/twitter.py` | Manual tracking example (`_track_twitter_usage`) |
+| `server/services/handlers/search.py` | Manual tracking example (`_track_search_usage`) |
 | `server/models/database.py` | `APIUsageMetric`, `TokenUsageMetric` models |
 | `server/core/database.py` | `save_api_usage_metric()`, `get_api_usage_summary()` |
 | `client/src/components/CredentialsModal.tsx` | `renderApiUsagePanel()` UI component |

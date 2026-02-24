@@ -128,6 +128,12 @@ const CATEGORIES: Category[] = [
     items: [
       { id: 'whatsapp_personal', name: 'WhatsApp Personal', placeholder: '', color: '#25D366', desc: 'Connect via QR code pairing', CustomIcon: WhatsAppIcon, isSpecial: true, panelType: 'whatsapp' },
       { id: 'twitter', name: 'Twitter/X', placeholder: '', color: '#000000', desc: 'Post tweets, search, user lookup', CustomIcon: XIcon, isSpecial: true, panelType: 'twitter' },
+    ],
+  },
+  {
+    key: 'productivity',
+    label: 'Productivity',
+    items: [
       { id: 'gmail', name: 'Google Workspace', placeholder: '', color: '#4285F4', desc: 'Gmail, Calendar, Drive, Sheets, Tasks, Contacts', CustomIcon: GoogleWorkspaceIcon, isSpecial: true, panelType: 'gmail' },
     ],
   },
@@ -142,9 +148,16 @@ const CATEGORIES: Category[] = [
     key: 'search',
     label: 'Search',
     items: [
-      { id: 'brave_search', name: 'Brave Search', placeholder: 'BSA...', color: '#FB542B', desc: 'Web search via Brave Search API' },
-      { id: 'serper', name: 'Serper', placeholder: '', color: '#4285F4', desc: 'Google search via Serper API' },
-      { id: 'perplexity', name: 'Perplexity', placeholder: 'pplx-...', color: '#20808D', desc: 'AI-powered search with citations' },
+      { id: 'brave_search', name: 'Brave Search', placeholder: 'BSA...', color: '#FB542B', desc: 'Web search via Brave Search API', CustomIcon: BraveSearchIcon },
+      { id: 'perplexity', name: 'Perplexity', placeholder: 'pplx-...', color: '#20808D', desc: 'AI-powered search with citations', CustomIcon: PerplexitySearchIcon },
+    ],
+  },
+  {
+    key: 'scrapers',
+    label: 'Scrapers',
+    items: [
+      { id: 'apify', name: 'Apify', placeholder: 'apify_api_...', color: '#246DFF', desc: 'Web scraping, social media extraction', CustomIcon: ApifyIcon },
+      { id: 'serper', name: 'Serper', placeholder: '', color: '#4285F4', desc: 'Google SERP scraping via Serper API', CustomIcon: SerperSearchIcon },
     ],
   },
   {
@@ -152,7 +165,6 @@ const CATEGORIES: Category[] = [
     label: 'Services',
     items: [
       { id: 'google_maps', name: 'Google Maps', placeholder: 'AIza...', color: '#EA4335', desc: 'Geocoding, Places, Directions', CustomIcon: GoogleMapsIcon, panelType: 'google_maps' },
-      { id: 'apify', name: 'Apify', placeholder: 'apify_api_...', color: '#246DFF', desc: 'Web scraping, social media extraction', CustomIcon: ApifyIcon },
     ],
   },
 ];

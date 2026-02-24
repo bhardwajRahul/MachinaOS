@@ -102,7 +102,10 @@ All tools use the same schema-based approach:
 |-----------|--------|---------|
 | `calculatorTool` | `CalculatorSchema` | `_execute_calculator()` |
 | `currentTimeTool` | `CurrentTimeSchema` | `_execute_current_time()` |
-| `webSearchTool` | `WebSearchSchema` | `_execute_web_search()` |
+| `duckduckgoSearch` | `DuckDuckGoSearchSchema` | `_execute_duckduckgo_search()` |
+| `braveSearch` | `BraveSearchSchema` | `handle_brave_search()` |
+| `serperSearch` | `SerperSearchSchema` | `handle_serper_search()` |
+| `perplexitySearch` | `PerplexitySearchSchema` | `handle_perplexity_search()` |
 | `httpRequest` | `HttpRequestSchema` | `_execute_http_request()` |
 | `pythonExecutor` | `PythonCodeSchema` | `_execute_python_code()` |
 | `whatsappSend` | `WhatsAppSendSchema` | `_execute_whatsapp_send()` |
@@ -132,7 +135,7 @@ All tools use the same schema-based approach:
 
 Self-contained tools with all logic in a single handler.
 
-**Examples:** `calculatorTool`, `currentTimeTool`, `webSearchTool`
+**Examples:** `calculatorTool`, `currentTimeTool`, `duckduckgoSearch`, `braveSearch`, `serperSearch`, `perplexitySearch`
 
 ```
 [Calculator Tool] ──────────────────────→ [AI Agent]
@@ -233,7 +236,7 @@ export const toolNodes: Record<string, INodeTypeDescription> = {
 export const TOOL_NODE_TYPES = [
   'calculatorTool',
   'currentTimeTool',
-  'webSearchTool',
+  'duckduckgoSearch',
   'androidTool',
   'weatherTool'          // Add new tool here
 ];
@@ -263,7 +266,7 @@ Update `server/constants.py`:
 AI_TOOL_TYPES: FrozenSet[str] = frozenset([
     'calculatorTool',
     'currentTimeTool',
-    'webSearchTool',
+    'duckduckgoSearch',
     'androidTool',
     'weatherTool',          # Add new tool here
 ])
@@ -406,8 +409,8 @@ async def execute_tool(
         return await _execute_calculator(llm_params)
     elif tool_type == 'currentTimeTool':
         return await _execute_current_time(llm_params)
-    elif tool_type == 'webSearchTool':
-        return await _execute_web_search(llm_params, tool_params)
+    elif tool_type == 'duckduckgoSearch':
+        return await _execute_duckduckgo_search(llm_params, tool_params)
     elif tool_type == 'httpRequest':
         return await _execute_http_request(llm_params, tool_params)
     elif tool_type == 'pythonExecutor':
@@ -432,7 +435,10 @@ In `server/services/ai.py`, add the tool to `_build_tool_from_node()`:
 DEFAULT_TOOL_NAMES = {
     'calculatorTool': 'calculator',
     'currentTimeTool': 'get_current_time',
-    'webSearchTool': 'web_search',
+    'duckduckgoSearch': 'web_search',
+    'braveSearch': 'brave_search',
+    'serperSearch': 'serper_search',
+    'perplexitySearch': 'perplexity_search',
     'androidTool': 'android_device',
     'whatsappSend': 'whatsapp_send',
     'whatsappDb': 'whatsapp_db',
@@ -442,7 +448,10 @@ DEFAULT_TOOL_NAMES = {
 DEFAULT_TOOL_DESCRIPTIONS = {
     'calculatorTool': 'Perform mathematical calculations.',
     'currentTimeTool': 'Get the current date and time.',
-    'webSearchTool': 'Search the web for information.',
+    'duckduckgoSearch': 'Search the web using DuckDuckGo (free, no API key).',
+    'braveSearch': 'Search the web using Brave Search.',
+    'serperSearch': 'Search the web using Google via Serper API.',
+    'perplexitySearch': 'Search the web using Perplexity Sonar AI with citations.',
     'androidTool': 'Control Android device.',
     'whatsappSend': 'Send WhatsApp messages.',
     'whatsappDb': 'Query WhatsApp database.',

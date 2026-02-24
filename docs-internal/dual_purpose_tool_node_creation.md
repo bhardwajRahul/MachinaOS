@@ -81,7 +81,7 @@ Nodes that ONLY work as AI tools, not as workflow nodes.
 - Added to `AI_TOOL_TYPES` constant
 - Excluded from workflow execution via `CONFIG_NODE_TYPES`
 
-**Examples:** `calculatorTool`, `currentTimeTool`, `webSearchTool`
+**Examples:** `calculatorTool`, `currentTimeTool`, `duckduckgoSearch`
 
 ### Dual-Purpose Tool Nodes (Active)
 
@@ -94,7 +94,7 @@ Nodes that work BOTH as workflow nodes AND as AI tools.
 - NOT in `AI_TOOL_TYPES` (would break workflow execution)
 - Dynamically excluded when connected to `input-tools` handle
 
-**Examples:** `whatsappSend`, `whatsappDb`, `twitterSend`, `twitterSearch`, `twitterUser`, `httpRequest`, `pythonExecutor`, `javascriptExecutor`, `addLocations`, `showNearbyPlaces`
+**Examples:** `whatsappSend`, `whatsappDb`, `twitterSend`, `twitterSearch`, `twitterUser`, `httpRequest`, `pythonExecutor`, `javascriptExecutor`, `addLocations`, `showNearbyPlaces`, `braveSearch`, `serperSearch`, `perplexitySearch`
 
 ### Comparison Table
 

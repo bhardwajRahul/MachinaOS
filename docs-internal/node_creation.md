@@ -26,7 +26,7 @@ This guide explains how to create new nodes for MachinaOs, covering frontend def
 
 ## Node Types Overview
 
-MachinaOs supports 105 nodes across 17 categories:
+MachinaOs supports 108 nodes across 18 categories:
 
 | Category | Visual Component | Example Nodes | Count |
 |----------|-----------------|---------------|-------|
@@ -37,7 +37,8 @@ MachinaOs supports 105 nodes across 17 categories:
 | **Specialized Agents** | AIAgentNode | android_agent, coding_agent, web_agent, task_agent, social_agent, travel_agent, tool_agent, productivity_agent, payments_agent, consumer_agent, autonomous_agent, orchestrator_agent | 12 |
 | **AI Memory** | SquareNode | simpleMemory | 1 |
 | **AI Skills** | SquareNode | masterSkill, customSkill + 9 individual skills | 11 |
-| **AI Tools** | SquareNode | calculatorTool, currentTimeTool, webSearchTool, androidTool | 4 |
+| **AI Tools** | SquareNode | calculatorTool, currentTimeTool, duckduckgoSearch, androidTool | 4 |
+| **Search** | SquareNode | braveSearch, serperSearch, perplexitySearch | 3 |
 | **Triggers** | TriggerNode | whatsappReceive, webhookTrigger, chatTrigger, twitterReceive | 4 |
 | **Android** | SquareNode | batteryMonitor, wifiAutomation, location, cameraControl (16 services) | 16 |
 | **WhatsApp** | SquareNode | whatsappSend, whatsappReceive, whatsappDb | 3 |
@@ -1357,8 +1358,11 @@ Tool Node (calculatorTool) → (tool output) → AI Agent (input-tools handle)
 |------|------|-------------|
 | `calculatorTool` | `🔢` | Mathematical operations (add, subtract, multiply, divide, power, sqrt, mod, abs) |
 | `currentTimeTool` | `🕐` | Get current date/time with timezone support |
-| `webSearchTool` | `🔍` | Web search via DuckDuckGo (free) or Serper API |
+| `duckduckgoSearch` | SVG | DuckDuckGo web search - free, no API key required |
 | `androidTool` | `📱` | Android device control toolkit - aggregates connected Android service nodes |
+| `braveSearch` | SVG | Brave Search API - web results with titles, snippets, URLs (dual-purpose) |
+| `serperSearch` | SVG | Google SERP via Serper API - web, news, images, places (dual-purpose) |
+| `perplexitySearch` | SVG | Perplexity Sonar AI - markdown answer with citations (dual-purpose) |
 
 ### Define a Tool Node
 
@@ -1412,7 +1416,9 @@ export const toolNodes: Record<string, INodeTypeDescription> = {
 };
 
 // Add to TOOL_NODE_TYPES for identification
-export const TOOL_NODE_TYPES = ['calculatorTool', 'currentTimeTool', 'webSearchTool', 'androidTool', 'myCustomTool'];
+export const TOOL_NODE_TYPES = ['calculatorTool', 'currentTimeTool', 'duckduckgoSearch', 'androidTool', 'myCustomTool'];
+// Search nodes are in a separate file: searchNodes.ts
+export const SEARCH_NODE_TYPES = ['braveSearch', 'serperSearch', 'perplexitySearch'];
 ```
 
 ### Backend: Tool Schema
@@ -1432,7 +1438,7 @@ def _get_tool_schema(tool_type: str) -> type:
     schemas = {
         'calculatorTool': CalculatorSchema,
         'currentTimeTool': CurrentTimeSchema,
-        'webSearchTool': WebSearchSchema,
+        'duckduckgoSearch': DuckDuckGoSearchSchema,
         'myCustomTool': MyCustomToolSchema,  # Add here
     }
     return schemas.get(tool_type)
@@ -1459,8 +1465,8 @@ async def execute_tool(tool_type: str, tool_params: Dict, llm_params: Dict) -> s
         return await _execute_calculator(llm_params)
     elif tool_type == 'currentTimeTool':
         return await _execute_current_time(llm_params)
-    elif tool_type == 'webSearchTool':
-        return await _execute_web_search(llm_params, tool_params)
+    elif tool_type == 'duckduckgoSearch':
+        return await _execute_duckduckgo_search(llm_params, tool_params)
     elif tool_type == 'myCustomTool':
         return await _execute_my_custom_tool(llm_params)  # Add here
     else:
