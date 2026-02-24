@@ -26,7 +26,7 @@ This guide explains how to create new nodes for MachinaOs, covering frontend def
 
 ## Node Types Overview
 
-MachinaOs supports 79 nodes across 16 categories:
+MachinaOs supports 105 nodes across 17 categories:
 
 | Category | Visual Component | Example Nodes | Count |
 |----------|-----------------|---------------|-------|
@@ -272,11 +272,25 @@ const triggerTypes = ['start', 'cronScheduler', 'webhookTrigger', 'whatsappRecei
 
 ## Backend: Workflow Handler
 
-### Add to Execution Service
+### Add to Execution Service (Enables Run Button)
 
-First, add your node to supported types in `client/src/services/executionService.ts`:
+**CRITICAL:** Add your node type to the supported types whitelist in `client/src/services/executionService.ts`. Without this, the "Run" button will NOT appear in the parameter panel for your node.
 
 ```typescript
+// client/src/services/executionService.ts
+
+// Option 1: Import and spread node types array (recommended for modules)
+import { YOUR_NODE_TYPES } from '../nodeDefinitions/yourNodes';
+
+static isNodeTypeSupported(nodeType: string): boolean {
+  const supportedTypes = [
+    // ... existing types
+    ...YOUR_NODE_TYPES,  // Spread imported array
+  ];
+  return supportedTypes.includes(nodeType);
+}
+
+// Option 2: Add individual node types directly
 static isNodeTypeSupported(nodeType: string): boolean {
   const supportedTypes = [
     // ... existing types
@@ -285,6 +299,11 @@ static isNodeTypeSupported(nodeType: string): boolean {
   return supportedTypes.includes(nodeType);
 }
 ```
+
+**Why this is required:**
+- The `isNodeTypeSupported()` method acts as an execution whitelist
+- Only nodes in this list show the "Run" button in the parameter panel
+- This prevents accidental execution of incomplete/untested nodes
 
 ### Create Backend Handler
 
@@ -1645,7 +1664,7 @@ await database.save_node_parameters(memory_node_id, {'memoryContent': updated_co
 - [ ] Create node definition in `client/src/nodeDefinitions/`
 - [ ] Register in `client/src/nodeDefinitions.ts`
 - [ ] Map to visual component in `Dashboard.tsx`
-- [ ] Add to supported types in `executionService.ts`
+- [ ] **Add to supported types in `executionService.ts`** (CRITICAL - enables Run button)
 - [ ] Add output schema in `InputSection.tsx` (for drag-and-drop UX)
 - [ ] For input-only nodes: Add to `NO_OUTPUT_NODE_TYPES` in `SquareNode.tsx`
 

@@ -15,7 +15,7 @@ async def _get_apify_client(context: Dict[str, Any]) -> Optional[ApifyClientAsyn
     """Get authenticated Apify client from stored credentials."""
     from core.container import container
     auth_service = container.auth_service()
-    api_token = await auth_service.get_api_key("apify_api_token")
+    api_token = await auth_service.get_api_key("apify", "default")
     if not api_token:
         return None
     return ApifyClientAsync(api_token)

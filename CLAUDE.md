@@ -364,7 +364,7 @@ class CacheEntry(SQLModel, table=True):
 
 ## Codebase Summary
 - **Hybrid architecture**: Node.js + Python + React TypeScript
-- **104 implemented workflow nodes** with clean service separation (6 AI models + 3 AI agents/memory + 13 specialized agents + 11 skills + 3 dedicated tools + 6 dual-purpose tools + 16 Android + 3 WhatsApp + 4 Twitter + 2 Social + 3 Location + 3 Code + 6 Utility + 6 Document + 2 Chat + 2 Scheduler + 1 Workflow + 26 Google Workspace)
+- **105 implemented workflow nodes** with clean service separation (6 AI models + 3 AI agents/memory + 13 specialized agents + 11 skills + 3 dedicated tools + 6 dual-purpose tools + 16 Android + 3 WhatsApp + 4 Twitter + 2 Social + 3 Location + 3 Code + 6 Utility + 6 Document + 2 Chat + 2 Scheduler + 1 Workflow + 26 Google Workspace + 1 Apify)
 - **WebSocket-First Architecture**: WebSocket as primary frontend-backend communication (87 message handlers)
 - **Recent optimizations**: REST APIs replaced with WebSocket, AI endpoints migrated to Python, Android automation integrated
 
@@ -525,7 +525,7 @@ The project uses WebSocket as the primary communication method between frontend 
 - `server/services/status_broadcaster.py` - Connection management and broadcasting
 
 ## Implemented Node Types
-The following 104 nodes are currently implemented and functional:
+The following 105 nodes are currently implemented and functional:
 
 ### AI Chat Models (6 nodes)
 - **openaiChatModel**: OpenAI GPT models with response format options. O-series models (o1, o3, o4) support reasoning effort parameter.
@@ -1063,6 +1063,21 @@ GOOGLE_REDIRECT_URI=http://localhost:3010/api/google/callback
 ```
 
 **Google API Pricing:** All Google Workspace APIs are free with rate limits. See `server/config/pricing.json` for configured limits.
+
+### Apify Nodes (1 node)
+Web scraping service for social media, search engines, and websites using pre-built actors.
+
+- **apifyActor**: **Dual-purpose node** - Run Apify actors (web scrapers) for Instagram, TikTok, Twitter/X, LinkedIn, Facebook, YouTube, Google Search, Google Maps, and website crawling. Works as workflow node OR AI Agent tool. Group: `['api', 'scraper', 'tool']`. Pre-built actor dropdown with quick input helpers per actor type. Parameters: actorId, actorInput (JSON), maxResults, timeout, memory.
+
+**Key Files:**
+| File | Description |
+|------|-------------|
+| `client/src/nodeDefinitions/apifyNodes.ts` | Node definition with actor presets |
+| `server/services/handlers/apify.py` | Actor execution via apify-client SDK |
+| `server/skills/web_agent/apify-skill/SKILL.md` | AI agent skill for web scraping |
+| `client/src/components/CredentialsModal.tsx` | Apify API token panel |
+
+**Authentication:** Single API token (Personal or Organization) from Apify Console -> Settings -> Integrations.
 
 ### Workflow Nodes (2 nodes)
 - **start**: Manual workflow trigger to start workflow execution

@@ -57,9 +57,16 @@ const GoogleWorkspaceIcon = () => (
   <GoogleOutlined style={{ fontSize: 20, color: '#4285F4' }} />
 );
 
-const ApifyIcon = () => (
-  <div dangerouslySetInnerHTML={{ __html: ApifyIcons.apify }} style={{ width: 20, height: 20 }} />
-);
+const ApifyIcon = () => {
+  // Replace the raw SVG to ensure it scales to container
+  const scaledSvg = ApifyIcons.apify.replace('<svg', '<svg width="100%" height="100%"');
+  return (
+    <div
+      dangerouslySetInnerHTML={{ __html: scaledSvg }}
+      style={{ width: 20, height: 20 }}
+    />
+  );
+};
 
 // ============================================================================
 // TYPES & DATA

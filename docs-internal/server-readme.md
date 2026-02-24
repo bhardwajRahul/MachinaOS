@@ -53,6 +53,34 @@ For production:
 4. Configure proper CORS origins
 5. Consider enabling Redis caching
 
+## Authentication & Encryption
+
+### Authentication Toggle
+
+Set `VITE_AUTH_ENABLED=false` in `.env` to bypass the login page entirely.
+
+When auth is disabled:
+- Login page is skipped
+- User is set as anonymous with owner privileges
+- Encryption service auto-initializes using `API_KEY_ENCRYPTION_KEY` as the password
+- API keys can be saved/retrieved without user login
+
+### Encryption Auto-Initialization
+
+The encryption service requires initialization before encrypting/decrypting API keys. This normally happens during user login via `_initialize_encryption()`.
+
+When `VITE_AUTH_ENABLED=false`, the encryption is auto-initialized at startup in `main.py`:
+
+```python
+# In main.py lifespan()
+if settings.vite_auth_enabled == "false":
+    encryption = container.encryption_service()
+    if not encryption.is_initialized():
+        encryption.initialize(settings.api_key_encryption_key, salt)
+```
+
+This allows API keys to be stored without authentication, useful for local development.
+
 ## Security Notes
 
 **NEVER commit `.env` files to git!**

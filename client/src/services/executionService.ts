@@ -12,6 +12,7 @@ import { DRIVE_NODE_TYPES } from '../nodeDefinitions/driveNodes';
 import { SHEETS_NODE_TYPES } from '../nodeDefinitions/sheetsNodes';
 import { TASKS_NODE_TYPES } from '../nodeDefinitions/tasksNodes';
 import { CONTACTS_NODE_TYPES } from '../nodeDefinitions/contactsNodes';
+import { APIFY_NODE_TYPES } from '../nodeDefinitions/apifyNodes';
 import { Node, Edge } from 'reactflow';
 import { INodeExecutionData } from '../types/INodeProperties';
 import { API_CONFIG } from '../config/api';
@@ -239,7 +240,9 @@ export class ExecutionService {
       ...DRIVE_NODE_TYPES,
       ...SHEETS_NODE_TYPES,
       ...TASKS_NODE_TYPES,
-      ...CONTACTS_NODE_TYPES
+      ...CONTACTS_NODE_TYPES,
+      // Apify web scraping
+      ...APIFY_NODE_TYPES
     ];
 
     return supportedTypes.includes(nodeType);

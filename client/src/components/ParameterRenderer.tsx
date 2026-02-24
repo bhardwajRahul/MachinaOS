@@ -1872,6 +1872,38 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
           </div>
         );
 
+      case 'json':
+        // JSON editor - textarea for JSON input
+        const jsonRows = (parameter as any).typeOptions?.rows || 6;
+        return (
+          <textarea
+            value={currentValue || parameter.default || '{}'}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={parameter.placeholder || '{}'}
+            rows={jsonRows}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            style={{
+              width: '100%',
+              padding: '10px 12px',
+              border: isDragOver ? `2px solid ${theme.colors.focus}` : `1px solid ${theme.colors.border}`,
+              borderRadius: '6px',
+              fontSize: '13px',
+              backgroundColor: isDragOver ? theme.colors.focusRing : theme.colors.background,
+              color: theme.colors.text,
+              outline: 'none',
+              resize: 'vertical',
+              minHeight: '100px',
+              fontFamily: 'monospace',
+              lineHeight: '1.5',
+              transition: 'all 0.2s ease'
+            }}
+            onFocus={(e) => e.target.style.borderColor = theme.colors.focus}
+            onBlur={(e) => e.target.style.borderColor = theme.colors.border}
+          />
+        );
+
       default:
         return <div style={{ color: theme.colors.error, fontSize: '14px', padding: '8px 12px', backgroundColor: `${theme.colors.error}15`, border: `1px solid ${theme.colors.error}30`, borderRadius: '6px' }}>Unsupported parameter type: {parameter.type}</div>;
     }

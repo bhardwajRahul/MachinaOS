@@ -999,6 +999,7 @@ Post and interact with tweets on Twitter/X.
 - [ ] Include `'tool'` in the `group` array
 - [ ] Define comprehensive `properties` (LLM will fill these)
 - [ ] Ensure node renders correctly (SquareNode handles multiple outputs)
+- [ ] **Add to `executionService.ts` `isNodeTypeSupported()`** (CRITICAL - enables Run button)
 
 ### Backend Schema (ai.py)
 

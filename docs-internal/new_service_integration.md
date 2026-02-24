@@ -601,7 +601,7 @@ export const nodeDefinitions: NodeDefinitionRegistry = {
 }
 ```
 
-### Add to executionService.ts (Enable Run Button)
+### Add to executionService.ts (CRITICAL - Enables Run Button)
 
 ```typescript
 // client/src/services/executionService.ts
@@ -620,7 +620,7 @@ static isNodeTypeSupported(nodeType: string): boolean {
 }
 ```
 
-**Important:** Without this step, the Run button will not appear in the parameter panel for your new nodes.
+**CRITICAL:** Without this step, the Run button will NOT appear in the parameter panel for your new nodes. This is the execution whitelist - only nodes in this list can be executed via the Run button.
 
 ---
 
@@ -939,7 +939,7 @@ Use this checklist when adding a new service:
   - [ ] Export node types array
   - [ ] Import in `nodeDefinitions.ts`
   - [ ] Add to Dashboard.tsx
-  - [ ] Add to `executionService.ts` `isNodeTypeSupported()` (enables Run button)
+  - [ ] **Add to `executionService.ts` `isNodeTypeSupported()`** (CRITICAL - enables Run button)
 
 - [ ] **AI Tool Integration** (`server/services/ai.py`, `server/services/handlers/tools.py`)
   - [ ] Add Pydantic schemas in `_get_tool_schema()`

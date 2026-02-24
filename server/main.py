@@ -71,8 +71,18 @@ async def lifespan(app: FastAPI):
     await container.cache().startup()
 
     # Initialize credentials database (creates tables if not exist)
-    await container.credentials_database().initialize()
+    credentials_db = container.credentials_database()
+    salt = await credentials_db.initialize()
     logger.info("Credentials database initialized")
+
+    # When auth is disabled, auto-initialize encryption with a default key
+    # This allows saving API keys without user login
+    if settings.vite_auth_enabled == "false":
+        encryption = container.encryption_service()
+        if not encryption.is_initialized():
+            # Use api_key_encryption_key as the default password
+            encryption.initialize(settings.api_key_encryption_key, salt)
+            logger.info("Encryption service auto-initialized (auth disabled)")
 
     # Initialize event waiter with cache service for Redis Streams support
     from services import event_waiter

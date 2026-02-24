@@ -110,6 +110,18 @@ Add these to `.env` or configure via the Credentials UI:
 - `GOOGLE_AI_API_KEY`
 - `GOOGLE_MAPS_API_KEY`
 
+### Authentication Toggle
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VITE_AUTH_ENABLED` | true | Set to `false` to bypass login entirely |
+
+When `VITE_AUTH_ENABLED=false`:
+- Login page is skipped entirely
+- User is set as anonymous with owner privileges
+- Encryption service auto-initializes with `API_KEY_ENCRYPTION_KEY` as the password
+- API keys can be saved/retrieved without user authentication
+- Useful for local development and testing
+
 ## Docker Commands
 
 | Command | Description |
