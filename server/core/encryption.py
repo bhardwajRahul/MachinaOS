@@ -1,12 +1,13 @@
 """Field-level encryption using Fernet (AES-128-CBC + HMAC-SHA256).
 
 This module provides secure encryption for API keys and OAuth tokens stored in
-the credentials database. Uses PBKDF2HMAC for key derivation from user password.
+the credentials database. Uses PBKDF2HMAC for key derivation from a server-scoped
+encryption key (API_KEY_ENCRYPTION_KEY in .env), following the n8n pattern.
 
 Security:
 - Fernet: AES-128-CBC with PKCS7 padding + HMAC-SHA256 for authentication
 - PBKDF2: SHA256, 600,000 iterations (OWASP 2024 recommendation)
-- Key derived from user's login password, stored only in memory
+- Key derived from server config, initialized at startup, persists across restarts
 """
 
 import base64
@@ -23,20 +24,19 @@ logger = logging.getLogger(__name__)
 
 class EncryptionService:
     """
-    Fernet-based encryption service with key derivation from user password.
+    Fernet-based encryption service with PBKDF2 key derivation.
 
-    The encryption key is derived from the user's login password using PBKDF2
-    and stored only in memory. The key is cleared on logout.
+    Uses a server-scoped encryption key (API_KEY_ENCRYPTION_KEY from .env)
+    following the n8n pattern. Initialized once at startup, persists across
+    the application lifecycle. Not tied to user sessions.
 
     Usage:
         encryption = EncryptionService()
         salt = await credentials_db.get_or_create_salt()
-        encryption.initialize(user_password, salt)
+        encryption.initialize(server_key, salt)
 
         encrypted = encryption.encrypt("my-api-key")
         decrypted = encryption.decrypt(encrypted)
-
-        encryption.clear()  # On logout
     """
 
     # OWASP recommended iterations for PBKDF2-SHA256 (2024)
@@ -49,11 +49,11 @@ class EncryptionService:
 
     def derive_key_from_password(self, password: str, salt: bytes) -> bytes:
         """
-        Derive Fernet-compatible key from password using PBKDF2.
+        Derive Fernet-compatible key from passphrase using PBKDF2.
 
         Args:
-            password: User's login password
-            salt: Random salt (should be stored in credentials DB)
+            password: Server-scoped encryption key (API_KEY_ENCRYPTION_KEY)
+            salt: Random salt (stored in credentials DB)
 
         Returns:
             Base64-encoded 32-byte key suitable for Fernet
@@ -70,13 +70,12 @@ class EncryptionService:
 
     def initialize(self, password: str, salt: bytes) -> None:
         """
-        Initialize Fernet cipher with key derived from password.
+        Initialize Fernet cipher with key derived from passphrase.
 
-        Must be called after successful user login before any encrypt/decrypt
-        operations. The derived key is stored only in memory.
+        Called once at server startup. The derived key is stored only in memory.
 
         Args:
-            password: User's login password (plaintext)
+            password: Server-scoped encryption key (API_KEY_ENCRYPTION_KEY)
             salt: Random salt from credentials database
         """
         key = self.derive_key_from_password(password, salt)
@@ -98,7 +97,7 @@ class EncryptionService:
             RuntimeError: If encryption service not initialized
         """
         if not self._fernet:
-            raise RuntimeError("Encryption service not initialized - user must be logged in")
+            raise RuntimeError("Encryption service not initialized - check server startup")
         token = self._fernet.encrypt(plaintext.encode())
         return token.decode()  # Fernet tokens are already base64
 
@@ -117,7 +116,7 @@ class EncryptionService:
             ValueError: If decryption fails (wrong key or corrupted data)
         """
         if not self._fernet:
-            raise RuntimeError("Encryption service not initialized - user must be logged in")
+            raise RuntimeError("Encryption service not initialized - check server startup")
         try:
             plaintext = self._fernet.decrypt(ciphertext.encode())
             return plaintext.decode()
@@ -133,8 +132,8 @@ class EncryptionService:
         """
         Clear encryption key from memory.
 
-        Should be called on user logout to ensure keys don't persist
-        in memory longer than necessary.
+        Generally not needed in normal operation since the key persists
+        for the application lifecycle (server-scoped, not session-scoped).
         """
         self._fernet = None
         self._salt = None

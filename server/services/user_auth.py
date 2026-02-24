@@ -17,12 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class UserAuthService:
-    """Handles user authentication, registration, and JWT token management.
-
-    On login, this service initializes the EncryptionService with a key derived
-    from the user's password. This enables decryption of API keys and OAuth tokens
-    stored in the separate credentials database.
-    """
+    """Handles user authentication, registration, and JWT token management."""
 
     def __init__(
         self,
@@ -107,10 +102,6 @@ class UserAuthService:
 
         logger.info(f"User registered: {email} (owner={is_owner})")
 
-        # Initialize encryption for the new user
-        # This ensures credentials can be saved immediately after registration
-        await self._initialize_encryption(password)
-
         return user, None
 
     async def login(
@@ -119,9 +110,6 @@ class UserAuthService:
         """
         Authenticate user and return user object.
         Returns (user, None) on success, (None, error_message) on failure.
-
-        On successful login, initializes the EncryptionService with a key
-        derived from the user's password for decrypting stored credentials.
         """
         user = await self.get_user_by_email(email)
         if not user:
@@ -141,35 +129,12 @@ class UserAuthService:
                 db_user.last_login = datetime.now(timezone.utc)
                 await session.commit()
 
-        # Initialize encryption with user's password
-        await self._initialize_encryption(password)
-
         logger.info(f"User logged in: {email}")
         return user, None
 
-    async def _initialize_encryption(self, password: str) -> None:
-        """
-        Initialize encryption service with key derived from password.
-
-        Gets or creates the salt from the credentials database and uses it
-        with the password to derive the encryption key via PBKDF2.
-        """
-        # Ensure credentials database is initialized and get salt
-        salt = await self.credentials_db.initialize()
-
-        # Initialize encryption service with derived key
-        self.encryption.initialize(password, salt)
-        logger.debug("Encryption service initialized for user session")
-
     def logout(self) -> None:
-        """
-        Clear encryption key on logout.
-
-        Clears the encryption service's in-memory key to ensure credentials
-        cannot be decrypted after user logout.
-        """
-        self.encryption.clear()
-        logger.debug("Encryption service cleared on logout")
+        """Log out user. Encryption key persists (server-scoped, not session-scoped)."""
+        logger.debug("User logged out")
 
     def create_access_token(self, user: User) -> str:
         """Create JWT access token for user."""

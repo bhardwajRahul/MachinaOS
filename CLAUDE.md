@@ -2562,15 +2562,17 @@ email-validator>=2.0.0
 ## Encrypted Credentials System
 
 ### Overview
-API keys and OAuth tokens are stored in a separate encrypted database (`credentials.db`) using Fernet encryption (AES-128-CBC + HMAC-SHA256). The encryption key is derived from the user's login password using PBKDF2, ensuring credentials are only accessible during an authenticated session.
+API keys and OAuth tokens are stored in a separate encrypted database (`credentials.db`) using Fernet encryption (AES-128-CBC + HMAC-SHA256). Following the n8n pattern, the encryption key is derived from a server-scoped config key (`API_KEY_ENCRYPTION_KEY` in `.env`) using PBKDF2, initialized at startup and persisting across restarts.
 
 ### Security Architecture
 ```
-User Login (password)
+Server Startup
        ↓
-PBKDF2HMAC (SHA256, 600K iterations) + Salt
+API_KEY_ENCRYPTION_KEY (from .env) + Salt (from credentials.db)
        ↓
-Fernet Key (in-memory only)
+PBKDF2HMAC (SHA256, 600K iterations)
+       ↓
+Fernet Key (in-memory for application lifetime)
        ↓
 EncryptionService.encrypt()/decrypt()
        ↓
@@ -2578,9 +2580,9 @@ credentials.db (encrypted ciphertext)
 ```
 
 **Key Security Properties:**
-- Encryption key derived from user password (never stored)
-- Key exists only in memory during authenticated session
-- Cleared on logout via `EncryptionService.clear()`
+- Server-scoped encryption key from `API_KEY_ENCRYPTION_KEY` in `.env` (n8n pattern)
+- Key initialized at startup, persists across application lifetime
+- Not tied to user sessions -- survives server restarts with valid JWT
 - Salt stored in credentials database (not the main database)
 - OWASP 2024 compliant: 600,000 PBKDF2 iterations
 
