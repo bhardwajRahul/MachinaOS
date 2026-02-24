@@ -686,6 +686,14 @@ interface MasterSkillConfig {
 }
 ```
 
+**skillsConfig Persistence:**
+- `skillsConfig` persists skills from **all folders**, not just the currently selected one. Switching folders does not remove previously enabled skills from config.
+- The backend (`handlers/ai.py`) handles stale config entries gracefully at execution time -- it checks `enabled`, tries to load instructions, and logs a warning if a skill file is missing. Stale disabled entries are simply skipped.
+- No frontend cleanup of stale skills is performed to avoid race conditions with async skill loading.
+
+**Custom Skill Creation:**
+- The `create_user_skill` WebSocket handler requires `name`, `display_name`, and `instructions`. The `description` field is optional (defaults to empty string).
+
 **Backend Expansion:**
 When AI Agent executes with a connected Master Skill node, `_collect_agent_connections()` in `handlers/ai.py` expands the skillsConfig into individual skill entries:
 ```python
