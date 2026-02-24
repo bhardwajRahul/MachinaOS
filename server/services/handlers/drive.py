@@ -474,3 +474,39 @@ async def handle_drive_share(
     except Exception as e:
         logger.error(f"Drive share error: {e}")
         return {"success": False, "error": str(e), "execution_time": time.time() - start_time}
+
+
+# ============================================================================
+# CONSOLIDATED DISPATCHER
+# ============================================================================
+
+async def handle_google_drive(
+    node_id: str,
+    node_type: str,
+    parameters: Dict[str, Any],
+    context: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Consolidated Drive handler with operation dispatcher.
+
+    Routes to appropriate handler based on 'operation' parameter:
+    - upload: Upload file to Drive
+    - download: Download file from Drive
+    - list: List files in Drive
+    - share: Share file with user
+    """
+    operation = parameters.get('operation', 'upload')
+
+    if operation == 'upload':
+        return await handle_drive_upload(node_id, node_type, parameters, context)
+    elif operation == 'download':
+        return await handle_drive_download(node_id, node_type, parameters, context)
+    elif operation == 'list':
+        return await handle_drive_list(node_id, node_type, parameters, context)
+    elif operation == 'share':
+        return await handle_drive_share(node_id, node_type, parameters, context)
+    else:
+        return {
+            "success": False,
+            "error": f"Unknown Drive operation: {operation}. Supported: upload, download, list, share",
+            "execution_time": 0
+        }

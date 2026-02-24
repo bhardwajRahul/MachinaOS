@@ -321,3 +321,36 @@ async def handle_sheets_append(
     except Exception as e:
         logger.error(f"Sheets append error: {e}")
         return {"success": False, "error": str(e), "execution_time": time.time() - start_time}
+
+
+# ============================================================================
+# CONSOLIDATED DISPATCHER
+# ============================================================================
+
+async def handle_google_sheets(
+    node_id: str,
+    node_type: str,
+    parameters: Dict[str, Any],
+    context: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Consolidated Sheets handler with operation dispatcher.
+
+    Routes to appropriate handler based on 'operation' parameter:
+    - read: Read data from spreadsheet
+    - write: Write data to spreadsheet
+    - append: Append rows to spreadsheet
+    """
+    operation = parameters.get('operation', 'read')
+
+    if operation == 'read':
+        return await handle_sheets_read(node_id, node_type, parameters, context)
+    elif operation == 'write':
+        return await handle_sheets_write(node_id, node_type, parameters, context)
+    elif operation == 'append':
+        return await handle_sheets_append(node_id, node_type, parameters, context)
+    else:
+        return {
+            "success": False,
+            "error": f"Unknown Sheets operation: {operation}. Supported: read, write, append",
+            "execution_time": 0
+        }

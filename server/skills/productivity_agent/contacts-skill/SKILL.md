@@ -1,7 +1,7 @@
 ---
 name: contacts-skill
 description: Create, list, and search Google Contacts. Supports names, emails, phone numbers, and organizations.
-allowed-tools: contacts_create contacts_list contacts_search
+allowed-tools: google_contacts
 metadata:
   author: machina
   version: "1.0"
@@ -14,14 +14,26 @@ metadata:
 
 Manage Google Contacts - create, list, and search contacts.
 
-## Available Tools
+## Tool: google_contacts
 
-### contacts_create
+Consolidated Google Contacts tool with `operation` parameter.
 
-Create a new contact.
+### Operations
+
+| Operation | Description | Required Fields |
+|-----------|-------------|-----------------|
+| `create` | Create a new contact | first_name |
+| `list` | List contacts | (none) |
+| `search` | Search contacts by query | query |
+| `get` | Get contact details | resource_name |
+| `update` | Update existing contact | resource_name |
+| `delete` | Delete a contact | resource_name |
+
+### create - Create a new contact
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| operation | string | Yes | Must be `"create"` |
 | first_name | string | Yes | Contact's first name |
 | last_name | string | No | Contact's last name |
 | email | string | No | Email address |
@@ -33,6 +45,7 @@ Create a new contact.
 **Example - Basic contact:**
 ```json
 {
+  "operation": "create",
   "first_name": "John",
   "last_name": "Smith",
   "email": "john.smith@example.com",
@@ -43,6 +56,7 @@ Create a new contact.
 **Example - Full contact:**
 ```json
 {
+  "operation": "create",
   "first_name": "Jane",
   "last_name": "Doe",
   "email": "jane.doe@company.com",
@@ -53,71 +67,36 @@ Create a new contact.
 }
 ```
 
-**Response:**
-```json
-{
-  "success": true,
-  "resource_name": "people/c1234567890",
-  "display_name": "John Smith",
-  "email": "john.smith@example.com",
-  "phone": "+1-555-123-4567"
-}
-```
-
-### contacts_list
-
-List contacts from your address book.
+### list - List contacts
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| operation | string | Yes | Must be `"list"` |
 | page_size | integer | No | Results per page (default: 20, max: 100) |
 | page_token | string | No | Token for next page |
-| sort_order | string | No | Sort by: LAST_MODIFIED_ASCENDING, LAST_MODIFIED_DESCENDING, FIRST_NAME_ASCENDING, LAST_NAME_ASCENDING |
+| sort_order | string | No | LAST_MODIFIED_ASCENDING, LAST_MODIFIED_DESCENDING, FIRST_NAME_ASCENDING, LAST_NAME_ASCENDING |
 
-**Example - List contacts:**
+**Example:**
 ```json
 {
+  "operation": "list",
   "page_size": 50,
   "sort_order": "FIRST_NAME_ASCENDING"
 }
 ```
 
-**Response:**
-```json
-{
-  "contacts": [
-    {
-      "resource_name": "people/c1234567890",
-      "display_name": "Alice Johnson",
-      "email": "alice@example.com",
-      "phone": "+1-555-111-2222",
-      "company": "Tech Corp",
-      "job_title": "Product Manager"
-    },
-    {
-      "resource_name": "people/c0987654321",
-      "display_name": "Bob Williams",
-      "email": "bob@example.com",
-      "phone": "+1-555-333-4444"
-    }
-  ],
-  "count": 2,
-  "next_page_token": "..."
-}
-```
-
-### contacts_search
-
-Search contacts by name or email.
+### search - Search contacts
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| operation | string | Yes | Must be `"search"` |
 | query | string | Yes | Search query (name or email) |
 | page_size | integer | No | Results per page (default: 10, max: 30) |
 
 **Example - Search by name:**
 ```json
 {
+  "operation": "search",
   "query": "John"
 }
 ```
@@ -125,23 +104,61 @@ Search contacts by name or email.
 **Example - Search by email domain:**
 ```json
 {
+  "operation": "search",
   "query": "@company.com"
 }
 ```
 
-**Response:**
+### get - Get contact details
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| operation | string | Yes | Must be `"get"` |
+| resource_name | string | Yes | Contact resource name (e.g., "people/c1234567890") |
+
+**Example:**
 ```json
 {
-  "contacts": [
-    {
-      "resource_name": "people/c1234567890",
-      "display_name": "John Smith",
-      "email": "john.smith@example.com",
-      "phone": "+1-555-123-4567",
-      "company": "Example Inc"
-    }
-  ],
-  "count": 1
+  "operation": "get",
+  "resource_name": "people/c1234567890"
+}
+```
+
+### update - Update a contact
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| operation | string | Yes | Must be `"update"` |
+| resource_name | string | Yes | Contact resource name |
+| update_first_name | string | No | New first name |
+| update_last_name | string | No | New last name |
+| update_email | string | No | New email |
+| update_phone | string | No | New phone |
+| update_company | string | No | New company |
+| update_job_title | string | No | New job title |
+
+**Example:**
+```json
+{
+  "operation": "update",
+  "resource_name": "people/c1234567890",
+  "update_email": "new.email@example.com",
+  "update_job_title": "Director of Engineering"
+}
+```
+
+### delete - Delete a contact
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| operation | string | Yes | Must be `"delete"` |
+| resource_name | string | Yes | Contact resource name |
+
+**Example:**
+```json
+{
+  "operation": "delete",
+  "resource_name": "people/c1234567890"
 }
 ```
 
@@ -183,6 +200,6 @@ Accepted formats:
 
 ## Setup Requirements
 
-1. Connect Contacts nodes to AI Agent's `input-tools` handle
+1. Connect Contacts node to AI Agent's `input-tools` handle
 2. Authenticate with Google Workspace in Credentials Modal
 3. Ensure People API (Contacts) scopes are authorized

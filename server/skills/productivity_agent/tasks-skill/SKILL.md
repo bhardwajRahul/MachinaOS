@@ -1,7 +1,7 @@
 ---
 name: tasks-skill
 description: Create, list, and complete Google Tasks. Supports task lists, due dates, and notes.
-allowed-tools: tasks_create tasks_list tasks_complete
+allowed-tools: google_tasks
 metadata:
   author: machina
   version: "1.0"
@@ -14,14 +14,25 @@ metadata:
 
 Manage Google Tasks - create, list, and complete tasks.
 
-## Available Tools
+## Tool: google_tasks
 
-### tasks_create
+Consolidated Google Tasks tool with `operation` parameter.
 
-Create a new task.
+### Operations
+
+| Operation | Description | Required Fields |
+|-----------|-------------|-----------------|
+| `create` | Create a new task | title |
+| `list` | List tasks from a list | (none, defaults to @default) |
+| `complete` | Mark task as completed | task_id |
+| `update` | Update an existing task | task_id |
+| `delete` | Delete a task | task_id |
+
+### create - Create a new task
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| operation | string | Yes | Must be `"create"` |
 | title | string | Yes | Task title |
 | notes | string | No | Task notes/description |
 | due_date | string | No | Due date (ISO 8601 or YYYY-MM-DD) |
@@ -30,6 +41,7 @@ Create a new task.
 **Example - Simple task:**
 ```json
 {
+  "operation": "create",
   "title": "Review quarterly report"
 }
 ```
@@ -37,108 +49,83 @@ Create a new task.
 **Example - Task with details:**
 ```json
 {
+  "operation": "create",
   "title": "Submit expense report",
   "notes": "Include receipts for conference travel",
   "due_date": "2024-02-15"
 }
 ```
 
-**Example - Task in specific list:**
-```json
-{
-  "title": "Buy groceries",
-  "tasklist_id": "MTIzNDU2Nzg5MA",
-  "due_date": "2024-02-01"
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "task_id": "abc123xyz",
-  "title": "Submit expense report",
-  "status": "needsAction",
-  "due": "2024-02-15T00:00:00Z"
-}
-```
-
-### tasks_list
-
-List tasks from a task list.
+### list - List tasks
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| operation | string | Yes | Must be `"list"` |
 | tasklist_id | string | No | Task list ID (default: @default) |
 | show_completed | boolean | No | Include completed tasks (default: false) |
 | show_hidden | boolean | No | Include hidden tasks (default: false) |
-| max_results | integer | No | Maximum results (default: 20, max: 100) |
-| due_min | string | No | Filter by minimum due date |
-| due_max | string | No | Filter by maximum due date |
+| max_results | integer | No | Maximum results (default: 100) |
 
 **Example - List pending tasks:**
 ```json
 {
+  "operation": "list",
   "show_completed": false,
   "max_results": 50
 }
 ```
 
-**Example - Tasks due this week:**
-```json
-{
-  "due_min": "2024-02-01",
-  "due_max": "2024-02-07"
-}
-```
-
-**Response:**
-```json
-{
-  "tasks": [
-    {
-      "id": "abc123xyz",
-      "title": "Submit expense report",
-      "notes": "Include receipts for conference travel",
-      "status": "needsAction",
-      "due": "2024-02-15T00:00:00Z",
-      "updated": "2024-02-01T10:30:00Z"
-    },
-    {
-      "id": "def456uvw",
-      "title": "Review quarterly report",
-      "status": "needsAction",
-      "updated": "2024-02-01T09:00:00Z"
-    }
-  ],
-  "count": 2
-}
-```
-
-### tasks_complete
-
-Mark a task as completed.
+### complete - Mark task as completed
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| operation | string | Yes | Must be `"complete"` |
 | task_id | string | Yes | Task ID to complete |
 | tasklist_id | string | No | Task list ID (default: @default) |
 
 **Example:**
 ```json
 {
+  "operation": "complete",
   "task_id": "abc123xyz"
 }
 ```
 
-**Response:**
+### update - Update a task
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| operation | string | Yes | Must be `"update"` |
+| task_id | string | Yes | Task ID to update |
+| tasklist_id | string | No | Task list ID (default: @default) |
+| update_title | string | No | New title |
+| update_notes | string | No | New notes |
+| update_due_date | string | No | New due date |
+| update_status | string | No | New status: `"needsAction"` or `"completed"` |
+
+**Example:**
 ```json
 {
-  "success": true,
+  "operation": "update",
   "task_id": "abc123xyz",
-  "title": "Submit expense report",
-  "status": "completed",
-  "completed": "2024-02-10T14:30:00Z"
+  "update_title": "Updated task title",
+  "update_due_date": "2024-03-01"
+}
+```
+
+### delete - Delete a task
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| operation | string | Yes | Must be `"delete"` |
+| task_id | string | Yes | Task ID to delete |
+| tasklist_id | string | No | Task list ID (default: @default) |
+
+**Example:**
+```json
+{
+  "operation": "delete",
+  "task_id": "abc123xyz"
 }
 ```
 
@@ -178,6 +165,6 @@ The default task list is `@default`. To work with custom lists:
 
 ## Setup Requirements
 
-1. Connect Tasks nodes to AI Agent's `input-tools` handle
+1. Connect Tasks node to AI Agent's `input-tools` handle
 2. Authenticate with Google Workspace in Credentials Modal
 3. Ensure Tasks API scopes are authorized

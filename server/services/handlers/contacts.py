@@ -520,3 +520,60 @@ async def handle_contacts_delete(
     except Exception as e:
         logger.error(f"Contacts delete error: {e}")
         return {"success": False, "error": str(e), "execution_time": time.time() - start_time}
+
+
+# ============================================================================
+# CONSOLIDATED DISPATCHER
+# ============================================================================
+
+async def handle_google_contacts(
+    node_id: str,
+    node_type: str,
+    parameters: Dict[str, Any],
+    context: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Consolidated Contacts handler with operation dispatcher.
+
+    Routes to appropriate handler based on 'operation' parameter:
+    - create: Create new contact
+    - list: List contacts
+    - search: Search contacts
+    - get: Get contact by resource name
+    - update: Update existing contact
+    - delete: Delete contact
+    """
+    operation = parameters.get('operation', 'create')
+
+    # Map update_* parameters to standard names for update operation
+    if operation == 'update':
+        if parameters.get('update_first_name'):
+            parameters['first_name'] = parameters['update_first_name']
+        if parameters.get('update_last_name'):
+            parameters['last_name'] = parameters['update_last_name']
+        if parameters.get('update_email'):
+            parameters['email'] = parameters['update_email']
+        if parameters.get('update_phone'):
+            parameters['phone'] = parameters['update_phone']
+        if parameters.get('update_company'):
+            parameters['company'] = parameters['update_company']
+        if parameters.get('update_job_title'):
+            parameters['job_title'] = parameters['update_job_title']
+
+    if operation == 'create':
+        return await handle_contacts_create(node_id, node_type, parameters, context)
+    elif operation == 'list':
+        return await handle_contacts_list(node_id, node_type, parameters, context)
+    elif operation == 'search':
+        return await handle_contacts_search(node_id, node_type, parameters, context)
+    elif operation == 'get':
+        return await handle_contacts_get(node_id, node_type, parameters, context)
+    elif operation == 'update':
+        return await handle_contacts_update(node_id, node_type, parameters, context)
+    elif operation == 'delete':
+        return await handle_contacts_delete(node_id, node_type, parameters, context)
+    else:
+        return {
+            "success": False,
+            "error": f"Unknown Contacts operation: {operation}. Supported: create, list, search, get, update, delete",
+            "execution_time": 0
+        }

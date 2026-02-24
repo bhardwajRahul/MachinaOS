@@ -442,3 +442,52 @@ async def handle_calendar_delete(
     except Exception as e:
         logger.error(f"Calendar delete error: {e}")
         return {"success": False, "error": str(e), "execution_time": time.time() - start_time}
+
+
+# ============================================================================
+# CONSOLIDATED DISPATCHER
+# ============================================================================
+
+async def handle_google_calendar(
+    node_id: str,
+    node_type: str,
+    parameters: Dict[str, Any],
+    context: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Consolidated Calendar handler with operation dispatcher.
+
+    Routes to appropriate handler based on 'operation' parameter:
+    - create: Create calendar event
+    - list: List calendar events
+    - update: Update existing event
+    - delete: Delete event
+    """
+    operation = parameters.get('operation', 'create')
+
+    # Map update_* parameters to standard names for update operation
+    if operation == 'update':
+        if parameters.get('update_title'):
+            parameters['title'] = parameters['update_title']
+        if parameters.get('update_start_time'):
+            parameters['start_time'] = parameters['update_start_time']
+        if parameters.get('update_end_time'):
+            parameters['end_time'] = parameters['update_end_time']
+        if parameters.get('update_description'):
+            parameters['description'] = parameters['update_description']
+        if parameters.get('update_location'):
+            parameters['location'] = parameters['update_location']
+
+    if operation == 'create':
+        return await handle_calendar_create(node_id, node_type, parameters, context)
+    elif operation == 'list':
+        return await handle_calendar_list(node_id, node_type, parameters, context)
+    elif operation == 'update':
+        return await handle_calendar_update(node_id, node_type, parameters, context)
+    elif operation == 'delete':
+        return await handle_calendar_delete(node_id, node_type, parameters, context)
+    else:
+        return {
+            "success": False,
+            "error": f"Unknown Calendar operation: {operation}. Supported: create, list, update, delete",
+            "execution_time": 0
+        }

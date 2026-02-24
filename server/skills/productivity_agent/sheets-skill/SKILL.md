@@ -1,7 +1,7 @@
 ---
 name: sheets-skill
 description: Read, write, and append data to Google Sheets spreadsheets. Supports cell ranges, formulas, and batch operations.
-allowed-tools: sheets_read sheets_write sheets_append
+allowed-tools: google_sheets
 metadata:
   author: machina
   version: "1.0"
@@ -14,14 +14,23 @@ metadata:
 
 Read and write data to Google Sheets spreadsheets.
 
-## Available Tools
+## Tool: google_sheets
 
-### sheets_read
+Consolidated Google Sheets tool with `operation` parameter.
 
-Read data from a spreadsheet range.
+### Operations
+
+| Operation | Description | Required Fields |
+|-----------|-------------|-----------------|
+| `read` | Read data from a range | spreadsheet_id, range |
+| `write` | Write data to a range | spreadsheet_id, range, values |
+| `append` | Append rows to a table | spreadsheet_id, range, values |
+
+### read - Read spreadsheet data
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| operation | string | Yes | Must be `"read"` |
 | spreadsheet_id | string | Yes | Spreadsheet ID from URL |
 | range | string | Yes | A1 notation range (e.g., "Sheet1!A1:D10") |
 
@@ -38,44 +47,26 @@ From URL: `https://docs.google.com/spreadsheets/d/SPREADSHEET_ID/edit`
 **Example:**
 ```json
 {
+  "operation": "read",
   "spreadsheet_id": "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
   "range": "Sheet1!A1:E10"
 }
 ```
 
-**Response:**
-```json
-{
-  "success": true,
-  "range": "Sheet1!A1:E10",
-  "values": [
-    ["Name", "Email", "Department", "Start Date", "Status"],
-    ["Alice", "alice@example.com", "Engineering", "2023-01-15", "Active"],
-    ["Bob", "bob@example.com", "Marketing", "2023-03-20", "Active"]
-  ],
-  "rows": 3,
-  "columns": 5
-}
-```
-
-### sheets_write
-
-Write data to a specific range (overwrites existing data).
+### write - Write data to a range
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| operation | string | Yes | Must be `"write"` |
 | spreadsheet_id | string | Yes | Spreadsheet ID |
 | range | string | Yes | A1 notation range |
 | values | array | Yes | 2D array of values |
-| value_input_option | string | No | How to interpret values (default: USER_ENTERED) |
-
-**Value Input Options:**
-- `USER_ENTERED` - Parse values as if typed by user (formulas work)
-- `RAW` - Store values as-is (no parsing)
+| value_input_option | string | No | `"USER_ENTERED"` or `"RAW"` (default: USER_ENTERED) |
 
 **Example - Write data:**
 ```json
 {
+  "operation": "write",
   "spreadsheet_id": "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
   "range": "Sheet1!A1:C3",
   "values": [
@@ -89,6 +80,7 @@ Write data to a specific range (overwrites existing data).
 **Example - Write formula:**
 ```json
 {
+  "operation": "write",
   "spreadsheet_id": "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
   "range": "Sheet1!D2",
   "values": [["=SUM(B2:C2)"]],
@@ -96,53 +88,27 @@ Write data to a specific range (overwrites existing data).
 }
 ```
 
-**Response:**
-```json
-{
-  "success": true,
-  "spreadsheet_id": "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
-  "updated_range": "Sheet1!A1:C3",
-  "updated_rows": 3,
-  "updated_columns": 3,
-  "updated_cells": 9
-}
-```
-
-### sheets_append
-
-Append rows to the end of a table.
+### append - Append rows to a table
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| operation | string | Yes | Must be `"append"` |
 | spreadsheet_id | string | Yes | Spreadsheet ID |
 | range | string | Yes | Table range (e.g., "Sheet1!A:E") |
 | values | array | Yes | 2D array of rows to append |
-| value_input_option | string | No | How to interpret values (default: USER_ENTERED) |
-| insert_data_option | string | No | How to insert (default: INSERT_ROWS) |
+| value_input_option | string | No | `"USER_ENTERED"` or `"RAW"` (default: USER_ENTERED) |
+| insert_data_option | string | No | `"INSERT_ROWS"` or `"OVERWRITE"` (default: INSERT_ROWS) |
 
-**Insert Options:**
-- `INSERT_ROWS` - Insert new rows for data
-- `OVERWRITE` - Overwrite existing data after table
-
-**Example - Append new rows:**
+**Example:**
 ```json
 {
+  "operation": "append",
   "spreadsheet_id": "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
   "range": "Sheet1!A:E",
   "values": [
     ["Charlie", "charlie@example.com", "Sales", "2024-02-01", "Active"],
     ["Diana", "diana@example.com", "HR", "2024-02-15", "Active"]
   ]
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "spreadsheet_id": "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
-  "updated_range": "Sheet1!A4:E5",
-  "appended_rows": 2
 }
 ```
 
@@ -175,7 +141,7 @@ Append rows to the end of a table.
 
 ## Setup Requirements
 
-1. Connect Sheets nodes to AI Agent's `input-tools` handle
+1. Connect Sheets node to AI Agent's `input-tools` handle
 2. Authenticate with Google Workspace in Credentials Modal
 3. Ensure Sheets API scopes are authorized
 4. Spreadsheet must be accessible to authenticated account

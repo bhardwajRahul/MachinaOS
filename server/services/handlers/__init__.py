@@ -11,6 +11,12 @@ This package contains all node execution handlers organized by category:
 - utility.py: Maps, Text, Chat, Cron, Start
 - whatsapp.py: WhatsApp Send, WhatsApp DB
 - social.py: Social Receive, Social Send (unified messaging)
+- gmail.py: Consolidated Gmail handler (send, search, read)
+- calendar.py: Consolidated Calendar handler (create, list, update, delete)
+- drive.py: Consolidated Drive handler (upload, download, list, share)
+- sheets.py: Consolidated Sheets handler (read, write, append)
+- tasks.py: Consolidated Tasks handler (create, list, complete, update, delete)
+- contacts.py: Consolidated Contacts handler (create, list, search, get, update, delete)
 - polyglot.py: Polyglot server integration (standalone, not auto-imported)
 """
 
@@ -74,12 +80,13 @@ from .twitter import (
     handle_twitter_user,
 )
 
-# Gmail handlers
-from .gmail import (
-    handle_gmail_send,
-    handle_gmail_search,
-    handle_gmail_read,
-)
+# Google Workspace handlers (consolidated)
+from .gmail import handle_google_gmail
+from .calendar import handle_google_calendar
+from .drive import handle_google_drive
+from .sheets import handle_google_sheets
+from .tasks import handle_google_tasks
+from .contacts import handle_google_contacts
 
 # Social handlers (unified messaging)
 from .social import (
@@ -147,10 +154,13 @@ __all__ = [
     'handle_twitter_send',
     'handle_twitter_search',
     'handle_twitter_user',
-    # Gmail
-    'handle_gmail_send',
-    'handle_gmail_search',
-    'handle_gmail_read',
+    # Google Workspace (consolidated)
+    'handle_google_gmail',
+    'handle_google_calendar',
+    'handle_google_drive',
+    'handle_google_sheets',
+    'handle_google_tasks',
+    'handle_google_contacts',
     # Social
     'handle_social_receive',
     'handle_social_send',
