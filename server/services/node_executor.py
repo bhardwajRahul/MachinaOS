@@ -38,6 +38,7 @@ from services.handlers import (
     handle_task_manager,
     handle_twitter_send, handle_twitter_search, handle_twitter_user,
     handle_gmail_send, handle_gmail_search, handle_gmail_read,
+    handle_brave_search, handle_serper_search, handle_perplexity_search,
 )
 from services.handlers.apify import handle_apify_actor
 from services.handlers.calendar import (
@@ -188,6 +189,10 @@ class NodeExecutor:
             'contactsGet': handle_contacts_get,
             'contactsUpdate': handle_contacts_update,
             'contactsDelete': handle_contacts_delete,
+            # Search
+            'braveSearch': handle_brave_search,
+            'serperSearch': handle_serper_search,
+            'perplexitySearch': handle_perplexity_search,
             # Social (unified messaging)
             # Note: socialReceive handled in _dispatch with connected_outputs
             'socialSend': handle_social_send,

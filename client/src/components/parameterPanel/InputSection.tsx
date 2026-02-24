@@ -649,6 +649,19 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                 message_type: 'string',
                 timestamp: 'string'
               },
+              // Search node schema (shared by braveSearch, serperSearch, perplexitySearch)
+              search: {
+                query: 'string',
+                results: [{
+                  title: 'string',
+                  snippet: 'string',
+                  url: 'string',
+                }],
+                result_count: 'number',
+                answer: 'string',
+                citations: 'array',
+                provider: 'string',
+              },
               // Document processing schemas
               httpScraper: {
                 items: 'array',
@@ -719,6 +732,7 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
             const isGmailSend = nodeType === 'gmailSend';
             const isGmailSearch = nodeType === 'gmailSearch';
             const isGmailRead = nodeType === 'gmailRead';
+            const isSearchNode = nodeType === 'braveSearch' || nodeType === 'serperSearch' || nodeType === 'perplexitySearch';
 
             // Google Workspace nodes detection
             const googleWorkspaceNodeTypes = [
@@ -780,6 +794,7 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                             isSocialReceive ? sampleSchemas.social :
                             isSocialSend ? sampleSchemas.socialSend :
                             isApify ? sampleSchemas.apify :
+                            isSearchNode ? sampleSchemas.search :
                             { data: 'any' };
             }
 

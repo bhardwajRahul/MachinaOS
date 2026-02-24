@@ -81,6 +81,23 @@ CONFIG_NODE_TYPES: FrozenSet[str] = (
 )
 
 # =============================================================================
+# SEARCH NODE TYPES
+# =============================================================================
+
+SEARCH_NODE_TYPES: FrozenSet[str] = frozenset([
+    'braveSearch',
+    'serperSearch',
+    'perplexitySearch',
+])
+
+# Dual-purpose search nodes (workflow node + AI tool)
+SEARCH_TOOL_TYPES: FrozenSet[str] = frozenset([
+    'braveSearch',
+    'serperSearch',
+    'perplexitySearch',
+])
+
+# =============================================================================
 # GOOGLE MAPS NODE TYPES
 # =============================================================================
 

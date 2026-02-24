@@ -197,6 +197,18 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
     if node_type in ANDROID_SERVICE_NODE_TYPES:
         return await _execute_android_service(tool_args, config)
 
+    # Brave Search (dual-purpose: workflow node + AI tool)
+    if node_type == 'braveSearch':
+        return await _execute_brave_search_tool(tool_args, config.get('parameters', {}))
+
+    # Serper Search (dual-purpose: workflow node + AI tool)
+    if node_type == 'serperSearch':
+        return await _execute_serper_search_tool(tool_args, config.get('parameters', {}))
+
+    # Perplexity Search (dual-purpose: workflow node + AI tool)
+    if node_type == 'perplexitySearch':
+        return await _execute_perplexity_search_tool(tool_args, config.get('parameters', {}))
+
     # Google Maps Geocoding (gmaps_locations node as tool)
     if node_type == 'gmaps_locations':
         return await _execute_geocoding(tool_args, config.get('parameters', {}))
@@ -2324,3 +2336,49 @@ async def handle_task_manager(
         'database': context.get('database')
     }
     return await _execute_task_manager({}, config)
+
+
+# =============================================================================
+# SEARCH TOOL WRAPPERS (for AI Agent tool calling)
+# =============================================================================
+
+async def _execute_brave_search_tool(args: Dict[str, Any],
+                                     node_params: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute Brave Search via handler (AI Agent tool wrapper)."""
+    from services.handlers.search import handle_brave_search
+
+    parameters = {**node_params, **args}
+    return await handle_brave_search(
+        node_id="tool_brave_search",
+        node_type="braveSearch",
+        parameters=parameters,
+        context={}
+    )
+
+
+async def _execute_serper_search_tool(args: Dict[str, Any],
+                                      node_params: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute Serper Search via handler (AI Agent tool wrapper)."""
+    from services.handlers.search import handle_serper_search
+
+    parameters = {**node_params, **args}
+    return await handle_serper_search(
+        node_id="tool_serper_search",
+        node_type="serperSearch",
+        parameters=parameters,
+        context={}
+    )
+
+
+async def _execute_perplexity_search_tool(args: Dict[str, Any],
+                                          node_params: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute Perplexity Search via handler (AI Agent tool wrapper)."""
+    from services.handlers.search import handle_perplexity_search
+
+    parameters = {**node_params, **args}
+    return await handle_perplexity_search(
+        node_id="tool_perplexity_search",
+        node_type="perplexitySearch",
+        parameters=parameters,
+        context={}
+    )

@@ -2365,6 +2365,9 @@ class AIService:
             'whatsappDb': 'whatsapp_db',
             'gmaps_locations': 'geocode',
             'gmaps_nearby_places': 'nearby_places',
+            'braveSearch': 'brave_search',
+            'serperSearch': 'serper_search',
+            'perplexitySearch': 'perplexity_search',
             'taskManager': 'task_manager',
             'timer': 'timer',
             'cronScheduler': 'cron_scheduler',
@@ -2412,6 +2415,9 @@ class AIService:
             'androidTool': 'Control Android device. Available services are determined by connected nodes.',
             'whatsappSend': 'Send WhatsApp messages to contacts or groups. Supports text, media, location, and contact messages.',
             'whatsappDb': 'Query WhatsApp database - list contacts, search groups, get contact/group info, retrieve chat history.',
+            'braveSearch': 'Search the web using Brave Search. Returns web results with titles, snippets, and URLs.',
+            'serperSearch': 'Search the web using Google via Serper API. Returns web results with titles, snippets, and URLs.',
+            'perplexitySearch': 'Search the web using Perplexity Sonar AI. Returns an AI-generated answer with citations and source URLs.',
             'gmaps_locations': 'Geocode addresses to coordinates or reverse geocode coordinates to addresses using Google Maps.',
             'gmaps_nearby_places': 'Search for nearby places (restaurants, hospitals, banks, etc.) using Google Maps Places API.',
             'taskManager': 'Track delegated sub-agent tasks. Operations: list_tasks (see all tasks), get_task (check specific task status/result), mark_done (cleanup completed tasks).',
@@ -2636,6 +2642,30 @@ class AIService:
                 query: str = Field(description="Search query to look up on the web")
 
             return WebSearchSchema
+
+        # Brave Search tool schema (dual-purpose: workflow node + AI tool)
+        if node_type == 'braveSearch':
+            class BraveSearchSchema(BaseModel):
+                """Search the web using Brave Search API."""
+                query: str = Field(description="Search query to look up on the web")
+
+            return BraveSearchSchema
+
+        # Serper Search tool schema (dual-purpose: workflow node + AI tool)
+        if node_type == 'serperSearch':
+            class SerperSearchSchema(BaseModel):
+                """Search the web using Google via Serper API."""
+                query: str = Field(description="Search query to look up on Google")
+
+            return SerperSearchSchema
+
+        # Perplexity Search tool schema (dual-purpose: workflow node + AI tool)
+        if node_type == 'perplexitySearch':
+            class PerplexitySearchSchema(BaseModel):
+                """Search the web using Perplexity Sonar AI for an answer with citations."""
+                query: str = Field(description="Search query to get AI-powered answer with citations")
+
+            return PerplexitySearchSchema
 
         # Timer tool schema (dual-purpose: workflow node + AI tool)
         if node_type == 'timer':

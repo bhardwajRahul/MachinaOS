@@ -25,6 +25,7 @@ import { driveNodes, DRIVE_NODE_TYPES } from './nodeDefinitions/driveNodes';
 import { sheetsNodes, SHEETS_NODE_TYPES } from './nodeDefinitions/sheetsNodes';
 import { tasksNodes, TASKS_NODE_TYPES } from './nodeDefinitions/tasksNodes';
 import { contactsNodes, CONTACTS_NODE_TYPES } from './nodeDefinitions/contactsNodes';
+import { searchNodes, SEARCH_NODE_TYPES } from './nodeDefinitions/searchNodes';
 
 // ============================================================================
 // MAIN NODE REGISTRY - Combining all modular definitions
@@ -54,7 +55,8 @@ export const nodeDefinitions: Record<string, INodeTypeDescription> = {
   ...driveNodes,
   ...sheetsNodes,
   ...tasksNodes,
-  ...contactsNodes
+  ...contactsNodes,
+  ...searchNodes
 };
 
 // ============================================================================
@@ -156,6 +158,10 @@ export const TASKS_NODES = [
 
 export const CONTACTS_NODES = [
   ...CONTACTS_NODE_TYPES
+];
+
+export const SEARCH_NODES = [
+  ...SEARCH_NODE_TYPES
 ];
 
 // Re-export types and utilities from modular files for external access

@@ -25,6 +25,7 @@ import {
   OpenAIIcon, ClaudeIcon, GeminiIcon, GroqIcon, OpenRouterIcon, CerebrasIcon,
 } from './icons/AIProviderIcons';
 import { ApifyIcons } from '../assets/icons/apify';
+import { SearchIcons } from '../assets/icons/search';
 
 // ============================================================================
 // SERVICE ICONS
@@ -68,6 +69,24 @@ const ApifyIcon = () => {
   );
 };
 
+const BraveSearchIcon = () => {
+  const ref = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => { if (ref.current) ref.current.innerHTML = SearchIcons.brave; }, []);
+  return <div ref={ref} style={{ width: 20, height: 20 }} />;
+};
+
+const SerperSearchIcon = () => {
+  const ref = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => { if (ref.current) ref.current.innerHTML = SearchIcons.serper; }, []);
+  return <div ref={ref} style={{ width: 20, height: 20 }} />;
+};
+
+const PerplexitySearchIcon = () => {
+  const ref = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => { if (ref.current) ref.current.innerHTML = SearchIcons.perplexity; }, []);
+  return <div ref={ref} style={{ width: 20, height: 20 }} />
+};
+
 // ============================================================================
 // TYPES & DATA
 // ============================================================================
@@ -81,7 +100,7 @@ interface CredentialItem {
   Icon?: React.FC<{ size?: number }>;
   CustomIcon?: React.FC;
   isSpecial?: boolean;
-  panelType?: 'whatsapp' | 'android' | 'twitter' | 'gmail' | 'google_maps';
+  panelType?: 'whatsapp' | 'android' | 'twitter' | 'gmail' | 'google_maps' | 'search';
 }
 
 interface Category {
@@ -117,6 +136,15 @@ const CATEGORIES: Category[] = [
     label: 'Android',
     items: [
       { id: 'android_remote', name: 'Android Device', placeholder: 'your-api-key...', color: '#3DDC84', desc: 'API key + QR code pairing', CustomIcon: AndroidIcon, isSpecial: true, panelType: 'android' },
+    ],
+  },
+  {
+    key: 'search',
+    label: 'Search',
+    items: [
+      { id: 'brave_search', name: 'Brave Search', placeholder: 'BSA...', color: '#FB542B', desc: 'Web search via Brave Search API' },
+      { id: 'serper', name: 'Serper', placeholder: '', color: '#4285F4', desc: 'Google search via Serper API' },
+      { id: 'perplexity', name: 'Perplexity', placeholder: 'pplx-...', color: '#20808D', desc: 'AI-powered search with citations' },
     ],
   },
   {

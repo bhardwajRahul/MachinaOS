@@ -31,6 +31,7 @@ import { TOOL_NODE_TYPES } from './nodeDefinitions/toolNodes';
 import { SPECIALIZED_AGENT_TYPES } from './nodeDefinitions/specializedAgentNodes';
 import { SKILL_NODE_TYPES } from './nodeDefinitions/skillNodes';
 import { DOCUMENT_NODE_TYPES } from './nodeDefinitions/documentNodes';
+import { SEARCH_NODE_TYPES } from './nodeDefinitions/searchNodes';
 import { SOCIAL_NODE_TYPES } from './nodeDefinitions/socialNodes';
 import { APIFY_NODE_TYPES } from './nodeDefinitions/apifyNodes';
 import ParameterPanel from './ParameterPanel';
@@ -133,6 +134,9 @@ const createNodeTypes = (): Record<string, React.ComponentType<any>> => {
       types[type] = SquareNode;
     } else if (APIFY_NODE_TYPES.includes(type)) {
       // Apify web scraping nodes use SquareNode component
+      types[type] = SquareNode;
+    } else if (SEARCH_NODE_TYPES.includes(type)) {
+      // Search API nodes use SquareNode component
       types[type] = SquareNode;
     } else if (SOCIAL_NODE_TYPES.includes(type)) {
       // Social nodes use AIAgentNode for multiple output handles support

@@ -97,6 +97,13 @@ from .document import (
     handle_vector_store,
 )
 
+# Search handlers
+from .search import (
+    handle_brave_search,
+    handle_serper_search,
+    handle_perplexity_search,
+)
+
 # Tool execution handlers (for AI Agent tool calling)
 from .tools import (
     execute_tool,
@@ -154,6 +161,10 @@ __all__ = [
     'handle_text_chunker',
     'handle_embedding_generator',
     'handle_vector_store',
+    # Search
+    'handle_brave_search',
+    'handle_serper_search',
+    'handle_perplexity_search',
     # Tools
     'execute_tool',
     'handle_task_manager',

@@ -213,6 +213,28 @@
       "media_metadata": 0.005,
       "privacy_update": 0.010,
       "mute_delete": 0.005
+    },
+    "brave_search": {
+      "_description": "Brave Search API pricing (per query)",
+      "_source": "https://brave.com/search/api/",
+      "_updated": "2026-02",
+      "web_search": 0.003,
+      "_default": 0.003
+    },
+    "serper": {
+      "_description": "Serper Google Search API pricing (per query)",
+      "_source": "https://serper.dev/pricing",
+      "_updated": "2026-02",
+      "web_search": 0.001,
+      "_default": 0.001
+    },
+    "perplexity": {
+      "_description": "Perplexity Sonar API pricing (per request)",
+      "_source": "https://docs.perplexity.ai/guides/pricing",
+      "_updated": "2026-02",
+      "sonar_search": 0.005,
+      "sonar_pro_search": 0.005,
+      "_default": 0.005
     }
   },
 
@@ -300,6 +322,15 @@
       "delete": "contact_delete",
       "list": "contact_list",
       "search": "contact_search"
+    },
+    "brave_search": {
+      "web_search": "web_search"
+    },
+    "serper": {
+      "web_search": "web_search"
+    },
+    "perplexity": {
+      "sonar_search": "sonar_search"
     }
   },
 
