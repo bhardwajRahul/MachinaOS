@@ -16,6 +16,15 @@ import { SearchOutlined, ReloadOutlined, InfoCircleOutlined, FolderOutlined, Plu
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { skillNodes, SKILL_NODE_TYPES } from '../../nodeDefinitions/skillNodes';
+import { DUCKDUCKGO_ICON, BRAVE_SEARCH_ICON, SERPER_ICON, PERPLEXITY_ICON } from '../../assets/icons/search';
+
+// Override icons for skills that have branded SVGs
+const SKILL_ICON_OVERRIDES: Record<string, string> = {
+  'duckduckgo-search-skill': DUCKDUCKGO_ICON,
+  'brave-search-skill': BRAVE_SEARCH_ICON,
+  'serper-search-skill': SERPER_ICON,
+  'perplexity-search-skill': PERPLEXITY_ICON,
+};
 
 // Skill configuration stored in node parameters
 // Key is skillName (folder name like 'whatsapp-skill')
@@ -201,7 +210,7 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
               type: s.name,
               skillName: s.name,
               displayName: s.name.split('-').map(w => w[0].toUpperCase() + w.slice(1)).join(' '),
-              icon: defaults.icon || s.metadata?.icon || '',
+              icon: defaults.icon || SKILL_ICON_OVERRIDES[s.name] || s.metadata?.icon || '',
               color: defaults.color || s.metadata?.color || '#6366F1',
               description: s.description || ''
             };
