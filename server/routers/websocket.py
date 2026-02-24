@@ -1763,6 +1763,190 @@ async def handle_whatsapp_rate_limit_unpause(data: Dict[str, Any], websocket: We
 
 
 # ============================================================================
+# Telegram Handlers - Connect/disconnect/status for Telegram bot
+# ============================================================================
+
+from services.telegram_service import get_telegram_service
+
+
+async def handle_telegram_connect(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Connect to Telegram with bot token. Stores token in encrypted credentials."""
+    token = data.get("token")
+    if not token:
+        return {"success": False, "error": "Bot token required"}
+
+    service = get_telegram_service()
+    result = await service.connect(token)
+
+    # Store token in encrypted credentials on success
+    if result.get("success"):
+        try:
+            auth_service = get_auth_service()
+            await auth_service.store_api_key(
+                provider="telegram_bot_token",
+                api_key=token,
+                models=[],
+                session_id="default",
+            )
+        except Exception as e:
+            logger.warning(f"[Telegram] Failed to store token in credentials: {e}")
+
+    return result
+
+
+async def handle_telegram_disconnect(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Disconnect Telegram bot and remove stored token."""
+    service = get_telegram_service()
+    result = await service.disconnect()
+
+    # Remove stored token
+    try:
+        auth_service = get_auth_service()
+        await auth_service.remove_api_key("telegram_bot_token")
+    except Exception as e:
+        logger.warning(f"[Telegram] Failed to remove stored token: {e}")
+
+    return result
+
+
+async def handle_telegram_status(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Get Telegram bot connection status. Also checks for stored token."""
+    service = get_telegram_service()
+    status = service.get_status()
+
+    # Check if token is stored (for reconnect UI)
+    has_stored_token = False
+    try:
+        auth_service = get_auth_service()
+        stored = await auth_service.get_api_key("telegram_bot_token")
+        has_stored_token = stored is not None
+    except Exception:
+        pass
+
+    status["has_stored_token"] = has_stored_token
+    return {"success": True, "status": status}
+
+
+async def handle_telegram_send(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Send message via Telegram bot (direct WebSocket call, not via workflow node)."""
+    service = get_telegram_service()
+
+    if not service.connected:
+        return {"success": False, "error": "Telegram bot not connected"}
+
+    chat_id = data.get("chat_id")
+    message_type = data.get("message_type", "text")
+    text = data.get("text")
+    parse_mode = data.get("parse_mode")
+
+    if not chat_id:
+        return {"success": False, "error": "chat_id required"}
+
+    try:
+        if message_type == "text":
+            if not text:
+                return {"success": False, "error": "text required for text message"}
+            result = await service.send_message(
+                chat_id=chat_id,
+                text=text,
+                parse_mode=parse_mode,
+            )
+        elif message_type == "photo":
+            photo_url = data.get("media_url")
+            if not photo_url:
+                return {"success": False, "error": "media_url required for photo"}
+            result = await service.send_photo(
+                chat_id=chat_id,
+                photo=photo_url,
+                caption=data.get("caption"),
+                parse_mode=parse_mode,
+            )
+        elif message_type == "document":
+            doc_url = data.get("media_url")
+            if not doc_url:
+                return {"success": False, "error": "media_url required for document"}
+            result = await service.send_document(
+                chat_id=chat_id,
+                document=doc_url,
+                caption=data.get("caption"),
+                parse_mode=parse_mode,
+            )
+        elif message_type == "location":
+            lat = data.get("latitude")
+            lon = data.get("longitude")
+            if lat is None or lon is None:
+                return {"success": False, "error": "latitude and longitude required"}
+            result = await service.send_location(
+                chat_id=chat_id,
+                latitude=float(lat),
+                longitude=float(lon),
+            )
+        elif message_type == "contact":
+            phone = data.get("phone_number")
+            first_name = data.get("first_name")
+            if not phone or not first_name:
+                return {"success": False, "error": "phone_number and first_name required"}
+            result = await service.send_contact(
+                chat_id=chat_id,
+                phone_number=phone,
+                first_name=first_name,
+                last_name=data.get("last_name"),
+            )
+        else:
+            return {"success": False, "error": f"Unsupported message type: {message_type}"}
+
+        return {"success": True, "result": result}
+    except Exception as e:
+        logger.error(f"[Telegram] Send error: {e}")
+        return {"success": False, "error": str(e)}
+
+
+async def handle_telegram_reconnect(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Reconnect Telegram using stored bot token from encrypted credentials."""
+    try:
+        auth_service = get_auth_service()
+        token = await auth_service.get_api_key("telegram_bot_token")
+        if not token:
+            return {"success": False, "error": "No stored bot token found. Enter token to connect."}
+
+        service = get_telegram_service()
+        result = await service.connect(token)
+        return result
+    except Exception as e:
+        logger.error(f"[Telegram] Reconnect failed: {e}")
+        return {"success": False, "error": str(e)}
+
+
+async def handle_telegram_get_me(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Get bot info."""
+    service = get_telegram_service()
+    if not service.connected:
+        return {"success": False, "error": "Telegram bot not connected"}
+    try:
+        result = await service.get_me()
+        return {"success": True, "result": result}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+async def handle_telegram_get_chat(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Get chat info."""
+    service = get_telegram_service()
+    if not service.connected:
+        return {"success": False, "error": "Telegram bot not connected"}
+
+    chat_id = data.get("chat_id")
+    if not chat_id:
+        return {"success": False, "error": "chat_id required"}
+
+    try:
+        result = await service.get_chat(chat_id)
+        return {"success": True, "result": result}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+# ============================================================================
 # Workflow Storage Operations
 # ============================================================================
 
@@ -2702,6 +2886,15 @@ MESSAGE_HANDLERS: Dict[str, MessageHandler] = {
     "whatsapp_rate_limit_set": handle_whatsapp_rate_limit_set,
     "whatsapp_rate_limit_stats": handle_whatsapp_rate_limit_stats,
     "whatsapp_rate_limit_unpause": handle_whatsapp_rate_limit_unpause,
+
+    # Telegram operations
+    "telegram_connect": handle_telegram_connect,
+    "telegram_disconnect": handle_telegram_disconnect,
+    "telegram_reconnect": handle_telegram_reconnect,
+    "telegram_status": handle_telegram_status,
+    "telegram_send": handle_telegram_send,
+    "telegram_get_me": handle_telegram_get_me,
+    "telegram_get_chat": handle_telegram_get_chat,
 
     # Workflow storage operations
     "save_workflow": handle_save_workflow,

@@ -31,7 +31,7 @@ interface PendingRequest {
 const REQUEST_TIMEOUT = 30000;
 
 // Trigger node types that wait indefinitely for events
-const TRIGGER_NODE_TYPES = ['whatsappReceive', 'webhookTrigger', 'cronScheduler', 'chatTrigger'];
+const TRIGGER_NODE_TYPES = ['whatsappReceive', 'webhookTrigger', 'cronScheduler', 'chatTrigger', 'telegramReceive'];
 
 // Status types
 export interface AndroidStatus {
@@ -105,6 +105,13 @@ export interface GoogleStatus {
   email: string | null;
   name?: string;
   profile_image_url?: string;
+}
+
+export interface TelegramStatus {
+  connected: boolean;
+  bot_username: string | null;
+  bot_name: string | null;
+  bot_id: string | null;
 }
 
 // WhatsApp Rate Limit types (from Go RPC schema)
@@ -222,6 +229,7 @@ interface WebSocketContextValue {
   whatsappStatus: WhatsAppStatus;
   twitterStatus: TwitterStatus;
   googleStatus: GoogleStatus;
+  telegramStatus: TelegramStatus;
   whatsappMessages: WhatsAppMessage[];  // History of received messages
   lastWhatsAppMessage: WhatsAppMessage | null;  // Most recent message
   apiKeyStatuses: Record<string, ApiKeyStatus>;
@@ -355,6 +363,13 @@ const defaultGoogleStatus: GoogleStatus = {
   email: null,
 };
 
+const defaultTelegramStatus: TelegramStatus = {
+  connected: false,
+  bot_username: null,
+  bot_name: null,
+  bot_id: null,
+};
+
 const WebSocketContext = createContext<WebSocketContextValue | null>(null);
 
 // WebSocket URL (convert http to ws)
@@ -390,6 +405,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [whatsappStatus, setWhatsappStatus] = useState<WhatsAppStatus>(defaultWhatsAppStatus);
   const [twitterStatus, setTwitterStatus] = useState<TwitterStatus>(defaultTwitterStatus);
   const [googleStatus, setGoogleStatus] = useState<GoogleStatus>(defaultGoogleStatus);
+  const [telegramStatus, setTelegramStatus] = useState<TelegramStatus>(defaultTelegramStatus);
   const [whatsappMessages, setWhatsappMessages] = useState<WhatsAppMessage[]>([]);
   const [lastWhatsAppMessage, setLastWhatsAppMessage] = useState<WhatsAppMessage | null>(null);
   const [apiKeyStatuses, setApiKeyStatuses] = useState<Record<string, ApiKeyStatus>>({});
@@ -506,6 +522,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             if (data.whatsapp) setWhatsappStatus(data.whatsapp);
             if (data.twitter) setTwitterStatus(data.twitter);
             if (data.google) setGoogleStatus(data.google);
+            if (data.telegram) setTelegramStatus(data.telegram);
             if (data.api_keys) setApiKeyStatuses(data.api_keys);
             // Node statuses from initial_status - group by workflow_id (n8n pattern)
             if (data.nodes) {
@@ -592,6 +609,18 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
               connected: data.connected || false,
               email: data.email || null,
               name: data.name,
+            });
+          }
+          break;
+
+        case 'telegram_status':
+          // Handle Telegram bot status updates
+          if (data) {
+            setTelegramStatus({
+              connected: data.connected || false,
+              bot_username: data.bot_username || null,
+              bot_name: data.bot_name || null,
+              bot_id: data.bot_id || null,
             });
           }
           break;
@@ -2054,6 +2083,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     whatsappStatus,
     twitterStatus,
     googleStatus,
+    telegramStatus,
     whatsappMessages,
     lastWhatsAppMessage,
     apiKeyStatuses,
@@ -2197,6 +2227,12 @@ export const useTwitterStatus = (): TwitterStatus => {
 export const useGoogleStatus = (): GoogleStatus => {
   const { googleStatus } = useWebSocket();
   return googleStatus;
+};
+
+// Hook specifically for Telegram status
+export const useTelegramStatus = (): TelegramStatus => {
+  const { telegramStatus } = useWebSocket();
+  return telegramStatus;
 };
 
 // Hook specifically for deployment status

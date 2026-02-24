@@ -39,6 +39,7 @@ from services.handlers import (
     handle_twitter_send, handle_twitter_search, handle_twitter_user,
     handle_brave_search, handle_serper_search, handle_perplexity_search,
 )
+from services.handlers.telegram import handle_telegram_send, handle_telegram_receive
 from services.handlers.apify import handle_apify_actor
 # Consolidated Google Workspace handlers (6 services with operation dispatchers)
 from services.handlers.gmail import handle_google_gmail, handle_gmail_receive
@@ -144,6 +145,9 @@ class NodeExecutor:
             # WhatsApp
             'whatsappSend': handle_whatsapp_send,
             'whatsappDb': handle_whatsapp_db,
+            # Telegram
+            'telegramSend': handle_telegram_send,
+            'telegramReceive': handle_telegram_receive,
             # Twitter/X
             'twitterSend': handle_twitter_send,
             'twitterSearch': handle_twitter_search,
