@@ -120,9 +120,13 @@ TRIGGER_REGISTRY: Dict[str, TriggerConfig] = {
         event_type='gmail_email_received',
         display_name='Gmail Email'
     ),
+    'telegramReceive': TriggerConfig(
+        node_type='telegramReceive',
+        event_type='telegram_message_received',
+        display_name='Telegram Message'
+    ),
     # Future triggers - just add to registry:
     # 'mqttTrigger': TriggerConfig('mqttTrigger', 'mqtt_message', 'MQTT Message'),
-    # 'telegramTrigger': TriggerConfig('telegramTrigger', 'telegram_message', 'Telegram'),
 }
 
 
@@ -416,6 +420,89 @@ def build_gmail_filter(params: Dict) -> Callable[[Dict], bool]:
     return matches
 
 
+def build_telegram_filter(params: Dict) -> Callable[[Dict], bool]:
+    """Build filter function for Telegram messages.
+
+    Filters by:
+    - chatTypeFilter: 'all', 'private', 'group', 'supergroup', 'channel'
+    - contentTypeFilter: 'all', 'text', 'photo', 'video', 'audio', 'voice', 'document', 'sticker', 'location', 'contact', 'poll'
+    - chat_id: Filter to specific chat (optional)
+    - from_user: Filter to specific user ID (optional)
+    - keywords: Comma-separated keywords to match in text (optional)
+    - ignoreBots: Ignore messages from bots (default: True)
+
+    Event data fields (from TelegramService._format_message):
+    - message_id: int
+    - chat_id: int
+    - chat_type: str ('private', 'group', 'supergroup', 'channel')
+    - chat_title: str (for groups/channels)
+    - from_id: int (sender user ID)
+    - from_username: str (sender username)
+    - from_first_name: str
+    - from_last_name: str
+    - is_bot: bool
+    - text: str (message text or caption)
+    - content_type: str
+    - date: str (ISO format)
+    - reply_to_message_id: int (optional)
+    - photo/document/location/contact: dict (media info if present)
+
+    Args:
+        params: Node parameters
+
+    Returns:
+        Filter function that checks if event matches criteria
+    """
+    chat_type_filter = params.get('chatTypeFilter', 'all')
+    content_type_filter = params.get('contentTypeFilter', 'all')
+    chat_id_filter = params.get('chat_id', '')
+    from_user_filter = params.get('from_user', '')
+    keywords = [k.strip().lower() for k in params.get('keywords', '').split(',') if k.strip()]
+    ignore_bots = params.get('ignoreBots', True)
+
+    logger.debug(f"[TelegramFilter] Built: chat_type={chat_type_filter}, content_type={content_type_filter}, chat_id='{chat_id_filter}', ignore_bots={ignore_bots}")
+
+    def matches(m: Dict) -> bool:
+        # Chat type filter
+        if chat_type_filter != 'all':
+            msg_chat_type = m.get('chat_type', '')
+            if msg_chat_type != chat_type_filter:
+                return False
+
+        # Content type filter
+        if content_type_filter != 'all':
+            msg_content_type = m.get('content_type', '')
+            if msg_content_type != content_type_filter:
+                return False
+
+        # Chat ID filter (exact match)
+        if chat_id_filter:
+            msg_chat_id = str(m.get('chat_id', ''))
+            if msg_chat_id != str(chat_id_filter):
+                return False
+
+        # From user filter (user ID)
+        if from_user_filter:
+            msg_from_id = str(m.get('from_id', ''))
+            if msg_from_id != str(from_user_filter):
+                return False
+
+        # Keywords filter (any keyword in text)
+        if keywords:
+            text = (m.get('text') or '').lower()
+            if not any(kw in text for kw in keywords):
+                return False
+
+        # Ignore bot messages
+        if ignore_bots and m.get('is_bot', False):
+            return False
+
+        logger.debug(f"[TelegramFilter] Matched message from {m.get('from_username', m.get('from_id'))}")
+        return True
+
+    return matches
+
+
 # Registry of filter builders per trigger type
 FILTER_BUILDERS: Dict[str, Callable[[Dict], Callable[[Dict], bool]]] = {
     'whatsappReceive': build_whatsapp_filter,
@@ -424,6 +511,7 @@ FILTER_BUILDERS: Dict[str, Callable[[Dict], Callable[[Dict], bool]]] = {
     'taskTrigger': build_task_completed_filter,
     'twitterReceive': build_twitter_filter,
     'gmailReceive': build_gmail_filter,
+    'telegramReceive': build_telegram_filter,
 }
 
 

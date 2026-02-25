@@ -82,6 +82,9 @@ xdk>=0.1.0
 # Apify Web Scraping
 apify-client>=1.8.0
 
+# Telegram Bot API
+python-telegram-bot==22.6
+
 # Gmail API
 google-api-python-client>=2.100.0
 google-auth>=2.27.0

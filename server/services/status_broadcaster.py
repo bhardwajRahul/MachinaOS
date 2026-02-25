@@ -53,6 +53,12 @@ class StatusBroadcaster:
                 "email": None,
                 "name": None,
             },
+            "telegram": {
+                "connected": False,
+                "bot_id": None,
+                "bot_username": None,
+                "bot_name": None
+            },
             "api_keys": {},  # provider -> validation status
             "nodes": {},  # node_id -> node status
             "variables": {},  # variable_name -> value
@@ -425,6 +431,36 @@ class StatusBroadcaster:
     def get_whatsapp_status(self) -> Dict[str, Any]:
         """Get WhatsApp connection status."""
         return self._status["whatsapp"].copy()
+
+    # =========================================================================
+    # Telegram Status Updates
+    # =========================================================================
+
+    async def update_telegram_status(
+        self,
+        connected: bool,
+        bot_id: Optional[int] = None,
+        bot_username: Optional[str] = None,
+        bot_name: Optional[str] = None
+    ):
+        """Update Telegram bot connection status and broadcast."""
+        import time
+        self._status["telegram"] = {
+            "connected": connected,
+            "bot_id": bot_id,
+            "bot_username": bot_username,
+            "bot_name": bot_name,
+            "timestamp": time.time()
+        }
+
+        await self.broadcast({
+            "type": "telegram_status",
+            "data": self._status["telegram"]
+        })
+
+    def get_telegram_status(self) -> Dict[str, Any]:
+        """Get Telegram bot connection status."""
+        return self._status["telegram"].copy()
 
     # =========================================================================
     # Node Status Updates

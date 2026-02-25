@@ -8,6 +8,7 @@ import { toolNodes, TOOL_NODE_TYPES } from './nodeDefinitions/toolNodes';
 import { specializedAgentNodes, SPECIALIZED_AGENT_TYPES } from './nodeDefinitions/specializedAgentNodes';
 import { locationNodes, LOCATION_NODE_TYPES } from './nodeDefinitions/locationNodes';
 import { whatsappNodes, WHATSAPP_NODE_TYPES } from './nodeDefinitions/whatsappNodes';
+import { telegramNodes, TELEGRAM_NODE_TYPES } from './nodeDefinitions/telegramNodes';
 import { workflowNodes } from './nodeDefinitions/workflowNodes';
 import { schedulerNodes, SCHEDULER_NODE_TYPES } from './nodeDefinitions/schedulerNodes';
 import { androidServiceNodes, ANDROID_SERVICE_NODE_TYPES } from './nodeDefinitions/androidServiceNodes';
@@ -37,6 +38,7 @@ export const nodeDefinitions: Record<string, INodeTypeDescription> = {
   ...specializedAgentNodes,
   ...locationNodes,
   ...whatsappNodes,
+  ...telegramNodes,
   ...androidServiceNodes,
   ...chatNodes,
   ...codeNodes,
@@ -77,6 +79,10 @@ export const LOCATION_NODES = [
 
 export const WHATSAPP_NODES = [
   ...WHATSAPP_NODE_TYPES
+];
+
+export const TELEGRAM_NODES = [
+  ...TELEGRAM_NODE_TYPES
 ];
 
 export const ANDROID_SERVICE_NODES = [
