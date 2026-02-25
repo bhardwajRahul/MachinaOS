@@ -7,8 +7,9 @@ import {
   exportWorkflowToJSON as exportToJSON,
   exportWorkflowToFile as exportToFile,
   importWorkflowFromJSON as importFromJSON,
-  sanitizeNodes
+  sanitizeNodes,
 } from '../utils/workflowExport';
+import type { ImportedWorkflow } from '../utils/workflowExport';
 import { workflowApi } from '../services/workflowApi';
 
 export interface WorkflowData {
@@ -89,9 +90,9 @@ interface AppStore {
   removeEdges: (edgeIds: string[]) => void;
 
   // Workflow export/import
-  exportWorkflowToJSON: () => string;
-  exportWorkflowToFile: () => void;
-  importWorkflowFromJSON: (jsonString: string) => void;
+  exportWorkflowToJSON: (nodeParameters?: Record<string, Record<string, any>>) => string;
+  exportWorkflowToFile: (nodeParameters?: Record<string, Record<string, any>>) => void;
+  importWorkflowFromJSON: (jsonString: string) => ImportedWorkflow;
 }
 
 // Helper functions
@@ -610,29 +611,30 @@ export const useAppStore = create<AppStore>((set, get) => ({
     });
   },
 
-  exportWorkflowToJSON: () => {
+  exportWorkflowToJSON: (nodeParameters?) => {
     const { currentWorkflow } = get();
     if (!currentWorkflow) {
       throw new Error('No workflow to export');
     }
 
-    return exportToJSON(currentWorkflow);
+    return exportToJSON(currentWorkflow, nodeParameters);
   },
 
-  exportWorkflowToFile: () => {
+  exportWorkflowToFile: (nodeParameters?) => {
     const { currentWorkflow } = get();
     if (!currentWorkflow) {
       throw new Error('No workflow to export');
     }
 
-    exportToFile(currentWorkflow);
+    exportToFile(currentWorkflow, nodeParameters);
   },
 
   importWorkflowFromJSON: (jsonString: string) => {
-    const workflow = importFromJSON(jsonString);
+    const imported = importFromJSON(jsonString);
     set({
-      currentWorkflow: workflow,
+      currentWorkflow: imported,
       hasUnsavedChanges: true
     });
+    return imported;
   },
 }));

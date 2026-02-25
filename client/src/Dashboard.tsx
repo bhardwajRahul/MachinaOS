@@ -320,7 +320,7 @@ const DashboardContent: React.FC = () => {
   } = useWorkflowManagement();
 
   const { collapsedSections, searchQuery, setSearchQuery, toggleSection } = useComponentPalette();
-  const { saveNodeParameters, executeWorkflow, deployWorkflow, cancelDeployment, nodeStatuses, deploymentStatus, workflowLock, isConnected, sendRequest } = useWebSocket();
+  const { saveNodeParameters, getAllNodeParameters, executeWorkflow, deployWorkflow, cancelDeployment, nodeStatuses, deploymentStatus, workflowLock, isConnected, sendRequest } = useWebSocket();
   const applyUIDefaults = useAppStore((state) => state.applyUIDefaults);
 
   // Scope deployment and lock to current workflow (n8n pattern)
@@ -727,9 +727,29 @@ const DashboardContent: React.FC = () => {
     }
   };
 
+  // Helper: fetch all node parameters from DB for export
+  const fetchNodeParametersForExport = async (): Promise<Record<string, Record<string, any>>> => {
+    if (!currentWorkflow?.nodes.length) return {};
+    const nodeIds = currentWorkflow.nodes.map(n => n.id);
+    try {
+      const allParams = await getAllNodeParameters(nodeIds);
+      const result: Record<string, Record<string, any>> = {};
+      for (const [nodeId, np] of Object.entries(allParams)) {
+        if (np?.parameters && Object.keys(np.parameters).length > 0) {
+          result[nodeId] = np.parameters;
+        }
+      }
+      return result;
+    } catch (error) {
+      console.error('Failed to fetch node parameters for export:', error);
+      return {};
+    }
+  };
+
   const handleExportJSON = async () => {
     try {
-      const jsonString = exportWorkflowToJSON();
+      const nodeParameters = await fetchNodeParametersForExport();
+      const jsonString = exportWorkflowToJSON(nodeParameters);
       await navigator.clipboard.writeText(jsonString);
       alert('Workflow JSON copied to clipboard');
     } catch (error) {
@@ -738,9 +758,10 @@ const DashboardContent: React.FC = () => {
     }
   };
 
-  const handleExportFile = () => {
+  const handleExportFile = async () => {
     try {
-      exportWorkflowToFile();
+      const nodeParameters = await fetchNodeParametersForExport();
+      exportWorkflowToFile(nodeParameters);
     } catch (error) {
       console.error('Export file error:', error);
       alert('Failed to export workflow file');
@@ -799,14 +820,28 @@ const DashboardContent: React.FC = () => {
 
         console.log('Importing workflow:', workflow);
 
-        // Save node parameters to database
-        for (const node of workflow.nodes) {
-          if (node.data && Object.keys(node.data).length > 0) {
-            try {
-              await saveNodeParameters(node.id, node.data);
-              console.log(`Saved parameters for node ${node.id}:`, node.data);
-            } catch (error) {
-              console.error(`Failed to save parameters for node ${node.id}:`, error);
+        // Save embedded nodeParameters from new-format exports
+        if (importedWorkflow.nodeParameters) {
+          for (const [nodeId, params] of Object.entries(importedWorkflow.nodeParameters)) {
+            if (params && Object.keys(params).length > 0) {
+              try {
+                await saveNodeParameters(nodeId, params);
+                console.log(`Saved parameters for node ${nodeId} (from nodeParameters)`);
+              } catch (error) {
+                console.error(`Failed to save parameters for node ${nodeId}:`, error);
+              }
+            }
+          }
+        } else {
+          // Fallback for old-format exports: save node.data if it has non-UI fields
+          for (const node of workflow.nodes) {
+            if (node.data && Object.keys(node.data).length > 0) {
+              try {
+                await saveNodeParameters(node.id, node.data);
+                console.log(`Saved parameters for node ${node.id} (from node.data fallback)`);
+              } catch (error) {
+                console.error(`Failed to save parameters for node ${node.id}:`, error);
+              }
             }
           }
         }

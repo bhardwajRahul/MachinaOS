@@ -57,4 +57,14 @@ async def import_examples_for_user(database) -> int:
             imported += 1
             logger.info(f"Imported example: {example.get('name')}")
 
+            # Save embedded nodeParameters if present
+            node_parameters = example.get("nodeParameters", {})
+            for node_id, params in node_parameters.items():
+                if params:
+                    try:
+                        await database.save_node_parameters(node_id, params)
+                        logger.debug(f"Saved parameters for node {node_id}")
+                    except Exception as e:
+                        logger.error(f"Failed to save parameters for node {node_id}: {e}")
+
     return imported
