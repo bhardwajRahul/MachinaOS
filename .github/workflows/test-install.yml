@@ -35,8 +35,8 @@ jobs:
       - name: Verify installation
         shell: bash
         run: |
-          machinaos --help
-          machinaos --version
+          machina --help
+          machina --version
 
       - name: Check whatsapp-rpc binary
         shell: bash
@@ -57,7 +57,7 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          machina start &
+          machina start --skip-whatsapp &
           PID=$!
 
           for i in {1..15}; do
@@ -80,7 +80,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $job = Start-Job -ScriptBlock { machina start }
+          $job = Start-Job -ScriptBlock { machina start --skip-whatsapp }
           Start-Sleep -Seconds 15
 
           try {
@@ -146,7 +146,7 @@ jobs:
         shell: bash
         working-directory: MachinaOS
         run: |
-          npm run start &
+          npm run start -- --skip-whatsapp &
           PID=$!
 
           for i in {1..15}; do
@@ -172,7 +172,7 @@ jobs:
         run: |
           $job = Start-Job -ScriptBlock {
             Set-Location $using:PWD
-            npm run start
+            npm run start -- --skip-whatsapp
           }
           Start-Sleep -Seconds 15
 
@@ -206,8 +206,8 @@ jobs:
 
       - name: Verify installation
         run: |
-          machinaos --help
-          machinaos --version
+          machina --help
+          machina --version
 
   # Test install.ps1 script (Windows)
   test-install-script-windows:
@@ -219,5 +219,5 @@ jobs:
 
       - name: Verify installation
         run: |
-          machinaos --help
-          machinaos --version
+          machina --help
+          machina --version
