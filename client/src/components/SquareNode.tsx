@@ -197,9 +197,7 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
         const hasRequiredParams = data && Object.keys(data).length > 0;
         setIsConfigured(hasRequiredParams && !!apiKey);
 
-        if (!apiKey && provider) {
-          console.warn(`[SquareNode] ${definition?.displayName} ${id}: No API key configured for ${provider}`);
-        }
+        // Missing API key is expected before user configures credentials - no need to log
       } catch (error) {
         console.error('Configuration check error:', error);
         setHasApiKey(false);

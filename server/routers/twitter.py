@@ -16,7 +16,7 @@ Tokens stored as API keys with provider prefixes:
 
 from typing import Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse
 
 from core.container import container
@@ -27,37 +27,9 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/api/twitter", tags=["twitter"])
 
 
-def get_settings():
-    """Get application settings."""
-    return container.settings()
-
-
 def get_auth_service():
     """Get auth service for API key storage."""
     return container.auth_service()
-
-
-def get_twitter_oauth() -> TwitterOAuth:
-    """Create TwitterOAuth instance from stored credentials."""
-    auth_service = get_auth_service()
-    # Twitter client_id and client_secret are stored as API keys
-    # These are configured in the Credentials Modal
-    import asyncio
-    loop = asyncio.get_event_loop()
-
-    # Get stored Twitter app credentials (client_id, client_secret)
-    # These are stored via the Credentials Modal with provider='twitter'
-    client_id = loop.run_until_complete(auth_service.get_api_key("twitter_client_id")) or ""
-    client_secret = loop.run_until_complete(auth_service.get_api_key("twitter_client_secret"))
-
-    settings = get_settings()
-    redirect_uri = settings.twitter_redirect_uri
-
-    return TwitterOAuth(
-        client_id=client_id,
-        client_secret=client_secret,
-        redirect_uri=redirect_uri,
-    )
 
 
 @router.get("/callback")
@@ -107,8 +79,19 @@ async def twitter_oauth_callback(
             status_code=400,
         )
 
+    # Retrieve redirect_uri from state (set during auth initiation)
+    redirect_uri = pending_state.get("redirect_uri")
+    if not redirect_uri:
+        logger.error("Twitter OAuth callback missing redirect_uri in state")
+        return HTMLResponse(
+            content=_callback_html(
+                success=False,
+                error="Invalid state: missing redirect URI. Please try again.",
+            ),
+            status_code=400,
+        )
+
     # Get stored client credentials to create OAuth instance
-    settings = get_settings()
     auth_service = get_auth_service()
     client_id = await auth_service.get_api_key("twitter_client_id") or ""
     client_secret = await auth_service.get_api_key("twitter_client_secret")
@@ -116,7 +99,7 @@ async def twitter_oauth_callback(
     oauth = TwitterOAuth(
         client_id=client_id,
         client_secret=client_secret,
-        redirect_uri=settings.twitter_redirect_uri,
+        redirect_uri=redirect_uri,
     )
 
     # Exchange code for tokens
@@ -181,12 +164,14 @@ async def twitter_oauth_callback(
 
 
 @router.get("/status")
-async def get_twitter_status():
+async def get_twitter_status(request: Request):
     """
     Get Twitter connection status.
 
     Returns whether the user is authenticated with Twitter.
     """
+    from services.oauth_utils import get_redirect_uri
+
     auth_service = get_auth_service()
 
     # Try to get stored tokens via auth_service
@@ -203,14 +188,14 @@ async def get_twitter_status():
     refresh_token = tokens.get("refresh_token")
 
     # Get stored client credentials (these remain in auth_service as they're app-level)
-    settings = get_settings()
     client_id = await auth_service.get_api_key("twitter_client_id") or ""
     client_secret = await auth_service.get_api_key("twitter_client_secret")
+    redirect_uri = get_redirect_uri(request, "twitter")
 
     oauth = TwitterOAuth(
         client_id=client_id,
         client_secret=client_secret,
-        redirect_uri=settings.twitter_redirect_uri,
+        redirect_uri=redirect_uri,
     )
 
     # Verify token is still valid by getting user info
@@ -254,10 +239,12 @@ async def get_twitter_status():
 
 
 @router.post("/logout")
-async def twitter_logout():
+async def twitter_logout(request: Request):
     """
     Disconnect Twitter by revoking tokens and clearing stored credentials.
     """
+    from services.oauth_utils import get_redirect_uri
+
     auth_service = get_auth_service()
 
     # Get stored tokens via auth_service
@@ -270,12 +257,12 @@ async def twitter_logout():
         # Get client credentials for revocation (app-level, in auth_service)
         client_id = await auth_service.get_api_key("twitter_client_id") or ""
         client_secret = await auth_service.get_api_key("twitter_client_secret")
+        redirect_uri = get_redirect_uri(request, "twitter")
 
-        settings = get_settings()
         oauth = TwitterOAuth(
             client_id=client_id,
             client_secret=client_secret,
-            redirect_uri=settings.twitter_redirect_uri,
+            redirect_uri=redirect_uri,
         )
 
         # Revoke tokens
@@ -299,13 +286,12 @@ def _callback_html(success: bool, username: str = None, error: str = None) -> st
         title = "Twitter Connected"
         message = f"Successfully connected as @{username}!"
         color = "#00ba7c"  # Green
-        icon = "check-circle"
     else:
         title = "Connection Failed"
         message = error or "Failed to connect to Twitter"
         color = "#f4212e"  # Red
-        icon = "x-circle"
 
+    escaped_error = error.replace("'", "\\'") if error else ""
     return f"""
 <!DOCTYPE html>
 <html>
@@ -368,7 +354,7 @@ def _callback_html(success: bool, username: str = None, error: str = None) -> st
                 type: 'twitter_oauth_callback',
                 success: {str(success).lower()},
                 {"username: '" + username + "'," if username else ""}
-                {"error: '" + error.replace("'", "\\'") + "'," if error else ""}
+                {"error: '" + escaped_error + "'," if error else ""}
             }}, '*');
         }}
         // Close after 2 seconds

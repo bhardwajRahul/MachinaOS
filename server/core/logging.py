@@ -93,7 +93,7 @@ class WebSocketLogHandler(logging.Handler):
             # Non-blocking put - drop if queue is full
             try:
                 self._queue.put_nowait(log_data)
-            except:
+            except Exception:
                 pass  # Drop log if queue is full
 
         except Exception:
@@ -124,7 +124,7 @@ class WebSocketLogHandler(logging.Handler):
                 # Block for up to 0.1 seconds waiting for logs
                 try:
                     log_data = self._queue.get(timeout=0.1)
-                except:
+                except Exception:
                     continue
 
                 # Schedule async broadcast on the event loop

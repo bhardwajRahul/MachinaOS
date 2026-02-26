@@ -2,9 +2,8 @@
 
 import time
 import httpx
-import asyncio
 from datetime import datetime
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, List
 
 from core.logging import get_logger, log_execution_time
 
@@ -249,7 +248,7 @@ class AndroidService:
 
             if not response:
                 raise Exception(
-                    f"No response from Android device (timeout). "
+                    "No response from Android device (timeout). "
                     "Ensure the Android app is running and paired."
                 )
 
@@ -503,7 +502,7 @@ class AndroidService:
                 "timestamp": datetime.now().isoformat()
             }
 
-        except httpx.TimeoutException as e:
+        except httpx.TimeoutException:
             error_msg = f"Request timeout after {self.default_timeout}s"
             logger.error(
                 "[Android Service] Timeout",

@@ -1,7 +1,6 @@
 """Dependency injection container for the application."""
 
 from dependency_injector import containers, providers
-from dependency_injector.wiring import Provide, inject
 
 from core.config import Settings
 from core.database import Database

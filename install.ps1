@@ -190,7 +190,7 @@ function Main {
     Write-Color "============================================" "Green"
     Write-Host ""
     Write-Host "  Start MachinaOS:"
-    Write-Host "    machinaos start"
+    Write-Host "    machina start"
     Write-Host ""
     Write-Host "  Open in browser:"
     Write-Host "    http://localhost:3000"

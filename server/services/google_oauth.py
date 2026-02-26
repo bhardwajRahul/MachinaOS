@@ -73,6 +73,16 @@ def get_oauth_endpoints() -> Dict[str, str]:
     config = _load_config()
     return config.get("oauth", _get_default_config()["oauth"])
 
+def get_callback_paths() -> Dict[str, str]:
+    """Get OAuth callback paths from config."""
+    config = _load_config()
+    oauth = config.get("oauth", {})
+    return {
+        "google": oauth.get("google_callback_path", "/api/google/callback"),
+        "twitter": oauth.get("twitter_callback_path", "/api/twitter/callback"),
+    }
+
+
 def get_service_config(service: str) -> Dict[str, Any]:
     """Get service-specific config (base_url, version, etc.)."""
     config = _load_config()
@@ -119,7 +129,7 @@ class GoogleOAuth:
         self,
         client_id: str,
         client_secret: str,
-        redirect_uri: str = "http://localhost:3010/api/google/callback",
+        redirect_uri: str,
         scopes: Optional[List[str]] = None,
     ):
         self.client_id = client_id
@@ -173,6 +183,7 @@ class GoogleOAuth:
         _oauth_states[state] = {
             "created_at": time.time(),
             "data": state_data or {"mode": "owner"},
+            "redirect_uri": self.redirect_uri,
         }
 
         logger.info("Generated Google OAuth URL", state=state[:8])

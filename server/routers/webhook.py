@@ -3,9 +3,9 @@
 Works like WhatsApp trigger - uses broadcaster.send_custom_event() to dispatch
 to event_waiter which resolves waiting trigger nodes.
 """
-from fastapi import APIRouter, Request, HTTPException, Response
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
-from typing import Dict, Any
+from typing import Dict
 import asyncio
 import logging
 
@@ -49,7 +49,7 @@ async def handle_webhook(path: str, request: Request):
     if "application/json" in content_type and body:
         try:
             json_body = await request.json()
-        except:
+        except Exception:
             pass
 
     webhook_data = {

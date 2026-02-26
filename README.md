@@ -25,7 +25,7 @@ Mashup of N8N + Openclaw but with better visibility of what it's doing and also 
 
 ```bash
 npm install -g machinaos
-machinaos start
+machina start
 ```
 
 Open http://localhost:3000
@@ -93,7 +93,7 @@ Click **Credentials** in the toolbar to add your API keys for AI providers, Goog
 
 ## Documentation
 
-Full docs: https://docs.machinaos.dev
+Full docs: https://docs.zeenie.xyz/
 
 ## Community
 

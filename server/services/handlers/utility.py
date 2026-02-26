@@ -290,7 +290,7 @@ async def handle_start(
     initial_data_str = parameters.get('initialData', '{}')
     try:
         initial_data = json.loads(initial_data_str)
-    except:
+    except Exception:
         initial_data = {}
 
     return {
@@ -667,7 +667,7 @@ async def handle_console(
                         # fieldPath was likely a template like {{aiagent.response}} that got resolved
                         # Use the resolved value directly instead of navigating
                         log_value = field_path
-                        logger.debug(f"[Console] Using resolved fieldPath value directly")
+                        logger.debug("[Console] Using resolved fieldPath value directly")
                     else:
                         # fieldPath is a literal path like "response" or "data.items[0]"
                         log_value = _navigate_field_path(input_data, field_path)

@@ -168,7 +168,7 @@ async def handle_apify_actor(
             logger.warning(f"[Apify] Actor {actor_id} timed out")
             return {
                 "success": False,
-                "error": f"Actor timed out. Try increasing the timeout.",
+                "error": "Actor timed out. Try increasing the timeout.",
                 "result": {
                     "run_id": run_id,
                     "actor_id": actor_id,
@@ -222,7 +222,7 @@ async def handle_apify_actor(
         if "401" in error_msg or "Unauthorized" in error_msg:
             error_msg = "Invalid Apify API token. Please check your credentials."
         elif "404" in error_msg or "not found" in error_msg.lower():
-            error_msg = f"Actor not found. Check the actor ID."
+            error_msg = "Actor not found. Check the actor ID."
         return {
             "success": False,
             "error": error_msg,

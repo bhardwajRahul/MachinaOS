@@ -1,7 +1,7 @@
 """SQLModel database models and tables."""
 
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 from sqlmodel import SQLModel, Field, Column, DateTime, JSON
 from sqlalchemy import func
 
@@ -253,6 +253,8 @@ class UserSettings(SQLModel, table=True):
     component_palette_default_open: bool = Field(default=True)
     console_panel_default_open: bool = Field(default=False)
     examples_loaded: bool = Field(default=False)  # Track if example workflows were imported
+    onboarding_completed: bool = Field(default=False)  # Track if user completed or skipped onboarding
+    onboarding_step: int = Field(default=0)  # Last completed onboarding step (for resuming)
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         sa_column=Column(DateTime(timezone=True), server_default=func.now())

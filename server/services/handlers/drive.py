@@ -6,11 +6,11 @@ API Reference: https://developers.google.com/drive/api/v3/reference
 import asyncio
 import io
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import httpx
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload, MediaIoBaseUpload, MediaIoBaseDownload
+from googleapiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
 
 from core.logging import get_logger
 from services.handlers.google_auth import get_google_credentials

@@ -44,6 +44,7 @@ import WorkflowSidebar from './components/ui/WorkflowSidebar';
 import SettingsPanel, { WorkflowSettings, defaultSettings } from './components/ui/SettingsPanel';
 import AIResultModal from './components/ui/AIResultModal';
 import CredentialsModal from './components/CredentialsModal';
+import OnboardingWizard from './components/onboarding/OnboardingWizard';
 import ErrorBoundary from './components/ui/ErrorBoundary';
 import ConsolePanel from './components/ui/ConsolePanel';
 import { useAppTheme } from './hooks/useAppTheme';
@@ -365,6 +366,7 @@ const DashboardContent: React.FC = () => {
   });
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [credentialsOpen, setCredentialsOpen] = React.useState(false);
+  const [onboardingReopenTrigger, setOnboardingReopenTrigger] = React.useState(0);
 
   // Console panel visibility from store (database-backed)
   const consolePanelVisible = useAppStore((state) => state.consolePanelVisible);
@@ -1267,12 +1269,22 @@ const DashboardContent: React.FC = () => {
           onClose={() => setSettingsOpen(false)}
           settings={settings}
           onSettingsChange={setSettings}
+          onReplayOnboarding={() => {
+            setSettingsOpen(false);
+            setOnboardingReopenTrigger(prev => prev + 1);
+          }}
         />
 
         {/* Credentials Modal */}
         <CredentialsModal
           visible={credentialsOpen}
           onClose={() => setCredentialsOpen(false)}
+        />
+
+        {/* Onboarding Wizard */}
+        <OnboardingWizard
+          onOpenCredentials={() => setCredentialsOpen(true)}
+          reopenTrigger={onboardingReopenTrigger}
         />
 
         {/* Node Context Menu (right-click) */}

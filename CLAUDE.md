@@ -27,6 +27,7 @@ This is a React Flow-based workflow automation platform implementing n8n-inspire
 | **[Server Documentation](./docs-internal/server-readme.md)** | Python backend architecture and API documentation |
 | **[Skill Creation Guide](./server/skills/GUIDE.md)** | How to create new skills (folder structure, SKILL.md format, metadata, supporting files) |
 | **[New Service Integration](./docs-internal/new_service_integration.md)** | Complete guide for integrating external services (OAuth, database, handlers, nodes, AI tools) - use Google Workspace as reference |
+| **[Onboarding Service](./docs-internal/onboarding.md)** | First-launch welcome wizard with 5 steps, database persistence, and replay from Settings |
 | **[Polyglot Server](../polyglot-server/ARCHITECTURE.md)** | Plugin registry microservice with MCP gateway (optional integration) |
 
 ## Design Principles & Standards
@@ -923,6 +924,7 @@ Authentication is handled via OAuth 2.0 PKCE flow in the Credentials Modal:
 | File | Description |
 |------|-------------|
 | `server/services/twitter_oauth.py` | OAuth 2.0 PKCE flow implementation |
+| `server/services/oauth_utils.py` | Runtime OAuth redirect URI derivation from request context |
 | `server/routers/twitter.py` | OAuth callback endpoint, token exchange |
 | `server/services/handlers/twitter.py` | Node handlers using XDK SDK |
 | `client/src/nodeDefinitions/twitterNodes.ts` | 4 node definitions |
@@ -965,7 +967,7 @@ client.users.get_followers(user_id, max_results=100, user_fields=["created_at"])
 ```bash
 TWITTER_CLIENT_ID=your_client_id
 TWITTER_CLIENT_SECRET=your_client_secret
-TWITTER_REDIRECT_URI=http://localhost:3010/api/twitter/callback
+# TWITTER_REDIRECT_URI is derived at runtime from request context (no env var needed)
 ```
 
 ### Google Workspace Nodes (7 nodes)
@@ -1021,9 +1023,10 @@ GOOGLE_WORKSPACE_SCOPES = [
 **Key Files:**
 | File | Description |
 |------|-------------|
-| `server/services/google_oauth.py` | OAuth 2.0 flow (authorization URL, token exchange) |
+| `server/services/google_oauth.py` | OAuth 2.0 flow (authorization URL, token exchange, `get_callback_paths()`) |
+| `server/services/oauth_utils.py` | Runtime OAuth redirect URI derivation from request context |
 | `server/services/handlers/google_auth.py` | Shared credential helper (`get_google_credentials()`) used by all 6 handlers |
-| `server/config/google_apis.json` | API endpoints and scopes config |
+| `server/config/google_apis.json` | API endpoints, scopes, and OAuth callback paths |
 | `server/routers/google.py` | OAuth callback and status endpoints |
 | `server/services/handlers/gmail.py` | Gmail handlers + `handle_gmail_receive` polling trigger |
 | `server/services/handlers/calendar.py` | Calendar handlers |
@@ -1064,11 +1067,8 @@ Access and refresh tokens are stored via OAuth system (after Google login):
 | `tasks-skill` | `tasks_create`, `tasks_list`, `tasks_complete` | Manage Google Tasks |
 | `contacts-skill` | `contacts_create`, `contacts_list`, `contacts_search` | Manage contacts |
 
-**Environment Variables:**
-```bash
-# OAuth redirect (optional, defaults to localhost:3010)
-GOOGLE_REDIRECT_URI=http://localhost:3010/api/google/callback
-```
+**OAuth Redirect URIs:**
+OAuth redirect URIs are derived at runtime from the request/WebSocket context via `server/services/oauth_utils.py`. No environment variable needed -- works automatically in dev (`http://localhost:3010`) and production (`https://domain.com`).
 
 **Google API Pricing:** All Google Workspace APIs are free with rate limits. See `server/config/pricing.json` for configured limits.
 
@@ -1273,12 +1273,12 @@ python -m services.temporal.worker
 
 ### CLI Commands (npx or global install)
 ```bash
-npx machinaos start      # Start all services
-npx machinaos stop       # Stop all services
-npx machinaos build      # Build for production
-npx machinaos clean      # Clean build artifacts
-npx machinaos docker:up  # Start with Docker
-npx machinaos help       # Show all commands
+npx machina start      # Start all services
+npx machina stop       # Stop all services
+npx machina build      # Build for production
+npx machina clean      # Clean build artifacts
+npx machina docker:up  # Start with Docker
+npx machina help       # Show all commands
 ```
 
 ### npm Scripts
@@ -1344,6 +1344,7 @@ See **[Scripts Reference](./docs-internal/SCRIPTS.md)** for full documentation.
 ✅ **Authentication System**: n8n-style JWT authentication with HttpOnly cookies, single-owner and multi-user modes
 ✅ **Cache System**: n8n-pattern cache with Redis (production) / SQLite (local dev) / Memory fallback hierarchy
 ✅ **AI Thinking/Reasoning**: Extended thinking for Claude, Gemini 2.5/Flash Thinking, Groq Qwen3/QwQ with output available in Input Data & Variables for downstream nodes
+✅ **Onboarding Service**: 5-step welcome wizard with Ant Design UI, database persistence, skip/resume/replay support
 
 ## Key Features
 
@@ -2805,7 +2806,10 @@ Example workflows use the same format as UI exports:
     }
   ],
   "edges": [],
-  "version": "0.0.10"
+  "nodeParameters": {
+    "start_1": { "someParam": "value" }
+  },
+  "version": "0.0.35"
 }
 ```
 
@@ -2817,7 +2821,8 @@ Example workflows use the same format as UI exports:
 | `description` | Optional description |
 | `nodes` | Array of node objects with id, type, position, data |
 | `edges` | Array of edge connections between nodes |
-| `version` | App version (e.g., "0.0.10") |
+| `nodeParameters` | Optional map of node_id to parameter objects (saved to DB on import) |
+| `version` | App version (e.g., "0.0.35") |
 
 ### Key Files
 | File | Description |
@@ -2872,6 +2877,50 @@ if "examples_loaded" not in columns:
         "ALTER TABLE user_settings ADD COLUMN examples_loaded BOOLEAN DEFAULT 0"
     ))
 ```
+
+## Onboarding Service
+
+### Overview
+Multi-step welcome wizard that appears after first launch, guiding users through platform capabilities. Database-backed, skippable, resumable, and replayable from Settings.
+
+See **[Onboarding Service](./docs-internal/onboarding.md)** for full documentation.
+
+### Architecture
+- **5-step wizard** using existing `Modal` component + Ant Design `Steps`, `Card`, `Button`, `Typography`, `Tag`
+- **Database persistence** via `UserSettings.onboarding_completed` + `UserSettings.onboarding_step`
+- **No new WebSocket handlers** -- reuses `get_user_settings` / `save_user_settings`
+- **Existing users** auto-skip via migration (`examples_loaded=1` -> `onboarding_completed=1`)
+
+### Steps
+
+| Step | Component | Title | Purpose |
+|------|-----------|-------|---------|
+| 0 | `WelcomeStep` | Welcome to MachinaOs | Platform intro + feature highlights |
+| 1 | `ConceptsStep` | Key Concepts | Nodes, Edges, Agents, Skills, Normal/Dev Mode |
+| 2 | `ApiKeyStep` | API Key Setup | Provider list + "Open Credentials" button |
+| 3 | `CanvasStep` | Canvas Tour | Visual UI layout diagram + keyboard shortcuts |
+| 4 | `GetStartedStep` | Get Started | Example workflows, quick recipe, tips |
+
+### Key Files
+| File | Description |
+|------|-------------|
+| `client/src/hooks/useOnboarding.ts` | State hook with WebSocket persistence |
+| `client/src/components/onboarding/OnboardingWizard.tsx` | Main wizard with Ant Design Steps |
+| `client/src/components/onboarding/steps/*.tsx` | 5 step components using antd + @ant-design/icons |
+| `client/src/Dashboard.tsx` | Renders wizard + passes `reopenTrigger` |
+| `client/src/components/ui/SettingsPanel.tsx` | "Replay Welcome Guide" button in Help section |
+| `server/models/database.py` | `UserSettings.onboarding_completed`, `onboarding_step` |
+| `server/core/database.py` | Migration + CRUD for onboarding fields |
+
+### Replay from Settings
+- SettingsPanel has a "Replay Welcome Guide" button in the Help section
+- Clicking it: closes Settings, increments `onboardingReopenTrigger` in Dashboard
+- `useOnboarding` detects trigger change, resets state, reopens wizard from step 0
+
+### Adding New Steps
+1. Create `client/src/components/onboarding/steps/NewStep.tsx` using Ant Design components
+2. Import in `OnboardingWizard.tsx`, add to `renderStep()` switch and `stepItems` array
+3. Update `TOTAL_STEPS` in `useOnboarding.ts`
 
 ## AI Chat Model Development Guide
 
@@ -4860,8 +4909,9 @@ This function:
   - QR codes generated as base64 PNG in memory (no file I/O, no `data/qr` directory)
   - Source: https://github.com/trohitg/whatsapp-rpc
 - **Node Data Architecture**: `node.data` only stores `label` (display name). All parameters are stored in the database via `save_node_parameters` WebSocket handler. This prevents parameter bloat in workflow JSON exports and keeps React Flow state lightweight. `useDragAndDrop.ts` saves default parameters to DB on drop, not to `node.data`.
-- **Workflow Export Sanitization**: `exportWorkflow()` in `useWorkflow.ts` strips transient fields (`selected`, `dragging`, `width`, `height`, `measured`, `positionAbsolute`) from nodes and edges before export. Only `id`, `type`, `position`, `data.label` are included per node.
+- **Workflow Export/Import with Parameters**: Exported workflow JSON includes a `nodeParameters` field containing all node configuration (provider, model, prompt, skillsConfig, etc.) fetched from the database at export time. On import, embedded `nodeParameters` are saved back to the database. `sanitizeNodes()` in `workflowExport.ts` still strips `node.data` to UI-only fields (`label`, `disabled`, `condition`). A `parameterSanitizer.ts` utility exists for credential stripping but is currently disabled (pass-through). Old exports without `nodeParameters` import cleanly (backward compatible). Key files: `client/src/utils/workflowExport.ts`, `client/src/utils/parameterSanitizer.ts`, `client/src/Dashboard.tsx` (export/import handlers), `server/services/example_loader.py`.
 - **Skill System Architecture**: Skills organized in `server/skills/<folder>/` subfolders. Each folder appears in Master Skill dropdown. DB is source of truth for skill instructions (seeded from SKILL.md on first load). Icon resolution: node definition (SVG) > SKILL.md metadata (emoji) > fallback. Native DOM keydown handler prevents React Flow from intercepting Ctrl shortcuts in skill editor.
-- **Example Workflows**: Auto-load example workflows from `workflows/` folder on first use. Uses `UserSettings.examples_loaded` flag to track import status. Supports anonymous users (`user_id="default"`). Reuses existing `database.save_workflow()` for import. See "Example Workflows" section for details.
+- **Example Workflows**: Auto-load example workflows from `workflows/` folder on first use. Uses `UserSettings.examples_loaded` flag to track import status. Supports anonymous users (`user_id="default"`). Reuses existing `database.save_workflow()` for import. Embedded `nodeParameters` in example JSON files are saved to the database on import. See "Example Workflows" section for details.
+- **Onboarding Service**: 5-step welcome wizard (Welcome, Concepts, API Keys, Canvas Tour, Get Started) using Ant Design Steps/Card/Button/Typography. Database-backed via `UserSettings.onboarding_completed` + `onboarding_step`. Existing users auto-skip (migration marks `examples_loaded=1` as completed). Replayable from Settings "Help" section. No new WebSocket handlers needed. See [Onboarding Service](./docs-internal/onboarding.md) for details.
 - **Node.js Code Executor**: Persistent Node.js server (Express + tsx) at port 3020 for JavaScript/TypeScript execution, replacing subprocess spawning per execution. Handlers in `server/services/handlers/code.py` call `NodeJSClient` which makes HTTP requests to the Node.js server. All config via environment variables (`NODEJS_EXECUTOR_URL`, `NODEJS_EXECUTOR_PORT`, etc.).
 - never use emojis in prints

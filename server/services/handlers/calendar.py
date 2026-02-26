@@ -6,7 +6,7 @@ API Reference: https://developers.google.com/workspace/calendar/api/v3/reference
 import asyncio
 import time
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 from googleapiclient.discovery import build
 

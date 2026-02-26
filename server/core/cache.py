@@ -5,9 +5,7 @@ with Redis used only for distributed queue mode or high-performance needs.
 """
 
 import json
-import asyncio
 from typing import Any, Dict, Optional, List, TYPE_CHECKING
-from datetime import timedelta
 
 try:
     import redis.asyncio as redis

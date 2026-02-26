@@ -19,7 +19,7 @@ Supports all Google Workspace services:
 
 from typing import Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from core.container import container
@@ -28,11 +28,6 @@ from services.google_oauth import GoogleOAuth, get_pending_state
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/api/google", tags=["google"])
-
-
-def get_settings():
-    """Get application settings."""
-    return container.settings()
 
 
 def get_auth_service():
@@ -90,8 +85,16 @@ async def google_oauth_callback(
     customer_id = state_data.get("customer_id")
     redirect_after = state_data.get("redirect_after")
 
-    # Get settings and credentials
-    settings = get_settings()
+    # Retrieve redirect_uri from state (set during auth initiation)
+    redirect_uri = pending_state.get("redirect_uri")
+    if not redirect_uri:
+        logger.error("Google OAuth callback missing redirect_uri in state")
+        return HTMLResponse(
+            content=_callback_html(success=False, error="Invalid state: missing redirect URI. Please try again."),
+            status_code=400,
+        )
+
+    # Get credentials
     auth_service = get_auth_service()
     client_id = await auth_service.get_api_key("google_client_id") or ""
     client_secret = await auth_service.get_api_key("google_client_secret") or ""
@@ -105,7 +108,7 @@ async def google_oauth_callback(
     oauth = GoogleOAuth(
         client_id=client_id,
         client_secret=client_secret,
-        redirect_uri=settings.google_redirect_uri,
+        redirect_uri=redirect_uri,
     )
 
     # Exchange code for tokens
@@ -196,9 +199,10 @@ async def google_logout():
 
 
 @router.post("/customer-auth-url")
-async def generate_customer_auth_url(customer_id: str, redirect_after: Optional[str] = None):
+async def generate_customer_auth_url(request: Request, customer_id: str, redirect_after: Optional[str] = None):
     """Generate OAuth URL for a customer to connect their Google account."""
-    settings = get_settings()
+    from services.oauth_utils import get_redirect_uri
+
     auth_service = get_auth_service()
     client_id = await auth_service.get_api_key("google_client_id") or ""
     client_secret = await auth_service.get_api_key("google_client_secret") or ""
@@ -206,10 +210,12 @@ async def generate_customer_auth_url(customer_id: str, redirect_after: Optional[
     if not client_id or not client_secret:
         return {"success": False, "error": "Google not configured. Add Client ID and Secret."}
 
+    redirect_uri = get_redirect_uri(request, "google")
+
     oauth = GoogleOAuth(
         client_id=client_id,
         client_secret=client_secret,
-        redirect_uri=settings.google_redirect_uri,
+        redirect_uri=redirect_uri,
     )
     result = oauth.generate_authorization_url(state_data={"customer_id": customer_id, "redirect_after": redirect_after, "mode": "customer"})
     return {"success": True, "url": result["url"], "state": result["state"]}
@@ -246,6 +252,7 @@ def _callback_html(success: bool, email: str = None, error: str = None) -> str:
     else:
         title, message, color = "Connection Failed", error or "Failed to connect", "#ea4335"
 
+    escaped_error = error.replace("'", "\\'") if error else ""
     return f"""<!DOCTYPE html>
 <html>
 <head><title>{title}</title>
@@ -265,6 +272,6 @@ p{{font-size:16px;color:rgba(255,255,255,0.8);margin-bottom:20px}}
 <h1>{title}</h1><p>{message}</p><p class="close-text">This window will close automatically...</p>
 </div>
 <script>
-if(window.opener){{window.opener.postMessage({{type:'google_oauth_callback',success:{str(success).lower()},{"email:'"+email+"'," if email else ""}{"error:'"+error.replace("'","\\'")+"'," if error else ""}}},'*')}}
+if(window.opener){{window.opener.postMessage({{type:'google_oauth_callback',success:{str(success).lower()},{"email:'"+email+"'," if email else ""}{"error:'"+escaped_error+"'," if error else ""}}},'*')}}
 setTimeout(function(){{window.close()}},2000);
 </script></body></html>"""

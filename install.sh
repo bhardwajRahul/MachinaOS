@@ -286,7 +286,7 @@ main() {
   echo -e "${GREEN}============================================${NC}"
   echo ""
   echo "  Start MachinaOS:"
-  echo "    machinaos start"
+  echo "    machina start"
   echo ""
   echo "  Open in browser:"
   echo "    http://localhost:3000"

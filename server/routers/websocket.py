@@ -21,6 +21,11 @@ from services.status_broadcaster import get_status_broadcaster
 from core.container import container
 from core.logging import get_logger
 
+
+def get_auth_service():
+    """Get auth service from DI container."""
+    return container.auth_service()
+
 logger = get_logger(__name__)
 
 router = APIRouter(tags=["websocket"])
@@ -642,7 +647,7 @@ async def handle_deploy_workflow(data: Dict[str, Any], websocket: WebSocket) -> 
         for te in tool_edges:
             logger.debug(f"[Deploy] Tool edge: source={te.get('source')} -> target={te.get('target')}")
     else:
-        logger.debug(f"[Deploy] No input-tools edges found")
+        logger.debug("[Deploy] No input-tools edges found")
 
     if not nodes:
         return {"success": False, "error": "No nodes provided"}
@@ -788,7 +793,6 @@ async def handle_cancel_deployment(data: Dict[str, Any], websocket: WebSocket) -
         Cancellation result with iterations completed
     """
     global _deployment_tasks
-    from services import event_waiter
 
     workflow_service = container.workflow_service()
     broadcaster = get_status_broadcaster()
@@ -1075,10 +1079,13 @@ async def handle_twitter_oauth_login(data: Dict[str, Any], websocket: WebSocket)
         }
 
     # Create OAuth instance and generate authorization URL
+    from services.oauth_utils import get_redirect_uri
+    redirect_uri = get_redirect_uri(websocket, "twitter")
+
     oauth = TwitterOAuth(
         client_id=client_id,
         client_secret=client_secret,
-        redirect_uri="http://localhost:3010/api/twitter/callback",
+        redirect_uri=redirect_uri,
     )
 
     auth_data = oauth.generate_authorization_url()
@@ -1118,10 +1125,13 @@ async def handle_twitter_oauth_status(data: Dict[str, Any], websocket: WebSocket
     client_id = await auth_service.get_api_key("twitter_client_id") or ""
     client_secret = await auth_service.get_api_key("twitter_client_secret")
 
+    from services.oauth_utils import get_redirect_uri
+    redirect_uri = get_redirect_uri(websocket, "twitter")
+
     oauth = TwitterOAuth(
         client_id=client_id,
         client_secret=client_secret,
-        redirect_uri="http://localhost:3010/api/twitter/callback",
+        redirect_uri=redirect_uri,
     )
 
     # Verify token by getting user info
@@ -1185,10 +1195,13 @@ async def handle_twitter_logout(data: Dict[str, Any], websocket: WebSocket) -> D
 
     # Revoke tokens if we have them
     if access_token or refresh_token:
+        from services.oauth_utils import get_redirect_uri
+        redirect_uri = get_redirect_uri(websocket, "twitter")
+
         oauth = TwitterOAuth(
             client_id=client_id,
             client_secret=client_secret,
-            redirect_uri="http://localhost:3010/api/twitter/callback",
+            redirect_uri=redirect_uri,
         )
 
         if access_token:
@@ -1221,7 +1234,6 @@ async def handle_google_oauth_login(data: Dict[str, Any], websocket: WebSocket) 
     from services.google_oauth import GoogleOAuth
 
     auth_service = container.auth_service()
-    settings = container.settings()
 
     client_id = await auth_service.get_api_key("google_client_id")
     client_secret = await auth_service.get_api_key("google_client_secret")
@@ -1232,10 +1244,13 @@ async def handle_google_oauth_login(data: Dict[str, Any], websocket: WebSocket) 
             "error": "Google Workspace Client ID and Secret not configured. Add your Google API credentials first."
         }
 
+    from services.oauth_utils import get_redirect_uri
+    redirect_uri = get_redirect_uri(websocket, "google")
+
     oauth = GoogleOAuth(
         client_id=client_id,
         client_secret=client_secret,
-        redirect_uri=settings.google_redirect_uri,
+        redirect_uri=redirect_uri,
     )
 
     auth_data = oauth.generate_authorization_url()
@@ -1654,7 +1669,7 @@ async def handle_validate_apify_key(data: Dict[str, Any], websocket: WebSocket) 
             return {
                 "success": True,
                 "valid": True,
-                "message": f"Apify API token is valid",
+                "message": "Apify API token is valid",
                 "username": result.get("username"),
                 "email": result.get("email"),
                 "plan": result.get("plan")
@@ -2198,7 +2213,6 @@ async def handle_save_skill_content(data: Dict[str, Any], websocket: WebSocket) 
     For user skills, updates the database.
     """
     import re
-    from pathlib import Path
     from services.skill_loader import get_skill_loader
 
     skill_name = data["skill_name"]
@@ -3140,7 +3154,7 @@ async def websocket_internal_endpoint(websocket: WebSocket):
 
     Security: Should only be exposed on localhost/internal network.
     """
-    broadcaster = get_status_broadcaster()
+    get_status_broadcaster()
     await websocket.accept()
 
     logger.info("[WebSocket Internal] Temporal worker connected")

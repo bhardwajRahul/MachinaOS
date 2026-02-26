@@ -4,9 +4,10 @@ import { ComponentPaletteProps } from '../../types/ComponentTypes';
 import { INodeTypeDescription } from '../../types/INodeProperties';
 import ComponentItem from './ComponentItem';
 import CollapsibleSection from './CollapsibleSection';
+import googleSvg from '../../assets/icons/search/google.svg?raw';
 
-// Category emoji icons
-const CATEGORY_EMOJIS: Record<string, string> = {
+// Category icons - emoji strings or { svg: string } for inline SVG icons
+const CATEGORY_ICONS: Record<string, string | { svg: string }> = {
   workflow: '⚡',
   trigger: '🕐',
   ai: '🤖',
@@ -21,6 +22,10 @@ const CATEGORY_EMOJIS: Record<string, string> = {
   code: '💻',
   document: '🗄️',
   utility: '🔧',
+  api: '🕷️',
+  search: '🔍',
+  google: { svg: googleSvg },
+  scheduler: '📅',
 };
 
 // Categories that should be merged into 'social' (Social Media)
@@ -59,6 +64,10 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
       code: colors.categoryCode || theme.dracula.orange,
       document: colors.categoryTrigger || theme.dracula.pink,
       utility: colors.categoryUtil || theme.dracula.purple,
+      api: colors.categoryCode || theme.dracula.orange,
+      search: colors.categoryModel || theme.dracula.cyan,
+      google: theme.accent.blue,
+      scheduler: colors.categoryTrigger || theme.dracula.pink,
     };
     const labelMap: Record<string, string> = {
       workflow: 'Workflows',
@@ -75,9 +84,13 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
       code: 'Code',
       document: 'Documents',
       utility: 'Utilities',
+      api: 'API & Scraping',
+      search: 'Search',
+      google: 'Google Workspace',
+      scheduler: 'Schedulers',
     };
     return {
-      icon: CATEGORY_EMOJIS[key] || '📦',
+      icon: CATEGORY_ICONS[key] || '📦',
       color: colorMap[key] || theme.colors.textSecondary,
       label: labelMap[key] || category
     };
@@ -271,7 +284,14 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
                             borderRadius: '6px',
                             fontSize: '16px',
                           }}>
-                            {config.icon}
+                            {typeof config.icon === 'object' && 'svg' in config.icon ? (
+                              <span
+                                dangerouslySetInnerHTML={{ __html: config.icon.svg }}
+                                style={{ width: '16px', height: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                              />
+                            ) : (
+                              config.icon
+                            )}
                           </span>
                           <span style={{
                             fontWeight: theme.fontWeight.semibold,

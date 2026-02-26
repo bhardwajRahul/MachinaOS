@@ -21,8 +21,8 @@ Internal reference for the GitHub Actions CI/CD pipeline. Covers all workflows, 
   manual dispatch ------> |                  |        | - test-install     |
                           |  +-- predeploy --+        +--------------------+
                           |  |
-                          |  +-- publish-npm ---------> npmjs.org (machinaos)
-                          |  +-- publish-github-pkgs -> GitHub Packages (@trohitg/machinaos)
+                          |  +-- publish-npm ---------> npmjs.org (machina)
+                          |  +-- publish-github-pkgs -> GitHub Packages (@trohitg/machina)
                           +------------------+
 
   push to docs-MachinaOs/ +------------------+
@@ -80,7 +80,7 @@ Shared environment setup used by `predeploy.yml` jobs. Eliminates duplicated Nod
 | `node-version` | `'20'` | Node.js version to install |
 | `python-version` | `'3.12'` | Python version to install |
 
-Python and uv are needed because `postinstall.js` skips Python venv setup in CI, so they must be available for the `machinaos build` command in `test-install`.
+Python and uv are needed because `postinstall.js` skips Python venv setup in CI, so they must be available for the `machina build` command in `test-install`.
 
 ---
 
@@ -151,14 +151,14 @@ Total: **6 combinations**, `fail-fast: false` (all run regardless of individual 
 1. Checkout
 2. Setup environment (composite action with matrix `node-version`)
 3. `npm pack` -- create tarball
-4. `npm install -g machinaos-*.tgz` -- global install from tarball
-5. `machinaos --help` -- verify CLI is available
-6. `machinaos build` -- install client deps, build client, setup Python venv
-7. Verify build artifacts exist at `$(npm root -g)/machinaos`:
+4. `npm install -g machina-*.tgz` -- global install from tarball
+5. `machina --help` -- verify CLI is available
+6. `machina build` -- install client deps, build client, setup Python venv
+7. Verify build artifacts exist at `$(npm root -g)/machina`:
    - `.env` file
    - `client/dist/` directory
    - `server/.venv/` directory
-8. `machinaos start &` -- start in background, wait 10s, verify process is still running
+8. `machina start &` -- start in background, wait 10s, verify process is still running
 
 All steps use `shell: bash` for cross-platform compatibility (Windows uses Git Bash).
 
@@ -227,7 +227,7 @@ Calls `predeploy.yml` as a prerequisite. Both publish jobs require this to pass 
 
 ### Job: publish-npm
 
-Publishes the unscoped `machinaos` package to the public npm registry.
+Publishes the unscoped `machina` package to the public npm registry.
 
 ```
 npm install --ignore-scripts  # Install deps without running postinstall
@@ -239,14 +239,14 @@ Uses `NODE_AUTH_TOKEN` from `secrets.NPM_TOKEN`. Registry URL: `https://registry
 
 ### Job: publish-github-packages
 
-Publishes the scoped `@trohitg/machinaos` package to GitHub Packages.
+Publishes the scoped `@trohitg/machina` package to GitHub Packages.
 
 Requires `packages: write` permission. Before publishing, an inline Node.js script rewrites `package.json`:
 
 ```javascript
 // Executed at build time to scope the package name:
 const pkg = require('./package.json');
-pkg.name = '@trohitg/machinaos';
+pkg.name = '@trohitg/machina';
 pkg.publishConfig = { registry: 'https://npm.pkg.github.com' };
 require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2));
 ```
@@ -312,7 +312,7 @@ Uses `MINTLIFY_TOKEN` secret for authentication.
 - **`fail-fast: false` in test-install**: All 6 OS/Node combinations run to completion, giving visibility into platform-specific failures even when one platform fails.
 - **Docker layer caching via GHA**: `cache-from: type=gha` reuses layers across runs, reducing Docker build times.
 - **Scoped `docker-build.yml`**: Prevents full Docker rebuild on every PR -- only triggers when Dockerfile or compose files change.
-- **Dual npm publish**: Unscoped `machinaos` for public npm, scoped `@trohitg/machinaos` for GitHub Packages. The scoped name is rewritten at publish time, not in source.
+- **Dual npm publish**: Unscoped `machina` for public npm, scoped `@trohitg/machina` for GitHub Packages. The scoped name is rewritten at publish time, not in source.
 
 ---
 

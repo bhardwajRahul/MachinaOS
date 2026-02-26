@@ -10,9 +10,18 @@ import operator
 
 from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, BaseMessage, ToolMessage
+
+# Lazy import for Google GenAI (google-generativeai init hangs on Windows/Python 3.13)
+_ChatGoogleGenerativeAI = None
+
+def _get_google_genai_class():
+    global _ChatGoogleGenerativeAI
+    if _ChatGoogleGenerativeAI is None:
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        _ChatGoogleGenerativeAI = ChatGoogleGenerativeAI
+    return _ChatGoogleGenerativeAI
 
 # Conditional import for Cerebras (requires Python <3.13)
 CEREBRAS_IMPORT_ERROR = None
@@ -126,7 +135,7 @@ def _get_memory_vector_store(session_id: str):
 class ProviderConfig:
     """Configuration for an AI provider."""
     name: str
-    model_class: Type
+    model_class: Optional[Type]
     api_key_param: str  # Parameter name for API key in model constructor
     max_tokens_param: str  # Parameter name for max tokens
     detection_patterns: tuple  # Patterns to detect this provider from model name
@@ -230,7 +239,7 @@ PROVIDER_CONFIGS: Dict[str, ProviderConfig] = {
     ),
     'gemini': ProviderConfig(
         name='gemini',
-        model_class=ChatGoogleGenerativeAI,
+        model_class=None,  # Lazy: resolved via _get_google_genai_class() to avoid import hang on Windows
         api_key_param='google_api_key',
         max_tokens_param='max_output_tokens',
         detection_patterns=('gemini', 'google'),
@@ -1138,7 +1147,9 @@ class AIService:
                 # Passing through as model_kwargs if supported
                 kwargs['thinking_budget'] = thinking.budget
 
-        return config.model_class(**kwargs)
+        # Resolve lazy-loaded model class (gemini)
+        model_class = config.model_class or _get_google_genai_class()
+        return model_class(**kwargs)
 
     async def fetch_models(self, provider: str, api_key: str) -> List[str]:
         """Fetch available models from provider API."""
@@ -1488,7 +1499,7 @@ class AIService:
                 for skill_info in skill_data:
                     skill_name = skill_info.get('skill_name') or skill_info.get('node_type', '').replace('Skill', '-skill').lower()
                     # Convert node type to skill name (e.g., 'whatsappSkill' -> 'whatsapp-skill')
-                    if skill_name.endswith('skill') and not '-' in skill_name:
+                    if skill_name.endswith('skill') and '-' not in skill_name:
                         skill_name = skill_name[:-5] + '-skill'  # whatsappskill -> whatsapp-skill
                     skill_names.append(skill_name)
                     logger.debug(f"[AIAgent] Skill detected: {skill_name}")
@@ -1564,7 +1575,7 @@ class AIService:
 
                 # Broadcast: Loading memory
                 await broadcast_status("loading_memory", {
-                    "message": f"Loading conversation history...",
+                    "message": "Loading conversation history...",
                     "session_id": session_id,
                     "has_memory": True
                 })
@@ -1633,7 +1644,7 @@ class AIService:
                     if check_tool:
                         tools.append(check_tool)
                         tool_configs[check_tool.name] = check_config
-                        logger.debug(f"[LangGraph] Auto-injected check_delegated_tasks tool")
+                        logger.debug("[LangGraph] Auto-injected check_delegated_tasks tool")
 
             # Create tool executor callback
             async def tool_executor(tool_name: str, tool_args: Dict) -> Any:
@@ -1807,7 +1818,7 @@ class AIService:
                     updated_content = compaction_result['summary']
                     updated_content = _append_to_memory_markdown(updated_content, 'human', prompt)
                     updated_content = _append_to_memory_markdown(updated_content, 'ai', response_content)
-                    logger.info(f"[LangGraph Memory] Using compacted summary as new base")
+                    logger.info("[LangGraph Memory] Using compacted summary as new base")
                 else:
                     # Normal flow: append to existing memory
                     updated_content = memory_data.get('memory_content', '# Conversation History\n\n*No messages yet.*\n')
@@ -1939,7 +1950,7 @@ class AIService:
                 for skill_info in skill_data:
                     skill_name = skill_info.get('skill_name') or skill_info.get('node_type', '').replace('Skill', '-skill').lower()
                     # Convert node type to skill name (e.g., 'whatsappSkill' -> 'whatsapp-skill')
-                    if skill_name.endswith('skill') and not '-' in skill_name:
+                    if skill_name.endswith('skill') and '-' not in skill_name:
                         skill_name = skill_name[:-5] + '-skill'  # whatsappskill -> whatsapp-skill
                     skill_names.append(skill_name)
                     logger.debug(f"[ChatAgent] Skill detected: {skill_name}")
@@ -1982,7 +1993,7 @@ class AIService:
                     if check_tool:
                         all_tools.append(check_tool)
                         tool_node_configs[check_tool.name] = check_config
-                        logger.debug(f"[ChatAgent] Auto-injected check_delegated_tasks tool")
+                        logger.debug("[ChatAgent] Auto-injected check_delegated_tasks tool")
 
             logger.debug(f"[ChatAgent] Total tools available: {len(all_tools)}")
             # Debug: log all tool schemas to verify they're correct
@@ -2246,7 +2257,7 @@ class AIService:
                     updated_content = compaction_result['summary']
                     updated_content = _append_to_memory_markdown(updated_content, 'human', prompt)
                     updated_content = _append_to_memory_markdown(updated_content, 'ai', response_content)
-                    logger.info(f"[ChatAgent Memory] Using compacted summary as new base")
+                    logger.info("[ChatAgent Memory] Using compacted summary as new base")
                 else:
                     # Normal flow: append to existing memory
                     updated_content = memory_content or '# Conversation History\n\n*No messages yet.*\n'

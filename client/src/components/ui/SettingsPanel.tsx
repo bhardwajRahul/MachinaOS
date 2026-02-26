@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Switch, InputNumber, message } from 'antd';
+import { Switch, InputNumber, Button, message } from 'antd';
+import { QuestionCircleOutlined } from '@ant-design/icons';
 import Modal from './Modal';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { useWebSocket } from '../../contexts/WebSocketContext';
@@ -27,6 +28,7 @@ interface SettingsPanelProps {
   onClose: () => void;
   settings: WorkflowSettings;
   onSettingsChange: (settings: WorkflowSettings) => void;
+  onReplayOnboarding?: () => void;
 }
 
 const SettingsPanel: React.FC<SettingsPanelProps> = ({
@@ -34,6 +36,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   onClose,
   settings,
   onSettingsChange,
+  onReplayOnboarding,
 }) => {
   const theme = useAppTheme();
   const { sendRequest, isConnected } = useWebSocket();
@@ -418,6 +421,36 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 disabled={isSaving}
                 style={{ width: 80 }}
               />
+            </div>
+          </div>
+
+          {/* Help Section */}
+          <div style={sectionStyle}>
+            <div style={sectionHeaderStyle}>
+              <div style={{ ...sectionIconStyle, backgroundColor: `${theme.dracula.cyan}20` }}>
+                <QuestionCircleOutlined style={{ color: theme.dracula.cyan }} />
+              </div>
+              <div style={sectionTitleStyle}>Help</div>
+            </div>
+
+            <div style={settingRowStyle}>
+              <div style={settingLabelStyle}>
+                <div style={labelTextStyle}>Replay Welcome Guide</div>
+                <div style={descriptionStyle}>Show the onboarding wizard again to review platform features</div>
+              </div>
+              <Button
+                size="small"
+                icon={<QuestionCircleOutlined />}
+                onClick={onReplayOnboarding}
+                disabled={!onReplayOnboarding}
+                style={{
+                  backgroundColor: `${theme.dracula.cyan}25`,
+                  color: theme.dracula.cyan,
+                  borderColor: `${theme.dracula.cyan}60`,
+                }}
+              >
+                Replay
+              </Button>
             </div>
           </div>
         </div>

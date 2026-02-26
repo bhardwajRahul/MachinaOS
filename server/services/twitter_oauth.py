@@ -76,7 +76,7 @@ class TwitterOAuth:
     Twitter/X OAuth 2.0 with PKCE flow implementation.
 
     Usage:
-        oauth = TwitterOAuth(client_id="...", redirect_uri="http://localhost:3010/api/twitter/callback")
+        oauth = TwitterOAuth(client_id="...", redirect_uri="http://localhost:3010/api/twitter/callback")  # URI derived at runtime
 
         # Step 1: Generate authorization URL
         auth_data = oauth.generate_authorization_url()
@@ -92,8 +92,8 @@ class TwitterOAuth:
     def __init__(
         self,
         client_id: str,
+        redirect_uri: str,
         client_secret: Optional[str] = None,
-        redirect_uri: str = "http://localhost:3010/api/twitter/callback",
         scopes: Optional[list] = None,
     ):
         """
@@ -128,6 +128,7 @@ class TwitterOAuth:
         _oauth_states[state] = {
             "code_verifier": code_verifier,
             "created_at": time.time(),
+            "redirect_uri": self.redirect_uri,
         }
 
         params = {

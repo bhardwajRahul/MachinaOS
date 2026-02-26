@@ -16,8 +16,7 @@ from core.logging import get_logger
 from constants import ANDROID_SERVICE_NODE_TYPES
 
 if TYPE_CHECKING:
-    from services.ai import AIService
-    from core.database import Database
+    pass
 
 logger = get_logger(__name__)
 
@@ -263,7 +262,7 @@ async def _execute_http_request(args: Dict[str, Any],
     # Parse headers from node params
     try:
         default_headers = json.loads(node_params.get('headers', '{}'))
-    except:
+    except Exception:
         default_headers = {}
 
     logger.debug(f"[HTTP Tool] {method} {full_url}")
@@ -280,7 +279,7 @@ async def _execute_http_request(args: Dict[str, Any],
             # Try to parse JSON response
             try:
                 data = response.json()
-            except:
+            except Exception:
                 data = response.text
 
             return {
@@ -374,7 +373,7 @@ except Exception as e:
         if result.returncode == 0:
             try:
                 return json.loads(result.stdout.strip())
-            except:
+            except Exception:
                 return {"success": True, "output": result.stdout.strip()}
         else:
             return {"error": result.stderr or "Python execution failed"}
@@ -387,7 +386,7 @@ except Exception as e:
     finally:
         try:
             os.unlink(temp_path)
-        except:
+        except Exception:
             pass
 
 
@@ -456,7 +455,7 @@ try {{
         if result.returncode == 0:
             try:
                 return json.loads(result.stdout.strip())
-            except:
+            except Exception:
                 return {"success": True, "output": result.stdout.strip()}
         else:
             return {"error": result.stderr or "JavaScript execution failed"}
@@ -471,7 +470,7 @@ try {{
     finally:
         try:
             os.unlink(temp_path)
-        except:
+        except Exception:
             pass
 
 

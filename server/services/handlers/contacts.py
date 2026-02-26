@@ -5,7 +5,7 @@ API Reference: https://developers.google.com/people/api/rest
 
 import asyncio
 import time
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from googleapiclient.discovery import build
 
@@ -69,7 +69,7 @@ def _format_contact(person: Dict[str, Any]) -> Dict[str, Any]:
     emails = person.get('emailAddresses', [])
     phones = person.get('phoneNumbers', [])
     organizations = person.get('organizations', [])
-    addresses = person.get('addresses', [])
+    person.get('addresses', [])
     photos = person.get('photos', [])
 
     # Get primary values

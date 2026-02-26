@@ -20,6 +20,7 @@ function fixPermissions() {
   const files = [
     resolve(ROOT, 'bin/cli.js'),
     resolve(ROOT, 'scripts/start.js'),
+    resolve(ROOT, 'scripts/dev.js'),
     resolve(ROOT, 'scripts/stop.js'),
     resolve(ROOT, 'scripts/build.js'),
     resolve(ROOT, 'scripts/clean.js'),
@@ -39,9 +40,16 @@ function fixPermissions() {
 }
 
 const isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
+const isBuilding = process.env.MACHINAOS_BUILDING === 'true';
 
 if (isCI) {
   console.log('CI detected, skipping postinstall.');
+  process.exit(0);
+}
+
+if (isBuilding) {
+  // build.js is orchestrating -- skip install.js to avoid duplicate work
+  fixPermissions();
   process.exit(0);
 }
 
@@ -84,7 +92,7 @@ async function main() {
     console.log('  MachinaOS installed successfully!');
     console.log('========================================');
     console.log('');
-    console.log('Run: machinaos start');
+    console.log('Run: machina start');
     console.log('Open: http://localhost:3000');
     console.log('');
 
@@ -96,7 +104,7 @@ async function main() {
     console.log('');
     console.log(`Error: ${err.message}`);
     console.log('');
-    console.log('Try: machinaos build');
+    console.log('Try: machina build');
     console.log('');
     process.exit(1);
   }

@@ -243,7 +243,7 @@ class MachinaWorkflow:
                     return node_id, {"success": False, "error": str(e)}
 
         # Wait for first completion using Temporal's wait
-        handles = [h for _, h in items]
+        [h for _, h in items]
 
         # Use asyncio.wait pattern via workflow.wait
         await workflow.wait_condition(

@@ -11,7 +11,6 @@ try:
 except ImportError:
     pass  # Windows - uvloop not available, use default asyncio
 
-import os
 from datetime import datetime
 from contextlib import asynccontextmanager
 
@@ -131,7 +130,6 @@ async def lifespan(app: FastAPI):
         await cleanup_service.start()
 
     # Initialize compaction service and wire AI service
-    from services.compaction import get_compaction_service
     compaction_svc = container.compaction_service()  # Trigger singleton initialization
     compaction_svc.set_ai_service(container.ai_service())
     logger.info("Compaction service initialized")
@@ -297,7 +295,7 @@ async def health_check():
     """Detailed health check with resource monitoring."""
     from services import event_waiter
     from services.execution import get_recovery_sweeper
-    from core.health import get_health_status, get_uptime, get_memory_mb, get_disk_percent, get_cpu_percent
+    from core.health import get_health_status
 
     sweeper = get_recovery_sweeper()
 

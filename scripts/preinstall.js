@@ -45,9 +45,9 @@ function cleanup() {
   try {
     const entries = readdirSync(nodeModules);
 
-    // Clean .machinaos-* temp directories
+    // Clean .machina-* temp directories
     for (const name of entries) {
-      if (name.startsWith('.machinaos-')) {
+      if (name.startsWith('.machina-')) {
         const fullPath = resolve(nodeModules, name);
         try {
           if (statSync(fullPath).isDirectory()) {

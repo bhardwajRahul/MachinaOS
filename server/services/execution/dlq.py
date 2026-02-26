@@ -14,9 +14,12 @@ Usage:
     await dlq.add_failed_node(ctx, node, inputs, error)
 """
 
-from typing import Dict, Any, Protocol
+from typing import Dict, Any, Protocol, TYPE_CHECKING
 from core.logging import get_logger
 from .models import ExecutionContext, NodeExecution, DLQEntry
+
+if TYPE_CHECKING:
+    from .cache import ExecutionCache
 
 logger = get_logger(__name__)
 

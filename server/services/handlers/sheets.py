@@ -5,7 +5,7 @@ API Reference: https://developers.google.com/workspace/sheets/api/reference/rest
 
 import asyncio
 import time
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from googleapiclient.discovery import build
 

@@ -3,7 +3,6 @@
 import json
 from typing import Dict, Any, TYPE_CHECKING
 from core.logging import get_logger
-from constants import ANDROID_SERVICE_NODE_TYPES
 
 if TYPE_CHECKING:
     from services.android_service import AndroidService
@@ -75,7 +74,7 @@ async def handle_android_service(
             service_params[key] = parameters[key]
 
     logger.debug(f"[ANDROID DEBUG] node_type={node_type} -> service_id={service_id}, action={action}, host={android_host}, port={android_port}, service_params={service_params}")
-    logger.debug(f"[ANDROID DEBUG] About to call android_service.execute_service")
+    logger.debug("[ANDROID DEBUG] About to call android_service.execute_service")
 
     result = await android_service.execute_service(
         node_id=node_id,
@@ -85,5 +84,5 @@ async def handle_android_service(
         android_host=android_host,
         android_port=android_port
     )
-    logger.debug(f"[ANDROID DEBUG] Got result from android_service")
+    logger.debug("[ANDROID DEBUG] Got result from android_service")
     return result

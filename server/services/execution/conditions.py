@@ -24,7 +24,7 @@ Supported operators:
 """
 
 import re
-from typing import Dict, Any, Optional, List, Union
+from typing import Dict, Any, List
 
 from core.logging import get_logger
 

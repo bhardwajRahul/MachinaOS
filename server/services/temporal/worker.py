@@ -29,7 +29,6 @@ print(f"[Worker Import] MachinaWorkflow loaded from: {MachinaWorkflow.__module__
 from .activities import (
     NodeExecutionActivities,
     create_shared_session,
-    execute_node_activity,
 )
 
 logger = get_logger(__name__)

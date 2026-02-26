@@ -59,9 +59,6 @@ class Settings(BaseSettings):
     anthropic_api_key: Optional[str] = Field(default=None, env="ANTHROPIC_API_KEY")
     google_ai_api_key: Optional[str] = Field(default=None, env="GOOGLE_AI_API_KEY")
 
-    # WhatsApp Service URL (Flask service)
-    whatsapp_service_url: str = Field(default="http://localhost:5000", env="WHATSAPP_SERVICE_URL")
-
     # Node.js Executor Configuration
     nodejs_executor_url: str = Field(default="http://localhost:3020", env="NODEJS_EXECUTOR_URL")
     nodejs_executor_timeout: int = Field(default=30, env="NODEJS_EXECUTOR_TIMEOUT", ge=5, le=300)
@@ -72,11 +69,6 @@ class Settings(BaseSettings):
     # WebSocket Configuration
     websocket_url: str = Field(default="", env="WEBSOCKET_URL")
     websocket_api_key: Optional[str] = Field(default=None, env="WEBSOCKET_API_KEY")
-
-    # OAuth Redirect URIs
-    google_redirect_uri: str = Field(default="http://localhost:3010/api/google/callback", env="GOOGLE_REDIRECT_URI")
-    gmail_redirect_uri: str = Field(default="http://localhost:3010/api/gmail/callback", env="GMAIL_REDIRECT_URI")  # Deprecated: use google_redirect_uri
-    twitter_redirect_uri: str = Field(default="http://localhost:3010/api/twitter/callback", env="TWITTER_REDIRECT_URI")
 
     # Android Relay Configuration (passed to Vite frontend)
     vite_android_relay_url: Optional[str] = Field(default=None, env="VITE_ANDROID_RELAY_URL")

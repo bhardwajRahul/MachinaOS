@@ -3,8 +3,8 @@
 ## Quick Start
 
 ```bash
-npm install -g machinaos
-machinaos start
+npm install -g machina
+machina start
 ```
 
 Open http://localhost:3000
@@ -15,15 +15,15 @@ Open http://localhost:3000
 
 | Command | Description |
 |---------|-------------|
-| `machinaos start` | Start the development server (checks dependencies first) |
-| `machinaos stop` | Stop all running services |
-| `machinaos build` | Build the project for production (checks dependencies first) |
-| `machinaos clean` | Clean build artifacts and node_modules |
-| `machinaos docker:up` | Start with Docker Compose (detached) |
-| `machinaos docker:down` | Stop Docker Compose services |
-| `machinaos docker:build` | Build Docker images |
-| `machinaos docker:logs` | View Docker logs (follows) |
-| `machinaos help` | Show help message |
+| `machina start` | Start the development server (checks dependencies first) |
+| `machina stop` | Stop all running services |
+| `machina build` | Build the project for production (checks dependencies first) |
+| `machina clean` | Clean build artifacts and node_modules |
+| `machina docker:up` | Start with Docker Compose (detached) |
+| `machina docker:down` | Stop Docker Compose services |
+| `machina docker:build` | Build Docker images |
+| `machina docker:logs` | View Docker logs (follows) |
+| `machina help` | Show help message |
 
 ### Dependency Checks
 
@@ -255,18 +255,18 @@ Key variables in `.env` (see `.env.template` for full list):
 
 ```bash
 # Development
-machinaos start          # Start all services
-machinaos stop           # Stop all services
+machina start          # Start all services
+machina stop           # Stop all services
 
 # Build
-machinaos build          # Build for production
-machinaos clean          # Clean everything
+machina build          # Build for production
+machina clean          # Clean everything
 
 # Docker (development)
-machinaos docker:up      # Start containers
-machinaos docker:down    # Stop containers
-machinaos docker:logs    # View logs
-machinaos docker:build   # Rebuild images
+machina docker:up      # Start containers
+machina docker:down    # Stop containers
+machina docker:logs    # View logs
+machina docker:build   # Rebuild images
 
 # Docker (production)
 npm run docker:prod:up   # Start production

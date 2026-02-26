@@ -1,6 +1,5 @@
 """Code execution node handlers - Python and JavaScript executors."""
 
-import json
 import time
 from datetime import datetime
 from typing import Dict, Any, Optional
@@ -42,14 +41,13 @@ async def handle_python_executor(
     Returns:
         Execution result dict with output and console output
     """
-    import sys
     import io
     start_time = time.time()
     console_output = ""
 
     try:
         code = parameters.get('code', '')
-        timeout = int(parameters.get('timeout', 30))
+        int(parameters.get('timeout', 30))
 
         if not code.strip():
             return {

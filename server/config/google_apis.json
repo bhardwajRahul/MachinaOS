@@ -7,7 +7,9 @@
     "auth_uri": "https://accounts.google.com/o/oauth2/auth",
     "token_uri": "https://oauth2.googleapis.com/token",
     "revoke_uri": "https://oauth2.googleapis.com/revoke",
-    "userinfo_uri": "https://www.googleapis.com/oauth2/v2/userinfo"
+    "userinfo_uri": "https://www.googleapis.com/oauth2/v2/userinfo",
+    "google_callback_path": "/api/google/callback",
+    "twitter_callback_path": "/api/twitter/callback"
   },
 
   "services": {

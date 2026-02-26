@@ -69,7 +69,7 @@ async def handle_http_request(
             # Parse response data
             try:
                 response_data = response.json()
-            except:
+            except Exception:
                 response_data = response.text
 
             result_data = {

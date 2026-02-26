@@ -19,7 +19,7 @@ if [ -f "$(dirname "$0")/server/.env" ]; then
 fi
 
 GCP_HOST="${1:-${DEPLOY_HOST:-user@your-server-ip}}"
-SERVICE_NAME="machinaos"
+SERVICE_NAME="machina"
 DOMAIN="${DEPLOY_DOMAIN:-your-domain.com}"
 REMOTE_DIR="/opt/${SERVICE_NAME}"
 LOCAL_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -49,11 +49,11 @@ tar --exclude='node_modules' \
     --exclude='*.db-*' \
     --exclude='data' \
     --exclude='bin' \
-    -czf /tmp/machinaos-src.tar.gz \
+    -czf /tmp/machina-src.tar.gz \
     -C "${LOCAL_DIR}" \
     client server docker-compose.prod.yml
 
-scp /tmp/machinaos-src.tar.gz "${GCP_HOST}:/tmp/${SERVICE_NAME}/"
+scp /tmp/machina-src.tar.gz "${GCP_HOST}:/tmp/${SERVICE_NAME}/"
 
 # Upload production .env (prefer .env.production, fallback to .env, then create from template)
 if [ -f "${LOCAL_DIR}/server/.env.production" ]; then
@@ -74,7 +74,7 @@ fi
 echo "[2/5] Building and deploying on GCP..."
 ssh ${GCP_HOST} << 'REMOTE_SCRIPT'
 set -e
-SERVICE_NAME="machinaos"
+SERVICE_NAME="machina"
 DEPLOY_DIR="/opt/${SERVICE_NAME}"
 
 # Stop existing containers
@@ -86,7 +86,7 @@ sudo chown -R $USER:$USER ${DEPLOY_DIR}
 
 # Extract source code
 cd ${DEPLOY_DIR}
-tar -xzf /tmp/${SERVICE_NAME}/machinaos-src.tar.gz
+tar -xzf /tmp/${SERVICE_NAME}/machina-src.tar.gz
 
 # Copy .env file to server directory (where docker-compose expects it)
 mkdir -p ${DEPLOY_DIR}/server
@@ -188,7 +188,7 @@ sleep 5
 ssh ${GCP_HOST} "cd /opt/${SERVICE_NAME} && docker-compose ps"
 
 # Cleanup local temp files
-rm -f /tmp/machinaos-src.tar.gz
+rm -f /tmp/machina-src.tar.gz
 
 echo "========================================"
 echo "[5/5] Deployment Complete!"

@@ -2,7 +2,6 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Response, Request
 from pydantic import BaseModel, EmailStr
-from typing import Optional
 
 from core.container import container
 from core.config import Settings

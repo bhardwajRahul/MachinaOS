@@ -57,7 +57,7 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          machinaos start &
+          machina start &
           PID=$!
 
           for i in {1..15}; do
@@ -69,10 +69,10 @@ jobs:
           done
 
           if kill -0 $PID 2>/dev/null; then
-            echo "machinaos start: OK"
-            machinaos stop || kill $PID 2>/dev/null || true
+            echo "machina start: OK"
+            machina stop || kill $PID 2>/dev/null || true
           else
-            echo "machinaos start: FAILED"
+            echo "machina start: FAILED"
             exit 1
           fi
 
@@ -80,7 +80,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $job = Start-Job -ScriptBlock { machinaos start }
+          $job = Start-Job -ScriptBlock { machina start }
           Start-Sleep -Seconds 15
 
           try {
@@ -91,11 +91,11 @@ jobs:
           }
 
           if ($job.State -eq "Running") {
-            Write-Host "machinaos start: OK"
+            Write-Host "machina start: OK"
             Stop-Job $job
             Remove-Job $job
           } else {
-            Write-Host "machinaos start: FAILED"
+            Write-Host "machina start: FAILED"
             Receive-Job $job
             exit 1
           }

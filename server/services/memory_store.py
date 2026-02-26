@@ -3,7 +3,7 @@
 Uses standard Python data structures with LangChain message compatibility.
 No deprecated APIs - follows LangChain 0.3+ recommendations.
 """
-from typing import Dict, List, Optional, Callable
+from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
 import logging

@@ -5,7 +5,6 @@ Supports all node types, variable updates, and workflow state changes.
 """
 
 import asyncio
-import json
 import orjson
 from typing import Set, Dict, Any, Optional, List
 from fastapi import WebSocket
@@ -366,13 +365,13 @@ class StatusBroadcaster:
             relay_url = session.get("relay_url")
             api_key = session.get("api_key")
             device_id = session.get("device_id")
-            device_name = session.get("device_name")
+            session.get("device_name")
 
             if not relay_url or not api_key:
                 logger.debug("[StatusBroadcaster] Stored session missing relay URL or API key")
                 return
 
-            logger.info(f"[StatusBroadcaster] Auto-reconnecting to Android relay...",
+            logger.info("[StatusBroadcaster] Auto-reconnecting to Android relay...",
                        relay_url=relay_url, device_id=device_id)
 
             # Attempt to reconnect

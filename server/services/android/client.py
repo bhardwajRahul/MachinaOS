@@ -15,12 +15,10 @@ import json
 import uuid
 import aiohttp
 from typing import Optional, Dict, Any, Set, Callable
-from datetime import datetime
 import structlog
 
-from .protocol import RPCRequest, RPCResponse, RPCEvent, RPCRequestTracker, parse_message, is_response
+from .protocol import RPCResponse, RPCRequestTracker, is_response
 from .broadcaster import (
-    broadcast_android_status,
     broadcast_connected,
     broadcast_device_disconnected,
     broadcast_relay_disconnected,

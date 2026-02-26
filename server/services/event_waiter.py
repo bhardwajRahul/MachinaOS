@@ -680,7 +680,6 @@ async def _wait_redis(waiter: Waiter, timeout: Optional[float]) -> Dict:
     consumer_name = f"consumer_{waiter.id}"
 
     # Start reading from now (new messages only)
-    last_id = '$'
     block_ms = 5000  # 5 second blocks to allow cancellation checks
 
     start_time = time.time()
@@ -793,7 +792,7 @@ def dispatch(event_type: str, data: Dict) -> int:
         # Handle both async context and thread context (e.g., APScheduler callbacks)
         try:
             # Try to get the current running loop
-            loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
             # We're in an async context - schedule task normally
             asyncio.create_task(dispatch_async(event_type, data))
         except RuntimeError:

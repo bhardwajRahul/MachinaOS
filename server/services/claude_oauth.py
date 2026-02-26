@@ -1,6 +1,5 @@
 """Claude OAuth Service - Isolated login that doesn't affect user's main session."""
 
-import asyncio
 import json
 import os
 import shutil
@@ -86,7 +85,7 @@ async def initiate_claude_oauth() -> Dict[str, Any]:
             try:
                 process.stdin.write(b"yes\nyes\n")
                 process.stdin.flush()
-            except:
+            except Exception:
                 pass
         else:
             # Unix: pipe inputs
@@ -100,7 +99,7 @@ async def initiate_claude_oauth() -> Dict[str, Any]:
             try:
                 process.stdin.write(b"yes\nyes\n")
                 process.stdin.flush()
-            except:
+            except Exception:
                 pass
 
         logger.info(f"Claude OAuth login started with PID {process.pid}")

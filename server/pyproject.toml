@@ -55,6 +55,7 @@ dependencies = [
     "apscheduler>=3.10.0",
     "qrcode[pil]>=8.0",
     "pytz>=2024.1",
+    "psutil>=6.0.0",
 
     # Web Search
     "ddgs>=9.0.0",
@@ -64,6 +65,9 @@ dependencies = [
 
     # Apify Web Scraping
     "apify-client>=1.8.0",
+
+    # Telegram Bot API
+    "python-telegram-bot>=22.6",
 
     # Gmail API
     "google-api-python-client>=2.100.0",
@@ -89,6 +93,15 @@ keyring = [
 ]
 aws = [
     "boto3>=1.34.0",  # AWS Secrets Manager
+]
+
+[tool.ruff]
+line-length = 140
+
+[tool.ruff.lint]
+ignore = [
+    "E402",   # Module level import not at top (intentional lazy imports)
+    "E701",   # Multiple statements on one line (compact dict patterns)
 ]
 
 [tool.uv]

@@ -8,7 +8,7 @@ Runs as background task to:
 
 import asyncio
 import time
-from typing import Dict, Any, List, Optional, Callable, Awaitable
+from typing import List, Optional, Callable, Awaitable
 
 from core.logging import get_logger
 from .models import TaskStatus, WorkflowStatus
@@ -209,8 +209,8 @@ class RecoverySweeper:
             Number of executions cleaned up
         """
         cleaned = 0
-        max_age_seconds = max_age_hours * 3600
-        current_time = time.time()
+        max_age_hours * 3600
+        time.time()
 
         # This would need a scan of all execution keys
         # For now, we rely on Redis TTL for cleanup

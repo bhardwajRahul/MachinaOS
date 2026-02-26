@@ -24,6 +24,9 @@ const isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
 // Ensure Python UTF-8 encoding
 process.env.PYTHONUTF8 = '1';
 
+// Tell postinstall.js to skip install.js -- build.js handles everything
+process.env.MACHINAOS_BUILDING = 'true';
+
 // Skip build entirely in CI (workflows handle this)
 if (isCI && isPostInstall) {
   console.log('CI environment detected, skipping postinstall build.');
@@ -143,33 +146,28 @@ try {
     console.log('[0/6] Created .env from template');
   }
 
-  // Step 1: Install root dependencies (skip if postinstall - npm already did this)
+  // Step 1: Install root + client dependencies (workspaces handles both)
   if (!isPostInstall) {
-    console.log('[1/5] Installing root dependencies...');
+    console.log('[1/4] Installing dependencies...');
     npmInstall(ROOT);
   } else {
-    console.log('[1/5] Root dependencies already installed by npm');
+    console.log('[1/4] Dependencies already installed by npm');
   }
 
-  // Step 2: Install client dependencies
-  console.log('[2/5] Installing client dependencies...');
-  npmInstall(resolve(ROOT, 'client'));
-
-  // Step 3: Build client
-  console.log('[3/5] Building client...');
+  // Step 2: Build client
+  console.log('[2/4] Building client...');
   run('npm run build', resolve(ROOT, 'client'));
 
-  // Step 4: Install Python dependencies
-  console.log('[4/5] Installing Python dependencies...');
+  // Step 3: Install Python dependencies
+  console.log('[3/4] Installing Python dependencies...');
   const serverDir = resolve(ROOT, 'server');
-  // Check if .venv exists, skip creation if it does
   if (!existsSync(resolve(serverDir, '.venv'))) {
     run('uv venv', serverDir);
   }
   run('uv sync', serverDir);
 
-  // Step 5: Verify WhatsApp RPC package
-  console.log('[5/5] Verifying WhatsApp RPC...');
+  // Step 4: Verify WhatsApp RPC package
+  console.log('[4/4] Verifying WhatsApp RPC...');
   run('whatsapp-rpc status', ROOT);
 
   console.log('\nBuild complete.');

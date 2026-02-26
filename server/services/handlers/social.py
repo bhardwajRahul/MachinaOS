@@ -8,7 +8,7 @@ Supported platforms: WhatsApp, Telegram, Discord, Slack, Signal, SMS, Webchat, E
 
 import time
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from core.logging import get_logger
 
 logger = get_logger(__name__)

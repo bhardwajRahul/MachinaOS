@@ -1,8 +1,8 @@
 """Modern async database service with SQLModel and SQLAlchemy 2.0."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
-from sqlmodel import SQLModel, select, Session
+from sqlmodel import SQLModel, select
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import text, func
@@ -16,7 +16,6 @@ from models.database import (
     AgentTeam, TeamMember, TeamTask, AgentMessage, GoogleConnection
 )
 from models.cache import CacheEntry  # SQLite-backed cache for Redis alternative
-from models.auth import User  # Import User model to ensure table creation
 from core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -88,6 +87,22 @@ class Database:
                         "ALTER TABLE user_settings ADD COLUMN examples_loaded BOOLEAN DEFAULT 0"
                     ))
                     logger.info("Added examples_loaded column to user_settings")
+
+                if "onboarding_completed" not in columns:
+                    await conn.execute(text(
+                        "ALTER TABLE user_settings ADD COLUMN onboarding_completed BOOLEAN DEFAULT 0"
+                    ))
+                    # Existing users (examples_loaded=1) skip onboarding
+                    await conn.execute(text(
+                        "UPDATE user_settings SET onboarding_completed = 1 WHERE examples_loaded = 1"
+                    ))
+                    logger.info("Added onboarding_completed column to user_settings")
+
+                if "onboarding_step" not in columns:
+                    await conn.execute(text(
+                        "ALTER TABLE user_settings ADD COLUMN onboarding_step INTEGER DEFAULT 0"
+                    ))
+                    logger.info("Added onboarding_step column to user_settings")
 
                 # Migrate token_usage_metrics table - add cost columns
                 result = await conn.execute(text("PRAGMA table_info(token_usage_metrics)"))
@@ -436,7 +451,7 @@ class Database:
                 stmt = select(APIKey).where(
                     APIKey.provider == provider,
                     APIKey.session_id == session_id,
-                    APIKey.is_valid == True
+                    APIKey.is_valid
                 )
                 result = await session.execute(stmt)
                 return result.scalar_one_or_none()
@@ -1379,7 +1394,7 @@ class Database:
         try:
             async with self.get_session() as session:
                 if active_only:
-                    stmt = select(UserSkill).where(UserSkill.is_active == True).order_by(UserSkill.display_name)
+                    stmt = select(UserSkill).where(UserSkill.is_active).order_by(UserSkill.display_name)
                 else:
                     stmt = select(UserSkill).order_by(UserSkill.display_name)
 
@@ -1508,6 +1523,8 @@ class Database:
                     "component_palette_default_open": settings.component_palette_default_open,
                     "console_panel_default_open": settings.console_panel_default_open,
                     "examples_loaded": settings.examples_loaded,
+                    "onboarding_completed": settings.onboarding_completed,
+                    "onboarding_step": settings.onboarding_step,
                     "created_at": settings.created_at.isoformat() if settings.created_at else None,
                     "updated_at": settings.updated_at.isoformat() if settings.updated_at else None
                 }
@@ -1539,6 +1556,10 @@ class Database:
                         existing.console_panel_default_open = settings_data["console_panel_default_open"]
                     if "examples_loaded" in settings_data:
                         existing.examples_loaded = settings_data["examples_loaded"]
+                    if "onboarding_completed" in settings_data:
+                        existing.onboarding_completed = settings_data["onboarding_completed"]
+                    if "onboarding_step" in settings_data:
+                        existing.onboarding_step = settings_data["onboarding_step"]
                 else:
                     # Create new settings
                     existing = UserSettings(
@@ -1548,7 +1569,9 @@ class Database:
                         sidebar_default_open=settings_data.get("sidebar_default_open", True),
                         component_palette_default_open=settings_data.get("component_palette_default_open", True),
                         console_panel_default_open=settings_data.get("console_panel_default_open", False),
-                        examples_loaded=settings_data.get("examples_loaded", False)
+                        examples_loaded=settings_data.get("examples_loaded", False),
+                        onboarding_completed=settings_data.get("onboarding_completed", False),
+                        onboarding_step=settings_data.get("onboarding_step", 0)
                     )
                     session.add(existing)
 
@@ -2318,7 +2341,7 @@ class Database:
                         AgentMessage.to_agent.is_(None)
                     ))
                 if unread_only:
-                    query = query.where(AgentMessage.read == False)
+                    query = query.where(not AgentMessage.read)
                 query = query.order_by(AgentMessage.created_at.asc()).limit(100)
                 result = await session.execute(query)
                 return [
@@ -2339,7 +2362,7 @@ class Database:
                 result = await session.execute(
                     select(AgentMessage).where(
                         AgentMessage.team_id == team_id,
-                        AgentMessage.read == False,
+                        not AgentMessage.read,
                         or_(AgentMessage.to_agent == agent_node_id, AgentMessage.to_agent.is_(None))
                     )
                 )
@@ -2446,7 +2469,7 @@ class Database:
                 result = await session.execute(
                     select(GoogleConnection).where(
                         GoogleConnection.customer_id == customer_id,
-                        GoogleConnection.is_active == True
+                        GoogleConnection.is_active
                     )
                 )
                 return result.scalar_one_or_none()
@@ -2477,7 +2500,7 @@ class Database:
             async with self.get_session() as session:
                 result = await session.execute(
                     select(GoogleConnection)
-                    .where(GoogleConnection.is_active == True)
+                    .where(GoogleConnection.is_active)
                     .order_by(GoogleConnection.connected_at.desc())
                     .limit(limit)
                 )

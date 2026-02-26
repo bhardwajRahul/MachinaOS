@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any
 
 from core.container import container
 from core.database import Database

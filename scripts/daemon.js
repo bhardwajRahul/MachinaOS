@@ -251,7 +251,7 @@ function macGeneratePlist() {
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.machinaos.backend</string>
+    <string>com.machina.backend</string>
     <key>ProgramArguments</key>
     <array>
         <string>${venvPath}/bin/gunicorn</string>
@@ -280,7 +280,7 @@ function macGeneratePlist() {
 }
 
 function macGetPlistPath() {
-  return resolve(homedir(), 'Library', 'LaunchAgents', 'com.machinaos.backend.plist');
+  return resolve(homedir(), 'Library', 'LaunchAgents', 'com.machina.backend.plist');
 }
 
 function macInstall() {
@@ -331,7 +331,7 @@ function macUninstall() {
 }
 
 function macStatus() {
-  run('launchctl list | grep machinaos', { ignoreError: true });
+  run('launchctl list | grep machina', { ignoreError: true });
 }
 
 function macStart() {
@@ -376,7 +376,7 @@ Platform: ${isWindows ? 'Windows (NSSM)' : isMac ? 'macOS (launchd)' : 'Linux (s
 
 Examples:
   node scripts/service.js install
-  node scripts/service.js install --dir=/opt/machinaos --user=machina
+  node scripts/service.js install --dir=/opt/machina --user=machina
   node scripts/service.js status
   node scripts/service.js restart
 `);

@@ -21,8 +21,8 @@ MachinaOs/
 ## Quick Start
 
 ```bash
-npm install -g machinaos
-machinaos start
+npm install -g machina
+machina start
 ```
 
 Open http://localhost:3000

@@ -374,9 +374,7 @@ const AIAgentNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
       setConfigValid(validation.valid);
       setConfigErrors(validation.errors);
 
-      if (!validation.valid) {
-        console.warn(`${config.title} ${id} configuration issues:`, validation.errors);
-      }
+      // Configuration issues are expected before user fills in parameters - no need to log
     } catch (error) {
       console.error('Configuration validation error:', error);
       setConfigValid(false);

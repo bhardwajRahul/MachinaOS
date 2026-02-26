@@ -27,7 +27,7 @@
     "url": "https://github.com/trohitg/MachinaOS/issues"
   },
   "bin": {
-    "machinaos": "./bin/cli.js"
+    "machina": "./bin/cli.js"
   },
   "engines": {
     "node": ">=20.0.0"
@@ -61,7 +61,7 @@
   ],
   "scripts": {
     "start": "node scripts/start.js",
-    "start:daemon": "node scripts/start.js --daemon",
+    "dev": "node scripts/dev.js",
     "start:temporal": "cross-env TEMPORAL_ENABLED=true node scripts/start.js",
     "client:start": "cd client && npm run start",
     "python:start": "cd server && uv run uvicorn main:app --host 127.0.0.1 --port 3010 --reload --reload-dir . --reload-exclude \"*.pyc\" --reload-exclude \"__pycache__\" --log-level warning",
@@ -101,7 +101,6 @@
   "dependencies": {
     "concurrently": "^9.2.1",
     "cross-env": "^7.0.3",
-    "find-process": "^1.4.11",
     "rimraf": "^6.0.1",
     "whatsapp-rpc": "^0.0.10"
   }

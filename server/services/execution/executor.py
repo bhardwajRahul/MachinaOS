@@ -22,12 +22,11 @@ from .models import (
     WorkflowStatus,
     NodeExecution,
     hash_inputs,
-    RetryPolicy,
     get_retry_policy,
 )
 from .cache import ExecutionCache
-from .conditions import evaluate_condition, decide_next_edges
-from .dlq import create_dlq_handler, DLQHandlerProtocol, NullDLQHandler
+from .conditions import evaluate_condition
+from .dlq import create_dlq_handler
 
 logger = get_logger(__name__)
 
@@ -1004,7 +1003,7 @@ class WorkflowExecutor:
 
         logger.debug("Computed execution layers",
                     layer_count=len(layers),
-                    layers=[[n[:8] for n in l] for l in layers])
+                    layers=[[n[:8] for n in layer] for layer in layers])
 
         return layers
 

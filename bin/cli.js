@@ -9,7 +9,8 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const PKG = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf-8'));
 
 const COMMANDS = {
-  start: 'Start the development server',
+  start: 'Start in production mode',
+  dev: 'Start development server (hot-reload)',
   stop: 'Stop all running services',
   build: 'Build the project for production',
   clean: 'Clean build artifacts',
@@ -25,17 +26,24 @@ function printHelp() {
   console.log(`
 MachinaOS - Workflow Automation Platform
 
-Usage: machinaos <command>
+Usage: machina <command> [flags]
 
 Commands:
 ${Object.entries(COMMANDS).map(([cmd, desc]) => `  ${cmd.padEnd(14)} ${desc}`).join('\n')}
 
-Examples:
-  machinaos start      # Start development server
-  machinaos build      # Build for production
-  machinaos docker:up  # Start with Docker
+Flags:
+  --verbose, -v    Show full service logs (start)
+  --skip-whatsapp  Skip WhatsApp service (start, dev)
+  --daemon         Use gunicorn backend (dev)
 
-Documentation: https://github.com/trohitg/MachinaOS
+Examples:
+  machina start          # Production server (clean output)
+  machina start -v       # Production with full logs
+  machina dev            # Development with hot-reload
+  machina build          # Build for production
+  machina docker:up      # Start with Docker
+
+Documentation: https://docs.zeenie.xyz/
 `);
 }
 
@@ -100,8 +108,10 @@ function checkDeps() {
   }
 }
 
-function run(script) {
-  const child = spawn(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', script], {
+function run(script, extraArgs = []) {
+  const npmArgs = ['run', script];
+  if (extraArgs.length) npmArgs.push('--', ...extraArgs);
+  const child = spawn(process.platform === 'win32' ? 'npm.cmd' : 'npm', npmArgs, {
     cwd: ROOT,
     stdio: 'inherit',
     shell: true,
@@ -118,10 +128,10 @@ const cmd = process.argv[2] || 'help';
 if (cmd === 'help' || cmd === '--help' || cmd === '-h') {
   printHelp();
 } else if (cmd === 'version' || cmd === '--version' || cmd === '-v') {
-  console.log(`machinaos v${PKG.version}`);
-} else if (cmd === 'start' || cmd === 'build') {
+  console.log(`machina v${PKG.version}`);
+} else if (cmd === 'start' || cmd === 'dev' || cmd === 'build') {
   checkDeps();
-  run(cmd);
+  run(cmd, process.argv.slice(3));
 } else if (COMMANDS[cmd]) {
   run(cmd);
 } else {

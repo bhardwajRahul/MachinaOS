@@ -19,7 +19,7 @@ import QRCodeDisplay from './ui/QRCodeDisplay';
 import ApiKeyInput from './ui/ApiKeyInput';
 import { useApiKeys, ProviderDefaults, ProviderUsageSummary, APIUsageSummary } from '../hooks/useApiKeys';
 import { useAppTheme } from '../hooks/useAppTheme';
-import { useWhatsAppStatus, useAndroidStatus, useTwitterStatus, useGoogleStatus, useTelegramStatus, useWebSocket, RateLimitConfig, RateLimitStats } from '../contexts/WebSocketContext';
+import { useWhatsAppStatus, useAndroidStatus, useTwitterStatus, useGoogleStatus, useWebSocket, RateLimitConfig, RateLimitStats } from '../contexts/WebSocketContext';
 import { useWhatsApp } from '../hooks/useWhatsApp';
 import {
   OpenAIIcon, ClaudeIcon, GeminiIcon, GroqIcon, OpenRouterIcon, CerebrasIcon,
