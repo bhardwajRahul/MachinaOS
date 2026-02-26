@@ -44,7 +44,10 @@ const SENSITIVE_SUBSTRINGS = [
   'authtoken', 'auth_token',
 ];
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+/**
+ * Check if a parameter key holds sensitive credential data.
+ * Returns true if the key should be stripped from exports.
+ */
 function isSensitiveKey(key: string): boolean {
   if (SAFE_KEYS.has(key)) return false;
   if (SENSITIVE_EXACT_KEYS.has(key)) return true;
@@ -52,12 +55,41 @@ function isSensitiveKey(key: string): boolean {
   return SENSITIVE_SUBSTRINGS.some(sub => lower.includes(sub));
 }
 
+// Runtime/state keys that should not appear in exported workflows.
+// These are transient execution state, not user configuration.
+const RUNTIME_KEYS = new Set([
+  'memoryContent',         // Conversation history (personal data)
+  'token_usage',           // Execution token metrics
+  'execution_time',        // Runtime timing
+  'last_execution',        // Last execution result
+  'last_result',           // Cached result
+]);
+
 /**
- * Deep-strip sensitive keys from a parameter object.
+ * Deep-strip sensitive and runtime keys from a parameter object.
  * Returns a new object with sensitive values removed.
  * Recurses into nested objects but passes arrays through unchanged.
  */
 export function sanitizeParameters(params: Record<string, any>): Record<string, any> {
-  // TODO: Re-enable sanitization once safe-key allowlist is fully validated
-  return { ...params };
+  const result: Record<string, any> = {};
+
+  for (const [key, value] of Object.entries(params)) {
+    // Skip sensitive credential keys
+    if (isSensitiveKey(key)) continue;
+
+    // Skip runtime/state keys
+    if (RUNTIME_KEYS.has(key)) continue;
+
+    // Recurse into nested objects (but not arrays or null)
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      const cleaned = sanitizeParameters(value);
+      if (Object.keys(cleaned).length > 0) {
+        result[key] = cleaned;
+      }
+    } else {
+      result[key] = value;
+    }
+  }
+
+  return result;
 }

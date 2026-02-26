@@ -85,7 +85,7 @@ const claudeConfig: ChatModelConfig = {
     {
       ...STANDARD_PARAMETERS.maxTokens,
       default: 4096,  // Higher default for Claude to accommodate thinking mode
-      typeOptions: { minValue: 1, maxValue: 64000 },
+      typeOptions: { minValue: 1, maxValue: 128000 },
       description: 'Maximum tokens to generate. Must be greater than Thinking Budget when thinking is enabled.'
     },
     {

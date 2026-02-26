@@ -5,7 +5,7 @@
 The compaction service enables automatic memory compaction, token tracking, and **cost calculation** for MachinaOs specialized agents. It uses a hybrid approach leveraging native provider APIs (Anthropic, OpenAI) when available, with comprehensive token and cost tracking for all providers.
 
 **Inspired by:** Claude Code's compaction pattern from the Anthropic SDK
-**Default Threshold:** 100,000 tokens (configurable per session)
+**Threshold Strategy:** per-session `custom_threshold` > model-aware (50% of context window) > global default (100K)
 **Cost Calculation:** Official pricing from each provider (per 1M tokens)
 
 ## Architecture
@@ -57,12 +57,18 @@ When using Anthropic's SDK with `tool_runner`, pass the compaction control confi
 from services.compaction import get_compaction_service
 
 svc = get_compaction_service()
+
+# Model-aware threshold (50% of context window)
+compaction_config = svc.anthropic_config(model="claude-opus-4.6", provider="anthropic")
+# Returns: {"enabled": True, "context_token_threshold": 500000}  (50% of 1M context)
+
+# Or override with explicit threshold
 compaction_config = svc.anthropic_config(threshold=100000)
 # Returns: {"enabled": True, "context_token_threshold": 100000}
 
 # Use with tool_runner
 result = await tool_runner(
-    model="claude-3-5-sonnet-20241022",
+    model="claude-opus-4.6",
     messages=messages,
     tools=tools,
     compaction_control=compaction_config
@@ -74,21 +80,16 @@ result = await tool_runner(
 For direct Messages API usage with the compaction beta:
 
 ```python
+# Model-aware threshold
+api_config = svc.anthropic_api_config(model="claude-sonnet-4.5", provider="anthropic")
+# Threshold auto-computed from model's context window (50% of 1M = 500000)
+
+# Or override with explicit threshold
 api_config = svc.anthropic_api_config(threshold=100000)
-# Returns:
-# {
-#     "betas": ["compact-2026-01-12"],
-#     "context_management": {
-#         "edits": [{
-#             "type": "compact_20260112",
-#             "trigger": {"type": "input_tokens", "value": 100000}
-#         }]
-#     }
-# }
 
 # Use with Messages API
 response = await client.messages.create(
-    model="claude-3-5-sonnet-20241022",
+    model="claude-sonnet-4.5",
     messages=messages,
     **api_config
 )
@@ -99,6 +100,11 @@ response = await client.messages.create(
 For OpenAI models (including GPT-4 and o-series):
 
 ```python
+# Model-aware threshold
+openai_config = svc.openai_config(model="gpt-5.2", provider="openai")
+# Returns: {"context_management": {"compact_threshold": 200000}}  (50% of 400K)
+
+# Or override with explicit threshold
 openai_config = svc.openai_config(threshold=100000)
 # Returns: {"context_management": {"compact_threshold": 100000}}
 ```
@@ -218,7 +224,7 @@ result = await svc.track(
     session_id="user-session-123",
     node_id="agent-node-1",
     provider="anthropic",
-    model="claude-3-5-sonnet-20241022",
+    model="claude-opus-4.6",
     usage={
         "input_tokens": 5000,
         "output_tokens": 1000,
@@ -232,9 +238,12 @@ result = await svc.track(
 # result:
 # {
 #     "total": 6000,           # New cumulative total
-#     "threshold": 100000,     # Active threshold
+#     "threshold": 500000,     # Model-aware: 50% of 1M context window
+#     "total_cost": 0.021,     # USD cost
 #     "needs_compaction": False
 # }
+#
+# Threshold priority: custom_threshold > model-aware (50% context) > global default
 ```
 
 ### Record Compaction Event
@@ -256,13 +265,18 @@ await svc.record(
 ### Get Session Statistics
 
 ```python
-stats = await svc.stats("user-session-123")
+# Model-aware threshold when model/provider given
+stats = await svc.stats("user-session-123", model="claude-opus-4.6", provider="anthropic")
 # {
 #     "session_id": "user-session-123",
 #     "total": 15000,
-#     "threshold": 100000,
+#     "threshold": 500000,  # 50% of 1M context window
 #     "count": 1  # Number of compactions
 # }
+
+# Without model/provider, falls back to global default
+stats = await svc.stats("user-session-123")
+# {"session_id": "user-session-123", "total": 15000, "threshold": 100000, "count": 1}
 ```
 
 ### Configure Per-Session Settings
@@ -329,8 +343,14 @@ ws.send(JSON.stringify({
 ```bash
 # In server/.env
 COMPACTION_ENABLED=true       # Enable/disable compaction globally (default: true)
-COMPACTION_THRESHOLD=100000   # Default token threshold (default: 100000, min: 10000)
+COMPACTION_THRESHOLD=100000   # Global fallback threshold (default: 100000, min: 10000)
+                              # Used when model context window is unknown
 ```
+
+**Threshold priority chain:**
+1. Per-session `custom_threshold` (set via `configure()` or WebSocket)
+2. Model-aware threshold: 50% of model's context window (e.g., 500K for 1M model)
+3. Global `COMPACTION_THRESHOLD` from `.env` (fallback when model info unavailable)
 
 ### Per-Session Override
 
@@ -413,7 +433,8 @@ if memory_data and memory_data.get('session_id'):
 
 | File | Description |
 |------|-------------|
-| `server/services/compaction.py` | CompactionService class with provider configs |
+| `server/services/compaction.py` | CompactionService class with model-aware thresholds and provider configs |
+| `server/services/model_registry.py` | ModelRegistryService providing context_length for threshold computation |
 | `server/models/database.py` | SQLModel tables for token tracking |
 | `server/core/database.py` | CRUD methods for metrics and events |
 | `server/core/config.py` | Environment variable configuration |
@@ -429,7 +450,7 @@ if memory_data and memory_data.get('session_id'):
 
 3. **Per-Session State**: Each memory session has independent token tracking and thresholds. This allows different agents to have different compaction settings.
 
-4. **100K Token Threshold**: Matches Claude Code's default. This provides a good balance between context retention and performance.
+4. **Model-Aware Threshold**: Threshold is 50% of the model's context window (via `get_model_threshold()`). For example, Claude Opus 4.6 (1M context) gets a 500K threshold, GPT-5.2 (400K) gets 200K, Groq models (131K) get ~65K. Falls back to global `COMPACTION_THRESHOLD` when model info is unavailable. Per-session `custom_threshold` always takes priority.
 
 5. **Singleton Pattern**: Service accessible via `get_compaction_service()` for easy integration anywhere in the codebase.
 
@@ -437,7 +458,7 @@ if memory_data and memory_data.get('session_id'):
 
 ## Client-Side Compaction
 
-For all providers (not just Anthropic/OpenAI), the service performs automatic client-side compaction when the threshold is exceeded. This uses the AI service to generate a structured summary following Claude Code's 5-section pattern.
+For all providers (not just Anthropic/OpenAI), the service performs automatic client-side compaction when the model-aware threshold is exceeded. This uses the AI service to generate a structured summary following Claude Code's 5-section pattern. The summary max_tokens is capped at `min(4096, model's max output tokens)`.
 
 ### compact_context() Method
 
@@ -448,7 +469,7 @@ result = await svc.compact_context(
     memory_content="# Conversation History\n...",  # Current memory markdown
     provider="anthropic",
     api_key="sk-...",
-    model="claude-3-5-sonnet-20241022"
+    model="claude-opus-4.6"
 )
 
 # result:
@@ -604,6 +625,5 @@ The Token Usage panel is displayed in the MiddleSection of the parameter panel f
 
 ## Future Enhancements
 
-1. **Cost Tracking**: Extend token metrics to include cost calculations per provider/model
-2. **Compaction History UI**: View past compaction events and summaries in the frontend
-3. **Multiple Summary Strategies**: Allow users to choose different summarization approaches
+1. **Compaction History UI**: View past compaction events and summaries in the frontend
+2. **Multiple Summary Strategies**: Allow users to choose different summarization approaches

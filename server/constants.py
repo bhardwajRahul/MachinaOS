@@ -283,6 +283,7 @@ WORKFLOW_TRIGGER_TYPES: FrozenSet[str] = frozenset([
     'taskTrigger',
     'twitterReceive',
     'gmailReceive',
+    'telegramReceive',
 ])
 
 # =============================================================================

@@ -153,7 +153,7 @@ export const STANDARD_PARAMETERS = {
     name: 'maxTokens',
     type: 'number' as const,
     default: 4096,
-    typeOptions: { minValue: 1, maxValue: 128000 },
+    typeOptions: { minValue: 1, maxValue: 200000 },
     description: 'Maximum number of tokens to generate'
   },
 

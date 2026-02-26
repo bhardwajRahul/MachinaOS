@@ -16,7 +16,7 @@ This is a React Flow-based workflow automation platform implementing n8n-inspire
 | **[Agent Architecture](./docs-internal/agent_architecture.md)** | How AI Agent and Chat Agent discover skills/tools, inject them into LLM prompts, and execute via LangGraph |
 | **[Agent Delegation](./docs-internal/agent_delegation.md)** | How memory, parameters, and execution context flow when one AI agent delegates work to another agent connected as a tool |
 | **[Agent Teams](./docs-internal/agent_teams.md)** | Claude SDK Agent Teams pattern - AI Employee and Orchestrator nodes with input-teammates handle for multi-agent coordination |
-| **[Memory Compaction](./docs-internal/memory_compaction.md)** | Token tracking and memory compaction service using native provider APIs (Anthropic, OpenAI) |
+| **[Memory Compaction](./docs-internal/memory_compaction.md)** | Token tracking and model-aware memory compaction using native provider APIs (Anthropic, OpenAI) with threshold = 50% of context window |
 | **[Pricing Service](./docs-internal/pricing_service.md)** | Centralized cost tracking for LLM tokens and API services (Twitter, Google Maps) with HTTPX event hooks |
 | **[CI/CD Pipeline](./docs-internal/ci_cd.md)** | GitHub Actions workflows, predeploy validation, release publishing, and composite setup action |
 | **[Workflow Schema](./docs-internal/workflow-schema.md)** | JSON schema for workflows, edge handle conventions, config node architecture |
@@ -63,8 +63,10 @@ server/services/
 ├── node_executor.py         # Single node execution with registry pattern
 ├── parameter_resolver.py    # Template variable resolution
 ├── agent_team.py            # AgentTeamService for multi-agent coordination
+├── model_registry.py        # ModelRegistryService - model constraints from OpenRouter + llm_defaults
 ├── nodejs_client.py         # HTTP client for Node.js code executor
 ├── pricing.py               # LLM and API cost calculation (loads config/pricing.json)
+├── telegram_service.py      # TelegramService with python-telegram-bot long-polling
 ├── tracked_http.py          # HTTPX event hooks for automatic API cost tracking
 ├── deployment/              # Event-driven deployment lifecycle
 │   ├── __init__.py
@@ -102,6 +104,7 @@ server/models/
 
 server/config/
 ├── llm_defaults.json        # Default models per provider (edit to change defaults)
+├── model_registry.json      # Cached model data from OpenRouter (auto-refreshed)
 └── pricing.json             # LLM and API pricing config
 
 server/nodejs/                   # Persistent Node.js server for JS/TS execution
@@ -365,15 +368,15 @@ class CacheEntry(SQLModel, table=True):
 
 ## Codebase Summary
 - **Hybrid architecture**: Node.js + Python + React TypeScript
-- **89 implemented workflow nodes** with clean service separation (6 AI models + 3 AI agents/memory + 13 specialized agents + 11 skills + 3 dedicated tools + 9 dual-purpose tools + 16 Android + 3 WhatsApp + 4 Twitter + 2 Social + 3 Location + 3 Code + 6 Utility + 6 Document + 2 Chat + 2 Scheduler + 1 Workflow + 7 Google Workspace + 1 Apify + 3 Search)
-- **WebSocket-First Architecture**: WebSocket as primary frontend-backend communication (87 message handlers)
+- **89 implemented workflow nodes** with clean service separation (6 AI models + 3 AI agents/memory + 13 specialized agents + 1 skill + 4 dedicated tools + 3 search + 16 Android + 3 WhatsApp + 4 Twitter + 2 Telegram + 2 Social + 3 Location + 3 Code + 6 Utility + 6 Document + 2 Chat + 2 Scheduler + 2 Workflow + 7 Google Workspace + 1 Apify)
+- **WebSocket-First Architecture**: WebSocket as primary frontend-backend communication (119 message handlers)
 - **Recent optimizations**: REST APIs replaced with WebSocket, AI endpoints migrated to Python, Android automation integrated
 
 ## Architecture Refactoring
 The project was completely refactored from schema-based node definitions to explicit INodeProperties interface system inspired by n8n architecture. Key changes:
 - **Pure INodeProperties System**: Removed all backward compatibility layers
-- **82 Implemented Node Components**: AI models, agents, skills, location services, Android automation, WhatsApp, Twitter/X, social, code execution, HTTP/Webhook utilities, document processing, chat, schedulers, and search
-- **WebSocket-First Communication**: 86 WebSocket message handlers replace most REST API calls
+- **89 Implemented Node Components**: AI models, agents, skills, location services, Android automation, WhatsApp, Twitter/X, Telegram, social, code execution, HTTP/Webhook utilities, document processing, chat, schedulers, and search
+- **WebSocket-First Communication**: 119 WebSocket message handlers replace most REST API calls
 - **Resource-Operation Pattern**: Organized by functional categories (AI, Location, Android, WhatsApp)
 - **TypeScript-First**: Full type safety with proper interface alignment
 - **Code Cleanup**: Removed dead code, unused files, and legacy methods
@@ -389,8 +392,8 @@ The project was completely refactored from schema-based node definitions to expl
 - `src/nodeDefinitions.ts` - Main registry importing and merging all modular node definitions
 - `src/nodeDefinitions/aiModelNodes.ts` - AI chat model definitions using factory pattern
 - `src/nodeDefinitions/aiAgentNodes.ts` - AI agent and processing components
-- `src/nodeDefinitions/skillNodes.ts` - Skill node definitions (11 nodes including masterSkill and customSkill)
-- `src/nodeDefinitions/specializedAgentNodes.ts` - Specialized AI agent definitions (10 nodes) with shared AI_AGENT_PROPERTIES and centralized dracula theming
+- `src/nodeDefinitions/skillNodes.ts` - Skill node definition (masterSkill aggregator)
+- `src/nodeDefinitions/specializedAgentNodes.ts` - Specialized AI agent definitions (13 nodes) with shared AI_AGENT_PROPERTIES and centralized dracula theming
 - `src/nodeDefinitions/toolNodes.ts` - AI Agent tool nodes (calculatorTool, currentTimeTool, duckduckgoSearch)
 - `src/nodeDefinitions/searchNodes.ts` - Search API nodes (braveSearch, serperSearch, perplexitySearch)
 - `src/nodeDefinitions/androidServiceNodes.ts` - 16 Android service nodes (monitoring, apps, automation, sensors, media)
@@ -398,6 +401,7 @@ The project was completely refactored from schema-based node definitions to expl
 - `src/nodeDefinitions/googleWorkspaceNodes.ts` - All Google Workspace nodes (7 consolidated nodes)
 - `src/nodeDefinitions/whatsappNodes.ts` - WhatsApp messaging integration (3 nodes)
 - `src/nodeDefinitions/twitterNodes.ts` - Twitter/X integration (4 nodes: send, search, user, receive)
+- `src/nodeDefinitions/telegramNodes.ts` - Telegram bot integration (2 nodes: send, receive)
 - `src/nodeDefinitions/socialNodes.ts` - Unified social messaging nodes (socialReceive, socialSend)
 - `src/nodeDefinitions/codeNodes.ts` - Python, JavaScript, and TypeScript code execution nodes
 - `src/nodeDefinitions/utilityNodes.ts` - HTTP, Webhook, chatTrigger, and console nodes
@@ -460,7 +464,7 @@ The theme system uses two complementary color palettes:
 
 **Dracula** (vibrant action colors):
 - `theme.dracula.green` (#50fa7b) - Run/Success actions
-- `theme.dracula.purple` (#bd93f9) - Deploy/Save actions
+- `theme.dracula.purple` (#bd93f9) - Start/Save actions
 - `theme.dracula.pink` (#ff79c6) - Cancel/Stop actions
 - `theme.dracula.cyan` (#8be9fd) - Info/Alternative actions
 - `theme.dracula.red` (#ff5555) - Error/Danger states
@@ -468,7 +472,7 @@ The theme system uses two complementary color palettes:
 - `theme.dracula.yellow` (#f1fa8c) - Credentials/Highlight
 
 #### UI Components Using Dracula Theme
-- **TopToolbar Action Buttons**: Run (green), Deploy (purple), Stop (pink), Save (cyan)
+- **TopToolbar Action Buttons**: Run (green), Start (purple), Stop (pink), Save (cyan)
 - **TopToolbar Icon Buttons**: Settings (orange), Credentials (yellow), Theme Toggle (yellow/purple)
 - **TopToolbar File Button**: Cyan text with medium font size and semibold weight, colorful dropdown menu items
 - **ParameterPanel Buttons**: Run (green), Save (purple), Cancel (pink)
@@ -518,24 +522,24 @@ React Flow edges use dynamic Dracula colors via `getEdgeStyles(theme.dracula)`:
 ### WebSocket-First Architecture
 The project uses WebSocket as the primary communication method between frontend and backend, replacing most REST API calls:
 - `src/contexts/WebSocketContext.tsx` - Central WebSocket context with request/response pattern
-- `server/routers/websocket.py` - WebSocket endpoint with 87 message handlers
+- `server/routers/websocket.py` - WebSocket endpoint with 119 message handlers
 - `server/services/status_broadcaster.py` - Connection management and broadcasting
 
 ## Implemented Node Types
-The following 108 nodes are currently implemented and functional:
+The following 89 nodes are currently implemented and functional:
 
 ### AI Chat Models (6 nodes)
 - **openaiChatModel**: OpenAI GPT models with response format options. O-series models (o1, o3, o4) support reasoning effort parameter.
 - **anthropicChatModel**: Claude models with extended thinking support (budget_tokens for claude-3-5-sonnet, claude-3-opus)
 - **geminiChatModel**: Google Gemini models with multimodal capabilities, safety settings, and thinking support for 2.5/Flash Thinking models
 - **openrouterChatModel**: OpenRouter unified API - access 200+ models from OpenAI, Anthropic, Google, Meta, Mistral, and more through a single API. Features free/paid model grouping in dropdown.
-- **groqChatModel**: Groq ultra-fast inference with Llama, Mixtral, Gemma, and reasoning-capable Qwen3/QwQ models
+- **groqChatModel**: Groq ultra-fast inference with Llama, Qwen3, and GPT-OSS models. Qwen3-32b supports reasoning_format.
 - **cerebrasChatModel**: Cerebras ultra-fast inference on custom AI hardware with Llama and Qwen models
 
 ### AI Agents & Memory (3 nodes)
 - **aiAgent**: Advanced AI agent with tool calling, memory input handle, and iterative reasoning. Uses LangGraph for structured execution. Parameters: Provider, Model, Prompt, System Message, Options.
 - **chatAgent**: Conversational AI agent with memory and skill support for multi-turn chat interactions. Parameters: Provider, Model, Prompt (supports `{{chatTrigger.message}}` template or auto-fallback from connected input), System Message. Behavior extended by connected skills.
-### AI Agent Tool Nodes (5 dedicated + 9 dual-purpose)
+### AI Agent Tool Nodes (6 dedicated + 10 dual-purpose)
 Tool nodes connect to AI Agent's `input-tools` handle to provide capabilities the agent can invoke during reasoning. Both `masterSkill` and `simpleMemory` are in the AI Tools category.
 
 #### Dedicated Tool Nodes (passive, tool-only)
@@ -723,6 +727,7 @@ if skill_type == 'masterSkill':
 - **calculatorTool**: Mathematical operations (add, subtract, multiply, divide, power, sqrt, mod, abs)
 - **currentTimeTool**: Get current date/time with timezone support
 - **duckduckgoSearch**: DuckDuckGo web search (free, uses `ddgs` library, no API key required)
+- **taskManager**: Task management tool for AI agents to create, track, and manage tasks
 
 #### Dual-Purpose Search Nodes (workflow node + AI tool)
 Search API nodes that work BOTH as standalone workflow nodes AND as AI Agent tools. When connected to `input-tools`, the LLM fills the node's parameter schema.
@@ -968,6 +973,28 @@ client.users.get_followers(user_id, max_results=100, user_fields=["created_at"])
 TWITTER_CLIENT_ID=your_client_id
 TWITTER_CLIENT_SECRET=your_client_secret
 # TWITTER_REDIRECT_URI is derived at runtime from request context (no env var needed)
+```
+
+### Telegram Nodes (2 nodes)
+Telegram bot integration using `python-telegram-bot` SDK with long-polling for incoming messages.
+
+- **telegramSend**: **Dual-purpose node** - Send text, photo, document, location, or contact messages via Telegram bot. Works as workflow node OR AI Agent tool. Group: `['social', 'tool']`. Recipient types: Self (bot owner), User/Chat ID, Group. Parameters: recipient_type, chat_id, message_type, text, media_url, caption, parse_mode, silent, reply_to_message_id.
+- **telegramReceive**: Event-driven trigger that waits for incoming Telegram messages. Group: `['social', 'trigger']`. Filters: chat type (all/private/group/supergroup/channel), content type (text/photo/video/audio/document/sticker/location/contact/poll), chat ID, user ID, keywords. Option to ignore bot messages.
+
+**Key Files:**
+| File | Description |
+|------|-------------|
+| `server/services/telegram_service.py` | TelegramService with long-polling message handler |
+| `server/services/handlers/telegram.py` | Node handlers for send and receive |
+| `client/src/nodeDefinitions/telegramNodes.ts` | 2 node definitions |
+| `client/src/components/CredentialsModal.tsx` | Telegram bot token panel |
+
+**Authentication:** Bot token from @BotFather on Telegram. Stored via `auth_service.get_api_key('telegram_bot_token')`.
+
+**Environment Variables:**
+```bash
+# Optional: Set owner chat ID for "Self" recipient type
+TELEGRAM_OWNER_CHAT_ID=your_chat_id
 ```
 
 ### Google Workspace Nodes (7 nodes)
@@ -1313,8 +1340,8 @@ All scripts in `scripts/` are cross-platform Node.js (Windows, macOS, Linux, WSL
 See **[Scripts Reference](./docs-internal/SCRIPTS.md)** for full documentation.
 
 ## Current Status
-✅ **INodeProperties System**: Fully implemented with 75 functional node components
-✅ **WebSocket-First Architecture**: 87 message handlers replacing REST APIs
+✅ **INodeProperties System**: Fully implemented with 89 functional node components
+✅ **WebSocket-First Architecture**: 119 message handlers replacing REST APIs
 ✅ **Code Editor**: Python, JavaScript, and TypeScript executors with syntax-highlighted editor (react-simple-code-editor + prismjs) and console output
 ✅ **Node.js Executor**: Persistent Node.js server (Express + tsx) for fast JS/TS execution, replacing subprocess spawning
 ✅ **Component Palette**: Emoji icons with distinct dracula-themed category colors, localStorage persistence for collapsed sections
@@ -1343,7 +1370,7 @@ See **[Scripts Reference](./docs-internal/SCRIPTS.md)** for full documentation.
 ✅ **Production Deployment**: Docker Compose deployment (4 containers: Redis, Backend, Frontend, WhatsApp), nginx reverse proxy, and Let's Encrypt SSL
 ✅ **Authentication System**: n8n-style JWT authentication with HttpOnly cookies, single-owner and multi-user modes
 ✅ **Cache System**: n8n-pattern cache with Redis (production) / SQLite (local dev) / Memory fallback hierarchy
-✅ **AI Thinking/Reasoning**: Extended thinking for Claude, Gemini 2.5/Flash Thinking, Groq Qwen3/QwQ with output available in Input Data & Variables for downstream nodes
+✅ **AI Thinking/Reasoning**: Extended thinking for Claude, Gemini 2.5/3, OpenAI GPT-5/o-series, Groq Qwen3 with output available in Input Data & Variables for downstream nodes
 ✅ **Onboarding Service**: 5-step welcome wizard with Ant Design UI, database persistence, skip/resume/replay support
 
 ## Key Features
@@ -1624,13 +1651,23 @@ deploy_workflow() -> Sets up triggers, returns immediately
 - **Execution Engine**: Routes AI nodes to Python Flask backend with auto-injection of API keys
 
 #### Supported AI Providers & Models
-All 6 providers are available across aiAgent, chatAgent (Zeenie), and all specialized agents:
-- **OpenAI**: GPT-5, GPT-4o, o-series (o1, o3, o4) with reasoning effort. Max output: 128K tokens.
-- **Anthropic**: Claude Opus 4.6, Sonnet 4.5 with extended thinking. Max output: 128K tokens.
-- **Google**: Gemini 3.0, 2.5 Pro/Flash with thinking_budget. Max output: 65K tokens.
-- **Groq**: Ultra-fast Llama, Qwen3/QwQ with reasoning_format. Max output: 8K tokens.
-- **OpenRouter**: Unified API for 200+ models from multiple providers.
-- **Cerebras**: Ultra-fast Llama and Qwen models on custom AI hardware.
+All 6 providers are available across aiAgent, chatAgent (Zeenie), and all specialized agents. Model parameters (max output, context length, thinking type, temperature range) are managed by `ModelRegistryService` (`server/services/model_registry.py`) which fetches from OpenRouter and falls back to `server/config/llm_defaults.json`.
+
+| Provider | Key Models | Context | Max Output | Thinking | Temp Range |
+|----------|-----------|---------|-----------|----------|------------|
+| **OpenAI** | GPT-5.2/5.1/5/5-mini/5-nano | 400K | 128K | effort (hybrid) | 0-2 |
+| **OpenAI** | GPT-4.1/4.1-mini/4.1-nano | 1M | 32K | none | 0-2 |
+| **OpenAI** | o1, o3, o3-mini, o4-mini | 200K | 100K | effort (reasoning) | fixed 1.0 |
+| **OpenAI** | GPT-4o/4o-mini | 128K | 16K | none | 0-2 |
+| **Anthropic** | Claude Opus 4.6 | 200K (1M beta) | 128K | budget | 0-1 |
+| **Anthropic** | Claude Sonnet 4.6/4.5/4, Opus 4.5, Haiku 4.5 | 200K (1M beta) | 64K | budget | 0-1 |
+| **Anthropic** | Claude Opus 4.1/4 | 200K | 32K | budget | 0-1 |
+| **Google** | Gemini 3-pro/flash, 2.5-pro/flash/flash-lite | 1M | 65K | budget | 0-2 |
+| **Groq** | Llama 4 Scout, Llama 3.x, Qwen3-32b, GPT-OSS | 131K | 8-131K | format (Qwen3) | 0-2 |
+| **OpenRouter** | 200+ models from multiple providers | varies | varies | varies | 0-2 |
+| **Cerebras** | Llama 3.1-8b, GPT-OSS-120b, Qwen-3-235b | 32-131K | 8K | format (Qwen) | 0-1.5 |
+
+`_resolve_max_tokens()` in `ai.py` clamps user-requested max_tokens to the model's actual limit.
 
 #### Key Features
 - Visual configuration with status indicators and parameter buttons
@@ -1645,12 +1682,12 @@ All 6 providers are available across aiAgent, chatAgent (Zeenie), and all specia
 Users can configure default parameter values per LLM provider in the Credentials Modal. These defaults are applied to new AI nodes using that provider.
 
 **Configurable Parameters:**
-- `temperature` (0-2): Controls randomness in responses
-- `max_tokens` (1-128000): Maximum response length
+- `temperature`: Controls randomness (range varies: Anthropic 0-1, Cerebras 0-1.5, others 0-2; o-series fixed at 1.0)
+- `max_tokens` (1-200000): Maximum response length (clamped to model's actual limit by `_resolve_max_tokens()`)
 - `thinking_enabled`: Enable extended thinking for supported models
-- `thinking_budget` (1024-16000): Token budget for thinking
-- `reasoning_effort` (low/medium/high): For OpenAI o-series, Groq
-- `reasoning_format` (parsed/hidden): For Groq Qwen models
+- `thinking_budget` (1024-16000): Token budget for thinking (Claude, Gemini)
+- `reasoning_effort` (low/medium/high): For OpenAI o-series and GPT-5 hybrid reasoning
+- `reasoning_format` (parsed/hidden): For Groq Qwen3 models
 
 **Database Model** (`server/models/database.py`):
 ```python
@@ -1743,12 +1780,14 @@ Extended thinking and reasoning capabilities for supported AI models. When enabl
 
 #### Supported Providers & Configuration
 
-| Provider | Models | Parameter | Notes |
-|----------|--------|-----------|-------|
-| **Claude** | opus-4.6, sonnet-4.5 | `thinkingBudget` (1024-16000 tokens) | Requires `max_tokens > budget_tokens`. Temperature auto-set to 1. |
-| **Gemini** | gemini-3.0, gemini-2.5-pro/flash | `thinkingBudget` (token count) | Uses `thinking_budget` API parameter |
-| **Groq** | qwen3-32b, qwq-32b | `reasoningFormat` ('parsed' or 'hidden') | 'parsed' returns reasoning, 'hidden' returns only final answer |
-| **OpenAI** | o1, o3, o4, GPT-5 series | `reasoningEffort` (minimal/low/medium/high/xhigh) | GPT-5.2 supports xhigh reasoning |
+| Provider | Models | Parameter | Thinking Type | Notes |
+|----------|--------|-----------|---------------|-------|
+| **Claude** | All Claude 4.x/3.5 | `thinkingBudget` (1024-16000 tokens) | budget | Requires `max_tokens > budget_tokens`. Temperature auto-set to 1. |
+| **Gemini** | gemini-3.x, gemini-2.5-pro/flash | `thinkingBudget` (token count) | budget | Uses `thinking_budget` API parameter |
+| **OpenAI** | o1, o3, o3-mini, o4-mini | `reasoningEffort` (low/medium/high) | effort | Reasoning-only models. Temperature fixed at 1.0. |
+| **OpenAI** | GPT-5.2/5.1/5/5-mini/5-nano | `reasoningEffort` (low/medium/high/xhigh) | effort | Hybrid reasoning: can operate with or without thinking. |
+| **Groq** | qwen3-32b | `reasoningFormat` ('parsed' or 'hidden') | format | 'parsed' returns reasoning, 'hidden' returns only final answer |
+| **Cerebras** | qwen-3-235b | `reasoningFormat` ('parsed' or 'hidden') | format | Same format-based reasoning as Groq Qwen |
 
 #### Frontend Parameters (`client/src/factories/baseChatModelFactory.ts`)
 ```typescript
@@ -1847,7 +1886,8 @@ const isAI = nodeTypeLower.includes('chatmodel') || aiAgentTypes.includes(nodeTy
 #### Limitations
 - **OpenAI o-series**: Reasoning summaries are only available to organizations that have completed verification at platform.openai.com. Without verification, `thinking` will be `null`.
 - **Claude**: `max_tokens` must be greater than `thinkingBudget`. Temperature is automatically set to 1 when thinking is enabled.
-- **Groq**: Only Qwen3 and QwQ models support reasoning. Format 'hidden' suppresses reasoning output.
+- **Groq**: Only Qwen3-32b supports reasoning (QwQ removed from Groq). Format 'hidden' suppresses reasoning output.
+- **Cerebras**: Qwen-3-235b supports format-based reasoning (same as Groq Qwen).
 
 ## AI Agent Node Architecture
 
@@ -2809,7 +2849,7 @@ Example workflows use the same format as UI exports:
   "nodeParameters": {
     "start_1": { "someParam": "value" }
   },
-  "version": "0.0.35"
+  "version": "0.0.36"
 }
 ```
 
@@ -2822,7 +2862,7 @@ Example workflows use the same format as UI exports:
 | `nodes` | Array of node objects with id, type, position, data |
 | `edges` | Array of edge connections between nodes |
 | `nodeParameters` | Optional map of node_id to parameter objects (saved to DB on import) |
-| `version` | App version (e.g., "0.0.35") |
+| `version` | App version (e.g., "0.0.36") |
 
 ### Key Files
 | File | Description |
@@ -2886,7 +2926,7 @@ Multi-step welcome wizard that appears after first launch, guiding users through
 See **[Onboarding Service](./docs-internal/onboarding.md)** for full documentation.
 
 ### Architecture
-- **5-step wizard** using existing `Modal` component + Ant Design `Steps`, `Card`, `Button`, `Typography`, `Tag`
+- **5-step wizard** using existing `Modal` component (autoHeight, maxWidth 580px, maxHeight 70vh) + Ant Design `Steps`, `Card`, `Button`, `Typography`, `Tag`
 - **Database persistence** via `UserSettings.onboarding_completed` + `UserSettings.onboarding_step`
 - **No new WebSocket handlers** -- reuses `get_user_settings` / `save_user_settings`
 - **Existing users** auto-skip via migration (`examples_loaded=1` -> `onboarding_completed=1`)
@@ -3229,36 +3269,33 @@ CompactionService.record() → Save compaction event to DB
 
 ### Native Provider APIs
 
+**Threshold strategy:** per-session `custom_threshold` > model-aware threshold (50% of context window) > global default.
+
 **Anthropic SDK (tool_runner):**
 ```python
-compaction_control = {
-    "enabled": True,
-    "context_token_threshold": 100000
-}
+# Model-aware: threshold computed from model's context window
+compaction_control = svc.anthropic_config(model="claude-opus-4.6", provider="anthropic")
+# Returns: {"enabled": True, "context_token_threshold": 500000}  (50% of 1M)
 ```
 
 **Anthropic Messages API:**
 ```python
-{
-    "betas": ["compact-2026-01-12"],
-    "context_management": {
-        "edits": [{
-            "type": "compact_20260112",
-            "trigger": {"type": "input_tokens", "value": 100000}
-        }]
-    }
-}
+api_config = svc.anthropic_api_config(model="claude-sonnet-4.5", provider="anthropic")
+# Returns: {"betas": ["compact-2026-01-12"], "context_management": {"edits": [...]}}
+# Threshold auto-computed from model's context window
 ```
 
 **OpenAI:**
 ```python
-{"context_management": {"compact_threshold": 100000}}
+openai_config = svc.openai_config(model="gpt-5.2", provider="openai")
+# Returns: {"context_management": {"compact_threshold": 200000}}  (50% of 400K)
 ```
 
 ### Key Files
 | File | Description |
 |------|-------------|
-| `server/services/compaction.py` | CompactionService with track(), record(), stats(), configure(), compact_context() methods |
+| `server/services/compaction.py` | CompactionService with model-aware thresholds, track(), record(), stats(), configure(), compact_context() methods |
+| `server/services/model_registry.py` | ModelRegistryService providing context_length for model-aware threshold computation |
 | `server/services/pricing.py` | PricingService with official pricing registry for all 6 providers |
 | `server/services/ai.py` | `_track_token_usage()` with automatic compaction triggering |
 | `server/models/database.py` | TokenUsageMetric, CompactionEvent, SessionTokenState tables (with cost fields) |
@@ -3323,36 +3360,41 @@ from services.compaction import get_compaction_service
 
 svc = get_compaction_service()
 
-# Get provider-specific config
-anthropic_cfg = svc.anthropic_config(threshold=100000)
-openai_cfg = svc.openai_config(threshold=100000)
+# Get model-aware provider config (threshold = 50% of context window)
+anthropic_cfg = svc.anthropic_config(model="claude-opus-4.6", provider="anthropic")
+# threshold: 500000 (50% of 1M context)
+openai_cfg = svc.openai_config(model="gpt-5.2", provider="openai")
+# threshold: 200000 (50% of 400K context)
 
-# Track token usage after AI execution
+# Or override with explicit threshold
+anthropic_cfg = svc.anthropic_config(threshold=100000)
+
+# Track token usage after AI execution (threshold auto-computed from model)
 result = await svc.track(
     session_id="user-123",
     node_id="agent-1",
     provider="anthropic",
-    model="claude-3-5-sonnet",
+    model="claude-opus-4.6",
     usage={"input_tokens": 5000, "output_tokens": 1000, "total_tokens": 6000}
 )
-# result: {"total": 6000, "total_cost": 0.021, "threshold": 100000, "needs_compaction": False}
+# result: {"total": 6000, "total_cost": 0.021, "threshold": 500000, "needs_compaction": False}
 
 # Record compaction event after native API handles it
 await svc.record(
     session_id="user-123",
     node_id="agent-1",
     provider="anthropic",
-    model="claude-3-5-sonnet",
-    tokens_before=105000,
+    model="claude-opus-4.6",
+    tokens_before=505000,
     tokens_after=15000,
     summary="Compacted conversation summary..."
 )
 
-# Get session statistics
-stats = await svc.stats("user-123")
-# {"session_id": "user-123", "total": 15000, "threshold": 100000, "count": 1}
+# Get session statistics (model-aware threshold when model/provider given)
+stats = await svc.stats("user-123", model="claude-opus-4.6", provider="anthropic")
+# {"session_id": "user-123", "total": 15000, "threshold": 500000, "count": 1}
 
-# Configure per-session settings
+# Configure per-session custom threshold (overrides model-aware threshold)
 await svc.configure("user-123", threshold=50000, enabled=True)
 ```
 
@@ -3403,8 +3445,10 @@ pricing_info = pricing.get_pricing("anthropic", "claude-3-5-sonnet-20241022")
 Environment variables in `.env`:
 ```bash
 COMPACTION_ENABLED=true       # Enable/disable compaction globally
-COMPACTION_THRESHOLD=100000   # Default token threshold (min: 10000)
+COMPACTION_THRESHOLD=100000   # Global default threshold (min: 10000, used when model context unknown)
 ```
+
+**Threshold priority:** per-session `custom_threshold` > model-aware (50% of context window) > `COMPACTION_THRESHOLD`
 
 ### Client-Side Compaction
 
@@ -3488,7 +3532,7 @@ compaction_svc.set_ai_service(container.ai_service())
 - **5-Section Summary**: Follows Claude Code's structured summary format for continuity
 - **Automatic Triggering**: Compaction triggered in `_track_token_usage()` when threshold exceeded
 - **Per-Session State**: Each memory session has independent token tracking and thresholds
-- **100K Threshold**: Matches Claude Code's default (configurable per session)
+- **Model-Aware Threshold**: 50% of model's context window (e.g., 500K for Claude Opus 4.6 with 1M context, 200K for GPT-5.2 with 400K context). Falls back to global `COMPACTION_THRESHOLD` when model info unavailable. Per-session `custom_threshold` always takes priority.
 - **Singleton Pattern**: Service accessible via `get_compaction_service()`
 
 ## API Cost Tracking
@@ -3644,6 +3688,7 @@ Tool nodes display execution status via the standard node status system:
 | calculatorTool | CalculatorSchema | `_execute_calculator()` | Math operations |
 | currentTimeTool | CurrentTimeSchema | `_execute_current_time()` | Date/time with timezone |
 | duckduckgoSearch | DuckDuckGoSearchSchema | `_execute_duckduckgo_search()` | DuckDuckGo web search (free) |
+| taskManager | TaskManagerSchema | `_execute_task_manager()` | Task creation and management |
 | braveSearch | BraveSearchSchema | `handle_brave_search()` | Brave Search API web results |
 | serperSearch | SerperSearchSchema | `handle_serper_search()` | Google SERP via Serper API |
 | perplexitySearch | PerplexitySearchSchema | `handle_perplexity_search()` | AI-powered search with citations |
@@ -4644,7 +4689,7 @@ def has_real_android_devices(self) -> bool:
 
 Updated `client_left` and presence handlers use `has_real_android_devices()` instead of checking total device count.
 
-### WebSocket Message Types (86 Handlers)
+### WebSocket Message Types (119 Handlers)
 
 #### Request/Response Messages (Client -> Server -> Client)
 | Category | Message Types |
@@ -4659,17 +4704,26 @@ Updated `client_left` and presence handlers use `has_real_android_devices()` ins
 | **AI Operations** | `execute_ai_node`, `get_ai_models` |
 | **API Keys** | `validate_api_key`, `get_stored_api_key`, `save_api_key`, `delete_api_key` |
 | **Claude OAuth** | `claude_oauth_login`, `claude_oauth_status` |
+| **Twitter OAuth** | `twitter_oauth_login`, `twitter_oauth_status`, `twitter_logout` |
+| **Google OAuth** | `google_oauth_login`, `google_oauth_status`, `google_logout` |
+| **AI Proxy** | `test_ai_proxy` |
 | **Android** | `get_android_devices`, `execute_android_action`, `android_relay_connect`, `android_relay_disconnect`, `android_relay_reconnect` |
 | **Maps** | `validate_maps_key` |
-| **WhatsApp** | `whatsapp_status`, `whatsapp_qr`, `whatsapp_send`, `whatsapp_start`, `whatsapp_restart`, `whatsapp_groups`, `whatsapp_group_info`, `whatsapp_chat_history`, `whatsapp_rate_limit_get`, `whatsapp_rate_limit_set`, `whatsapp_rate_limit_stats`, `whatsapp_rate_limit_unpause` |
+| **Apify** | `validate_apify_key` |
+| **WhatsApp** | `whatsapp_status`, `whatsapp_connected_phone`, `whatsapp_qr`, `whatsapp_send`, `whatsapp_start`, `whatsapp_restart`, `whatsapp_groups`, `whatsapp_group_info`, `whatsapp_chat_history`, `whatsapp_rate_limit_get`, `whatsapp_rate_limit_set`, `whatsapp_rate_limit_stats`, `whatsapp_rate_limit_unpause` |
+| **Telegram** | `telegram_connect`, `telegram_disconnect`, `telegram_status`, `telegram_send`, `telegram_reconnect`, `telegram_get_me`, `telegram_get_chat` |
 | **Workflow Storage** | `save_workflow`, `get_workflow`, `get_all_workflows`, `delete_workflow` |
-| **Chat Messages** | `send_chat_message`, `get_chat_messages`, `clear_chat_messages`, `save_chat_message` |
+| **Chat Messages** | `send_chat_message`, `get_chat_messages`, `clear_chat_messages`, `save_chat_message`, `get_chat_sessions` |
 | **Console/Terminal** | `get_console_logs`, `clear_console_logs`, `get_terminal_logs`, `clear_terminal_logs` |
 | **User Skills** | `get_user_skills`, `get_user_skill`, `create_user_skill`, `update_user_skill`, `delete_user_skill` |
 | **Built-in Skills** | `get_skill_content`, `save_skill_content`, `scan_skill_folder`, `list_skill_folders` |
 | **Memory/Skill Reset** | `clear_memory`, `reset_skill` |
 | **User Settings** | `get_user_settings`, `save_user_settings` |
 | **Provider Defaults** | `get_provider_defaults`, `save_provider_defaults` |
+| **Pricing** | `get_pricing_config`, `save_pricing_config` |
+| **Usage/Compaction** | `get_api_usage_summary`, `get_compaction_stats`, `configure_compaction`, `get_provider_usage_summary` |
+| **Agent Teams** | `create_team`, `get_team`, `get_team_status`, `dissolve_team`, `add_team_task`, `claim_team_task`, `complete_team_task`, `get_team_tasks`, `send_team_message`, `get_team_messages` |
+| **Model Registry** | `get_model_constraints`, `refresh_model_registry` |
 
 #### Broadcast Messages (Server -> All Clients)
 | Message Type | Description |

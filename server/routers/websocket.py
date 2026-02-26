@@ -1803,6 +1803,10 @@ async def handle_telegram_connect(data: Dict[str, Any], websocket: WebSocket) ->
                 models=[],
                 session_id="default",
             )
+            # Restore owner_chat_id from credentials if previously captured
+            saved_owner = await auth_service.get_api_key("telegram_owner_chat_id")
+            if saved_owner:
+                await service.set_owner(int(saved_owner))
         except Exception as e:
             logger.warning(f"[Telegram] Failed to store token in credentials: {e}")
 
@@ -1926,6 +1930,16 @@ async def handle_telegram_reconnect(data: Dict[str, Any], websocket: WebSocket) 
 
         service = get_telegram_service()
         result = await service.connect(token)
+
+        # Restore owner_chat_id from credentials if previously captured
+        if result.get("success"):
+            try:
+                saved_owner = await auth_service.get_api_key("telegram_owner_chat_id")
+                if saved_owner:
+                    await service.set_owner(int(saved_owner))
+            except Exception as e:
+                logger.warning(f"[Telegram] Failed to restore owner_chat_id: {e}")
+
         return result
     except Exception as e:
         logger.error(f"[Telegram] Reconnect failed: {e}")
@@ -2637,12 +2651,19 @@ async def handle_get_api_usage_summary(data: Dict[str, Any], websocket: WebSocke
 
 @ws_handler("session_id")
 async def handle_get_compaction_stats(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
-    """Get compaction statistics for a session."""
+    """Get compaction statistics for a session.
+
+    Optional model/provider params enable model-aware threshold (50% of context window).
+    """
     from services.compaction import get_compaction_service
     svc = get_compaction_service()
     if not svc:
         return {"success": False, "error": "Compaction service not initialized"}
-    return await svc.stats(data["session_id"])
+    return await svc.stats(
+        data["session_id"],
+        model=data.get("model", ""),
+        provider=data.get("provider", ""),
+    )
 
 
 @ws_handler("session_id")
@@ -2797,6 +2818,35 @@ async def handle_get_team_messages(data: Dict[str, Any], websocket: WebSocket) -
         unread_only=data.get("unread_only", False)
     )
     return {"messages": messages}
+
+
+# ============================================================================
+# Model Registry Handlers
+# ============================================================================
+
+@ws_handler()
+async def handle_get_model_constraints(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Get model constraints (max_output_tokens, temperature range, thinking support, etc.)."""
+    from services.model_registry import get_model_registry
+    registry = get_model_registry()
+    model = data.get("model", "")
+    provider = data.get("provider", "")
+    if not model or not provider:
+        return {"success": False, "error": "model and provider are required"}
+    constraints = registry.get_model_constraints(model, provider)
+    return {"success": True, **constraints}
+
+
+@ws_handler()
+async def handle_refresh_model_registry(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Force refresh model registry from OpenRouter."""
+    from services.model_registry import get_model_registry
+    registry = get_model_registry()
+    try:
+        count = await registry.refresh()
+        return {"success": True, "model_count": count}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 
 # ============================================================================
@@ -2966,6 +3016,10 @@ MESSAGE_HANDLERS: Dict[str, MessageHandler] = {
     "get_pricing_config": handle_get_pricing_config,
     "save_pricing_config": handle_save_pricing_config,
     "get_api_usage_summary": handle_get_api_usage_summary,
+
+    # Model Registry
+    "get_model_constraints": handle_get_model_constraints,
+    "refresh_model_registry": handle_refresh_model_registry,
 
     # Agent Teams
     "create_team": handle_create_team,

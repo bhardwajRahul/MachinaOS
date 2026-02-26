@@ -29,6 +29,7 @@ class TelegramService:
         self._connected: bool = False
         self._polling_task: Optional[asyncio.Task] = None
         self._bot_info: Dict[str, Any] = {}
+        self._owner_chat_id: Optional[int] = None
 
     @classmethod
     def get_instance(cls) -> "TelegramService":
@@ -49,6 +50,16 @@ class TelegramService:
         """Check if bot is connected and polling."""
         return self._connected and self._application is not None
 
+    @property
+    def owner_chat_id(self) -> Optional[int]:
+        """Get the bot owner's chat ID (auto-captured from first private message)."""
+        return self._owner_chat_id
+
+    async def set_owner(self, chat_id: int):
+        """Set owner chat_id (used to restore from credentials on reconnect)."""
+        self._owner_chat_id = chat_id
+        logger.info(f"[Telegram] Owner chat_id restored: {chat_id}")
+
     def get_status(self) -> Dict[str, Any]:
         """Get current connection status."""
         return {
@@ -57,6 +68,7 @@ class TelegramService:
             "bot_username": self._bot_info.get("username"),
             "bot_name": self._bot_info.get("first_name"),
             "polling_active": self._polling_task is not None and not self._polling_task.done(),
+            "owner_chat_id": self._owner_chat_id,
         }
 
     async def connect(self, token: str) -> Dict[str, Any]:
@@ -158,6 +170,7 @@ class TelegramService:
             self._token = None
             self._connected = False
             self._polling_task = None
+            self._owner_chat_id = None
 
             # Broadcast disconnected status
             await self._broadcast_status()
@@ -198,6 +211,20 @@ class TelegramService:
                 return
 
             msg = update.message
+
+            # Auto-capture bot owner from first private message
+            if self._owner_chat_id is None and msg.chat.type == "private" and msg.from_user:
+                self._owner_chat_id = msg.from_user.id
+                logger.info(f"[Telegram] Owner detected: @{msg.from_user.username} (ID: {msg.from_user.id})")
+                # Persist to credentials DB so it survives reconnects
+                try:
+                    from services.auth import get_auth_service
+                    auth = get_auth_service()
+                    await auth.store_api_key("telegram_owner_chat_id", str(msg.from_user.id))
+                except Exception as persist_err:
+                    logger.warning(f"[Telegram] Failed to persist owner chat_id: {persist_err}")
+                await self._broadcast_status()
+
             event_data = self._format_message(msg)
 
             logger.debug(f"[Telegram] Message received: {event_data.get('content_type')} from {event_data.get('from_username', event_data.get('from_id'))}")
@@ -292,6 +319,7 @@ class TelegramService:
                 bot_id=self._bot_info.get("id"),
                 bot_username=self._bot_info.get("username"),
                 bot_name=self._bot_info.get("first_name"),
+                owner_chat_id=self._owner_chat_id,
             )
         except Exception as e:
             logger.warning(f"[Telegram] Status broadcast failed: {e}")

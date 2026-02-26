@@ -215,6 +215,55 @@ def _get_default_model(provider: str, fallback: str) -> str:
     return providers.get(provider, {}).get("default_model", fallback)
 
 
+def _resolve_max_tokens(flattened: dict, model: str, provider: str) -> int:
+    """Resolve max_tokens: user param -> model registry -> llm_defaults -> 4096.
+
+    Clamps to model's actual maximum if user value exceeds it.
+    """
+    from services.model_registry import get_model_registry
+    registry = get_model_registry()
+    model_max = registry.get_max_output_tokens(model, provider)
+
+    user_val = flattened.get('max_tokens') or flattened.get('maxTokens')
+    if user_val:
+        user_int = int(user_val)
+        if user_int > model_max:
+            logger.info(f"[AI] Clamping max_tokens from {user_int} to {model_max} for {provider}/{model}")
+            return model_max
+        return user_int
+    return model_max
+
+
+def _resolve_temperature(flattened: dict, model: str, provider: str, thinking_enabled: bool) -> float:
+    """Resolve temperature with model-specific constraints.
+
+    Handles:
+    - O-series models: always temp=1
+    - Claude with thinking: always temp=1
+    - Range clamping per provider
+    """
+    from services.model_registry import get_model_registry
+    registry = get_model_registry()
+
+    user_temp = float(flattened.get('temperature', 0.7))
+
+    # O-series reasoning models always require temperature=1
+    if registry.is_reasoning_model(model, provider):
+        if user_temp != 1:
+            logger.info(f"[AI] Reasoning model '{model}': forcing temperature to 1 (was {user_temp})")
+        return 1.0
+
+    # Claude thinking mode requires temperature=1
+    if thinking_enabled and provider == 'anthropic':
+        if user_temp != 1:
+            logger.info(f"[AI] Claude thinking mode: forcing temperature to 1 (was {user_temp})")
+        return 1.0
+
+    # Clamp to valid range for provider/model
+    temp_range = registry.get_temperature_range(model, provider)
+    return max(temp_range[0], min(temp_range[1], user_temp))
+
+
 # Provider configurations - defaults from config/llm_defaults.json
 PROVIDER_CONFIGS: Dict[str, ProviderConfig] = {
     'openai': ProviderConfig(
@@ -263,7 +312,7 @@ PROVIDER_CONFIGS: Dict[str, ProviderConfig] = {
         api_key_param='api_key',
         max_tokens_param='max_tokens',
         detection_patterns=('groq',),
-        default_model=_get_default_model('groq', 'llama-4-maverick'),
+        default_model=_get_default_model('groq', 'llama-4-scout'),
         models_endpoint='https://api.groq.com/openai/v1/models',
         models_header_fn=_groq_headers
     ),
@@ -880,17 +929,6 @@ class AIService:
         logger.warning(f"[LangGraph] Empty response with no error details. Content type: {type(content)}, value: {repr(content)}")
         raise ValueError("AI generated empty response. Try rephrasing your prompt or using a different model.")
 
-    def _is_reasoning_model(self, model: str) -> bool:
-        """Check if model supports reasoning (OpenAI o-series).
-
-        O-series models: o1, o1-mini, o1-preview, o3, o3-mini, o4-mini, etc.
-        NOT gpt-4o (which contains 'o' but is not a reasoning model).
-        """
-        model_lower = model.lower()
-        # Check for o-series pattern: starts with 'o' followed by digit
-        # e.g., o1, o1-mini, o3, o3-mini, o4-mini
-        return bool(re.match(r'^o[134](-|$)', model_lower))
-
     async def _track_token_usage(
         self,
         session_id: str,
@@ -1075,77 +1113,47 @@ class AIService:
                 'X-Title': 'MachinaOS'
             }
 
-        # OpenAI o-series reasoning models ALWAYS require temperature=1
-        # This applies regardless of whether thinking mode is enabled
-        if provider == 'openai' and self._is_reasoning_model(model):
+        # Apply thinking/reasoning configuration using model registry
+        # The registry determines thinking_type based on model metadata
+        from services.model_registry import get_model_registry
+        registry = get_model_registry()
+
+        # Force temperature=1 for reasoning models (regardless of thinking mode)
+        if registry.is_reasoning_model(model, provider):
             if kwargs.get('temperature', 1) != 1:
-                logger.info(f"[AI] OpenAI o-series model '{model}': forcing temperature to 1 (was {kwargs.get('temperature')})")
+                logger.info(f"[AI] Reasoning model '{model}': forcing temperature to 1 (was {kwargs.get('temperature')})")
                 kwargs['temperature'] = 1
 
-        # Apply thinking/reasoning configuration per provider (per LangChain docs Jan 2026)
         if thinking and thinking.enabled:
-            if provider == 'anthropic':
-                # Claude extended thinking: thinking={"type": "enabled", "budget_tokens": N}
-                # Requires temperature=1, budget min 1024 tokens
-                # IMPORTANT: max_tokens must be greater than budget_tokens
-                budget = max(1024, thinking.budget)
-                # Ensure max_tokens > budget_tokens (add buffer for response)
-                if max_tokens <= budget:
-                    # Set max_tokens to budget + reasonable response space (at least 1024 more)
-                    kwargs[config.max_tokens_param] = budget + max(1024, max_tokens)
-                    logger.info(f"[AI] Claude thinking: adjusted max_tokens from {max_tokens} to {kwargs[config.max_tokens_param]} (budget={budget})")
-                kwargs['thinking'] = {"type": "enabled", "budget_tokens": budget}
-                kwargs['temperature'] = 1  # Required for Claude thinking mode
-            elif provider == 'openai' and self._is_reasoning_model(model):
-                # OpenAI o-series: Use reasoning_effort parameter
-                # Note: reasoning.summary requires organization verification on OpenAI
-                # So we just use reasoning_effort for now
-                kwargs['reasoning_effort'] = thinking.effort
-                # O-series models only support temperature=1
-                kwargs['temperature'] = 1
-                logger.info(f"[AI] OpenAI o-series: reasoning_effort={thinking.effort}, temperature=1")
-            elif provider == 'gemini':
-                # Gemini thinking support varies by model:
-                # - Gemini 2.5 Flash/Pro: Use thinking_budget (int tokens, 0=off, -1=dynamic)
-                # - Gemini 2.0 Flash Thinking: Built-in thinking, use thinking_budget
-                # - Gemini 3 models: Limited/experimental thinking support
-                model_lower = model.lower()
+            thinking_type = registry.get_thinking_type(model, provider)
 
-                # Gemini 2.5 models support thinking_budget
-                if 'gemini-2.5' in model_lower or '2.5' in model_lower:
+            if thinking_type == 'budget':
+                # Claude, Gemini, Cerebras: budget_tokens approach
+                budget = max(1024, thinking.budget)
+                if provider == 'anthropic':
+                    # Claude: max_tokens must be > budget_tokens
+                    if max_tokens <= budget:
+                        kwargs[config.max_tokens_param] = budget + max(1024, max_tokens)
+                        logger.info(f"[AI] Claude thinking: adjusted max_tokens from {max_tokens} to {kwargs[config.max_tokens_param]} (budget={budget})")
+                    kwargs['thinking'] = {"type": "enabled", "budget_tokens": budget}
+                    kwargs['temperature'] = 1
+                elif provider == 'gemini':
                     kwargs['thinking_budget'] = thinking.budget
                     kwargs['include_thoughts'] = True
-                    logger.info(f"[AI] Gemini 2.5 thinking: budget={thinking.budget}")
-                # Gemini 2.0 Flash Thinking model
-                elif 'gemini-2.0-flash-thinking' in model_lower or 'flash-thinking' in model_lower:
+                    logger.info(f"[AI] Gemini thinking: budget={thinking.budget}")
+                elif provider == 'cerebras':
                     kwargs['thinking_budget'] = thinking.budget
-                    kwargs['include_thoughts'] = True
-                    logger.info(f"[AI] Gemini Flash Thinking: budget={thinking.budget}")
-                # Gemini 3 preview models - thinking support is experimental/limited
-                # Only 'low' and 'high' levels may be supported, not 'medium'
-                elif 'gemini-3' in model_lower:
-                    # For Gemini 3, try thinking_budget instead of thinking_level
-                    # as level support is inconsistent across preview models
-                    kwargs['thinking_budget'] = thinking.budget
-                    kwargs['include_thoughts'] = True
-                    logger.info(f"[AI] Gemini 3 thinking: using budget={thinking.budget} (level support varies)")
-                # Other Gemini 2.x models - try thinking_budget
-                elif 'gemini-2' in model_lower:
-                    kwargs['thinking_budget'] = thinking.budget
-                    kwargs['include_thoughts'] = True
-                    logger.info(f"[AI] Gemini 2.x thinking: budget={thinking.budget}")
-                else:
-                    # For other/older Gemini models, thinking may not be supported
-                    logger.warning(f"[AI] Gemini model '{model}' may not support thinking mode")
-            elif provider == 'groq':
-                # Groq: reasoning_format ('parsed' or 'hidden')
-                # 'parsed' includes reasoning in additional_kwargs, 'hidden' suppresses it
+            elif thinking_type == 'effort':
+                # OpenAI o-series: reasoning_effort parameter
+                kwargs['reasoning_effort'] = thinking.effort
+                kwargs['temperature'] = 1
+                logger.info(f"[AI] OpenAI reasoning: effort={thinking.effort}, temperature=1")
+            elif thinking_type == 'format':
+                # Groq Qwen/QwQ: reasoning_format parameter
                 format_val = thinking.format if thinking.format in ('parsed', 'hidden') else 'parsed'
                 kwargs['reasoning_format'] = format_val
-            elif provider == 'cerebras':
-                # Cerebras: No official LangChain thinking support yet
-                # Passing through as model_kwargs if supported
-                kwargs['thinking_budget'] = thinking.budget
+            elif thinking_type == 'none':
+                logger.warning(f"[AI] Model '{model}' ({provider}) may not support thinking mode")
 
         # Resolve lazy-loaded model class (gemini)
         model_class = config.model_class or _get_google_genai_class()
@@ -1315,12 +1323,6 @@ class AIService:
                            flattened.get('systemMessage') or
                            flattened.get('systemPrompt') or '')
 
-            # Max tokens - support camelCase from frontend
-            max_tokens = int(flattened.get('max_tokens') or
-                           flattened.get('maxTokens') or 1000)
-
-            temperature = float(flattened.get('temperature', 0.7))
-
             if not api_key:
                 raise ValueError("API key is required")
 
@@ -1339,6 +1341,9 @@ class AIService:
             else:
                 provider = self.detect_provider(model)
 
+            # Resolve max_tokens and temperature via model registry
+            max_tokens = _resolve_max_tokens(flattened, model, provider)
+
             # Build thinking config from parameters
             thinking_config = None
             if flattened.get('thinkingEnabled'):
@@ -1349,6 +1354,8 @@ class AIService:
                     level=flattened.get('thinkingLevel', 'medium'),
                     format=flattened.get('reasoningFormat', 'parsed'),
                 )
+
+            temperature = _resolve_temperature(flattened, model, provider, bool(thinking_config and thinking_config.enabled))
 
             # Check for proxy URL (stored as {provider}_proxy credential)
             proxy_url = await self.auth.get_api_key(f"{provider}_proxy")
@@ -1518,8 +1525,6 @@ class AIService:
             api_key = flattened.get('api_key') or flattened.get('apiKey')
             provider = parameters.get('provider', 'openai')
             model = parameters.get('model', '')
-            temperature = float(flattened.get('temperature', 0.7))
-            max_tokens = int(flattened.get('max_tokens') or flattened.get('maxTokens') or 1000)
 
             logger.debug(f"[LangGraph] Agent: {provider}/{model}, tools={len(tool_data) if tool_data else 0}")
 
@@ -1535,6 +1540,9 @@ class AIService:
             if not api_key:
                 raise ValueError("API key is required for AI Agent")
 
+            # Resolve max_tokens and temperature via model registry
+            max_tokens = _resolve_max_tokens(flattened, model, provider)
+
             # Build thinking config from parameters
             thinking_config = None
             if flattened.get('thinkingEnabled'):
@@ -1546,6 +1554,8 @@ class AIService:
                     format=flattened.get('reasoningFormat', 'parsed'),
                 )
                 logger.debug(f"[LangGraph] Thinking enabled: budget={thinking_config.budget}, effort={thinking_config.effort}")
+
+            temperature = _resolve_temperature(flattened, model, provider, bool(thinking_config and thinking_config.enabled))
 
             # Broadcast: Initializing model
             await broadcast_status("initializing", {
@@ -2008,8 +2018,6 @@ class AIService:
             api_key = flattened.get('api_key') or flattened.get('apiKey')
             provider = parameters.get('provider', 'openai')
             model = parameters.get('model', '')
-            temperature = float(flattened.get('temperature', 0.7))
-            max_tokens = int(flattened.get('max_tokens') or flattened.get('maxTokens') or 1000)
 
             logger.debug(f"[ChatAgent] Provider: {provider}, Model: {model}")
 
@@ -2025,6 +2033,9 @@ class AIService:
             if not api_key:
                 raise ValueError("API key is required for Zeenie")
 
+            # Resolve max_tokens and temperature via model registry
+            max_tokens = _resolve_max_tokens(flattened, model, provider)
+
             # Build thinking config from parameters
             thinking_config = None
             if flattened.get('thinkingEnabled'):
@@ -2035,6 +2046,8 @@ class AIService:
                     level=flattened.get('thinkingLevel', 'medium'),
                     format=flattened.get('reasoningFormat', 'parsed'),
                 )
+
+            temperature = _resolve_temperature(flattened, model, provider, bool(thinking_config and thinking_config.enabled))
 
             # Broadcast: Initializing
             await broadcast_status("initializing", {

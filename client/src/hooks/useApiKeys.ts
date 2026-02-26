@@ -49,6 +49,19 @@ export interface ProviderUsageSummary {
   models: ModelUsageSummary[];
 }
 
+// Model constraints from model registry
+export interface ModelConstraints {
+  found: boolean;
+  model: string;
+  provider: string;
+  max_output_tokens: number;
+  context_length: number;
+  temperature_range: [number, number];
+  supports_thinking: boolean;
+  thinking_type: 'budget' | 'effort' | 'format' | 'none';
+  is_reasoning_model: boolean;
+}
+
 // API Usage interfaces (for Twitter, Google Maps, etc.)
 export interface APIOperationSummary {
   operation: string;
@@ -102,6 +115,9 @@ export interface UseApiKeysResult {
 
   // API usage summary (Twitter, etc.)
   getAPIUsageSummary: (service?: string) => Promise<APIUsageSummary[]>;
+
+  // Model constraints from registry
+  getModelConstraints: (model: string, provider: string) => Promise<ModelConstraints>;
 
   // State
   isValidating: boolean;
@@ -401,6 +417,36 @@ export const useApiKeys = (): UseApiKeysResult => {
     }
   }, [sendRequest, isConnected]);
 
+  /**
+   * Get model constraints from the model registry
+   */
+  const getModelConstraints = useCallback(async (
+    model: string,
+    provider: string
+  ): Promise<ModelConstraints> => {
+    const fallback: ModelConstraints = {
+      found: false,
+      model,
+      provider,
+      max_output_tokens: 4096,
+      context_length: 128000,
+      temperature_range: [0, 2],
+      supports_thinking: false,
+      thinking_type: 'none',
+      is_reasoning_model: false,
+    };
+
+    if (!isConnected) return fallback;
+
+    try {
+      const response = await sendRequest<ModelConstraints>('get_model_constraints', { model, provider });
+      return response || fallback;
+    } catch (error) {
+      console.warn(`Error fetching model constraints for ${provider}/${model}:`, error);
+      return fallback;
+    }
+  }, [sendRequest, isConnected]);
+
   return {
     validateApiKey,
     saveApiKey,
@@ -415,6 +461,7 @@ export const useApiKeys = (): UseApiKeysResult => {
     saveProviderDefaults,
     getProviderUsageSummary,
     getAPIUsageSummary,
+    getModelConstraints,
     isValidating,
     validationError,
     isConnected

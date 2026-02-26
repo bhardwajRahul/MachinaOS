@@ -6,7 +6,7 @@ import ToolSchemaEditor from './ToolSchemaEditor';
 import MasterSkillEditor from './MasterSkillEditor';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { useAppStore } from '../../store/useAppStore';
-import { useWebSocket } from '../../contexts/WebSocketContext';
+import { useWebSocket, CompactionStats } from '../../contexts/WebSocketContext';
 import { nodeDefinitions } from '../../nodeDefinitions';
 import { INodeTypeDescription, INodeProperties } from '../../types/INodeProperties';
 import { ExecutionResult } from '../../services/executionService';
@@ -86,7 +86,7 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
 }) => {
   const theme = useAppTheme();
   const { currentWorkflow } = useAppStore();
-  const { clearMemory, resetSkill, sendRequest } = useWebSocket();
+  const { clearMemory, resetSkill, sendRequest, compactionStats: contextCompactionStats, updateCompactionStats } = useWebSocket();
   const [isConsoleExpanded, setIsConsoleExpanded] = useState(true);
   const [connectedSkills, setConnectedSkills] = useState<ConnectedSkill[]>([]);
   const [isSkillsExpanded, setIsSkillsExpanded] = useState(true);
@@ -97,18 +97,17 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
   const [clearLongTermMemory, setClearLongTermMemory] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Compaction state
-  const [compactionStats, setCompactionStats] = useState<{
-    session_id: string;
-    total: number;
-    threshold: number;
-    count: number;
-  } | null>(null);
+  // Compaction state - reads from WebSocket context (real-time updates via broadcasts)
   const [connectedMemorySessionId, setConnectedMemorySessionId] = useState<string | null>(null);
   const [compactionLoading, setCompactionLoading] = useState(false);
   const [isEditingThreshold, setIsEditingThreshold] = useState(false);
-  const [editThresholdValue, setEditThresholdValue] = useState<number>(100000);
+  const [editThresholdValue, setEditThresholdValue] = useState<number>(0);
   const [savingThreshold, setSavingThreshold] = useState(false);
+
+  // Derive compaction stats from WebSocket context for the connected memory session
+  const compactionStats: CompactionStats | null = connectedMemorySessionId
+    ? contextCompactionStats[connectedMemorySessionId] || null
+    : null;
 
   // For Memory nodes: track the connected agent's ID for auto-session display
   const [connectedAgentId, setConnectedAgentId] = useState<string | null>(null);
@@ -197,7 +196,6 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
   useEffect(() => {
     if (!isAgentWithSkills || !currentWorkflow) {
       setConnectedMemorySessionId(null);
-      setCompactionStats(null);
       return;
     }
 
@@ -210,7 +208,6 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
 
     if (!memoryEdge) {
       setConnectedMemorySessionId(null);
-      setCompactionStats(null);
       return;
     }
 
@@ -228,20 +225,28 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
           : nodeId;  // nodeId is the agent's ID
         setConnectedMemorySessionId(actualSessionId);
 
-        // Fetch compaction stats for this session
+        // Get agent's model/provider for model-aware threshold computation
+        const agentModel = parameters.model || '';
+        const agentProvider = parameters.provider || '';
+
+        // Fetch compaction stats for this session (with model-aware threshold)
         setCompactionLoading(true);
         const statsResponse = await sendRequest<{
           session_id: string;
           total: number;
           threshold: number;
           count: number;
-        }>('get_compaction_stats', { session_id: actualSessionId });
+        }>('get_compaction_stats', {
+          session_id: actualSessionId,
+          model: agentModel,
+          provider: agentProvider,
+        });
 
-        if (statsResponse) {
-          setCompactionStats({
+        if (statsResponse && currentWorkflow?.id) {
+          updateCompactionStats(currentWorkflow.id, actualSessionId, {
             session_id: statsResponse.session_id || actualSessionId,
             total: statsResponse.total || 0,
-            threshold: statsResponse.threshold || 100000,
+            threshold: statsResponse.threshold,
             count: statsResponse.count || 0
           });
         }
@@ -253,7 +258,7 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
     };
 
     fetchMemorySessionId();
-  }, [nodeId, isAgentWithSkills, currentWorkflow, sendRequest]);
+  }, [nodeId, isAgentWithSkills, currentWorkflow, sendRequest, updateCompactionStats, parameters.model, parameters.provider]);
 
   // For Memory nodes: find which AI Agent this memory is connected TO
   // Used to display the auto-derived session ID
@@ -798,9 +803,9 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
                               <InputNumber
                                 size="small"
                                 value={editThresholdValue}
-                                onChange={(v) => setEditThresholdValue(v || 100000)}
+                                onChange={(v) => setEditThresholdValue(v || compactionStats.threshold)}
                                 min={10000}
-                                max={1000000}
+                                max={2000000}
                                 step={10000}
                                 style={{ width: 100 }}
                               />
@@ -816,7 +821,9 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
                                       session_id: connectedMemorySessionId,
                                       threshold: editThresholdValue
                                     });
-                                    setCompactionStats(prev => prev ? { ...prev, threshold: editThresholdValue } : null);
+                                    if (compactionStats && connectedMemorySessionId && currentWorkflow?.id) {
+                                      updateCompactionStats(currentWorkflow.id, connectedMemorySessionId, { ...compactionStats, threshold: editThresholdValue });
+                                    }
                                     setIsEditingThreshold(false);
                                     message.success('Threshold updated');
                                   } catch (_err) {

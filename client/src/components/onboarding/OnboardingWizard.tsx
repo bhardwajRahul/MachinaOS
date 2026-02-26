@@ -57,28 +57,28 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onOpenCredentials, 
       isOpen={isVisible}
       onClose={skip}
       title="Welcome Guide"
-      maxWidth="680px"
-      maxHeight="85vh"
+      maxWidth="580px"
+      maxHeight="70vh"
+      autoHeight
     >
       <div style={{
         display: 'flex',
         flexDirection: 'column',
-        height: '100%',
-        padding: '20px 24px 16px',
+        padding: '16px 20px 12px',
       }}>
         {/* Progress steps */}
         <Steps
           current={currentStep}
           size="small"
           items={stepItems}
-          style={{ marginBottom: 20 }}
+          style={{ marginBottom: 16 }}
         />
 
         {/* Step content */}
         <div style={{
-          flex: 1,
           overflowY: 'auto',
-          minHeight: 0,
+          minHeight: 340,
+          maxHeight: 'calc(70vh - 200px)',
           paddingRight: 4,
         }}>
           {renderStep()}
@@ -89,8 +89,8 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onOpenCredentials, 
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          paddingTop: 16,
-          marginTop: 16,
+          paddingTop: 12,
+          marginTop: 12,
           borderTop: `1px solid ${theme.colors.border}`,
         }}>
           {/* Left: Skip */}

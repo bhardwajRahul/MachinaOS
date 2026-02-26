@@ -54,17 +54,31 @@ async def handle_telegram_send(
                 "timestamp": datetime.now().isoformat()
             }
 
-        # Extract parameters
-        chat_id = parameters.get("chat_id")
-        if not chat_id:
-            return {
-                "success": False,
-                "node_id": node_id,
-                "node_type": node_type,
-                "error": "chat_id is required",
-                "execution_time": time.time() - start_time,
-                "timestamp": datetime.now().isoformat()
-            }
+        # Resolve recipient based on type (mirrors WhatsApp self-mode pattern)
+        recipient_type = parameters.get("recipient_type", "self")
+
+        if recipient_type == "self":
+            chat_id = service.owner_chat_id
+            if not chat_id:
+                return {
+                    "success": False,
+                    "node_id": node_id,
+                    "node_type": node_type,
+                    "error": "Bot owner not detected. Send any message to your bot first.",
+                    "execution_time": time.time() - start_time,
+                    "timestamp": datetime.now().isoformat()
+                }
+        else:
+            chat_id = parameters.get("chat_id")
+            if not chat_id:
+                return {
+                    "success": False,
+                    "node_id": node_id,
+                    "node_type": node_type,
+                    "error": "chat_id is required",
+                    "execution_time": time.time() - start_time,
+                    "timestamp": datetime.now().isoformat()
+                }
 
         message_type = parameters.get("message_type", "text")
         parse_mode = parameters.get("parse_mode") or None

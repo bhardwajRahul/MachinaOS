@@ -19,13 +19,14 @@ import QRCodeDisplay from './ui/QRCodeDisplay';
 import ApiKeyInput from './ui/ApiKeyInput';
 import { useApiKeys, ProviderDefaults, ProviderUsageSummary, APIUsageSummary } from '../hooks/useApiKeys';
 import { useAppTheme } from '../hooks/useAppTheme';
-import { useWhatsAppStatus, useAndroidStatus, useTwitterStatus, useGoogleStatus, useWebSocket, RateLimitConfig, RateLimitStats } from '../contexts/WebSocketContext';
+import { useWhatsAppStatus, useAndroidStatus, useTwitterStatus, useGoogleStatus, useTelegramStatus, useWebSocket, RateLimitConfig, RateLimitStats } from '../contexts/WebSocketContext';
 import { useWhatsApp } from '../hooks/useWhatsApp';
 import {
   OpenAIIcon, ClaudeIcon, GeminiIcon, GroqIcon, OpenRouterIcon, CerebrasIcon,
 } from './icons/AIProviderIcons';
 import { ApifyIcons } from '../assets/icons/apify';
 import { SearchIcons } from '../assets/icons/search';
+import { TelegramIcons } from '../assets/icons/telegram';
 
 // ============================================================================
 // SERVICE ICONS
@@ -52,6 +53,13 @@ const WhatsAppIcon = () => (
 
 const XIcon = () => (
   <TwitterOutlined style={{ fontSize: 20, color: '#000000' }} />
+);
+
+const TelegramIcon = () => (
+  <div
+    dangerouslySetInnerHTML={{ __html: TelegramIcons.telegram }}
+    style={{ width: 20, height: 20 }}
+  />
 );
 
 const GoogleWorkspaceIcon = () => (
@@ -128,6 +136,7 @@ const CATEGORIES: Category[] = [
     items: [
       { id: 'whatsapp_personal', name: 'WhatsApp Personal', placeholder: '', color: '#25D366', desc: 'Connect via QR code pairing', CustomIcon: WhatsAppIcon, isSpecial: true, panelType: 'whatsapp' },
       { id: 'twitter', name: 'Twitter/X', placeholder: '', color: '#000000', desc: 'Post tweets, search, user lookup', CustomIcon: XIcon, isSpecial: true, panelType: 'twitter' },
+      { id: 'telegram', name: 'Telegram Bot', placeholder: '', color: '#0088CC', desc: 'Send messages via Telegram bot', CustomIcon: TelegramIcon, isSpecial: true, panelType: 'telegram' },
     ],
   },
   {
@@ -186,6 +195,7 @@ const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey,
   const androidStatus = useAndroidStatus();
   const twitterStatus = useTwitterStatus();
   const googleStatus = useGoogleStatus();
+  const telegramStatus = useTelegramStatus();
 
 
   // Tag style helper - consistent theming for status tags
@@ -394,6 +404,9 @@ const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey,
     if (item.panelType === 'gmail') {
       return { connected: googleStatus.connected, label: googleStatus.connected ? googleStatus.email : 'Not Connected' };
     }
+    if (item.panelType === 'telegram') {
+      return { connected: telegramStatus.connected, label: telegramStatus.connected ? `@${telegramStatus.bot_username}` : 'Not Connected' };
+    }
     return null;
   };
 
@@ -531,6 +544,12 @@ const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey,
   const [gmailLoading, setGmailLoading] = useState<string | null>(null);
   const [gmailError, setGmailError] = useState<string | null>(null);
 
+  // Telegram state
+  const [telegramToken, setTelegramToken] = useState('');
+  const [telegramTokenStored, setTelegramTokenStored] = useState<boolean | null>(null);
+  const [telegramLoading, setTelegramLoading] = useState<string | null>(null);
+  const [telegramError, setTelegramError] = useState<string | null>(null);
+
   // Rate limit state
   const [rateLimitConfig, setRateLimitConfig] = useState<RateLimitConfig | null>(null);
   const [rateLimitStats, setRateLimitStats] = useState<RateLimitStats | null>(null);
@@ -581,6 +600,15 @@ const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey,
       });
     }
   }, [visible, hasStoredKey, getStoredApiKey]);
+
+  // Load Telegram token status on mount
+  useEffect(() => {
+    if (visible) {
+      hasStoredKey('telegram_bot_token').then((has) => {
+        setTelegramTokenStored(has);
+      });
+    }
+  }, [visible, hasStoredKey]);
 
   // Twitter handlers
   const handleTwitterSaveCredentials = async () => {
@@ -708,6 +736,73 @@ const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey,
       setGmailError(err.message || 'Failed to refresh status');
     } finally {
       setGmailLoading(null);
+    }
+  };
+
+  // Telegram handlers
+  const handleTelegramConnect = async () => {
+    if (!telegramToken.trim()) {
+      setTelegramError('Bot token is required');
+      return;
+    }
+    setTelegramLoading('connect');
+    setTelegramError(null);
+    try {
+      const response = await sendRequest('telegram_connect', { token: telegramToken.trim() });
+      if (response.success) {
+        setTelegramTokenStored(true);
+      } else {
+        setTelegramError(response.error || 'Failed to connect');
+      }
+    } catch (err: any) {
+      setTelegramError(err.message || 'Failed to connect');
+    } finally {
+      setTelegramLoading(null);
+    }
+  };
+
+  const handleTelegramDisconnect = async () => {
+    setTelegramLoading('disconnect');
+    setTelegramError(null);
+    try {
+      const response = await sendRequest('telegram_disconnect', {});
+      if (response.success) {
+        setTelegramTokenStored(false);
+        setTelegramToken('');
+      } else {
+        setTelegramError(response.error || 'Failed to disconnect');
+      }
+    } catch (err: any) {
+      setTelegramError(err.message || 'Failed to disconnect');
+    } finally {
+      setTelegramLoading(null);
+    }
+  };
+
+  const handleTelegramReconnect = async () => {
+    setTelegramLoading('reconnect');
+    setTelegramError(null);
+    try {
+      const response = await sendRequest('telegram_reconnect', {});
+      if (!response.success) {
+        setTelegramError(response.error || 'Failed to reconnect');
+      }
+    } catch (err: any) {
+      setTelegramError(err.message || 'Failed to reconnect');
+    } finally {
+      setTelegramLoading(null);
+    }
+  };
+
+  const handleTelegramRefreshStatus = async () => {
+    setTelegramLoading('refresh');
+    setTelegramError(null);
+    try {
+      await sendRequest('telegram_status', {});
+    } catch (err: any) {
+      setTelegramError(err.message || 'Failed to refresh status');
+    } finally {
+      setTelegramLoading(null);
     }
   };
 
@@ -1685,6 +1780,185 @@ const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey,
             <Button
               onClick={handleTwitterRefreshStatus}
               loading={twitterLoading === 'refresh'}
+              icon={<ReloadOutlined />}
+              style={{
+                backgroundColor: `${theme.dracula.cyan}25`,
+                borderColor: `${theme.dracula.cyan}60`,
+                color: theme.dracula.cyan,
+              }}
+            >
+              Refresh
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    // Telegram panel
+    if (selectedItem.panelType === 'telegram') {
+      return (
+        <div style={{ padding: theme.spacing.xl, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+          <Descriptions
+            title={<Space><TelegramIcon /> Telegram Bot</Space>}
+            bordered
+            column={1}
+            size="small"
+            style={{
+              marginBottom: theme.spacing.xl,
+              background: theme.colors.backgroundAlt,
+              borderRadius: theme.borderRadius.md,
+            }}
+            styles={{
+              label: {
+                backgroundColor: theme.colors.backgroundPanel,
+                color: theme.colors.textSecondary,
+                fontWeight: theme.fontWeight.medium,
+              },
+              content: {
+                backgroundColor: theme.colors.background,
+                color: theme.colors.text,
+              },
+            }}
+          >
+            <Descriptions.Item label="Status">
+              <Tag style={getTagStyle(telegramStatus.connected ? 'success' : 'error')}>
+                {telegramStatus.connected ? 'Connected' : 'Not Connected'}
+              </Tag>
+            </Descriptions.Item>
+            <Descriptions.Item label="Token">
+              <Tag style={getTagStyle(telegramTokenStored ? 'success' : 'error')}>
+                {telegramTokenStored === null ? 'Checking...' : telegramTokenStored ? 'Stored' : 'Not configured'}
+              </Tag>
+            </Descriptions.Item>
+            {telegramStatus.connected && telegramStatus.bot_username && (
+              <Descriptions.Item label="Bot">
+                <span style={{ fontFamily: 'monospace', fontSize: theme.fontSize.sm }}>@{telegramStatus.bot_username}</span>
+                {telegramStatus.bot_name && <span style={{ color: theme.colors.textSecondary }}> ({telegramStatus.bot_name})</span>}
+              </Descriptions.Item>
+            )}
+            {telegramStatus.connected && telegramStatus.owner_chat_id && (
+              <Descriptions.Item label="Owner">
+                <span style={{ fontFamily: 'monospace', fontSize: theme.fontSize.sm }}>{telegramStatus.owner_chat_id}</span>
+              </Descriptions.Item>
+            )}
+          </Descriptions>
+
+          {/* Bot Token Input - Only show if not connected */}
+          {!telegramStatus.connected && (
+            <div style={{ marginBottom: theme.spacing.xl }}>
+              <label style={{
+                display: 'block',
+                fontSize: theme.fontSize.sm,
+                fontWeight: theme.fontWeight.medium,
+                color: theme.colors.text,
+                marginBottom: theme.spacing.sm,
+              }}>
+                Bot Token
+              </label>
+              <Input.Password
+                value={telegramToken}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTelegramToken(e.target.value)}
+                placeholder="123456789:ABCdefGHIjklMNOpqrSTUvwxYZ"
+                style={{
+                  marginBottom: theme.spacing.md,
+                  backgroundColor: theme.colors.background,
+                  borderColor: theme.colors.border,
+                  color: theme.colors.text,
+                  fontFamily: 'monospace',
+                  fontSize: theme.fontSize.sm,
+                }}
+              />
+              <div style={{
+                fontSize: theme.fontSize.xs,
+                color: theme.colors.textMuted,
+                lineHeight: 1.5,
+              }}>
+                Get a bot token from <span style={{ color: theme.dracula.cyan }}>@BotFather</span> on Telegram.
+                After connecting, send any message to your bot to register as the owner.
+              </div>
+            </div>
+          )}
+
+          {telegramError && (
+            <Alert type="error" message={telegramError} showIcon style={{ marginBottom: theme.spacing.lg }} />
+          )}
+
+          {/* Info box */}
+          <div style={{
+            padding: theme.spacing.md,
+            borderRadius: theme.borderRadius.md,
+            backgroundColor: `${theme.dracula.cyan}10`,
+            border: `1px solid ${theme.dracula.cyan}30`,
+            marginBottom: theme.spacing.xl,
+            flex: 1,
+          }}>
+            <div style={{
+              fontSize: theme.fontSize.sm,
+              color: theme.colors.textSecondary,
+              lineHeight: 1.5,
+            }}>
+              {telegramStatus.connected ? (
+                <>Your Telegram bot is connected and polling for messages. Use Telegram nodes in your workflows.</>
+              ) : telegramTokenStored ? (
+                <>A bot token is stored. Click Reconnect to connect using the stored token.</>
+              ) : (
+                <>Enter your bot token from @BotFather to get started.</>
+              )}
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div style={{
+            display: 'flex',
+            gap: theme.spacing.sm,
+            justifyContent: 'center',
+            paddingTop: theme.spacing.md,
+            borderTop: `1px solid ${theme.colors.border}`,
+          }}>
+            {!telegramStatus.connected ? (
+              <>
+                <Button
+                  onClick={handleTelegramConnect}
+                  loading={telegramLoading === 'connect'}
+                  disabled={!telegramToken.trim() && !telegramTokenStored}
+                  style={{
+                    backgroundColor: `${theme.dracula.green}25`,
+                    borderColor: `${theme.dracula.green}60`,
+                    color: theme.dracula.green,
+                  }}
+                >
+                  Connect
+                </Button>
+                {telegramTokenStored && (
+                  <Button
+                    onClick={handleTelegramReconnect}
+                    loading={telegramLoading === 'reconnect'}
+                    style={{
+                      backgroundColor: `${theme.dracula.purple}25`,
+                      borderColor: `${theme.dracula.purple}60`,
+                      color: theme.dracula.purple,
+                    }}
+                  >
+                    Reconnect
+                  </Button>
+                )}
+              </>
+            ) : (
+              <Button
+                onClick={handleTelegramDisconnect}
+                loading={telegramLoading === 'disconnect'}
+                style={{
+                  backgroundColor: `${theme.dracula.pink}25`,
+                  borderColor: `${theme.dracula.pink}60`,
+                  color: theme.dracula.pink,
+                }}
+              >
+                Disconnect
+              </Button>
+            )}
+            <Button
+              onClick={handleTelegramRefreshStatus}
+              loading={telegramLoading === 'refresh'}
               icon={<ReloadOutlined />}
               style={{
                 backgroundColor: `${theme.dracula.cyan}25`,

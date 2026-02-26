@@ -440,7 +440,8 @@ class StatusBroadcaster:
         connected: bool,
         bot_id: Optional[int] = None,
         bot_username: Optional[str] = None,
-        bot_name: Optional[str] = None
+        bot_name: Optional[str] = None,
+        owner_chat_id: Optional[int] = None
     ):
         """Update Telegram bot connection status and broadcast."""
         import time
@@ -449,6 +450,7 @@ class StatusBroadcaster:
             "bot_id": bot_id,
             "bot_username": bot_username,
             "bot_name": bot_name,
+            "owner_chat_id": owner_chat_id,
             "timestamp": time.time()
         }
 

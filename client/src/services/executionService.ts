@@ -9,6 +9,7 @@ import { TWITTER_NODE_TYPES } from '../nodeDefinitions/twitterNodes';
 import { GOOGLE_WORKSPACE_NODE_TYPES } from '../nodeDefinitions/googleWorkspaceNodes';
 import { APIFY_NODE_TYPES } from '../nodeDefinitions/apifyNodes';
 import { SEARCH_NODE_TYPES } from '../nodeDefinitions/searchNodes';
+import { TELEGRAM_NODE_TYPES } from '../nodeDefinitions/telegramNodes';
 import { Node, Edge } from 'reactflow';
 import { INodeExecutionData } from '../types/INodeProperties';
 import { API_CONFIG } from '../config/api';
@@ -235,7 +236,9 @@ export class ExecutionService {
       // Apify web scraping
       ...APIFY_NODE_TYPES,
       // Search API nodes
-      ...SEARCH_NODE_TYPES
+      ...SEARCH_NODE_TYPES,
+      // Telegram Nodes
+      ...TELEGRAM_NODE_TYPES
     ];
 
     return supportedTypes.includes(nodeType);

@@ -3,6 +3,9 @@
 Anthropic: tool_runner with compaction_control parameter
 OpenAI: context_management with compact_threshold
 Others: Client-side summarization fallback
+
+Threshold strategy: per-session custom_threshold > model-aware threshold > global default.
+Model-aware threshold = 50% of model's context window (e.g., 100K for a 200K model).
 """
 
 from pydantic import BaseModel
@@ -17,6 +20,9 @@ if TYPE_CHECKING:
     from core.config import Settings
 
 logger = get_logger(__name__)
+
+# Fraction of context window used as compaction threshold when no custom threshold is set
+CONTEXT_THRESHOLD_RATIO = 0.5
 
 
 def _extract_text_from_response(content) -> str:
@@ -69,28 +75,45 @@ class CompactionService:
         """Wire AI service for generating compaction summaries."""
         self._ai_service = ai_service
 
-    def anthropic_config(self, threshold: Optional[int] = None) -> Dict[str, Any]:
+    def get_model_threshold(self, model: str, provider: str) -> int:
+        """Compute compaction threshold based on model's context window.
+
+        Returns 50% of the model's context length, floored to the global
+        default if the registry has no data.  Per-session custom_threshold
+        (checked in track()) still takes priority over this value.
+        """
+        from services.model_registry import get_model_registry
+        registry = get_model_registry()
+        context_length = registry.get_context_length(model, provider)
+        model_threshold = int(context_length * CONTEXT_THRESHOLD_RATIO)
+        # Never go below the configured minimum (ge=10000 in Settings)
+        return max(model_threshold, 10000)
+
+    def anthropic_config(self, threshold: Optional[int] = None, model: str = "", provider: str = "anthropic") -> Dict[str, Any]:
         """Anthropic SDK compaction_control for tool_runner."""
+        effective = threshold or self.get_model_threshold(model, provider)
         return {
             "enabled": self._config.enabled,
-            "context_token_threshold": threshold or self._config.threshold
+            "context_token_threshold": effective
         }
 
-    def anthropic_api_config(self, threshold: Optional[int] = None) -> Dict[str, Any]:
+    def anthropic_api_config(self, threshold: Optional[int] = None, model: str = "", provider: str = "anthropic") -> Dict[str, Any]:
         """Anthropic Messages API context_management config."""
+        effective = threshold or self.get_model_threshold(model, provider)
         return {
             "betas": ["compact-2026-01-12"],
             "context_management": {
                 "edits": [{
                     "type": "compact_20260112",
-                    "trigger": {"type": "input_tokens", "value": threshold or self._config.threshold}
+                    "trigger": {"type": "input_tokens", "value": effective}
                 }]
             }
         }
 
-    def openai_config(self, threshold: Optional[int] = None) -> Dict[str, Any]:
+    def openai_config(self, threshold: Optional[int] = None, model: str = "", provider: str = "openai") -> Dict[str, Any]:
         """OpenAI context_management config."""
-        return {"context_management": {"compact_threshold": threshold or self._config.threshold}}
+        effective = threshold or self.get_model_threshold(model, provider)
+        return {"context_management": {"compact_threshold": effective}}
 
     async def track(self, session_id: str, node_id: str, provider: str, model: str, usage: Dict[str, int]) -> Dict[str, Any]:
         """Track token usage and cost, return compaction status."""
@@ -133,7 +156,13 @@ class CompactionService:
             "cumulative_total_cost": new_total_cost
         })
 
-        threshold = state.get("custom_threshold") or self._config.threshold
+        # Priority: per-session custom > model-aware > global default
+        custom = state.get("custom_threshold")
+        if custom:
+            threshold = custom
+        else:
+            threshold = self.get_model_threshold(model, provider)
+
         return {
             "total": new_total,
             "total_cost": new_total_cost,
@@ -156,10 +185,26 @@ class CompactionService:
             "compaction_count": state["compaction_count"] + 1
         })
 
-    async def stats(self, session_id: str) -> Dict[str, Any]:
-        """Get session statistics."""
+    async def stats(self, session_id: str, model: str = "", provider: str = "") -> Dict[str, Any]:
+        """Get session statistics.
+
+        When model/provider are provided, the threshold reflects the model's
+        context window.  Otherwise falls back to the global default.
+        """
         state = await self._db.get_or_create_session_token_state(session_id)
-        return {"session_id": session_id, "total": state["cumulative_total"], "threshold": state.get("custom_threshold") or self._config.threshold, "count": state.get("compaction_count", 0)}
+        custom = state.get("custom_threshold")
+        if custom:
+            threshold = custom
+        elif model and provider:
+            threshold = self.get_model_threshold(model, provider)
+        else:
+            threshold = self._config.threshold
+        return {
+            "session_id": session_id,
+            "total": state["cumulative_total"],
+            "threshold": threshold,
+            "count": state.get("compaction_count", 0),
+        }
 
     async def configure(self, session_id: str, threshold: Optional[int] = None, enabled: Optional[bool] = None) -> bool:
         """Configure session settings."""
@@ -218,9 +263,14 @@ CONVERSATION:
 
 Provide a concise but complete summary."""
 
+            # Use a reasonable summary size: min(4096, model's max output)
+            from services.model_registry import get_model_registry
+            model_max = get_model_registry().get_max_output_tokens(model, provider)
+            summary_tokens = min(4096, model_max)
+
             llm = self._ai_service.create_model(
                 provider=provider, api_key=api_key, model=model,
-                temperature=0.3, max_tokens=2000
+                temperature=0.3, max_tokens=summary_tokens
             )
 
             from langchain_core.messages import HumanMessage

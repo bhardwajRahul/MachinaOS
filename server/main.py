@@ -134,6 +134,22 @@ async def lifespan(app: FastAPI):
     compaction_svc.set_ai_service(container.ai_service())
     logger.info("Compaction service initialized")
 
+    # Initialize model registry service
+    from services.model_registry import get_model_registry
+    model_registry = get_model_registry()
+    model_registry.startup()
+    logger.info("Model registry initialized")
+
+    # Background refresh if cache is stale
+    if model_registry.is_stale():
+        async def _refresh_registry():
+            try:
+                count = await model_registry.refresh()
+                logger.info(f"Model registry refreshed: {count} models")
+            except Exception as e:
+                logger.warning(f"Model registry refresh failed (offline?): {e}")
+        asyncio.create_task(_refresh_registry())
+
     # Initialize agent team service
     from services.agent_team import init_agent_team_service
     from services.status_broadcaster import get_status_broadcaster

@@ -1,32 +1,146 @@
 {
   "version": "2026.02",
-  "last_updated": "2026-02-23",
-  "_description": "Default models and settings for each LLM provider. Edit this file to change defaults.",
+  "last_updated": "2026-02-26",
+  "_description": "Default models, settings, and offline fallback constraints for each LLM provider.",
 
   "providers": {
     "openai": {
       "default_model": "gpt-5.2",
-      "detection_patterns": ["gpt", "openai", "o1", "o3", "o4"]
+      "detection_patterns": ["gpt", "openai", "o1", "o3", "o4"],
+      "max_output_tokens": {
+        "gpt-5.2": 128000,
+        "gpt-5.1": 128000,
+        "gpt-5": 128000,
+        "gpt-5-mini": 128000,
+        "gpt-5-nano": 128000,
+        "gpt-4o": 16384,
+        "gpt-4o-mini": 16384,
+        "gpt-4.1": 32768,
+        "gpt-4.1-mini": 32768,
+        "gpt-4.1-nano": 32768,
+        "o3": 100000,
+        "o3-mini": 100000,
+        "o4-mini": 100000,
+        "o1": 100000,
+        "_default": 16384
+      },
+      "context_length": {
+        "gpt-5.2": 400000,
+        "gpt-5.1": 400000,
+        "gpt-5": 400000,
+        "gpt-5-mini": 400000,
+        "gpt-5-nano": 400000,
+        "gpt-4.1": 1047576,
+        "gpt-4.1-mini": 1047576,
+        "gpt-4.1-nano": 1047576,
+        "gpt-4o": 128000,
+        "gpt-4o-mini": 128000,
+        "o3": 200000,
+        "o3-mini": 200000,
+        "o4-mini": 200000,
+        "o1": 200000,
+        "_default": 128000
+      },
+      "reasoning_models": ["o1", "o3", "o3-mini", "o4-mini"],
+      "thinking_models": ["gpt-5"],
+      "thinking_type": "effort",
+      "temperature_range": [0.0, 2.0]
     },
     "anthropic": {
       "default_model": "claude-opus-4.6",
-      "detection_patterns": ["claude", "anthropic"]
+      "detection_patterns": ["claude", "anthropic"],
+      "max_output_tokens": {
+        "claude-opus-4.6": 128000,
+        "claude-sonnet-4.6": 64000,
+        "claude-opus-4.5": 64000,
+        "claude-sonnet-4.5": 64000,
+        "claude-sonnet-4": 64000,
+        "claude-opus-4.1": 32000,
+        "claude-opus-4": 32000,
+        "claude-haiku-4.5": 64000,
+        "claude-3.5-haiku": 8192,
+        "claude-3-opus": 4096,
+        "claude-3-haiku": 4096,
+        "_default": 8192
+      },
+      "context_length": {
+        "claude-opus-4.6": 1000000,
+        "claude-sonnet-4.6": 1000000,
+        "claude-sonnet-4.5": 1000000,
+        "claude-sonnet-4": 1000000,
+        "_default": 200000
+      },
+      "thinking_type": "budget",
+      "temperature_range": [0.0, 1.0]
     },
     "gemini": {
       "default_model": "gemini-2.5-flash",
-      "detection_patterns": ["gemini", "google"]
+      "detection_patterns": ["gemini", "google"],
+      "max_output_tokens": {
+        "gemini-3-pro": 65536,
+        "gemini-3-flash": 65536,
+        "gemini-2.5-pro": 65536,
+        "gemini-2.5-flash": 65536,
+        "gemini-2.5-flash-lite": 65536,
+        "gemini-2.0-flash": 8192,
+        "gemini-2.0-flash-lite": 8192,
+        "_default": 8192
+      },
+      "context_length": {
+        "_default": 1048576
+      },
+      "thinking_models": ["gemini-2.5", "gemini-3"],
+      "thinking_type": "budget",
+      "temperature_range": [0.0, 2.0]
     },
     "openrouter": {
       "default_model": "anthropic/claude-opus-4.6",
-      "detection_patterns": ["openrouter"]
+      "detection_patterns": ["openrouter"],
+      "max_output_tokens": {
+        "_default": 4096
+      },
+      "context_length": {
+        "_default": 128000
+      },
+      "temperature_range": [0.0, 2.0]
     },
     "groq": {
-      "default_model": "llama-4-maverick",
-      "detection_patterns": ["groq"]
+      "default_model": "llama-4-scout",
+      "detection_patterns": ["groq"],
+      "max_output_tokens": {
+        "llama-3.1-8b": 131072,
+        "llama-3.3-70b": 32768,
+        "llama-4-scout": 8192,
+        "qwen3-32b": 40960,
+        "gpt-oss-120b": 65536,
+        "gpt-oss-20b": 65536,
+        "_default": 8192
+      },
+      "context_length": {
+        "_default": 131072
+      },
+      "thinking_models": ["qwen3"],
+      "thinking_type": "format",
+      "temperature_range": [0.0, 2.0]
     },
     "cerebras": {
       "default_model": "llama3.1-8b",
-      "detection_patterns": ["cerebras", "llama3.1", "llama-3.3", "qwen-3", "qwen3", "gpt-oss"]
+      "detection_patterns": ["cerebras", "llama3.1", "gpt-oss", "qwen-3-235b"],
+      "max_output_tokens": {
+        "llama3.1-8b": 8192,
+        "gpt-oss-120b": 8192,
+        "qwen-3-235b": 8192,
+        "_default": 8192
+      },
+      "context_length": {
+        "llama3.1-8b": 128000,
+        "gpt-oss-120b": 131072,
+        "qwen-3-235b": 32768,
+        "_default": 128000
+      },
+      "thinking_models": ["qwen-3-235b"],
+      "thinking_type": "format",
+      "temperature_range": [0.0, 1.5]
     }
   }
 }

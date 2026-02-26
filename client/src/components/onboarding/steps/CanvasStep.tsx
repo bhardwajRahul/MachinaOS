@@ -48,7 +48,7 @@ const CanvasStep: React.FC = () => {
           <Text style={{ fontSize: 11, color: theme.dracula.orange }} strong>Toolbar</Text>
           <div style={{ flex: 1 }} />
           <Tag color="orange" style={{ fontSize: 10, margin: 0, lineHeight: '18px' }}>Run</Tag>
-          <Tag color="purple" style={{ fontSize: 10, margin: 0, lineHeight: '18px' }}>Deploy</Tag>
+          <Tag color="purple" style={{ fontSize: 10, margin: 0, lineHeight: '18px' }}>Start</Tag>
           <Tag color="cyan" style={{ fontSize: 10, margin: 0, lineHeight: '18px' }}>Save</Tag>
         </div>
 

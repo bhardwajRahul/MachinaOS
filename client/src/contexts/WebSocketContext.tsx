@@ -112,6 +112,7 @@ export interface TelegramStatus {
   bot_username: string | null;
   bot_name: string | null;
   bot_id: string | null;
+  owner_chat_id: number | null;
 }
 
 // WhatsApp Rate Limit types (from Go RPC schema)
@@ -208,6 +209,15 @@ export interface NodeParameters {
   timestamp?: number;
 }
 
+// Per-session compaction/token usage stats (pushed by backend broadcasts)
+export interface CompactionStats {
+  session_id: string;
+  total: number;
+  threshold: number;
+  count: number;
+  total_cost?: number;
+}
+
 export interface FullStatus {
   android: AndroidStatus;
   api_keys: Record<string, ApiKeyStatus>;
@@ -242,11 +252,15 @@ interface WebSocketContextValue {
   workflowStatus: WorkflowStatus;
   deploymentStatus: DeploymentStatus;
   workflowLock: WorkflowLock;
+  compactionStats: Record<string, CompactionStats>;  // session_id -> stats (current workflow)
 
   // Status getters
   getNodeStatus: (nodeId: string) => NodeStatus | undefined;
   getApiKeyStatus: (provider: string) => ApiKeyStatus | undefined;
   getVariable: (name: string) => any;
+
+  // Compaction stats
+  updateCompactionStats: (workflowId: string, sessionId: string, stats: CompactionStats) => void;
   requestStatus: () => void;
   clearNodeStatus: (nodeId: string) => Promise<void>;
   clearWhatsAppMessages: () => void;
@@ -368,6 +382,7 @@ const defaultTelegramStatus: TelegramStatus = {
   bot_username: null,
   bot_name: null,
   bot_id: null,
+  owner_chat_id: null,
 };
 
 const WebSocketContext = createContext<WebSocketContextValue | null>(null);
@@ -420,6 +435,8 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [workflowStatus, setWorkflowStatus] = useState<WorkflowStatus>(defaultWorkflowStatus);
   const [deploymentStatus, setDeploymentStatus] = useState<DeploymentStatus>(defaultDeploymentStatus);
   const [workflowLock, setWorkflowLock] = useState<WorkflowLock>(defaultWorkflowLock);
+  // Per-workflow compaction stats: workflow_id -> session_id -> CompactionStats (n8n pattern)
+  const [allCompactionStats, setAllCompactionStats] = useState<Record<string, Record<string, CompactionStats>>>({});
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -621,6 +638,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
               bot_username: data.bot_username || null,
               bot_name: data.bot_name || null,
               bot_id: data.bot_id || null,
+              owner_chat_id: data.owner_chat_id ?? null,
             });
           }
           break;
@@ -951,6 +969,61 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           }
           break;
 
+        case 'token_usage_update': {
+          // Real-time token usage from backend after each AI execution
+          const tokenSessionId = message.session_id;
+          const tokenWorkflowId = message.workflow_id || currentWorkflowIdRef.current || '';
+          const trackingData = message.data || {};
+          if (tokenSessionId && tokenWorkflowId) {
+            setAllCompactionStats(prev => {
+              const wfStats = prev[tokenWorkflowId] || {};
+              const existing = wfStats[tokenSessionId];
+              return {
+                ...prev,
+                [tokenWorkflowId]: {
+                  ...wfStats,
+                  [tokenSessionId]: {
+                    session_id: tokenSessionId,
+                    total: trackingData.total ?? existing?.total ?? 0,
+                    threshold: trackingData.threshold ?? existing?.threshold ?? 0,
+                    count: existing?.count ?? 0,
+                    total_cost: trackingData.total_cost ?? existing?.total_cost,
+                  }
+                }
+              };
+            });
+          }
+          break;
+        }
+
+        case 'compaction_completed': {
+          // Backend completed compaction - increment count if successful
+          const compSessionId = message.session_id;
+          if (compSessionId) {
+            setAllCompactionStats(prev => {
+              const updated = { ...prev };
+              for (const wid of Object.keys(updated)) {
+                if (updated[wid]?.[compSessionId]) {
+                  updated[wid] = {
+                    ...updated[wid],
+                    [compSessionId]: {
+                      ...updated[wid][compSessionId],
+                      count: (updated[wid][compSessionId].count || 0) + (message.success ? 1 : 0),
+                      total: message.tokens_after ?? updated[wid][compSessionId].total,
+                    }
+                  };
+                }
+              }
+              return updated;
+            });
+          }
+          break;
+        }
+
+        case 'compaction_starting':
+          // Could be used for UI loading indicator in the future
+          break;
+
         case 'error':
           console.error('[WebSocket] Server error:', message.code, message.message);
           break;
@@ -1265,6 +1338,23 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     if (!currentWorkflowId) return {};
     return allVariables[currentWorkflowId] || {};
   }, [allVariables, currentWorkflowId]);
+
+  // Derive current workflow's compaction stats (n8n pattern)
+  const compactionStats = useMemo(() => {
+    if (!currentWorkflowId) return {};
+    return allCompactionStats[currentWorkflowId] || {};
+  }, [allCompactionStats, currentWorkflowId]);
+
+  // Update compaction stats for a specific workflow + session (called by MiddleSection on initial fetch)
+  const updateCompactionStats = useCallback((workflowId: string, sessionId: string, stats: CompactionStats) => {
+    setAllCompactionStats(prev => ({
+      ...prev,
+      [workflowId]: {
+        ...(prev[workflowId] || {}),
+        [sessionId]: stats,
+      }
+    }));
+  }, []);
 
   // =========================================================================
   // Core Request/Response Pattern
@@ -2096,6 +2186,10 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     workflowStatus,
     deploymentStatus,
     workflowLock,
+
+    // Compaction stats (real-time via broadcasts)
+    compactionStats,
+    updateCompactionStats,
 
     // Status getters
     getNodeStatus,

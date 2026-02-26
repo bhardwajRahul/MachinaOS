@@ -10,6 +10,8 @@ interface ModalProps {
   maxWidth?: string;
   maxHeight?: string;
   headerActions?: React.ReactNode;
+  /** When true, modal height fits content up to maxHeight instead of fixed at maxHeight */
+  autoHeight?: boolean;
 }
 
 const Modal: React.FC<ModalProps> = ({
@@ -20,6 +22,7 @@ const Modal: React.FC<ModalProps> = ({
   maxWidth = '500px',
   maxHeight = '80vh',
   headerActions,
+  autoHeight = false,
 }) => {
   const theme = useAppTheme();
   return (
@@ -45,7 +48,7 @@ const Modal: React.FC<ModalProps> = ({
             boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
             width: maxWidth,
             minWidth: maxWidth,
-            height: maxHeight,
+            height: autoHeight ? 'auto' : maxHeight,
             maxHeight: maxHeight,
             display: 'flex',
             flexDirection: 'column',

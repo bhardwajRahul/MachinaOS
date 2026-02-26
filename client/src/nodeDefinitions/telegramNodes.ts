@@ -55,13 +55,27 @@ export const telegramNodes: Record<string, INodeTypeDescription> = {
     properties: [
       // ===== RECIPIENT =====
       {
+        displayName: 'Send To',
+        name: 'recipient_type',
+        type: 'options',
+        options: [
+          { name: 'Self (Bot Owner)', value: 'self' },
+          { name: 'User / Chat ID', value: 'user' },
+          { name: 'Group', value: 'group' }
+        ],
+        default: 'self',
+        description: 'Send to bot owner, specific user, or group'
+      },
+      {
         displayName: 'Chat ID',
         name: 'chat_id',
         type: 'string',
         default: '',
-        required: true,
         placeholder: '123456789 or @username',
-        description: 'Telegram chat ID (numeric) or @username'
+        description: 'Telegram chat ID (numeric) or @username',
+        displayOptions: {
+          show: { recipient_type: ['user', 'group'] }
+        }
       },
 
       // ===== MESSAGE TYPE =====

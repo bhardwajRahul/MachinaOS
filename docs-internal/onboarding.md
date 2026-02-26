@@ -135,7 +135,7 @@ export const useOnboarding = (reopenTrigger?: number) => {
 | `reopenTrigger` | `number?` | Incrementing counter triggers wizard reopen |
 
 **UI Structure**:
-- Uses existing `Modal` component (`maxWidth="680px"`, `maxHeight="85vh"`)
+- Uses existing `Modal` component (`maxWidth="580px"`, `maxHeight="70vh"`, `autoHeight`)
 - Ant Design `Steps` component for progress indicator
 - Step content rendered via switch on `currentStep`
 - Footer: "Skip for now" (left) | "Back" + "Next"/"Start Building" (right)
