@@ -34,7 +34,7 @@ ${Object.entries(COMMANDS).map(([cmd, desc]) => `  ${cmd.padEnd(14)} ${desc}`).j
 Flags:
   --verbose, -v    Show full service logs (start)
   --skip-whatsapp  Skip WhatsApp service (start, dev)
-  --daemon         Use gunicorn backend (dev)
+  --daemon         Use uvicorn daemon backend
 
 Examples:
   machina start          # Production server (clean output)

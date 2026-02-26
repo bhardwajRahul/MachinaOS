@@ -34,7 +34,7 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
   onSave,
   onNew,
   onOpen,
-  onRun,
+  onRun: _onRun,
   isRunning = false,
   onDeploy,
   onCancelDeployment,
@@ -576,28 +576,6 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
         <div style={{ width: '1px', height: theme.spacing.xl, backgroundColor: theme.colors.border, margin: `0 ${theme.spacing.sm}` }} />
 
         {/* Action Buttons */}
-        <button
-          onClick={onRun}
-          disabled={isRunning || isDeploying}
-          style={actionButtonStyle(theme.colors.actionRun, isRunning || isDeploying)}
-          onMouseEnter={(e) => {
-            if (!isRunning && !isDeploying) {
-              e.currentTarget.style.backgroundColor = `${theme.colors.actionRun}40`;
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (!isRunning && !isDeploying) {
-              e.currentTarget.style.backgroundColor = `${theme.colors.actionRun}25`;
-            }
-          }}
-          title={isRunning ? 'Running...' : isDeploying ? 'Cannot run while deploying' : 'Run workflow once'}
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M8 5v14l11-7z"/>
-          </svg>
-          {isRunning ? 'Running' : 'Run'}
-        </button>
-
         {!isDeploying ? (
           <button
             onClick={onDeploy}

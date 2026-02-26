@@ -48,7 +48,7 @@ async function main() {
     await killPort(port);
   }
 
-  // Services: static client, backend (gunicorn on Linux, uvicorn on Windows), whatsapp, temporal
+  // Services: static client, backend (uvicorn), whatsapp, temporal
   const services = [];
   services.push(`"node ${resolve(ROOT, 'scripts', 'serve-client.js').replace(/\\/g, '/')}"`);
   services.push(isWindows ? 'npm:python:start' : 'npm:python:daemon');

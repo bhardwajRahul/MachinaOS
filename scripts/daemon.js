@@ -113,7 +113,7 @@ function windowsInstall() {
   run(`nssm remove ${SERVICE_NAME} confirm`, { ignoreError: true, silent: true });
 
   // Install service
-  run(`nssm install ${SERVICE_NAME} "${pythonExe}" -m gunicorn main:app -c gunicorn.conf.py`);
+  run(`nssm install ${SERVICE_NAME} "${pythonExe}" -m uvicorn main:app --host 0.0.0.0 --port 3010 --log-level warning`);
   run(`nssm set ${SERVICE_NAME} AppDirectory "${serverDir}"`);
   run(`nssm set ${SERVICE_NAME} AppEnvironmentExtra "PYTHONPATH=${serverDir}"`);
   run(`nssm set ${SERVICE_NAME} Start SERVICE_AUTO_START`);
@@ -170,7 +170,7 @@ Type=simple
 User=${serviceUser}
 WorkingDirectory=${serverDir}
 EnvironmentFile=${installDir}/.env
-ExecStart=${venvPath}/bin/gunicorn main:app -c gunicorn.conf.py
+ExecStart=${venvPath}/bin/uvicorn main:app --host 0.0.0.0 --port 3010 --log-level warning
 Restart=always
 RestartSec=5
 StartLimitIntervalSec=60
@@ -254,10 +254,14 @@ function macGeneratePlist() {
     <string>com.machina.backend</string>
     <key>ProgramArguments</key>
     <array>
-        <string>${venvPath}/bin/gunicorn</string>
+        <string>${venvPath}/bin/uvicorn</string>
         <string>main:app</string>
-        <string>-c</string>
-        <string>gunicorn.conf.py</string>
+        <string>--host</string>
+        <string>0.0.0.0</string>
+        <string>--port</string>
+        <string>3010</string>
+        <string>--log-level</string>
+        <string>warning</string>
     </array>
     <key>WorkingDirectory</key>
     <string>${serverDir}</string>
