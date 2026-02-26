@@ -62,6 +62,7 @@ class Settings(BaseSettings):
     # Node.js Executor Configuration
     nodejs_executor_url: str = Field(default="http://localhost:3020", env="NODEJS_EXECUTOR_URL")
     nodejs_executor_timeout: int = Field(default=30, env="NODEJS_EXECUTOR_TIMEOUT", ge=5, le=300)
+    nodejs_executor_port: int = Field(default=3020, env="NODEJS_EXECUTOR_PORT", ge=1024, le=65535)
 
     # AI Proxy Configuration (Ollama-style proxy)
     ai_proxy_default_port: int = Field(default=11434, env="AI_PROXY_DEFAULT_PORT")
