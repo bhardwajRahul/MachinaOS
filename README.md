@@ -4,7 +4,7 @@
 <a href="https://opensource.org/licenses/MIT" target="_blank"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
 <a href="https://discord.gg/c9pCJ7d8Ce" target="_blank"><img src="https://img.shields.io/discord/1455977012308086895?logo=discord&logoColor=white&label=Discord" alt="Discord"></a>
 
-Build your personal AI assistant. Connect AI Assistant to your email, calendar, messages, phone, and more.
+Personal AI Assistant/Co-Employees that Perform Human Like Tasks. Connect AI Assistant to your email, calendar, messages, phone, and more.
 
 Mashup of N8N + Openclaw but with better visibility of what it's doing and also tighter control of what your AI Assistant can do.
 
