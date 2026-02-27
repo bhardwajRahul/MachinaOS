@@ -1,6 +1,6 @@
 {
   "name": "machinaos",
-  "version": "0.0.37",
+  "version": "0.0.38",
   "description": "Open source workflow automation platform with AI agents, React Flow, and n8n-inspired architecture",
   "type": "module",
   "keywords": [
@@ -102,6 +102,6 @@
     "concurrently": "^9.2.1",
     "cross-env": "^7.0.3",
     "rimraf": "^6.0.1",
-    "whatsapp-rpc": "^0.0.10"
+    "whatsapp-rpc": "^0.0.12"
   }
 }

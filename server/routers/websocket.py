@@ -1063,7 +1063,6 @@ async def handle_twitter_oauth_login(data: Dict[str, Any], websocket: WebSocket)
     Opens browser to Twitter authorization page. After user authorizes,
     Twitter redirects to /api/twitter/callback which stores tokens.
     """
-    import webbrowser
     from services.twitter_oauth import TwitterOAuth
 
     auth_service = container.auth_service()
@@ -1090,12 +1089,10 @@ async def handle_twitter_oauth_login(data: Dict[str, Any], websocket: WebSocket)
 
     auth_data = oauth.generate_authorization_url()
 
-    # Open browser to authorization URL
-    webbrowser.open(auth_data["url"])
-
     return {
         "success": True,
         "message": "Opening Twitter authorization in browser...",
+        "url": auth_data["url"],
         "state": auth_data["state"],
     }
 
@@ -1230,7 +1227,6 @@ async def handle_google_oauth_login(data: Dict[str, Any], websocket: WebSocket) 
     Google redirects to /api/google/callback which stores tokens.
     Grants access to all Google Workspace services (Gmail, Calendar, Drive, etc).
     """
-    import webbrowser
     from services.google_oauth import GoogleOAuth
 
     auth_service = container.auth_service()
@@ -1255,11 +1251,10 @@ async def handle_google_oauth_login(data: Dict[str, Any], websocket: WebSocket) 
 
     auth_data = oauth.generate_authorization_url()
 
-    webbrowser.open(auth_data["url"])
-
     return {
         "success": True,
         "message": "Opening Google authorization in browser...",
+        "url": auth_data["url"],
         "state": auth_data["state"],
     }
 

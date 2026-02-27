@@ -1,6 +1,6 @@
 {
-  "id": "workflow-1772151325023-i7zkjbt04",
-  "name": "Test",
+  "id": "example_workflow-1772151325023-i7zkjbt04",
+  "name": "Zeenie Assistant",
   "nodes": [
     {
       "id": "chatTrigger-1769755237666",
@@ -25,7 +25,7 @@
       "id": "duckduckgoSearch-1769755286327",
       "type": "duckduckgoSearch",
       "position": {
-        "x": 2240,
+        "x": 2320,
         "y": 720
       },
       "data": {
@@ -35,7 +35,7 @@
       "height": 82,
       "selected": false,
       "positionAbsolute": {
-        "x": 2240,
+        "x": 2320,
         "y": 720
       },
       "dragging": false
@@ -44,7 +44,7 @@
       "id": "httpRequest-1769755308753",
       "type": "httpRequest",
       "position": {
-        "x": 1960,
+        "x": 2020,
         "y": 720
       },
       "data": {
@@ -54,7 +54,7 @@
       "height": 82,
       "selected": false,
       "positionAbsolute": {
-        "x": 1960,
+        "x": 2020,
         "y": 720
       },
       "dragging": false
@@ -63,7 +63,7 @@
       "id": "pythonExecutor-1769889650412",
       "type": "pythonExecutor",
       "position": {
-        "x": 2500,
+        "x": 2560,
         "y": 720
       },
       "data": {
@@ -73,7 +73,7 @@
       "height": 82,
       "selected": false,
       "positionAbsolute": {
-        "x": 2500,
+        "x": 2560,
         "y": 720
       },
       "dragging": false
@@ -82,7 +82,7 @@
       "id": "javascriptExecutor-1769889652348",
       "type": "javascriptExecutor",
       "position": {
-        "x": 2600,
+        "x": 2680,
         "y": 720
       },
       "data": {
@@ -92,7 +92,7 @@
       "height": 82,
       "selected": false,
       "positionAbsolute": {
-        "x": 2600,
+        "x": 2680,
         "y": 720
       },
       "dragging": false
@@ -102,7 +102,7 @@
       "type": "chatAgent",
       "position": {
         "x": 2360,
-        "y": -120
+        "y": -100
       },
       "data": {
         "label": "Zeenie"
@@ -112,7 +112,7 @@
       "selected": false,
       "positionAbsolute": {
         "x": 2360,
-        "y": -120
+        "y": -100
       },
       "dragging": false
     },
@@ -158,7 +158,7 @@
       "id": "coding_agent-1770070861999",
       "type": "coding_agent",
       "position": {
-        "x": 2460,
+        "x": 2520,
         "y": 380
       },
       "data": {
@@ -168,7 +168,7 @@
       "height": 200,
       "selected": false,
       "positionAbsolute": {
-        "x": 2460,
+        "x": 2520,
         "y": 380
       },
       "dragging": false
@@ -177,7 +177,7 @@
       "id": "web_agent-1770070863433",
       "type": "web_agent",
       "position": {
-        "x": 1940,
+        "x": 2040,
         "y": 380
       },
       "data": {
@@ -187,7 +187,7 @@
       "height": 200,
       "selected": false,
       "positionAbsolute": {
-        "x": 1940,
+        "x": 2040,
         "y": 380
       },
       "dragging": false
@@ -215,7 +215,7 @@
       "id": "masterSkill-1770080471262",
       "type": "masterSkill",
       "position": {
-        "x": 1140,
+        "x": 1220,
         "y": 720
       },
       "data": {
@@ -225,7 +225,7 @@
       "height": 82,
       "selected": false,
       "positionAbsolute": {
-        "x": 1140,
+        "x": 1220,
         "y": 720
       },
       "dragging": false
@@ -253,7 +253,7 @@
       "id": "masterSkill-1770193844078",
       "type": "masterSkill",
       "position": {
-        "x": 1860,
+        "x": 1920,
         "y": 720
       },
       "data": {
@@ -263,7 +263,7 @@
       "height": 82,
       "selected": false,
       "positionAbsolute": {
-        "x": 1860,
+        "x": 1920,
         "y": 720
       },
       "dragging": false
@@ -272,7 +272,7 @@
       "id": "masterSkill-1770193849164",
       "type": "masterSkill",
       "position": {
-        "x": 2400,
+        "x": 2460,
         "y": 720
       },
       "data": {
@@ -282,7 +282,7 @@
       "height": 82,
       "selected": false,
       "positionAbsolute": {
-        "x": 2400,
+        "x": 2460,
         "y": 720
       },
       "dragging": false
@@ -310,7 +310,7 @@
       "id": "social_agent-1770213991252",
       "type": "social_agent",
       "position": {
-        "x": 2940,
+        "x": 3020,
         "y": 380
       },
       "data": {
@@ -320,7 +320,7 @@
       "height": 200,
       "selected": false,
       "positionAbsolute": {
-        "x": 2940,
+        "x": 3020,
         "y": 380
       },
       "dragging": false
@@ -329,7 +329,7 @@
       "id": "masterSkill-1770214062703",
       "type": "masterSkill",
       "position": {
-        "x": 2940,
+        "x": 2980,
         "y": 720
       },
       "data": {
@@ -339,7 +339,7 @@
       "height": 82,
       "selected": false,
       "positionAbsolute": {
-        "x": 2940,
+        "x": 2980,
         "y": 720
       },
       "dragging": false
@@ -443,7 +443,7 @@
       "id": "simpleMemory-1770973735815",
       "type": "simpleMemory",
       "position": {
-        "x": 1800,
+        "x": 1920,
         "y": 540
       },
       "data": {
@@ -453,7 +453,7 @@
       "height": 82,
       "selected": false,
       "positionAbsolute": {
-        "x": 1800,
+        "x": 1920,
         "y": 540
       },
       "dragging": false
@@ -462,7 +462,7 @@
       "id": "simpleMemory-1770973759469",
       "type": "simpleMemory",
       "position": {
-        "x": 2320,
+        "x": 2400,
         "y": 540
       },
       "data": {
@@ -472,16 +472,16 @@
       "height": 82,
       "selected": false,
       "positionAbsolute": {
-        "x": 2320,
+        "x": 2400,
         "y": 540
       },
-      "dragging": true
+      "dragging": false
     },
     {
       "id": "simpleMemory-1770973783506",
       "type": "simpleMemory",
       "position": {
-        "x": 2800,
+        "x": 2880,
         "y": 540
       },
       "data": {
@@ -491,10 +491,10 @@
       "height": 82,
       "selected": false,
       "positionAbsolute": {
-        "x": 2800,
+        "x": 2880,
         "y": 540
       },
-      "dragging": true
+      "dragging": false
     },
     {
       "id": "simpleMemory-1770973798020",
@@ -519,7 +519,7 @@
       "id": "productivity_agent-1771834433838",
       "type": "productivity_agent",
       "position": {
-        "x": 1400,
+        "x": 1480,
         "y": 380
       },
       "data": {
@@ -529,7 +529,7 @@
       "height": 200,
       "selected": false,
       "positionAbsolute": {
-        "x": 1400,
+        "x": 1480,
         "y": 380
       },
       "dragging": false
@@ -576,7 +576,7 @@
       "id": "twitterSearch-1771834599628",
       "type": "twitterSearch",
       "position": {
-        "x": 3060,
+        "x": 3080,
         "y": 720
       },
       "data": {
@@ -586,7 +586,7 @@
       "height": 82,
       "selected": false,
       "positionAbsolute": {
-        "x": 3060,
+        "x": 3080,
         "y": 720
       },
       "dragging": false
@@ -595,7 +595,7 @@
       "id": "twitterUser-1771834600973",
       "type": "twitterUser",
       "position": {
-        "x": 3160,
+        "x": 3180,
         "y": 720
       },
       "data": {
@@ -605,7 +605,7 @@
       "height": 82,
       "selected": false,
       "positionAbsolute": {
-        "x": 3160,
+        "x": 3180,
         "y": 720
       },
       "dragging": false
@@ -614,7 +614,7 @@
       "id": "simpleMemory-1771834793747",
       "type": "simpleMemory",
       "position": {
-        "x": 1220,
+        "x": 1340,
         "y": 540
       },
       "data": {
@@ -624,7 +624,7 @@
       "height": 82,
       "selected": false,
       "positionAbsolute": {
-        "x": 1220,
+        "x": 1340,
         "y": 540
       },
       "dragging": true
@@ -633,7 +633,7 @@
       "id": "gmail-1772074604463",
       "type": "gmail",
       "position": {
-        "x": 1720,
+        "x": 1820,
         "y": 720
       },
       "data": {
@@ -643,7 +643,7 @@
       "height": 82,
       "selected": false,
       "positionAbsolute": {
-        "x": 1720,
+        "x": 1820,
         "y": 720
       },
       "dragging": false
@@ -652,7 +652,7 @@
       "id": "calendar-1772074605773",
       "type": "calendar",
       "position": {
-        "x": 1540,
+        "x": 1620,
         "y": 720
       },
       "data": {
@@ -662,7 +662,7 @@
       "height": 82,
       "selected": false,
       "positionAbsolute": {
-        "x": 1540,
+        "x": 1620,
         "y": 720
       },
       "dragging": false
@@ -671,7 +671,7 @@
       "id": "drive-1772074607205",
       "type": "drive",
       "position": {
-        "x": 1340,
+        "x": 1420,
         "y": 720
       },
       "data": {
@@ -681,7 +681,7 @@
       "height": 82,
       "selected": false,
       "positionAbsolute": {
-        "x": 1340,
+        "x": 1420,
         "y": 720
       },
       "dragging": false
@@ -690,7 +690,7 @@
       "id": "sheets-1772074608160",
       "type": "sheets",
       "position": {
-        "x": 1640,
+        "x": 1720,
         "y": 720
       },
       "data": {
@@ -700,16 +700,16 @@
       "height": 82,
       "selected": false,
       "positionAbsolute": {
-        "x": 1640,
+        "x": 1720,
         "y": 720
       },
-      "dragging": true
+      "dragging": false
     },
     {
       "id": "tasks-1772074609131",
       "type": "tasks",
       "position": {
-        "x": 1440,
+        "x": 1520,
         "y": 720
       },
       "data": {
@@ -719,7 +719,7 @@
       "height": 82,
       "selected": false,
       "positionAbsolute": {
-        "x": 1440,
+        "x": 1520,
         "y": 720
       },
       "dragging": false
@@ -728,7 +728,7 @@
       "id": "contacts-1772074610122",
       "type": "contacts",
       "position": {
-        "x": 1240,
+        "x": 1320,
         "y": 720
       },
       "data": {
@@ -738,10 +738,10 @@
       "height": 82,
       "selected": false,
       "positionAbsolute": {
-        "x": 1240,
+        "x": 1320,
         "y": 720
       },
-      "dragging": true
+      "dragging": false
     },
     {
       "id": "telegramSend-1772074741486",
@@ -785,7 +785,7 @@
       "id": "perplexitySearch-1772075707557",
       "type": "perplexitySearch",
       "position": {
-        "x": 2140,
+        "x": 2200,
         "y": 720
       },
       "data": {
@@ -795,7 +795,7 @@
       "height": 82,
       "selected": false,
       "positionAbsolute": {
-        "x": 2140,
+        "x": 2200,
         "y": 720
       },
       "dragging": false
@@ -804,7 +804,7 @@
       "id": "braveSearch-1772075714278",
       "type": "braveSearch",
       "position": {
-        "x": 2060,
+        "x": 2120,
         "y": 720
       },
       "data": {
@@ -814,7 +814,7 @@
       "height": 82,
       "selected": false,
       "positionAbsolute": {
-        "x": 2060,
+        "x": 2120,
         "y": 720
       },
       "dragging": false
@@ -823,7 +823,7 @@
       "id": "typescriptExecutor-1772075756858",
       "type": "typescriptExecutor",
       "position": {
-        "x": 2720,
+        "x": 2800,
         "y": 720
       },
       "data": {
@@ -833,10 +833,10 @@
       "height": 82,
       "selected": false,
       "positionAbsolute": {
-        "x": 2720,
+        "x": 2800,
         "y": 720
       },
-      "dragging": true
+      "dragging": false
     }
   ],
   "edges": [
@@ -1429,9 +1429,9 @@
       "selected": false
     }
   ],
-  "createdAt": "2026-02-27T00:15:25.023Z",
-  "lastModified": "2026-02-27T00:34:08.292Z",
-  "version": "0.0.36",
+  "createdAt": "2026-02-26T22:56:32.660Z",
+  "lastModified": "2026-02-27T05:07:52.625Z",
+  "version": "0.0.37",
   "nodeParameters": {
     "chatAgent-1770060581808": {
       "provider": "gemini",
@@ -1731,6 +1731,12 @@
       }
     },
     "simpleMemory-1770973684811": {
+      "sessionId": "",
+      "windowSize": 100,
+      "longTermEnabled": false,
+      "retrievalCount": 3
+    },
+    "simpleMemory-1770973759469": {
       "sessionId": "",
       "windowSize": 100,
       "longTermEnabled": false,

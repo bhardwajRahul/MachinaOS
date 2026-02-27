@@ -309,13 +309,6 @@ const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey,
     if (!defaults?.default_model || modelConstraints[provider]) return;
     getModelConstraints(defaults.default_model, provider).then(constraints => {
       setModelConstraints(c => ({ ...c, [provider]: constraints }));
-      // Set max_tokens to model's actual max if user hasn't customized it
-      if (constraints.max_output_tokens && defaults.max_tokens !== constraints.max_output_tokens) {
-        setProviderDefaults(p => ({
-          ...p,
-          [provider]: { ...p[provider], max_tokens: constraints.max_output_tokens } as ProviderDefaults,
-        }));
-      }
     });
   }, [selectedItem, isConnected, providerDefaults, modelConstraints, getModelConstraints]);
 
@@ -670,7 +663,9 @@ const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey,
     setTwitterError(null);
     try {
       const response = await sendRequest('twitter_oauth_login', {});
-      if (!response.success) {
+      if (response.success && response.url) {
+        window.open(response.url, '_blank');
+      } else if (!response.success) {
         setTwitterError(response.error || 'Failed to start OAuth');
       }
     } catch (err: any) {
@@ -736,7 +731,9 @@ const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey,
     setGmailError(null);
     try {
       const response = await sendRequest('google_oauth_login', {});
-      if (!response.success) {
+      if (response.success && response.url) {
+        window.open(response.url, '_blank');
+      } else if (!response.success) {
         setGmailError(response.error || 'Failed to start OAuth');
       }
     } catch (err: any) {
