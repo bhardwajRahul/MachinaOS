@@ -10,6 +10,7 @@ import { resolve } from 'path';
 import {
   ROOT,
   isWindows,
+  isWSL,
   loadEnvConfig,
   ensureEnvFile,
   killPort,
@@ -51,13 +52,13 @@ async function main() {
   // Services: static client, backend (uvicorn), whatsapp, temporal
   const services = [];
   services.push(`"node ${resolve(ROOT, 'scripts', 'serve-client.js').replace(/\\/g, '/')}"`);
-  services.push(isWindows ? 'npm:python:start' : 'npm:python:daemon');
+  services.push((isWindows || isWSL) ? 'npm:python:start' : 'npm:python:daemon');
   if (!skipWhatsApp) services.push('npm:whatsapp:api');
   if (config.temporalEnabled) services.push('npm:temporal:worker');
 
   if (isVerbose) {
     console.log('\n=== MachinaOS Starting (verbose) ===\n');
-    const proc = spawn('npx', ['concurrently', '--raw', '--kill-others-on-fail', ...services], {
+    const proc = spawn('npx', ['concurrently', '--raw', '--kill-others', ...services], {
       cwd: ROOT,
       stdio: 'inherit',
       shell: true,
@@ -80,7 +81,7 @@ async function main() {
     if (config.temporalEnabled) serviceNames.push('temporal');
 
     const proc = spawn('npx', [
-      'concurrently', '--kill-others-on-fail',
+      'concurrently', '--kill-others',
       '-n', serviceNames.join(','),
       '-c', 'blue,green,yellow,magenta',
       ...services,

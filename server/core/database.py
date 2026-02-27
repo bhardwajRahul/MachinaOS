@@ -104,6 +104,18 @@ class Database:
                     ))
                     logger.info("Added onboarding_step column to user_settings")
 
+                if "memory_window_size" not in columns:
+                    await conn.execute(text(
+                        "ALTER TABLE user_settings ADD COLUMN memory_window_size INTEGER DEFAULT 100"
+                    ))
+                    logger.info("Added memory_window_size column to user_settings")
+
+                if "compaction_ratio" not in columns:
+                    await conn.execute(text(
+                        "ALTER TABLE user_settings ADD COLUMN compaction_ratio REAL DEFAULT 0.5"
+                    ))
+                    logger.info("Added compaction_ratio column to user_settings")
+
                 # Migrate token_usage_metrics table - add cost columns
                 result = await conn.execute(text("PRAGMA table_info(token_usage_metrics)"))
                 columns = {row[1] for row in result.fetchall()}
@@ -1522,6 +1534,8 @@ class Database:
                     "sidebar_default_open": settings.sidebar_default_open,
                     "component_palette_default_open": settings.component_palette_default_open,
                     "console_panel_default_open": settings.console_panel_default_open,
+                    "memory_window_size": settings.memory_window_size,
+                    "compaction_ratio": settings.compaction_ratio,
                     "examples_loaded": settings.examples_loaded,
                     "onboarding_completed": settings.onboarding_completed,
                     "onboarding_step": settings.onboarding_step,
@@ -1554,6 +1568,10 @@ class Database:
                         existing.component_palette_default_open = settings_data["component_palette_default_open"]
                     if "console_panel_default_open" in settings_data:
                         existing.console_panel_default_open = settings_data["console_panel_default_open"]
+                    if "memory_window_size" in settings_data:
+                        existing.memory_window_size = settings_data["memory_window_size"]
+                    if "compaction_ratio" in settings_data:
+                        existing.compaction_ratio = settings_data["compaction_ratio"]
                     if "examples_loaded" in settings_data:
                         existing.examples_loaded = settings_data["examples_loaded"]
                     if "onboarding_completed" in settings_data:
@@ -1569,6 +1587,8 @@ class Database:
                         sidebar_default_open=settings_data.get("sidebar_default_open", True),
                         component_palette_default_open=settings_data.get("component_palette_default_open", True),
                         console_panel_default_open=settings_data.get("console_panel_default_open", False),
+                        memory_window_size=settings_data.get("memory_window_size", 100),
+                        compaction_ratio=settings_data.get("compaction_ratio", 0.5),
                         examples_loaded=settings_data.get("examples_loaded", False),
                         onboarding_completed=settings_data.get("onboarding_completed", False),
                         onboarding_step=settings_data.get("onboarding_step", 0)

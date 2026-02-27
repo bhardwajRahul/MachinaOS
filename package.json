@@ -1,6 +1,6 @@
 {
   "name": "machinaos",
-  "version": "0.0.36",
+  "version": "0.0.37",
   "description": "Open source workflow automation platform with AI agents, React Flow, and n8n-inspired architecture",
   "type": "module",
   "keywords": [
@@ -64,7 +64,7 @@
     "dev": "node scripts/dev.js",
     "start:temporal": "cross-env TEMPORAL_ENABLED=true node scripts/start.js",
     "client:start": "cd client && npm run start",
-    "python:start": "cd server && uv run uvicorn main:app --host 127.0.0.1 --port 3010 --reload --reload-dir . --reload-exclude \"*.pyc\" --reload-exclude \"__pycache__\" --log-level warning",
+    "python:start": "cd server && uv run uvicorn main:app --host 127.0.0.1 --port 3010 --log-level warning",
     "python:daemon": "cd server && uv run uvicorn main:app --host 0.0.0.0 --port 3010 --log-level warning",
     "temporal:worker": "cd server && uv run python -m services.temporal.worker",
     "whatsapp:start": "whatsapp-rpc start",

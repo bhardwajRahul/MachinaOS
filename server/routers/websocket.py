@@ -2572,6 +2572,7 @@ async def handle_save_user_settings(data: Dict[str, Any], websocket: WebSocket) 
 async def handle_get_provider_defaults(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
     """Get default parameters for a provider."""
     from services.ai import get_default_model
+    from services.model_registry import get_model_registry
     database = container.database()
     provider = data.get("provider", "").lower()
     defaults = await database.get_provider_defaults(provider)
@@ -2585,13 +2586,16 @@ async def handle_get_provider_defaults(data: Dict[str, Any], websocket: WebSocke
             defaults["default_model"] = config_default_model
         return {"provider": provider, "defaults": defaults}
 
-    # No DB record - return standard fallback values
+    # No DB record - fetch model constraints from registry for sensible defaults
+    registry = get_model_registry()
+    model_max_tokens = registry.get_max_output_tokens(config_default_model, provider)
+
     return {
         "provider": provider,
         "defaults": {
             "default_model": config_default_model,
             "temperature": 0.7,
-            "max_tokens": 1000,
+            "max_tokens": model_max_tokens,
             "thinking_enabled": False,
             "thinking_budget": 2048,
             "reasoning_effort": "medium",

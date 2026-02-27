@@ -11,13 +11,14 @@ import {
   SafetyOutlined,
   ReloadOutlined,
   DollarOutlined,
+  SettingOutlined,
   TwitterOutlined,
   GoogleOutlined,
 } from '@ant-design/icons';
 import Modal from './ui/Modal';
 import QRCodeDisplay from './ui/QRCodeDisplay';
 import ApiKeyInput from './ui/ApiKeyInput';
-import { useApiKeys, ProviderDefaults, ProviderUsageSummary, APIUsageSummary } from '../hooks/useApiKeys';
+import { useApiKeys, ProviderDefaults, ProviderUsageSummary, APIUsageSummary, ModelConstraints } from '../hooks/useApiKeys';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { useWhatsAppStatus, useAndroidStatus, useTwitterStatus, useGoogleStatus, useTelegramStatus, useWebSocket, RateLimitConfig, RateLimitStats } from '../contexts/WebSocketContext';
 import { useWhatsApp } from '../hooks/useWhatsApp';
@@ -190,7 +191,7 @@ interface Props {
 
 const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
   const theme = useAppTheme();
-const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey, validateGoogleMapsKey, validateApifyKey, getProviderDefaults, saveProviderDefaults, getProviderUsageSummary, getAPIUsageSummary, getStoredModels, isConnected } = useApiKeys();
+const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey, validateGoogleMapsKey, validateApifyKey, getProviderDefaults, saveProviderDefaults, getProviderUsageSummary, getAPIUsageSummary, getStoredModels, getModelConstraints, isConnected } = useApiKeys();
   const whatsappStatus = useWhatsAppStatus();
   const androidStatus = useAndroidStatus();
   const twitterStatus = useTwitterStatus();
@@ -221,6 +222,9 @@ const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey,
   const [providerDefaults, setProviderDefaults] = useState<Record<string, ProviderDefaults>>({});
   const [defaultsLoading, setDefaultsLoading] = useState<Record<string, boolean>>({});
   const [defaultsDirty, setDefaultsDirty] = useState<Record<string, boolean>>({});
+
+  // Model constraints per provider (fetched from model registry when default model changes)
+  const [modelConstraints, setModelConstraints] = useState<Record<string, ModelConstraints>>({});
 
   // Usage & Costs state (LLM providers)
   const [usageSummary, setUsageSummary] = useState<ProviderUsageSummary[]>([]);
@@ -297,8 +301,38 @@ const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey,
     }
   }, [selectedItem, isConnected, getProviderDefaults, providerDefaults, getStoredModels, models]);
 
+  // Fetch model constraints when provider defaults are loaded (for the default model)
+  useEffect(() => {
+    if (!selectedItem || !isConnected) return;
+    const provider = selectedItem.id;
+    const defaults = providerDefaults[provider];
+    if (!defaults?.default_model || modelConstraints[provider]) return;
+    getModelConstraints(defaults.default_model, provider).then(constraints => {
+      setModelConstraints(c => ({ ...c, [provider]: constraints }));
+      // Set max_tokens to model's actual max if user hasn't customized it
+      if (constraints.max_output_tokens && defaults.max_tokens !== constraints.max_output_tokens) {
+        setProviderDefaults(p => ({
+          ...p,
+          [provider]: { ...p[provider], max_tokens: constraints.max_output_tokens } as ProviderDefaults,
+        }));
+      }
+    });
+  }, [selectedItem, isConnected, providerDefaults, modelConstraints, getModelConstraints]);
+
   // Handler to update a single default value
   const updateProviderDefault = (provider: string, key: keyof ProviderDefaults, value: number | boolean | string) => {
+    // When model changes, fetch new constraints and update max_tokens to model max
+    if (key === 'default_model' && typeof value === 'string' && value) {
+      getModelConstraints(value, provider).then(constraints => {
+        setModelConstraints(c => ({ ...c, [provider]: constraints }));
+        if (constraints.max_output_tokens) {
+          setProviderDefaults(p => ({
+            ...p,
+            [provider]: { ...p[provider], max_tokens: constraints.max_output_tokens } as ProviderDefaults,
+          }));
+        }
+      });
+    }
     setProviderDefaults(p => ({
       ...p,
       [provider]: { ...(p[provider] || {}), [key]: value } as ProviderDefaults
@@ -2322,129 +2356,257 @@ const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey,
         {/* Default Parameters Section - Only for AI providers */}
         {CATEGORIES.find(c => c.key === 'ai')?.items.some(i => i.id === item.id) && (
           <div style={{ marginBottom: theme.spacing.xl }}>
-            <label style={{
-              display: 'block',
-              fontSize: theme.fontSize.sm,
-              fontWeight: theme.fontWeight.medium,
-              color: theme.colors.text,
-              marginBottom: theme.spacing.md,
-            }}>
-              Default Parameters
-            </label>
+            <Collapse
+              ghost
+              defaultActiveKey={['defaults']}
+              items={[{
+                key: 'defaults',
+                label: (
+                  <span style={{ fontSize: theme.fontSize.sm, fontWeight: theme.fontWeight.medium, color: theme.colors.text }}>
+                    <SettingOutlined style={{ marginRight: theme.spacing.sm }} />
+                    Default Parameters
+                  </span>
+                ),
+                children: (() => {
+                  const mc = modelConstraints[item.id];
+                  const tempMin = mc?.temperature_range?.[0] ?? 0;
+                  const tempMax = mc?.temperature_range?.[1] ?? 2;
+                  const maxOut = mc?.max_output_tokens;
+                  const thinkType = mc?.thinking_type;
+                  const canThink = mc?.supports_thinking;
+                  const fixedTemp = mc?.is_reasoning_model && tempMin === tempMax;
+                  const defaults = providerDefaults[item.id];
+                  const rowStyle: React.CSSProperties = {
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: `${theme.spacing.sm} 0`,
+                  };
+                  const dividerStyle: React.CSSProperties = {
+                    borderBottom: `1px solid ${theme.colors.border}40`,
+                    marginBottom: 0,
+                  };
+                  const labelStyle: React.CSSProperties = {
+                    fontSize: theme.fontSize.sm, fontWeight: theme.fontWeight.medium, color: theme.colors.text,
+                  };
+                  const descStyle: React.CSSProperties = {
+                    fontSize: theme.fontSize.xs, color: theme.colors.textSecondary, marginTop: 2,
+                  };
 
-            <div style={{
-              padding: theme.spacing.lg,
-              backgroundColor: theme.colors.backgroundAlt,
-              borderRadius: theme.borderRadius.md,
-              border: `1px solid ${theme.colors.border}`,
-              opacity: defaultsLoading[item.id] ? 0.6 : 1,
-            }}>
-              {/* Default Model */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: theme.spacing.md }}>
-                <div>
-                  <div style={{ fontSize: theme.fontSize.sm, fontWeight: theme.fontWeight.medium, color: theme.colors.text }}>Default Model</div>
-                  <div style={{ fontSize: theme.fontSize.xs, color: theme.colors.textSecondary }}>Model used when none specified</div>
-                </div>
-                <Select
-                  size="small"
-                  showSearch
-                  value={providerDefaults[item.id]?.default_model || undefined}
-                  onChange={(v) => updateProviderDefault(item.id, 'default_model', v)}
-                  placeholder="Select model"
-                  style={{ width: 200 }}
-                  options={(models[item.id] || []).map(m => ({ label: m, value: m }))}
-                  filterOption={(input, option) =>
-                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-                  }
-                  notFoundContent={models[item.id] ? 'No models found' : 'Validate API key first'}
-                  virtual={false}
-                  popupMatchSelectWidth={false}
-                  getPopupContainer={(trigger) => trigger.parentElement || document.body}
-                  listHeight={300}
-                />
-              </div>
+                  return (
+                  <div style={{
+                    opacity: defaultsLoading[item.id] ? 0.6 : 1,
+                  }}>
+                    {/* Default Model */}
+                    <div style={{ ...rowStyle, paddingTop: 0 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={labelStyle}>Default Model</div>
+                        <div style={descStyle}>Model used when none specified</div>
+                      </div>
+                      <Select
+                        size="small"
+                        showSearch
+                        value={defaults?.default_model || undefined}
+                        onChange={(v) => updateProviderDefault(item.id, 'default_model', v)}
+                        placeholder="Select model"
+                        style={{ width: 220, flexShrink: 0 }}
+                        options={(models[item.id] || []).map(m => ({ label: m, value: m }))}
+                        filterOption={(input, option) =>
+                          (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                        }
+                        notFoundContent={models[item.id] ? 'No models found' : 'Validate API key first'}
+                        virtual={false}
+                        popupMatchSelectWidth={false}
+                        getPopupContainer={(trigger) => trigger.parentElement || document.body}
+                        listHeight={300}
+                      />
+                    </div>
 
-              {/* Temperature */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: theme.spacing.md }}>
-                <div>
-                  <div style={{ fontSize: theme.fontSize.sm, fontWeight: theme.fontWeight.medium, color: theme.colors.text }}>Temperature</div>
-                  <div style={{ fontSize: theme.fontSize.xs, color: theme.colors.textSecondary }}>Controls randomness (0-2)</div>
-                </div>
-                <InputNumber
-                  size="small"
-                  value={providerDefaults[item.id]?.temperature ?? 0.7}
-                  onChange={(v) => updateProviderDefault(item.id, 'temperature', v ?? 0.7)}
-                  min={0}
-                  max={2}
-                  step={0.1}
-                  style={{ width: 80 }}
-                />
-              </div>
+                    {/* Model capabilities from backend */}
+                    {mc && (
+                      <div style={{
+                        display: 'flex', gap: 6, flexWrap: 'wrap',
+                        padding: `${theme.spacing.sm} ${theme.spacing.md}`,
+                        backgroundColor: `${theme.colors.backgroundAlt}`,
+                        borderRadius: theme.borderRadius.sm,
+                        marginBottom: theme.spacing.sm,
+                        border: `1px solid ${theme.colors.border}30`,
+                      }}>
+                        {maxOut != null && (
+                          <Tag style={{ ...getTagStyle('success'), margin: 0, fontSize: 11 }}>
+                            Max Output: {maxOut.toLocaleString()}
+                          </Tag>
+                        )}
+                        {mc.context_length != null && (
+                          <Tag style={{ margin: 0, fontSize: 11, backgroundColor: `${theme.dracula.cyan}20`, borderColor: `${theme.dracula.cyan}50`, color: theme.dracula.cyan }}>
+                            Context: {mc.context_length.toLocaleString()}
+                          </Tag>
+                        )}
+                        <Tag style={{ margin: 0, fontSize: 11, backgroundColor: `${theme.dracula.purple}20`, borderColor: `${theme.dracula.purple}50`, color: theme.dracula.purple }}>
+                          Temp: {tempMin}-{tempMax}
+                        </Tag>
+                        {canThink && (
+                          <Tag style={{ ...getTagStyle('warning'), margin: 0, fontSize: 11 }}>
+                            Thinking: {thinkType}
+                          </Tag>
+                        )}
+                        {mc.is_reasoning_model && (
+                          <Tag style={{ margin: 0, fontSize: 11, backgroundColor: `${theme.dracula.pink}20`, borderColor: `${theme.dracula.pink}50`, color: theme.dracula.pink }}>
+                            Reasoning
+                          </Tag>
+                        )}
+                      </div>
+                    )}
 
-              {/* Max Tokens */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: theme.spacing.md }}>
-                <div>
-                  <div style={{ fontSize: theme.fontSize.sm, fontWeight: theme.fontWeight.medium, color: theme.colors.text }}>Max Tokens</div>
-                  <div style={{ fontSize: theme.fontSize.xs, color: theme.colors.textSecondary }}>Maximum response length</div>
-                </div>
-                <InputNumber
-                  size="small"
-                  value={providerDefaults[item.id]?.max_tokens ?? 4096}
-                  onChange={(v) => updateProviderDefault(item.id, 'max_tokens', v ?? 4096)}
-                  min={1}
-                  max={128000}
-                  style={{ width: 100 }}
-                />
-              </div>
+                    {/* Temperature - hide when backend says fixed */}
+                    {!fixedTemp && (
+                      <>
+                        <div style={dividerStyle} />
+                        <div style={rowStyle}>
+                          <div>
+                            <div style={labelStyle}>Temperature</div>
+                            <div style={descStyle}>Controls randomness ({tempMin}-{tempMax})</div>
+                          </div>
+                          <InputNumber
+                            size="small"
+                            value={defaults?.temperature}
+                            onChange={(v) => updateProviderDefault(item.id, 'temperature', v ?? 0.7)}
+                            min={tempMin}
+                            max={tempMax}
+                            step={0.1}
+                            style={{ width: 80 }}
+                          />
+                        </div>
+                      </>
+                    )}
 
-              {/* Thinking/Reasoning Toggle */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: theme.spacing.md }}>
-                <div>
-                  <div style={{ fontSize: theme.fontSize.sm, fontWeight: theme.fontWeight.medium, color: theme.colors.text }}>Thinking/Reasoning</div>
-                  <div style={{ fontSize: theme.fontSize.xs, color: theme.colors.textSecondary }}>Extended thinking for supported models</div>
-                </div>
-                <Switch
-                  size="small"
-                  checked={providerDefaults[item.id]?.thinking_enabled ?? false}
-                  onChange={(v) => updateProviderDefault(item.id, 'thinking_enabled', v)}
-                />
-              </div>
+                    {/* Max Tokens - range from backend */}
+                    <div style={dividerStyle} />
+                    <div style={rowStyle}>
+                      <div>
+                        <div style={labelStyle}>Max Tokens</div>
+                        <div style={descStyle}>
+                          {maxOut != null ? `Up to ${maxOut.toLocaleString()}` : 'Maximum response length'}
+                        </div>
+                      </div>
+                      <InputNumber
+                        size="small"
+                        value={defaults?.max_tokens}
+                        onChange={(v) => updateProviderDefault(item.id, 'max_tokens', v ?? (maxOut || 4096))}
+                        min={1}
+                        max={maxOut || undefined}
+                        style={{ width: 120 }}
+                      />
+                    </div>
 
-              {/* Thinking Budget - conditional */}
-              {providerDefaults[item.id]?.thinking_enabled && (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: theme.spacing.md }}>
-                  <div>
-                    <div style={{ fontSize: theme.fontSize.sm, fontWeight: theme.fontWeight.medium, color: theme.colors.text }}>Thinking Budget</div>
-                    <div style={{ fontSize: theme.fontSize.xs, color: theme.colors.textSecondary }}>Token budget (1024-16000)</div>
+                    {/* Thinking toggle - only when backend says model supports it */}
+                    {canThink && (
+                      <>
+                        <div style={dividerStyle} />
+                        <div style={rowStyle}>
+                          <div>
+                            <div style={labelStyle}>Thinking/Reasoning</div>
+                            <div style={descStyle}>Extended thinking ({thinkType})</div>
+                          </div>
+                          <Switch
+                            size="small"
+                            checked={defaults?.thinking_enabled ?? false}
+                            onChange={(v) => updateProviderDefault(item.id, 'thinking_enabled', v)}
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    {/* Thinking Budget - budget type from backend (Claude, Gemini) */}
+                    {canThink && thinkType === 'budget' && defaults?.thinking_enabled && (
+                      <>
+                        <div style={dividerStyle} />
+                        <div style={rowStyle}>
+                          <div>
+                            <div style={labelStyle}>Thinking Budget</div>
+                            <div style={descStyle}>Token budget (1024-16000)</div>
+                          </div>
+                          <InputNumber
+                            size="small"
+                            value={defaults?.thinking_budget ?? 2048}
+                            onChange={(v) => updateProviderDefault(item.id, 'thinking_budget', v ?? 2048)}
+                            min={1024}
+                            max={16000}
+                            style={{ width: 100 }}
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    {/* Reasoning Effort - effort type from backend (OpenAI o-series, GPT-5) */}
+                    {canThink && thinkType === 'effort' && defaults?.thinking_enabled && (
+                      <>
+                        <div style={dividerStyle} />
+                        <div style={rowStyle}>
+                          <div>
+                            <div style={labelStyle}>Reasoning Effort</div>
+                            <div style={descStyle}>Low, medium, or high</div>
+                          </div>
+                          <Select
+                            size="small"
+                            value={defaults?.reasoning_effort ?? 'medium'}
+                            onChange={(v) => updateProviderDefault(item.id, 'reasoning_effort', v)}
+                            style={{ width: 110 }}
+                            options={[
+                              { label: 'Low', value: 'low' },
+                              { label: 'Medium', value: 'medium' },
+                              { label: 'High', value: 'high' },
+                            ]}
+                            getPopupContainer={(trigger) => trigger.parentElement || document.body}
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    {/* Reasoning Format - format type from backend (Groq Qwen3, Cerebras Qwen) */}
+                    {canThink && thinkType === 'format' && defaults?.thinking_enabled && (
+                      <>
+                        <div style={dividerStyle} />
+                        <div style={rowStyle}>
+                          <div>
+                            <div style={labelStyle}>Reasoning Format</div>
+                            <div style={descStyle}>Parsed or hidden</div>
+                          </div>
+                          <Select
+                            size="small"
+                            value={defaults?.reasoning_format ?? 'parsed'}
+                            onChange={(v) => updateProviderDefault(item.id, 'reasoning_format', v)}
+                            style={{ width: 110 }}
+                            options={[
+                              { label: 'Parsed', value: 'parsed' },
+                              { label: 'Hidden', value: 'hidden' },
+                            ]}
+                            getPopupContainer={(trigger) => trigger.parentElement || document.body}
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    {/* Save Button */}
+                    <div style={{ marginTop: theme.spacing.md }}>
+                      <Button
+                        size="small"
+                        onClick={() => handleSaveProviderDefaults(item.id)}
+                        loading={defaultsLoading[item.id]}
+                        disabled={!defaultsDirty[item.id]}
+                        block
+                        style={{
+                          backgroundColor: defaultsDirty[item.id] ? `${theme.dracula.green}25` : undefined,
+                          borderColor: defaultsDirty[item.id] ? `${theme.dracula.green}60` : undefined,
+                          color: defaultsDirty[item.id] ? theme.dracula.green : undefined,
+                        }}
+                      >
+                        Save Defaults
+                      </Button>
+                    </div>
                   </div>
-                  <InputNumber
-                    size="small"
-                    value={providerDefaults[item.id]?.thinking_budget ?? 2048}
-                    onChange={(v) => updateProviderDefault(item.id, 'thinking_budget', v ?? 2048)}
-                    min={1024}
-                    max={16000}
-                    style={{ width: 80 }}
-                  />
-                </div>
-              )}
-
-              {/* Save Button */}
-              <Button
-                size="small"
-                onClick={() => handleSaveProviderDefaults(item.id)}
-                loading={defaultsLoading[item.id]}
-                disabled={!defaultsDirty[item.id]}
-                block
-                style={{
-                  marginTop: theme.spacing.sm,
-                  backgroundColor: defaultsDirty[item.id] ? `${theme.dracula.green}25` : undefined,
-                  borderColor: defaultsDirty[item.id] ? `${theme.dracula.green}60` : undefined,
-                  color: defaultsDirty[item.id] ? theme.dracula.green : undefined,
-                }}
-              >
-                Save Defaults
-              </Button>
-            </div>
+                  );
+                })(),
+              }]}
+            />
           </div>
         )}
 
@@ -2453,6 +2615,7 @@ const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey,
           <div style={{ marginBottom: theme.spacing.xl }}>
             <Collapse
               ghost
+              defaultActiveKey={['usage']}
               onChange={(keys) => setUsageExpanded(keys.includes('usage'))}
               items={[{
                 key: 'usage',
@@ -2576,48 +2739,20 @@ const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey,
         {/* Usage & Costs Section - For Google Maps */}
         {item.id === 'google_maps' && renderApiUsagePanel('google_maps', 'Google Maps')}
 
-        {/* Models list */}
-        {models[item.id]?.length > 0 && (
-          <div style={{ marginBottom: theme.spacing.xl }}>
-            <label style={{
-              display: 'block',
-              fontSize: theme.fontSize.sm,
-              fontWeight: theme.fontWeight.medium,
-              color: theme.colors.text,
-              marginBottom: theme.spacing.sm,
-            }}>
-              Available Models
-            </label>
-            <div style={{
-              fontSize: theme.fontSize.sm,
-              color: theme.colors.textSecondary,
-              padding: theme.spacing.md,
-              backgroundColor: theme.colors.backgroundAlt,
-              borderRadius: theme.borderRadius.md,
-              maxHeight: 150,
-              overflow: 'auto',
-            }}>
-              {models[item.id].map((model, idx) => (
-                <div key={idx} style={{ padding: '4px 0' }}>{model}</div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Info box */}
         <div style={{
-          marginTop: theme.spacing.xl,
-          padding: theme.spacing.md,
-          borderRadius: theme.borderRadius.md,
-          backgroundColor: `${theme.dracula.cyan}10`,
-          border: `1px solid ${theme.dracula.cyan}30`,
+          marginTop: theme.spacing.lg,
+          padding: `${theme.spacing.sm} ${theme.spacing.md}`,
+          borderRadius: theme.borderRadius.sm,
+          backgroundColor: `${theme.colors.backgroundAlt}`,
+          borderLeft: `3px solid ${theme.dracula.cyan}60`,
         }}>
           <div style={{
-            fontSize: theme.fontSize.sm,
-            color: theme.colors.textSecondary,
+            fontSize: theme.fontSize.xs,
+            color: theme.colors.textMuted,
             lineHeight: 1.5,
           }}>
-            Your API key is stored securely and will be automatically injected when using {item.name} nodes in your workflows.
+            API key stored securely. Auto-injected when using {item.name} nodes.
           </div>
         </div>
       </div>

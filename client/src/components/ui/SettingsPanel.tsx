@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Switch, InputNumber, Button, message } from 'antd';
+import { Switch, InputNumber, Slider, Button, message } from 'antd';
 import { QuestionCircleOutlined } from '@ant-design/icons';
 import Modal from './Modal';
 import { useAppTheme } from '../../hooks/useAppTheme';
@@ -12,6 +12,7 @@ export interface WorkflowSettings {
   componentPaletteDefaultOpen: boolean;
   consolePanelDefaultOpen: boolean;
   memoryWindowSize: number;
+  compactionRatio: number;
 }
 
 export const defaultSettings: WorkflowSettings = {
@@ -21,6 +22,7 @@ export const defaultSettings: WorkflowSettings = {
   componentPaletteDefaultOpen: true,
   consolePanelDefaultOpen: false,
   memoryWindowSize: 100,
+  compactionRatio: 0.5,
 };
 
 interface SettingsPanelProps {
@@ -63,6 +65,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
           componentPaletteDefaultOpen: dbSettings.component_palette_default_open ?? defaultSettings.componentPaletteDefaultOpen,
           consolePanelDefaultOpen: dbSettings.console_panel_default_open ?? defaultSettings.consolePanelDefaultOpen,
           memoryWindowSize: dbSettings.memory_window_size ?? defaultSettings.memoryWindowSize,
+          compactionRatio: dbSettings.compaction_ratio ?? defaultSettings.compactionRatio,
         });
       }
     } catch (error) {
@@ -83,6 +86,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
           component_palette_default_open: newSettings.componentPaletteDefaultOpen,
           console_panel_default_open: newSettings.consolePanelDefaultOpen,
           memory_window_size: newSettings.memoryWindowSize,
+          compaction_ratio: newSettings.compactionRatio,
         }
       });
       if (showMessage) {
@@ -399,11 +403,11 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
             )}
           </div>
 
-          {/* Memory Settings */}
+          {/* Memory & Compaction Settings */}
           <div style={sectionStyle}>
             <div style={sectionHeaderStyle}>
               <div style={{ ...sectionIconStyle, backgroundColor: `${theme.dracula.purple}20` }}>{'\uD83E\uDDE0'}</div>
-              <div style={sectionTitleStyle}>Memory</div>
+              <div style={sectionTitleStyle}>Memory & Compaction</div>
             </div>
 
             <div style={settingRowStyle}>
@@ -421,6 +425,50 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 disabled={isSaving}
                 style={{ width: 80 }}
               />
+            </div>
+
+            <div style={{ borderBottom: `1px solid ${theme.colors.border}40`, margin: `${theme.spacing.xs} 0` }} />
+
+            <div style={{ padding: `${theme.spacing.sm} 0` }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: theme.spacing.sm }}>
+                <div style={settingLabelStyle}>
+                  <div style={labelTextStyle}>Compaction Ratio</div>
+                  <div style={descriptionStyle}>
+                    Fraction of context window that triggers memory compaction
+                  </div>
+                </div>
+                <span style={{
+                  fontSize: theme.fontSize.sm,
+                  fontWeight: theme.fontWeight.semibold,
+                  color: theme.dracula.cyan,
+                  minWidth: 42,
+                  textAlign: 'right',
+                }}>
+                  {Math.round(settings.compactionRatio * 100)}%
+                </span>
+              </div>
+              <Slider
+                min={10}
+                max={90}
+                step={5}
+                value={Math.round(settings.compactionRatio * 100)}
+                onChange={(value) => handleChange('compactionRatio', value / 100)}
+                disabled={isSaving}
+                tooltip={{ formatter: (val) => `${val}%` }}
+                marks={{
+                  10: { label: '10%', style: { fontSize: 10, color: theme.colors.textMuted } },
+                  50: { label: '50%', style: { fontSize: 10, color: theme.colors.textMuted } },
+                  90: { label: '90%', style: { fontSize: 10, color: theme.colors.textMuted } },
+                }}
+              />
+              <div style={{
+                fontSize: theme.fontSize.xs,
+                color: theme.colors.textMuted,
+                marginTop: theme.spacing.xs,
+                lineHeight: 1.4,
+              }}>
+                Lower = compact sooner (saves tokens, loses detail). Higher = compact later (preserves context, uses more tokens).
+              </div>
             </div>
           </div>
 

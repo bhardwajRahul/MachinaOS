@@ -19,6 +19,16 @@ export const ROOT = resolve(__dirname, '..');
 export const isWindows = process.platform === 'win32';
 export const isGitBash = isWindows && (process.env.MSYSTEM || process.env.SHELL?.includes('bash'));
 
+// WSL detection: Linux process but project lives on Windows filesystem (/mnt/)
+export const isWSL = !isWindows && process.platform === 'linux' && (
+  !!process.env.WSL_DISTRO_NAME ||
+  !!process.env.WSLENV ||
+  ROOT.startsWith('/mnt/')
+);
+
+// True when we should use Windows-style venv paths (Scripts/python.exe)
+export const useWindowsVenv = isWindows || isWSL;
+
 // Cached Python path (undefined = not checked, null = unavailable, string = path)
 let _pythonCmd;
 
@@ -27,6 +37,7 @@ let _pythonCmd;
  */
 export function getPlatformName() {
   if (isGitBash) return 'Git Bash';
+  if (isWSL) return 'WSL';
   if (isWindows) return 'Windows';
   if (process.platform === 'darwin') return 'macOS';
   return 'Linux';
@@ -125,16 +136,23 @@ function findPython() {
   if (_pythonCmd !== undefined) return _pythonCmd;
 
   // Check project venv first
-  const venvPython = isWindows
-    ? resolve(ROOT, 'server', '.venv', 'Scripts', 'python.exe')
-    : resolve(ROOT, 'server', '.venv', 'bin', 'python3');
-  try {
-    execSync(`"${venvPython}" --version`, { timeout: 5000, stdio: 'pipe' });
-    if (ensurePsutil(`"${venvPython}"`)) {
-      _pythonCmd = venvPython;
-      return _pythonCmd;
-    }
-  } catch {}
+  // On WSL with Windows filesystem, try both Windows-style and Linux-style venv paths
+  const venvCandidates = useWindowsVenv
+    ? [
+        resolve(ROOT, 'server', '.venv', 'Scripts', 'python.exe'),
+        resolve(ROOT, 'server', '.venv', 'bin', 'python3'),
+      ]
+    : [resolve(ROOT, 'server', '.venv', 'bin', 'python3')];
+
+  for (const venvPython of venvCandidates) {
+    try {
+      execSync(`"${venvPython}" --version`, { timeout: 5000, stdio: 'pipe' });
+      if (ensurePsutil(`"${venvPython}"`)) {
+        _pythonCmd = venvPython;
+        return _pythonCmd;
+      }
+    } catch {}
+  }
 
   // Fall back to system python
   const systemCmd = isWindows ? 'python' : 'python3';

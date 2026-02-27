@@ -38,7 +38,7 @@ async function main() {
 
   console.log('\n=== MachinaOS Starting ===\n');
   log(`Platform: ${getPlatformName()}`);
-  log(`Mode: ${isDaemonMode ? 'Daemon (Gunicorn)' : 'Development (uvicorn)'}`);
+  log(`Mode: ${isDaemonMode ? 'Daemon (uvicorn)' : 'Development (uvicorn)'}`);
   log(`Ports: ${config.allPorts.join(', ')}`);
   log(`Temporal: ${config.temporalEnabled ? 'enabled' : 'disabled'}`);
   log(`WhatsApp: ${skipWhatsApp ? 'skipped' : 'enabled'}`);
@@ -90,7 +90,7 @@ async function main() {
   if (!skipWhatsApp) services.push('npm:whatsapp:api');
   if (config.temporalEnabled) services.push('npm:temporal:worker');
 
-  const proc = spawn('npx', ['concurrently', '--raw', '--kill-others-on-fail', ...services], {
+  const proc = spawn('npx', ['concurrently', '--raw', '--kill-others', ...services], {
     cwd: ROOT,
     stdio: 'inherit',
     shell: true,

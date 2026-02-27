@@ -21,8 +21,9 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-# Fraction of context window used as compaction threshold when no custom threshold is set
-CONTEXT_THRESHOLD_RATIO = 0.5
+# Default fraction of context window used as compaction threshold
+# Overridden by user_settings.compaction_ratio if configured.
+DEFAULT_CONTEXT_THRESHOLD_RATIO = 0.5
 
 
 def _extract_text_from_response(content) -> str:
@@ -75,45 +76,63 @@ class CompactionService:
         """Wire AI service for generating compaction summaries."""
         self._ai_service = ai_service
 
-    def get_model_threshold(self, model: str, provider: str) -> int:
+    async def _get_compaction_ratio(self) -> float:
+        """Get compaction ratio from user settings, falling back to default."""
+        try:
+            settings = await self._db.get_user_settings("default")
+            if settings and "compaction_ratio" in settings:
+                ratio = float(settings["compaction_ratio"])
+                if 0.1 <= ratio <= 0.9:
+                    return ratio
+        except Exception:
+            pass
+        return DEFAULT_CONTEXT_THRESHOLD_RATIO
+
+    def get_model_threshold(self, model: str, provider: str, ratio: float = DEFAULT_CONTEXT_THRESHOLD_RATIO) -> int:
         """Compute compaction threshold based on model's context window.
 
-        Returns 50% of the model's context length, floored to the global
+        Returns ratio * model's context length, floored to the global
         default if the registry has no data.  Per-session custom_threshold
         (checked in track()) still takes priority over this value.
         """
         from services.model_registry import get_model_registry
         registry = get_model_registry()
         context_length = registry.get_context_length(model, provider)
-        model_threshold = int(context_length * CONTEXT_THRESHOLD_RATIO)
+        model_threshold = int(context_length * ratio)
         # Never go below the configured minimum (ge=10000 in Settings)
         return max(model_threshold, 10000)
 
-    def anthropic_config(self, threshold: Optional[int] = None, model: str = "", provider: str = "anthropic") -> Dict[str, Any]:
+    async def anthropic_config(self, threshold: Optional[int] = None, model: str = "", provider: str = "anthropic") -> Dict[str, Any]:
         """Anthropic SDK compaction_control for tool_runner."""
-        effective = threshold or self.get_model_threshold(model, provider)
+        if not threshold:
+            ratio = await self._get_compaction_ratio()
+            threshold = self.get_model_threshold(model, provider, ratio=ratio)
         return {
             "enabled": self._config.enabled,
-            "context_token_threshold": effective
+            "context_token_threshold": threshold
         }
 
-    def anthropic_api_config(self, threshold: Optional[int] = None, model: str = "", provider: str = "anthropic") -> Dict[str, Any]:
+    async def anthropic_api_config(self, threshold: Optional[int] = None, model: str = "", provider: str = "anthropic") -> Dict[str, Any]:
         """Anthropic Messages API context_management config."""
-        effective = threshold or self.get_model_threshold(model, provider)
+        if not threshold:
+            ratio = await self._get_compaction_ratio()
+            threshold = self.get_model_threshold(model, provider, ratio=ratio)
         return {
             "betas": ["compact-2026-01-12"],
             "context_management": {
                 "edits": [{
                     "type": "compact_20260112",
-                    "trigger": {"type": "input_tokens", "value": effective}
+                    "trigger": {"type": "input_tokens", "value": threshold}
                 }]
             }
         }
 
-    def openai_config(self, threshold: Optional[int] = None, model: str = "", provider: str = "openai") -> Dict[str, Any]:
+    async def openai_config(self, threshold: Optional[int] = None, model: str = "", provider: str = "openai") -> Dict[str, Any]:
         """OpenAI context_management config."""
-        effective = threshold or self.get_model_threshold(model, provider)
-        return {"context_management": {"compact_threshold": effective}}
+        if not threshold:
+            ratio = await self._get_compaction_ratio()
+            threshold = self.get_model_threshold(model, provider, ratio=ratio)
+        return {"context_management": {"compact_threshold": threshold}}
 
     async def track(self, session_id: str, node_id: str, provider: str, model: str, usage: Dict[str, int]) -> Dict[str, Any]:
         """Track token usage and cost, return compaction status."""
@@ -156,12 +175,13 @@ class CompactionService:
             "cumulative_total_cost": new_total_cost
         })
 
-        # Priority: per-session custom > model-aware > global default
+        # Priority: per-session custom > model-aware (with user ratio) > global default
         custom = state.get("custom_threshold")
         if custom:
             threshold = custom
         else:
-            threshold = self.get_model_threshold(model, provider)
+            ratio = await self._get_compaction_ratio()
+            threshold = self.get_model_threshold(model, provider, ratio=ratio)
 
         return {
             "total": new_total,
@@ -196,7 +216,8 @@ class CompactionService:
         if custom:
             threshold = custom
         elif model and provider:
-            threshold = self.get_model_threshold(model, provider)
+            ratio = await self._get_compaction_ratio()
+            threshold = self.get_model_threshold(model, provider, ratio=ratio)
         else:
             threshold = self._config.threshold
         return {

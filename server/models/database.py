@@ -252,6 +252,8 @@ class UserSettings(SQLModel, table=True):
     sidebar_default_open: bool = Field(default=True)
     component_palette_default_open: bool = Field(default=True)
     console_panel_default_open: bool = Field(default=False)
+    memory_window_size: int = Field(default=100)  # Message pairs in short-term memory (1-100)
+    compaction_ratio: float = Field(default=0.5)  # Fraction of context window triggering compaction (0.1-0.9)
     examples_loaded: bool = Field(default=False)  # Track if example workflows were imported
     onboarding_completed: bool = Field(default=False)  # Track if user completed or skipped onboarding
     onboarding_step: int = Field(default=0)  # Last completed onboarding step (for resuming)
