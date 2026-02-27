@@ -76,9 +76,25 @@ async def handle_http_scraper(
         else:
             urls_to_fetch.append((url, {}))
 
-        logger.info("[httpScraper] Starting", node_id=node_id, urls=len(urls_to_fetch))
+        # Transparent proxy injection
+        proxy_url = None
+        if parameters.get('useProxy', False):
+            try:
+                from services.proxy.service import get_proxy_service
+                proxy_svc = get_proxy_service()
+                if proxy_svc and proxy_svc.is_enabled():
+                    proxy_url = await proxy_svc.get_proxy_url(url, parameters)
+            except Exception as e:
+                logger.warning("[httpScraper] Proxy lookup failed, proceeding without proxy", error=str(e))
 
-        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+        logger.info("[httpScraper] Starting", node_id=node_id, urls=len(urls_to_fetch),
+                     proxy=bool(proxy_url))
+
+        client_kwargs: dict = {"timeout": 30, "follow_redirects": True}
+        if proxy_url:
+            client_kwargs["proxy"] = proxy_url
+
+        async with httpx.AsyncClient(**client_kwargs) as client:
             for fetch_url, meta in urls_to_fetch:
                 try:
                     response = await client.get(fetch_url, headers=headers)

@@ -41,6 +41,7 @@ from services.handlers import (
 )
 from services.handlers.telegram import handle_telegram_send, handle_telegram_receive
 from services.handlers.apify import handle_apify_actor
+from services.handlers.proxy import handle_proxy_request, handle_proxy_status, handle_proxy_config
 # Consolidated Google Workspace handlers (6 services with operation dispatchers)
 from services.handlers.gmail import handle_google_gmail, handle_gmail_receive
 from services.handlers.calendar import handle_google_calendar
@@ -185,6 +186,10 @@ class NodeExecutor:
             'teamMonitor': handle_team_monitor,
             # Apify web scraping
             'apifyActor': handle_apify_actor,
+            # Proxy nodes
+            'proxyRequest': handle_proxy_request,
+            'proxyStatus': handle_proxy_status,
+            'proxyConfig': handle_proxy_config,
             # Note: 'console' handled in _dispatch with connected_outputs
         }
 

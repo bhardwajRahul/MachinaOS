@@ -26,6 +26,7 @@ const CATEGORY_ICONS: Record<string, string | { svg: string }> = {
   search: '🔍',
   google: { svg: googleSvg },
   scheduler: '📅',
+  proxy: '🛡',
 };
 
 // Categories that should be merged into 'social' (Social Media)
@@ -68,6 +69,7 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
       search: colors.categoryModel || theme.dracula.cyan,
       google: theme.accent.blue,
       scheduler: colors.categoryTrigger || theme.dracula.pink,
+      proxy: colors.categoryUtil || theme.dracula.purple,
     };
     const labelMap: Record<string, string> = {
       workflow: 'Workflows',
@@ -88,6 +90,7 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
       search: 'Search',
       google: 'Google Workspace',
       scheduler: 'Schedulers',
+      proxy: 'Proxy',
     };
     return {
       icon: CATEGORY_ICONS[key] || '📦',

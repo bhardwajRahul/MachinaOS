@@ -1,381 +1,156 @@
 ---
 name: proxy-config-skill
-description: Configure any residential proxy provider using template-driven URL encoding. Generate url_template JSON from provider docs, save providers, set credentials, manage routing rules.
-allowed-tools: proxy_config python_code
+description: Configure residential proxy providers and make proxied HTTP requests with geo-targeting.
+allowed-tools: proxy_config proxy_request proxy_status python_code
 metadata:
   author: machina
-  version: "1.0"
+  version: "3.0"
   category: integration
   icon: "🛡"
   color: "#8B5CF6"
 ---
 
-# Proxy Config Skill
+# Proxy Configuration Skill
 
-Configure any residential proxy provider in the world using the template-driven proxy system. No provider-specific code exists -- you generate a `url_template` JSON config that tells the system how to format proxy URLs for that provider.
+You manage residential proxy providers. Providers are configured with a JSON `url_template` that controls how geo/session parameters are encoded into the proxy URL.
 
-## How It Works
+## Setup Workflow
 
-1. User tells you which proxy provider they want to configure
-2. You use `python_code` to generate and validate the `url_template` JSON
-3. You use `proxy_config` to save the provider, set credentials, and optionally add routing rules
-4. You use `proxy_config(test_provider)` to verify the setup works
+To add a new proxy provider, make these tool calls in order:
 
-## Tools
+### Step 1: Add the provider
 
-- **proxy_config** -- Manage providers, credentials, and routing rules
-- **python_code** -- Generate and validate url_template JSON configs
+Call `proxy_config` with `operation: "add_provider"`. The `url_template` field is a **JSON string**.
 
----
+Most residential proxy providers use username-based parameter encoding with dash separators. Use this default template unless the provider docs show otherwise:
 
-## url_template JSON Schema
-
-The `url_template` is a JSON object that tells the proxy system how to encode geo-targeting, session, and other parameters into the proxy URL. Every residential proxy provider uses one of three encoding strategies.
-
-### Encoding Strategies (param_field)
-
-| Strategy | param_field | How it works | Providers using this |
-|----------|-------------|--------------|---------------------|
-| Username encoding | `"username"` | Parameters appended to username string | ~80% of providers |
-| Password encoding | `"password"` | Parameters appended to password string | A few providers |
-| No encoding | `"none"` | Plain credentials, no parameter encoding | Generic/custom setups |
-
-### Template Fields
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `param_field` | string | `"username"` | Where to encode params: `"username"`, `"password"`, or `"none"` |
-| `username_prefix` | string | `"{username}"` | Template for the username base. `{username}` is replaced with the actual username |
-| `username_param_separator` | string | `"-"` | Separator between username prefix and first parameter |
-| `param_separator` | string | `"-"` | Separator between individual parameters |
-| `param_keys` | object | `{}` | Map of parameter names to format strings. `{v}` is replaced with the value |
-| `country_case` | string | `"lower"` | Case for country codes: `"lower"` or `"upper"` |
-| `city_separator` | string | `"_"` | Character replacing spaces in city/state names |
-
-### param_keys Reference
-
-| Key | Purpose | Example format string |
-|-----|---------|----------------------|
-| `country` | ISO country code | `"country-{v}"`, `"_country-{v}"`, `"cc-{v}"` |
-| `state` | State/region | `"state-{v}"`, `"_state-{v}"` |
-| `city` | City name | `"city-{v}"`, `"_city-{v}"` |
-| `session_id` | Sticky session ID | `"session-{v}"`, `"sessid-{v}"` |
-| `session_duration` | Session duration | `"sessTime-{v}"`, `"_lifetime-{v}"` |
-
-### How URL Formatting Works
-
-Given credentials `user123` / `pass456`, host `gate.example.com:7777`, country `US`:
-
-**Username encoding** (`param_field: "username"`):
 ```
-http://user123-country-us:pass456@gate.example.com:7777
-      ^^^^^^^^^^^^^^^^^^^^^^^
-      prefix + separator + params
-```
-
-**Password encoding** (`param_field: "password"`):
-```
-http://user123:pass456country-us@gate.example.com:7777
-               ^^^^^^^^^^^^^^^^^^^^^
-               password + params (no separator usually)
-```
-
-**No encoding** (`param_field: "none"`):
-```
-http://user123:pass456@gate.example.com:7777
-```
-
----
-
-## Workflow: Configure a New Provider
-
-### Step 1: Generate url_template with python_code
-
-Read the provider's documentation to identify:
-1. What the proxy gateway host and port are
-2. How parameters are encoded (username-based or password-based)
-3. What separator characters are used
-4. What the parameter format strings look like
-
-Then use `python_code` to generate and validate the template:
-
-```python
-import json
-
-# Build the url_template based on provider docs
-template = {
-    "param_field": "username",
-    "username_prefix": "{username}",
-    "username_param_separator": "-",
-    "param_separator": "-",
-    "param_keys": {
-        "country": "country-{v}",
-        "city": "city-{v}",
-        "session_id": "session-{v}",
-        "session_duration": "sessTime-{v}"
-    },
-    "country_case": "lower",
-    "city_separator": "_"
-}
-
-# Validate: simulate what the proxy system does
-username = "testuser"
-password = "testpass"
-country = "us"
-city = "new_york"
-session_id = "abc123"
-
-params = []
-if "country" in template["param_keys"]:
-    cc = country.lower() if template.get("country_case") == "lower" else country.upper()
-    params.append(template["param_keys"]["country"].replace("{v}", cc))
-if "city" in template["param_keys"]:
-    c = city.lower().replace(" ", template.get("city_separator", "_"))
-    params.append(template["param_keys"]["city"].replace("{v}", c))
-if "session_id" in template["param_keys"]:
-    params.append(template["param_keys"]["session_id"].replace("{v}", session_id))
-
-param_str = template.get("param_separator", "-").join(params)
-prefix = template.get("username_prefix", "{username}").replace("{username}", username)
-
-if template["param_field"] == "username" and param_str:
-    sep = template.get("username_param_separator", "-")
-    final_user = f"{prefix}{sep}{param_str}"
-    final_pass = password
-elif template["param_field"] == "password" and param_str:
-    final_user = prefix
-    final_pass = f"{password}{param_str}"
-else:
-    final_user = prefix
-    final_pass = password
-
-url = f"http://{final_user}:{final_pass}@gate.example.com:7777"
-print(f"Generated URL: {url}")
-
-# Assert the URL matches expected format from provider docs
-assert "country-us" in url, "Country encoding failed"
-assert "city-new_york" in url, "City encoding failed"
-assert "session-abc123" in url, "Session encoding failed"
-
-# Output the validated template
-result = json.dumps(template, indent=2)
-print(f"\nValidated template:\n{result}")
-output = result
-```
-
-### Step 2: Save the provider with proxy_config
-
-```json
-{
+proxy_config({
   "operation": "add_provider",
-  "name": "my_provider",
-  "gateway_host": "gate.example.com",
+  "name": "smartproxy",
+  "gateway_host": "gate.smartproxy.com",
   "gateway_port": 7777,
-  "url_template": "{...the JSON template from step 1...}",
-  "cost_per_gb": 2.50,
-  "enabled": true,
-  "priority": 50
-}
+  "url_template": "{\"param_field\":\"username\",\"username_prefix\":\"{username}\",\"username_param_separator\":\"-\",\"param_separator\":\"-\",\"param_keys\":{\"country\":\"country-{v}\",\"city\":\"city-{v}\",\"state\":\"state-{v}\",\"session_id\":\"session-{v}\",\"session_duration\":\"sessTime-{v}\"},\"country_case\":\"lower\",\"city_separator\":\"_\"}"
+})
 ```
 
-### Step 3: Set credentials
+### Step 2: Set credentials
 
-```json
-{
+```
+proxy_config({
   "operation": "set_credentials",
-  "name": "my_provider",
-  "username": "actual_username",
-  "password": "actual_password"
-}
+  "name": "smartproxy",
+  "username": "the_username",
+  "password": "the_password"
+})
 ```
 
-### Step 4: Test the provider
+### Step 3: Test
 
-```json
-{
+```
+proxy_config({
   "operation": "test_provider",
-  "name": "my_provider"
-}
+  "name": "smartproxy"
+})
 ```
 
-Expected response:
+If test returns `"success": true`, the provider is ready. If it fails, check credentials and gateway host/port.
+
+## Making Proxied Requests
+
+Once a provider is configured:
+
+```
+proxy_request({
+  "url": "https://example.com/page",
+  "proxyCountry": "US"
+})
+```
+
+The system auto-selects the best healthy provider. To force a specific one:
+
+```
+proxy_request({
+  "url": "https://example.com/page",
+  "proxyProvider": "smartproxy",
+  "proxyCountry": "US",
+  "sessionType": "sticky"
+})
+```
+
+## url_template Reference
+
+The `url_template` JSON controls how the system builds the proxy URL. It determines how username/password strings are constructed with geo and session parameters.
+
+**Fields:**
+- `param_field`: Where params go. `"username"` (80% of providers), `"password"`, or `"none"`.
+- `username_prefix`: Template for username base. `{username}` is replaced with actual username.
+- `username_param_separator`: Separator between username and first param (e.g. `"-"`).
+- `param_separator`: Separator between params (e.g. `"-"`).
+- `param_keys`: Object mapping param names to format strings. `{v}` is replaced with the value.
+  - `country`: e.g. `"country-{v}"` produces `country-us`
+  - `city`: e.g. `"city-{v}"` produces `city-new_york`
+  - `state`: e.g. `"state-{v}"` produces `state-california`
+  - `session_id`: e.g. `"session-{v}"` produces `session-abc123`
+  - `session_duration`: e.g. `"sessTime-{v}"` produces `sessTime-10`
+- `country_case`: `"lower"` or `"upper"` for country codes.
+- `city_separator`: Replaces spaces in city/state names (e.g. `"_"` makes `new_york`).
+
+**Result for username encoding with country US:**
+`http://myuser-country-us:mypass@gate.provider.com:7777`
+
+**Result for password encoding with country US:**
+`http://myuser:mypasscountry-us@gate.provider.com:7777`
+
+## Common Provider Templates
+
+### DataImpulse (username-based, dash separator)
+Gateway: `gw.dataimpulse.com:823`
 ```json
-{
-  "success": true,
-  "ip": "203.0.113.42",
-  "latency_ms": 1250.3,
-  "status_code": 200
-}
+{"param_field":"username","username_prefix":"{username}","username_param_separator":"__","param_separator":"__","param_keys":{"country":"country-{v}","city":"city-{v}","session_id":"session-{v}","session_duration":"sessionduration-{v}"},"country_case":"lower","city_separator":"_"}
 ```
 
-### Step 5 (Optional): Add routing rules
-
-Route specific domains through specific providers:
-
+### Decodo/Smartproxy (username-based, dash separator)
+Gateway: `gate.smartproxy.com:7777`
 ```json
-{
-  "operation": "add_routing_rule",
-  "domain_pattern": "*.linkedin.com",
-  "preferred_providers": "[\"my_provider\"]",
-  "required_country": "US",
-  "session_type": "sticky"
-}
+{"param_field":"username","username_prefix":"{username}","username_param_separator":"-","param_separator":"-","param_keys":{"country":"country-{v}","city":"city-{v}","state":"state-{v}","session_id":"session-{v}","session_duration":"sessTime-{v}"},"country_case":"lower","city_separator":"_"}
 ```
 
----
-
-## proxy_config Tool Reference
-
-### Operations
-
-| Operation | Description | Required Fields |
-|-----------|-------------|-----------------|
-| `list_providers` | List all configured providers | (none) |
-| `add_provider` | Add a new provider | name, gateway_host, gateway_port, url_template |
-| `update_provider` | Update provider settings | name, + fields to change |
-| `remove_provider` | Remove a provider | name |
-| `set_credentials` | Set provider username/password | name, username, password |
-| `test_provider` | Health check via httpbin.org/ip | name |
-| `get_stats` | Get usage statistics | (none) |
-| `add_routing_rule` | Add domain routing rule | domain_pattern |
-| `list_routing_rules` | List all routing rules | (none) |
-| `remove_routing_rule` | Remove a routing rule | rule_id |
-
-### add_provider Fields
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| operation | string | Yes | `"add_provider"` |
-| name | string | Yes | Unique provider name (e.g., `"smartproxy"`, `"brightdata"`) |
-| gateway_host | string | Yes | Gateway hostname |
-| gateway_port | integer | Yes | Gateway port |
-| url_template | string | Yes | JSON string of template config |
-| enabled | boolean | No | Active status (default: true) |
-| priority | integer | No | Lower = preferred (default: 50) |
-| cost_per_gb | float | No | USD per GB (default: 0) |
-| geo_coverage | string | No | JSON array of ISO country codes |
-
-### set_credentials Fields
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| operation | string | Yes | `"set_credentials"` |
-| name | string | Yes | Provider name |
-| username | string | Yes | Proxy username from provider dashboard |
-| password | string | Yes | Proxy password from provider dashboard |
-
-### add_routing_rule Fields
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| operation | string | Yes | `"add_routing_rule"` |
-| domain_pattern | string | Yes | Glob pattern: `"*.example.com"`, `"*"` (catch-all) |
-| preferred_providers | string | No | JSON array of provider names |
-| required_country | string | No | ISO country code |
-| session_type | string | No | `"rotating"` or `"sticky"` (default: rotating) |
-
----
-
-## Reading Provider Documentation
-
-When the user gives you a provider name or documentation URL, look for these patterns:
-
-### What to Extract
-
-1. **Gateway endpoint**: Usually formatted as `host:port` (e.g., `gate.smartproxy.com:7777`)
-2. **Username format**: How parameters are appended (e.g., `user-country-us-session-abc123`)
-3. **Separator characters**: Dash `-`, underscore `_`, dot `.`, or custom
-4. **Parameter names**: What the provider calls country, city, session, etc.
-5. **Country code format**: Lowercase `us` vs uppercase `US`
-
-### Common Patterns to Recognize
-
-**Pattern A: Dash-separated username params (most common)**
+### Bright Data (username-based, dash separator)
+Gateway: `brd.superproxy.io:22225`
+```json
+{"param_field":"username","username_prefix":"{username}","username_param_separator":"-","param_separator":"-","param_keys":{"country":"country-{v}","city":"city-{v}","state":"state-{v}","session_id":"session-{v}"},"country_case":"lower","city_separator":"_"}
 ```
-username: user-country-us-city-new_york-session-abc123
-password: pass
+
+### IPRoyal (password-based)
+Gateway: `geo.iproyal.com:12321`
+```json
+{"param_field":"password","username_prefix":"{username}","param_separator":"_","param_keys":{"country":"country-{v}","city":"city-{v}","session_id":"session-{v}","session_duration":"sessionduration-{v}"},"country_case":"lower","city_separator":"_"}
 ```
-Template: `param_field: "username"`, separators: `"-"`
 
-**Pattern B: Underscore prefix params**
+### Custom/Generic (no encoding)
+For providers that don't encode params in credentials:
+```json
+{"param_field":"none"}
 ```
-username: user_country-us_city-new_york_session-abc123
-password: pass
-```
-Template: `username_param_separator: "_"`, keys use `"_country-{v}"`
 
-**Pattern C: Password-based encoding**
-```
-username: user
-password: pass_country-us_session-abc123
-```
-Template: `param_field: "password"`
+## If Provider Uses Unfamiliar Format
 
-**Pattern D: Custom prefix**
-```
-username: customer-user-zone-us
-password: pass
-```
-Template: `username_prefix: "customer-{username}"`, keys: `"zone-{v}"`
+Use `python_code` to reverse-engineer the template from the provider's example URL:
 
-### Validation Checklist
-
-After generating a template, always verify with `python_code`:
-
-1. Country code appears correctly in the URL
-2. City names have spaces replaced with the right separator
-3. Session IDs are properly formatted
-4. The overall URL matches what the provider docs show
-5. Both rotating (no session) and sticky (with session) modes work
-
----
-
-## Examples
-
-### Example: User says "Set up Smartproxy"
-
-1. Generate template with `python_code`:
 ```python
 import json
+
+# Example from provider docs:
+# Username: user123-cc-US-city-NewYork-sess-abc123
+# Password: pass456
+# Host: proxy.example.com:8080
+
 template = {
     "param_field": "username",
     "username_prefix": "{username}",
     "username_param_separator": "-",
     "param_separator": "-",
-    "param_keys": {
-        "country": "country-{v}",
-        "city": "city-{v}",
-        "state": "state-{v}",
-        "session_id": "session-{v}",
-        "session_duration": "sessTime-{v}"
-    },
-    "country_case": "lower",
-    "city_separator": "_"
-}
-output = json.dumps(template)
-```
-
-2. Save: `proxy_config(add_provider, name="smartproxy", gateway_host="gate.smartproxy.com", gateway_port=7777, url_template=<template>, cost_per_gb=4.00)`
-3. Credentials: `proxy_config(set_credentials, name="smartproxy", username="sp...", password="...")`
-4. Test: `proxy_config(test_provider, name="smartproxy")`
-
-### Example: User provides custom proxy docs
-
-If the user pastes documentation showing:
-```
-Proxy: proxy.example.com:8080
-Username: your_key
-Password: your_secret_cc-US_city-NewYork_sess-12345
-```
-
-You identify: password-based encoding, underscore prefix, dash key-value separator.
-
-```python
-import json
-template = {
-    "param_field": "password",
-    "username_prefix": "{username}",
-    "param_separator": "_",
     "param_keys": {
         "country": "cc-{v}",
         "city": "city-{v}",
@@ -384,17 +159,70 @@ template = {
     "country_case": "upper",
     "city_separator": ""
 }
+
+# Verify it produces the right URL
+username = "user123"
+params = []
+params.append(template["param_keys"]["country"].replace("{v}", "US"))
+params.append(template["param_keys"]["city"].replace("{v}", "NewYork"))
+params.append(template["param_keys"]["session_id"].replace("{v}", "abc123"))
+param_str = template["param_separator"].join(params)
+result = f"{username}{template['username_param_separator']}{param_str}"
+print(f"Built username: {result}")
+assert result == "user123-cc-US-city-NewYork-sess-abc123", f"Mismatch: {result}"
+
 output = json.dumps(template)
+print(f"Template: {output}")
 ```
 
----
+Then pass the `output` as the `url_template` string to `proxy_config(add_provider)`.
 
-## Guidelines
+## All proxy_config Operations
 
-1. **Always validate** the template with `python_code` before saving
-2. **Always test** the provider after setting credentials
-3. **Never hardcode** provider-specific logic -- the template handles everything
-4. If the user does not know their credentials, tell them to find username/password in their proxy provider's dashboard
-5. If test fails, check: credentials correct? Gateway host/port correct? Template encoding matches docs?
-6. Cost per GB is optional but helps the system prefer cheaper providers
-7. Priority lower = preferred; use 10-30 for primary, 50 for default, 70-90 for fallback
+| Operation | Required Parameters | Description |
+|-----------|-------------------|-------------|
+| `list_providers` | none | List all configured providers |
+| `add_provider` | `name`, `gateway_host`, `gateway_port`, `url_template` | Add a new provider |
+| `update_provider` | `name` + any fields to change | Update existing provider |
+| `remove_provider` | `name` | Delete a provider |
+| `set_credentials` | `name`, `username`, `password` | Store proxy credentials |
+| `test_provider` | `name` | Test via httpbin.org/ip |
+| `get_stats` | none | Usage statistics |
+| `add_routing_rule` | `domain_pattern` | Route domains to specific providers |
+| `list_routing_rules` | none | List all routing rules |
+| `remove_routing_rule` | `rule_id` | Delete a routing rule |
+
+Optional fields for `add_provider`/`update_provider`: `enabled` (bool), `priority` (int, lower=preferred), `cost_per_gb` (float).
+
+## proxy_request Parameters
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `url` | yes | | Target URL |
+| `method` | no | GET | HTTP method |
+| `headers` | no | | JSON string of headers |
+| `body` | no | | Request body string |
+| `proxyProvider` | no | auto | Provider name |
+| `proxyCountry` | no | | ISO country code (US, GB, DE) |
+| `sessionType` | no | rotating | `rotating` or `sticky` |
+| `timeout` | no | 30 | Seconds |
+| `maxRetries` | no | 3 | Retry with failover |
+
+## Transparent Proxy on HTTP Nodes
+
+The `httpRequest` and `httpScraper` nodes have built-in proxy support. Set `useProxy: true` and the proxy service handles everything -- provider selection, geo-targeting, and session type are all managed from the proxy service configuration (provider priorities, routing rules, default country).
+
+When the AI Agent uses `http_request` as a tool, it can set `useProxy: true` in the tool arguments. No other proxy fields needed.
+
+**When to use which:**
+- Use **http_request with useProxy: true** for proxied requests (simple, proxy service handles routing)
+- Use **proxy_request** tool only when you need explicit control over retries and failover
+
+## Notes
+
+- Always run `test_provider` after setting up a new provider
+- If the user does not know their credentials, they need to get them from their proxy provider dashboard
+- If test fails: check credentials, gateway host/port, and that the url_template matches the provider's format
+- Use `proxy_status` to check provider health before making requests
+- `sessionType: "sticky"` keeps the same IP across requests (good for scraping sessions)
+- `sessionType: "rotating"` gets a new IP each request (good for anonymity)

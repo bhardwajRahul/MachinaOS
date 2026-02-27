@@ -14,7 +14,11 @@ import {
   loadEnvConfig,
   ensureEnvFile,
   killPort,
+  createLogger,
 } from './utils.js';
+
+const START_TIME = Date.now();
+const log = createLogger(START_TIME);
 
 const args = process.argv.slice(2);
 const isVerbose = args.includes('--verbose') || args.includes('-v');
@@ -45,9 +49,11 @@ async function main() {
   ensureEnvFile();
 
   // Free ports
+  log('Freeing ports...');
   for (const port of config.allPorts) {
     await killPort(port);
   }
+  log('Ports ready');
 
   // Services: static client, backend (uvicorn), whatsapp, temporal
   const services = [];
@@ -56,14 +62,43 @@ async function main() {
   if (!skipWhatsApp) services.push('npm:whatsapp:api');
   if (config.temporalEnabled) services.push('npm:temporal:worker');
 
+  // Ready-detection patterns for each service
+  const readyPatterns = [
+    { name: 'Client',   pattern: /ready in|VITE.*ready|Client:\s*http/i },
+    { name: 'Backend',  pattern: /Application startup complete|Uvicorn running/i },
+  ];
+  if (!skipWhatsApp) {
+    readyPatterns.push({ name: 'WhatsApp', pattern: /listening on|WhatsApp.*ready|API.*started|:9400/i });
+  }
+  const readySet = new Set();
+  const totalExpected = readyPatterns.length;
+
+  function checkReady(text) {
+    for (const { name, pattern } of readyPatterns) {
+      if (!readySet.has(name) && pattern.test(text)) {
+        readySet.add(name);
+        log(`${name} ready`);
+        if (readySet.size === totalExpected) {
+          log(`All services ready`);
+        }
+      }
+    }
+  }
+
   if (isVerbose) {
     console.log('\n=== MachinaOS Starting (verbose) ===\n');
     const proc = spawn('npx', ['concurrently', '--raw', '--kill-others', ...services], {
       cwd: ROOT,
-      stdio: 'inherit',
+      stdio: ['inherit', 'pipe', 'pipe'],
       shell: true,
       env: { ...process.env, FORCE_COLOR: '1' },
     });
+
+    proc.stdout.on('data', (data) => {
+      process.stdout.write(data);
+      checkReady(data.toString());
+    });
+    proc.stderr.on('data', (data) => process.stderr.write(data));
 
     process.on('SIGINT', () => proc.kill('SIGINT'));
     process.on('SIGTERM', () => proc.kill('SIGTERM'));
@@ -96,7 +131,9 @@ async function main() {
     const essential = /error|fatal|exception|failed|started|ready|listening|running|address already in use|application startup complete/i;
 
     proc.stdout.on('data', (data) => {
-      for (const line of data.toString().split('\n')) {
+      const text = data.toString();
+      checkReady(text);
+      for (const line of text.split('\n')) {
         const trimmed = line.trim();
         if (trimmed && essential.test(trimmed)) {
           process.stdout.write(line + '\n');

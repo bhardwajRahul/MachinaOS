@@ -23,6 +23,7 @@ import { apifyNodes, APIFY_NODE_TYPES } from './nodeDefinitions/apifyNodes';
 import { searchNodes, SEARCH_NODE_TYPES } from './nodeDefinitions/searchNodes';
 // Consolidated Google Workspace nodes (replaces gmailNodes, calendarNodes, driveNodes, sheetsNodes, tasksNodes, contactsNodes)
 import { googleWorkspaceNodes, GOOGLE_WORKSPACE_NODE_TYPES } from './nodeDefinitions/googleWorkspaceNodes';
+import { proxyNodes, PROXY_NODE_TYPES } from './nodeDefinitions/proxyNodes';
 
 // ============================================================================
 // MAIN NODE REGISTRY - Combining all modular definitions
@@ -49,7 +50,8 @@ export const nodeDefinitions: Record<string, INodeTypeDescription> = {
   ...twitterNodes,
   ...apifyNodes,
   ...searchNodes,
-  ...googleWorkspaceNodes
+  ...googleWorkspaceNodes,
+  ...proxyNodes
 };
 
 // ============================================================================
@@ -140,6 +142,10 @@ export const GOOGLE_WORKSPACE_NODES = [
 
 export const SEARCH_NODES = [
   ...SEARCH_NODE_TYPES
+];
+
+export const PROXY_NODES = [
+  ...PROXY_NODE_TYPES
 ];
 
 // Re-export types and utilities from modular files for external access

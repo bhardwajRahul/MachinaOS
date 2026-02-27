@@ -92,6 +92,31 @@ export const documentNodes: Record<string, INodeTypeDescription> = {
         default: '{}',
         typeOptions: { rows: 2 },
         placeholder: '{"Authorization": "Bearer token"}'
+      },
+      {
+        displayName: 'Use Proxy',
+        name: 'useProxy',
+        type: 'boolean',
+        default: false,
+        description: 'Route requests through a configured proxy provider'
+      },
+      {
+        displayName: 'Proxy Country',
+        name: 'proxyCountry',
+        type: 'string',
+        default: '',
+        placeholder: 'US',
+        description: 'ISO country code for geo-targeting (e.g. US, GB, DE)',
+        displayOptions: { show: { useProxy: [true] } }
+      },
+      {
+        displayName: 'Proxy Provider',
+        name: 'proxyProvider',
+        type: 'string',
+        default: '',
+        placeholder: 'Auto-select',
+        description: 'Specific provider name, or leave empty for auto-selection',
+        displayOptions: { show: { useProxy: [true] } }
       }
     ]
   },

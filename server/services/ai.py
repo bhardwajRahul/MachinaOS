@@ -8,9 +8,21 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional, Callable, Type, TypedDict, Annotated, Sequence
 import operator
 
+_ai_t0 = time.perf_counter()
+
+
+def _ailog(msg):
+    elapsed = (time.perf_counter() - _ai_t0) * 1000
+    print(f"           ai.py: {msg} ({elapsed:.0f}ms)", flush=True)
+
+
+_ailog("importing langchain_openai...")
 from langchain_openai import ChatOpenAI
+_ailog("importing langchain_anthropic...")
 from langchain_anthropic import ChatAnthropic
+_ailog("importing langchain_groq...")
 from langchain_groq import ChatGroq
+_ailog("importing langchain_core.messages...")
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, BaseMessage, ToolMessage
 
 # Lazy import for Google GenAI (google-generativeai init hangs on Windows/Python 3.13)
@@ -26,15 +38,18 @@ def _get_google_genai_class():
 # Conditional import for Cerebras (requires Python <3.13)
 CEREBRAS_IMPORT_ERROR = None
 try:
+    _ailog("importing langchain_cerebras...")
     from langchain_cerebras import ChatCerebras
     CEREBRAS_AVAILABLE = True
 except ImportError as e:
     ChatCerebras = None
     CEREBRAS_AVAILABLE = False
     CEREBRAS_IMPORT_ERROR = str(e)
+_ailog("importing langgraph + pydantic...")
 from langchain_core.tools import StructuredTool
 from langgraph.graph import StateGraph, END
 from pydantic import BaseModel, Field, create_model
+_ailog("all LangChain imports done")
 import json
 
 from core.config import Settings
@@ -815,6 +830,64 @@ def build_agent_graph(chat_model, tools: List = None, tool_executor: Callable = 
     return graph.compile()
 
 
+def _build_skill_system_prompt(skill_data: List[Dict[str, Any]], log_prefix: str = "[Agent]") -> tuple:
+    """Build skill injection text for the system message.
+
+    Personality skills (names ending in '-personality') get their FULL SKILL.md
+    instructions injected. All other skills get brief registry descriptions only.
+
+    Args:
+        skill_data: List of skill entries from _collect_agent_connections.
+        log_prefix: Log prefix for debug messages.
+
+    Returns:
+        Tuple of (prompt_text, has_personality). prompt_text is the string to
+        append to system_message. has_personality indicates whether any
+        personality skills were found (used to drop the default system message).
+    """
+    if not skill_data:
+        return "", False
+
+    from services.skill_loader import get_skill_loader
+
+    skill_loader = get_skill_loader()
+    skill_loader.scan_skills()
+
+    personality_blocks = []
+    non_personality_names = []
+
+    for skill_info in skill_data:
+        skill_name = skill_info.get('skill_name') or skill_info.get('node_type', '').replace('Skill', '-skill').lower()
+        if skill_name.endswith('skill') and '-' not in skill_name:
+            skill_name = skill_name[:-5] + '-skill'
+
+        if skill_name.endswith('-personality'):
+            instructions = skill_info.get('parameters', {}).get('instructions', '')
+            if instructions:
+                personality_blocks.append(instructions)
+                logger.debug(f"{log_prefix} Personality skill injected (full): {skill_name}")
+            else:
+                logger.warning(f"{log_prefix} Personality skill {skill_name} has no instructions")
+        else:
+            non_personality_names.append(skill_name)
+            logger.debug(f"{log_prefix} Skill detected: {skill_name}")
+
+    parts = []
+
+    for block in personality_blocks:
+        parts.append(block)
+
+    if non_personality_names:
+        registry_prompt = skill_loader.get_registry_prompt(non_personality_names)
+        if registry_prompt:
+            parts.append(registry_prompt)
+
+    if parts:
+        logger.debug(f"{log_prefix} Enhanced system message: {len(personality_blocks)} personality, {len(non_personality_names)} standard skills")
+
+    return "\n\n".join(parts), len(personality_blocks) > 0
+
+
 class AIService:
     """AI model service for LangChain operations."""
 
@@ -1493,29 +1566,13 @@ class AIService:
             prompt = parameters.get('prompt', 'Hello')
             system_message = parameters.get('systemMessage', 'You are a helpful assistant')
 
-            # Load skills and enhance system message with SKILL.md context
-            # Skills provide instructions/context - actual tools come from tool nodes
-            if skill_data:
-                from services.skill_loader import get_skill_loader
-
-                skill_loader = get_skill_loader()
-                skill_loader.scan_skills()
-
-                # Extract skill names from connected skill nodes
-                skill_names = []
-                for skill_info in skill_data:
-                    skill_name = skill_info.get('skill_name') or skill_info.get('node_type', '').replace('Skill', '-skill').lower()
-                    # Convert node type to skill name (e.g., 'whatsappSkill' -> 'whatsapp-skill')
-                    if skill_name.endswith('skill') and '-' not in skill_name:
-                        skill_name = skill_name[:-5] + '-skill'  # whatsappskill -> whatsapp-skill
-                    skill_names.append(skill_name)
-                    logger.debug(f"[AIAgent] Skill detected: {skill_name}")
-
-                # Add skill SKILL.md content to system message
-                skill_prompt = skill_loader.get_registry_prompt(skill_names)
-                if skill_prompt:
+            # Inject skills: personality skills get full instructions, others get brief descriptions
+            skill_prompt, has_personality = _build_skill_system_prompt(skill_data, log_prefix="[AIAgent]")
+            if skill_prompt:
+                if has_personality:
+                    system_message = skill_prompt
+                else:
                     system_message = f"{system_message}\n\n{skill_prompt}"
-                    logger.debug(f"[AIAgent] Enhanced system message with {len(skill_names)} skill contexts")
 
             # Flatten options collection from frontend
             options = parameters.get('options', {})
@@ -1655,6 +1712,15 @@ class AIService:
                         tools.append(check_tool)
                         tool_configs[check_tool.name] = check_config
                         logger.debug("[LangGraph] Auto-injected check_delegated_tasks tool")
+
+                    # Add delegation guidance to system message
+                    delegate_names = [n for n in tool_configs if n.startswith('delegate_to_')]
+                    system_message += (
+                        "\n\n## Agent Delegation\n"
+                        "When delegating to sub-agents, use 'task' for the mission directive "
+                        "(role and goal) and 'context' for input data the agent needs to work with.\n"
+                        f"Available agents: {', '.join(delegate_names)}"
+                    )
 
             # Create tool executor callback
             async def tool_executor(tool_name: str, tool_args: Dict) -> Any:
@@ -1947,29 +2013,13 @@ class AIService:
             prompt = parameters.get('prompt', 'Hello')
             system_message = parameters.get('systemMessage', 'You are a helpful assistant')
 
-            # Load skills and enhance system message with SKILL.md context
-            # Skills only provide instructions/context - actual tools come from direct tool nodes
-            if skill_data:
-                from services.skill_loader import get_skill_loader
-
-                skill_loader = get_skill_loader()
-                skill_loader.scan_skills()
-
-                # Extract skill names from connected skill nodes
-                skill_names = []
-                for skill_info in skill_data:
-                    skill_name = skill_info.get('skill_name') or skill_info.get('node_type', '').replace('Skill', '-skill').lower()
-                    # Convert node type to skill name (e.g., 'whatsappSkill' -> 'whatsapp-skill')
-                    if skill_name.endswith('skill') and '-' not in skill_name:
-                        skill_name = skill_name[:-5] + '-skill'  # whatsappskill -> whatsapp-skill
-                    skill_names.append(skill_name)
-                    logger.debug(f"[ChatAgent] Skill detected: {skill_name}")
-
-                # Add skill SKILL.md content to system message
-                skill_prompt = skill_loader.get_registry_prompt(skill_names)
-                if skill_prompt:
+            # Inject skills: personality skills get full instructions, others get brief descriptions
+            skill_prompt, has_personality = _build_skill_system_prompt(skill_data, log_prefix="[ChatAgent]")
+            if skill_prompt:
+                if has_personality:
+                    system_message = skill_prompt
+                else:
                     system_message = f"{system_message}\n\n{skill_prompt}"
-                    logger.debug(f"[ChatAgent] Enhanced system message with {len(skill_names)} skill contexts")
 
             # Build tools from tool_data using same method as AI Agent
             # This supports ALL tool types: calculatorTool, currentTimeTool, duckduckgoSearch, androidTool, httpRequest
@@ -2004,6 +2054,15 @@ class AIService:
                         all_tools.append(check_tool)
                         tool_node_configs[check_tool.name] = check_config
                         logger.debug("[ChatAgent] Auto-injected check_delegated_tasks tool")
+
+                    # Add delegation guidance to system message
+                    delegate_names = [n for n in tool_node_configs if n.startswith('delegate_to_')]
+                    system_message += (
+                        "\n\n## Agent Delegation\n"
+                        "When delegating to sub-agents, use 'task' for the mission directive "
+                        "(role and goal) and 'context' for input data the agent needs to work with.\n"
+                        f"Available agents: {', '.join(delegate_names)}"
+                    )
 
             logger.debug(f"[ChatAgent] Total tools available: {len(all_tools)}")
             # Debug: log all tool schemas to verify they're correct
@@ -2436,6 +2495,10 @@ class AIService:
             'sheets': 'google_sheets',
             'tasks': 'google_tasks',
             'contacts': 'google_contacts',
+            # Proxy (dual-purpose tools)
+            'proxyRequest': 'proxy_request',
+            'proxyConfig': 'proxy_config',
+            'proxyStatus': 'proxy_status',
         }
         DEFAULT_TOOL_DESCRIPTIONS = {
             'calculatorTool': 'Perform mathematical calculations. Operations: add, subtract, multiply, divide, power, sqrt, mod, abs',
@@ -2495,6 +2558,10 @@ class AIService:
             'sheets': 'Read and write Google Sheets data. Operations: read (get range), write (set range), append (add rows).',
             'tasks': 'Manage Google Tasks. Operations: create (new task), list (find tasks), complete (mark done), update (modify task), delete (remove task).',
             'contacts': 'Manage Google Contacts. Operations: create (new contact), list (browse), search (find by name/email/phone), get (details by resource name), update (modify), delete (remove).',
+            # Proxy (dual-purpose tools)
+            'proxyRequest': 'Make HTTP requests through residential proxy providers with geo-targeting, session control, and automatic failover. Supports GET, POST, PUT, DELETE, PATCH methods.',
+            'proxyConfig': 'Manage proxy providers and routing rules. Operations: list_providers, add_provider, update_provider, remove_provider, set_credentials, test_provider, get_stats, add_routing_rule, list_routing_rules, remove_routing_rule.',
+            'proxyStatus': 'Get proxy provider health stats, scores, and usage statistics. Returns enabled status, provider list with health scores, and aggregated stats.',
         }
 
         try:
@@ -2633,6 +2700,7 @@ class AIService:
                 url: str = Field(description="URL path or full URL to request")
                 method: str = Field(default="GET", description="HTTP method: GET, POST, PUT, DELETE")
                 body: Optional[Dict[str, Any]] = Field(default=None, description="Request body as JSON object")
+                useProxy: bool = Field(default=False, description="Route request through a configured residential proxy")
 
             return HttpRequestSchema
 
@@ -3292,15 +3360,17 @@ class AIService:
                 """Delegate a task to another AI Agent (non-blocking).
 
                 The child agent works independently in the background.
+                The 'task' becomes the agent's mission directive (system message).
+                The 'context' becomes the agent's input data (user prompt).
                 Returns a task_id immediately. Use 'check_delegated_tasks'
                 tool to check status and retrieve results when ready.
                 """
                 task: str = Field(
-                    description=f"The task/instruction to delegate to '{agent_label}'. Be specific about what you want done."
+                    description=f"The mission directive for '{agent_label}'. Describe the role and goal clearly, e.g. 'You are a coding assistant. Write a Python script that processes the given CSV data.'"
                 )
                 context: Optional[str] = Field(
                     default=None,
-                    description="Additional context or data the child agent needs to complete the task"
+                    description="Input data or specific details the agent needs to work with, e.g. file contents, user requirements, or parameters"
                 )
 
             return DelegateToAgentSchema
@@ -3332,6 +3402,129 @@ class AIService:
                 )
 
             return ApifyActorSchema
+
+        # Proxy Request tool schema (dual-purpose: workflow node + AI tool)
+        if node_type == 'proxyRequest':
+            class ProxyRequestSchema(BaseModel):
+                """Make HTTP requests through residential proxy providers with geo-targeting and failover."""
+                url: str = Field(
+                    description="Target URL to request through the proxy"
+                )
+                method: Optional[str] = Field(
+                    default="GET",
+                    description="HTTP method: GET, POST, PUT, DELETE, PATCH"
+                )
+                headers: Optional[str] = Field(
+                    default=None,
+                    description="JSON string of HTTP headers (e.g. '{\"Authorization\": \"Bearer token\"}')"
+                )
+                body: Optional[str] = Field(
+                    default=None,
+                    description="Request body (for POST/PUT/PATCH). JSON string or plain text."
+                )
+                proxyProvider: Optional[str] = Field(
+                    default=None,
+                    description="Provider name to use, or omit for auto-selection (best health score)"
+                )
+                proxyCountry: Optional[str] = Field(
+                    default=None,
+                    description="ISO 3166-1 alpha-2 country code for geo-targeting (e.g. US, GB, DE)"
+                )
+                sessionType: Optional[str] = Field(
+                    default="rotating",
+                    description="Session type: 'rotating' (new IP per request) or 'sticky' (same IP)"
+                )
+                timeout: Optional[int] = Field(
+                    default=30,
+                    description="Request timeout in seconds (5-300)"
+                )
+                maxRetries: Optional[int] = Field(
+                    default=3,
+                    description="Max retry attempts with failover (0-10)"
+                )
+
+            return ProxyRequestSchema
+
+        # Proxy Status tool schema (dual-purpose: workflow node + AI tool)
+        if node_type == 'proxyStatus':
+            class ProxyStatusSchema(BaseModel):
+                """Get proxy provider health stats, scores, and usage statistics."""
+                providerFilter: Optional[str] = Field(
+                    default=None,
+                    description="Filter by specific provider name, or omit for all providers"
+                )
+
+            return ProxyStatusSchema
+
+        # Proxy Config tool schema (dual-purpose: workflow node + AI tool)
+        if node_type == 'proxyConfig':
+            class ProxyConfigSchema(BaseModel):
+                """Manage proxy providers and routing rules.
+
+                Operations: list_providers, add_provider, update_provider, remove_provider,
+                set_credentials, test_provider, get_stats, add_routing_rule, list_routing_rules, remove_routing_rule.
+                """
+                operation: str = Field(
+                    description="Operation: list_providers, add_provider, update_provider, remove_provider, set_credentials, test_provider, get_stats, add_routing_rule, list_routing_rules, remove_routing_rule"
+                )
+                name: Optional[str] = Field(
+                    default=None,
+                    description="Provider name (required for add/update/remove/set_credentials/test_provider)"
+                )
+                gateway_host: Optional[str] = Field(
+                    default=None,
+                    description="Gateway hostname (for add_provider/update_provider)"
+                )
+                gateway_port: Optional[int] = Field(
+                    default=None,
+                    description="Gateway port (for add_provider/update_provider)"
+                )
+                url_template: Optional[str] = Field(
+                    default=None,
+                    description="JSON template config for proxy URL encoding (for add_provider/update_provider)"
+                )
+                username: Optional[str] = Field(
+                    default=None,
+                    description="Proxy username (for set_credentials)"
+                )
+                password: Optional[str] = Field(
+                    default=None,
+                    description="Proxy password (for set_credentials)"
+                )
+                enabled: Optional[bool] = Field(
+                    default=None,
+                    description="Enable/disable provider (for add_provider/update_provider)"
+                )
+                priority: Optional[int] = Field(
+                    default=None,
+                    description="Provider priority, lower=preferred (for add_provider/update_provider)"
+                )
+                cost_per_gb: Optional[float] = Field(
+                    default=None,
+                    description="Cost per GB in USD (for add_provider/update_provider)"
+                )
+                domain_pattern: Optional[str] = Field(
+                    default=None,
+                    description="Domain glob pattern (for add_routing_rule, e.g. '*.linkedin.com')"
+                )
+                preferred_providers: Optional[str] = Field(
+                    default=None,
+                    description="JSON array of provider names (for add_routing_rule)"
+                )
+                required_country: Optional[str] = Field(
+                    default=None,
+                    description="ISO country code (for add_routing_rule)"
+                )
+                session_type: Optional[str] = Field(
+                    default=None,
+                    description="Session type: 'rotating' or 'sticky' (for add_routing_rule)"
+                )
+                rule_id: Optional[int] = Field(
+                    default=None,
+                    description="Routing rule ID (for remove_routing_rule)"
+                )
+
+            return ProxyConfigSchema
 
         # Generic schema for other nodes
         class GenericToolSchema(BaseModel):

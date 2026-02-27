@@ -171,6 +171,14 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
     if node_type == 'apifyActor':
         return await _execute_apify_actor(tool_args, config.get('parameters', {}))
 
+    # Proxy nodes (dual-purpose: workflow node + AI tool)
+    if node_type == 'proxyRequest':
+        return await _execute_proxy_request(tool_args, config.get('parameters', {}), config)
+    if node_type == 'proxyStatus':
+        return await _execute_proxy_status(tool_args, config.get('parameters', {}))
+    if node_type == 'proxyConfig':
+        return await _execute_proxy_config(tool_args, config.get('parameters', {}))
+
     # Built-in: Check delegated task results
     # Auto-injected when parent has delegation tools
     if node_type == '_builtin_check_delegated_tasks':
@@ -265,10 +273,27 @@ async def _execute_http_request(args: Dict[str, Any],
     except Exception:
         default_headers = {}
 
-    logger.debug(f"[HTTP Tool] {method} {full_url}")
+    # Transparent proxy injection (useProxy from node params or LLM args)
+    proxy_url = None
+    use_proxy = args.get('useProxy', node_params.get('useProxy', False))
+    if use_proxy:
+        try:
+            from services.proxy.service import get_proxy_service
+            proxy_svc = get_proxy_service()
+            if proxy_svc and proxy_svc.is_enabled():
+                merged = {**node_params, **args}
+                proxy_url = await proxy_svc.get_proxy_url(full_url, merged)
+        except Exception as e:
+            logger.warning(f"[HTTP Tool] Proxy lookup failed, proceeding without proxy: {e}")
+
+    logger.debug(f"[HTTP Tool] {method} {full_url}", proxy=bool(proxy_url))
 
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        client_kwargs: dict = {"timeout": 30.0}
+        if proxy_url:
+            client_kwargs["proxy"] = proxy_url
+
+        async with httpx.AsyncClient(**client_kwargs) as client:
             response = await client.request(
                 method=method,
                 url=full_url,
@@ -286,7 +311,8 @@ async def _execute_http_request(args: Dict[str, Any],
                 "status": response.status_code,
                 "data": data,
                 "url": full_url,
-                "method": method
+                "method": method,
+                "proxied": proxy_url is not None,
             }
 
     except httpx.TimeoutException:
@@ -1358,6 +1384,251 @@ async def _execute_apify_actor(args: Dict[str, Any],
     )
 
 
+async def _execute_proxy_request(args: Dict[str, Any],
+                                 node_params: Dict[str, Any],
+                                 config: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute proxy HTTP request as an AI tool.
+
+    Delegates to the standalone proxy request handler.
+
+    Args:
+        args: LLM-provided arguments (url, method, headers, body, etc.)
+        node_params: Node parameters
+        config: Full tool config with context
+
+    Returns:
+        Request result dict
+    """
+    from services.handlers.proxy import handle_proxy_request
+
+    # Merge LLM args over node params
+    merged = {**node_params, **{k: v for k, v in args.items() if v is not None}}
+
+    context = config.get('context', {})
+    node_id = config.get('node_id', 'tool_proxy_request')
+
+    result = await handle_proxy_request(node_id, 'proxyRequest', merged, context)
+    return result.get('result', result)
+
+
+async def _execute_proxy_status(args: Dict[str, Any],
+                                node_params: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute proxy status check as an AI tool.
+
+    Delegates to the standalone proxy status handler.
+
+    Args:
+        args: LLM-provided arguments (providerFilter)
+        node_params: Node parameters
+
+    Returns:
+        Status result dict
+    """
+    from services.handlers.proxy import handle_proxy_status
+
+    merged = {**node_params, **{k: v for k, v in args.items() if v is not None}}
+
+    result = await handle_proxy_status('tool_proxy_status', 'proxyStatus', merged, {})
+    return result.get('result', result)
+
+
+async def _execute_proxy_config(args: Dict[str, Any],
+                                node_params: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute proxy configuration operations.
+
+    Manages proxy providers, credentials, and routing rules.
+
+    Args:
+        args: LLM-provided arguments (operation, name, etc.)
+        node_params: Node parameters
+
+    Returns:
+        Operation result dict
+    """
+    import json as _json
+    from core.container import container
+    from services.proxy.service import get_proxy_service
+
+    operation = args.get('operation', node_params.get('operation', ''))
+    name = args.get('name', node_params.get('name', ''))
+    proxy_svc = get_proxy_service()
+
+    if operation == 'list_providers':
+        providers = proxy_svc.get_providers() if proxy_svc else []
+        return {"success": True, "operation": operation, "providers": [p.model_dump() for p in providers]}
+
+    if operation == 'get_stats':
+        stats = proxy_svc.get_stats() if proxy_svc else {}
+        return {"success": True, "operation": operation, "stats": stats}
+
+    if operation == 'list_routing_rules':
+        rules = proxy_svc.get_routing_rules() if proxy_svc else []
+        return {"success": True, "operation": operation, "rules": [r.model_dump() for r in rules]}
+
+    if operation == 'add_provider':
+        if not name:
+            return {"success": False, "error": "Provider name is required"}
+        gateway_host = args.get('gateway_host', node_params.get('gateway_host', ''))
+        gateway_port = int(args.get('gateway_port', node_params.get('gateway_port', 0)))
+        url_template_str = args.get('url_template', node_params.get('url_template', '{}'))
+        cost_per_gb = float(args.get('cost_per_gb', node_params.get('cost_per_gb', 0)))
+        enabled = args.get('enabled', node_params.get('enabled', True))
+        priority = int(args.get('priority', node_params.get('priority', 50)))
+
+        try:
+            url_template = _json.loads(url_template_str) if isinstance(url_template_str, str) else url_template_str
+        except _json.JSONDecodeError:
+            return {"success": False, "error": f"Invalid url_template JSON: {url_template_str}"}
+
+        db = container.database()
+        await db.save_proxy_provider({
+            "name": name,
+            "enabled": enabled,
+            "priority": priority,
+            "cost_per_gb": cost_per_gb,
+            "gateway_host": gateway_host,
+            "gateway_port": gateway_port,
+            "url_template": _json.dumps(url_template),
+        })
+
+        if proxy_svc:
+            await proxy_svc.reload_providers()
+
+        return {"success": True, "operation": operation, "name": name}
+
+    if operation == 'update_provider':
+        if not name:
+            return {"success": False, "error": "Provider name is required"}
+        db = container.database()
+        existing = await db.get_proxy_provider(name)
+        if not existing:
+            return {"success": False, "error": f"Provider '{name}' not found"}
+
+        updates = {}
+        for field in ['gateway_host', 'gateway_port', 'cost_per_gb', 'enabled', 'priority']:
+            val = args.get(field, node_params.get(field))
+            if val is not None:
+                updates[field] = val
+
+        url_template_str = args.get('url_template', node_params.get('url_template'))
+        if url_template_str:
+            try:
+                url_template = _json.loads(url_template_str) if isinstance(url_template_str, str) else url_template_str
+                updates['url_template'] = _json.dumps(url_template)
+            except _json.JSONDecodeError:
+                return {"success": False, "error": f"Invalid url_template JSON"}
+
+        if updates:
+            merged = {**existing, **updates}
+            await db.save_proxy_provider(merged)
+            if proxy_svc:
+                await proxy_svc.reload_providers()
+
+        return {"success": True, "operation": operation, "name": name, "updated_fields": list(updates.keys())}
+
+    if operation == 'remove_provider':
+        if not name:
+            return {"success": False, "error": "Provider name is required"}
+        db = container.database()
+        await db.delete_proxy_provider(name)
+        if proxy_svc:
+            await proxy_svc.reload_providers()
+        return {"success": True, "operation": operation, "name": name}
+
+    if operation == 'set_credentials':
+        if not name:
+            return {"success": False, "error": "Provider name is required"}
+        username = args.get('username', node_params.get('username', ''))
+        password = args.get('password', node_params.get('password', ''))
+        if not username or not password:
+            return {"success": False, "error": "Username and password are required"}
+
+        auth_svc = container.auth_service()
+        await auth_svc.store_api_key(f"proxy_{name}_username", username, [])
+        await auth_svc.store_api_key(f"proxy_{name}_password", password, [])
+
+        if proxy_svc:
+            await proxy_svc.reload_providers()
+
+        return {"success": True, "operation": operation, "name": name}
+
+    if operation == 'test_provider':
+        if not name:
+            return {"success": False, "error": "Provider name is required"}
+        if not proxy_svc:
+            return {"success": False, "error": "Proxy service not enabled"}
+
+        import time as _time
+        import httpx
+
+        try:
+            proxy_url = await proxy_svc.get_proxy_url("https://httpbin.org/ip", {"proxyProvider": name})
+            if not proxy_url:
+                return {"success": False, "error": f"Could not get proxy URL for '{name}'"}
+
+            start = _time.monotonic()
+            async with httpx.AsyncClient(proxy=proxy_url, timeout=30) as client:
+                resp = await client.get("https://httpbin.org/ip")
+            latency_ms = (_time.monotonic() - start) * 1000
+
+            try:
+                data = resp.json()
+                ip = data.get("origin", "unknown")
+            except Exception:
+                ip = "unknown"
+
+            return {
+                "success": resp.status_code == 200,
+                "operation": operation,
+                "name": name,
+                "ip": ip,
+                "latency_ms": round(latency_ms, 1),
+                "status_code": resp.status_code,
+            }
+        except Exception as e:
+            return {"success": False, "operation": operation, "name": name, "error": str(e)}
+
+    if operation == 'add_routing_rule':
+        domain_pattern = args.get('domain_pattern', node_params.get('domain_pattern', ''))
+        if not domain_pattern:
+            return {"success": False, "error": "domain_pattern is required"}
+
+        preferred_str = args.get('preferred_providers', node_params.get('preferred_providers', '[]'))
+        try:
+            preferred = _json.loads(preferred_str) if isinstance(preferred_str, str) else preferred_str
+        except _json.JSONDecodeError:
+            preferred = []
+
+        db = container.database()
+        rule_data = {
+            "domain_pattern": domain_pattern,
+            "preferred_providers": _json.dumps(preferred),
+            "required_country": args.get('required_country', node_params.get('required_country', '')),
+            "session_type": args.get('session_type', node_params.get('session_type', 'rotating')),
+        }
+        await db.save_proxy_routing_rule(rule_data)
+
+        if proxy_svc:
+            await proxy_svc.reload_providers()
+
+        return {"success": True, "operation": operation, "domain_pattern": domain_pattern}
+
+    if operation == 'remove_routing_rule':
+        rule_id = args.get('rule_id', node_params.get('rule_id'))
+        if not rule_id:
+            return {"success": False, "error": "rule_id is required"}
+
+        db = container.database()
+        await db.delete_proxy_routing_rule(int(rule_id))
+
+        if proxy_svc:
+            await proxy_svc.reload_providers()
+
+        return {"success": True, "operation": operation, "rule_id": rule_id}
+
+    return {"success": False, "error": f"Unknown operation: {operation}"}
+
+
 async def _execute_generic(args: Dict[str, Any],
                            config: Dict[str, Any]) -> Dict[str, Any]:
     """Execute a generic tool (fallback handler).
@@ -1464,11 +1735,9 @@ async def _execute_delegated_agent(args: Dict[str, Any],
         if models:
             child_params['model'] = models[0]
 
-    # Build prompt from task + context
-    full_prompt = task_description
-    if task_context:
-        full_prompt = f"{task_description}\n\nContext:\n{task_context}"
-    child_params['prompt'] = full_prompt
+    # Task goes into systemMessage (directive), context data goes into prompt
+    child_params['systemMessage'] = task_description
+    child_params['prompt'] = task_context if task_context else task_description
 
     # Create execution context for child agent
     child_context = {

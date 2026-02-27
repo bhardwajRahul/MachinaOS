@@ -4,6 +4,15 @@ Modern FastAPI backend for React Flow workflow automation platform.
 Refactored with dependency injection, modular services, and clean architecture.
 """
 
+import time as _time
+_t0 = _time.perf_counter()
+
+
+def _startup_log(msg):
+    elapsed = _time.perf_counter() - _t0
+    print(f"  [{elapsed:6.2f}s] {msg}", flush=True)
+
+
 # Performance: Install uvloop if available (Linux/macOS only)
 try:
     import uvloop
@@ -19,14 +28,19 @@ from contextlib import asynccontextmanager
 # Adding custom handlers that raise KeyboardInterrupt causes cascading errors
 # during async operations (WebSocket handlers, logging, etc.).
 
+_startup_log("Importing FastAPI...")
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse
 
+_startup_log("Importing DI container + all services...")
 from core.container import container
+_startup_log("Importing settings + logging...")
 from core.config import Settings
 from core.logging import configure_logging, get_logger, setup_websocket_logging, shutdown_websocket_logging
+_startup_log("Importing routers...")
 from routers import workflow, database, maps, nodejs_compat, android, websocket, webhook, auth, twitter, google
+_startup_log("All imports complete")
 
 # Initialize settings and logging
 settings = Settings()
@@ -48,7 +62,7 @@ logging.getLogger("watchfiles").setLevel(logging.WARNING)
 async def lifespan(app: FastAPI):
     """Application lifespan management."""
     # Startup
-    logger.info("Starting React Flow Python Services")
+    _startup_log("Lifespan startup begin")
 
     # Wire dependency injection
     container.wire(modules=[
@@ -68,6 +82,7 @@ async def lifespan(app: FastAPI):
     # Start services
     await container.database().startup()
     await container.cache().startup()
+    _startup_log("Database + cache started")
 
     # Initialize credentials database (creates tables if not exist)
     credentials_db = container.credentials_database()
@@ -80,6 +95,7 @@ async def lifespan(app: FastAPI):
     if not encryption.is_initialized():
         encryption.initialize(settings.api_key_encryption_key, salt)
         logger.info("Encryption service initialized")
+    _startup_log("Credentials + encryption initialized")
 
     # Initialize event waiter with cache service for Redis Streams support
     from services import event_waiter
@@ -133,6 +149,7 @@ async def lifespan(app: FastAPI):
     compaction_svc = container.compaction_service()  # Trigger singleton initialization
     compaction_svc.set_ai_service(container.ai_service())
     logger.info("Compaction service initialized")
+    _startup_log("Compaction service ready")
 
     # Initialize model registry service
     from services.model_registry import get_model_registry
@@ -155,6 +172,16 @@ async def lifespan(app: FastAPI):
     from services.status_broadcaster import get_status_broadcaster
     init_agent_team_service(container.database(), get_status_broadcaster())
     logger.info("Agent team service initialized")
+
+    # Initialize proxy service (loads providers from DB, reads credentials)
+    from services.proxy.service import init_proxy_service
+    proxy_svc = init_proxy_service(
+        auth_service=container.auth_service(),
+        database=container.database(),
+        settings=settings,
+    )
+    await proxy_svc.startup()
+    _startup_log("Proxy service initialized")
 
     # Record startup time for health reporting
     set_startup_time()
@@ -203,7 +230,8 @@ async def lifespan(app: FastAPI):
             logger.warning(f"Temporal not available (optional): {str(e)}")
             logger.info("Continuing without Temporal - using local parallel/sequential execution")
 
-    logger.info("Services started successfully")
+    _startup_log("All services initialized")
+    print("Application startup complete", flush=True)
     yield
 
     # Shutdown
@@ -223,6 +251,12 @@ async def lifespan(app: FastAPI):
                 await temporal_client_wrapper.disconnect()
         except Exception:
             pass
+
+    # Shutdown proxy service
+    from services.proxy.service import get_proxy_service
+    _proxy_svc = get_proxy_service()
+    if _proxy_svc:
+        await _proxy_svc.shutdown()
 
     # Close Android relay client (prevents "Unclosed client session" warning)
     from services.android.manager import close_relay_client

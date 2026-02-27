@@ -29,6 +29,7 @@ Make an HTTP request to any URL.
 | url | string | Yes | Full URL to request (e.g., `https://api.example.com/data`) |
 | method | string | No | HTTP method: `GET`, `POST`, `PUT`, `DELETE`, `PATCH` (default: `GET`) |
 | body | object | No | Request body as JSON object (for POST/PUT/PATCH) |
+| useProxy | boolean | No | Route through proxy (default: `false`). The proxy service handles provider selection, geo-targeting, and session type automatically. |
 
 ### Node Parameters
 
@@ -46,7 +47,8 @@ Additional options can be configured on the node:
   "status": 200,
   "data": { "key": "value" },
   "url": "https://api.example.com/data",
-  "method": "GET"
+  "method": "GET",
+  "proxied": false
 }
 ```
 
@@ -188,6 +190,21 @@ Additional options can be configured on the node:
 | Health check | GET | Verify service availability |
 | Webhook trigger | POST | Send events to services |
 
+## Proxy Usage
+
+To route a request through a residential proxy, just set `useProxy: true`. The proxy service automatically selects the best provider, geo-target, and session type from its configuration. A proxy provider must be configured first via the `proxy_config` tool (see proxy-config-skill).
+
+**Proxied request:**
+```json
+{
+  "url": "https://example.com/data",
+  "method": "GET",
+  "useProxy": true
+}
+```
+
+If no proxy providers are configured or the proxy lookup fails, the request proceeds directly without a proxy and `"proxied": false` appears in the response.
+
 ## Guidelines
 
 1. **URLs**: Must be fully qualified with protocol (https://)
@@ -195,6 +212,7 @@ Additional options can be configured on the node:
 3. **Timeout**: Default 30 seconds
 4. **JSON body**: Automatically serialized for POST/PUT/PATCH
 5. **Response**: JSON responses are automatically parsed
+6. **Proxy**: Set `useProxy: true` to route through proxy -- the proxy service handles all routing details
 
 ## Security Notes
 
@@ -209,3 +227,4 @@ Additional options can be configured on the node:
 1. Connect the **HTTP Request** node to Zeenie's `input-tools` handle
 2. Configure authentication headers on the node if needed
 3. Ensure network access to target APIs
+4. For proxy usage: configure a proxy provider via the proxy-config-skill first

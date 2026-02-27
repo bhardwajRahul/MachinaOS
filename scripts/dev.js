@@ -71,14 +71,13 @@ async function main() {
   }
 
   // Start services
-  log('Starting services...');
-  log('Press Ctrl+C to stop\n');
+  log('Spawning services...');
 
   const clientDist = resolve(ROOT, 'client', 'dist', 'index.html');
   const hasVite = existsSync(resolve(ROOT, 'node_modules', 'vite'))
     || existsSync(resolve(ROOT, 'client', 'node_modules', 'vite'));
   const isProduction = existsSync(clientDist) && !hasVite;
-  log(`Mode: ${isProduction ? 'Production' : 'Development'}`);
+  log(`Client: ${isProduction ? 'Static server' : 'Vite dev server'}`);
 
   const services = [];
   if (isProduction) {
@@ -90,12 +89,40 @@ async function main() {
   if (!skipWhatsApp) services.push('npm:whatsapp:api');
   if (config.temporalEnabled) services.push('npm:temporal:worker');
 
+  // Ready-detection patterns for each service
+  const readyPatterns = [
+    { name: 'Client',   pattern: /ready in|VITE.*ready|Client:\s*http/i },
+    { name: 'Backend',  pattern: /Application startup complete|Uvicorn running/i },
+  ];
+  if (!skipWhatsApp) {
+    readyPatterns.push({ name: 'WhatsApp', pattern: /listening on|WhatsApp.*ready|API.*started|:9400/i });
+  }
+  const readySet = new Set();
+  const totalExpected = readyPatterns.length;
+
   const proc = spawn('npx', ['concurrently', '--raw', '--kill-others', ...services], {
     cwd: ROOT,
-    stdio: 'inherit',
+    stdio: ['inherit', 'pipe', 'pipe'],
     shell: true,
     env: { ...process.env, FORCE_COLOR: '1' }
   });
+
+  proc.stdout.on('data', (data) => {
+    process.stdout.write(data);
+    const text = data.toString();
+    for (const { name, pattern } of readyPatterns) {
+      if (!readySet.has(name) && pattern.test(text)) {
+        readySet.add(name);
+        log(`${name} ready`);
+        if (readySet.size === totalExpected) {
+          log(`All services ready -- http://localhost:${config.clientPort}`);
+          console.log('');
+        }
+      }
+    }
+  });
+
+  proc.stderr.on('data', (data) => process.stderr.write(data));
 
   process.on('SIGINT', () => proc.kill('SIGINT'));
   process.on('SIGTERM', () => proc.kill('SIGTERM'));

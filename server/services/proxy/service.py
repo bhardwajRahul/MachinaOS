@@ -139,11 +139,11 @@ class ProxyService:
         self._initialized = False
 
     async def startup(self) -> None:
-        """Load provider configs from DB and credentials from AuthService."""
-        if not self._settings.proxy_enabled:
-            logger.info("Proxy service disabled (PROXY_ENABLED=false)")
-            return
+        """Load provider configs from DB and credentials from AuthService.
 
+        Always initializes -- providers are managed dynamically by the LLM
+        via proxy_config tool. PROXY_ENABLED is not a gate.
+        """
         try:
             # Load provider configs from database
             db_providers = await self._database.get_proxy_providers()
@@ -170,7 +170,7 @@ class ProxyService:
         logger.info("Proxy service stopped")
 
     def is_enabled(self) -> bool:
-        return self._settings.proxy_enabled and self._initialized
+        return self._initialized
 
     async def get_proxy_url(
         self,
@@ -234,7 +234,7 @@ class ProxyService:
         )
 
         # Determine session type
-        session_type_str = parameters.get("proxySessionType", "rotating")
+        session_type_str = parameters.get("sessionType") or parameters.get("proxySessionType", "rotating")
         session_type = SessionType(session_type_str) if session_type_str else SessionType.ROTATING
         if rule:
             session_type = rule.session_type

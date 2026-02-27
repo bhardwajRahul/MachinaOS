@@ -500,6 +500,53 @@ class AgentMessage(SQLModel, table=True):
     )
 
 
+class ProxyProviderConfig(SQLModel, table=True):
+    """Proxy provider configuration stored in database.
+
+    Each row represents a configured residential proxy provider with
+    gateway endpoint, url_template for parameter encoding, and metadata.
+    """
+
+    __tablename__ = "proxy_providers"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str = Field(unique=True, index=True, max_length=255)
+    enabled: bool = Field(default=True)
+    priority: int = Field(default=50)  # Lower = preferred
+    cost_per_gb: float = Field(default=0.0)
+    gateway_host: str = Field(default="", max_length=500)
+    gateway_port: int = Field(default=0)
+    url_template: str = Field(default="{}", max_length=5000)  # JSON template config
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(DateTime(timezone=True), server_default=func.now())
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(DateTime(timezone=True), onupdate=func.now())
+    )
+
+
+class ProxyRoutingRule(SQLModel, table=True):
+    """Domain-based routing rules for proxy providers.
+
+    Routes specific domain patterns through preferred providers
+    with optional geo-targeting and session type requirements.
+    """
+
+    __tablename__ = "proxy_routing_rules"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    domain_pattern: str = Field(max_length=500)  # e.g., *.linkedin.com
+    preferred_providers: str = Field(default="[]", max_length=2000)  # JSON array
+    required_country: str = Field(default="", max_length=10)
+    session_type: str = Field(default="rotating", max_length=20)
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(DateTime(timezone=True), server_default=func.now())
+    )
+
+
 class GoogleConnection(SQLModel, table=True):
     """Google Workspace OAuth connections for customer access mode.
 

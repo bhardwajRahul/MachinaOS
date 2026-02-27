@@ -13,7 +13,8 @@ from models.database import (
     NodeParameter, Workflow, Execution, APIKey, APIKeyValidation, NodeOutput,
     ConversationMessage, ToolSchema, UserSkill, ChatMessage, UserSettings,
     TokenUsageMetric, CompactionEvent, SessionTokenState, ProviderDefaults,
-    AgentTeam, TeamMember, TeamTask, AgentMessage, GoogleConnection
+    AgentTeam, TeamMember, TeamTask, AgentMessage, GoogleConnection,
+    ProxyProviderConfig, ProxyRoutingRule
 )
 from models.cache import CacheEntry  # SQLite-backed cache for Redis alternative
 from core.logging import get_logger
@@ -2579,4 +2580,187 @@ class Database:
                 return False
         except Exception as e:
             logger.error(f"Failed to update Google last used: {e}")
+            return False
+
+    # ============================================================================
+    # Proxy Provider CRUD
+    # ============================================================================
+
+    async def save_proxy_provider(self, data: Dict[str, Any]) -> bool:
+        """Save or update a proxy provider configuration (upsert by name)."""
+        try:
+            name = data.get("name")
+            if not name:
+                logger.error("Cannot save proxy provider without name")
+                return False
+
+            async with self.get_session() as session:
+                stmt = select(ProxyProviderConfig).where(ProxyProviderConfig.name == name)
+                result = await session.execute(stmt)
+                existing = result.scalar_one_or_none()
+
+                if existing:
+                    for field in ["enabled", "priority", "cost_per_gb", "gateway_host", "gateway_port", "url_template"]:
+                        if field in data:
+                            setattr(existing, field, data[field])
+                    existing.updated_at = datetime.now(timezone.utc)
+                else:
+                    existing = ProxyProviderConfig(
+                        name=name,
+                        enabled=data.get("enabled", True),
+                        priority=data.get("priority", 50),
+                        cost_per_gb=data.get("cost_per_gb", 0.0),
+                        gateway_host=data.get("gateway_host", ""),
+                        gateway_port=data.get("gateway_port", 0),
+                        url_template=data.get("url_template", "{}"),
+                    )
+                    session.add(existing)
+
+                await session.commit()
+                logger.info(f"[DB] Proxy provider saved: {name}")
+                return True
+
+        except Exception as e:
+            logger.error(f"Failed to save proxy provider: {e}")
+            return False
+
+    async def get_proxy_provider(self, name: str) -> Optional[Dict[str, Any]]:
+        """Get a single proxy provider by name."""
+        try:
+            async with self.get_session() as session:
+                stmt = select(ProxyProviderConfig).where(ProxyProviderConfig.name == name)
+                result = await session.execute(stmt)
+                p = result.scalar_one_or_none()
+
+                if not p:
+                    return None
+
+                return {
+                    "id": p.id,
+                    "name": p.name,
+                    "enabled": p.enabled,
+                    "priority": p.priority,
+                    "cost_per_gb": p.cost_per_gb,
+                    "gateway_host": p.gateway_host,
+                    "gateway_port": p.gateway_port,
+                    "url_template": p.url_template,
+                    "created_at": p.created_at.isoformat() if p.created_at else None,
+                    "updated_at": p.updated_at.isoformat() if p.updated_at else None,
+                }
+
+        except Exception as e:
+            logger.error(f"Failed to get proxy provider: {e}")
+            return None
+
+    async def get_proxy_providers(self) -> List[Dict[str, Any]]:
+        """Get all proxy provider configurations."""
+        try:
+            async with self.get_session() as session:
+                stmt = select(ProxyProviderConfig).order_by(ProxyProviderConfig.priority)
+                result = await session.execute(stmt)
+                providers = result.scalars().all()
+
+                return [
+                    {
+                        "id": p.id,
+                        "name": p.name,
+                        "enabled": p.enabled,
+                        "priority": p.priority,
+                        "cost_per_gb": p.cost_per_gb,
+                        "gateway_host": p.gateway_host,
+                        "gateway_port": p.gateway_port,
+                        "url_template": p.url_template,
+                        "created_at": p.created_at.isoformat() if p.created_at else None,
+                        "updated_at": p.updated_at.isoformat() if p.updated_at else None,
+                    }
+                    for p in providers
+                ]
+
+        except Exception as e:
+            logger.error(f"Failed to get proxy providers: {e}")
+            return []
+
+    async def delete_proxy_provider(self, name: str) -> bool:
+        """Delete a proxy provider by name."""
+        try:
+            async with self.get_session() as session:
+                stmt = select(ProxyProviderConfig).where(ProxyProviderConfig.name == name)
+                result = await session.execute(stmt)
+                provider = result.scalar_one_or_none()
+
+                if provider:
+                    await session.delete(provider)
+                    await session.commit()
+                    logger.info(f"[DB] Proxy provider deleted: {name}")
+
+                return True
+
+        except Exception as e:
+            logger.error(f"Failed to delete proxy provider: {e}")
+            return False
+
+    # ============================================================================
+    # Proxy Routing Rules CRUD
+    # ============================================================================
+
+    async def save_proxy_routing_rule(self, data: Dict[str, Any]) -> bool:
+        """Save a new proxy routing rule."""
+        try:
+            async with self.get_session() as session:
+                rule = ProxyRoutingRule(
+                    domain_pattern=data.get("domain_pattern", ""),
+                    preferred_providers=data.get("preferred_providers", "[]"),
+                    required_country=data.get("required_country", ""),
+                    session_type=data.get("session_type", "rotating"),
+                )
+                session.add(rule)
+                await session.commit()
+                logger.info(f"[DB] Proxy routing rule saved: {data.get('domain_pattern')}")
+                return True
+
+        except Exception as e:
+            logger.error(f"Failed to save proxy routing rule: {e}")
+            return False
+
+    async def get_proxy_routing_rules(self) -> List[Dict[str, Any]]:
+        """Get all proxy routing rules."""
+        try:
+            async with self.get_session() as session:
+                stmt = select(ProxyRoutingRule).order_by(ProxyRoutingRule.id)
+                result = await session.execute(stmt)
+                rules = result.scalars().all()
+
+                return [
+                    {
+                        "id": r.id,
+                        "domain_pattern": r.domain_pattern,
+                        "preferred_providers": r.preferred_providers,
+                        "required_country": r.required_country,
+                        "session_type": r.session_type,
+                        "created_at": r.created_at.isoformat() if r.created_at else None,
+                    }
+                    for r in rules
+                ]
+
+        except Exception as e:
+            logger.error(f"Failed to get proxy routing rules: {e}")
+            return []
+
+    async def delete_proxy_routing_rule(self, rule_id: int) -> bool:
+        """Delete a proxy routing rule by ID."""
+        try:
+            async with self.get_session() as session:
+                stmt = select(ProxyRoutingRule).where(ProxyRoutingRule.id == rule_id)
+                result = await session.execute(stmt)
+                rule = result.scalar_one_or_none()
+
+                if rule:
+                    await session.delete(rule)
+                    await session.commit()
+                    logger.info(f"[DB] Proxy routing rule deleted: {rule_id}")
+
+                return True
+
+        except Exception as e:
+            logger.error(f"Failed to delete proxy routing rule: {e}")
             return False

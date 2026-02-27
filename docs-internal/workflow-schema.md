@@ -59,7 +59,7 @@ A workflow JSON document contains:
 }
 ```
 
-## Supported Node Types (64 Total)
+## Supported Node Types (67 Total)
 
 ### Workflow Nodes (1 node)
 - `start` - Workflow entry point with initial data
@@ -149,11 +149,16 @@ Dual-purpose nodes (workflow + AI tool). Defined in `searchNodes.ts`:
 - `mediaControl` - Media playback, volume
 
 ### Utility Nodes (5 nodes)
-- `httpRequest` - HTTP requests (GET, POST, PUT, DELETE, PATCH)
+- `httpRequest` - HTTP requests (GET, POST, PUT, DELETE, PATCH) with optional proxy support (`useProxy: true`)
 - `webhookTrigger` - Incoming HTTP webhook trigger at `/webhook/{path}`
 - `webhookResponse` - Custom response to webhook caller
 - `chatTrigger` - Console message input trigger
 - `console` - Debug logging output
+
+### Proxy Nodes (3 nodes)
+- `proxyRequest` - HTTP requests through residential proxy providers with geo-targeting and failover
+- `proxyConfig` - Configure proxy providers, credentials, and routing rules
+- `proxyStatus` - View proxy provider health, scores, and usage statistics
 
 ### Code Nodes (2 nodes)
 - `pythonExecutor` - Python code execution with input_data access

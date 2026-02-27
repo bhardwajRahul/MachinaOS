@@ -1,5 +1,15 @@
 """Dependency injection container for the application."""
 
+import time as _time
+
+_ct0 = _time.perf_counter()
+
+
+def _clog(msg):
+    elapsed = (_time.perf_counter() - _ct0) * 1000
+    print(f"           container: {msg} ({elapsed:.0f}ms)", flush=True)
+
+
 from dependency_injector import containers, providers
 
 from core.config import Settings
@@ -7,14 +17,18 @@ from core.database import Database
 from core.cache import CacheService
 from core.encryption import EncryptionService
 from core.credentials_database import CredentialsDatabase
+_clog("core imports done")
 from services.ai import AIService
+_clog("AIService imported")
 from services.maps import MapsService
 from services.workflow import WorkflowService
+_clog("WorkflowService imported")
 from services.auth import AuthService
 from services.text import TextService
 from services.android_service import AndroidService
 from services.user_auth import UserAuthService
 from services.compaction import init_compaction_service
+_clog("all service imports done")
 
 # Temporal is optional - import with fallback
 try:

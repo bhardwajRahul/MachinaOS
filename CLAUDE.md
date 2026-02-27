@@ -68,6 +68,11 @@ server/services/
 ├── pricing.py               # LLM and API cost calculation (loads config/pricing.json)
 ├── telegram_service.py      # TelegramService with python-telegram-bot long-polling
 ├── tracked_http.py          # HTTPX event hooks for automatic API cost tracking
+├── proxy/                   # Residential proxy provider management
+│   ├── __init__.py          # Exports get_proxy_service, ProxyService
+│   ├── service.py           # ProxyService singleton - provider selection, URL generation
+│   ├── providers.py         # TemplateProxyProvider - JSON url_template formatting
+│   └── models.py            # ProxyProvider, RoutingRule, SessionType enums
 ├── deployment/              # Event-driven deployment lifecycle
 │   ├── __init__.py
 │   ├── state.py             # DeploymentState, TriggerInfo dataclasses
@@ -368,14 +373,14 @@ class CacheEntry(SQLModel, table=True):
 
 ## Codebase Summary
 - **Hybrid architecture**: Node.js + Python + React TypeScript
-- **89 implemented workflow nodes** with clean service separation (6 AI models + 3 AI agents/memory + 13 specialized agents + 1 skill + 4 dedicated tools + 3 search + 16 Android + 3 WhatsApp + 4 Twitter + 2 Telegram + 2 Social + 3 Location + 3 Code + 6 Utility + 6 Document + 2 Chat + 2 Scheduler + 2 Workflow + 7 Google Workspace + 1 Apify)
+- **92 implemented workflow nodes** with clean service separation (6 AI models + 3 AI agents/memory + 13 specialized agents + 1 skill + 4 dedicated tools + 3 search + 16 Android + 3 WhatsApp + 4 Twitter + 2 Telegram + 2 Social + 3 Location + 3 Code + 6 Utility + 6 Document + 2 Chat + 2 Scheduler + 2 Workflow + 7 Google Workspace + 1 Apify + 3 Proxy)
 - **WebSocket-First Architecture**: WebSocket as primary frontend-backend communication (119 message handlers)
 - **Recent optimizations**: REST APIs replaced with WebSocket, AI endpoints migrated to Python, Android automation integrated
 
 ## Architecture Refactoring
 The project was completely refactored from schema-based node definitions to explicit INodeProperties interface system inspired by n8n architecture. Key changes:
 - **Pure INodeProperties System**: Removed all backward compatibility layers
-- **89 Implemented Node Components**: AI models, agents, skills, location services, Android automation, WhatsApp, Twitter/X, Telegram, social, code execution, HTTP/Webhook utilities, document processing, chat, schedulers, and search
+- **92 Implemented Node Components**: AI models, agents, skills, location services, Android automation, WhatsApp, Twitter/X, Telegram, social, code execution, HTTP/Webhook utilities, document processing, chat, schedulers, search, and proxy
 - **WebSocket-First Communication**: 119 WebSocket message handlers replace most REST API calls
 - **Resource-Operation Pattern**: Organized by functional categories (AI, Location, Android, WhatsApp)
 - **TypeScript-First**: Full type safety with proper interface alignment
@@ -404,6 +409,7 @@ The project was completely refactored from schema-based node definitions to expl
 - `src/nodeDefinitions/telegramNodes.ts` - Telegram bot integration (2 nodes: send, receive)
 - `src/nodeDefinitions/socialNodes.ts` - Unified social messaging nodes (socialReceive, socialSend)
 - `src/nodeDefinitions/codeNodes.ts` - Python, JavaScript, and TypeScript code execution nodes
+- `src/nodeDefinitions/proxyNodes.ts` - Proxy nodes (proxyRequest, proxyConfig, proxyStatus) and shared PROXY_PARAMETERS
 - `src/nodeDefinitions/utilityNodes.ts` - HTTP, Webhook, chatTrigger, and console nodes
 - `src/nodeDefinitions/documentNodes.ts` - Document processing nodes (httpScraper, fileDownloader, documentParser, textChunker, embeddingGenerator, vectorStore)
 - `src/nodeDefinitions/chatNodes.ts` - Chat send and history nodes
@@ -526,7 +532,7 @@ The project uses WebSocket as the primary communication method between frontend 
 - `server/services/status_broadcaster.py` - Connection management and broadcasting
 
 ## Implemented Node Types
-The following 89 nodes are currently implemented and functional:
+The following 92 nodes are currently implemented and functional:
 
 ### AI Chat Models (6 nodes)
 - **openaiChatModel**: OpenAI GPT models with response format options. O-series models (o1, o3, o4) support reasoning effort parameter.
@@ -594,7 +600,9 @@ server/skills/
 │   └── nearby-places-skill/SKILL.md
 └── web_agent/                            # Web automation skills
     ├── web-search-skill/SKILL.md
-    └── http-request-skill/SKILL.md
+    ├── http-request-skill/SKILL.md
+    ├── proxy-config-skill/SKILL.md
+    └── apify-skill/SKILL.md
 ```
 
 **SKILL.md Format:**
@@ -1114,6 +1122,29 @@ Web scraping service for social media, search engines, and websites using pre-bu
 
 **Authentication:** Single API token (Personal or Organization) from Apify Console -> Settings -> Integrations.
 
+### Proxy Nodes (3 nodes)
+Residential proxy provider management with geo-targeting, session control, and automatic failover.
+
+- **proxyRequest**: Make HTTP requests through residential proxy providers with geo-targeting and failover. Parameters: method, url, headers, body, timeout, proxyProvider (auto-select or specific), proxyCountry (ISO code), sessionType (rotating/sticky), stickyDuration, maxRetries, followRedirects.
+- **proxyConfig**: **Dual-purpose node** - Configure proxy providers and routing rules. Works as workflow node OR AI Agent tool. Operations: list_providers, add_provider, update_provider, remove_provider, set_credentials, test_provider, get_stats, add_routing_rule, list_routing_rules, remove_routing_rule.
+- **proxyStatus**: View proxy provider health, scores, and usage statistics. Filter by specific provider name or view all.
+
+**Key Architecture:**
+- **TemplateProxyProvider**: Single class using JSON `url_template` to format proxy URLs for any provider (username-based, password-based, or no encoding)
+- **Auto-selection**: ProxyService ranks providers by health score (success rate, latency) and selects the best one
+- **Transparent proxy on HTTP nodes**: `httpRequest` and `httpScraper` nodes support `useProxy: true` flag. The proxy service handles provider selection, geo-targeting, and session type automatically.
+
+**Key Files:**
+| File | Description |
+|------|-------------|
+| `client/src/nodeDefinitions/proxyNodes.ts` | 3 node definitions + shared PROXY_PARAMETERS |
+| `server/services/proxy/service.py` | ProxyService singleton with provider selection and URL generation |
+| `server/services/proxy/providers.py` | TemplateProxyProvider for JSON url_template formatting |
+| `server/services/proxy/models.py` | ProxyProvider, RoutingRule, SessionType dataclasses |
+| `server/services/handlers/proxy.py` | Handler functions for proxy_config, proxy_request, proxy_status |
+| `server/skills/web_agent/proxy-config-skill/SKILL.md` | AI agent skill for proxy configuration |
+| `server/skills/web_agent/http-request-skill/SKILL.md` | HTTP request skill with proxy usage docs |
+
 ### Workflow Nodes (2 nodes)
 - **start**: Manual workflow trigger to start workflow execution
 - **taskTrigger**: Event-driven trigger that fires when a delegated child agent completes its task (success or error). Filters by task_id, agent_name, status (all/completed/error), and parent_node_id. Output includes task_id, status, agent_name, result/error, workflow_id.
@@ -1124,7 +1155,7 @@ Web scraping service for social media, search engines, and websites using pre-bu
 - **typescriptExecutor**: **Dual-purpose node** - Execute TypeScript code via persistent Node.js server with type safety, syntax-highlighted editor and console output. Works as workflow node OR AI Agent tool (`typescript_code`).
 
 ### Utility Nodes (6 nodes)
-- **httpRequest**: Make HTTP requests to external APIs (GET, POST, PUT, DELETE, PATCH) with configurable headers, body, and timeout
+- **httpRequest**: Make HTTP requests to external APIs (GET, POST, PUT, DELETE, PATCH) with configurable headers, body, timeout, and optional proxy support (`useProxy: true` routes through configured residential proxy)
 - **webhookTrigger**: Event-driven trigger that waits for incoming HTTP requests at `/webhook/{path}` with method filtering and authentication options
 - **webhookResponse**: Send custom response back to webhook caller with configurable status code, body, and content type
 - **chatTrigger**: Trigger node that receives messages from the Console Panel chat interface
@@ -1134,7 +1165,7 @@ Web scraping service for social media, search engines, and websites using pre-bu
 ### Document Processing Nodes (6 nodes)
 RAG pipeline nodes for document ingestion, processing, and vector storage. Supports multiple providers and backends.
 
-- **httpScraper**: Scrape links from web pages with date/page pagination support. Modes: single request, date range iteration, page pagination. Outputs: items array with URLs.
+- **httpScraper**: Scrape links from web pages with date/page pagination support. Modes: single request, date range iteration, page pagination. Outputs: items array with URLs. Supports `useProxy: true` for proxy routing.
 - **fileDownloader**: Download files from URLs in parallel using semaphore-based concurrency. Parameters: output directory, max workers (1-32), skip existing, timeout.
 - **documentParser**: Parse documents to text using configurable parsers. Parsers: PyPDF (fast), Marker (GPU OCR), Unstructured (multi-format), BeautifulSoup (HTML).
 - **textChunker**: Split text into overlapping chunks for embedding. Strategies: recursive (recommended), markdown, token. Parameters: chunk size (100-8000), overlap (0-1000).
@@ -1340,7 +1371,7 @@ All scripts in `scripts/` are cross-platform Node.js (Windows, macOS, Linux, WSL
 See **[Scripts Reference](./docs-internal/SCRIPTS.md)** for full documentation.
 
 ## Current Status
-✅ **INodeProperties System**: Fully implemented with 89 functional node components
+✅ **INodeProperties System**: Fully implemented with 92 functional node components
 ✅ **WebSocket-First Architecture**: 119 message handlers replacing REST APIs
 ✅ **Code Editor**: Python, JavaScript, and TypeScript executors with syntax-highlighted editor (react-simple-code-editor + prismjs) and console output
 ✅ **Node.js Executor**: Persistent Node.js server (Express + tsx) for fast JS/TS execution, replacing subprocess spawning
@@ -1372,6 +1403,7 @@ See **[Scripts Reference](./docs-internal/SCRIPTS.md)** for full documentation.
 ✅ **Cache System**: n8n-pattern cache with Redis (production) / SQLite (local dev) / Memory fallback hierarchy
 ✅ **AI Thinking/Reasoning**: Extended thinking for Claude, Gemini 2.5/3, OpenAI GPT-5/o-series, Groq Qwen3 with output available in Input Data & Variables for downstream nodes
 ✅ **Onboarding Service**: 5-step welcome wizard with Ant Design UI, database persistence, skip/resume/replay support
+✅ **Proxy System**: Residential proxy provider management with template-based URL formatting, auto-selection by health score, transparent proxy injection on httpRequest/httpScraper nodes via `useProxy: true`
 
 ## Key Features
 

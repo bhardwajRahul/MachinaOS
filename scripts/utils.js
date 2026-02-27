@@ -27,7 +27,9 @@ export const isWSL = !isWindows && process.platform === 'linux' && (
 );
 
 // True when we should use Windows-style venv paths (Scripts/python.exe)
-export const useWindowsVenv = isWindows || isWSL;
+// WSL excluded: even with a Windows venv, WSL should prefer system python3
+// for port management (Windows python.exe via interop gives wrong process info)
+export const useWindowsVenv = isWindows && !isWSL;
 
 // Cached Python path (undefined = not checked, null = unavailable, string = path)
 let _pythonCmd;

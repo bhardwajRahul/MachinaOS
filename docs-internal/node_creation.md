@@ -26,7 +26,7 @@ This guide explains how to create new nodes for MachinaOs, covering frontend def
 
 ## Node Types Overview
 
-MachinaOs supports 108 nodes across 18 categories:
+MachinaOs supports 111 nodes across 19 categories:
 
 | Category | Visual Component | Example Nodes | Count |
 |----------|-----------------|---------------|-------|
@@ -46,6 +46,7 @@ MachinaOs supports 108 nodes across 18 categories:
 | **Social** | SquareNode | socialReceive, socialSend | 2 |
 | **Location/Maps** | SquareNode | createMap, addLocations, showNearbyPlaces | 3 |
 | **Utility** | SquareNode | httpRequest, webhookTrigger, webhookResponse, chatTrigger, console | 5 |
+| **Proxy** | SquareNode | proxyRequest, proxyConfig, proxyStatus | 3 |
 | **Code** | SquareNode | pythonExecutor, javascriptExecutor | 2 |
 | **Chat** | SquareNode | chatSend, chatHistory | 2 |
 | **Document** | SquareNode | httpScraper, fileDownloader, documentParser, textChunker, embeddingGenerator, vectorStore | 6 |

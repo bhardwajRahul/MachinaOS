@@ -238,7 +238,11 @@ export class ExecutionService {
       // Search API nodes
       ...SEARCH_NODE_TYPES,
       // Telegram Nodes
-      ...TELEGRAM_NODE_TYPES
+      ...TELEGRAM_NODE_TYPES,
+      // Proxy Nodes
+      'proxyRequest',
+      'proxyConfig',
+      'proxyStatus'
     ];
 
     return supportedTypes.includes(nodeType);

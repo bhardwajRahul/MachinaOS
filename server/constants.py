@@ -81,6 +81,23 @@ CONFIG_NODE_TYPES: FrozenSet[str] = (
 )
 
 # =============================================================================
+# PROXY NODE TYPES
+# =============================================================================
+
+PROXY_NODE_TYPES: FrozenSet[str] = frozenset([
+    'proxyRequest',
+    'proxyConfig',
+    'proxyStatus',
+])
+
+# Dual-purpose proxy nodes (workflow node + AI tool)
+PROXY_TOOL_TYPES: FrozenSet[str] = frozenset([
+    'proxyRequest',
+    'proxyConfig',
+    'proxyStatus',
+])
+
+# =============================================================================
 # SEARCH NODE TYPES
 # =============================================================================
 

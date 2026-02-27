@@ -91,7 +91,7 @@ async def handle_proxy_request(
                 "success": False,
                 "node_id": node_id,
                 "node_type": "proxyRequest",
-                "error": "Proxy service is not enabled. Set PROXY_ENABLED=true in .env",
+                "error": "Proxy service not initialized. Use proxy_config tool to add a provider first.",
                 "execution_time": time.time() - start_time,
                 "timestamp": datetime.now().isoformat(),
             }

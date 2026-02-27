@@ -3,10 +3,31 @@
 import json
 import time
 from datetime import datetime
-from typing import Dict, Any
+from typing import Any, Dict, Optional
 from core.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+async def _get_proxy_url_if_enabled(url: str, parameters: Dict[str, Any]) -> Optional[str]:
+    """Return a proxy URL if useProxy is enabled and a provider is available.
+
+    Returns None when proxy should not be used (disabled, no providers, etc.).
+    Exceptions from the proxy service are logged and swallowed so that the
+    request proceeds without a proxy rather than failing.
+    """
+    if not parameters.get('useProxy', False):
+        return None
+
+    try:
+        from services.proxy.service import get_proxy_service
+        proxy_svc = get_proxy_service()
+        if not proxy_svc or not proxy_svc.is_enabled():
+            return None
+        return await proxy_svc.get_proxy_url(url, parameters)
+    except Exception as e:
+        logger.warning("Proxy URL lookup failed, proceeding without proxy", error=str(e))
+        return None
 
 
 async def handle_http_request(
@@ -47,14 +68,20 @@ async def handle_http_request(
         except json.JSONDecodeError:
             headers = {}
 
-        logger.info("[HTTP Request] Executing", node_id=node_id, method=method, url=url)
+        # Transparent proxy injection
+        proxy_url = await _get_proxy_url_if_enabled(url, parameters)
+        logger.info("[HTTP Request] Executing", node_id=node_id, method=method, url=url,
+                     proxy=bool(proxy_url))
 
-        async with httpx.AsyncClient() as client:
+        client_kwargs: Dict[str, Any] = {"timeout": timeout}
+        if proxy_url:
+            client_kwargs["proxy"] = proxy_url
+
+        async with httpx.AsyncClient(**client_kwargs) as client:
             kwargs = {
                 'method': method,
                 'url': url,
                 'headers': headers,
-                'timeout': timeout
             }
 
             # Add body for POST/PUT/PATCH
@@ -77,7 +104,8 @@ async def handle_http_request(
                 "data": response_data,
                 "headers": dict(response.headers),
                 "url": str(response.url),
-                "method": method
+                "method": method,
+                "proxied": proxy_url is not None,
             }
 
             return {

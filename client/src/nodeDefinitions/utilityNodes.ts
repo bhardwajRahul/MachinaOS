@@ -64,6 +64,42 @@ export const utilityNodes: Record<string, INodeTypeDescription> = {
         name: 'timeout',
         type: 'number',
         default: 30
+      },
+      {
+        displayName: 'Use Proxy',
+        name: 'useProxy',
+        type: 'boolean',
+        default: false,
+        description: 'Route request through a configured proxy provider'
+      },
+      {
+        displayName: 'Proxy Country',
+        name: 'proxyCountry',
+        type: 'string',
+        default: '',
+        placeholder: 'US',
+        description: 'ISO country code for geo-targeting (e.g. US, GB, DE)',
+        displayOptions: { show: { useProxy: [true] } }
+      },
+      {
+        displayName: 'Proxy Provider',
+        name: 'proxyProvider',
+        type: 'string',
+        default: '',
+        placeholder: 'Auto-select',
+        description: 'Specific provider name, or leave empty for auto-selection',
+        displayOptions: { show: { useProxy: [true] } }
+      },
+      {
+        displayName: 'Session Type',
+        name: 'sessionType',
+        type: 'options',
+        default: 'rotating',
+        options: [
+          { name: 'Rotating (new IP per request)', value: 'rotating' },
+          { name: 'Sticky (same IP)', value: 'sticky' }
+        ],
+        displayOptions: { show: { useProxy: [true] } }
       }
     ]
   },

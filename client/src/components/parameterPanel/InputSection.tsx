@@ -637,6 +637,28 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                 compute_units: 'number',
                 started_at: 'string',
                 finished_at: 'string'
+              },
+              // Proxy node schemas
+              proxyRequest: {
+                status: 'number',
+                data: 'any',
+                headers: 'object',
+                url: 'string',
+                method: 'string',
+                proxy_provider: 'string',
+                latency_ms: 'number',
+                bytes_transferred: 'number',
+                attempt: 'number'
+              },
+              proxyStatus: {
+                enabled: 'boolean',
+                providers: 'array',
+                stats: 'object'
+              },
+              proxyConfig: {
+                operation: 'string',
+                success: 'boolean',
+                data: 'any'
               }
             };
 
@@ -687,6 +709,10 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
             // Apify web scraping node detection
             const isApify = nodeType === 'apifyActor';
 
+            // Proxy node detection
+            const proxyNodeTypes = ['proxyRequest', 'proxyStatus', 'proxyConfig'];
+            const isProxyNode = proxyNodeTypes.includes(nodeType);
+
             // Select appropriate schema
             if (isAndroidLocation) {
               outputSchema = sampleSchemas.androidLocation;
@@ -695,6 +721,8 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
             } else if (isDocumentNode && sampleSchemas[nodeType as keyof typeof sampleSchemas]) {
               outputSchema = sampleSchemas[nodeType as keyof typeof sampleSchemas];
             } else if (isGoogleWorkspaceNode && sampleSchemas[nodeType as keyof typeof sampleSchemas]) {
+              outputSchema = sampleSchemas[nodeType as keyof typeof sampleSchemas];
+            } else if (isProxyNode && sampleSchemas[nodeType as keyof typeof sampleSchemas]) {
               outputSchema = sampleSchemas[nodeType as keyof typeof sampleSchemas];
             } else {
               outputSchema = isLocationNode || isGoogleMaps ? sampleSchemas.location :

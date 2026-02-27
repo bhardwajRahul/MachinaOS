@@ -67,6 +67,11 @@ class Settings(BaseSettings):
     # AI Proxy Configuration (Ollama-style proxy)
     ai_proxy_default_port: int = Field(default=11434, env="AI_PROXY_DEFAULT_PORT")
 
+    # Residential Proxy Configuration
+    proxy_enabled: bool = Field(default=False, env="PROXY_ENABLED")
+    proxy_budget_daily_usd: float = Field(default=50.0, env="PROXY_BUDGET_DAILY_USD")
+    proxy_default_country: str = Field(default="", env="PROXY_DEFAULT_COUNTRY")
+
     # WebSocket Configuration
     websocket_url: str = Field(default="", env="WEBSOCKET_URL")
     websocket_api_key: Optional[str] = Field(default=None, env="WEBSOCKET_API_KEY")
