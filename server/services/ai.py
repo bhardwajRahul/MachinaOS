@@ -2499,6 +2499,8 @@ class AIService:
             'proxyRequest': 'proxy_request',
             'proxyConfig': 'proxy_config',
             'proxyStatus': 'proxy_status',
+            # Crawlee web scraping (dual-purpose tool)
+            'crawleeScraper': 'web_scraper',
         }
         DEFAULT_TOOL_DESCRIPTIONS = {
             'calculatorTool': 'Perform mathematical calculations. Operations: add, subtract, multiply, divide, power, sqrt, mod, abs',
@@ -2562,6 +2564,8 @@ class AIService:
             'proxyRequest': 'Make HTTP requests through residential proxy providers with geo-targeting, session control, and automatic failover. Supports GET, POST, PUT, DELETE, PATCH methods.',
             'proxyConfig': 'Manage proxy providers and routing rules. Operations: list_providers, add_provider, update_provider, remove_provider, set_credentials, test_provider, get_stats, add_routing_rule, list_routing_rules, remove_routing_rule.',
             'proxyStatus': 'Get proxy provider health stats, scores, and usage statistics. Returns enabled status, provider list with health scores, and aggregated stats.',
+            # Crawlee web scraping (dual-purpose tool)
+            'crawleeScraper': 'Scrape web pages to extract text, links, and structured data. Supports static HTML (beautifulsoup) and JavaScript-rendered pages (playwright). Use crawlerType to select engine.',
         }
 
         try:
@@ -3402,6 +3406,24 @@ class AIService:
                 )
 
             return ApifyActorSchema
+
+        # Crawlee web scraper tool schema (dual-purpose: workflow node + AI tool)
+        if node_type == 'crawleeScraper':
+            class CrawleeScraperSchema(BaseModel):
+                """Scrape web pages to extract text, links, and structured data.
+                Supports static HTML (beautifulsoup) and JS-rendered pages (playwright)."""
+                url: str = Field(description="URL to scrape (https://...)")
+                crawlerType: str = Field(
+                    default="beautifulsoup",
+                    description="Engine: beautifulsoup (static HTML, fast), playwright (JS-rendered), adaptive (auto-detect)"
+                )
+                mode: str = Field(default="single", description="single (one page) or crawl (follow links)")
+                cssSelector: Optional[str] = Field(default=None, description="CSS selector to extract specific content")
+                maxPages: int = Field(default=10, description="Max pages for crawl mode (1-1000)")
+                outputFormat: str = Field(default="text", description="Output: text, html, or markdown")
+                useProxy: bool = Field(default=False, description="Route through configured proxy")
+
+            return CrawleeScraperSchema
 
         # Proxy Request tool schema (dual-purpose: workflow node + AI tool)
         if node_type == 'proxyRequest':

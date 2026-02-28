@@ -171,6 +171,10 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
     if node_type == 'apifyActor':
         return await _execute_apify_actor(tool_args, config.get('parameters', {}))
 
+    # Crawlee web scraper (dual-purpose: workflow node + AI tool)
+    if node_type == 'crawleeScraper':
+        return await _execute_crawlee_scraper(tool_args, config.get('parameters', {}))
+
     # Proxy nodes (dual-purpose: workflow node + AI tool)
     if node_type == 'proxyRequest':
         return await _execute_proxy_request(tool_args, config.get('parameters', {}), config)
@@ -1379,6 +1383,33 @@ async def _execute_apify_actor(args: Dict[str, Any],
     return await handle_apify_actor(
         node_id="tool_apify_actor",
         node_type="apifyActor",
+        parameters=parameters,
+        context={}
+    )
+
+
+async def _execute_crawlee_scraper(args: Dict[str, Any],
+                                    node_params: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute Crawlee web scraper as an AI tool.
+
+    Maps LLM-provided arguments to node parameters and delegates to handler.
+    """
+    from services.handlers.crawlee import handle_crawlee_scraper
+
+    parameters = {
+        **node_params,
+        'url': args.get('url', node_params.get('url', '')),
+        'crawlerType': args.get('crawlerType', node_params.get('crawlerType', 'beautifulsoup')),
+        'mode': args.get('mode', node_params.get('mode', 'single')),
+        'cssSelector': args.get('cssSelector', node_params.get('cssSelector', '')),
+        'maxPages': args.get('maxPages', node_params.get('maxPages', 10)),
+        'outputFormat': args.get('outputFormat', node_params.get('outputFormat', 'text')),
+        'useProxy': args.get('useProxy', node_params.get('useProxy', False)),
+    }
+
+    return await handle_crawlee_scraper(
+        node_id="tool_crawlee_scraper",
+        node_type="crawleeScraper",
         parameters=parameters,
         context={}
     )

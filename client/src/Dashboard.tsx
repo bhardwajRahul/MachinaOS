@@ -36,6 +36,7 @@ import { SOCIAL_NODE_TYPES } from './nodeDefinitions/socialNodes';
 import { APIFY_NODE_TYPES } from './nodeDefinitions/apifyNodes';
 import { GOOGLE_WORKSPACE_NODE_TYPES } from './nodeDefinitions/googleWorkspaceNodes';
 import { PROXY_NODE_TYPES } from './nodeDefinitions/proxyNodes';
+import { CRAWLEE_NODE_TYPES } from './nodeDefinitions/crawleeNodes';
 import ParameterPanel from './ParameterPanel';
 import LocationParameterPanel from './components/LocationParameterPanel';
 import { useAppStore } from './store/useAppStore';
@@ -143,6 +144,9 @@ const createNodeTypes = (): Record<string, React.ComponentType<any>> => {
       types[type] = SquareNode;
     } else if (PROXY_NODE_TYPES.includes(type)) {
       // Proxy nodes use SquareNode component
+      types[type] = SquareNode;
+    } else if (CRAWLEE_NODE_TYPES.includes(type)) {
+      // Crawlee web scraping nodes use SquareNode component
       types[type] = SquareNode;
     } else if (SOCIAL_NODE_TYPES.includes(type)) {
       // Social nodes use AIAgentNode for multiple output handles support

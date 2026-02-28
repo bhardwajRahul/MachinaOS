@@ -24,6 +24,7 @@ import { searchNodes, SEARCH_NODE_TYPES } from './nodeDefinitions/searchNodes';
 // Consolidated Google Workspace nodes (replaces gmailNodes, calendarNodes, driveNodes, sheetsNodes, tasksNodes, contactsNodes)
 import { googleWorkspaceNodes, GOOGLE_WORKSPACE_NODE_TYPES } from './nodeDefinitions/googleWorkspaceNodes';
 import { proxyNodes, PROXY_NODE_TYPES } from './nodeDefinitions/proxyNodes';
+import { crawleeNodes, CRAWLEE_NODE_TYPES } from './nodeDefinitions/crawleeNodes';
 
 // ============================================================================
 // MAIN NODE REGISTRY - Combining all modular definitions
@@ -51,7 +52,8 @@ export const nodeDefinitions: Record<string, INodeTypeDescription> = {
   ...apifyNodes,
   ...searchNodes,
   ...googleWorkspaceNodes,
-  ...proxyNodes
+  ...proxyNodes,
+  ...crawleeNodes
 };
 
 // ============================================================================
@@ -146,6 +148,10 @@ export const SEARCH_NODES = [
 
 export const PROXY_NODES = [
   ...PROXY_NODE_TYPES
+];
+
+export const CRAWLEE_NODES = [
+  ...CRAWLEE_NODE_TYPES
 ];
 
 // Re-export types and utilities from modular files for external access
