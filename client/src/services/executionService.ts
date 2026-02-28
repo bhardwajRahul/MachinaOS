@@ -10,6 +10,7 @@ import { GOOGLE_WORKSPACE_NODE_TYPES } from '../nodeDefinitions/googleWorkspaceN
 import { APIFY_NODE_TYPES } from '../nodeDefinitions/apifyNodes';
 import { SEARCH_NODE_TYPES } from '../nodeDefinitions/searchNodes';
 import { TELEGRAM_NODE_TYPES } from '../nodeDefinitions/telegramNodes';
+import { CRAWLEE_NODE_TYPES } from '../nodeDefinitions/crawleeNodes';
 import { Node, Edge } from 'reactflow';
 import { INodeExecutionData } from '../types/INodeProperties';
 import { API_CONFIG } from '../config/api';
@@ -235,6 +236,8 @@ export class ExecutionService {
       ...GOOGLE_WORKSPACE_NODE_TYPES,
       // Apify web scraping
       ...APIFY_NODE_TYPES,
+      // Crawlee web scraping
+      ...CRAWLEE_NODE_TYPES,
       // Search API nodes
       ...SEARCH_NODE_TYPES,
       // Telegram Nodes

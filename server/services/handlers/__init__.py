@@ -111,6 +111,9 @@ from .search import (
     handle_perplexity_search,
 )
 
+# Crawlee web scraping handler
+from .crawlee import handle_crawlee_scraper
+
 # Tool execution handlers (for AI Agent tool calling)
 from .tools import (
     execute_tool,
@@ -176,6 +179,8 @@ __all__ = [
     'handle_brave_search',
     'handle_serper_search',
     'handle_perplexity_search',
+    # Crawlee
+    'handle_crawlee_scraper',
     # Tools
     'execute_tool',
     'handle_task_manager',

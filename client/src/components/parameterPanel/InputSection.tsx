@@ -666,6 +666,20 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                 operation: 'string',
                 success: 'boolean',
                 data: 'any'
+              },
+              // Crawlee web scraping schema
+              crawlee: {
+                pages: [{
+                  url: 'string',
+                  title: 'string',
+                  content: 'string',
+                  links: 'array',
+                  screenshot: 'string'
+                }],
+                page_count: 'number',
+                crawler_type: 'string',
+                mode: 'string',
+                proxied: 'boolean'
               }
             };
 
@@ -720,6 +734,9 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
             const proxyNodeTypes = ['proxyRequest', 'proxyStatus', 'proxyConfig'];
             const isProxyNode = proxyNodeTypes.includes(nodeType);
 
+            // Crawlee web scraping node detection
+            const isCrawlee = nodeType === 'crawleeScraper';
+
             // Select appropriate schema
             if (isAndroidLocation) {
               outputSchema = sampleSchemas.androidLocation;
@@ -748,6 +765,7 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                             isSocialSend ? sampleSchemas.socialSend :
                             isApify ? sampleSchemas.apify :
                             isSearchNode ? sampleSchemas.search :
+                            isCrawlee ? sampleSchemas.crawlee :
                             { data: 'any' };
             }
 
