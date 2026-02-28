@@ -204,6 +204,10 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                   sender_jid: 'string',
                   sender_phone: 'string',
                   sender_name: 'string'
+                },
+                newsletter_meta: {
+                  edit_ts: 'number',
+                  original_ts: 'number'
                 }
               },
               whatsappDb: {
@@ -242,6 +246,9 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                 is_business: 'boolean',
                 is_contact: 'boolean',
                 profile_pic: 'string',
+                // channel operations output
+                channels: [{ jid: 'string', name: 'string', subscriber_count: 'number' }],
+                channel_jid: 'string',
                 timestamp: 'string'
               },
               webhook: {

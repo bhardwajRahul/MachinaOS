@@ -1,8 +1,38 @@
 {
-  "_generated": "2026-02-26T17:40:58.078412+00:00",
+  "_generated": "2026-02-28T07:14:28.108966+00:00",
   "_source": "openrouter",
   "_model_count": 343,
   "models": {
+    "bytedance-seed/seed-2.0-mini": {
+      "id": "bytedance-seed/seed-2.0-mini",
+      "name": "ByteDance Seed: Seed-2.0-Mini",
+      "provider": "bytedance-seed",
+      "local_id": "seed-2.0-mini",
+      "context_length": 262144,
+      "max_output_tokens": 131072,
+      "input_price_per_mtok": 0.1,
+      "output_price_per_mtok": 0.4,
+      "supports_thinking": false,
+      "thinking_type": "none",
+      "temperature_range": [
+        0.0,
+        2.0
+      ],
+      "is_reasoning_model": false,
+      "supported_parameters": [
+        "frequency_penalty",
+        "include_reasoning",
+        "max_tokens",
+        "reasoning",
+        "response_format",
+        "stop",
+        "structured_outputs",
+        "temperature",
+        "tool_choice",
+        "tools",
+        "top_p"
+      ]
+    },
     "gemini/gemini-3.1-flash-image-preview": {
       "id": "google/gemini-3.1-flash-image-preview",
       "name": "Google: Nano Banana 2 (Gemini 3.1 Flash Image Preview)",
@@ -16,7 +46,7 @@
       "thinking_type": "budget",
       "temperature_range": [
         0.0,
-        1.0
+        2.0
       ],
       "is_reasoning_model": false,
       "supported_parameters": [
@@ -199,7 +229,7 @@
       "thinking_type": "budget",
       "temperature_range": [
         0.0,
-        1.0
+        2.0
       ],
       "is_reasoning_model": false,
       "supported_parameters": [
@@ -280,7 +310,7 @@
       "thinking_type": "budget",
       "temperature_range": [
         0.0,
-        1.0
+        2.0
       ],
       "is_reasoning_model": false,
       "supported_parameters": [
@@ -400,9 +430,9 @@
       "provider": "minimax",
       "local_id": "minimax-m2.5",
       "context_length": 196608,
-      "max_output_tokens": 65536,
-      "input_price_per_mtok": 0.3,
-      "output_price_per_mtok": 1.1,
+      "max_output_tokens": 196608,
+      "input_price_per_mtok": 0.295,
+      "output_price_per_mtok": 1.2,
       "supports_thinking": false,
       "thinking_type": "none",
       "temperature_range": [
@@ -1188,7 +1218,7 @@
       "thinking_type": "budget",
       "temperature_range": [
         0.0,
-        1.0
+        2.0
       ],
       "is_reasoning_model": false,
       "supported_parameters": [
@@ -1224,39 +1254,6 @@
       "supported_parameters": [
         "tool_choice",
         "tools"
-      ]
-    },
-    "allenai/olmo-3.1-32b-think": {
-      "id": "allenai/olmo-3.1-32b-think",
-      "name": "AllenAI: Olmo 3.1 32B Think",
-      "provider": "allenai",
-      "local_id": "olmo-3.1-32b-think",
-      "context_length": 65536,
-      "max_output_tokens": 65536,
-      "input_price_per_mtok": 0.15,
-      "output_price_per_mtok": 0.5,
-      "supports_thinking": false,
-      "thinking_type": "none",
-      "temperature_range": [
-        0.0,
-        2.0
-      ],
-      "is_reasoning_model": false,
-      "supported_parameters": [
-        "frequency_penalty",
-        "include_reasoning",
-        "logit_bias",
-        "max_tokens",
-        "presence_penalty",
-        "reasoning",
-        "repetition_penalty",
-        "response_format",
-        "seed",
-        "stop",
-        "structured_outputs",
-        "temperature",
-        "top_k",
-        "top_p"
       ]
     },
     "xiaomi/mimo-v2-flash": {
@@ -1363,8 +1360,8 @@
       "max_output_tokens": 16384,
       "input_price_per_mtok": 1.75,
       "output_price_per_mtok": 14.0,
-      "supports_thinking": false,
-      "thinking_type": "none",
+      "supports_thinking": true,
+      "thinking_type": "effort",
       "temperature_range": [
         0.0,
         2.0
@@ -1853,6 +1850,8 @@
         "include_reasoning",
         "max_tokens",
         "reasoning",
+        "response_format",
+        "structured_outputs",
         "temperature",
         "top_p"
       ]
@@ -2070,7 +2069,7 @@
       "thinking_type": "budget",
       "temperature_range": [
         0.0,
-        1.0
+        2.0
       ],
       "is_reasoning_model": false,
       "supported_parameters": [
@@ -2129,7 +2128,7 @@
       "thinking_type": "budget",
       "temperature_range": [
         0.0,
-        1.0
+        2.0
       ],
       "is_reasoning_model": false,
       "supported_parameters": [
@@ -2215,8 +2214,8 @@
       "max_output_tokens": 16384,
       "input_price_per_mtok": 1.25,
       "output_price_per_mtok": 10.0,
-      "supports_thinking": false,
-      "thinking_type": "none",
+      "supports_thinking": true,
+      "thinking_type": "effort",
       "temperature_range": [
         0.0,
         2.0
@@ -2989,7 +2988,7 @@
       "thinking_type": "budget",
       "temperature_range": [
         0.0,
-        1.0
+        2.0
       ],
       "is_reasoning_model": false,
       "supported_parameters": [
@@ -3215,7 +3214,9 @@
       "supported_parameters": [
         "frequency_penalty",
         "include_reasoning",
+        "logit_bias",
         "max_tokens",
+        "min_p",
         "presence_penalty",
         "reasoning",
         "repetition_penalty",
@@ -3296,7 +3297,7 @@
       "thinking_type": "budget",
       "temperature_range": [
         0.0,
-        1.0
+        2.0
       ],
       "is_reasoning_model": false,
       "supported_parameters": [
@@ -4318,8 +4319,8 @@
       "max_output_tokens": 16384,
       "input_price_per_mtok": 1.25,
       "output_price_per_mtok": 10.0,
-      "supports_thinking": false,
-      "thinking_type": "none",
+      "supports_thinking": true,
+      "thinking_type": "effort",
       "temperature_range": [
         0.0,
         2.0
@@ -4991,7 +4992,7 @@
       "thinking_type": "budget",
       "temperature_range": [
         0.0,
-        1.0
+        2.0
       ],
       "is_reasoning_model": false,
       "supported_parameters": [
@@ -5241,7 +5242,7 @@
       "thinking_type": "none",
       "temperature_range": [
         0.0,
-        1.0
+        2.0
       ],
       "is_reasoning_model": false,
       "supported_parameters": [
@@ -5529,7 +5530,7 @@
       "thinking_type": "budget",
       "temperature_range": [
         0.0,
-        1.0
+        2.0
       ],
       "is_reasoning_model": false,
       "supported_parameters": [
@@ -5559,7 +5560,7 @@
       "thinking_type": "budget",
       "temperature_range": [
         0.0,
-        1.0
+        2.0
       ],
       "is_reasoning_model": false,
       "supported_parameters": [
@@ -5680,7 +5681,7 @@
       "thinking_type": "budget",
       "temperature_range": [
         0.0,
-        1.0
+        2.0
       ],
       "is_reasoning_model": false,
       "supported_parameters": [
@@ -5704,8 +5705,8 @@
       "local_id": "deepseek-r1-0528",
       "context_length": 163840,
       "max_output_tokens": 65536,
-      "input_price_per_mtok": 0.4,
-      "output_price_per_mtok": 1.75,
+      "input_price_per_mtok": 0.45,
+      "output_price_per_mtok": 2.15,
       "supports_thinking": false,
       "thinking_type": "none",
       "temperature_range": [
@@ -5804,7 +5805,7 @@
       "thinking_type": "none",
       "temperature_range": [
         0.0,
-        1.0
+        2.0
       ],
       "is_reasoning_model": false,
       "supported_parameters": [
@@ -5831,7 +5832,7 @@
       "thinking_type": "none",
       "temperature_range": [
         0.0,
-        1.0
+        2.0
       ],
       "is_reasoning_model": false,
       "supported_parameters": [
@@ -5890,7 +5891,7 @@
       "thinking_type": "budget",
       "temperature_range": [
         0.0,
-        1.0
+        2.0
       ],
       "is_reasoning_model": false,
       "supported_parameters": [
@@ -6158,7 +6159,7 @@
       "name": "Qwen: Qwen3 8B",
       "provider": "qwen",
       "local_id": "qwen3-8b",
-      "context_length": 32000,
+      "context_length": 40960,
       "max_output_tokens": 8192,
       "input_price_per_mtok": 0.05,
       "output_price_per_mtok": 0.4,
@@ -6695,9 +6696,9 @@
       "provider": "deepseek",
       "local_id": "deepseek-chat-v3-0324",
       "context_length": 163840,
-      "max_output_tokens": 65536,
-      "input_price_per_mtok": 0.19,
-      "output_price_per_mtok": 0.87,
+      "max_output_tokens": 0,
+      "input_price_per_mtok": 0.2,
+      "output_price_per_mtok": 0.77,
       "supports_thinking": false,
       "thinking_type": "none",
       "temperature_range": [
@@ -6839,7 +6840,7 @@
       "thinking_type": "none",
       "temperature_range": [
         0.0,
-        1.0
+        2.0
       ],
       "is_reasoning_model": false,
       "supported_parameters": [
@@ -6864,7 +6865,7 @@
       "thinking_type": "none",
       "temperature_range": [
         0.0,
-        1.0
+        2.0
       ],
       "is_reasoning_model": false,
       "supported_parameters": [
@@ -6894,7 +6895,7 @@
       "thinking_type": "none",
       "temperature_range": [
         0.0,
-        1.0
+        2.0
       ],
       "is_reasoning_model": false,
       "supported_parameters": [
@@ -6918,7 +6919,7 @@
       "thinking_type": "none",
       "temperature_range": [
         0.0,
-        1.0
+        2.0
       ],
       "is_reasoning_model": false,
       "supported_parameters": [
@@ -7025,7 +7026,7 @@
       "thinking_type": "none",
       "temperature_range": [
         0.0,
-        1.0
+        2.0
       ],
       "is_reasoning_model": false,
       "supported_parameters": [
@@ -7052,7 +7053,7 @@
       "thinking_type": "none",
       "temperature_range": [
         0.0,
-        1.0
+        2.0
       ],
       "is_reasoning_model": false,
       "supported_parameters": [
@@ -7203,6 +7204,7 @@
       "supported_parameters": [
         "frequency_penalty",
         "include_reasoning",
+        "logprobs",
         "max_tokens",
         "presence_penalty",
         "reasoning",
@@ -7213,6 +7215,7 @@
         "tool_choice",
         "tools",
         "top_k",
+        "top_logprobs",
         "top_p"
       ]
     },
@@ -7229,7 +7232,7 @@
       "thinking_type": "none",
       "temperature_range": [
         0.0,
-        1.0
+        2.0
       ],
       "is_reasoning_model": false,
       "supported_parameters": [
@@ -7394,7 +7397,7 @@
       "thinking_type": "none",
       "temperature_range": [
         0.0,
-        1.0
+        2.0
       ],
       "is_reasoning_model": false,
       "supported_parameters": [
@@ -7720,6 +7723,7 @@
       "supported_parameters": [
         "frequency_penalty",
         "include_reasoning",
+        "logprobs",
         "max_tokens",
         "presence_penalty",
         "reasoning",
@@ -7730,6 +7734,7 @@
         "structured_outputs",
         "temperature",
         "top_k",
+        "top_logprobs",
         "top_p"
       ]
     },
@@ -7958,6 +7963,7 @@
       "is_reasoning_model": false,
       "supported_parameters": [
         "frequency_penalty",
+        "logprobs",
         "max_tokens",
         "min_p",
         "presence_penalty",
@@ -7968,6 +7974,7 @@
         "structured_outputs",
         "temperature",
         "top_k",
+        "top_logprobs",
         "top_p"
       ]
     },
@@ -8367,6 +8374,7 @@
       "is_reasoning_model": false,
       "supported_parameters": [
         "frequency_penalty",
+        "logprobs",
         "max_tokens",
         "presence_penalty",
         "response_format",
@@ -8375,6 +8383,7 @@
         "temperature",
         "tool_choice",
         "tools",
+        "top_logprobs",
         "top_p"
       ]
     },
@@ -8594,6 +8603,7 @@
       "supported_parameters": [
         "frequency_penalty",
         "logit_bias",
+        "logprobs",
         "max_tokens",
         "min_p",
         "presence_penalty",
@@ -8606,6 +8616,7 @@
         "tool_choice",
         "tools",
         "top_k",
+        "top_logprobs",
         "top_p"
       ]
     },
@@ -9307,7 +9318,7 @@
       "thinking_type": "none",
       "temperature_range": [
         0.0,
-        1.0
+        2.0
       ],
       "is_reasoning_model": false,
       "supported_parameters": [
@@ -9334,7 +9345,7 @@
       "thinking_type": "none",
       "temperature_range": [
         0.0,
-        1.0
+        2.0
       ],
       "is_reasoning_model": false,
       "supported_parameters": [

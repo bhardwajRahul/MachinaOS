@@ -1,6 +1,6 @@
 ---
 name: whatsapp-send-skill
-description: Send WhatsApp messages to contacts or groups. Supports text, images, videos, audio, documents, stickers, locations, and contacts.
+description: Send WhatsApp messages to contacts, groups, or channels. Supports text, images, videos, audio, documents, stickers, locations, and contacts.
 allowed-tools: whatsapp_send
 metadata:
   author: machina
@@ -12,7 +12,7 @@ metadata:
 
 # WhatsApp Send Tool
 
-Send messages to WhatsApp contacts or groups.
+Send messages to WhatsApp contacts, groups, or newsletter channels.
 
 ## How It Works
 
@@ -20,15 +20,16 @@ This skill provides instructions for the **WhatsApp Send** tool node. Connect th
 
 ## whatsapp_send Tool
 
-Send messages to individual contacts or groups.
+Send messages to individual contacts, groups, or channels.
 
 ### Schema Fields
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| recipient_type | string | Yes | `"phone"` for individual or `"group"` for group chat |
+| recipient_type | string | Yes | `"phone"` for individual, `"group"` for group chat, or `"channel"` for newsletter |
 | phone | string | If phone | Phone number without + prefix (e.g., `1234567890`) |
 | group_id | string | If group | Group JID (e.g., `123456789@g.us`) |
+| channel_jid | string | If channel | Newsletter JID (e.g., `120363198765432101@newsletter`) |
 | message_type | string | Yes | Message type (see below) |
 | message | string | If text | Text message content |
 | media_url | string | If media | URL for image/video/audio/document/sticker |
@@ -85,6 +86,18 @@ Send messages to individual contacts or groups.
   "message": "Hello everyone!"
 }
 ```
+
+**Send to channel (newsletter):**
+```json
+{
+  "recipient_type": "channel",
+  "channel_jid": "120363198765432101@newsletter",
+  "message_type": "text",
+  "message": "Channel update: new features released!"
+}
+```
+
+> **Channel limitations:** Channels only support `text`, `image`, `video`, `audio`, and `document` message types. Sticker, location, and contact are NOT supported. You must be an admin/owner of the channel to send.
 
 **Send video:**
 ```json
@@ -160,7 +173,8 @@ Send messages to individual contacts or groups.
 
 1. **Phone numbers**: Always use without + prefix, just digits (e.g., `919876543210`)
 2. **Group IDs**: Use JID format ending in `@g.us` (e.g., `123456789@g.us`)
-3. **Media URLs**: Must be publicly accessible URLs (https://)
+3. **Channel JIDs**: Use JID format ending in `@newsletter` (e.g., `120363198765432101@newsletter`)
+4. **Media URLs**: Must be publicly accessible URLs (https://)
 4. **vCard format**: Use vCard 3.0 specification for contact cards
 5. **Message length**: Text messages can be up to 4096 characters
 6. **Media size**: Check WhatsApp limits for media file sizes

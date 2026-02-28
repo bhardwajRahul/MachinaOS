@@ -661,7 +661,7 @@ async def _execute_whatsapp_send(args: Dict[str, Any],
     """Send WhatsApp message with full message type support.
 
     Supports all message types: text, image, video, audio, document, sticker, location, contact
-    Recipients: phone number or group_id
+    Recipients: phone number, group_id, or channel_jid (newsletter)
     Media sources: URL
 
     Args:
@@ -678,6 +678,7 @@ async def _execute_whatsapp_send(args: Dict[str, Any],
         'recipient_type': args.get('recipient_type', 'phone'),
         'phone': args.get('phone', ''),
         'group_id': args.get('group_id', ''),
+        'channel_jid': args.get('channel_jid', ''),
         'message_type': args.get('message_type', 'text'),
         'message': args.get('message', ''),
         'media_source': 'url' if args.get('media_url') else 'none',
@@ -699,6 +700,10 @@ async def _execute_whatsapp_send(args: Dict[str, Any],
         return {"error": "Phone number is required for recipient_type='phone'"}
     if recipient_type == 'group' and not parameters['group_id']:
         return {"error": "Group ID is required for recipient_type='group'"}
+    if recipient_type == 'channel' and not parameters['channel_jid']:
+        return {"error": "Channel JID is required for recipient_type='channel'"}
+    if recipient_type == 'channel' and message_type not in ('text', 'image', 'video', 'audio', 'document'):
+        return {"error": f"Channels only support: text, image, video, audio, document. Got: {message_type}"}
     if message_type == 'text' and not parameters['message']:
         return {"error": "Message content is required for message_type='text'"}
     if message_type in ('image', 'video', 'audio', 'document', 'sticker') and not parameters['media_url']:
@@ -708,7 +713,12 @@ async def _execute_whatsapp_send(args: Dict[str, Any],
     if message_type == 'contact' and not parameters['vcard']:
         return {"error": "vcard is required for message_type='contact'"}
 
-    recipient = parameters['phone'] if recipient_type == 'phone' else parameters['group_id']
+    if recipient_type == 'channel':
+        recipient = parameters['channel_jid']
+    elif recipient_type == 'phone':
+        recipient = parameters['phone']
+    else:
+        recipient = parameters['group_id']
     logger.info(f"[WhatsApp Tool] Sending {message_type} to {recipient[:15]}...")
 
     try:
@@ -739,13 +749,20 @@ async def _execute_whatsapp_db(args: Dict[str, Any],
                                node_params: Dict[str, Any]) -> Dict[str, Any]:
     """Query WhatsApp database - contacts, groups, messages.
 
-    Supports 6 operations:
+    Supports 13 operations:
     - chat_history: Retrieve messages from a chat
     - search_groups: Search groups by name
     - get_group_info: Get group details with participant names
     - get_contact_info: Get full contact info (for send/reply)
     - list_contacts: List contacts with saved names
     - check_contacts: Check WhatsApp registration status
+    - list_channels: List subscribed newsletter channels
+    - get_channel_info: Get channel details
+    - channel_messages: Get channel message history
+    - channel_stats: Get channel subscriber/view stats
+    - channel_follow: Follow/subscribe to a channel
+    - channel_unfollow: Unfollow/unsubscribe from a channel
+    - channel_create: Create a new newsletter channel
 
     Args:
         args: LLM-provided arguments matching WhatsAppDbSchema (snake_case)
@@ -806,6 +823,55 @@ async def _execute_whatsapp_db(args: Dict[str, Any],
         if not phones:
             return {"error": "phones (comma-separated) is required for check_contacts"}
         parameters['phones'] = phones
+
+    elif operation == 'list_channels':
+        if args.get('refresh'):
+            parameters['refresh'] = True
+        parameters['limit'] = min(args.get('limit', 20), 50)
+
+    elif operation == 'get_channel_info':
+        channel_jid = args.get('channel_jid', '')
+        if not channel_jid:
+            return {"error": "channel_jid is required for get_channel_info"}
+        parameters['channel_jid'] = channel_jid
+        if args.get('refresh'):
+            parameters['refresh'] = True
+
+    elif operation == 'channel_messages':
+        channel_jid = args.get('channel_jid', '')
+        if not channel_jid:
+            return {"error": "channel_jid is required for channel_messages"}
+        parameters['channel_jid'] = channel_jid
+        parameters['channel_count'] = min(args.get('channel_count', 20), 100)
+        if args.get('before_server_id'):
+            parameters['before_server_id'] = args['before_server_id']
+
+    elif operation == 'channel_stats':
+        channel_jid = args.get('channel_jid', '')
+        if not channel_jid:
+            return {"error": "channel_jid is required for channel_stats"}
+        parameters['channel_jid'] = channel_jid
+        parameters['channel_count'] = min(args.get('channel_count', 10), 100)
+
+    elif operation == 'channel_follow':
+        channel_jid = args.get('channel_jid', '')
+        if not channel_jid:
+            return {"error": "channel_jid is required for channel_follow"}
+        parameters['channel_jid'] = channel_jid
+
+    elif operation == 'channel_unfollow':
+        channel_jid = args.get('channel_jid', '')
+        if not channel_jid:
+            return {"error": "channel_jid is required for channel_unfollow"}
+        parameters['channel_jid'] = channel_jid
+
+    elif operation == 'channel_create':
+        channel_name = args.get('channel_name', '')
+        if not channel_name:
+            return {"error": "channel_name is required for channel_create"}
+        parameters['channel_name'] = channel_name
+        if args.get('channel_description'):
+            parameters['channel_description'] = args['channel_description']
 
     else:
         return {"error": f"Unknown operation: {operation}"}

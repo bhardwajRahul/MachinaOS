@@ -18,6 +18,7 @@ This is a React Flow-based workflow automation platform implementing n8n-inspire
 | **[Agent Teams](./docs-internal/agent_teams.md)** | Claude SDK Agent Teams pattern - AI Employee and Orchestrator nodes with input-teammates handle for multi-agent coordination |
 | **[Memory Compaction](./docs-internal/memory_compaction.md)** | Token tracking and model-aware memory compaction using native provider APIs (Anthropic, OpenAI) with threshold = 50% of context window |
 | **[Pricing Service](./docs-internal/pricing_service.md)** | Centralized cost tracking for LLM tokens and API services (Twitter, Google Maps) with HTTPX event hooks |
+| **[Proxy Service](./docs-internal/proxy_service.md)** | Residential proxy provider management with template-based URL formatting, health scoring, and transparent HTTP node injection |
 | **[CI/CD Pipeline](./docs-internal/ci_cd.md)** | GitHub Actions workflows, predeploy validation, release publishing, and composite setup action |
 | **[Workflow Schema](./docs-internal/workflow-schema.md)** | JSON schema for workflows, edge handle conventions, config node architecture |
 | **[Execution Engine Design](./docs-internal/DESIGN.md)** | Architecture patterns, design standards, and implementation details for the workflow execution engine |
@@ -374,7 +375,7 @@ class CacheEntry(SQLModel, table=True):
 ## Codebase Summary
 - **Hybrid architecture**: Node.js + Python + React TypeScript
 - **92 implemented workflow nodes** with clean service separation (6 AI models + 3 AI agents/memory + 13 specialized agents + 1 skill + 4 dedicated tools + 3 search + 16 Android + 3 WhatsApp + 4 Twitter + 2 Telegram + 2 Social + 3 Location + 3 Code + 6 Utility + 6 Document + 2 Chat + 2 Scheduler + 2 Workflow + 7 Google Workspace + 1 Apify + 3 Proxy)
-- **WebSocket-First Architecture**: WebSocket as primary frontend-backend communication (119 message handlers)
+- **WebSocket-First Architecture**: WebSocket as primary frontend-backend communication (120 message handlers)
 - **Recent optimizations**: REST APIs replaced with WebSocket, AI endpoints migrated to Python, Android automation integrated
 
 ## Architecture Refactoring
@@ -528,7 +529,7 @@ React Flow edges use dynamic Dracula colors via `getEdgeStyles(theme.dracula)`:
 ### WebSocket-First Architecture
 The project uses WebSocket as the primary communication method between frontend and backend, replacing most REST API calls:
 - `src/contexts/WebSocketContext.tsx` - Central WebSocket context with request/response pattern
-- `server/routers/websocket.py` - WebSocket endpoint with 119 message handlers
+- `server/routers/websocket.py` - WebSocket endpoint with 120 message handlers
 - `server/services/status_broadcaster.py` - Connection management and broadcasting
 
 ## Implemented Node Types
@@ -833,8 +834,8 @@ service_id_map = {
 
 #### Dual-Purpose Tool Nodes (workflow node + AI tool)
 Nodes that work BOTH as standalone workflow nodes AND as AI Agent tools. When connected to `input-tools`, the LLM fills the node's parameter schema.
-- **whatsappSend**: Send WhatsApp messages (text, media, location, contact). Full schema for all message types.
-- **whatsappDb**: Query WhatsApp database - chat history, contacts, groups with filtering and pagination.
+- **whatsappSend**: Send WhatsApp messages (text, media, location, contact) to contacts, groups, or newsletter channels. Full schema for all message types.
+- **whatsappDb**: Query WhatsApp database - chat history, contacts, groups, and newsletter channels with filtering and pagination.
 - **pythonExecutor**: Execute Python code for calculations, data processing, and automation. Tool name: `python_code`. Available: math, json, datetime, Counter, defaultdict, random.
 - **javascriptExecutor**: Execute JavaScript code via persistent Node.js server for calculations, data processing, and JSON manipulation. Tool name: `javascript_code`.
 - **typescriptExecutor**: Execute TypeScript code via persistent Node.js server with type safety. Tool name: `typescript_code`.
@@ -900,15 +901,22 @@ Android device connection is configured via the Credentials Modal (Android panel
 - **mediaControl**: Media playback control - volume control, playback control, play media files
 
 ### WhatsApp Nodes (3 nodes)
-- **whatsappSend**: **Dual-purpose node** - Send WhatsApp messages (text, image, video, audio, document, sticker, location, contact). Works as workflow node OR AI Agent tool. Group: `['whatsapp', 'tool']`. Recipient types: Self (connected phone), Phone Number, Group. Full parameter schema for message type, media URL, location coordinates, contact vCard.
-- **whatsappDb**: **Dual-purpose node** - Comprehensive WhatsApp database query node with 6 operations. Works as workflow node OR AI Agent tool. Group: `['whatsapp', 'tool']`. Operations:
+- **whatsappSend**: **Dual-purpose node** - Send WhatsApp messages (text, image, video, audio, document, sticker, location, contact) to contacts, groups, or newsletter channels. Works as workflow node OR AI Agent tool. Group: `['whatsapp', 'tool']`. Recipient types: Self (connected phone), Phone Number, Group, Channel (newsletter). Channel messages only support text, image, video, audio, document (NOT sticker, location, contact). Full parameter schema for message type, media URL, location coordinates, contact vCard, channel JID.
+- **whatsappDb**: **Dual-purpose node** - Comprehensive WhatsApp database query node with 13 operations. Works as workflow node OR AI Agent tool. Group: `['whatsapp', 'tool']`. Operations:
   - `chat_history`: Retrieve messages from individual or group chats with filtering and pagination
   - `search_groups`: Search groups by name
   - `get_group_info`: Get group details with participant names and phone numbers
   - `get_contact_info`: Get full contact info (name, phone, profile picture) for sending/replying
   - `list_contacts`: List all contacts with saved names
   - `check_contacts`: Check WhatsApp registration status for phone numbers
-- **whatsappReceive**: Event-driven trigger that waits for incoming WhatsApp messages with filters (message type, sender, group, keywords, forwarded status). Marked with `['whatsapp', 'trigger']` group for n8n-style trigger identification. Stores group/sender names alongside JID/phone for display persistence. The Go RPC resolves LIDs to phone numbers before sending events - `sender_phone` field is already resolved. Filter options: All Messages, From Self (notes to self chat only), From Any Contact (Non-Group), From Specific Contact, From Specific Group, Contains Keywords
+  - `list_channels`: List subscribed newsletter channels with optional server refresh
+  - `get_channel_info`: Get channel details (name, description, subscribers)
+  - `channel_messages`: Get channel message history with pagination
+  - `channel_stats`: Get channel subscriber/view statistics
+  - `channel_follow`: Follow/subscribe to a newsletter channel
+  - `channel_unfollow`: Unfollow/unsubscribe from a newsletter channel
+  - `channel_create`: Create a new newsletter channel
+- **whatsappReceive**: Event-driven trigger that waits for incoming WhatsApp messages with filters (message type, sender, group, channel, keywords, forwarded status). Marked with `['whatsapp', 'trigger']` group for n8n-style trigger identification. Stores group/sender names alongside JID/phone for display persistence. The Go RPC resolves LIDs to phone numbers before sending events - `sender_phone` field is already resolved. Filter options: All Messages, From Self (notes to self chat only), From Any Contact (Non-Group), From Specific Contact, From Specific Group, From Channel (Newsletter), Contains Keywords
 
 ### Social Nodes (2 nodes)
 Unified social messaging nodes for multi-platform communication. Supports WhatsApp, Telegram, Discord, Slack, Signal, SMS, Webchat, Email, Matrix, Teams.
@@ -1372,7 +1380,7 @@ See **[Scripts Reference](./docs-internal/SCRIPTS.md)** for full documentation.
 
 ## Current Status
 ✅ **INodeProperties System**: Fully implemented with 92 functional node components
-✅ **WebSocket-First Architecture**: 119 message handlers replacing REST APIs
+✅ **WebSocket-First Architecture**: 120 message handlers replacing REST APIs
 ✅ **Code Editor**: Python, JavaScript, and TypeScript executors with syntax-highlighted editor (react-simple-code-editor + prismjs) and console output
 ✅ **Node.js Executor**: Persistent Node.js server (Express + tsx) for fast JS/TS execution, replacing subprocess spawning
 ✅ **Component Palette**: Emoji icons with distinct dracula-themed category colors, localStorage persistence for collapsed sections
@@ -1384,7 +1392,7 @@ See **[Scripts Reference](./docs-internal/SCRIPTS.md)** for full documentation.
 ✅ **Location Services**: Interactive map picker with coordinate handling, Google Maps API key fetched from backend credentials
 ✅ **Code Cleanup**: Dead code removed, unused files deleted
 ✅ **Process Management**: Robust stop scripts with duplicate process detection
-✅ **WhatsApp Integration**: Square node design with QR code viewer, group/sender name persistence, and proper error handling
+✅ **WhatsApp Integration**: Square node design with QR code viewer, group/sender name persistence, newsletter channel support (send, query, follow/unfollow, create), and proper error handling
 ✅ **Backend Stability**: Fixed dependency injection and error handling preventing crashes
 ✅ **Development Server**: Running at **http://localhost:3001** (frontend) and **http://localhost:3010** (backend)
 ✅ **WebSocket Integration**: Persistent WebSocket connections for remote Android devices with background tasks and message queue
@@ -4114,7 +4122,7 @@ export interface AndroidStatus {
 ## WhatsApp Integration
 
 ### Overview
-WhatsApp nodes use square design with integrated QR code viewing and proper error handling. The integration proxies all requests through the Python backend to the WhatsApp RPC service (default port 9400, configurable via `WHATSAPP_RPC_PORT` env var or `--port` CLI flag).
+WhatsApp nodes use square design with integrated QR code viewing and proper error handling. The integration proxies all requests through the Python backend to the WhatsApp RPC service (default port 9400, configurable via `WHATSAPP_RPC_PORT` env var or `--port` CLI flag). Supports individual chats, groups, and newsletter channels (sending, querying, follow/unfollow, create).
 
 ### Architecture
 ```
@@ -4433,6 +4441,10 @@ const sampleSchemas = {
       sender_jid: 'string',
       sender_phone: 'string',  // Resolved phone number (Go RPC resolves LIDs)
       sender_name: 'string'
+    },
+    newsletter_meta: {
+      edit_ts: 'number',
+      original_ts: 'number'
     }
   }
 };
@@ -4742,7 +4754,7 @@ Updated `client_left` and presence handlers use `has_real_android_devices()` ins
 | **Android** | `get_android_devices`, `execute_android_action`, `android_relay_connect`, `android_relay_disconnect`, `android_relay_reconnect` |
 | **Maps** | `validate_maps_key` |
 | **Apify** | `validate_apify_key` |
-| **WhatsApp** | `whatsapp_status`, `whatsapp_connected_phone`, `whatsapp_qr`, `whatsapp_send`, `whatsapp_start`, `whatsapp_restart`, `whatsapp_groups`, `whatsapp_group_info`, `whatsapp_chat_history`, `whatsapp_rate_limit_get`, `whatsapp_rate_limit_set`, `whatsapp_rate_limit_stats`, `whatsapp_rate_limit_unpause` |
+| **WhatsApp** | `whatsapp_status`, `whatsapp_connected_phone`, `whatsapp_qr`, `whatsapp_send`, `whatsapp_start`, `whatsapp_restart`, `whatsapp_groups`, `whatsapp_group_info`, `whatsapp_chat_history`, `whatsapp_newsletters`, `whatsapp_rate_limit_get`, `whatsapp_rate_limit_set`, `whatsapp_rate_limit_stats`, `whatsapp_rate_limit_unpause` |
 | **Telegram** | `telegram_connect`, `telegram_disconnect`, `telegram_status`, `telegram_send`, `telegram_reconnect`, `telegram_get_me`, `telegram_get_chat` |
 | **Workflow Storage** | `save_workflow`, `get_workflow`, `get_all_workflows`, `delete_workflow` |
 | **Chat Messages** | `send_chat_message`, `get_chat_messages`, `clear_chat_messages`, `save_chat_message`, `get_chat_sessions` |
@@ -4912,7 +4924,7 @@ This function:
 - **Performance**: Fast HMR updates and clean TypeScript compilation
 - **AI Architecture**: 5-layer system with factory pattern and secure credential management
 - **Android Architecture**: Factory-based node creation with ADB integration for device automation
-- **WebSocket-First Architecture**: 87 message handlers replace REST APIs for parameters, execution, API keys, Android, WhatsApp, and skill operations
+- **WebSocket-First Architecture**: 120 message handlers replace REST APIs for parameters, execution, API keys, Android, WhatsApp, and skill operations
 - **WebSocket Hooks**: Dedicated React hooks (useWhatsApp, useExecution, useApiKeys, useAndroidOperations, useParameterPanel) for clean component integration
 - **WebSocket Support**: Persistent remote Android device connections via WebSocket proxy with background tasks
   - Connection stays alive across multiple API requests until switched to local ADB
@@ -4943,6 +4955,7 @@ This function:
   - WebSocket handlers for status, QR code, send message, and start connection
   - useWhatsApp hook provides clean React component integration
   - Uses external npm package `whatsapp-rpc` with pre-built Go binaries
+  - Newsletter channels: send to channels (text/image/video/audio/document), query channel DB (list, info, messages, stats), follow/unfollow, create. Channel JID format: `<numeric_id>@newsletter`. Channel events dispatched via `event.newsletter_*` handlers.
 - **Event-Driven Triggers**: Generic trigger node architecture with asyncio.Future
   - `server/services/event_waiter.py` - Waiter registration, dispatch, cancellation
   - TRIGGER_REGISTRY for extensible trigger types (WhatsApp, Webhook, future: Email, MQTT, Telegram)

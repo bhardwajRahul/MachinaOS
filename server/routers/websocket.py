@@ -1702,6 +1702,7 @@ from routers.whatsapp import (
     handle_whatsapp_groups as _wa_groups,
     handle_whatsapp_group_info as _wa_group_info,
     handle_whatsapp_chat_history as _wa_chat_history,
+    handle_whatsapp_newsletters as _wa_newsletters,
     whatsapp_rpc_call as _wa_rpc_call,
 )
 
@@ -1734,6 +1735,11 @@ async def handle_whatsapp_restart(data: Dict[str, Any], websocket: WebSocket) ->
 
 async def handle_whatsapp_groups(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
     return await _wa_groups()
+
+
+async def handle_whatsapp_newsletters(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Get list of subscribed newsletter channels."""
+    return await _wa_newsletters()
 
 
 async def handle_whatsapp_group_info(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
@@ -2943,6 +2949,7 @@ MESSAGE_HANDLERS: Dict[str, MessageHandler] = {
     "whatsapp_start": handle_whatsapp_start,
     "whatsapp_restart": handle_whatsapp_restart,
     "whatsapp_groups": handle_whatsapp_groups,
+    "whatsapp_newsletters": handle_whatsapp_newsletters,
     "whatsapp_group_info": handle_whatsapp_group_info,
     "whatsapp_chat_history": handle_whatsapp_chat_history,
     "whatsapp_rate_limit_get": handle_whatsapp_rate_limit_get,

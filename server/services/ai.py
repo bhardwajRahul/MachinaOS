@@ -2796,10 +2796,10 @@ class AIService:
         # WhatsApp send schema (existing node used as tool)
         if node_type == 'whatsappSend':
             class WhatsAppSendSchema(BaseModel):
-                """Send WhatsApp messages to contacts or groups."""
+                """Send WhatsApp messages to contacts, groups, or channels."""
                 recipient_type: str = Field(
                     default="phone",
-                    description="Send to: 'phone' for individual or 'group' for group chat"
+                    description="Send to: 'phone' for individual, 'group' for group chat, or 'channel' for newsletter channel"
                 )
                 phone: Optional[str] = Field(
                     default=None,
@@ -2809,9 +2809,13 @@ class AIService:
                     default=None,
                     description="Group JID (e.g., 123456789@g.us). Required for recipient_type='group'"
                 )
+                channel_jid: Optional[str] = Field(
+                    default=None,
+                    description="Newsletter JID (e.g., 120363198765432101@newsletter). Required for recipient_type='channel'. Only supports text, image, video, audio, document."
+                )
                 message_type: str = Field(
                     default="text",
-                    description="Message type: 'text', 'image', 'video', 'audio', 'document', 'sticker', 'location', 'contact'"
+                    description="Message type: 'text', 'image', 'video', 'audio', 'document', 'sticker', 'location', 'contact'. Channels only support: text, image, video, audio, document."
                 )
                 message: Optional[str] = Field(
                     default=None,
@@ -2837,7 +2841,7 @@ class AIService:
         # WhatsApp DB schema (existing node used as tool) - query contacts, groups, messages
         if node_type == 'whatsappDb':
             class WhatsAppDbSchema(BaseModel):
-                """Query WhatsApp database - contacts, groups, messages.
+                """Query WhatsApp database - contacts, groups, messages, channels.
 
                 Operations:
                 - chat_history: Get messages from a chat (requires phone or group_id)
@@ -2846,10 +2850,17 @@ class AIService:
                 - get_contact_info: Get full contact info for sending/replying (requires phone)
                 - list_contacts: List contacts with saved names (optional query filter)
                 - check_contacts: Check WhatsApp registration (requires phones comma-separated)
+                - list_channels: List subscribed newsletter channels (optional refresh)
+                - get_channel_info: Get channel details (requires channel_jid)
+                - channel_messages: Get channel message history (requires channel_jid)
+                - channel_stats: Get channel subscriber/view stats (requires channel_jid)
+                - channel_follow: Follow/subscribe to a channel (requires channel_jid)
+                - channel_unfollow: Unfollow/unsubscribe from a channel (requires channel_jid)
+                - channel_create: Create a new newsletter channel (requires channel_name)
                 """
                 operation: str = Field(
                     default="chat_history",
-                    description="Operation: 'chat_history', 'search_groups', 'get_group_info', 'get_contact_info', 'list_contacts', 'check_contacts'"
+                    description="Operation: 'chat_history', 'search_groups', 'get_group_info', 'get_contact_info', 'list_contacts', 'check_contacts', 'list_channels', 'get_channel_info', 'channel_messages', 'channel_stats', 'channel_follow', 'channel_unfollow', 'channel_create'"
                 )
                 # For chat_history
                 chat_type: Optional[str] = Field(
@@ -2895,6 +2906,31 @@ class AIService:
                 participant_limit: Optional[int] = Field(
                     default=None,
                     description="For get_group_info: max participants to return (1-100, default 50). Large groups may have hundreds of members."
+                )
+                # Channel (newsletter) operations
+                channel_jid: Optional[str] = Field(
+                    default=None,
+                    description="Newsletter JID (e.g., 120363198765432101@newsletter). Required for get_channel_info, channel_messages, channel_stats, channel_follow, channel_unfollow."
+                )
+                refresh: Optional[bool] = Field(
+                    default=None,
+                    description="For list_channels/get_channel_info: force refresh from server (default uses 24h cache)."
+                )
+                channel_count: Optional[int] = Field(
+                    default=None,
+                    description="For channel_messages/channel_stats: number of items to fetch (1-100, default 20 for messages, 10 for stats)."
+                )
+                before_server_id: Optional[int] = Field(
+                    default=None,
+                    description="For channel_messages: fetch messages before this server ID (pagination)."
+                )
+                channel_name: Optional[str] = Field(
+                    default=None,
+                    description="For channel_create: name of the new channel."
+                )
+                channel_description: Optional[str] = Field(
+                    default=None,
+                    description="For channel_create: description of the new channel."
                 )
 
             return WhatsAppDbSchema

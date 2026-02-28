@@ -222,7 +222,20 @@ class RPCClient:
 
             elif method == "event.message_received":
                 # Message received - broadcast as custom event for trigger nodes
+                # (includes newsletter messages with newsletter_meta field)
                 await broadcaster.send_custom_event("whatsapp_message_received", params)
+
+            elif method == "event.newsletter_join":
+                await broadcaster.send_custom_event("whatsapp_newsletter_join", params)
+
+            elif method == "event.newsletter_leave":
+                await broadcaster.send_custom_event("whatsapp_newsletter_leave", params)
+
+            elif method == "event.newsletter_mute_change":
+                await broadcaster.send_custom_event("whatsapp_newsletter_mute_change", params)
+
+            elif method == "event.newsletter_live_update":
+                await broadcaster.send_custom_event("whatsapp_newsletter_live_update", params)
 
             # Forward to custom handler if set
             if self._event_handler:
@@ -449,9 +462,10 @@ async def handle_whatsapp_send(params: dict) -> dict:
     Uses _send_lock to serialize sends - Go service processes sequentially.
 
     Params from frontend node (snake_case):
-    - recipient_type: 'self', 'phone', or 'group'
+    - recipient_type: 'self', 'phone', 'group', or 'channel'
     - phone: recipient phone number (if recipient_type='phone')
     - group_id: group JID (if recipient_type='group')
+    - channel_jid: newsletter JID (if recipient_type='channel')
     - message_type: text, image, video, audio, document, sticker, location, contact
     - message: text content (for text type)
     - media_source: base64, file, url (for media types)
@@ -468,7 +482,18 @@ async def handle_whatsapp_send(params: dict) -> dict:
 
             # Recipient (snake_case)
             recipient_type = params.get("recipient_type", "self")
-            if recipient_type == "group":
+            if recipient_type == "channel":
+                # Newsletter/channel send - uses newsletter_send RPC with group_id param
+                channel_jid = params.get("channel_jid")
+                if not channel_jid:
+                    return {"success": False, "error": "channel_jid is required"}
+                # Validate channel-supported message types
+                msg_type = params.get("message_type", "text")
+                channel_types = {"text", "image", "video", "audio", "document"}
+                if msg_type not in channel_types:
+                    return {"success": False, "error": f"Channels only support: {', '.join(sorted(channel_types))}. Got: {msg_type}"}
+                rpc_params["group_id"] = channel_jid  # newsletter_send uses group_id for JID
+            elif recipient_type == "group":
                 group_id = params.get("group_id")
                 if not group_id:
                     return {"success": False, "error": "group_id is required"}
@@ -578,7 +603,9 @@ async def handle_whatsapp_send(params: dict) -> dict:
                 rpc_params["metadata"] = params["metadata"]
 
             client = await get_client()
-            result = await client.call("send", rpc_params)
+            # Use newsletter_send for channel recipients, regular send for others
+            rpc_method = "newsletter_send" if recipient_type == "channel" else "send"
+            result = await client.call(rpc_method, rpc_params)
             return {
                 "success": True,
                 "message_id": result.get("message_id"),
@@ -830,3 +857,25 @@ async def whatsapp_rpc_call(method: str, params: dict = None) -> dict:
     except Exception as e:
         logger.error(f"WhatsApp RPC call '{method}' failed: {e}")
         return {"success": False, "error": str(e)}
+
+
+async def handle_whatsapp_newsletters() -> dict:
+    """Get list of subscribed WhatsApp newsletter channels via RPC.
+
+    Used by WebSocket handler for loadOptions dropdown in whatsappDb/whatsappReceive nodes.
+
+    Returns:
+        Dict with channels list containing jid and name
+    """
+    try:
+        client = await get_client()
+        channels = await client.call("newsletters")
+
+        return {
+            "success": True,
+            "channels": channels or [],
+            "timestamp": time.time()
+        }
+    except Exception as e:
+        logger.error(f"WhatsApp newsletters fetch failed: {e}")
+        return {"success": False, "error": str(e), "channels": []}

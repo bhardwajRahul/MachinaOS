@@ -1,6 +1,6 @@
 ---
 name: whatsapp-db-skill
-description: Query WhatsApp database for contacts, groups, and chat history. Look up contact info, search groups, retrieve messages.
+description: Query WhatsApp database for contacts, groups, channels, and chat history. Look up contact info, search groups, manage channels, retrieve messages.
 allowed-tools: whatsapp_db
 metadata:
   author: machina
@@ -12,7 +12,7 @@ metadata:
 
 # WhatsApp Database Tool
 
-Query WhatsApp database for contacts, groups, and message history.
+Query WhatsApp database for contacts, groups, channels (newsletters), and message history.
 
 ## How It Works
 
@@ -20,7 +20,7 @@ This skill provides instructions for the **WhatsApp DB** tool node. Connect the 
 
 ## whatsapp_db Tool
 
-Query contacts, groups, and chat history.
+Query contacts, groups, channels, and chat history.
 
 ### Schema Fields
 
@@ -38,6 +38,12 @@ Query contacts, groups, and chat history.
 | sender_phone | string | No | Filter by sender (when group_filter="contact") |
 | phones | string | For check_contacts | Comma-separated phone numbers |
 | participant_limit | int | No | Max participants (for get_group_info, 1-100) |
+| channel_jid | string | For channel ops | Newsletter JID (e.g., `120363198765432101@newsletter`) |
+| refresh | boolean | No | Force refresh from server (for list_channels, get_channel_info) |
+| channel_count | int | No | Number of items to fetch (for channel_messages, channel_stats) |
+| before_server_id | int | No | Pagination cursor (for channel_messages) |
+| channel_name | string | For channel_create | Name of the new channel |
+| channel_description | string | No | Description (for channel_create) |
 
 ### Operations
 
@@ -49,6 +55,13 @@ Query contacts, groups, and chat history.
 | `get_group_info` | Get group details with participants | group_id |
 | `chat_history` | Retrieve message history | chat_type, phone/group_id |
 | `check_contacts` | Check WhatsApp registration | phones |
+| `list_channels` | List subscribed newsletter channels | refresh (optional), limit |
+| `get_channel_info` | Get channel details | channel_jid |
+| `channel_messages` | Get channel message history | channel_jid, channel_count |
+| `channel_stats` | Get channel subscriber/view stats | channel_jid |
+| `channel_follow` | Follow/subscribe to a channel | channel_jid |
+| `channel_unfollow` | Unfollow/unsubscribe from a channel | channel_jid |
+| `channel_create` | Create a new newsletter channel | channel_name |
 
 ### Limits
 
@@ -58,6 +71,9 @@ Query contacts, groups, and chat history.
 | search_groups | 20 | 50 |
 | list_contacts | 50 | 100 |
 | get_group_info participants | 50 | 100 |
+| list_channels | 20 | 50 |
+| channel_messages | 20 | 100 |
+| channel_stats | 10 | 100 |
 
 **Important:** Always use small limits and specific queries to avoid context overflow.
 
@@ -229,6 +245,75 @@ Check if phone numbers have WhatsApp.
     {"phone": "1234567890", "registered": true, "jid": "1234567890@s.whatsapp.net"},
     {"phone": "0987654321", "registered": false}
   ]
+}
+```
+
+### list_channels
+
+List subscribed newsletter channels.
+
+```json
+{
+  "operation": "list_channels",
+  "limit": 10
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "operation": "list_channels",
+  "channels": [
+    {"jid": "120363198765432101@newsletter", "name": "Tech Updates", "subscriber_count": 5000}
+  ],
+  "total": 3
+}
+```
+
+### get_channel_info
+
+Get channel details.
+
+```json
+{
+  "operation": "get_channel_info",
+  "channel_jid": "120363198765432101@newsletter"
+}
+```
+
+### channel_messages
+
+Get channel message history.
+
+```json
+{
+  "operation": "channel_messages",
+  "channel_jid": "120363198765432101@newsletter",
+  "channel_count": 10
+}
+```
+
+### channel_follow
+
+Follow/subscribe to a channel.
+
+```json
+{
+  "operation": "channel_follow",
+  "channel_jid": "120363198765432101@newsletter"
+}
+```
+
+### channel_create
+
+Create a new newsletter channel.
+
+```json
+{
+  "operation": "channel_create",
+  "channel_name": "My Channel",
+  "channel_description": "A channel about interesting topics"
 }
 ```
 
