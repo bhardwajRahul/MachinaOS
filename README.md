@@ -72,16 +72,23 @@ Create AI agents that remember conversations, use tools, and work together. Choo
 ### Control Your Devices
 - Send WhatsApp messages automatically
 - Post to Twitter/X
+- Send Telegram messages via bot
 - Control your Android phone (WiFi, Bluetooth, apps, camera)
 - Schedule tasks and reminders
 
 ### Process Documents
 - Scrape websites
+- Route requests through residential proxies with geo-targeting
+- Run Apify actors for social media and search engine scraping
 - Parse PDFs and documents
 - Search your files with AI
 
 ### Build Agent Teams
 Create teams of specialized agents that delegate tasks to each other - a coding agent, a web agent, and a task agent working together.
+
+### Run Code
+- Execute Python, JavaScript, and TypeScript code
+- Persistent Node.js server for fast JS/TS execution
 
 ## Visual Workflow Builder
 
