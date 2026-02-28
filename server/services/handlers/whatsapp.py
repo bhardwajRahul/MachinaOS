@@ -17,7 +17,7 @@ async def handle_whatsapp_send(
     """Handle WhatsApp send message node via Go RPC service.
 
     Supports all message types: text, image, video, audio, document, sticker, location, contact
-    Recipients: phone number or group_id
+    Recipients: phone number, group_id, or channel_jid (newsletter)
     Media sources: base64, file path, or URL
 
     Args:
@@ -41,6 +41,14 @@ async def handle_whatsapp_send(
         if recipient_type == 'self':
             # Self will be resolved by the router using connected phone
             recipient = 'self'
+        elif recipient_type == 'channel':
+            recipient = parameters.get('channel_jid')
+            if not recipient:
+                raise ValueError("Channel JID is required")
+            # Validate channel-supported message types
+            channel_types = {'text', 'image', 'video', 'audio', 'document'}
+            if message_type not in channel_types:
+                raise ValueError(f"Channels only support: {', '.join(sorted(channel_types))}. Got: {message_type}")
         elif recipient_type == 'group':
             recipient = parameters.get('group_id')
             if not recipient:
@@ -135,6 +143,13 @@ async def handle_whatsapp_db(
     - get_contact_info: Get full contact info (name, phone, photo)
     - list_contacts: List contacts with saved names
     - check_contacts: Check WhatsApp registration
+    - list_channels: List subscribed newsletter channels
+    - get_channel_info: Get channel details
+    - channel_messages: Get channel message history
+    - channel_stats: Get channel subscriber/view stats
+    - channel_follow: Follow/subscribe to a channel
+    - channel_unfollow: Unfollow/unsubscribe from a channel
+    - channel_create: Create a new newsletter channel
 
     Args:
         node_id: The node ID
@@ -166,6 +181,20 @@ async def handle_whatsapp_db(
             return await _handle_list_contacts(node_id, parameters, start_time, whatsapp_rpc_call)
         elif operation == 'check_contacts':
             return await _handle_check_contacts(node_id, parameters, start_time, whatsapp_rpc_call)
+        elif operation == 'list_channels':
+            return await _handle_list_channels(node_id, parameters, start_time, whatsapp_rpc_call)
+        elif operation == 'get_channel_info':
+            return await _handle_get_channel_info(node_id, parameters, start_time, whatsapp_rpc_call)
+        elif operation == 'channel_messages':
+            return await _handle_channel_messages(node_id, parameters, start_time, whatsapp_rpc_call)
+        elif operation == 'channel_stats':
+            return await _handle_channel_stats(node_id, parameters, start_time, whatsapp_rpc_call)
+        elif operation == 'channel_follow':
+            return await _handle_channel_follow(node_id, parameters, start_time, whatsapp_rpc_call)
+        elif operation == 'channel_unfollow':
+            return await _handle_channel_unfollow(node_id, parameters, start_time, whatsapp_rpc_call)
+        elif operation == 'channel_create':
+            return await _handle_channel_create(node_id, parameters, start_time, whatsapp_rpc_call)
         else:
             raise ValueError(f"Unknown operation: {operation}")
 
@@ -422,6 +451,229 @@ async def _handle_check_contacts(node_id: str, parameters: Dict[str, Any], start
             "operation": "check_contacts",
             "results": results,
             "total": len(results),
+            "timestamp": datetime.now().isoformat()
+        },
+        "execution_time": time.time() - start_time,
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+async def _handle_list_channels(node_id: str, parameters: Dict[str, Any], start_time: float, rpc_call) -> Dict[str, Any]:
+    """Handle list_channels operation - list subscribed newsletter channels."""
+    refresh = parameters.get('refresh', False)
+    limit = parameters.get('limit', 20)
+
+    rpc_params: Dict[str, Any] = {}
+    if refresh:
+        rpc_params['refresh'] = True
+
+    data = await rpc_call('newsletters', rpc_params)
+
+    if isinstance(data, dict) and not data.get('success', True):
+        raise Exception(data.get('error', 'Failed to list channels'))
+
+    channels = data if isinstance(data, list) else data.get('result', [])
+    total_found = len(channels)
+
+    # Return essential fields only
+    channels_limited = [
+        {"jid": c.get("jid", ""), "name": c.get("name", ""), "subscriber_count": c.get("subscriber_count", 0)}
+        for c in channels[:limit]
+    ]
+
+    return {
+        "success": True,
+        "node_id": node_id,
+        "node_type": "whatsappDb",
+        "result": {
+            "operation": "list_channels",
+            "channels": channels_limited,
+            "total": total_found,
+            "returned": len(channels_limited),
+            "has_more": total_found > limit,
+            "hint": f"Showing {len(channels_limited)} of {total_found} channels." if total_found > limit else None,
+            "timestamp": datetime.now().isoformat()
+        },
+        "execution_time": time.time() - start_time,
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+async def _handle_get_channel_info(node_id: str, parameters: Dict[str, Any], start_time: float, rpc_call) -> Dict[str, Any]:
+    """Handle get_channel_info operation - get channel details."""
+    channel_jid = parameters.get('channel_jid')
+    if not channel_jid:
+        raise ValueError("Channel JID is required")
+
+    rpc_params: Dict[str, Any] = {'jid': channel_jid}
+    if parameters.get('refresh'):
+        rpc_params['refresh'] = True
+
+    data = await rpc_call('newsletter_info', rpc_params)
+
+    if isinstance(data, dict) and not data.get('success', True):
+        raise Exception(data.get('error', 'Failed to get channel info'))
+
+    result = data if not isinstance(data, dict) or 'result' not in data else data.get('result', data)
+
+    return {
+        "success": True,
+        "node_id": node_id,
+        "node_type": "whatsappDb",
+        "result": {
+            "operation": "get_channel_info",
+            **result,
+            "timestamp": datetime.now().isoformat()
+        },
+        "execution_time": time.time() - start_time,
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+async def _handle_channel_messages(node_id: str, parameters: Dict[str, Any], start_time: float, rpc_call) -> Dict[str, Any]:
+    """Handle channel_messages operation - get channel message history."""
+    channel_jid = parameters.get('channel_jid')
+    if not channel_jid:
+        raise ValueError("Channel JID is required")
+
+    count = parameters.get('channel_count', 20)
+    rpc_params: Dict[str, Any] = {'jid': channel_jid, 'count': count}
+
+    before_server_id = parameters.get('before_server_id')
+    if before_server_id:
+        rpc_params['before_server_id'] = int(before_server_id)
+
+    data = await rpc_call('newsletter_messages', rpc_params)
+
+    if isinstance(data, dict) and not data.get('success', True):
+        raise Exception(data.get('error', 'Failed to get channel messages'))
+
+    messages = data if isinstance(data, list) else data.get('result', [])
+
+    return {
+        "success": True,
+        "node_id": node_id,
+        "node_type": "whatsappDb",
+        "result": {
+            "operation": "channel_messages",
+            "messages": messages,
+            "count": len(messages),
+            "channel_jid": channel_jid,
+            "timestamp": datetime.now().isoformat()
+        },
+        "execution_time": time.time() - start_time,
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+async def _handle_channel_stats(node_id: str, parameters: Dict[str, Any], start_time: float, rpc_call) -> Dict[str, Any]:
+    """Handle channel_stats operation - get channel subscriber/view stats."""
+    channel_jid = parameters.get('channel_jid')
+    if not channel_jid:
+        raise ValueError("Channel JID is required")
+
+    count = parameters.get('channel_count', 10)
+    rpc_params: Dict[str, Any] = {'jid': channel_jid, 'count': count}
+
+    data = await rpc_call('newsletter_stats', rpc_params)
+
+    if isinstance(data, dict) and not data.get('success', True):
+        raise Exception(data.get('error', 'Failed to get channel stats'))
+
+    result = data if not isinstance(data, dict) or 'result' not in data else data.get('result', data)
+
+    return {
+        "success": True,
+        "node_id": node_id,
+        "node_type": "whatsappDb",
+        "result": {
+            "operation": "channel_stats",
+            **result,
+            "channel_jid": channel_jid,
+            "timestamp": datetime.now().isoformat()
+        },
+        "execution_time": time.time() - start_time,
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+async def _handle_channel_follow(node_id: str, parameters: Dict[str, Any], start_time: float, rpc_call) -> Dict[str, Any]:
+    """Handle channel_follow operation - follow/subscribe to a channel."""
+    channel_jid = parameters.get('channel_jid')
+    if not channel_jid:
+        raise ValueError("Channel JID is required")
+
+    data = await rpc_call('newsletter_follow', {'jid': channel_jid})
+
+    if isinstance(data, dict) and not data.get('success', True):
+        raise Exception(data.get('error', 'Failed to follow channel'))
+
+    return {
+        "success": True,
+        "node_id": node_id,
+        "node_type": "whatsappDb",
+        "result": {
+            "operation": "channel_follow",
+            "channel_jid": channel_jid,
+            "status": "followed",
+            "timestamp": datetime.now().isoformat()
+        },
+        "execution_time": time.time() - start_time,
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+async def _handle_channel_unfollow(node_id: str, parameters: Dict[str, Any], start_time: float, rpc_call) -> Dict[str, Any]:
+    """Handle channel_unfollow operation - unfollow/unsubscribe from a channel."""
+    channel_jid = parameters.get('channel_jid')
+    if not channel_jid:
+        raise ValueError("Channel JID is required")
+
+    data = await rpc_call('newsletter_unfollow', {'jid': channel_jid})
+
+    if isinstance(data, dict) and not data.get('success', True):
+        raise Exception(data.get('error', 'Failed to unfollow channel'))
+
+    return {
+        "success": True,
+        "node_id": node_id,
+        "node_type": "whatsappDb",
+        "result": {
+            "operation": "channel_unfollow",
+            "channel_jid": channel_jid,
+            "status": "unfollowed",
+            "timestamp": datetime.now().isoformat()
+        },
+        "execution_time": time.time() - start_time,
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+async def _handle_channel_create(node_id: str, parameters: Dict[str, Any], start_time: float, rpc_call) -> Dict[str, Any]:
+    """Handle channel_create operation - create a new newsletter channel."""
+    channel_name = parameters.get('channel_name')
+    if not channel_name:
+        raise ValueError("Channel name is required")
+
+    rpc_params: Dict[str, Any] = {'name': channel_name}
+    description = parameters.get('channel_description')
+    if description:
+        rpc_params['description'] = description
+
+    data = await rpc_call('newsletter_create', rpc_params)
+
+    if isinstance(data, dict) and not data.get('success', True):
+        raise Exception(data.get('error', 'Failed to create channel'))
+
+    result = data if not isinstance(data, dict) or 'result' not in data else data.get('result', data)
+
+    return {
+        "success": True,
+        "node_id": node_id,
+        "node_type": "whatsappDb",
+        "result": {
+            "operation": "channel_create",
+            **result,
             "timestamp": datetime.now().isoformat()
         },
         "execution_time": time.time() - start_time,

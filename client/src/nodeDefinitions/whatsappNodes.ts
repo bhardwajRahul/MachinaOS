@@ -114,10 +114,11 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         options: [
           { name: 'Self (Connected Phone)', value: 'self' },
           { name: 'Phone Number', value: 'phone' },
-          { name: 'Group', value: 'group' }
+          { name: 'Group', value: 'group' },
+          { name: 'Channel', value: 'channel' }
         ],
         default: 'self',
-        description: 'Send to self, individual, or group'
+        description: 'Send to self, individual, group, or channel (newsletter)'
       },
       {
         displayName: 'Phone Number',
@@ -143,6 +144,18 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
           show: { recipient_type: ['group'] }
         }
       },
+      {
+        displayName: 'Channel',
+        name: 'channel_jid',
+        type: 'string',
+        default: '',
+        required: true,
+        placeholder: '120363198765432101@newsletter',
+        description: 'Newsletter JID (use Load button to select). Admin/owner role required to send.',
+        displayOptions: {
+          show: { recipient_type: ['channel'] }
+        }
+      },
 
       // ===== MESSAGE TYPE =====
       {
@@ -160,7 +173,7 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
           { name: 'Contact', value: 'contact' }
         ],
         default: 'text',
-        description: 'Type of message to send'
+        description: 'Type of message to send. Channels only support: text, image, video, audio, document.'
       },
 
       // ===== TEXT MESSAGE =====
@@ -434,6 +447,7 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
           { name: 'From Any Contact (Non-Group)', value: 'any_contact' },
           { name: 'From Specific Contact', value: 'contact' },
           { name: 'From Specific Group', value: 'group' },
+          { name: 'From Channel (Newsletter)', value: 'channel' },
           { name: 'Contains Keywords', value: 'keywords' }
         ],
         default: 'all',
@@ -475,6 +489,18 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         description: 'Optional: Filter by sender phone number (use Load button to select from group members)'
       },
       {
+        displayName: 'Channel',
+        name: 'channel_jid',
+        type: 'string',
+        default: '',
+        required: true,
+        displayOptions: {
+          show: { filter: ['channel'] }
+        },
+        placeholder: '120363198765432101@newsletter',
+        description: 'Newsletter JID to receive messages from (use Load button to select)'
+      },
+      {
         displayName: 'Keywords',
         name: 'keywords',
         type: 'string',
@@ -495,7 +521,7 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         default: true,
         description: 'Do not trigger on messages sent by this device',
         displayOptions: {
-          show: { filter: ['all', 'any_contact', 'contact', 'group', 'keywords'] }
+          show: { filter: ['all', 'any_contact', 'contact', 'group', 'channel', 'keywords'] }
         }
       },
       {
@@ -581,6 +607,27 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
             console.error('Error loading group members:', error);
             return [{ name: 'Error loading members', value: '', description: 'Check WhatsApp connection' }];
           }
+        },
+
+        async getWhatsAppChannels(): Promise<Array<{name: string, value: string, description?: string}>> {
+          try {
+            const response = await wsRequest('whatsapp_newsletters') as { success: boolean; channels?: Array<{ jid: string; name: string; subscriber_count?: number; role?: string }> };
+
+            if (response.success && response.channels) {
+              if (response.channels.length === 0) {
+                return [{ name: 'No channels found', value: '', description: 'Follow some channels first' }];
+              }
+              return response.channels.map((ch) => ({
+                name: ch.name || ch.jid,
+                value: ch.jid,
+                description: ch.subscriber_count ? `${ch.subscriber_count} subscribers` : undefined
+              }));
+            }
+            return [{ name: 'No channels found', value: '', description: 'Connect WhatsApp first' }];
+          } catch (error) {
+            console.error('Error loading WhatsApp channels:', error);
+            return [{ name: 'Error loading channels', value: '', description: 'Check WhatsApp connection' }];
+          }
         }
       }
     }
@@ -629,7 +676,14 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
           { name: 'Get Group Info', value: 'get_group_info' },
           { name: 'Get Contact Info', value: 'get_contact_info' },
           { name: 'List Contacts', value: 'list_contacts' },
-          { name: 'Check Contacts', value: 'check_contacts' }
+          { name: 'Check Contacts', value: 'check_contacts' },
+          { name: 'List Channels', value: 'list_channels' },
+          { name: 'Get Channel Info', value: 'get_channel_info' },
+          { name: 'Channel Messages', value: 'channel_messages' },
+          { name: 'Channel Stats', value: 'channel_stats' },
+          { name: 'Follow Channel', value: 'channel_follow' },
+          { name: 'Unfollow Channel', value: 'channel_unfollow' },
+          { name: 'Create Channel', value: 'channel_create' }
         ],
         default: 'chat_history',
         description: 'Operation to perform'
@@ -789,6 +843,76 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         displayOptions: {
           show: { operation: ['check_contacts'] }
         }
+      },
+
+      // ===== CHANNEL (NEWSLETTER) PARAMETERS =====
+      {
+        displayName: 'Channel JID or Invite',
+        name: 'channel_jid',
+        type: 'string',
+        default: '',
+        required: true,
+        placeholder: '120363198765432101@newsletter or https://whatsapp.com/channel/...',
+        description: 'Newsletter JID or invite link (use Load button to select)',
+        displayOptions: {
+          show: { operation: ['get_channel_info', 'channel_messages', 'channel_stats', 'channel_follow', 'channel_unfollow'] }
+        }
+      },
+      {
+        displayName: 'Refresh Cache',
+        name: 'refresh',
+        type: 'boolean',
+        default: false,
+        description: 'Bypass 24h cache and fetch fresh data from WhatsApp servers',
+        displayOptions: {
+          show: { operation: ['list_channels', 'get_channel_info'] }
+        }
+      },
+      {
+        displayName: 'Message Count',
+        name: 'channel_count',
+        type: 'number',
+        default: 10,
+        typeOptions: { minValue: 1, maxValue: 100 },
+        description: 'Number of messages to retrieve',
+        displayOptions: {
+          show: { operation: ['channel_messages', 'channel_stats'] }
+        }
+      },
+      {
+        displayName: 'Before (Server ID)',
+        name: 'before_server_id',
+        type: 'number',
+        default: 0,
+        typeOptions: { minValue: 0 },
+        description: 'Pagination: get messages before this server ID (0 = latest)',
+        displayOptions: {
+          show: { operation: ['channel_messages'] }
+        }
+      },
+      {
+        displayName: 'Channel Name',
+        name: 'channel_name',
+        type: 'string',
+        default: '',
+        required: true,
+        placeholder: 'My Channel',
+        description: 'Name for the new channel',
+        displayOptions: {
+          show: { operation: ['channel_create'] }
+        }
+      },
+      {
+        displayName: 'Channel Description',
+        name: 'channel_description',
+        type: 'string',
+        default: '',
+        typeOptions: { rows: 3 },
+        placeholder: 'A channel about...',
+        description: 'Optional description for the new channel',
+        displayOptions: {
+          show: { operation: ['channel_create'] }
+        }
       }
     ],
     methods: {
@@ -812,6 +936,27 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
           } catch (error) {
             console.error('Error loading WhatsApp groups:', error);
             return [{ name: 'Error loading groups', value: '', description: 'Check WhatsApp connection' }];
+          }
+        },
+
+        async getWhatsAppChannels(): Promise<Array<{name: string, value: string, description?: string}>> {
+          try {
+            const response = await wsRequest('whatsapp_newsletters') as { success: boolean; channels?: Array<{ jid: string; name: string; subscriber_count?: number; role?: string }> };
+
+            if (response.success && response.channels) {
+              if (response.channels.length === 0) {
+                return [{ name: 'No channels found', value: '', description: 'Follow some channels first' }];
+              }
+              return response.channels.map((ch) => ({
+                name: ch.name || ch.jid,
+                value: ch.jid,
+                description: [ch.role, ch.subscriber_count ? `${ch.subscriber_count} subscribers` : ''].filter(Boolean).join(' - ') || undefined
+              }));
+            }
+            return [{ name: 'No channels found', value: '', description: 'Connect WhatsApp first' }];
+          } catch (error) {
+            console.error('Error loading WhatsApp channels:', error);
+            return [{ name: 'Error loading channels', value: '', description: 'Check WhatsApp connection' }];
           }
         }
       }

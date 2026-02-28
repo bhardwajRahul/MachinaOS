@@ -247,6 +247,15 @@ def build_whatsapp_filter(params: Dict) -> Callable[[Dict], bool]:
                 if sender_number not in sender_phone:
                     return False
 
+        if sender_filter == 'channel':
+            # Only accept messages from newsletter channels (chat_id ends with @newsletter)
+            if not msg_chat_id.endswith('@newsletter'):
+                return False
+            # If specific channel JID provided, match exactly
+            channel_jid = params.get('channel_jid', '')
+            if channel_jid and msg_chat_id != channel_jid:
+                return False
+
         if sender_filter == 'keywords':
             text = (m.get('text') or '').lower()
             if not any(kw in text for kw in keywords):
