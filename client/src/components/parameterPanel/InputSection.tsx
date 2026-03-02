@@ -249,7 +249,11 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                 // channel operations output
                 channels: [{ jid: 'string', name: 'string', subscriber_count: 'number' }],
                 channel_jid: 'string',
-                timestamp: 'string'
+                timestamp: 'string',
+                // channel_mute / channel_mark_viewed / follow / unfollow output
+                muted: 'boolean',
+                server_ids: 'string',
+                status: 'string'
               },
               webhook: {
                 method: 'string',

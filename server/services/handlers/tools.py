@@ -873,6 +873,23 @@ async def _execute_whatsapp_db(args: Dict[str, Any],
         if args.get('channel_description'):
             parameters['channel_description'] = args['channel_description']
 
+    elif operation == 'channel_mute':
+        channel_jid = args.get('channel_jid', '')
+        if not channel_jid:
+            return {"error": "channel_jid is required for channel_mute"}
+        parameters['channel_jid'] = channel_jid
+        parameters['mute'] = args.get('mute', True)
+
+    elif operation == 'channel_mark_viewed':
+        channel_jid = args.get('channel_jid', '')
+        if not channel_jid:
+            return {"error": "channel_jid is required for channel_mark_viewed"}
+        parameters['channel_jid'] = channel_jid
+        server_ids = args.get('server_ids', '')
+        if not server_ids:
+            return {"error": "server_ids is required for channel_mark_viewed"}
+        parameters['server_ids'] = server_ids
+
     else:
         return {"error": f"Unknown operation: {operation}"}
 

@@ -699,6 +699,182 @@ const SenderNumberSelector: React.FC<{
   );
 };
 
+// Channel JID Selector - with Load Channels button and dropdown
+const ChannelJidSelector: React.FC<{
+  value: string;
+  onChange: (value: string) => void;
+  onNameChange?: (name: string) => void;
+  storedName?: string;
+  placeholder?: string;
+  theme: ReturnType<typeof useAppTheme>;
+  isDragOver: boolean;
+  onDragOver: (e: React.DragEvent) => void;
+  onDragLeave: (e: React.DragEvent) => void;
+  onDrop: (e: React.DragEvent) => void;
+}> = ({ value, onChange, onNameChange, storedName, placeholder, theme, isDragOver, onDragOver, onDragLeave, onDrop }) => {
+  const [channels, setChannels] = useState<Array<{ jid: string; name: string; subscriber_count?: number; role?: string }>>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [localChannelName, setLocalChannelName] = useState<string | null>(null);
+  const selectedChannelName = storedName || localChannelName;
+  const { getWhatsAppChannels } = useWebSocket();
+
+  useEffect(() => {
+    if (storedName) setLocalChannelName(storedName);
+  }, [storedName]);
+
+  const handleLoadChannels = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const result = await getWhatsAppChannels();
+      if (result.success && result.channels.length > 0) {
+        setChannels(result.channels);
+        setShowDropdown(true);
+        if (value) {
+          const match = result.channels.find(c => c.jid === value);
+          if (match && match.name !== storedName) {
+            setLocalChannelName(match.name);
+            onNameChange?.(match.name);
+          }
+        }
+      } else if (result.error) {
+        setError(result.error);
+      } else {
+        setError('No channels found');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to load channels');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSelectChannel = (ch: { jid: string; name: string }) => {
+    onChange(ch.jid);
+    setLocalChannelName(ch.name);
+    onNameChange?.(ch.name);
+    setShowDropdown(false);
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    onChange(e.target.value);
+    setLocalChannelName(null);
+    onNameChange?.('');
+  };
+
+  const displayValue = selectedChannelName || value;
+  const isSelected = selectedChannelName !== null && value;
+  const isTemplate = value && value.includes('{{');
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <input
+          type="text"
+          value={displayValue}
+          onChange={handleInputChange}
+          placeholder={placeholder || '120363...@newsletter or https://whatsapp.com/channel/...'}
+          onDragOver={onDragOver}
+          onDragLeave={onDragLeave}
+          onDrop={onDrop}
+          style={{
+            flex: 1,
+            padding: '8px 12px',
+            border: isDragOver ? `2px solid ${theme.colors.focus}` : `1px solid ${theme.colors.border}`,
+            borderRadius: theme.borderRadius.md,
+            fontSize: theme.fontSize.base,
+            backgroundColor: isSelected ? theme.colors.backgroundAlt : (isDragOver ? theme.colors.focusRing : theme.colors.background),
+            color: isSelected ? theme.colors.success : (isTemplate ? theme.colors.templateVariable : theme.colors.text),
+            outline: 'none',
+            transition: 'all 0.2s ease',
+            fontFamily: isTemplate ? theme.fontFamily.mono : theme.fontFamily.sans,
+            fontWeight: isSelected ? theme.fontWeight.medium : theme.fontWeight.normal
+          }}
+          onFocus={(e) => e.target.style.borderColor = theme.colors.focus}
+          onBlur={(e) => e.target.style.borderColor = theme.colors.border}
+        />
+        <button
+          onClick={handleLoadChannels}
+          disabled={isLoading}
+          style={{
+            padding: '8px 12px',
+            border: `1px solid ${isLoading ? theme.colors.border : `${theme.colors.focus}40`}`,
+            borderRadius: theme.borderRadius.md,
+            backgroundColor: isLoading ? 'transparent' : `${theme.colors.focus}18`,
+            color: isLoading ? theme.colors.textMuted : theme.colors.focus,
+            cursor: isLoading ? 'wait' : 'pointer',
+            fontSize: theme.fontSize.sm,
+            fontWeight: theme.fontWeight.semibold,
+            fontFamily: theme.fontFamily.sans,
+            transition: 'all 0.2s ease',
+            whiteSpace: 'nowrap',
+            opacity: isLoading ? 0.7 : 1
+          }}
+          onMouseEnter={(e) => { if (!isLoading) e.currentTarget.style.backgroundColor = `${theme.colors.focus}30`; }}
+          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = isLoading ? 'transparent' : `${theme.colors.focus}18`; }}
+          title="Load WhatsApp channels"
+        >
+          {isLoading ? 'Loading...' : 'Load'}
+        </button>
+      </div>
+      {isSelected && (
+        <div style={{ fontSize: theme.fontSize.xs, color: theme.colors.textSecondary, marginTop: '4px', fontFamily: theme.fontFamily.mono }}>
+          {value}
+        </div>
+      )}
+      {error && (
+        <div style={{ fontSize: theme.fontSize.sm, color: theme.colors.error, marginTop: '4px', fontFamily: theme.fontFamily.sans }}>
+          {error}
+        </div>
+      )}
+      {showDropdown && channels.length > 0 && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, marginTop: '4px',
+          backgroundColor: theme.colors.background, border: `1px solid ${theme.colors.border}`,
+          borderRadius: theme.borderRadius.md, boxShadow: `0 4px 12px ${theme.colors.shadow}`,
+          maxHeight: '200px', overflowY: 'auto', zIndex: 1000
+        }}>
+          {channels.map((ch, i) => (
+            <button
+              key={ch.jid}
+              onClick={() => handleSelectChannel(ch)}
+              style={{
+                width: '100%', padding: '10px 12px', border: 'none', backgroundColor: 'transparent',
+                color: theme.colors.text, cursor: 'pointer', fontSize: theme.fontSize.sm,
+                fontFamily: theme.fontFamily.sans, textAlign: 'left',
+                borderBottom: i < channels.length - 1 ? `1px solid ${theme.colors.border}` : 'none'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.colors.backgroundAlt}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              <div style={{ fontWeight: theme.fontWeight.medium }}>{ch.name}</div>
+              <div style={{ fontSize: theme.fontSize.xs, color: theme.colors.textSecondary, marginTop: '2px', fontFamily: theme.fontFamily.mono }}>
+                {ch.jid}
+                {ch.subscriber_count != null && <span style={{ marginLeft: '8px' }}>({ch.subscriber_count} subscribers)</span>}
+              </div>
+            </button>
+          ))}
+          <button
+            onClick={() => setShowDropdown(false)}
+            style={{
+              width: '100%', padding: '8px 12px', border: 'none',
+              borderTop: `1px solid ${theme.colors.border}`, backgroundColor: theme.colors.backgroundAlt,
+              color: theme.colors.textSecondary, cursor: 'pointer', fontSize: theme.fontSize.sm,
+              fontFamily: theme.fontFamily.sans, textAlign: 'center'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.color = theme.colors.text}
+            onMouseLeave={(e) => e.currentTarget.style.color = theme.colors.textSecondary}
+          >
+            Close
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // Fixed Collection Renderer - n8n style fixed collection
 const FixedCollectionRenderer: React.FC<{
   parameter: any;
@@ -1364,6 +1540,25 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
               onChange={onChange}
               onNameChange={(name) => onParameterChange?.('group_name', name)}
               storedName={storedGroupName}
+              placeholder={parameter.placeholder}
+              theme={theme}
+              isDragOver={isDragOver}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            />
+          );
+        }
+
+        // Special case for channel_jid parameter - add Load Channels button
+        if (parameter.name === 'channel_jid') {
+          const storedChannelName = allParameters?.channel_display_name || '';
+          return (
+            <ChannelJidSelector
+              value={currentValue || ''}
+              onChange={onChange}
+              onNameChange={(name) => onParameterChange?.('channel_display_name', name)}
+              storedName={storedChannelName}
               placeholder={parameter.placeholder}
               theme={theme}
               isDragOver={isDragOver}

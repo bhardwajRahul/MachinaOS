@@ -318,6 +318,7 @@ interface WebSocketContextValue {
   startWhatsAppConnection: () => Promise<{ success: boolean; message?: string }>;
   restartWhatsAppConnection: () => Promise<{ success: boolean; message?: string }>;
   getWhatsAppGroups: () => Promise<{ success: boolean; groups: Array<{ jid: string; name: string; topic?: string; size?: number; is_community?: boolean }>; error?: string }>;
+  getWhatsAppChannels: () => Promise<{ success: boolean; channels: Array<{ jid: string; name: string; subscriber_count?: number; role?: string }>; error?: string }>;
   getWhatsAppGroupInfo: (groupId: string) => Promise<{ success: boolean; participants: Array<{ phone: string; name: string; jid: string; is_admin?: boolean }>; name?: string; error?: string }>;
   getWhatsAppRateLimitConfig: () => Promise<{ success: boolean; config?: RateLimitConfig; stats?: RateLimitStats; error?: string }>;
   setWhatsAppRateLimitConfig: (config: Partial<RateLimitConfig>) => Promise<{ success: boolean; config?: RateLimitConfig; error?: string }>;
@@ -1996,6 +1997,21 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, [sendRequest]);
 
+  const getWhatsAppChannelsAsync = useCallback(async (): Promise<{ success: boolean; channels: Array<{ jid: string; name: string; subscriber_count?: number; role?: string }>; error?: string }> => {
+    try {
+      const response = await sendRequest<any>('whatsapp_newsletters', {});
+      const channels = response.channels || response.result?.channels || [];
+      return {
+        success: response.success !== false,
+        channels,
+        error: response.error
+      };
+    } catch (error: any) {
+      console.error('[WebSocket] Failed to get WhatsApp channels:', error);
+      return { success: false, channels: [], error: error.message || 'Failed to get channels' };
+    }
+  }, [sendRequest]);
+
   const getWhatsAppGroupInfoAsync = useCallback(async (groupId: string): Promise<{ success: boolean; participants: Array<{ phone: string; name: string; jid: string; is_admin?: boolean }>; name?: string; error?: string }> => {
     try {
       const response = await sendRequest<any>('whatsapp_group_info', { group_id: groupId });
@@ -2251,6 +2267,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     startWhatsAppConnection: startWhatsAppConnectionAsync,
     restartWhatsAppConnection: restartWhatsAppConnectionAsync,
     getWhatsAppGroups: getWhatsAppGroupsAsync,
+    getWhatsAppChannels: getWhatsAppChannelsAsync,
     getWhatsAppGroupInfo: getWhatsAppGroupInfoAsync,
     getWhatsAppRateLimitConfig: getWhatsAppRateLimitConfigAsync,
     setWhatsAppRateLimitConfig: setWhatsAppRateLimitConfigAsync,

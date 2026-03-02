@@ -38,12 +38,14 @@ Query contacts, groups, channels, and chat history.
 | sender_phone | string | No | Filter by sender (when group_filter="contact") |
 | phones | string | For check_contacts | Comma-separated phone numbers |
 | participant_limit | int | No | Max participants (for get_group_info, 1-100) |
-| channel_jid | string | For channel ops | Newsletter JID (e.g., `120363198765432101@newsletter`) |
+| channel_jid | string | For channel ops | Newsletter JID or invite link URL (e.g., `120363198765432101@newsletter` or `https://whatsapp.com/channel/...`) |
 | refresh | boolean | No | Force refresh from server (for list_channels, get_channel_info) |
 | channel_count | int | No | Number of items to fetch (for channel_messages, channel_stats) |
 | before_server_id | int | No | Pagination cursor (for channel_messages) |
 | channel_name | string | For channel_create | Name of the new channel |
 | channel_description | string | No | Description (for channel_create) |
+| mute | boolean | For channel_mute | True to mute, false to unmute |
+| server_ids | string | For channel_mark_viewed | Comma-separated message server IDs to mark as viewed |
 
 ### Operations
 
@@ -62,6 +64,8 @@ Query contacts, groups, channels, and chat history.
 | `channel_follow` | Follow/subscribe to a channel | channel_jid |
 | `channel_unfollow` | Unfollow/unsubscribe from a channel | channel_jid |
 | `channel_create` | Create a new newsletter channel | channel_name |
+| `channel_mute` | Mute or unmute a channel | channel_jid, mute |
+| `channel_mark_viewed` | Mark channel messages as viewed | channel_jid, server_ids |
 
 ### Limits
 
@@ -74,6 +78,8 @@ Query contacts, groups, channels, and chat history.
 | list_channels | 20 | 50 |
 | channel_messages | 20 | 100 |
 | channel_stats | 10 | 100 |
+| channel_mute | - | - |
+| channel_mark_viewed | - | - |
 
 **Important:** Always use small limits and specific queries to avoid context overflow.
 
@@ -317,6 +323,41 @@ Create a new newsletter channel.
 }
 ```
 
+### channel_mute
+
+Mute or unmute a newsletter channel.
+
+```json
+{
+  "operation": "channel_mute",
+  "channel_jid": "120363198765432101@newsletter",
+  "mute": true
+}
+```
+
+### channel_mark_viewed
+
+Mark channel messages as viewed by server ID.
+
+```json
+{
+  "operation": "channel_mark_viewed",
+  "channel_jid": "120363198765432101@newsletter",
+  "server_ids": "100, 101, 102"
+}
+```
+
+### get_channel_info (with invite link)
+
+Get channel details using an invite link instead of JID.
+
+```json
+{
+  "operation": "get_channel_info",
+  "channel_jid": "https://whatsapp.com/channel/0029Va12345abcdef"
+}
+```
+
 ## Common Workflows
 
 ### Find and message someone by name
@@ -348,6 +389,8 @@ Create a new newsletter channel.
 3. **Limits**: Use small limits to avoid context overflow
 4. **Queries**: Be specific to narrow results
 5. **Pagination**: Use offset to page through chat_history
+6. **Channel JIDs**: JID format ending in `@newsletter`, or pass an invite link URL
+7. **Invite links**: `channel_jid` accepts both JIDs and `https://whatsapp.com/channel/...` URLs
 
 ## Error Responses
 

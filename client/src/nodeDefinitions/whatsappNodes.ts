@@ -683,7 +683,9 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
           { name: 'Channel Stats', value: 'channel_stats' },
           { name: 'Follow Channel', value: 'channel_follow' },
           { name: 'Unfollow Channel', value: 'channel_unfollow' },
-          { name: 'Create Channel', value: 'channel_create' }
+          { name: 'Create Channel', value: 'channel_create' },
+          { name: 'Mute/Unmute Channel', value: 'channel_mute' },
+          { name: 'Mark Channel Viewed', value: 'channel_mark_viewed' }
         ],
         default: 'chat_history',
         description: 'Operation to perform'
@@ -855,7 +857,7 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         placeholder: '120363198765432101@newsletter or https://whatsapp.com/channel/...',
         description: 'Newsletter JID or invite link (use Load button to select)',
         displayOptions: {
-          show: { operation: ['get_channel_info', 'channel_messages', 'channel_stats', 'channel_follow', 'channel_unfollow'] }
+          show: { operation: ['get_channel_info', 'channel_messages', 'channel_stats', 'channel_follow', 'channel_unfollow', 'channel_mute', 'channel_mark_viewed'] }
         }
       },
       {
@@ -913,7 +915,29 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         displayOptions: {
           show: { operation: ['channel_create'] }
         }
+      },
+      {
+        displayName: 'Mute',
+        name: 'mute',
+        type: 'boolean',
+        default: true,
+        description: 'True to mute the channel, false to unmute',
+        displayOptions: {
+          show: { operation: ['channel_mute'] }
+        }
+      },
+      {
+        displayName: 'Server IDs',
+        name: 'server_ids',
+        type: 'string',
+        default: '',
+        placeholder: '100, 101, 102',
+        description: 'Comma-separated message server IDs to mark as viewed',
+        displayOptions: {
+          show: { operation: ['channel_mark_viewed'] }
+        }
       }
+
     ],
     methods: {
       loadOptions: {
