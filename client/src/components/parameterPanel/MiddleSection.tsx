@@ -31,7 +31,8 @@ const AGENT_WITH_SKILLS_TYPES = [
   'payments_agent',
   'consumer_agent',
   'autonomous_agent',
-  'orchestrator_agent'
+  'orchestrator_agent',
+  'ai_employee'
 ];
 
 interface ConnectedSkill {

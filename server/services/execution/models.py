@@ -312,7 +312,7 @@ class ExecutionContext:
         Toolkit sub-nodes (nodes connected TO a toolkit like androidTool) are also
         excluded - they execute only when called via the toolkit's tool interface.
         """
-        from constants import CONFIG_NODE_TYPES, TOOLKIT_NODE_TYPES
+        from constants import CONFIG_NODE_TYPES, TOOLKIT_NODE_TYPES, AI_AGENT_TYPES
 
         execution_id = str(uuid.uuid4())
         ctx = cls(
@@ -327,8 +327,8 @@ class ExecutionContext:
         # These should only execute when called via the toolkit, not as workflow nodes
         toolkit_node_ids = {n.get("id") for n in (nodes or []) if n.get("type") in TOOLKIT_NODE_TYPES}
 
-        # Find AI Agent nodes (both aiAgent and chatAgent have config handles)
-        ai_agent_node_ids = {n.get("id") for n in (nodes or []) if n.get("type") in ('aiAgent', 'chatAgent')}
+        # Find AI Agent nodes (all agent types have config handles)
+        ai_agent_node_ids = {n.get("id") for n in (nodes or []) if n.get("type") in AI_AGENT_TYPES}
 
         subnode_ids: set = set()
         for edge in (edges or []):
@@ -340,10 +340,10 @@ class ExecutionContext:
             if target in toolkit_node_ids and source:
                 subnode_ids.add(source)
 
-            # Nodes connected to AI Agent/Zeenie config handles are sub-nodes
-            # These handles: input-memory, input-tools, input-skill
+            # Nodes connected to AI Agent config handles are sub-nodes
+            # These handles: input-memory, input-tools, input-skill, input-teammates
             if target in ai_agent_node_ids and source and target_handle:
-                if target_handle in ('input-memory', 'input-tools', 'input-skill'):
+                if target_handle in ('input-memory', 'input-tools', 'input-skill', 'input-teammates'):
                     subnode_ids.add(source)
 
         # Initialize node executions for all nodes (excluding config nodes and sub-nodes)

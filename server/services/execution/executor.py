@@ -888,7 +888,7 @@ class WorkflowExecutor:
         Returns:
             List of layers, where each layer is a list of node IDs
         """
-        from constants import CONFIG_NODE_TYPES, TOOLKIT_NODE_TYPES
+        from constants import CONFIG_NODE_TYPES, TOOLKIT_NODE_TYPES, AI_AGENT_TYPES
 
         # Build node type lookup for trigger detection
         node_types: Dict[str, str] = {
@@ -898,8 +898,8 @@ class WorkflowExecutor:
         # Find toolkit sub-nodes (nodes that connect TO a toolkit)
         toolkit_node_ids = {n.get("id") for n in nodes if n.get("type") in TOOLKIT_NODE_TYPES}
 
-        # Find AI Agent nodes (both aiAgent and chatAgent have config handles)
-        ai_agent_node_ids = {n.get("id") for n in nodes if n.get("type") in ('aiAgent', 'chatAgent')}
+        # Find AI Agent nodes (all agent types have config handles)
+        ai_agent_node_ids = {n.get("id") for n in nodes if n.get("type") in AI_AGENT_TYPES}
 
         subnode_ids: set = set()
         for edge in edges:
@@ -911,10 +911,10 @@ class WorkflowExecutor:
             if target in toolkit_node_ids and source:
                 subnode_ids.add(source)
 
-            # Nodes connected to AI Agent/Zeenie config handles are sub-nodes
-            # These handles: input-memory, input-tools, input-skill
+            # Nodes connected to AI Agent config handles are sub-nodes
+            # These handles: input-memory, input-tools, input-skill, input-teammates
             if target in ai_agent_node_ids and source and target_handle:
-                if target_handle in ('input-memory', 'input-tools', 'input-skill'):
+                if target_handle in ('input-memory', 'input-tools', 'input-skill', 'input-teammates'):
                     subnode_ids.add(source)
 
         # Filter out config nodes and sub-nodes from execution
