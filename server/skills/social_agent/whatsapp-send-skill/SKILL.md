@@ -175,9 +175,9 @@ Send messages to individual contacts, groups, or channels.
 2. **Group IDs**: Use JID format ending in `@g.us` (e.g., `123456789@g.us`)
 3. **Channel JIDs**: Use JID format ending in `@newsletter` (e.g., `120363198765432101@newsletter`)
 4. **Media URLs**: Must be publicly accessible URLs (https://)
-4. **vCard format**: Use vCard 3.0 specification for contact cards
-5. **Message length**: Text messages can be up to 4096 characters
-6. **Media size**: Check WhatsApp limits for media file sizes
+5. **vCard format**: Use vCard 3.0 specification for contact cards
+6. **Message length**: Text messages can be up to 4096 characters
+7. **Media size**: Check WhatsApp limits for media file sizes
 
 ## Common Use Cases
 

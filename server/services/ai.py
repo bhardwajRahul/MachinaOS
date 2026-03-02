@@ -2861,10 +2861,12 @@ class AIService:
                 - channel_follow: Follow/subscribe to a channel (requires channel_jid)
                 - channel_unfollow: Unfollow/unsubscribe from a channel (requires channel_jid)
                 - channel_create: Create a new newsletter channel (requires channel_name)
+                - channel_mute: Mute/unmute a channel (requires channel_jid, mute)
+                - channel_mark_viewed: Mark channel messages as viewed (requires channel_jid, server_ids)
                 """
                 operation: str = Field(
                     default="chat_history",
-                    description="Operation: 'chat_history', 'search_groups', 'get_group_info', 'get_contact_info', 'list_contacts', 'check_contacts', 'list_channels', 'get_channel_info', 'channel_messages', 'channel_stats', 'channel_follow', 'channel_unfollow', 'channel_create'"
+                    description="Operation: 'chat_history', 'search_groups', 'get_group_info', 'get_contact_info', 'list_contacts', 'check_contacts', 'list_channels', 'get_channel_info', 'channel_messages', 'channel_stats', 'channel_follow', 'channel_unfollow', 'channel_create', 'channel_mute', 'channel_mark_viewed'"
                 )
                 # For chat_history
                 chat_type: Optional[str] = Field(
@@ -2914,7 +2916,7 @@ class AIService:
                 # Channel (newsletter) operations
                 channel_jid: Optional[str] = Field(
                     default=None,
-                    description="Newsletter JID (e.g., 120363198765432101@newsletter). Required for get_channel_info, channel_messages, channel_stats, channel_follow, channel_unfollow."
+                    description="Newsletter JID (e.g., 120363198765432101@newsletter) or invite link (https://whatsapp.com/channel/...). Required for get_channel_info, channel_messages, channel_stats, channel_follow, channel_unfollow, channel_mute, channel_mark_viewed."
                 )
                 refresh: Optional[bool] = Field(
                     default=None,
@@ -2935,6 +2937,14 @@ class AIService:
                 channel_description: Optional[str] = Field(
                     default=None,
                     description="For channel_create: description of the new channel."
+                )
+                mute: Optional[bool] = Field(
+                    default=None,
+                    description="For channel_mute: True to mute, False to unmute."
+                )
+                server_ids: Optional[str] = Field(
+                    default=None,
+                    description="For channel_mark_viewed: comma-separated message server IDs to mark as viewed (e.g., '100, 101, 102')."
                 )
 
             return WhatsAppDbSchema

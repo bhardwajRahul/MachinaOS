@@ -8,6 +8,48 @@ from core.logging import get_logger
 logger = get_logger(__name__)
 
 
+def _is_invite_link(value: str) -> bool:
+    """Check if a channel identifier is an invite link URL."""
+    return value.strip().startswith('http://') or value.strip().startswith('https://')
+
+
+def _resolve_channel_identifier(value: str) -> Dict[str, str]:
+    """Route a channel identifier to the correct RPC parameter key.
+
+    For RPC methods that accept both 'jid' and 'invite' params
+    (newsletter_info, newsletter_stats).
+    """
+    if not value:
+        return {}
+    value = value.strip()
+    if _is_invite_link(value):
+        return {'invite': value}
+    return {'jid': value}
+
+
+async def _resolve_to_jid(value: str, rpc_call) -> str:
+    """Resolve a channel identifier to a JID string.
+
+    If the value is an invite link, calls newsletter_info to look up the JID.
+    For RPC methods that only accept 'jid' (newsletter_messages,
+    newsletter_follow, newsletter_unfollow, newsletter_mute,
+    newsletter_mark_viewed).
+    """
+    if not value:
+        raise ValueError("Channel JID is required")
+    value = value.strip()
+    if not _is_invite_link(value):
+        return value
+    # Resolve invite link to JID via newsletter_info
+    data = await rpc_call('newsletter_info', {'invite': value})
+    if isinstance(data, dict):
+        result = data.get('result', data)
+        jid = result.get('jid') or result.get('id')
+        if jid:
+            return jid
+    raise ValueError(f"Could not resolve invite link to channel JID: {value}")
+
+
 async def handle_whatsapp_send(
     node_id: str,
     node_type: str,
@@ -150,6 +192,14 @@ async def handle_whatsapp_db(
     - channel_follow: Follow/subscribe to a channel
     - channel_unfollow: Unfollow/unsubscribe from a channel
     - channel_create: Create a new newsletter channel
+    - channel_mute: Mute/unmute a newsletter channel
+    - channel_mark_viewed: Mark channel messages as viewed
+
+    Channel operations accept both JIDs (120363...@newsletter) and
+    invite links (https://whatsapp.com/channel/...). Methods that support
+    both params directly (newsletter_info, newsletter_stats) use
+    _resolve_channel_identifier(). Other methods use _resolve_to_jid()
+    which resolves invite links to JIDs via newsletter_info first.
 
     Args:
         node_id: The node ID
@@ -195,6 +245,10 @@ async def handle_whatsapp_db(
             return await _handle_channel_unfollow(node_id, parameters, start_time, whatsapp_rpc_call)
         elif operation == 'channel_create':
             return await _handle_channel_create(node_id, parameters, start_time, whatsapp_rpc_call)
+        elif operation == 'channel_mute':
+            return await _handle_channel_mute(node_id, parameters, start_time, whatsapp_rpc_call)
+        elif operation == 'channel_mark_viewed':
+            return await _handle_channel_mark_viewed(node_id, parameters, start_time, whatsapp_rpc_call)
         else:
             raise ValueError(f"Unknown operation: {operation}")
 
@@ -505,7 +559,7 @@ async def _handle_get_channel_info(node_id: str, parameters: Dict[str, Any], sta
     if not channel_jid:
         raise ValueError("Channel JID is required")
 
-    rpc_params: Dict[str, Any] = {'jid': channel_jid}
+    rpc_params: Dict[str, Any] = _resolve_channel_identifier(channel_jid)
     if parameters.get('refresh'):
         rpc_params['refresh'] = True
 
@@ -533,15 +587,14 @@ async def _handle_get_channel_info(node_id: str, parameters: Dict[str, Any], sta
 async def _handle_channel_messages(node_id: str, parameters: Dict[str, Any], start_time: float, rpc_call) -> Dict[str, Any]:
     """Handle channel_messages operation - get channel message history."""
     channel_jid = parameters.get('channel_jid')
-    if not channel_jid:
-        raise ValueError("Channel JID is required")
+    jid = await _resolve_to_jid(channel_jid, rpc_call)
 
     count = parameters.get('channel_count', 20)
-    rpc_params: Dict[str, Any] = {'jid': channel_jid, 'count': count}
+    rpc_params: Dict[str, Any] = {'jid': jid, 'count': count}
 
     before_server_id = parameters.get('before_server_id')
     if before_server_id:
-        rpc_params['before_server_id'] = int(before_server_id)
+        rpc_params['before'] = int(before_server_id)
 
     data = await rpc_call('newsletter_messages', rpc_params)
 
@@ -573,7 +626,7 @@ async def _handle_channel_stats(node_id: str, parameters: Dict[str, Any], start_
         raise ValueError("Channel JID is required")
 
     count = parameters.get('channel_count', 10)
-    rpc_params: Dict[str, Any] = {'jid': channel_jid, 'count': count}
+    rpc_params: Dict[str, Any] = {**_resolve_channel_identifier(channel_jid), 'count': count}
 
     data = await rpc_call('newsletter_stats', rpc_params)
 
@@ -600,10 +653,9 @@ async def _handle_channel_stats(node_id: str, parameters: Dict[str, Any], start_
 async def _handle_channel_follow(node_id: str, parameters: Dict[str, Any], start_time: float, rpc_call) -> Dict[str, Any]:
     """Handle channel_follow operation - follow/subscribe to a channel."""
     channel_jid = parameters.get('channel_jid')
-    if not channel_jid:
-        raise ValueError("Channel JID is required")
+    jid = await _resolve_to_jid(channel_jid, rpc_call)
 
-    data = await rpc_call('newsletter_follow', {'jid': channel_jid})
+    data = await rpc_call('newsletter_follow', {'jid': jid})
 
     if isinstance(data, dict) and not data.get('success', True):
         raise Exception(data.get('error', 'Failed to follow channel'))
@@ -626,10 +678,9 @@ async def _handle_channel_follow(node_id: str, parameters: Dict[str, Any], start
 async def _handle_channel_unfollow(node_id: str, parameters: Dict[str, Any], start_time: float, rpc_call) -> Dict[str, Any]:
     """Handle channel_unfollow operation - unfollow/unsubscribe from a channel."""
     channel_jid = parameters.get('channel_jid')
-    if not channel_jid:
-        raise ValueError("Channel JID is required")
+    jid = await _resolve_to_jid(channel_jid, rpc_call)
 
-    data = await rpc_call('newsletter_unfollow', {'jid': channel_jid})
+    data = await rpc_call('newsletter_unfollow', {'jid': jid})
 
     if isinstance(data, dict) and not data.get('success', True):
         raise Exception(data.get('error', 'Failed to unfollow channel'))
@@ -674,6 +725,71 @@ async def _handle_channel_create(node_id: str, parameters: Dict[str, Any], start
         "result": {
             "operation": "channel_create",
             **result,
+            "timestamp": datetime.now().isoformat()
+        },
+        "execution_time": time.time() - start_time,
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+async def _handle_channel_mute(node_id: str, parameters: Dict[str, Any], start_time: float, rpc_call) -> Dict[str, Any]:
+    """Handle channel_mute operation - mute/unmute a newsletter channel."""
+    channel_jid = parameters.get('channel_jid')
+    jid = await _resolve_to_jid(channel_jid, rpc_call)
+
+    mute = parameters.get('mute', True)
+    rpc_params = {'jid': jid, 'mute': bool(mute)}
+
+    data = await rpc_call('newsletter_mute', rpc_params)
+
+    if isinstance(data, dict) and not data.get('success', True):
+        raise Exception(data.get('error', 'Failed to mute/unmute channel'))
+
+    return {
+        "success": True,
+        "node_id": node_id,
+        "node_type": "whatsappDb",
+        "result": {
+            "operation": "channel_mute",
+            "channel_jid": channel_jid,
+            "muted": mute,
+            "status": "muted" if mute else "unmuted",
+            "timestamp": datetime.now().isoformat()
+        },
+        "execution_time": time.time() - start_time,
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+async def _handle_channel_mark_viewed(node_id: str, parameters: Dict[str, Any], start_time: float, rpc_call) -> Dict[str, Any]:
+    """Handle channel_mark_viewed operation - mark channel messages as viewed."""
+    channel_jid = parameters.get('channel_jid')
+    jid = await _resolve_to_jid(channel_jid, rpc_call)
+
+    server_ids_raw = parameters.get('server_ids', '')
+    if not server_ids_raw:
+        raise ValueError("server_ids is required (comma-separated message IDs)")
+
+    server_ids = [int(sid.strip()) for sid in str(server_ids_raw).split(',') if sid.strip()]
+    if not server_ids:
+        raise ValueError("At least one server_id is required")
+
+    rpc_params = {'jid': jid, 'server_ids': server_ids}
+
+    data = await rpc_call('newsletter_mark_viewed', rpc_params)
+
+    if isinstance(data, dict) and not data.get('success', True):
+        raise Exception(data.get('error', 'Failed to mark channel as viewed'))
+
+    return {
+        "success": True,
+        "node_id": node_id,
+        "node_type": "whatsappDb",
+        "result": {
+            "operation": "channel_mark_viewed",
+            "channel_jid": channel_jid,
+            "server_ids": ','.join(str(s) for s in server_ids),
+            "status": "marked_viewed",
             "timestamp": datetime.now().isoformat()
         },
         "execution_time": time.time() - start_time,
