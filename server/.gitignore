@@ -11,3 +11,6 @@ data/*.db*
 .env.local
 .env.development
 .env.production
+
+# Crawlee runtime storage (request queues, key-value stores, datasets)
+storage/

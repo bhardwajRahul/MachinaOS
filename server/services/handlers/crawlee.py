@@ -187,18 +187,20 @@ async def _run_beautifulsoup(
     """Run BeautifulSoupCrawler and collect results into pages list."""
     from crawlee import ConcurrencySettings
     from crawlee.crawlers import BeautifulSoupCrawler, BeautifulSoupCrawlingContext
+    from crawlee.storage_clients import MemoryStorageClient
 
-    crawler_kwargs: Dict[str, Any] = {
-        'max_requests_per_crawl': max_pages,
-        'max_crawl_depth': max_depth if mode == 'crawl' else 0,
-        'request_handler_timeout': timedelta(seconds=timeout_secs),
-        'concurrency_settings': ConcurrencySettings(max_concurrency=max_concurrency),
-        'configure_logging': False,
-    }
-    if proxy_config:
-        crawler_kwargs['proxy_configuration'] = proxy_config
-
-    crawler = BeautifulSoupCrawler(**crawler_kwargs)
+    crawler = BeautifulSoupCrawler(
+        max_requests_per_crawl=max_pages,
+        max_crawl_depth=max_depth if mode == 'crawl' else 0,
+        request_handler_timeout=timedelta(seconds=timeout_secs),
+        concurrency_settings=ConcurrencySettings(
+            max_concurrency=max_concurrency,
+            desired_concurrency=min(max_concurrency, 10),
+        ),
+        storage_client=MemoryStorageClient(),
+        proxy_configuration=proxy_config,
+        configure_logging=False,
+    )
 
     link_selector = parameters.get('linkSelector', '') or 'a[href]'
     url_pattern = parameters.get('urlPattern', '')
@@ -251,25 +253,27 @@ async def _run_playwright(
     """Run PlaywrightCrawler and collect results into pages list."""
     from crawlee import ConcurrencySettings
     from crawlee.crawlers import PlaywrightCrawler, PlaywrightCrawlingContext
+    from crawlee.storage_clients import MemoryStorageClient
 
     browser_type = parameters.get('browserType', 'chromium')
     wait_for_selector = parameters.get('waitForSelector', '')
     wait_timeout = parameters.get('waitTimeout', 30000)
     take_screenshot = parameters.get('screenshot', False)
 
-    crawler_kwargs: Dict[str, Any] = {
-        'max_requests_per_crawl': max_pages,
-        'max_crawl_depth': max_depth if mode == 'crawl' else 0,
-        'request_handler_timeout': timedelta(seconds=timeout_secs),
-        'concurrency_settings': ConcurrencySettings(max_concurrency=max_concurrency),
-        'browser_type': browser_type,
-        'headless': True,
-        'configure_logging': False,
-    }
-    if proxy_config:
-        crawler_kwargs['proxy_configuration'] = proxy_config
-
-    crawler = PlaywrightCrawler(**crawler_kwargs)
+    crawler = PlaywrightCrawler(
+        browser_type=browser_type,
+        headless=True,
+        max_requests_per_crawl=max_pages,
+        max_crawl_depth=max_depth if mode == 'crawl' else 0,
+        request_handler_timeout=timedelta(seconds=timeout_secs),
+        concurrency_settings=ConcurrencySettings(
+            max_concurrency=max_concurrency,
+            desired_concurrency=min(max_concurrency, 10),
+        ),
+        storage_client=MemoryStorageClient(),
+        proxy_configuration=proxy_config,
+        configure_logging=False,
+    )
 
     link_selector = parameters.get('linkSelector', '') or 'a[href]'
     url_pattern = parameters.get('urlPattern', '')
