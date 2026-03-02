@@ -34,7 +34,14 @@ const server = createServer((req, res) => {
   // Remove query string
   url = url.split('?')[0];
 
-  const filePath = join(DIST_DIR, url);
+  const filePath = resolve(DIST_DIR, '.' + url);
+
+  // Prevent path traversal outside DIST_DIR
+  if (!filePath.startsWith(DIST_DIR)) {
+    res.writeHead(403);
+    res.end('Forbidden');
+    return;
+  }
 
   readFile(filePath, (err, content) => {
     if (err) {

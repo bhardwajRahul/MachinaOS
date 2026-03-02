@@ -121,8 +121,10 @@ def cmd_kill_machina(root_dir, exclude_script=None):
                 continue
             if proc.pid == my_pid:
                 continue
-            proc.kill()
-            killed.append({"pid": proc.pid, "name": name})
+            # Graceful termination first, then force kill after timeout
+            result = kill_pid(proc.pid, graceful_timeout=2)
+            if result["killed"]:
+                killed.append({"pid": proc.pid, "name": name})
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             pass
 

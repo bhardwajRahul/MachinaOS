@@ -278,7 +278,15 @@ main() {
   echo ""
 
   # Install machinaos from npm
-  npm install -g machinaos
+  # On Linux/WSL without nvm, global npm install needs sudo unless prefix is user-writable
+  if npm install -g machinaos 2>/dev/null; then
+    : # Installed successfully
+  elif command -v sudo &> /dev/null; then
+    info "Retrying with sudo..."
+    sudo npm install -g machinaos
+  else
+    error_exit "npm install -g failed. Try: sudo npm install -g machinaos"
+  fi
 
   echo ""
   echo -e "${GREEN}============================================${NC}"
@@ -290,6 +298,9 @@ main() {
   echo ""
   echo "  Open in browser:"
   echo "    http://localhost:3000"
+  echo ""
+  echo "  Optional: Enable JS-rendered web scraping:"
+  echo "    playwright install chromium"
   echo ""
 }
 

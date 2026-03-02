@@ -31,6 +31,7 @@ services:
       - ./server:/app
       - backend-data:/app/data
       - credentials-data:/app/credentials  # Encrypted credentials database (separate volume)
+      - /app/nodejs/node_modules  # Preserve container-built node_modules (Linux binaries, not Windows)
     networks:
       - app-network
     restart: unless-stopped

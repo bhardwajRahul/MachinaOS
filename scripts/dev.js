@@ -100,7 +100,8 @@ async function main() {
   const readySet = new Set();
   const totalExpected = readyPatterns.length;
 
-  const proc = spawn('npx', ['concurrently', '--raw', '--kill-others', ...services], {
+  // No --kill-others: uvicorn hot-reloads (exit code 1) would cascade-kill frontend
+  const proc = spawn('npx', ['concurrently', '--raw', ...services], {
     cwd: ROOT,
     stdio: ['inherit', 'pipe', 'pipe'],
     shell: true,

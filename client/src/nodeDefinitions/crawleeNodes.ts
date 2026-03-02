@@ -45,7 +45,7 @@ export const crawleeNodes: Record<string, INodeTypeDescription> = {
         displayName: 'Tool Name',
         name: 'toolName',
         type: 'string',
-        default: 'web_scraper',
+        default: 'web_reader',
         description: 'Name of this tool when used by AI Agent',
       },
       {
@@ -53,7 +53,7 @@ export const crawleeNodes: Record<string, INodeTypeDescription> = {
         name: 'toolDescription',
         type: 'string',
         default:
-          'Scrape web pages to extract text content, links, and structured data. Supports static HTML and JavaScript-rendered pages.',
+          'Read and extract content from web pages. Fetches page text, links, and data. You MUST use this tool when asked to read or fetch any URL.',
         description: 'Description shown to AI Agent',
       },
 

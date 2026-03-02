@@ -71,7 +71,12 @@ export function loadEnvConfig() {
     for (const line of readFileSync(envPath, 'utf-8').split('\n')) {
       const match = line.match(/^([^#=]+)=(.*)$/);
       if (match) {
-        env[match[1].trim()] = match[2].trim().replace(/^["']|["']$/g, '');
+        let value = match[2].trim();
+        // Strip inline comments (but not inside quoted values)
+        if (!value.startsWith('"') && !value.startsWith("'")) {
+          value = value.replace(/\s+#.*$/, '');
+        }
+        env[match[1].trim()] = value.replace(/^["']|["']$/g, '');
       }
     }
   }
@@ -219,7 +224,33 @@ function killPortNative(port) {
     }
   } catch {}
 
-  return { killed, portFree: killed.length > 0 || true };
+  // Re-check if the port is actually free after killing
+  if (killed.length > 0) {
+    try {
+      let stillInUse = false;
+      if (isWindows) {
+        const recheck = execSync('netstat -ano', { encoding: 'utf-8', timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] });
+        const portStr = `:${port}`;
+        for (const line of recheck.split('\n')) {
+          if (line.includes(portStr) && line.includes('LISTENING')) {
+            const parts = line.trim().split(/\s+/);
+            if (parts[1]?.endsWith(portStr)) { stillInUse = true; break; }
+          }
+        }
+      } else {
+        try {
+          execSync(`lsof -ti :${port}`, { encoding: 'utf-8', timeout: 3000, stdio: ['pipe', 'pipe', 'pipe'] });
+          stillInUse = true;
+        } catch {
+          stillInUse = false; // lsof exits non-zero when no process found
+        }
+      }
+      return { killed, portFree: !stillInUse };
+    } catch {
+      return { killed, portFree: true }; // Assume freed if verification fails
+    }
+  }
+  return { killed, portFree: true }; // No processes found = port was already free
 }
 
 /**

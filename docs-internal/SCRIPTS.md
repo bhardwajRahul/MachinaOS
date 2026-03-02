@@ -28,7 +28,7 @@ Open http://localhost:3000
 ### Dependency Checks
 
 The `start` and `build` commands verify these dependencies before running:
-- Node.js 18+
+- Node.js 22+
 - Python 3.12+
 - uv (Python package manager)
 

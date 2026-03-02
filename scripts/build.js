@@ -89,11 +89,12 @@ const npmVersion = getVersion('npm --version');
 console.log(`  npm: ${npmVersion}`);
 
 // Python (required, user must install)
+// Check python3 first to avoid picking up Python 2.x on Linux/macOS/WSL
 let pyCmd = null;
-if (runSilent('python --version')) {
-  pyCmd = 'python';
-} else if (runSilent('python3 --version')) {
+if (runSilent('python3 --version')) {
   pyCmd = 'python3';
+} else if (runSilent('python --version')) {
+  pyCmd = 'python';
 }
 
 if (pyCmd) {
@@ -143,32 +144,44 @@ try {
   const templatePath = resolve(ROOT, '.env.template');
   if (!existsSync(envPath) && existsSync(templatePath)) {
     copyFileSync(templatePath, envPath);
-    console.log('[0/6] Created .env from template');
+    console.log('[0/5] Created .env from template');
   }
 
   // Step 1: Install root + client dependencies (workspaces handles both)
   if (!isPostInstall) {
-    console.log('[1/4] Installing dependencies...');
+    console.log('[1/5] Installing dependencies...');
     npmInstall(ROOT);
   } else {
-    console.log('[1/4] Dependencies already installed by npm');
+    console.log('[1/5] Dependencies already installed by npm');
   }
 
   // Step 2: Build client
-  console.log('[2/4] Building client...');
+  console.log('[2/5] Building client...');
   run('npm run build', resolve(ROOT, 'client'));
 
   // Step 3: Install Python dependencies
-  console.log('[3/4] Installing Python dependencies...');
+  console.log('[3/5] Installing Python dependencies...');
   const serverDir = resolve(ROOT, 'server');
   if (!existsSync(resolve(serverDir, '.venv'))) {
     run('uv venv', serverDir);
   }
   run('uv sync', serverDir);
 
-  // Step 4: Verify WhatsApp RPC package
-  console.log('[4/4] Verifying WhatsApp RPC...');
-  run('whatsapp-rpc status', ROOT);
+  // Step 4: Install Playwright browser for web scraping (non-fatal)
+  console.log('[4/5] Installing Playwright browser...');
+  try {
+    run('playwright install chromium', serverDir);
+  } catch {
+    console.log('  Warning: Playwright browser install failed. JS-rendered web scraping will be unavailable.');
+  }
+
+  // Step 5: Verify WhatsApp RPC package (non-fatal)
+  console.log('[5/5] Verifying WhatsApp RPC...');
+  try {
+    run('whatsapp-rpc status', ROOT);
+  } catch {
+    console.log('  Warning: whatsapp-rpc not available. Use --skip-whatsapp when starting.');
+  }
 
   console.log('\nBuild complete.');
 

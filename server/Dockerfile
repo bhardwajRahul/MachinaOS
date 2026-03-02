@@ -18,6 +18,9 @@ COPY pyproject.toml .
 # Install Python dependencies using uv
 RUN uv pip install --system -e .
 
+# Install Playwright browser (chromium) and its system dependencies
+RUN playwright install --with-deps chromium
+
 # Copy application code
 COPY . .
 

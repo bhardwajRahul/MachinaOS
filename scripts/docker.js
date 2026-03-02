@@ -4,7 +4,7 @@
  * Usage: node scripts/docker.js <command> [args...]
  * Commands: up, down, build, logs, restart
  */
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import {
   ROOT,
   loadEnvConfig,
@@ -53,10 +53,21 @@ if (command === 'logs') {
 // Add any additional args
 composeArgs.push(...args);
 
-console.log(`[Docker] Running: docker-compose ${composeArgs.join(' ')}`);
+// Detect docker compose v2 (docker compose) vs v1 (docker-compose)
+let useV2 = false;
+try {
+  execSync('docker compose version', { stdio: 'pipe', timeout: 5000 });
+  useV2 = true;
+} catch {
+  // Fall back to docker-compose v1
+}
 
-// Run docker-compose
-const proc = spawn('docker-compose', composeArgs, {
+const composeCmd = useV2 ? 'docker' : 'docker-compose';
+const composeFinalArgs = useV2 ? ['compose', ...composeArgs] : composeArgs;
+
+console.log(`[Docker] Running: ${composeCmd} ${composeFinalArgs.join(' ')}`);
+
+const proc = spawn(composeCmd, composeFinalArgs, {
   cwd: ROOT,
   stdio: 'inherit',
   shell: true

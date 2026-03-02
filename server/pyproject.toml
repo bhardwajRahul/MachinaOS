@@ -67,7 +67,7 @@ dependencies = [
     "apify-client>=1.8.0",
 
     # Crawlee Web Scraping
-    "crawlee[beautifulsoup]>=1.4.0",
+    "crawlee[beautifulsoup,playwright]>=1.4.0",
     "html2text>=2024.2.26",
 
     # Telegram Bot API

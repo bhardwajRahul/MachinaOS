@@ -17,7 +17,7 @@
  *   --memory=LIMIT   Memory limit (default: 2G, Linux only)
  */
 import { execSync, spawnSync } from 'child_process';
-import { existsSync, writeFileSync, mkdirSync, unlinkSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { homedir } from 'os';
@@ -115,7 +115,20 @@ function windowsInstall() {
   // Install service
   run(`nssm install ${SERVICE_NAME} "${pythonExe}" -m uvicorn main:app --host 0.0.0.0 --port 3010 --log-level warning`);
   run(`nssm set ${SERVICE_NAME} AppDirectory "${serverDir}"`);
-  run(`nssm set ${SERVICE_NAME} AppEnvironmentExtra "PYTHONPATH=${serverDir}"`);
+  // Load .env variables for the service
+  const envFile = resolve(installDir, '.env');
+  let envExtra = `PYTHONPATH=${serverDir} PYTHONUTF8=1`;
+  if (existsSync(envFile)) {
+    for (const line of readFileSync(envFile, 'utf-8').split('\n')) {
+      const match = line.match(/^([^#=]+)=(.*)$/);
+      if (match) {
+        const key = match[1].trim();
+        const val = match[2].trim().replace(/^["']|["']$/g, '');
+        if (key && val) envExtra += ` ${key}=${val}`;
+      }
+    }
+  }
+  run(`nssm set ${SERVICE_NAME} AppEnvironmentExtra "${envExtra}"`);
   run(`nssm set ${SERVICE_NAME} Start SERVICE_AUTO_START`);
   run(`nssm set ${SERVICE_NAME} AppStdout "${logsDir}\\service.log"`);
   run(`nssm set ${SERVICE_NAME} AppStderr "${logsDir}\\service.log"`);
@@ -169,7 +182,10 @@ After=network.target
 Type=simple
 User=${serviceUser}
 WorkingDirectory=${serverDir}
-EnvironmentFile=${installDir}/.env
+EnvironmentFile=-${installDir}/.env
+Environment=PYTHONPATH=${serverDir}
+Environment=PYTHONUTF8=1
+Environment=PATH=${venvPath}/bin:/usr/local/bin:/usr/bin:/bin
 ExecStart=${venvPath}/bin/uvicorn main:app --host 0.0.0.0 --port 3010 --log-level warning
 Restart=always
 RestartSec=5
@@ -269,6 +285,10 @@ function macGeneratePlist() {
     <dict>
         <key>PATH</key>
         <string>${venvPath}/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <key>PYTHONPATH</key>
+        <string>${serverDir}</string>
+        <key>PYTHONUTF8</key>
+        <string>1</string>
     </dict>
     <key>RunAtLoad</key>
     <true/>

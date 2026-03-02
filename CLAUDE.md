@@ -374,7 +374,7 @@ class CacheEntry(SQLModel, table=True):
 
 ## Codebase Summary
 - **Hybrid architecture**: Node.js + Python + React TypeScript
-- **92 implemented workflow nodes** with clean service separation (6 AI models + 3 AI agents/memory + 13 specialized agents + 1 skill + 4 dedicated tools + 3 search + 16 Android + 3 WhatsApp + 4 Twitter + 2 Telegram + 2 Social + 3 Location + 3 Code + 6 Utility + 6 Document + 2 Chat + 2 Scheduler + 2 Workflow + 7 Google Workspace + 1 Apify + 3 Proxy)
+- **93 implemented workflow nodes** with clean service separation (6 AI models + 3 AI agents/memory + 13 specialized agents + 1 skill + 4 dedicated tools + 3 search + 16 Android + 3 WhatsApp + 4 Twitter + 2 Telegram + 2 Social + 3 Location + 3 Code + 6 Utility + 6 Document + 2 Chat + 2 Scheduler + 2 Workflow + 7 Google Workspace + 1 Apify + 1 Crawlee + 3 Proxy)
 - **WebSocket-First Architecture**: WebSocket as primary frontend-backend communication (120 message handlers)
 - **Recent optimizations**: REST APIs replaced with WebSocket, AI endpoints migrated to Python, Android automation integrated
 
@@ -412,6 +412,7 @@ The project was completely refactored from schema-based node definitions to expl
 - `src/nodeDefinitions/codeNodes.ts` - Python, JavaScript, and TypeScript code execution nodes
 - `src/nodeDefinitions/proxyNodes.ts` - Proxy nodes (proxyRequest, proxyConfig, proxyStatus) and shared PROXY_PARAMETERS
 - `src/nodeDefinitions/utilityNodes.ts` - HTTP, Webhook, chatTrigger, and console nodes
+- `src/nodeDefinitions/crawleeNodes.ts` - Crawlee web scraping node (crawleeScraper) with static/Playwright modes
 - `src/nodeDefinitions/documentNodes.ts` - Document processing nodes (httpScraper, fileDownloader, documentParser, textChunker, embeddingGenerator, vectorStore)
 - `src/nodeDefinitions/chatNodes.ts` - Chat send and history nodes
 - `src/nodeDefinitions/schedulerNodes.ts` - Timer and cron scheduler nodes
@@ -603,7 +604,8 @@ server/skills/
     ├── web-search-skill/SKILL.md
     ├── http-request-skill/SKILL.md
     ├── proxy-config-skill/SKILL.md
-    └── apify-skill/SKILL.md
+    ├── apify-skill/SKILL.md
+    └── crawlee-scraper-skill/SKILL.md
 ```
 
 **SKILL.md Format:**
@@ -1374,12 +1376,12 @@ All scripts in `scripts/` are cross-platform Node.js (Windows, macOS, Linux, WSL
 - `stop.js` - Kills processes on configured ports
 - `build.js` - Full production build (client, Python, WhatsApp)
 - `clean.js` - Removes node_modules, dist, .venv
-- `docker.js` - Docker Compose wrapper with Redis profile detection
+- `docker.js` - Docker Compose wrapper with v2 detection and Redis profile support
 
 See **[Scripts Reference](./docs-internal/SCRIPTS.md)** for full documentation.
 
 ## Current Status
-✅ **INodeProperties System**: Fully implemented with 92 functional node components
+✅ **INodeProperties System**: Fully implemented with 93 functional node components
 ✅ **WebSocket-First Architecture**: 120 message handlers replacing REST APIs
 ✅ **Code Editor**: Python, JavaScript, and TypeScript executors with syntax-highlighted editor (react-simple-code-editor + prismjs) and console output
 ✅ **Node.js Executor**: Persistent Node.js server (Express + tsx) for fast JS/TS execution, replacing subprocess spawning
@@ -2230,12 +2232,13 @@ The project deploys using Docker Compose with nginx reverse proxy.
 
 **Backend (`server/Dockerfile`):**
 - Python 3.12-slim base with Node.js 22.x for JS/TS execution
+- Includes Playwright chromium for JS-rendered web scraping (crawleeScraper node)
 - Includes persistent Node.js server (Express + tsx) on port 3020
 - Optimized bytecode compilation (`python -O -m compileall`)
 - Health check endpoint on port 3010
-- Startup script (`start.sh`) runs both Python and Node.js servers
+- Startup script (`start.sh`) runs both Python and Node.js servers (must have LF line endings, not CRLF)
 - Depends on: redis, whatsapp
-- Size: ~600 MB
+- Size: ~800 MB (includes Playwright chromium)
 
 **WhatsApp (`docker/Dockerfile.whatsapp`):**
 - Uses npm package `whatsapp-rpc` with pre-built binaries
@@ -2267,6 +2270,9 @@ services:
   backend:
     build: ./server
     ports: ["${PYTHON_BACKEND_PORT:-3010}:${PYTHON_BACKEND_PORT:-3010}"]
+    volumes:
+      - ./server:/app
+      - /app/nodejs/node_modules  # Preserve Linux binaries (prevents Windows esbuild conflict)
     depends_on:
       whatsapp: { condition: service_healthy }  # No Redis dependency
     environment:

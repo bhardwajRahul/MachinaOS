@@ -215,7 +215,7 @@ const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey,
   const [loading, setLoading] = useState<Record<string, boolean>>({});
   const [models, setModels] = useState<Record<string, string[]>>({});
   const [keys, setKeys] = useState<Record<string, string>>({});
-  const [proxyUrls, setProxyUrls] = useState<Record<string, string>>({});
+  // const [proxyUrls, setProxyUrls] = useState<Record<string, string>>({});  // Proxy disabled for now
   const [selectedItem, setSelectedItem] = useState<CredentialItem | null>(null);
 
   // Provider defaults state
@@ -240,8 +240,6 @@ const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey,
     const allItems = CATEGORIES.flatMap(c => c.items);
     const newKeys: Record<string, string> = {};
     const newValid: Record<string, boolean> = {};
-    const newProxyUrls: Record<string, string> = {};
-
     for (const item of allItems) {
       if (item.isSpecial) continue;
       if (await hasStoredKey(item.id)) {
@@ -251,18 +249,9 @@ const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey,
           newValid[item.id] = true;
         }
       }
-      // Load proxy URL for AI providers (stored as {provider}_proxy)
-      const proxyKey = `${item.id}_proxy`;
-      if (await hasStoredKey(proxyKey)) {
-        const proxyUrl = await getStoredApiKey(proxyKey);
-        if (proxyUrl) {
-          newProxyUrls[item.id] = proxyUrl;
-        }
-      }
     }
     setKeys(newKeys);
     setValidKeys(newValid);
-    setProxyUrls(newProxyUrls);
   }, [hasStoredKey, getStoredApiKey]);
 
   useEffect(() => {
@@ -2297,58 +2286,7 @@ const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey,
           />
         </div>
 
-        {/* Proxy URL Input - Only for AI providers */}
-        {CATEGORIES.find(c => c.key === 'ai')?.items.some(i => i.id === item.id) && (
-          <div style={{ marginBottom: theme.spacing.xl }}>
-            <label style={{
-              display: 'block',
-              fontSize: theme.fontSize.sm,
-              fontWeight: theme.fontWeight.medium,
-              color: theme.colors.text,
-              marginBottom: theme.spacing.sm,
-            }}>
-              Proxy URL <span style={{ fontWeight: theme.fontWeight.normal, color: theme.colors.textMuted }}>(optional)</span>
-            </label>
-            <Space.Compact style={{ width: '100%' }}>
-              <Input
-                value={proxyUrls[item.id] || ''}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setProxyUrls(p => ({ ...p, [item.id]: e.target.value }))}
-                placeholder="http://localhost:11434"
-                style={{
-                  fontFamily: 'monospace',
-                  backgroundColor: theme.colors.background,
-                  borderColor: theme.colors.border,
-                  color: theme.colors.text,
-                }}
-              />
-              <Button
-                onClick={async () => {
-                  const proxyUrl = proxyUrls[item.id]?.trim();
-                  if (proxyUrl) {
-                    await saveApiKey(`${item.id}_proxy`, proxyUrl);
-                  } else {
-                    await removeApiKey(`${item.id}_proxy`);
-                    setProxyUrls(p => ({ ...p, [item.id]: '' }));
-                  }
-                }}
-                style={{
-                  backgroundColor: `${theme.dracula.purple}25`,
-                  borderColor: `${theme.dracula.purple}60`,
-                  color: theme.dracula.purple,
-                }}
-              >
-                {proxyUrls[item.id]?.trim() ? 'Save' : 'Clear'}
-              </Button>
-            </Space.Compact>
-            <div style={{
-              fontSize: theme.fontSize.xs,
-              color: theme.colors.textMuted,
-              marginTop: theme.spacing.sm,
-            }}>
-              Route requests through a proxy (e.g., Ollama). When set, the proxy handles authentication.
-            </div>
-          </div>
-        )}
+        {/* Proxy URL Input - Disabled for now */}
 
         {/* Default Parameters Section - Only for AI providers */}
         {CATEGORIES.find(c => c.key === 'ai')?.items.some(i => i.id === item.id) && (

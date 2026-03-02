@@ -1,7 +1,7 @@
 {
-  "_generated": "2026-02-28T07:14:28.108966+00:00",
+  "_generated": "2026-03-02T05:51:12.590903+00:00",
   "_source": "openrouter",
-  "_model_count": 343,
+  "_model_count": 342,
   "models": {
     "bytedance-seed/seed-2.0-mini": {
       "id": "bytedance-seed/seed-2.0-mini",
@@ -3617,36 +3617,6 @@
         "temperature",
         "tool_choice",
         "tools",
-        "top_p"
-      ]
-    },
-    "opengvlab/internvl3-78b": {
-      "id": "opengvlab/internvl3-78b",
-      "name": "OpenGVLab: InternVL3 78B",
-      "provider": "opengvlab",
-      "local_id": "internvl3-78b",
-      "context_length": 32768,
-      "max_output_tokens": 32768,
-      "input_price_per_mtok": 0.15,
-      "output_price_per_mtok": 0.6,
-      "supports_thinking": false,
-      "thinking_type": "none",
-      "temperature_range": [
-        0.0,
-        2.0
-      ],
-      "is_reasoning_model": false,
-      "supported_parameters": [
-        "frequency_penalty",
-        "max_tokens",
-        "presence_penalty",
-        "repetition_penalty",
-        "response_format",
-        "seed",
-        "stop",
-        "structured_outputs",
-        "temperature",
-        "top_k",
         "top_p"
       ]
     },
