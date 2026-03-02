@@ -180,10 +180,13 @@ class GoogleOAuth:
         )
 
         # Store state data for callback verification
+        # PKCE: google-auth-oauthlib auto-generates code_verifier; save it
+        # so exchange_code() can restore it on the new Flow instance.
         _oauth_states[state] = {
             "created_at": time.time(),
             "data": state_data or {"mode": "owner"},
             "redirect_uri": self.redirect_uri,
+            "code_verifier": getattr(flow, "code_verifier", None),
         }
 
         logger.info("Generated Google OAuth URL", state=state[:8])
@@ -219,6 +222,10 @@ class GoogleOAuth:
                 redirect_uri=self.redirect_uri,
                 state=state,
             )
+            # PKCE: restore code_verifier so token exchange includes it
+            code_verifier = oauth_state.get("code_verifier")
+            if code_verifier:
+                flow.code_verifier = code_verifier
             flow.fetch_token(code=code)
 
             # Get credentials from flow
