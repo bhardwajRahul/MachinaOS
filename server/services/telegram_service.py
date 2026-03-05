@@ -348,6 +348,17 @@ class TelegramService:
             return escape_markdown(text, version=1)
         return text
 
+    @staticmethod
+    def _format_auto(text: str) -> tuple[str, str]:
+        """Convert GFM markdown to Telegram HTML using markdown-it-py.
+
+        Returns (formatted_text, parse_mode) tuple.
+        """
+        if not text:
+            return text, "HTML"
+        from services.markdown_formatter import to_telegram_html
+        return to_telegram_html(text), "HTML"
+
     async def send_message(
         self,
         chat_id: str | int,
@@ -361,7 +372,7 @@ class TelegramService:
         Args:
             chat_id: Chat ID or @username
             text: Message text
-            parse_mode: 'HTML', 'Markdown', or 'MarkdownV2'
+            parse_mode: 'HTML', 'Markdown', 'MarkdownV2', or 'Auto'
             disable_notification: Send silently
             reply_to_message_id: Reply to this message
 
@@ -371,8 +382,11 @@ class TelegramService:
         if not self._bot:
             raise ValueError("Telegram bot not connected")
 
-        effective_pm = parse_mode if parse_mode else None
-        safe_text = self._escape_text(text, effective_pm)
+        if parse_mode == "Auto":
+            safe_text, effective_pm = self._format_auto(text)
+        else:
+            effective_pm = parse_mode if parse_mode else None
+            safe_text = self._escape_text(text, effective_pm)
 
         try:
             msg = await self._bot.send_message(
@@ -427,8 +441,11 @@ class TelegramService:
         if not self._bot:
             raise ValueError("Telegram bot not connected")
 
-        effective_pm = parse_mode if parse_mode else None
-        safe_caption = self._escape_text(caption, effective_pm) if caption else caption
+        if parse_mode == "Auto" and caption:
+            safe_caption, effective_pm = self._format_auto(caption)
+        else:
+            effective_pm = parse_mode if parse_mode else None
+            safe_caption = self._escape_text(caption, effective_pm) if caption else caption
 
         try:
             msg = await self._bot.send_photo(
@@ -484,8 +501,11 @@ class TelegramService:
         if not self._bot:
             raise ValueError("Telegram bot not connected")
 
-        effective_pm = parse_mode if parse_mode else None
-        safe_caption = self._escape_text(caption, effective_pm) if caption else caption
+        if parse_mode == "Auto" and caption:
+            safe_caption, effective_pm = self._format_auto(caption)
+        else:
+            effective_pm = parse_mode if parse_mode else None
+            safe_caption = self._escape_text(caption, effective_pm) if caption else caption
 
         try:
             msg = await self._bot.send_document(

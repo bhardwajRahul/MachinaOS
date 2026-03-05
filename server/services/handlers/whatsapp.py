@@ -172,6 +172,11 @@ async def handle_whatsapp_send(
         if message_type == 'text' and not parameters.get('message'):
             raise ValueError("Message content is required for text messages")
 
+        # Convert GFM markdown to WhatsApp-native formatting if enabled
+        if message_type == 'text' and parameters.get('format_markdown', False):
+            from services.markdown_formatter import to_whatsapp
+            parameters['message'] = to_whatsapp(parameters['message'])
+
         # Call WhatsApp Go RPC service via handler - pass full params
         data = await whatsapp_send_handler(parameters)
 

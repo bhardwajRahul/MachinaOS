@@ -1,5 +1,5 @@
 {
-  "id": "workflow-1772437472641-wdn3sj4us",
+  "id": "example_workflow-1772437472641-wdn3sj4us",
   "name": "AI Employee[Experimental]",
   "nodes": [
     {
@@ -45,7 +45,7 @@
       "type": "taskTrigger",
       "position": {
         "x": -960,
-        "y": 740
+        "y": 860
       },
       "data": {
         "label": "Task Completed"
@@ -55,7 +55,7 @@
       "selected": false,
       "positionAbsolute": {
         "x": -960,
-        "y": 740
+        "y": 860
       },
       "dragging": false
     },
@@ -63,8 +63,8 @@
       "id": "chatTrigger-1772283321856",
       "type": "chatTrigger",
       "position": {
-        "x": -940,
-        "y": 640
+        "x": -960,
+        "y": 740
       },
       "data": {
         "label": "Chat Trigger"
@@ -73,17 +73,17 @@
       "height": 82,
       "selected": false,
       "positionAbsolute": {
-        "x": -940,
-        "y": 640
+        "x": -960,
+        "y": 740
       },
-      "dragging": true
+      "dragging": false
     },
     {
       "id": "console-1772283322828",
       "type": "console",
       "position": {
-        "x": 180,
-        "y": 660
+        "x": 120,
+        "y": 760
       },
       "data": {
         "label": "Console"
@@ -92,10 +92,10 @@
       "height": 82,
       "selected": false,
       "positionAbsolute": {
-        "x": 180,
-        "y": 660
+        "x": 120,
+        "y": 760
       },
-      "dragging": true
+      "dragging": false
     },
     {
       "id": "teamMonitor-1772283324318",
@@ -443,7 +443,7 @@
       "id": "simpleMemory-1772286654076",
       "type": "simpleMemory",
       "position": {
-        "x": -940,
+        "x": -900,
         "y": 1420
       },
       "data": {
@@ -453,7 +453,7 @@
       "height": 82,
       "selected": false,
       "positionAbsolute": {
-        "x": -940,
+        "x": -900,
         "y": 1420
       },
       "dragging": false
@@ -481,7 +481,7 @@
       "id": "simpleMemory-1772286667244",
       "type": "simpleMemory",
       "position": {
-        "x": 100,
+        "x": 120,
         "y": 1420
       },
       "data": {
@@ -491,17 +491,17 @@
       "height": 82,
       "selected": false,
       "positionAbsolute": {
-        "x": 100,
+        "x": 120,
         "y": 1420
       },
-      "dragging": false
+      "dragging": true
     },
     {
       "id": "simpleMemory-1772286673234",
       "type": "simpleMemory",
       "position": {
         "x": 600,
-        "y": 1440
+        "y": 1400
       },
       "data": {
         "label": "Simple Memory 4"
@@ -511,9 +511,9 @@
       "selected": false,
       "positionAbsolute": {
         "x": 600,
-        "y": 1440
+        "y": 1400
       },
-      "dragging": false
+      "dragging": true
     },
     {
       "id": "simpleMemory-1772437660092",
@@ -550,6 +550,44 @@
       "positionAbsolute": {
         "x": -280,
         "y": 1080
+      },
+      "dragging": false
+    },
+    {
+      "id": "telegramSend-1772718415802",
+      "type": "telegramSend",
+      "position": {
+        "x": 100,
+        "y": 640
+      },
+      "data": {
+        "label": "Telegram Send"
+      },
+      "width": 80,
+      "height": 82,
+      "selected": false,
+      "positionAbsolute": {
+        "x": 100,
+        "y": 640
+      },
+      "dragging": false
+    },
+    {
+      "id": "telegramReceive-1772718416883",
+      "type": "telegramReceive",
+      "position": {
+        "x": -980,
+        "y": 620
+      },
+      "data": {
+        "label": "Telegram Receive"
+      },
+      "width": 94,
+      "height": 82,
+      "selected": false,
+      "positionAbsolute": {
+        "x": -980,
+        "y": 620
       },
       "dragging": false
     }
@@ -932,11 +970,39 @@
       "targetHandle": "input-skill",
       "id": "reactflow__edge-masterSkill-1772437683119output-main-orchestrator_agent-1772283239381input-skill",
       "selected": false
+    },
+    {
+      "type": "smoothstep",
+      "animated": true,
+      "style": {
+        "stroke": "#8be9fd",
+        "strokeWidth": 3
+      },
+      "source": "telegramReceive-1772718416883",
+      "sourceHandle": "output-main",
+      "target": "ai_employee-1772283240733",
+      "targetHandle": "input-main",
+      "id": "reactflow__edge-telegramReceive-1772718416883output-main-ai_employee-1772283240733input-main",
+      "selected": false
+    },
+    {
+      "type": "smoothstep",
+      "animated": true,
+      "style": {
+        "stroke": "#8be9fd",
+        "strokeWidth": 3
+      },
+      "source": "ai_employee-1772283240733",
+      "sourceHandle": "output-main",
+      "target": "telegramSend-1772718415802",
+      "targetHandle": "input-main",
+      "id": "reactflow__edge-ai_employee-1772283240733output-main-telegramSend-1772718415802input-main",
+      "selected": false
     }
   ],
-  "createdAt": "2026-03-02T07:44:32.641Z",
-  "lastModified": "2026-03-02T07:49:24.197Z",
-  "version": "0.0.40",
+  "createdAt": "2026-03-05T04:32:30.655Z",
+  "lastModified": "2026-03-05T16:07:13.122Z",
+  "version": "0.0.42",
   "nodeParameters": {
     "orchestrator_agent-1772283239381": {
       "provider": "openai",
@@ -949,7 +1015,7 @@
     "ai_employee-1772283240733": {
       "provider": "openai",
       "model": "gpt-5.2",
-      "prompt": "{{chattrigger.message}}",
+      "prompt": "{{chattrigger.message}} {{telegramreceive.text}}",
       "systemMessage": "You are a helpful assistant",
       "teamMode": "parallel",
       "maxConcurrent": 5,
@@ -969,7 +1035,7 @@
     },
     "console-1772283322828": {
       "label": "Console",
-      "logMode": "all",
+      "logMode": "field",
       "fieldPath": "{{aiemployee.data}}",
       "expression": "",
       "format": "json"
@@ -1303,6 +1369,32 @@
     },
     "masterSkill-1772437683119": {
       "label": "Master Skill 5"
+    },
+    "telegramSend-1772718415802": {
+      "recipient_type": "self",
+      "chat_id": "",
+      "message_type": "text",
+      "text": "{{aiemployee.response}}",
+      "media_url": "",
+      "caption": "",
+      "latitude": 0,
+      "longitude": 0,
+      "phone_number": "",
+      "first_name": "",
+      "last_name": "",
+      "parse_mode": "",
+      "silent": false,
+      "reply_to_message_id": 0,
+      "label": "Telegram Send"
+    },
+    "telegramReceive-1772718416883": {
+      "contentTypeFilter": "text",
+      "senderFilter": "self",
+      "chat_id": "",
+      "from_user": "",
+      "keywords": "",
+      "ignoreBots": true,
+      "label": "Telegram Receive"
     }
   }
 }

@@ -201,13 +201,14 @@ export const telegramNodes: Record<string, INodeTypeDescription> = {
         name: 'parse_mode',
         type: 'options',
         options: [
+          { name: 'Auto (Recommended)', value: 'Auto' },
           { name: 'None', value: '' },
           { name: 'HTML', value: 'HTML' },
           { name: 'Markdown', value: 'Markdown' },
           { name: 'MarkdownV2', value: 'MarkdownV2' }
         ],
-        default: '',
-        description: 'Text formatting mode',
+        default: 'Auto',
+        description: 'Auto converts LLM markdown to Telegram HTML. Use None for raw text.',
         displayOptions: {
           show: { message_type: ['text', 'photo', 'document'] }
         }

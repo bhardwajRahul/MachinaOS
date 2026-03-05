@@ -1,5 +1,5 @@
 {
-  "id": "example_workflow-1772151325023-i7zkjbt04",
+  "id": "example_example_workflow-1772151325023-i7zkjbt04",
   "name": "Zeenie Assistant",
   "nodes": [
     {
@@ -102,7 +102,7 @@
       "type": "chatAgent",
       "position": {
         "x": 2360,
-        "y": -100
+        "y": -120
       },
       "data": {
         "label": "Zeenie"
@@ -112,7 +112,7 @@
       "selected": false,
       "positionAbsolute": {
         "x": 2360,
-        "y": -100
+        "y": -120
       },
       "dragging": false
     },
@@ -291,8 +291,8 @@
       "id": "console-1770195247780",
       "type": "console",
       "position": {
-        "x": 3300,
-        "y": 40
+        "x": 3080,
+        "y": 100
       },
       "data": {
         "label": "Console 1"
@@ -301,8 +301,8 @@
       "height": 82,
       "selected": false,
       "positionAbsolute": {
-        "x": 3300,
-        "y": 40
+        "x": 3080,
+        "y": 100
       },
       "dragging": false
     },
@@ -405,7 +405,7 @@
       "id": "taskManager-1770801430177",
       "type": "taskManager",
       "position": {
-        "x": 2720,
+        "x": 2700,
         "y": 140
       },
       "data": {
@@ -415,7 +415,7 @@
       "height": 82,
       "selected": false,
       "positionAbsolute": {
-        "x": 2720,
+        "x": 2700,
         "y": 140
       },
       "dragging": true
@@ -481,7 +481,7 @@
       "id": "simpleMemory-1770973783506",
       "type": "simpleMemory",
       "position": {
-        "x": 2880,
+        "x": 2900,
         "y": 540
       },
       "data": {
@@ -491,16 +491,16 @@
       "height": 82,
       "selected": false,
       "positionAbsolute": {
-        "x": 2880,
+        "x": 2900,
         "y": 540
       },
-      "dragging": false
+      "dragging": true
     },
     {
       "id": "simpleMemory-1770973798020",
       "type": "simpleMemory",
       "position": {
-        "x": 3320,
+        "x": 3340,
         "y": 540
       },
       "data": {
@@ -510,10 +510,10 @@
       "height": 82,
       "selected": false,
       "positionAbsolute": {
-        "x": 3320,
+        "x": 3340,
         "y": 540
       },
-      "dragging": true
+      "dragging": false
     },
     {
       "id": "productivity_agent-1771834433838",
@@ -531,44 +531,6 @@
       "positionAbsolute": {
         "x": 1480,
         "y": 380
-      },
-      "dragging": false
-    },
-    {
-      "id": "whatsappSend-1771834542643",
-      "type": "whatsappSend",
-      "position": {
-        "x": 3120,
-        "y": -80
-      },
-      "data": {
-        "label": "WhatsApp Send"
-      },
-      "width": 87,
-      "height": 82,
-      "selected": false,
-      "positionAbsolute": {
-        "x": 3120,
-        "y": -80
-      },
-      "dragging": false
-    },
-    {
-      "id": "whatsappReceive-1771834543772",
-      "type": "whatsappReceive",
-      "position": {
-        "x": 1660,
-        "y": -60
-      },
-      "data": {
-        "label": "WhatsApp Receive"
-      },
-      "width": 101,
-      "height": 82,
-      "selected": false,
-      "positionAbsolute": {
-        "x": 1660,
-        "y": -60
       },
       "dragging": false
     },
@@ -747,8 +709,8 @@
       "id": "telegramSend-1772074741486",
       "type": "telegramSend",
       "position": {
-        "x": 3440,
-        "y": 120
+        "x": 3080,
+        "y": -20
       },
       "data": {
         "label": "Telegram Send"
@@ -757,27 +719,8 @@
       "height": 82,
       "selected": false,
       "positionAbsolute": {
-        "x": 3440,
-        "y": 120
-      },
-      "dragging": true
-    },
-    {
-      "id": "telegramReceive-1772074742881",
-      "type": "telegramReceive",
-      "position": {
-        "x": 1800,
-        "y": -160
-      },
-      "data": {
-        "label": "Telegram Receive"
-      },
-      "width": 94,
-      "height": 82,
-      "selected": false,
-      "positionAbsolute": {
-        "x": 1800,
-        "y": -160
+        "x": 3080,
+        "y": -20
       },
       "dragging": false
     },
@@ -835,6 +778,25 @@
       "positionAbsolute": {
         "x": 2800,
         "y": 720
+      },
+      "dragging": false
+    },
+    {
+      "id": "telegramReceive-1772725517789",
+      "type": "telegramReceive",
+      "position": {
+        "x": 1620,
+        "y": -80
+      },
+      "data": {
+        "label": "Telegram Receive"
+      },
+      "width": 94,
+      "height": 82,
+      "selected": false,
+      "positionAbsolute": {
+        "x": 1620,
+        "y": -80
       },
       "dragging": false
     }
@@ -1253,39 +1215,11 @@
         "stroke": "#8be9fd",
         "strokeWidth": 3
       },
-      "source": "whatsappReceive-1771834543772",
-      "sourceHandle": "output-main",
-      "target": "chatAgent-1770060581808",
-      "targetHandle": "input-main",
-      "id": "reactflow__edge-whatsappReceive-1771834543772output-main-chatAgent-1770060581808input-main",
-      "selected": false
-    },
-    {
-      "type": "smoothstep",
-      "animated": true,
-      "style": {
-        "stroke": "#8be9fd",
-        "strokeWidth": 3
-      },
       "source": "simpleMemory-1771834793747",
       "sourceHandle": "output-memory",
       "target": "productivity_agent-1771834433838",
       "targetHandle": "input-memory",
       "id": "reactflow__edge-simpleMemory-1771834793747output-memory-productivity_agent-1771834433838input-memory",
-      "selected": false
-    },
-    {
-      "type": "smoothstep",
-      "animated": true,
-      "style": {
-        "stroke": "#8be9fd",
-        "strokeWidth": 3
-      },
-      "source": "chatAgent-1770060581808",
-      "sourceHandle": "output-main",
-      "target": "whatsappSend-1771834542643",
-      "targetHandle": "input-main",
-      "id": "reactflow__edge-chatAgent-1770060581808output-main-whatsappSend-1771834542643input-main",
       "selected": false
     },
     {
@@ -1379,20 +1313,6 @@
         "stroke": "#8be9fd",
         "strokeWidth": 3
       },
-      "source": "telegramReceive-1772074742881",
-      "sourceHandle": "output-main",
-      "target": "chatAgent-1770060581808",
-      "targetHandle": "input-main",
-      "id": "reactflow__edge-telegramReceive-1772074742881output-main-chatAgent-1770060581808input-main",
-      "selected": false
-    },
-    {
-      "type": "smoothstep",
-      "animated": true,
-      "style": {
-        "stroke": "#8be9fd",
-        "strokeWidth": 3
-      },
       "source": "braveSearch-1772075714278",
       "sourceHandle": "output-tool",
       "target": "web_agent-1770070863433",
@@ -1427,16 +1347,43 @@
       "targetHandle": "input-tools",
       "id": "reactflow__edge-typescriptExecutor-1772075756858output-tool-coding_agent-1770070861999input-tools",
       "selected": false
+    },
+    {
+      "type": "smoothstep",
+      "animated": true,
+      "style": {
+        "stroke": "#8be9fd",
+        "strokeWidth": 3
+      },
+      "source": "chatAgent-1770060581808",
+      "sourceHandle": "output-main",
+      "target": "telegramSend-1772074741486",
+      "targetHandle": "input-main",
+      "id": "reactflow__edge-chatAgent-1770060581808output-main-telegramSend-1772074741486input-main",
+      "selected": false
+    },
+    {
+      "type": "smoothstep",
+      "animated": true,
+      "style": {
+        "stroke": "#8be9fd",
+        "strokeWidth": 3
+      },
+      "source": "telegramReceive-1772725517789",
+      "sourceHandle": "output-main",
+      "target": "chatAgent-1770060581808",
+      "targetHandle": "input-main",
+      "id": "reactflow__edge-telegramReceive-1772725517789output-main-chatAgent-1770060581808input-main"
     }
   ],
-  "createdAt": "2026-02-26T22:56:32.660Z",
-  "lastModified": "2026-02-27T05:07:52.625Z",
-  "version": "0.0.37",
+  "createdAt": "2026-03-05T04:32:30.931Z",
+  "lastModified": "2026-03-05T10:16:02.000Z",
+  "version": "0.0.42",
   "nodeParameters": {
     "chatAgent-1770060581808": {
       "provider": "gemini",
       "model": "gemini-3.1-pro-preview",
-      "prompt": "{{chattrigger.message}} {{whatsappreceive.text}}",
+      "prompt": "{{chattrigger.message}} {{telegramreceive.text}}",
       "systemMessage": "You are a helpful assistant."
     },
     "coding_agent-1770070861999": {
@@ -1748,41 +1695,6 @@
       "prompt": "{{ $json.chatInput }}",
       "systemMessage": "You are a helpful assistant"
     },
-    "whatsappSend-1771834542643": {
-      "recipient_type": "self",
-      "phone": "",
-      "group_id": "",
-      "message_type": "text",
-      "message": "{{zeenie.response}}",
-      "media_source": "base64",
-      "media_data": "",
-      "file_path": "",
-      "media_url": "",
-      "mime_type": "",
-      "caption": "",
-      "filename": "",
-      "latitude": 0,
-      "longitude": 0,
-      "location_name": "",
-      "address": "",
-      "contact_name": "",
-      "vcard": "",
-      "is_reply": false,
-      "reply_message_id": "",
-      "reply_sender": "",
-      "reply_content": ""
-    },
-    "whatsappReceive-1771834543772": {
-      "messageTypeFilter": "text",
-      "filter": "self",
-      "contactPhone": "",
-      "group_id": "",
-      "senderNumber": "",
-      "keywords": "",
-      "ignoreOwnMessages": true,
-      "forwardedFilter": "all",
-      "includeMediaData": false
-    },
     "gmail-1772074604463": {
       "operation": "send",
       "account_mode": "owner",
@@ -1906,9 +1818,10 @@
       "label": "Contacts"
     },
     "telegramSend-1772074741486": {
+      "recipient_type": "self",
       "chat_id": "",
       "message_type": "text",
-      "text": "",
+      "text": "{{zeenie.response}}",
       "media_url": "",
       "caption": "",
       "latitude": 0,
@@ -1920,15 +1833,6 @@
       "silent": false,
       "reply_to_message_id": 0,
       "label": "Telegram Send"
-    },
-    "telegramReceive-1772074742881": {
-      "chatTypeFilter": "all",
-      "contentTypeFilter": "all",
-      "chat_id": "",
-      "from_user": "",
-      "keywords": "",
-      "ignoreBots": true,
-      "label": "Telegram Receive"
     },
     "perplexitySearch-1772075707557": {
       "toolName": "perplexity_search",
@@ -1953,6 +1857,15 @@
     "typescriptExecutor-1772075756858": {
       "code": "// TypeScript Executor - Transform and process data with type safety\n//\n// Available:\n//   input_data - object with connected node outputs\n//   console.log() - for debugging\n//\n// Set the \"output\" variable with your result\n\ninterface Result {\n    message: string;\n    input_received: unknown;\n    processed: boolean;\n}\n\n// Example: Get data from connected node\nconst data = input_data?.start || input_data || {};\n\n// Process data with type safety\nconst result: Result = {\n    message: \"Hello from TypeScript!\",\n    input_received: data,\n    processed: true\n};\n\n// Set output (required)\noutput = result;",
       "label": "TypeScript Executor"
+    },
+    "telegramReceive-1772725517789": {
+      "contentTypeFilter": "text",
+      "senderFilter": "self",
+      "chat_id": "",
+      "from_user": "",
+      "keywords": "",
+      "ignoreBots": true,
+      "label": "Telegram Receive"
     }
   }
 }

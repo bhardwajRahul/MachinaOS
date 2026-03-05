@@ -258,14 +258,15 @@ class StatusBroadcaster:
         """Fetch Twitter status from stored OAuth tokens in database.
 
         Called on client connect to check if user is authenticated with Twitter.
+        Uses OAuth token system (matches REST endpoint and node handlers).
         """
         try:
             from core.container import container
             auth_service = container.auth_service()
 
-            # Check for stored access token
-            access_token = await auth_service.get_api_key("twitter_access_token")
-            if not access_token:
+            # Get tokens from OAuth system (NOT api_key system)
+            tokens = await auth_service.get_oauth_tokens("twitter", customer_id="owner")
+            if not tokens or not tokens.get("access_token"):
                 self._status["twitter"] = {
                     "connected": False,
                     "username": None,
@@ -275,32 +276,19 @@ class StatusBroadcaster:
                 }
                 return
 
-            # Get stored user info
-            user_info_str = await auth_service.get_api_key("twitter_user_info")
-            if user_info_str:
-                # Format: "user_id:username:name"
-                parts = user_info_str.split(":", 2)
-                user_id = parts[0] if len(parts) > 0 else None
-                username = parts[1] if len(parts) > 1 else None
-                name = parts[2] if len(parts) > 2 else None
+            # User info is stored in the OAuth token record
+            email = tokens.get("email", "")  # Stored as "@username"
+            name = tokens.get("name", "")
+            username = email.lstrip("@") if email.startswith("@") else email
 
-                self._status["twitter"] = {
-                    "connected": True,
-                    "username": username,
-                    "user_id": user_id,
-                    "name": name,
-                    "profile_image_url": None  # Could fetch fresh if needed
-                }
-                logger.debug(f"[StatusBroadcaster] Twitter status: connected as @{username}")
-            else:
-                # Has token but no user info - still connected
-                self._status["twitter"] = {
-                    "connected": True,
-                    "username": None,
-                    "user_id": None,
-                    "name": None,
-                    "profile_image_url": None
-                }
+            self._status["twitter"] = {
+                "connected": True,
+                "username": username or None,
+                "user_id": None,
+                "name": name or None,
+                "profile_image_url": None
+            }
+            logger.debug(f"[StatusBroadcaster] Twitter status: connected as @{username}")
         except Exception as e:
             logger.debug(f"[StatusBroadcaster] Could not refresh Twitter status: {e}")
 

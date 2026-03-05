@@ -67,6 +67,7 @@ server/services/
 ├── model_registry.py        # ModelRegistryService - model constraints from OpenRouter + llm_defaults
 ├── nodejs_client.py         # HTTP client for Node.js code executor
 ├── pricing.py               # LLM and API cost calculation (loads config/pricing.json)
+├── markdown_formatter.py    # GFM markdown to platform-specific formatting (Telegram HTML, WhatsApp, plain)
 ├── telegram_service.py      # TelegramService with python-telegram-bot long-polling
 ├── tracked_http.py          # HTTPX event hooks for automatic API cost tracking
 ├── proxy/                   # Residential proxy provider management
@@ -903,7 +904,7 @@ Android device connection is configured via the Credentials Modal (Android panel
 - **mediaControl**: Media playback control - volume control, playback control, play media files
 
 ### WhatsApp Nodes (3 nodes)
-- **whatsappSend**: **Dual-purpose node** - Send WhatsApp messages (text, image, video, audio, document, sticker, location, contact) to contacts, groups, or newsletter channels. Works as workflow node OR AI Agent tool. Group: `['whatsapp', 'tool']`. Recipient types: Self (connected phone), Phone Number, Group, Channel (newsletter). Channel messages only support text, image, video, audio, document (NOT sticker, location, contact). Full parameter schema for message type, media URL, location coordinates, contact vCard, channel JID.
+- **whatsappSend**: **Dual-purpose node** - Send WhatsApp messages (text, image, video, audio, document, sticker, location, contact) to contacts, groups, or newsletter channels. Works as workflow node OR AI Agent tool. Group: `['whatsapp', 'tool']`. Recipient types: Self (connected phone), Phone Number, Group, Channel (newsletter). Channel messages only support text, image, video, audio, document (NOT sticker, location, contact). **Format Markdown** toggle (default: true): converts GFM markdown to WhatsApp-native formatting via `markdown_formatter.to_whatsapp()`. Full parameter schema for message type, media URL, location coordinates, contact vCard, channel JID.
 - **whatsappDb**: **Dual-purpose node** - Comprehensive WhatsApp database query node with 18 operations. Works as workflow node OR AI Agent tool. Group: `['whatsapp', 'tool']`. Operations:
   - `chat_history`: Retrieve messages from individual or group chats with filtering, pagination, and optional media download
   - `search_groups`: Search groups by name
@@ -932,11 +933,11 @@ Unified social messaging nodes for multi-platform communication. Supports WhatsA
 - **socialSend**: **Dual-purpose node** - Send messages to any supported platform. Works as workflow node OR AI Agent tool. Supports text, image, video, audio, document, sticker, location, contact, poll, buttons, list message types.
 
 ### Twitter/X Nodes (4 nodes)
-Twitter/X integration using the official XDK Python SDK with OAuth 2.0 PKCE authentication.
+Twitter/X integration using the official XDK Python SDK with OAuth 2.0 PKCE authentication. All sync XDK calls wrapped in `asyncio.to_thread()` to avoid blocking the event loop. Lazy token refresh on 401/403 errors instead of validating on every call.
 
 - **twitterSend**: **Dual-purpose node** - Post tweets, reply, retweet, like/unlike, and delete tweets. Works as workflow node OR AI Agent tool. Group: `['social', 'tool']`. Actions: `tweet`, `reply`, `retweet`, `like`, `unlike`, `delete`. Parameters: action, text (280 char max), tweet_id, reply_to_id.
-- **twitterSearch**: **Dual-purpose node** - Search recent tweets using query operators. Works as workflow node OR AI Agent tool. Group: `['social', 'tool']`. Supports X API v2 query syntax: keywords, hashtags (#), mentions (@), from:user, to:user, -exclude, OR, lang:, has:links, has:media, is:retweet, -is:retweet.
-- **twitterUser**: **Dual-purpose node** - Look up user profiles and social connections. Works as workflow node OR AI Agent tool. Group: `['social', 'tool']`. Operations: `me` (get authenticated user), `by_username`, `by_id`, `followers`, `following`.
+- **twitterSearch**: **Dual-purpose node** - Search recent tweets with rich data via X API v2 expansions. Returns enriched tweets with `display_text` (expanded URLs), `author` profile, `public_metrics` (likes/retweets/replies/quotes/bookmarks/impressions), `media` attachments, `referenced_tweets` (quoted/replied), `note_tweet` for long-form content. Works as workflow node OR AI Agent tool. Group: `['social', 'tool']`. `max_results` clamped to 10-100 (X API v2 minimum is 10). Supports query operators: keywords, hashtags (#), mentions (@), from:user, to:user, -exclude, OR, lang:, has:links, has:media, has:images, has:videos, is:retweet, -is:retweet, is:reply, is:quote, url:.
+- **twitterUser**: **Dual-purpose node** - Look up user profiles and social connections with description and created_at. Works as workflow node OR AI Agent tool. Group: `['social', 'tool']`. Operations: `me` (get authenticated user), `by_username`, `by_id`, `followers` (max_results 1-1000), `following` (max_results 1-1000).
 - **twitterReceive**: Event-driven trigger that waits for incoming Twitter events (mentions, DMs, timeline updates). Group: `['social', 'trigger']`. Polling-based since X API free tier lacks webhooks.
 
 #### Twitter OAuth 2.0 Authentication
@@ -959,33 +960,25 @@ Authentication is handled via OAuth 2.0 PKCE flow in the Credentials Modal:
 | `client/src/components/CredentialsModal.tsx` | Twitter panel with OAuth button |
 | `server/skills/social_agent/twitter-*-skill/` | 3 Twitter skills for AI agents |
 
+**Handler Architecture:**
+- All sync XDK calls wrapped in `asyncio.to_thread()` (XDK uses sync `requests` internally)
+- No `get_me()` validation on every call -- lazy token refresh on 401/403 via `_refresh_and_get_client()`
+- Search uses full X API v2 expansions and returns enriched data with expanded URLs, author profiles, media, metrics, referenced tweets
+- `max_results` clamped: search 10-100, followers/following 1-1000
+
 **XDK SDK API Patterns:**
 ```python
 from xdk import Client
-
-# Create client with OAuth 2.0 user token
 client = Client(access_token=access_token)
 
-# Post tweet
 client.posts.create(body={"text": "Hello world!"})
-
-# Reply to tweet
 client.posts.create(body={"text": "Reply", "reply": {"in_reply_to_tweet_id": "123"}})
-
-# Retweet
 client.users.repost_post(user_id, body={"tweet_id": "123"})
-
-# Like/Unlike
 client.users.like_post(user_id, body={"tweet_id": "123"})
 client.users.unlike_post(user_id, tweet_id="123")
-
-# Delete
 client.posts.delete(tweet_id)
-
-# Search
-client.posts.search_recent(query="...", max_results=100, tweet_fields=["author_id", "created_at"])
-
-# User lookup
+client.posts.search_recent(query="...", max_results=100,
+    tweet_fields=[...], expansions=[...], media_fields=[...], user_fields=[...])
 client.users.get_me(user_fields=["created_at", "description"])
 client.users.get_by_usernames(usernames=["user1"], user_fields=["description"])
 client.users.get_followers(user_id, max_results=100, user_fields=["created_at"])
@@ -1001,7 +994,7 @@ TWITTER_CLIENT_SECRET=your_client_secret
 ### Telegram Nodes (2 nodes)
 Telegram bot integration using `python-telegram-bot` SDK with long-polling for incoming messages.
 
-- **telegramSend**: **Dual-purpose node** - Send text, photo, document, location, or contact messages via Telegram bot. Works as workflow node OR AI Agent tool. Group: `['social', 'tool']`. Recipient types: Self (bot owner), User/Chat ID, Group. Parameters: recipient_type, chat_id, message_type, text, media_url, caption, parse_mode, silent, reply_to_message_id. MarkdownV2/Markdown text auto-escaped via `_escape_text()`; falls back to plain text on `BadRequest`. "Self" restores `owner_chat_id` from credentials DB if not in memory.
+- **telegramSend**: **Dual-purpose node** - Send text, photo, document, location, or contact messages via Telegram bot. Works as workflow node OR AI Agent tool. Group: `['social', 'tool']`. Recipient types: Self (bot owner), User/Chat ID, Group. Parameters: recipient_type, chat_id, message_type, text, media_url, caption, parse_mode (Auto/HTML/Markdown/MarkdownV2/None), silent, reply_to_message_id. **Auto parse_mode** (default, recommended): converts GFM markdown to Telegram HTML via `markdown_formatter.to_telegram_html()`. MarkdownV2/Markdown text auto-escaped via `_escape_text()`; falls back to plain text on `BadRequest`. "Self" restores `owner_chat_id` from credentials DB if not in memory.
 - **telegramReceive**: Event-driven trigger that waits for incoming Telegram messages. Group: `['social', 'trigger']`. Uses `senderFilter` dropdown: All Messages, From Self (Bot Owner) (zero-config), Private/Group/Supergroup/Channel Only, Specific Chat, Specific User, Keywords. Content type filter and ignore bots option. "From Self" uses lazy `_get_owner_chat_id()` lookup at match time. Auto-reconnects on server restart via `StatusBroadcaster._refresh_telegram_status()`.
 
 **Key Files:**
@@ -1019,6 +1012,23 @@ Telegram bot integration using `python-telegram-bot` SDK with long-polling for i
 # Optional: Set owner chat ID for "Self" recipient type
 TELEGRAM_OWNER_CHAT_ID=your_chat_id
 ```
+
+### Markdown Formatter Service
+Platform-specific markdown formatting using `markdown-it-py` (Python port of `markdown-it`, 18K+ GitHub stars). Converts GFM markdown (as produced by LLMs) to platform-native formats.
+
+**Key File:** `server/services/markdown_formatter.py`
+
+**Public Functions:**
+| Function | Target | Description |
+|----------|--------|-------------|
+| `to_telegram_html(text)` | Telegram | Renders GFM to HTML, converts unsupported tags (`<h1>`-`<h6>` -> `<b>`, `<ul>/<li>` -> bullets, strips `<p>`) |
+| `to_whatsapp(text)` | WhatsApp | Walks markdown-it token stream, maps to WhatsApp syntax (`*bold*`, `_italic_`, `~strike~`, `` ```code``` ``, `> quote`) |
+| `to_plain(text)` | Any | Renders to HTML, strips all tags |
+
+**Usage:**
+- Telegram Send node: Auto parse_mode (default) calls `to_telegram_html()` via `TelegramService._format_auto()`
+- WhatsApp Send node: `format_markdown` toggle (default: true) calls `to_whatsapp()` in handler
+- No new dependencies -- `markdown-it-py` v4.0.0 already installed as transitive dependency
 
 ### Google Workspace Nodes (7 nodes)
 Consolidated Google Workspace integration with 6 unified operation-based nodes + 1 polling trigger. Each service node uses an `operation` parameter to select the action (e.g., gmail with operation: send/search/read). All services share a single OAuth connection with combined scopes.
@@ -1419,6 +1429,7 @@ See **[Scripts Reference](./docs-internal/SCRIPTS.md)** for full documentation.
 ✅ **AI Thinking/Reasoning**: Extended thinking for Claude, Gemini 2.5/3, OpenAI GPT-5/o-series, Groq Qwen3 with output available in Input Data & Variables for downstream nodes
 ✅ **Onboarding Service**: 5-step welcome wizard with Ant Design UI, database persistence, skip/resume/replay support
 ✅ **Proxy System**: Residential proxy provider management with template-based URL formatting, auto-selection by health score, transparent proxy injection on httpRequest/httpScraper nodes via `useProxy: true`
+✅ **Markdown Formatter**: GFM markdown to platform-native formatting (Telegram HTML, WhatsApp syntax, plain text) using markdown-it-py
 
 ## Key Features
 

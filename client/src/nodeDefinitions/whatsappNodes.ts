@@ -191,6 +191,18 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         }
       },
 
+      // ===== FORMAT OPTIONS =====
+      {
+        displayName: 'Format Markdown',
+        name: 'format_markdown',
+        type: 'boolean',
+        default: true,
+        description: 'Convert LLM markdown (bold, italic, code, lists) to WhatsApp-native formatting',
+        displayOptions: {
+          show: { message_type: ['text'] }
+        }
+      },
+
       // ===== MEDIA MESSAGES (image, video, audio, document, sticker) =====
       {
         displayName: 'Media Source',
