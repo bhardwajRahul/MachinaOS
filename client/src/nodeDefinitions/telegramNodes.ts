@@ -247,22 +247,6 @@ export const telegramNodes: Record<string, INodeTypeDescription> = {
       description: 'Received message data (message_id, chat_id, chat_type, from_id, from_username, text, content_type, date)'
     }],
     properties: [
-      // ===== CHAT TYPE FILTER =====
-      {
-        displayName: 'Chat Type',
-        name: 'chatTypeFilter',
-        type: 'options',
-        options: [
-          { name: 'All Types', value: 'all' },
-          { name: 'Private Only', value: 'private' },
-          { name: 'Group Only', value: 'group' },
-          { name: 'Supergroup Only', value: 'supergroup' },
-          { name: 'Channel Only', value: 'channel' }
-        ],
-        default: 'all',
-        description: 'Filter by chat type'
-      },
-
       // ===== CONTENT TYPE FILTER =====
       {
         displayName: 'Content Type',
@@ -285,30 +269,62 @@ export const telegramNodes: Record<string, INodeTypeDescription> = {
         description: 'Filter by message content type'
       },
 
-      // ===== SPECIFIC FILTERS =====
+      // ===== SENDER FILTER (WhatsApp-style dropdown) =====
       {
-        displayName: 'Chat ID Filter',
+        displayName: 'Sender Filter',
+        name: 'senderFilter',
+        type: 'options',
+        options: [
+          { name: 'All Messages', value: 'all' },
+          { name: 'From Self (Bot Owner)', value: 'self' },
+          { name: 'Private Chats Only', value: 'private' },
+          { name: 'Groups Only', value: 'group' },
+          { name: 'Supergroups Only', value: 'supergroup' },
+          { name: 'Channels Only', value: 'channel' },
+          { name: 'From Specific Chat', value: 'specific_chat' },
+          { name: 'From Specific User', value: 'specific_user' },
+          { name: 'Contains Keywords', value: 'keywords' }
+        ],
+        default: 'all',
+        description: 'Filter which messages trigger the workflow'
+      },
+
+      // ===== CONDITIONAL FIELDS =====
+      {
+        displayName: 'Chat ID',
         name: 'chat_id',
         type: 'string',
         default: '',
+        required: true,
         placeholder: '123456789',
-        description: 'Only trigger for messages from this specific chat (leave empty for all chats)'
+        description: 'Only trigger for messages from this specific chat ID',
+        displayOptions: {
+          show: { senderFilter: ['specific_chat'] }
+        }
       },
       {
-        displayName: 'From User ID Filter',
+        displayName: 'User ID',
         name: 'from_user',
         type: 'string',
         default: '',
+        required: true,
         placeholder: '987654321',
-        description: 'Only trigger for messages from this specific user ID (leave empty for all users)'
+        description: 'Only trigger for messages from this specific user ID',
+        displayOptions: {
+          show: { senderFilter: ['specific_user'] }
+        }
       },
       {
         displayName: 'Keywords',
         name: 'keywords',
         type: 'string',
         default: '',
+        required: true,
         placeholder: 'help, support, info',
-        description: 'Comma-separated keywords to trigger on (case-insensitive, leave empty to trigger on all)'
+        description: 'Comma-separated keywords to trigger on (case-insensitive)',
+        displayOptions: {
+          show: { senderFilter: ['keywords'] }
+        }
       },
 
       // ===== OPTIONS =====
@@ -317,7 +333,10 @@ export const telegramNodes: Record<string, INodeTypeDescription> = {
         name: 'ignoreBots',
         type: 'boolean',
         default: true,
-        description: 'Do not trigger on messages from other bots'
+        description: 'Do not trigger on messages from other bots',
+        displayOptions: {
+          show: { senderFilter: ['all', 'private', 'group', 'supergroup', 'channel', 'specific_chat', 'specific_user', 'keywords'] }
+        }
       }
     ]
   }

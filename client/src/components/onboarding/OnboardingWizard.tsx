@@ -57,8 +57,8 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onOpenCredentials, 
       isOpen={isVisible}
       onClose={skip}
       title="Welcome Guide"
-      maxWidth="580px"
-      maxHeight="70vh"
+      maxWidth="95vw"
+      maxHeight="95vh"
       autoHeight
     >
       <div style={{
@@ -77,8 +77,8 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onOpenCredentials, 
         {/* Step content */}
         <div style={{
           overflowY: 'auto',
-          minHeight: 340,
-          maxHeight: 'calc(70vh - 200px)',
+          minHeight: 500,
+          maxHeight: 'calc(95vh - 200px)',
           paddingRight: 4,
         }}>
           {renderStep()}

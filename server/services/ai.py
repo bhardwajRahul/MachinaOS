@@ -2868,7 +2868,7 @@ class AIService:
                 """
                 operation: str = Field(
                     default="chat_history",
-                    description="Operation: 'chat_history', 'search_groups', 'get_group_info', 'get_contact_info', 'list_contacts', 'check_contacts', 'list_channels', 'get_channel_info', 'channel_messages', 'channel_stats', 'channel_follow', 'channel_unfollow', 'channel_create', 'channel_mute', 'channel_mark_viewed'"
+                    description="Operation: 'chat_history', 'search_groups', 'get_group_info', 'get_contact_info', 'list_contacts', 'check_contacts', 'list_channels', 'get_channel_info', 'channel_messages', 'channel_stats', 'channel_follow', 'channel_unfollow', 'channel_create', 'channel_mute', 'channel_mark_viewed', 'newsletter_react', 'newsletter_live_updates', 'contact_profile_pic'"
                 )
                 # For chat_history
                 chat_type: Optional[str] = Field(
@@ -2932,6 +2932,30 @@ class AIService:
                     default=None,
                     description="For channel_messages: fetch messages before this server ID (pagination)."
                 )
+                message_offset: Optional[int] = Field(
+                    default=None,
+                    description="For channel_messages: pagination offset - skip this many messages."
+                )
+                since: Optional[str] = Field(
+                    default=None,
+                    description="For channel_messages: only return messages after this Unix timestamp."
+                )
+                until: Optional[str] = Field(
+                    default=None,
+                    description="For channel_messages: only return messages before this Unix timestamp."
+                )
+                media_type: Optional[str] = Field(
+                    default=None,
+                    description="For channel_messages: filter by media type ('image', 'video', 'audio', 'document', 'sticker'). Omit for all types."
+                )
+                search: Optional[str] = Field(
+                    default=None,
+                    description="For channel_messages: search for messages containing this text."
+                )
+                include_media_data: Optional[bool] = Field(
+                    default=None,
+                    description="For chat_history/channel_messages: download base64 media data for media messages. May be slow."
+                )
                 channel_name: Optional[str] = Field(
                     default=None,
                     description="For channel_create: name of the new channel."
@@ -2946,7 +2970,30 @@ class AIService:
                 )
                 server_ids: Optional[str] = Field(
                     default=None,
-                    description="For channel_mark_viewed: comma-separated message server IDs to mark as viewed (e.g., '100, 101, 102')."
+                    description="For channel_mark_viewed/newsletter_live_updates: comma-separated message server IDs (e.g., '100, 101, 102')."
+                )
+                # Newsletter react
+                react_server_id: Optional[int] = Field(
+                    default=None,
+                    description="For newsletter_react: server ID of the message to react to."
+                )
+                reaction: Optional[str] = Field(
+                    default=None,
+                    description="For newsletter_react: reaction emoji (empty string to remove reaction)."
+                )
+                # Channel create picture
+                picture: Optional[str] = Field(
+                    default=None,
+                    description="For channel_create: base64-encoded profile picture for the channel."
+                )
+                # Contact profile picture
+                profile_pic_jid: Optional[str] = Field(
+                    default=None,
+                    description="For contact_profile_pic: JID or phone number to get profile picture for."
+                )
+                preview: Optional[bool] = Field(
+                    default=None,
+                    description="For contact_profile_pic: get low-resolution preview instead of full picture."
                 )
 
             return WhatsAppDbSchema

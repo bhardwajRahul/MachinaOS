@@ -1,9 +1,8 @@
 """
 Telegram Node Handlers
 
-Handles execution of Telegram workflow nodes:
 - telegramSend: Send messages via Telegram bot
-- telegramReceive: Trigger node that waits for incoming messages
+- telegramReceive: Routed via generic handle_trigger_node + event_waiter.build_telegram_filter()
 """
 
 import time
@@ -59,6 +58,19 @@ async def handle_telegram_send(
 
         if recipient_type == "self":
             chat_id = service.owner_chat_id
+            # Fallback: restore from credentials DB
+            if not chat_id:
+                try:
+                    from core.container import container
+                    auth = container.auth_service()
+                    saved_owner = await auth.get_api_key("telegram_owner_chat_id")
+                    if saved_owner:
+                        owner_id = int(saved_owner)
+                        await service.set_owner(owner_id)
+                        chat_id = owner_id
+                        logger.info(f"[Telegram] Owner restored from credentials: {owner_id}")
+                except Exception as e:
+                    logger.warning(f"[Telegram] Failed to restore owner from credentials: {e}")
             if not chat_id:
                 return {
                     "success": False,
@@ -228,89 +240,5 @@ async def handle_telegram_send(
         }
 
 
-async def handle_telegram_receive(
-    node_id: str,
-    node_type: str,
-    parameters: Dict[str, Any],
-    context: Dict[str, Any]
-) -> Dict[str, Any]:
-    """Handle Telegram receive trigger node.
-
-    This is an event-driven trigger that waits for incoming Telegram messages.
-    Uses the event_waiter system to register a waiter and wait for matching events.
-
-    Filter Parameters:
-        - chatTypeFilter: all, private, group, supergroup, channel
-        - contentTypeFilter: all, text, photo, video, document, location, contact
-        - chat_id: Filter to specific chat (optional)
-        - from_user: Filter to specific user ID (optional)
-        - keywords: Comma-separated keywords to match in text (optional)
-        - ignoreBots: Ignore messages from bots (default: True)
-
-    Returns:
-        The matched Telegram message data
-    """
-    from services import event_waiter
-    from services.status_broadcaster import get_status_broadcaster
-    from services.telegram_service import get_telegram_service
-
-    start_time = time.time()
-    broadcaster = get_status_broadcaster()
-    service = get_telegram_service()
-
-    try:
-        # Check if bot is connected
-        if not service.connected:
-            return {
-                "success": False,
-                "node_id": node_id,
-                "node_type": node_type,
-                "error": "Telegram bot not connected. Add bot token in Credentials.",
-                "execution_time": time.time() - start_time,
-                "timestamp": datetime.now().isoformat()
-            }
-
-        # Register waiter with filter
-        waiter = event_waiter.register(node_type, node_id, parameters)
-
-        logger.info(f"[Telegram] Trigger {node_id} waiting for message (waiter_id={waiter.id})")
-
-        # Broadcast waiting status
-        await broadcaster.update_node_status(
-            node_id,
-            "waiting",
-            {
-                "message": "Waiting for Telegram message...",
-                "waiter_id": waiter.id,
-                "filters": {
-                    "chat_type": parameters.get("chatTypeFilter", "all"),
-                    "content_type": parameters.get("contentTypeFilter", "all"),
-                    "keywords": parameters.get("keywords", ""),
-                }
-            }
-        )
-
-        # Wait for matching event (no timeout - user cancels via cancel_event_wait)
-        event_data = await waiter.future
-
-        logger.info(f"[Telegram] Trigger {node_id} received message: {event_data.get('content_type')} from {event_data.get('from_username', event_data.get('from_id'))}")
-
-        return {
-            "success": True,
-            "node_id": node_id,
-            "node_type": node_type,
-            "result": event_data,
-            "execution_time": time.time() - start_time,
-            "timestamp": datetime.now().isoformat()
-        }
-
-    except Exception as e:
-        logger.error(f"[Telegram] Receive failed: {e}")
-        return {
-            "success": False,
-            "node_id": node_id,
-            "node_type": node_type,
-            "error": str(e),
-            "execution_time": time.time() - start_time,
-            "timestamp": datetime.now().isoformat()
-        }
+    # telegramReceive: routed via generic handle_trigger_node in node_executor.py
+    # Filter logic lives in event_waiter.build_telegram_filter() with lazy _get_owner_chat_id()

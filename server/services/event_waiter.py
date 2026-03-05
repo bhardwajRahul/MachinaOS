@@ -432,78 +432,112 @@ def build_gmail_filter(params: Dict) -> Callable[[Dict], bool]:
 def build_telegram_filter(params: Dict) -> Callable[[Dict], bool]:
     """Build filter function for Telegram messages.
 
-    Filters by:
-    - chatTypeFilter: 'all', 'private', 'group', 'supergroup', 'channel'
-    - contentTypeFilter: 'all', 'text', 'photo', 'video', 'audio', 'voice', 'document', 'sticker', 'location', 'contact', 'poll'
-    - chat_id: Filter to specific chat (optional)
-    - from_user: Filter to specific user ID (optional)
-    - keywords: Comma-separated keywords to match in text (optional)
-    - ignoreBots: Ignore messages from bots (default: True)
+    Supports new senderFilter-based params and legacy chatTypeFilter/chat_id/from_user params.
+
+    New parameter: senderFilter
+        - 'all': Accept all messages
+        - 'self': Only messages from the bot owner (uses injected _owner_chat_id)
+        - 'private': Only private (DM) chats
+        - 'group': Only group chats
+        - 'supergroup': Only supergroup chats
+        - 'channel': Only channel posts
+        - 'specific_chat': Only from specific chat_id
+        - 'specific_user': Only from specific from_user
+        - 'keywords': Messages containing specific keywords
+
+    Legacy parameters (backward compat):
+        - chatTypeFilter: 'all', 'private', 'group', 'supergroup', 'channel'
+        - chat_id, from_user, keywords, ignoreBots
 
     Event data fields (from TelegramService._format_message):
-    - message_id: int
-    - chat_id: int
-    - chat_type: str ('private', 'group', 'supergroup', 'channel')
-    - chat_title: str (for groups/channels)
-    - from_id: int (sender user ID)
-    - from_username: str (sender username)
-    - from_first_name: str
-    - from_last_name: str
-    - is_bot: bool
-    - text: str (message text or caption)
-    - content_type: str
-    - date: str (ISO format)
-    - reply_to_message_id: int (optional)
-    - photo/document/location/contact: dict (media info if present)
+        message_id, chat_id, chat_type, chat_title, from_id, from_username,
+        from_first_name, from_last_name, is_bot, text, content_type, date,
+        reply_to_message_id, photo/document/location/contact dicts
 
     Args:
-        params: Node parameters
+        params: Node parameters (may include injected _owner_chat_id)
 
     Returns:
         Filter function that checks if event matches criteria
     """
-    chat_type_filter = params.get('chatTypeFilter', 'all')
+    # New-style senderFilter (takes precedence)
+    sender_filter = params.get('senderFilter', '')
+
+    # Legacy fallback: reconstruct from old params if senderFilter absent
+    if not sender_filter:
+        chat_type_filter = params.get('chatTypeFilter', 'all')
+        old_chat_id = params.get('chat_id', '')
+        old_from_user = params.get('from_user', '')
+        old_keywords = params.get('keywords', '')
+
+        if old_chat_id:
+            sender_filter = 'specific_chat'
+        elif old_from_user:
+            sender_filter = 'specific_user'
+        elif old_keywords:
+            sender_filter = 'keywords'
+        elif chat_type_filter != 'all':
+            sender_filter = chat_type_filter
+        else:
+            sender_filter = 'all'
+
     content_type_filter = params.get('contentTypeFilter', 'all')
     chat_id_filter = params.get('chat_id', '')
     from_user_filter = params.get('from_user', '')
     keywords = [k.strip().lower() for k in params.get('keywords', '').split(',') if k.strip()]
     ignore_bots = params.get('ignoreBots', True)
+    owner_chat_id = params.get('_owner_chat_id')
 
-    logger.debug(f"[TelegramFilter] Built: chat_type={chat_type_filter}, content_type={content_type_filter}, chat_id='{chat_id_filter}', ignore_bots={ignore_bots}")
+    logger.debug(f"[TelegramFilter] Built: sender={sender_filter}, content_type={content_type_filter}, owner_chat_id={owner_chat_id}")
+
+    def _get_owner_chat_id() -> object:
+        """Get owner_chat_id dynamically - handles case where owner is detected
+        after the filter was built (first message to bot captures the owner)."""
+        if owner_chat_id:
+            return owner_chat_id
+        # Lazy lookup from service at match time
+        try:
+            from services.telegram_service import get_telegram_service
+            service = get_telegram_service()
+            return service.owner_chat_id
+        except Exception:
+            return None
 
     def matches(m: Dict) -> bool:
-        # Chat type filter
-        if chat_type_filter != 'all':
-            msg_chat_type = m.get('chat_type', '')
-            if msg_chat_type != chat_type_filter:
-                return False
-
-        # Content type filter
+        # Content type filter (always applies)
         if content_type_filter != 'all':
-            msg_content_type = m.get('content_type', '')
-            if msg_content_type != content_type_filter:
+            if m.get('content_type', '') != content_type_filter:
                 return False
 
-        # Chat ID filter (exact match)
-        if chat_id_filter:
-            msg_chat_id = str(m.get('chat_id', ''))
-            if msg_chat_id != str(chat_id_filter):
+        # Sender filter
+        if sender_filter == 'self':
+            current_owner = _get_owner_chat_id()
+            if not current_owner:
+                logger.debug("[TelegramFilter] Rejecting: owner_chat_id not available")
+                return False
+            if str(m.get('from_id', '')) != str(current_owner):
                 return False
 
-        # From user filter (user ID)
-        if from_user_filter:
-            msg_from_id = str(m.get('from_id', ''))
-            if msg_from_id != str(from_user_filter):
+        elif sender_filter in ('private', 'group', 'supergroup', 'channel'):
+            if m.get('chat_type', '') != sender_filter:
                 return False
 
-        # Keywords filter (any keyword in text)
-        if keywords:
-            text = (m.get('text') or '').lower()
-            if not any(kw in text for kw in keywords):
+        elif sender_filter == 'specific_chat':
+            if chat_id_filter and str(m.get('chat_id', '')) != str(chat_id_filter):
                 return False
 
-        # Ignore bot messages
-        if ignore_bots and m.get('is_bot', False):
+        elif sender_filter == 'specific_user':
+            if from_user_filter and str(m.get('from_id', '')) != str(from_user_filter):
+                return False
+
+        elif sender_filter == 'keywords':
+            if keywords:
+                text = (m.get('text') or '').lower()
+                if not any(kw in text for kw in keywords):
+                    return False
+
+        # Ignore bot messages (skip for 'self' filter)
+        if sender_filter != 'self' and ignore_bots and m.get('is_bot', False):
             return False
 
         logger.debug(f"[TelegramFilter] Matched message from {m.get('from_username', m.get('from_id'))}")
@@ -816,16 +850,26 @@ def dispatch(event_type: str, data: Dict) -> int:
     resolved = 0
     to_remove = []
 
-    for wid, w in _waiters.items():
-        if w.event_type == event_type and w.future and not w.future.done():
-            try:
-                if w.filter_fn(data):
-                    w.future.set_result(data)
-                    to_remove.append(wid)
-                    resolved += 1
-                    logger.debug(f"[EventWaiter] Resolved {w.node_type} waiter {wid}")
-            except Exception as e:
-                logger.error(f"[EventWaiter] Filter error for waiter {wid}: {e}")
+    matching_waiters = [(wid, w) for wid, w in _waiters.items()
+                        if w.event_type == event_type and w.future and not w.future.done()]
+
+    if not matching_waiters:
+        logger.debug(f"[EventWaiter] No active waiters for {event_type} (total waiters: {len(_waiters)})")
+    else:
+        logger.info(f"[EventWaiter] Dispatching {event_type} to {len(matching_waiters)} waiter(s)",
+                    event_type=event_type, from_id=data.get('from_id'), text=str(data.get('text', ''))[:50])
+
+    for wid, w in matching_waiters:
+        try:
+            if w.filter_fn(data):
+                w.future.set_result(data)
+                to_remove.append(wid)
+                resolved += 1
+                logger.info(f"[EventWaiter] Resolved {w.node_type} waiter {wid}")
+            else:
+                logger.debug(f"[EventWaiter] Filter rejected for {w.node_type} waiter {wid}")
+        except Exception as e:
+            logger.error(f"[EventWaiter] Filter error for waiter {wid}: {e}")
 
     for wid in to_remove:
         _waiters.pop(wid, None)

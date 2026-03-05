@@ -48,6 +48,25 @@ async def handle_trigger_node(
         }
 
     try:
+        # Telegram pre-check: verify bot is connected before waiting
+        if node_type == 'telegramReceive':
+            from services.telegram_service import get_telegram_service
+            service = get_telegram_service()
+            if not service.connected:
+                return {
+                    "success": False,
+                    "node_id": node_id,
+                    "node_type": node_type,
+                    "error": "Telegram bot not connected. Add bot token in Credentials.",
+                    "execution_time": time.time() - start_time,
+                    "timestamp": datetime.now().isoformat()
+                }
+            sender_filter = parameters.get('senderFilter', 'all')
+            logger.info("Telegram trigger starting",
+                       node_id=node_id, sender_filter=sender_filter,
+                       owner_detected=service.owner_chat_id is not None,
+                       execution_id=execution_id)
+
         # Register waiter for this trigger (async to pre-fetch LID cache)
         waiter = await event_waiter.register(node_type, node_id, parameters)
 
@@ -71,7 +90,7 @@ async def handle_trigger_node(
         # Uses wait_for_event which handles both Redis Streams and asyncio.Future modes
         try:
             event_data = await event_waiter.wait_for_event(waiter)
-            logger.info("Event received", node_id=node_id, execution_id=execution_id)
+            logger.info("Event received", node_id=node_id, node_type=node_type, execution_id=execution_id)
 
             # Success - event received
             return {

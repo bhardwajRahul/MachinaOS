@@ -11,7 +11,9 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 
 from telegram import Bot, Update
+from telegram.error import BadRequest
 from telegram.ext import Application, ContextTypes, MessageHandler, filters
+from telegram.helpers import escape_markdown
 
 logger = logging.getLogger(__name__)
 
@@ -171,6 +173,7 @@ class TelegramService:
             self._connected = False
             self._polling_task = None
             self._owner_chat_id = None
+            self._bot_info = {}
 
             # Broadcast disconnected status
             await self._broadcast_status()
@@ -218,20 +221,21 @@ class TelegramService:
                 logger.info(f"[Telegram] Owner detected: @{msg.from_user.username} (ID: {msg.from_user.id})")
                 # Persist to credentials DB so it survives reconnects
                 try:
-                    from services.auth import get_auth_service
-                    auth = get_auth_service()
-                    await auth.store_api_key("telegram_owner_chat_id", str(msg.from_user.id))
+                    from core.container import container
+                    auth = container.auth_service()
+                    await auth.store_api_key("telegram_owner_chat_id", str(msg.from_user.id), models=[])
                 except Exception as persist_err:
                     logger.warning(f"[Telegram] Failed to persist owner chat_id: {persist_err}")
                 await self._broadcast_status()
 
             event_data = self._format_message(msg)
 
-            logger.debug(f"[Telegram] Message received: {event_data.get('content_type')} from {event_data.get('from_username', event_data.get('from_id'))}")
+            logger.info(f"[Telegram] Message received: {event_data.get('content_type')} from {event_data.get('from_username', event_data.get('from_id'))}, chat_type={event_data.get('chat_type')}")
 
             # Dispatch to event_waiter for trigger nodes
             from services import event_waiter
-            event_waiter.dispatch("telegram_message_received", event_data)
+            resolved = event_waiter.dispatch("telegram_message_received", event_data)
+            logger.info(f"[Telegram] Dispatched to {resolved} waiter(s)")
 
         except Exception as e:
             logger.error(f"[Telegram] Message handler error: {e}")
@@ -328,6 +332,22 @@ class TelegramService:
     # Send Methods
     # =========================================================================
 
+    @staticmethod
+    def _escape_text(text: str, parse_mode: Optional[str]) -> str:
+        """Escape reserved characters for the given parse mode.
+
+        MarkdownV2 reserves: _ * [ ] ( ) ~ ` > # + - = | { } . !
+        Markdown (v1) reserves: _ * ` [
+        HTML: no escaping needed (Telegram handles it).
+        """
+        if not text or not parse_mode:
+            return text
+        if parse_mode == "MarkdownV2":
+            return escape_markdown(text, version=2)
+        if parse_mode == "Markdown":
+            return escape_markdown(text, version=1)
+        return text
+
     async def send_message(
         self,
         chat_id: str | int,
@@ -351,13 +371,29 @@ class TelegramService:
         if not self._bot:
             raise ValueError("Telegram bot not connected")
 
-        msg = await self._bot.send_message(
-            chat_id=chat_id,
-            text=text,
-            parse_mode=parse_mode if parse_mode else None,
-            disable_notification=disable_notification,
-            reply_to_message_id=reply_to_message_id,
-        )
+        effective_pm = parse_mode if parse_mode else None
+        safe_text = self._escape_text(text, effective_pm)
+
+        try:
+            msg = await self._bot.send_message(
+                chat_id=chat_id,
+                text=safe_text,
+                parse_mode=effective_pm,
+                disable_notification=disable_notification,
+                reply_to_message_id=reply_to_message_id,
+            )
+        except BadRequest as e:
+            if "can't parse entities" in str(e).lower() and effective_pm:
+                logger.warning(f"[Telegram] Parse mode {effective_pm} failed, sending as plain text")
+                msg = await self._bot.send_message(
+                    chat_id=chat_id,
+                    text=text,
+                    parse_mode=None,
+                    disable_notification=disable_notification,
+                    reply_to_message_id=reply_to_message_id,
+                )
+            else:
+                raise
 
         return {
             "message_id": msg.message_id,
@@ -391,14 +427,31 @@ class TelegramService:
         if not self._bot:
             raise ValueError("Telegram bot not connected")
 
-        msg = await self._bot.send_photo(
-            chat_id=chat_id,
-            photo=photo,
-            caption=caption,
-            parse_mode=parse_mode if parse_mode else None,
-            disable_notification=disable_notification,
-            reply_to_message_id=reply_to_message_id,
-        )
+        effective_pm = parse_mode if parse_mode else None
+        safe_caption = self._escape_text(caption, effective_pm) if caption else caption
+
+        try:
+            msg = await self._bot.send_photo(
+                chat_id=chat_id,
+                photo=photo,
+                caption=safe_caption,
+                parse_mode=effective_pm,
+                disable_notification=disable_notification,
+                reply_to_message_id=reply_to_message_id,
+            )
+        except BadRequest as e:
+            if "can't parse entities" in str(e).lower() and effective_pm:
+                logger.warning(f"[Telegram] Parse mode {effective_pm} failed for photo caption, sending as plain text")
+                msg = await self._bot.send_photo(
+                    chat_id=chat_id,
+                    photo=photo,
+                    caption=caption,
+                    parse_mode=None,
+                    disable_notification=disable_notification,
+                    reply_to_message_id=reply_to_message_id,
+                )
+            else:
+                raise
 
         return {
             "message_id": msg.message_id,
@@ -431,14 +484,31 @@ class TelegramService:
         if not self._bot:
             raise ValueError("Telegram bot not connected")
 
-        msg = await self._bot.send_document(
-            chat_id=chat_id,
-            document=document,
-            caption=caption,
-            parse_mode=parse_mode if parse_mode else None,
-            disable_notification=disable_notification,
-            reply_to_message_id=reply_to_message_id,
-        )
+        effective_pm = parse_mode if parse_mode else None
+        safe_caption = self._escape_text(caption, effective_pm) if caption else caption
+
+        try:
+            msg = await self._bot.send_document(
+                chat_id=chat_id,
+                document=document,
+                caption=safe_caption,
+                parse_mode=effective_pm,
+                disable_notification=disable_notification,
+                reply_to_message_id=reply_to_message_id,
+            )
+        except BadRequest as e:
+            if "can't parse entities" in str(e).lower() and effective_pm:
+                logger.warning(f"[Telegram] Parse mode {effective_pm} failed for document caption, sending as plain text")
+                msg = await self._bot.send_document(
+                    chat_id=chat_id,
+                    document=document,
+                    caption=caption,
+                    parse_mode=None,
+                    disable_notification=disable_notification,
+                    reply_to_message_id=reply_to_message_id,
+                )
+            else:
+                raise
 
         return {
             "message_id": msg.message_id,

@@ -255,6 +255,44 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                 server_ids: 'string',
                 status: 'string'
               },
+              telegram: {
+                message_id: 'number',
+                chat_id: 'number',
+                chat_type: 'string',
+                chat_title: 'string',
+                from_id: 'number',
+                from_username: 'string',
+                from_first_name: 'string',
+                from_last_name: 'string',
+                is_bot: 'boolean',
+                text: 'string',
+                content_type: 'string',
+                date: 'string',
+                reply_to_message_id: 'number',
+                photo: {
+                  file_id: 'string',
+                  file_unique_id: 'string',
+                  width: 'number',
+                  height: 'number',
+                  file_size: 'number'
+                },
+                document: {
+                  file_id: 'string',
+                  file_name: 'string',
+                  mime_type: 'string',
+                  file_size: 'number'
+                },
+                location: {
+                  latitude: 'number',
+                  longitude: 'number'
+                },
+                contact: {
+                  phone_number: 'string',
+                  first_name: 'string',
+                  last_name: 'string',
+                  user_id: 'number'
+                }
+              },
               webhook: {
                 method: 'string',
                 path: 'string',
@@ -704,6 +742,7 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
             const isCronScheduler = nodeType === 'cronScheduler';
             const isChatTrigger = nodeType === 'chatTrigger';
             const isTaskTrigger = nodeType === 'taskTrigger';
+            const isTelegramReceive = nodeType === 'telegramReceive';
             const isSocialReceive = nodeType === 'socialReceive';
             const isSocialSend = nodeType === 'socialSend';
             const isSearchNode = nodeType === 'braveSearch' || nodeType === 'serperSearch' || nodeType === 'perplexitySearch';
@@ -765,6 +804,7 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                             isCronScheduler ? sampleSchemas.cronScheduler :
                             isChatTrigger ? sampleSchemas.chatTrigger :
                             isTaskTrigger ? sampleSchemas.taskTrigger :
+                            isTelegramReceive ? sampleSchemas.telegram :
                             isSocialReceive ? sampleSchemas.social :
                             isSocialSend ? sampleSchemas.socialSend :
                             isApify ? sampleSchemas.apify :

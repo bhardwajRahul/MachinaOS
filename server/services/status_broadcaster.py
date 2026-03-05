@@ -96,6 +96,9 @@ class StatusBroadcaster:
         # Fetch Google Workspace status from stored OAuth tokens
         await self._refresh_google_status()
 
+        # Refresh Telegram status from stored token and auto-reconnect
+        await self._refresh_telegram_status()
+
         # Auto-reconnect Android relay if there's a stored session
         await self._auto_reconnect_android_relay()
 
@@ -327,6 +330,83 @@ class StatusBroadcaster:
             logger.debug(f"[StatusBroadcaster] Google status: connected as {tokens.get('email')}")
         except Exception as e:
             logger.debug(f"[StatusBroadcaster] Could not refresh Google status: {e}")
+
+    async def _refresh_telegram_status(self):
+        """Refresh Telegram status from stored credentials and auto-reconnect.
+
+        Called on client connect. If bot has a stored token and isn't connected,
+        attempts auto-reconnect (mirrors the Android relay reconnect pattern).
+        """
+        try:
+            from services.telegram_service import get_telegram_service
+            service = get_telegram_service()
+
+            # If already connected, just sync status cache
+            if service.connected:
+                status = service.get_status()
+                self._status["telegram"] = {
+                    "connected": True,
+                    "bot_id": status.get("bot_id"),
+                    "bot_username": status.get("bot_username"),
+                    "bot_name": status.get("bot_name"),
+                    "owner_chat_id": status.get("owner_chat_id"),
+                    "has_stored_token": True,
+                }
+                logger.debug(f"[StatusBroadcaster] Telegram already connected: @{status.get('bot_username')}")
+                return
+
+            # Not connected - check for stored token
+            from core.container import container
+            auth_service = container.auth_service()
+            stored_token = await auth_service.get_api_key("telegram_bot_token")
+
+            if not stored_token:
+                self._status["telegram"] = {
+                    "connected": False,
+                    "bot_id": None,
+                    "bot_username": None,
+                    "bot_name": None,
+                    "owner_chat_id": None,
+                    "has_stored_token": False,
+                }
+                return
+
+            # Has stored token but not connected - auto-reconnect
+            logger.info("[StatusBroadcaster] Auto-reconnecting Telegram bot...")
+            result = await service.connect(stored_token)
+
+            if result.get("success"):
+                # Restore owner_chat_id from credentials
+                try:
+                    saved_owner = await auth_service.get_api_key("telegram_owner_chat_id")
+                    if saved_owner:
+                        await service.set_owner(int(saved_owner))
+                except Exception:
+                    pass
+
+                status = service.get_status()
+                self._status["telegram"] = {
+                    "connected": True,
+                    "bot_id": status.get("bot_id"),
+                    "bot_username": status.get("bot_username"),
+                    "bot_name": status.get("bot_name"),
+                    "owner_chat_id": status.get("owner_chat_id"),
+                    "has_stored_token": True,
+                }
+                logger.info(f"[StatusBroadcaster] Telegram auto-reconnected: @{status.get('bot_username')}")
+            else:
+                self._status["telegram"] = {
+                    "connected": False,
+                    "bot_id": None,
+                    "bot_username": None,
+                    "bot_name": None,
+                    "owner_chat_id": None,
+                    "has_stored_token": True,
+                }
+                logger.warning(f"[StatusBroadcaster] Telegram auto-reconnect failed: {result.get('error')}")
+
+        except Exception as e:
+            logger.debug(f"[StatusBroadcaster] Could not refresh Telegram status: {e}")
 
     async def _auto_reconnect_android_relay(self):
         """Auto-reconnect to Android relay if there's a stored pairing session.

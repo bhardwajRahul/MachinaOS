@@ -814,6 +814,23 @@ const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey,
     }
   };
 
+  const handleTelegramSave = async () => {
+    if (!telegramToken.trim()) {
+      setTelegramError('Bot token is required');
+      return;
+    }
+    setTelegramLoading('save');
+    setTelegramError(null);
+    try {
+      await saveApiKey('telegram_bot_token', telegramToken.trim());
+      setTelegramTokenStored(true);
+    } catch (err: any) {
+      setTelegramError(err.message || 'Failed to save token');
+    } finally {
+      setTelegramLoading(null);
+    }
+  };
+
   const handleTelegramRefreshStatus = async () => {
     setTelegramLoading('refresh');
     setTelegramError(null);
@@ -1940,7 +1957,7 @@ const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey,
                 <Button
                   onClick={handleTelegramConnect}
                   loading={telegramLoading === 'connect'}
-                  disabled={!telegramToken.trim() && !telegramTokenStored}
+                  disabled={!telegramToken.trim()}
                   style={{
                     backgroundColor: `${theme.dracula.green}25`,
                     borderColor: `${theme.dracula.green}60`,
@@ -1949,6 +1966,19 @@ const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey,
                 >
                   Connect
                 </Button>
+                {telegramToken.trim() && (
+                  <Button
+                    onClick={handleTelegramSave}
+                    loading={telegramLoading === 'save'}
+                    style={{
+                      backgroundColor: `${theme.dracula.yellow}25`,
+                      borderColor: `${theme.dracula.yellow}60`,
+                      color: theme.dracula.yellow,
+                    }}
+                  >
+                    Save
+                  </Button>
+                )}
                 {telegramTokenStored && (
                   <Button
                     onClick={handleTelegramReconnect}

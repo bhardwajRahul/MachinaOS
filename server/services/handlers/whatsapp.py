@@ -1,8 +1,9 @@
 """WhatsApp node handlers - Send and DB operations."""
 
+import asyncio
 import time
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, List
 from core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -48,6 +49,73 @@ async def _resolve_to_jid(value: str, rpc_call) -> str:
         if jid:
             return jid
     raise ValueError(f"Could not resolve invite link to channel JID: {value}")
+
+
+# Media types that can be downloaded via the media RPC
+MEDIA_MESSAGE_TYPES = frozenset({'image', 'video', 'audio', 'document', 'sticker'})
+
+
+async def _download_single_media(message: Dict[str, Any], rpc_call) -> None:
+    """Download media for a single message in-place. Mutates the message dict."""
+    message_id = message.get('message_id') or message.get('id')
+    if not message_id:
+        return
+    try:
+        data = await rpc_call('media', {'message_id': message_id})
+        if isinstance(data, dict):
+            result = data.get('result', data)
+            if result.get('data'):
+                message['media_data'] = result['data']
+                message['media_mime_type'] = result.get('mime_type', '')
+            else:
+                message['media_error'] = result.get('error', 'No media data returned')
+        else:
+            message['media_error'] = 'Unexpected response format'
+    except Exception as e:
+        message['media_error'] = str(e)
+
+
+async def _enrich_messages_with_media(
+    messages: List[Dict[str, Any]],
+    rpc_call,
+    max_concurrent: int = 5
+) -> List[Dict[str, Any]]:
+    """Download media for messages that contain media types.
+
+    Uses asyncio.Semaphore for concurrency control and asyncio.gather
+    for parallel downloads. Gracefully handles per-message failures.
+
+    Args:
+        messages: List of message dicts (mutated in-place)
+        rpc_call: The whatsapp_rpc_call function
+        max_concurrent: Max parallel media downloads
+
+    Returns:
+        The same messages list (mutated with media_data/media_error fields)
+    """
+    semaphore = asyncio.Semaphore(max_concurrent)
+
+    async def download_with_semaphore(msg: Dict[str, Any]) -> None:
+        async with semaphore:
+            await _download_single_media(msg, rpc_call)
+
+    # Filter to only media messages
+    media_messages = [
+        msg for msg in messages
+        if msg.get('message_type', msg.get('type', '')) in MEDIA_MESSAGE_TYPES
+    ]
+
+    if not media_messages:
+        return messages
+
+    logger.info(f"Downloading media for {len(media_messages)} messages (max concurrent: {max_concurrent})")
+
+    await asyncio.gather(
+        *(download_with_semaphore(msg) for msg in media_messages),
+        return_exceptions=True
+    )
+
+    return messages
 
 
 async def handle_whatsapp_send(
@@ -220,7 +288,7 @@ async def handle_whatsapp_db(
         operation = parameters.get('operation', 'chat_history')
 
         if operation == 'chat_history':
-            return await _handle_chat_history(node_id, parameters, start_time, whatsapp_chat_history_handler)
+            return await _handle_chat_history(node_id, parameters, start_time, whatsapp_chat_history_handler, whatsapp_rpc_call)
         elif operation == 'search_groups':
             return await _handle_search_groups(node_id, parameters, start_time, whatsapp_rpc_call)
         elif operation == 'get_group_info':
@@ -249,6 +317,12 @@ async def handle_whatsapp_db(
             return await _handle_channel_mute(node_id, parameters, start_time, whatsapp_rpc_call)
         elif operation == 'channel_mark_viewed':
             return await _handle_channel_mark_viewed(node_id, parameters, start_time, whatsapp_rpc_call)
+        elif operation == 'newsletter_react':
+            return await _handle_newsletter_react(node_id, parameters, start_time, whatsapp_rpc_call)
+        elif operation == 'newsletter_live_updates':
+            return await _handle_newsletter_live_updates(node_id, parameters, start_time, whatsapp_rpc_call)
+        elif operation == 'contact_profile_pic':
+            return await _handle_contact_profile_pic(node_id, parameters, start_time, whatsapp_rpc_call)
         else:
             raise ValueError(f"Unknown operation: {operation}")
 
@@ -264,7 +338,7 @@ async def handle_whatsapp_db(
         }
 
 
-async def _handle_chat_history(node_id: str, parameters: Dict[str, Any], start_time: float, handler) -> Dict[str, Any]:
+async def _handle_chat_history(node_id: str, parameters: Dict[str, Any], start_time: float, handler, rpc_call=None) -> Dict[str, Any]:
     """Handle chat_history operation."""
     chat_type = parameters.get('chat_type', 'individual')
     rpc_params: Dict[str, Any] = {}
@@ -300,6 +374,10 @@ async def _handle_chat_history(node_id: str, parameters: Dict[str, Any], start_t
     base_offset = rpc_params.get('offset', 0)
     for i, msg in enumerate(messages):
         msg['index'] = base_offset + i + 1
+
+    # Enrich with media data if requested
+    if parameters.get('include_media_data') and rpc_call and messages:
+        await _enrich_messages_with_media(messages, rpc_call)
 
     return {
         "success": True,
@@ -512,6 +590,38 @@ async def _handle_check_contacts(node_id: str, parameters: Dict[str, Any], start
     }
 
 
+async def _handle_contact_profile_pic(node_id: str, parameters: Dict[str, Any], start_time: float, rpc_call) -> Dict[str, Any]:
+    """Handle contact_profile_pic operation - get profile picture for a contact/group."""
+    jid = parameters.get('profile_pic_jid') or parameters.get('phone')
+    if not jid:
+        raise ValueError("JID or phone number is required")
+
+    rpc_params: Dict[str, Any] = {'jid': jid}
+    preview = parameters.get('preview', False)
+    if preview:
+        rpc_params['preview'] = True
+
+    data = await rpc_call('contact_profile_pic', rpc_params)
+
+    if isinstance(data, dict) and not data.get('success', True):
+        raise Exception(data.get('error', 'Failed to get profile picture'))
+
+    result = data if not isinstance(data, dict) or 'result' not in data else data.get('result', data)
+
+    return {
+        "success": True,
+        "node_id": node_id,
+        "node_type": "whatsappDb",
+        "result": {
+            "operation": "contact_profile_pic",
+            **(result if isinstance(result, dict) else {"url": result}),
+            "timestamp": datetime.now().isoformat()
+        },
+        "execution_time": time.time() - start_time,
+        "timestamp": datetime.now().isoformat()
+    }
+
+
 async def _handle_list_channels(node_id: str, parameters: Dict[str, Any], start_time: float, rpc_call) -> Dict[str, Any]:
     """Handle list_channels operation - list subscribed newsletter channels."""
     refresh = parameters.get('refresh', False)
@@ -585,7 +695,11 @@ async def _handle_get_channel_info(node_id: str, parameters: Dict[str, Any], sta
 
 
 async def _handle_channel_messages(node_id: str, parameters: Dict[str, Any], start_time: float, rpc_call) -> Dict[str, Any]:
-    """Handle channel_messages operation - get channel message history."""
+    """Handle channel_messages operation - get channel message history.
+
+    Schema params (newsletter_messages RPC):
+      jid (required), count, offset, before, since, until, media_type, search, refresh
+    """
     channel_jid = parameters.get('channel_jid')
     jid = await _resolve_to_jid(channel_jid, rpc_call)
 
@@ -596,12 +710,44 @@ async def _handle_channel_messages(node_id: str, parameters: Dict[str, Any], sta
     if before_server_id:
         rpc_params['before'] = int(before_server_id)
 
+    # Pagination offset
+    msg_offset = parameters.get('message_offset')
+    if msg_offset:
+        rpc_params['offset'] = int(msg_offset)
+
+    # Date range filters (unix timestamps as strings)
+    since = parameters.get('since')
+    if since:
+        rpc_params['since'] = str(since)
+
+    until = parameters.get('until')
+    if until:
+        rpc_params['until'] = str(until)
+
+    # Media type filter
+    media_type = parameters.get('media_type')
+    if media_type and media_type != 'all':
+        rpc_params['media_type'] = media_type
+
+    # Text search
+    search = parameters.get('search')
+    if search:
+        rpc_params['search'] = search
+
+    # Force refresh bypassing cache
+    if parameters.get('refresh'):
+        rpc_params['refresh'] = True
+
     data = await rpc_call('newsletter_messages', rpc_params)
 
     if isinstance(data, dict) and not data.get('success', True):
         raise Exception(data.get('error', 'Failed to get channel messages'))
 
     messages = data if isinstance(data, list) else data.get('result', [])
+
+    # Enrich with media data if requested
+    if parameters.get('include_media_data') and messages:
+        await _enrich_messages_with_media(messages, rpc_call)
 
     return {
         "success": True,
@@ -710,6 +856,9 @@ async def _handle_channel_create(node_id: str, parameters: Dict[str, Any], start
     description = parameters.get('channel_description')
     if description:
         rpc_params['description'] = description
+    picture = parameters.get('picture')
+    if picture:
+        rpc_params['picture'] = picture
 
     data = await rpc_call('newsletter_create', rpc_params)
 
@@ -790,6 +939,81 @@ async def _handle_channel_mark_viewed(node_id: str, parameters: Dict[str, Any], 
             "channel_jid": channel_jid,
             "server_ids": ','.join(str(s) for s in server_ids),
             "status": "marked_viewed",
+            "timestamp": datetime.now().isoformat()
+        },
+        "execution_time": time.time() - start_time,
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+async def _handle_newsletter_react(node_id: str, parameters: Dict[str, Any], start_time: float, rpc_call) -> Dict[str, Any]:
+    """Handle newsletter_react operation - react to a channel message."""
+    channel_jid = parameters.get('channel_jid')
+    jid = await _resolve_to_jid(channel_jid, rpc_call)
+
+    server_id = parameters.get('react_server_id')
+    if not server_id:
+        raise ValueError("Message server ID is required")
+
+    reaction = parameters.get('reaction', '')
+
+    rpc_params: Dict[str, Any] = {
+        'jid': jid,
+        'server_id': int(server_id),
+        'reaction': reaction
+    }
+
+    data = await rpc_call('newsletter_react', rpc_params)
+
+    if isinstance(data, dict) and not data.get('success', True):
+        raise Exception(data.get('error', 'Failed to react to channel message'))
+
+    return {
+        "success": True,
+        "node_id": node_id,
+        "node_type": "whatsappDb",
+        "result": {
+            "operation": "newsletter_react",
+            "channel_jid": channel_jid,
+            "server_id": int(server_id),
+            "reaction": reaction,
+            "timestamp": datetime.now().isoformat()
+        },
+        "execution_time": time.time() - start_time,
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+async def _handle_newsletter_live_updates(node_id: str, parameters: Dict[str, Any], start_time: float, rpc_call) -> Dict[str, Any]:
+    """Handle newsletter_live_updates operation - subscribe to live view/reaction counts."""
+    channel_jid = parameters.get('channel_jid')
+    jid = await _resolve_to_jid(channel_jid, rpc_call)
+
+    server_ids_raw = parameters.get('server_ids', '')
+    if not server_ids_raw:
+        raise ValueError("server_ids is required (comma-separated message IDs)")
+
+    server_ids = [int(sid.strip()) for sid in str(server_ids_raw).split(',') if sid.strip()]
+    if not server_ids:
+        raise ValueError("At least one server_id is required")
+
+    rpc_params = {'jid': jid, 'server_ids': server_ids}
+
+    data = await rpc_call('newsletter_live_updates', rpc_params)
+
+    if isinstance(data, dict) and not data.get('success', True):
+        raise Exception(data.get('error', 'Failed to subscribe to live updates'))
+
+    result = data if not isinstance(data, dict) or 'result' not in data else data.get('result', data)
+
+    return {
+        "success": True,
+        "node_id": node_id,
+        "node_type": "whatsappDb",
+        "result": {
+            "operation": "newsletter_live_updates",
+            "channel_jid": channel_jid,
+            **(result if isinstance(result, dict) else {}),
             "timestamp": datetime.now().isoformat()
         },
         "execution_time": time.time() - start_time,

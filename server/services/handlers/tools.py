@@ -794,6 +794,8 @@ async def _execute_whatsapp_db(args: Dict[str, Any],
             'limit': args.get('limit', 50),
             'offset': args.get('offset', 0),
         })
+        if args.get('include_media_data'):
+            parameters['include_media_data'] = True
         # Validate required fields
         chat_type = parameters['chat_type']
         if chat_type == 'individual' and not parameters['phone']:
@@ -849,6 +851,20 @@ async def _execute_whatsapp_db(args: Dict[str, Any],
         parameters['channel_count'] = min(args.get('channel_count', 20), 100)
         if args.get('before_server_id'):
             parameters['before_server_id'] = args['before_server_id']
+        if args.get('message_offset'):
+            parameters['message_offset'] = args['message_offset']
+        if args.get('since'):
+            parameters['since'] = args['since']
+        if args.get('until'):
+            parameters['until'] = args['until']
+        if args.get('media_type'):
+            parameters['media_type'] = args['media_type']
+        if args.get('search'):
+            parameters['search'] = args['search']
+        if args.get('refresh'):
+            parameters['refresh'] = True
+        if args.get('include_media_data'):
+            parameters['include_media_data'] = True
 
     elif operation == 'channel_stats':
         channel_jid = args.get('channel_jid', '')
@@ -893,6 +909,35 @@ async def _execute_whatsapp_db(args: Dict[str, Any],
         if not server_ids:
             return {"error": "server_ids is required for channel_mark_viewed"}
         parameters['server_ids'] = server_ids
+
+    elif operation == 'newsletter_react':
+        channel_jid = args.get('channel_jid', '')
+        if not channel_jid:
+            return {"error": "channel_jid is required for newsletter_react"}
+        parameters['channel_jid'] = channel_jid
+        react_server_id = args.get('react_server_id')
+        if not react_server_id:
+            return {"error": "react_server_id is required for newsletter_react"}
+        parameters['react_server_id'] = react_server_id
+        parameters['reaction'] = args.get('reaction', '')
+
+    elif operation == 'newsletter_live_updates':
+        channel_jid = args.get('channel_jid', '')
+        if not channel_jid:
+            return {"error": "channel_jid is required for newsletter_live_updates"}
+        parameters['channel_jid'] = channel_jid
+        server_ids = args.get('server_ids', '')
+        if not server_ids:
+            return {"error": "server_ids is required for newsletter_live_updates"}
+        parameters['server_ids'] = server_ids
+
+    elif operation == 'contact_profile_pic':
+        profile_pic_jid = args.get('profile_pic_jid', '') or args.get('phone', '')
+        if not profile_pic_jid:
+            return {"error": "profile_pic_jid or phone is required for contact_profile_pic"}
+        parameters['profile_pic_jid'] = profile_pic_jid
+        if args.get('preview'):
+            parameters['preview'] = True
 
     else:
         return {"error": f"Unknown operation: {operation}"}

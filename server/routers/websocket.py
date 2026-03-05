@@ -1778,6 +1778,53 @@ async def handle_whatsapp_rate_limit_unpause(data: Dict[str, Any], websocket: We
     return result
 
 
+async def handle_whatsapp_mark_read(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Mark messages as read. Schema: mark_read({message_ids, chat_jid, sender_jid?})"""
+    message_ids = data.get("message_ids", [])
+    chat_jid = data.get("chat_jid", "")
+    if not message_ids or not chat_jid:
+        return {"success": False, "error": "message_ids (array) and chat_jid are required"}
+    params: Dict[str, Any] = {"message_ids": message_ids, "chat_jid": chat_jid}
+    sender_jid = data.get("sender_jid")
+    if sender_jid:
+        params["sender_jid"] = sender_jid
+    result = await _wa_rpc_call("mark_read", params)
+    return result
+
+
+async def handle_whatsapp_typing(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Send typing indicator. Schema: typing({jid, state: 'composing'|'paused', media?})"""
+    jid = data.get("jid", "")
+    state = data.get("state", "composing")
+    if not jid:
+        return {"success": False, "error": "jid is required"}
+    params: Dict[str, Any] = {"jid": jid, "state": state}
+    media = data.get("media")
+    if media:
+        params["media"] = media
+    result = await _wa_rpc_call("typing", params)
+    return result
+
+
+async def handle_whatsapp_presence(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Set online/offline presence. Schema: presence({status: 'available'|'unavailable'})"""
+    status = data.get("status", "available")
+    result = await _wa_rpc_call("presence", {"status": status})
+    return result
+
+
+async def handle_whatsapp_stop(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Graceful WhatsApp shutdown."""
+    result = await _wa_rpc_call("stop", {})
+    return result
+
+
+async def handle_whatsapp_diagnostics(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Get WhatsApp diagnostics/debug info."""
+    result = await _wa_rpc_call("diagnostics", {})
+    return result
+
+
 # ============================================================================
 # Telegram Handlers - Connect/disconnect/status for Telegram bot
 # ============================================================================
@@ -1815,17 +1862,19 @@ async def handle_telegram_connect(data: Dict[str, Any], websocket: WebSocket) ->
 
 
 async def handle_telegram_disconnect(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
-    """Disconnect Telegram bot and remove stored token."""
+    """Disconnect Telegram bot and remove stored token and owner chat ID."""
     service = get_telegram_service()
     result = await service.disconnect()
 
-    # Remove stored token
+    # Remove stored token and owner chat ID
     try:
         auth_service = get_auth_service()
         await auth_service.remove_api_key("telegram_bot_token")
+        await auth_service.remove_api_key("telegram_owner_chat_id")
     except Exception as e:
-        logger.warning(f"[Telegram] Failed to remove stored token: {e}")
+        logger.warning(f"[Telegram] Failed to remove stored credentials: {e}")
 
+    result["has_stored_token"] = False
     return result
 
 
@@ -2956,6 +3005,11 @@ MESSAGE_HANDLERS: Dict[str, MessageHandler] = {
     "whatsapp_rate_limit_set": handle_whatsapp_rate_limit_set,
     "whatsapp_rate_limit_stats": handle_whatsapp_rate_limit_stats,
     "whatsapp_rate_limit_unpause": handle_whatsapp_rate_limit_unpause,
+    "whatsapp_mark_read": handle_whatsapp_mark_read,
+    "whatsapp_typing": handle_whatsapp_typing,
+    "whatsapp_presence": handle_whatsapp_presence,
+    "whatsapp_stop": handle_whatsapp_stop,
+    "whatsapp_diagnostics": handle_whatsapp_diagnostics,
 
     # Telegram operations
     "telegram_connect": handle_telegram_connect,

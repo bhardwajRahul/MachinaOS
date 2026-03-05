@@ -39,13 +39,24 @@ Query contacts, groups, channels, and chat history.
 | phones | string | For check_contacts | Comma-separated phone numbers |
 | participant_limit | int | No | Max participants (for get_group_info, 1-100) |
 | channel_jid | string | For channel ops | Newsletter JID or invite link URL (e.g., `120363198765432101@newsletter` or `https://whatsapp.com/channel/...`) |
-| refresh | boolean | No | Force refresh from server (for list_channels, get_channel_info) |
+| refresh | boolean | No | Force refresh from server (for list_channels, get_channel_info, channel_messages) |
 | channel_count | int | No | Number of items to fetch (for channel_messages, channel_stats) |
 | before_server_id | int | No | Pagination cursor (for channel_messages) |
+| message_offset | int | No | Skip this many messages (for channel_messages) |
+| since | string | No | Unix timestamp - messages after this time (for channel_messages) |
+| until | string | No | Unix timestamp - messages before this time (for channel_messages) |
+| media_type | string | No | Filter by media type: image, video, audio, document, sticker (for channel_messages) |
+| search | string | No | Text search within messages (for channel_messages) |
+| include_media_data | boolean | No | Download base64 media data for media messages (for chat_history, channel_messages) |
 | channel_name | string | For channel_create | Name of the new channel |
 | channel_description | string | No | Description (for channel_create) |
+| picture | string | No | Base64-encoded profile picture (for channel_create) |
 | mute | boolean | For channel_mute | True to mute, false to unmute |
-| server_ids | string | For channel_mark_viewed | Comma-separated message server IDs to mark as viewed |
+| server_ids | string | For mark_viewed/live_updates | Comma-separated message server IDs |
+| react_server_id | int | For newsletter_react | Server ID of message to react to |
+| reaction | string | For newsletter_react | Reaction emoji (empty to remove) |
+| profile_pic_jid | string | For contact_profile_pic | JID or phone number |
+| preview | boolean | No | Get low-res preview (for contact_profile_pic) |
 
 ### Operations
 
@@ -59,13 +70,16 @@ Query contacts, groups, channels, and chat history.
 | `check_contacts` | Check WhatsApp registration | phones |
 | `list_channels` | List subscribed newsletter channels | refresh (optional), limit |
 | `get_channel_info` | Get channel details | channel_jid |
-| `channel_messages` | Get channel message history | channel_jid, channel_count |
+| `channel_messages` | Get channel messages with filters (date, media type, search) | channel_jid, channel_count |
 | `channel_stats` | Get channel subscriber/view stats | channel_jid |
 | `channel_follow` | Follow/subscribe to a channel | channel_jid |
 | `channel_unfollow` | Unfollow/unsubscribe from a channel | channel_jid |
 | `channel_create` | Create a new newsletter channel | channel_name |
 | `channel_mute` | Mute or unmute a channel | channel_jid, mute |
 | `channel_mark_viewed` | Mark channel messages as viewed | channel_jid, server_ids |
+| `newsletter_react` | React to a channel message | channel_jid, react_server_id, reaction |
+| `newsletter_live_updates` | Subscribe to live view/reaction counts | channel_jid, server_ids |
+| `contact_profile_pic` | Get contact/group profile picture | profile_pic_jid |
 
 ### Limits
 
@@ -355,6 +369,58 @@ Get channel details using an invite link instead of JID.
 {
   "operation": "get_channel_info",
   "channel_jid": "https://whatsapp.com/channel/0029Va12345abcdef"
+}
+```
+
+### channel_messages (with filters)
+
+Get channel messages filtered by media type and date range.
+
+```json
+{
+  "operation": "channel_messages",
+  "channel_jid": "120363198765432101@newsletter",
+  "channel_count": 20,
+  "media_type": "image",
+  "since": "1704067200",
+  "include_media_data": true
+}
+```
+
+### channel_messages (text search)
+
+Search channel messages by text content.
+
+```json
+{
+  "operation": "channel_messages",
+  "channel_jid": "120363198765432101@newsletter",
+  "search": "announcement",
+  "channel_count": 10
+}
+```
+
+### newsletter_react
+
+React to a channel message with an emoji.
+
+```json
+{
+  "operation": "newsletter_react",
+  "channel_jid": "120363198765432101@newsletter",
+  "react_server_id": 42,
+  "reaction": "\ud83d\udc4d"
+}
+```
+
+### contact_profile_pic
+
+Get a contact's profile picture.
+
+```json
+{
+  "operation": "contact_profile_pic",
+  "profile_pic_jid": "919876543210"
 }
 ```
 

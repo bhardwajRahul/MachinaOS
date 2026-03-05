@@ -177,6 +177,10 @@ def configure_logging(settings: Settings) -> None:
             level=getattr(logging, settings.log_level.upper())
         )
 
+    # Silence noisy third-party loggers
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+
     # Configure structlog
     processors = [
         structlog.stdlib.filter_by_level,

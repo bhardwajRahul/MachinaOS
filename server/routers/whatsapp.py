@@ -237,6 +237,9 @@ class RPCClient:
             elif method == "event.newsletter_live_update":
                 await broadcaster.send_custom_event("whatsapp_newsletter_live_update", params)
 
+            elif method == "event.history_sync_complete":
+                await broadcaster.send_custom_event("whatsapp_history_sync_complete", params)
+
             # Forward to custom handler if set
             if self._event_handler:
                 await self._event_handler(method, params)

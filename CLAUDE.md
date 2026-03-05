@@ -375,14 +375,14 @@ class CacheEntry(SQLModel, table=True):
 ## Codebase Summary
 - **Hybrid architecture**: Node.js + Python + React TypeScript
 - **93 implemented workflow nodes** with clean service separation (6 AI models + 3 AI agents/memory + 13 specialized agents + 1 skill + 4 dedicated tools + 3 search + 16 Android + 3 WhatsApp + 4 Twitter + 2 Telegram + 2 Social + 3 Location + 3 Code + 6 Utility + 6 Document + 2 Chat + 2 Scheduler + 2 Workflow + 7 Google Workspace + 1 Apify + 1 Crawlee + 3 Proxy)
-- **WebSocket-First Architecture**: WebSocket as primary frontend-backend communication (120 message handlers)
+- **WebSocket-First Architecture**: WebSocket as primary frontend-backend communication (125 message handlers)
 - **Recent optimizations**: REST APIs replaced with WebSocket, AI endpoints migrated to Python, Android automation integrated
 
 ## Architecture Refactoring
 The project was completely refactored from schema-based node definitions to explicit INodeProperties interface system inspired by n8n architecture. Key changes:
 - **Pure INodeProperties System**: Removed all backward compatibility layers
-- **92 Implemented Node Components**: AI models, agents, skills, location services, Android automation, WhatsApp, Twitter/X, Telegram, social, code execution, HTTP/Webhook utilities, document processing, chat, schedulers, search, and proxy
-- **WebSocket-First Communication**: 119 WebSocket message handlers replace most REST API calls
+- **93 Implemented Node Components**: AI models, agents, skills, location services, Android automation, WhatsApp, Twitter/X, Telegram, social, code execution, HTTP/Webhook utilities, document processing, chat, schedulers, search, and proxy
+- **WebSocket-First Communication**: 125 WebSocket message handlers replace most REST API calls
 - **Resource-Operation Pattern**: Organized by functional categories (AI, Location, Android, WhatsApp)
 - **TypeScript-First**: Full type safety with proper interface alignment
 - **Code Cleanup**: Removed dead code, unused files, and legacy methods
@@ -530,7 +530,7 @@ React Flow edges use dynamic Dracula colors via `getEdgeStyles(theme.dracula)`:
 ### WebSocket-First Architecture
 The project uses WebSocket as the primary communication method between frontend and backend, replacing most REST API calls:
 - `src/contexts/WebSocketContext.tsx` - Central WebSocket context with request/response pattern
-- `server/routers/websocket.py` - WebSocket endpoint with 120 message handlers
+- `server/routers/websocket.py` - WebSocket endpoint with 125 message handlers
 - `server/services/status_broadcaster.py` - Connection management and broadcasting
 
 ## Implemented Node Types
@@ -904,8 +904,8 @@ Android device connection is configured via the Credentials Modal (Android panel
 
 ### WhatsApp Nodes (3 nodes)
 - **whatsappSend**: **Dual-purpose node** - Send WhatsApp messages (text, image, video, audio, document, sticker, location, contact) to contacts, groups, or newsletter channels. Works as workflow node OR AI Agent tool. Group: `['whatsapp', 'tool']`. Recipient types: Self (connected phone), Phone Number, Group, Channel (newsletter). Channel messages only support text, image, video, audio, document (NOT sticker, location, contact). Full parameter schema for message type, media URL, location coordinates, contact vCard, channel JID.
-- **whatsappDb**: **Dual-purpose node** - Comprehensive WhatsApp database query node with 13 operations. Works as workflow node OR AI Agent tool. Group: `['whatsapp', 'tool']`. Operations:
-  - `chat_history`: Retrieve messages from individual or group chats with filtering and pagination
+- **whatsappDb**: **Dual-purpose node** - Comprehensive WhatsApp database query node with 18 operations. Works as workflow node OR AI Agent tool. Group: `['whatsapp', 'tool']`. Operations:
+  - `chat_history`: Retrieve messages from individual or group chats with filtering, pagination, and optional media download
   - `search_groups`: Search groups by name
   - `get_group_info`: Get group details with participant names and phone numbers
   - `get_contact_info`: Get full contact info (name, phone, profile picture) for sending/replying
@@ -913,11 +913,16 @@ Android device connection is configured via the Credentials Modal (Android panel
   - `check_contacts`: Check WhatsApp registration status for phone numbers
   - `list_channels`: List subscribed newsletter channels with optional server refresh
   - `get_channel_info`: Get channel details (name, description, subscribers)
-  - `channel_messages`: Get channel message history with pagination
+  - `channel_messages`: Get channel message history with pagination, date range, media type filter, text search, and optional media download
   - `channel_stats`: Get channel subscriber/view statistics
   - `channel_follow`: Follow/subscribe to a newsletter channel
   - `channel_unfollow`: Unfollow/unsubscribe from a newsletter channel
-  - `channel_create`: Create a new newsletter channel
+  - `channel_create`: Create a new newsletter channel (with optional picture)
+  - `channel_mute`: Mute/unmute a newsletter channel
+  - `channel_mark_viewed`: Mark channel messages as viewed
+  - `newsletter_react`: React to a channel message with an emoji
+  - `newsletter_live_updates`: Subscribe to live view/reaction counts for channel messages
+  - `contact_profile_pic`: Get profile picture for a contact or group
 - **whatsappReceive**: Event-driven trigger that waits for incoming WhatsApp messages with filters (message type, sender, group, channel, keywords, forwarded status). Marked with `['whatsapp', 'trigger']` group for n8n-style trigger identification. Stores group/sender names alongside JID/phone for display persistence. The Go RPC resolves LIDs to phone numbers before sending events - `sender_phone` field is already resolved. Filter options: All Messages, From Self (notes to self chat only), From Any Contact (Non-Group), From Specific Contact, From Specific Group, From Channel (Newsletter), Contains Keywords
 
 ### Social Nodes (2 nodes)
@@ -996,8 +1001,8 @@ TWITTER_CLIENT_SECRET=your_client_secret
 ### Telegram Nodes (2 nodes)
 Telegram bot integration using `python-telegram-bot` SDK with long-polling for incoming messages.
 
-- **telegramSend**: **Dual-purpose node** - Send text, photo, document, location, or contact messages via Telegram bot. Works as workflow node OR AI Agent tool. Group: `['social', 'tool']`. Recipient types: Self (bot owner), User/Chat ID, Group. Parameters: recipient_type, chat_id, message_type, text, media_url, caption, parse_mode, silent, reply_to_message_id.
-- **telegramReceive**: Event-driven trigger that waits for incoming Telegram messages. Group: `['social', 'trigger']`. Filters: chat type (all/private/group/supergroup/channel), content type (text/photo/video/audio/document/sticker/location/contact/poll), chat ID, user ID, keywords. Option to ignore bot messages.
+- **telegramSend**: **Dual-purpose node** - Send text, photo, document, location, or contact messages via Telegram bot. Works as workflow node OR AI Agent tool. Group: `['social', 'tool']`. Recipient types: Self (bot owner), User/Chat ID, Group. Parameters: recipient_type, chat_id, message_type, text, media_url, caption, parse_mode, silent, reply_to_message_id. MarkdownV2/Markdown text auto-escaped via `_escape_text()`; falls back to plain text on `BadRequest`. "Self" restores `owner_chat_id` from credentials DB if not in memory.
+- **telegramReceive**: Event-driven trigger that waits for incoming Telegram messages. Group: `['social', 'trigger']`. Uses `senderFilter` dropdown: All Messages, From Self (Bot Owner) (zero-config), Private/Group/Supergroup/Channel Only, Specific Chat, Specific User, Keywords. Content type filter and ignore bots option. "From Self" uses lazy `_get_owner_chat_id()` lookup at match time. Auto-reconnects on server restart via `StatusBroadcaster._refresh_telegram_status()`.
 
 **Key Files:**
 | File | Description |
@@ -1007,7 +1012,7 @@ Telegram bot integration using `python-telegram-bot` SDK with long-polling for i
 | `client/src/nodeDefinitions/telegramNodes.ts` | 2 node definitions |
 | `client/src/components/CredentialsModal.tsx` | Telegram bot token panel |
 
-**Authentication:** Bot token from @BotFather on Telegram. Stored via `auth_service.get_api_key('telegram_bot_token')`.
+**Authentication:** Bot token from @BotFather on Telegram. Stored via `auth_service.store_api_key('telegram_bot_token', token, models=[])`. Owner auto-captured on first private message, persisted as `telegram_owner_chat_id`. Credentials panel: Save (store only), Connect (store + connect), Reconnect. All credential access uses `from core.container import container; container.auth_service()` (NOT `from services.auth import get_auth_service`).
 
 **Environment Variables:**
 ```bash
@@ -1382,7 +1387,7 @@ See **[Scripts Reference](./docs-internal/SCRIPTS.md)** for full documentation.
 
 ## Current Status
 ✅ **INodeProperties System**: Fully implemented with 93 functional node components
-✅ **WebSocket-First Architecture**: 120 message handlers replacing REST APIs
+✅ **WebSocket-First Architecture**: 125 message handlers replacing REST APIs
 ✅ **Code Editor**: Python, JavaScript, and TypeScript executors with syntax-highlighted editor (react-simple-code-editor + prismjs) and console output
 ✅ **Node.js Executor**: Persistent Node.js server (Express + tsx) for fast JS/TS execution, replacing subprocess spawning
 ✅ **Component Palette**: Emoji icons with distinct dracula-themed category colors, localStorage persistence for collapsed sections
@@ -1394,7 +1399,7 @@ See **[Scripts Reference](./docs-internal/SCRIPTS.md)** for full documentation.
 ✅ **Location Services**: Interactive map picker with coordinate handling, Google Maps API key fetched from backend credentials
 ✅ **Code Cleanup**: Dead code removed, unused files deleted
 ✅ **Process Management**: Robust stop scripts with duplicate process detection
-✅ **WhatsApp Integration**: Square node design with QR code viewer, group/sender name persistence, newsletter channel support (send, query, follow/unfollow, create), and proper error handling
+✅ **WhatsApp Integration**: Square node design with QR code viewer, group/sender name persistence, newsletter channel support (send, query, follow/unfollow, create, mute, mark viewed, react, live updates), media download, profile pics, and proper error handling
 ✅ **Backend Stability**: Fixed dependency injection and error handling preventing crashes
 ✅ **Development Server**: Running at **http://localhost:3001** (frontend) and **http://localhost:3010** (backend)
 ✅ **WebSocket Integration**: Persistent WebSocket connections for remote Android devices with background tasks and message queue
@@ -4128,7 +4133,7 @@ export interface AndroidStatus {
 ## WhatsApp Integration
 
 ### Overview
-WhatsApp nodes use square design with integrated QR code viewing and proper error handling. The integration proxies all requests through the Python backend to the WhatsApp RPC service (default port 9400, configurable via `WHATSAPP_RPC_PORT` env var or `--port` CLI flag). Supports individual chats, groups, and newsletter channels (sending, querying, follow/unfollow, create).
+WhatsApp nodes use square design with integrated QR code viewing and proper error handling. The integration proxies all requests through the Python backend to the WhatsApp RPC service (default port 9400, configurable via `WHATSAPP_RPC_PORT` env var or `--port` CLI flag). Supports individual chats, groups, and newsletter channels (sending, querying, follow/unfollow, create, mute, mark viewed, react, live updates, media download, profile pics). All 14 WhatsApp events handled.
 
 ### Architecture
 ```
@@ -4325,7 +4330,8 @@ TRIGGER_REGISTRY: Dict[str, TriggerConfig] = {
     'webhookTrigger': TriggerConfig('webhookTrigger', 'webhook_received', 'Webhook Request'),
     'chatTrigger': TriggerConfig('chatTrigger', 'chat_message_received', 'Chat Message'),
     'taskTrigger': TriggerConfig('taskTrigger', 'task_completed', 'Task Completed'),
-    # Future: 'emailTrigger', 'mqttTrigger', 'telegramTrigger', etc.
+    'telegramReceive': TriggerConfig('telegramReceive', 'telegram_message_received', 'Telegram Message'),
+    # Future: 'emailTrigger', 'mqttTrigger', etc.
 }
 
 @dataclass
@@ -4739,7 +4745,7 @@ def has_real_android_devices(self) -> bool:
 
 Updated `client_left` and presence handlers use `has_real_android_devices()` instead of checking total device count.
 
-### WebSocket Message Types (119 Handlers)
+### WebSocket Message Types (125 Handlers)
 
 #### Request/Response Messages (Client -> Server -> Client)
 | Category | Message Types |
@@ -4760,7 +4766,7 @@ Updated `client_left` and presence handlers use `has_real_android_devices()` ins
 | **Android** | `get_android_devices`, `execute_android_action`, `android_relay_connect`, `android_relay_disconnect`, `android_relay_reconnect` |
 | **Maps** | `validate_maps_key` |
 | **Apify** | `validate_apify_key` |
-| **WhatsApp** | `whatsapp_status`, `whatsapp_connected_phone`, `whatsapp_qr`, `whatsapp_send`, `whatsapp_start`, `whatsapp_restart`, `whatsapp_groups`, `whatsapp_group_info`, `whatsapp_chat_history`, `whatsapp_newsletters`, `whatsapp_rate_limit_get`, `whatsapp_rate_limit_set`, `whatsapp_rate_limit_stats`, `whatsapp_rate_limit_unpause` |
+| **WhatsApp** | `whatsapp_status`, `whatsapp_connected_phone`, `whatsapp_qr`, `whatsapp_send`, `whatsapp_start`, `whatsapp_restart`, `whatsapp_groups`, `whatsapp_group_info`, `whatsapp_chat_history`, `whatsapp_newsletters`, `whatsapp_rate_limit_get`, `whatsapp_rate_limit_set`, `whatsapp_rate_limit_stats`, `whatsapp_rate_limit_unpause`, `whatsapp_mark_read`, `whatsapp_typing`, `whatsapp_presence`, `whatsapp_stop`, `whatsapp_diagnostics` |
 | **Telegram** | `telegram_connect`, `telegram_disconnect`, `telegram_status`, `telegram_send`, `telegram_reconnect`, `telegram_get_me`, `telegram_get_chat` |
 | **Workflow Storage** | `save_workflow`, `get_workflow`, `get_all_workflows`, `delete_workflow` |
 | **Chat Messages** | `send_chat_message`, `get_chat_messages`, `clear_chat_messages`, `save_chat_message`, `get_chat_sessions` |
@@ -4930,7 +4936,7 @@ This function:
 - **Performance**: Fast HMR updates and clean TypeScript compilation
 - **AI Architecture**: 5-layer system with factory pattern and secure credential management
 - **Android Architecture**: Factory-based node creation with ADB integration for device automation
-- **WebSocket-First Architecture**: 120 message handlers replace REST APIs for parameters, execution, API keys, Android, WhatsApp, and skill operations
+- **WebSocket-First Architecture**: 125 message handlers replace REST APIs for parameters, execution, API keys, Android, WhatsApp, and skill operations
 - **WebSocket Hooks**: Dedicated React hooks (useWhatsApp, useExecution, useApiKeys, useAndroidOperations, useParameterPanel) for clean component integration
 - **WebSocket Support**: Persistent remote Android device connections via WebSocket proxy with background tasks
   - Connection stays alive across multiple API requests until switched to local ADB
@@ -4961,10 +4967,13 @@ This function:
   - WebSocket handlers for status, QR code, send message, and start connection
   - useWhatsApp hook provides clean React component integration
   - Uses external npm package `whatsapp-rpc` with pre-built Go binaries
-  - Newsletter channels: send to channels (text/image/video/audio/document), query channel DB (list, info, messages, stats), follow/unfollow, create. Channel JID format: `<numeric_id>@newsletter`. Channel events dispatched via `event.newsletter_*` handlers.
+  - Newsletter channels: send to channels (text/image/video/audio/document), query channel DB (list, info, messages, stats), follow/unfollow, create, mute, mark viewed, react, live updates. Channel JID format: `<numeric_id>@newsletter`. All 14 WhatsApp events handled (including `event.history_sync_complete`).
+  - Media download: `include_media_data` param on chat_history and channel_messages triggers `media` RPC for base64 media retrieval
+  - Channel message filters: date range (since/until), media type, text search, pagination offset
+  - WebSocket RPC passthroughs: mark_read, typing, presence, stop, diagnostics
 - **Event-Driven Triggers**: Generic trigger node architecture with asyncio.Future
   - `server/services/event_waiter.py` - Waiter registration, dispatch, cancellation
-  - TRIGGER_REGISTRY for extensible trigger types (WhatsApp, Webhook, future: Email, MQTT, Telegram)
+  - TRIGGER_REGISTRY for extensible trigger types (WhatsApp, Webhook, Telegram, future: Email, MQTT)
   - Filter builders create closures from node parameters (whatsapp_filter, webhook_filter)
   - No timeout - wait indefinitely until event or user cancel
   - WebSocket handlers: `cancel_event_wait`, `get_active_waiters`

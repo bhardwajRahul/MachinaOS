@@ -685,7 +685,10 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
           { name: 'Unfollow Channel', value: 'channel_unfollow' },
           { name: 'Create Channel', value: 'channel_create' },
           { name: 'Mute/Unmute Channel', value: 'channel_mute' },
-          { name: 'Mark Channel Viewed', value: 'channel_mark_viewed' }
+          { name: 'Mark Channel Viewed', value: 'channel_mark_viewed' },
+          { name: 'React to Channel Message', value: 'newsletter_react' },
+          { name: 'Channel Live Updates', value: 'newsletter_live_updates' },
+          { name: 'Contact Profile Picture', value: 'contact_profile_pic' }
         ],
         default: 'chat_history',
         description: 'Operation to perform'
@@ -792,6 +795,18 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         }
       },
 
+      // ===== MEDIA DOWNLOAD =====
+      {
+        displayName: 'Include Media Data',
+        name: 'include_media_data',
+        type: 'boolean',
+        default: false,
+        description: 'Download base64 media data for image/video/audio/document/sticker messages. May be slow for many messages.',
+        displayOptions: {
+          show: { operation: ['chat_history', 'channel_messages'] }
+        }
+      },
+
       // ===== SEARCH GROUPS PARAMETERS =====
       {
         displayName: 'Search Query',
@@ -857,7 +872,7 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         placeholder: '120363198765432101@newsletter or https://whatsapp.com/channel/...',
         description: 'Newsletter JID or invite link (use Load button to select)',
         displayOptions: {
-          show: { operation: ['get_channel_info', 'channel_messages', 'channel_stats', 'channel_follow', 'channel_unfollow', 'channel_mute', 'channel_mark_viewed'] }
+          show: { operation: ['get_channel_info', 'channel_messages', 'channel_stats', 'channel_follow', 'channel_unfollow', 'channel_mute', 'channel_mark_viewed', 'newsletter_react', 'newsletter_live_updates'] }
         }
       },
       {
@@ -867,7 +882,7 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         default: false,
         description: 'Bypass 24h cache and fetch fresh data from WhatsApp servers',
         displayOptions: {
-          show: { operation: ['list_channels', 'get_channel_info'] }
+          show: { operation: ['list_channels', 'get_channel_info', 'channel_messages'] }
         }
       },
       {
@@ -888,6 +903,68 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         default: 0,
         typeOptions: { minValue: 0 },
         description: 'Pagination: get messages before this server ID (0 = latest)',
+        displayOptions: {
+          show: { operation: ['channel_messages'] }
+        }
+      },
+      {
+        displayName: 'Offset',
+        name: 'message_offset',
+        type: 'number',
+        default: 0,
+        typeOptions: { minValue: 0 },
+        description: 'Pagination offset - skip this many messages',
+        displayOptions: {
+          show: { operation: ['channel_messages'] }
+        }
+      },
+      {
+        displayName: 'Since (Unix Timestamp)',
+        name: 'since',
+        type: 'string',
+        default: '',
+        placeholder: '1704067200',
+        description: 'Only return messages after this Unix timestamp',
+        displayOptions: {
+          show: { operation: ['channel_messages'] }
+        }
+      },
+      {
+        displayName: 'Until (Unix Timestamp)',
+        name: 'until',
+        type: 'string',
+        default: '',
+        placeholder: '1706745600',
+        description: 'Only return messages before this Unix timestamp',
+        displayOptions: {
+          show: { operation: ['channel_messages'] }
+        }
+      },
+      {
+        displayName: 'Media Type Filter',
+        name: 'media_type',
+        type: 'options',
+        options: [
+          { name: 'All Types', value: 'all' },
+          { name: 'Image', value: 'image' },
+          { name: 'Video', value: 'video' },
+          { name: 'Audio', value: 'audio' },
+          { name: 'Document', value: 'document' },
+          { name: 'Sticker', value: 'sticker' }
+        ],
+        default: 'all',
+        description: 'Filter messages by media type',
+        displayOptions: {
+          show: { operation: ['channel_messages'] }
+        }
+      },
+      {
+        displayName: 'Search Text',
+        name: 'search',
+        type: 'string',
+        default: '',
+        placeholder: 'keyword...',
+        description: 'Search for messages containing this text',
         displayOptions: {
           show: { operation: ['channel_messages'] }
         }
@@ -932,9 +1009,70 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         type: 'string',
         default: '',
         placeholder: '100, 101, 102',
-        description: 'Comma-separated message server IDs to mark as viewed',
+        description: 'Comma-separated message server IDs',
         displayOptions: {
-          show: { operation: ['channel_mark_viewed'] }
+          show: { operation: ['channel_mark_viewed', 'newsletter_live_updates'] }
+        }
+      },
+
+      // ===== NEWSLETTER REACT PARAMETERS =====
+      {
+        displayName: 'Message Server ID',
+        name: 'react_server_id',
+        type: 'number',
+        default: 0,
+        typeOptions: { minValue: 0 },
+        description: 'Server ID of the message to react to',
+        displayOptions: {
+          show: { operation: ['newsletter_react'] }
+        }
+      },
+      {
+        displayName: 'Reaction',
+        name: 'reaction',
+        type: 'string',
+        default: '',
+        placeholder: '\ud83d\udc4d',
+        description: 'Reaction emoji (empty to remove reaction)',
+        displayOptions: {
+          show: { operation: ['newsletter_react'] }
+        }
+      },
+
+      // ===== CHANNEL CREATE - PICTURE =====
+      {
+        displayName: 'Channel Picture (Base64)',
+        name: 'picture',
+        type: 'string',
+        default: '',
+        typeOptions: { rows: 3 },
+        placeholder: 'base64 encoded image...',
+        description: 'Optional base64-encoded profile picture for the new channel',
+        displayOptions: {
+          show: { operation: ['channel_create'] }
+        }
+      },
+
+      // ===== CONTACT PROFILE PICTURE PARAMETERS =====
+      {
+        displayName: 'JID or Phone',
+        name: 'profile_pic_jid',
+        type: 'string',
+        default: '',
+        placeholder: '1234567890 or 1234567890@s.whatsapp.net',
+        description: 'Contact JID or phone number to get profile picture for',
+        displayOptions: {
+          show: { operation: ['contact_profile_pic'] }
+        }
+      },
+      {
+        displayName: 'Preview (Low Res)',
+        name: 'preview',
+        type: 'boolean',
+        default: false,
+        description: 'Get low-resolution preview instead of full picture',
+        displayOptions: {
+          show: { operation: ['contact_profile_pic'] }
         }
       }
 
