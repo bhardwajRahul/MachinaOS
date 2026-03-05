@@ -73,6 +73,9 @@ dependencies = [
     # Telegram Bot API
     "python-telegram-bot>=22.6",
 
+    # Markdown formatting (GFM to platform-native)
+    "markdown-it-py>=3.0.0",
+
     # Gmail API
     "google-api-python-client>=2.100.0",
     "google-auth>=2.27.0",
