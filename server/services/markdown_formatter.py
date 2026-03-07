@@ -10,22 +10,49 @@ import re
 from markdown_it import MarkdownIt
 
 
-_md = MarkdownIt("commonmark", {"breaks": True}).enable("strikethrough")
+_md = MarkdownIt("commonmark", {"breaks": True, "html": False}).enable(["strikethrough", "table"])
 
-# Tags Telegram supports natively in HTML parse mode
-_TELEGRAM_SUPPORTED = {"b", "strong", "i", "em", "s", "strike", "del", "code", "pre", "a", "blockquote", "u", "tg-spoiler", "tg-emoji"}
+
+def _table_to_pre(match: re.Match) -> str:
+    """Convert an HTML table to preformatted pipe-separated text."""
+    table_html = match.group(0)
+    rows = []
+    for tr in re.finditer(r"<tr>(.*?)</tr>", table_html, re.DOTALL):
+        cells = [c.strip() for c in re.findall(r"<t[hd][^>]*>(.*?)</t[hd]>", tr.group(1), re.DOTALL)]
+        if cells:
+            rows.append(cells)
+    if not rows:
+        return ""
+    widths = [0] * max(len(r) for r in rows)
+    for row in rows:
+        for i, cell in enumerate(row):
+            widths[i] = max(widths[i], len(cell))
+    lines = []
+    for idx, row in enumerate(rows):
+        line = " | ".join(cell.ljust(widths[i]) for i, cell in enumerate(row))
+        lines.append(line)
+        if idx == 0:
+            lines.append("-+-".join("-" * w for w in widths))
+    return "<pre>" + "\n".join(lines) + "</pre>"
 
 
 def to_telegram_html(text: str) -> str:
     """Convert GFM markdown to Telegram-compatible HTML.
 
     Telegram HTML supports: <b>, <i>, <s>, <code>, <pre>, <a>, <blockquote>, <u>.
-    Unsupported tags are converted: <h1>-<h6> -> <b>, <ul>/<ol>/<li> -> bullet text, <p> -> stripped.
+    Unsupported tags are converted: <h1>-<h6> -> <b>, <ul>/<ol>/<li> -> bullet text,
+    <table> -> <pre>, <p>/<br>/<hr> -> stripped/newlines.
     """
     if not text or not text.strip():
         return text
 
     html = _md.render(text).strip()
+
+    # Convert <br> to newline (not supported by Telegram HTML)
+    html = re.sub(r"<br\s*/?>", "\n", html)
+
+    # Convert tables to preformatted text (Telegram doesn't support <table>)
+    html = re.sub(r"<table>.*?</table>", _table_to_pre, html, flags=re.DOTALL)
 
     # Convert headings to bold
     html = re.sub(r"<h[1-6][^>]*>(.*?)</h[1-6]>", r"<b>\1</b>", html, flags=re.DOTALL)
@@ -45,11 +72,14 @@ def to_telegram_html(text: str) -> str:
     html = re.sub(r"<blockquote>\s*\n*", "<blockquote>", html)
     html = re.sub(r"\s*\n*</blockquote>", "</blockquote>", html)
 
-    # Map <strong> -> <b>, <em> -> <i>, <del>/<strike> -> <s> for consistency
+    # Map <strong> -> <b>, <em> -> <i>, <del>/<strike> -> <s>
     html = html.replace("<strong>", "<b>").replace("</strong>", "</b>")
     html = html.replace("<em>", "<i>").replace("</em>", "</i>")
     html = html.replace("<del>", "<s>").replace("</del>", "</s>")
     html = html.replace("<strike>", "<s>").replace("</strike>", "</s>")
+
+    # Strip class attributes from <code> (Telegram supports <code> but not class attr)
+    html = re.sub(r'<code class="[^"]*">', "<code>", html)
 
     # Collapse multiple newlines
     html = re.sub(r"\n{3,}", "\n\n", html)
@@ -77,17 +107,26 @@ def _walk_tokens(tokens: list, result: list, depth: int = 0) -> None:
     """Walk markdown-it token stream and emit WhatsApp-formatted text."""
     in_list = False
     in_blockquote = False
+    table_rows: list = []
+    table_row: list = []
+    in_table = False
     i = 0
     while i < len(tokens):
         token = tokens[i]
         ttype = token.type
 
         if ttype == "inline" and token.children:
-            _walk_tokens(token.children, result, depth)
+            if in_table:
+                # Collect cell text for table formatting
+                cell_parts: list = []
+                _walk_tokens(token.children, cell_parts, depth)
+                table_row.append("".join(cell_parts))
+            else:
+                _walk_tokens(token.children, result, depth)
         elif ttype == "text":
             result.append(token.content)
         elif ttype == "code_inline":
-            result.append(f"`{token.content}`")
+            result.append(f"```{token.content}```")
         elif ttype == "softbreak":
             result.append("\n")
         elif ttype == "hardbreak":
@@ -109,7 +148,6 @@ def _walk_tokens(tokens: list, result: list, depth: int = 0) -> None:
         elif ttype in ("s_close",):
             result.append("~")
         elif ttype == "paragraph_open":
-            # Suppress paragraph newline inside list items and blockquotes
             if not in_list and not in_blockquote and i > 0:
                 result.append("\n")
         elif ttype == "paragraph_close":
@@ -152,10 +190,45 @@ def _walk_tokens(tokens: list, result: list, depth: int = 0) -> None:
             alt = token.content or token.attrGet("alt") or "image"
             src = token.attrGet("src") or ""
             result.append(f"[{alt}]({src})")
+        # Table handling
+        elif ttype == "table_open":
+            in_table = True
+            table_rows = []
+        elif ttype == "table_close":
+            in_table = False
+            if table_rows:
+                _format_table_whatsapp(table_rows, result)
+            table_rows = []
+        elif ttype == "tr_open":
+            table_row = []
+        elif ttype == "tr_close":
+            if table_row:
+                table_rows.append(table_row)
+            table_row = []
+        elif ttype in ("thead_open", "thead_close", "tbody_open", "tbody_close",
+                        "th_open", "th_close", "td_open", "td_close"):
+            pass  # Handled via tr_open/close and inline collection
         elif ttype == "html_block" or ttype == "html_inline":
             result.append(token.content)
 
         i += 1
+
+
+def _format_table_whatsapp(rows: list, result: list) -> None:
+    """Format table rows as monospace text for WhatsApp."""
+    if not rows:
+        return
+    widths = [0] * max(len(r) for r in rows)
+    for row in rows:
+        for i, cell in enumerate(row):
+            widths[i] = max(widths[i], len(cell))
+    lines = []
+    for idx, row in enumerate(rows):
+        line = " | ".join(cell.ljust(widths[i]) for i, cell in enumerate(row))
+        lines.append(line)
+        if idx == 0:
+            lines.append("-+-".join("-" * w for w in widths))
+    result.append("```" + "\n".join(lines) + "```")
 
 
 def to_plain(text: str) -> str:

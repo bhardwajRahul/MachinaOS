@@ -90,7 +90,7 @@ class Container(containers.DeclarativeContainer):
     )
 
     # Services
-    auth_service = providers.Factory(
+    auth_service = providers.Singleton(
         AuthService,
         credentials_db=credentials_database,
         cache=cache,
@@ -106,7 +106,7 @@ class Container(containers.DeclarativeContainer):
         credentials_db=credentials_database
     )
 
-    ai_service = providers.Factory(
+    ai_service = providers.Singleton(
         AIService,
         auth_service=auth_service,
         database=database,

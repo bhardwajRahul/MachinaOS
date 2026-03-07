@@ -1,5 +1,5 @@
 {
-  "id": "example_example_workflow-1772151325023-i7zkjbt04",
+  "id": "example_example_example_workflow-1772151325023-i7zkjbt04",
   "name": "Zeenie Assistant",
   "nodes": [
     {
@@ -706,25 +706,6 @@
       "dragging": false
     },
     {
-      "id": "telegramSend-1772074741486",
-      "type": "telegramSend",
-      "position": {
-        "x": 3080,
-        "y": -20
-      },
-      "data": {
-        "label": "Telegram Send"
-      },
-      "width": 80,
-      "height": 82,
-      "selected": false,
-      "positionAbsolute": {
-        "x": 3080,
-        "y": -20
-      },
-      "dragging": false
-    },
-    {
       "id": "perplexitySearch-1772075707557",
       "type": "perplexitySearch",
       "position": {
@@ -797,6 +778,25 @@
       "positionAbsolute": {
         "x": 1620,
         "y": -80
+      },
+      "dragging": false
+    },
+    {
+      "id": "telegramSend-1772781380014",
+      "type": "telegramSend",
+      "position": {
+        "x": 3060,
+        "y": -20
+      },
+      "data": {
+        "label": "Telegram Send"
+      },
+      "width": 80,
+      "height": 82,
+      "selected": false,
+      "positionAbsolute": {
+        "x": 3060,
+        "y": -20
       },
       "dragging": false
     }
@@ -1355,11 +1355,11 @@
         "stroke": "#8be9fd",
         "strokeWidth": 3
       },
-      "source": "chatAgent-1770060581808",
+      "source": "telegramReceive-1772725517789",
       "sourceHandle": "output-main",
-      "target": "telegramSend-1772074741486",
+      "target": "chatAgent-1770060581808",
       "targetHandle": "input-main",
-      "id": "reactflow__edge-chatAgent-1770060581808output-main-telegramSend-1772074741486input-main",
+      "id": "reactflow__edge-telegramReceive-1772725517789output-main-chatAgent-1770060581808input-main",
       "selected": false
     },
     {
@@ -1369,16 +1369,16 @@
         "stroke": "#8be9fd",
         "strokeWidth": 3
       },
-      "source": "telegramReceive-1772725517789",
+      "source": "chatAgent-1770060581808",
       "sourceHandle": "output-main",
-      "target": "chatAgent-1770060581808",
+      "target": "telegramSend-1772781380014",
       "targetHandle": "input-main",
-      "id": "reactflow__edge-telegramReceive-1772725517789output-main-chatAgent-1770060581808input-main"
+      "id": "reactflow__edge-chatAgent-1770060581808output-main-telegramSend-1772781380014input-main"
     }
   ],
-  "createdAt": "2026-03-05T04:32:30.931Z",
-  "lastModified": "2026-03-05T10:16:02.000Z",
-  "version": "0.0.42",
+  "createdAt": "2026-03-06T01:21:31.507Z",
+  "lastModified": "2026-03-06T01:46:42.000Z",
+  "version": "0.0.43",
   "nodeParameters": {
     "chatAgent-1770060581808": {
       "provider": "gemini",
@@ -1817,23 +1817,6 @@
       "update_job_title": "",
       "label": "Contacts"
     },
-    "telegramSend-1772074741486": {
-      "recipient_type": "self",
-      "chat_id": "",
-      "message_type": "text",
-      "text": "{{zeenie.response}}",
-      "media_url": "",
-      "caption": "",
-      "latitude": 0,
-      "longitude": 0,
-      "phone_number": "",
-      "first_name": "",
-      "last_name": "",
-      "parse_mode": "",
-      "silent": false,
-      "reply_to_message_id": 0,
-      "label": "Telegram Send"
-    },
     "perplexitySearch-1772075707557": {
       "toolName": "perplexity_search",
       "toolDescription": "Search the web using Perplexity Sonar AI. Returns an AI-generated answer with citations and source URLs.",
@@ -1866,6 +1849,23 @@
       "keywords": "",
       "ignoreBots": true,
       "label": "Telegram Receive"
+    },
+    "telegramSend-1772781380014": {
+      "recipient_type": "self",
+      "chat_id": "",
+      "message_type": "text",
+      "text": "{{zeenie.response}}",
+      "media_url": "",
+      "caption": "",
+      "latitude": 0,
+      "longitude": 0,
+      "phone_number": "",
+      "first_name": "",
+      "last_name": "",
+      "parse_mode": "Auto",
+      "silent": false,
+      "reply_to_message_id": 0,
+      "label": "Telegram Send"
     }
   }
 }

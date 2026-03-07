@@ -16,6 +16,7 @@ import remarkBreaks from 'remark-breaks';
 import { useWebSocket, ConsoleLogEntry } from '../../contexts/WebSocketContext';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { useTheme } from '../../contexts/ThemeContext';
+import { InputNumber } from 'antd';
 import Prism from 'prismjs';
 import 'prismjs/components/prism-json';
 
@@ -36,6 +37,7 @@ interface ConsolePanelProps {
 // Storage keys for persisting state
 const CONSOLE_HEIGHT_KEY = 'console_panel_height';
 const CHAT_WIDTH_KEY = 'console_chat_width_percent';
+const CONSOLE_FONT_SIZE_KEY = 'console_font_size';
 
 const ConsolePanel: React.FC<ConsolePanelProps> = ({
   isOpen,
@@ -48,6 +50,11 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
   const theme = useAppTheme();
   const { isDarkMode } = useTheme();
   const { consoleLogs, clearConsoleLogs, terminalLogs, clearTerminalLogs, sendChatMessage, chatMessages, clearChatMessages } = useWebSocket();
+
+  // Font size bounds derived from theme
+  const minFontSize = parseInt(theme.fontSize.xs);
+  const maxFontSize = parseInt(theme.fontSize.xl) * 2;
+  const defaultFontSize = parseInt(theme.fontSize.sm);
 
   // Filter nodes to get chatTrigger and console nodes
   const chatTriggerNodes = useMemo(() =>
@@ -71,6 +78,18 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
   const logsEndRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
+
+  // Font size with localStorage persistence
+  const [consoleFontSize, setConsoleFontSize] = useState(() => {
+    try {
+      const saved = localStorage.getItem(CONSOLE_FONT_SIZE_KEY);
+      if (saved) {
+        const size = parseInt(saved, 10);
+        if (!isNaN(size) && size >= minFontSize && size <= maxFontSize) return size;
+      }
+    } catch { /* ignore */ }
+    return defaultFontSize;
+  });
 
   // Chat input state
   const [chatInput, setChatInput] = useState('');
@@ -136,6 +155,13 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
       // Ignore localStorage errors
     }
   }, [chatWidthPercent]);
+
+  // Save font size to localStorage when it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(CONSOLE_FONT_SIZE_KEY, consoleFontSize.toString());
+    } catch { /* ignore */ }
+  }, [consoleFontSize]);
 
   // Handle vertical resize start (panel height)
   const handleResizeStart = useCallback((e: React.MouseEvent) => {
@@ -545,7 +571,7 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
   };
 
   const sectionTitleStyle: React.CSSProperties = {
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.semibold,
     color: theme.colors.text,
     display: 'flex',
@@ -658,7 +684,7 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
     overflow: 'auto',
     padding: '12px 16px',
     fontFamily: theme.fontFamily.sans,
-    fontSize: theme.fontSize.sm,
+    fontSize: consoleFontSize,
   };
 
   const chatInputContainerStyle: React.CSSProperties = {
@@ -710,13 +736,13 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
   });
 
   const chatMessageTextStyle: React.CSSProperties = {
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.text,
     margin: 0
   };
 
   const chatMessageTimeStyle: React.CSSProperties = {
-    fontSize: '9px',
+    fontSize: theme.fontSize.xs,
     color: theme.colors.textMuted,
     marginTop: '2px'
   };
@@ -1029,6 +1055,15 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
                   Pretty
                 </label>
               )}
+              <InputNumber
+                size="small"
+                value={consoleFontSize}
+                onChange={v => v != null && setConsoleFontSize(v)}
+                min={minFontSize}
+                max={maxFontSize}
+                style={{ width: 52 }}
+                controls={false}
+              />
               {((consoleTab === 'console' && consoleLogs.length > 0) || (consoleTab === 'terminal' && terminalLogs.length > 0)) && (
                 <button
                   style={clearButtonStyle}
@@ -1045,7 +1080,7 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
               )}
             </div>
           </div>
-          <div style={{ flex: 1, overflow: 'auto', fontFamily: theme.fontFamily.mono, fontSize: theme.fontSize.sm }}>
+          <div style={{ flex: 1, overflow: 'auto', fontFamily: theme.fontFamily.mono, fontSize: consoleFontSize }}>
             {consoleTab === 'console' ? (
               // Console Logs Tab
               filteredLogs.length === 0 ? (

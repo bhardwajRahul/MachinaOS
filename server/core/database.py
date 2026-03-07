@@ -573,7 +573,7 @@ class Database:
                     session.add(existing)
 
                 await session.commit()
-                logger.info("[DB] Node output saved", action=action, node_id=node_id, session_id=session_id, output_name=output_name)
+                logger.debug("[DB] Node output saved", action=action, node_id=node_id, session_id=session_id, output_name=output_name)
                 return True
 
         except Exception as e:

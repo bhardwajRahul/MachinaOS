@@ -10,7 +10,7 @@ Mashup of N8N + Openclaw but with better visibility of what it's doing and also 
 
 ## See It In Action ↓
 
-[![MachinaOS Demo](https://img.youtube.com/vi/z_TEyGmeuyQ/maxresdefault.jpg)](https://www.youtube.com/watch?v=z_TEyGmeuyQ)
+[![MachinaOS Demo](media/guide_thumbnail.png)](https://www.youtube.com/watch?v=z_TEyGmeuyQ)
 
 ## Full Capabilities ↓
 

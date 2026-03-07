@@ -1,5 +1,5 @@
 {
-  "id": "example_example_example_example_workflow-1770568399727-b5zkjpuda",
+  "id": "example_example_example_example_example_workflow-1770568399727-b5zkjpuda",
   "name": "Zeenie Agent",
   "nodes": [
     {
@@ -152,26 +152,7 @@
         "x": 120,
         "y": 540
       },
-      "dragging": true
-    },
-    {
-      "id": "telegramSend-1772705307135",
-      "type": "telegramSend",
-      "position": {
-        "x": 800,
-        "y": 200
-      },
-      "data": {
-        "label": "Telegram Send"
-      },
-      "width": 80,
-      "height": 82,
-      "selected": false,
-      "positionAbsolute": {
-        "x": 800,
-        "y": 200
-      },
-      "dragging": true
+      "dragging": false
     },
     {
       "id": "telegramReceive-1772705308277",
@@ -305,6 +286,25 @@
         "y": 540
       },
       "dragging": false
+    },
+    {
+      "id": "telegramSend-1772781312234",
+      "type": "telegramSend",
+      "position": {
+        "x": 800,
+        "y": 200
+      },
+      "data": {
+        "label": "Telegram Send"
+      },
+      "width": 80,
+      "height": 82,
+      "selected": false,
+      "positionAbsolute": {
+        "x": 800,
+        "y": 200
+      },
+      "dragging": false
     }
   ],
   "edges": [
@@ -427,20 +427,6 @@
         "stroke": "#8be9fd",
         "strokeWidth": 3
       },
-      "source": "chatAgent-1770207244010",
-      "sourceHandle": "output-main",
-      "target": "telegramSend-1772705307135",
-      "targetHandle": "input-main",
-      "id": "reactflow__edge-chatAgent-1770207244010output-main-telegramSend-1772705307135input-main",
-      "selected": false
-    },
-    {
-      "type": "smoothstep",
-      "animated": true,
-      "style": {
-        "stroke": "#8be9fd",
-        "strokeWidth": 3
-      },
       "source": "gmail-1772705536587",
       "sourceHandle": "output-tool",
       "target": "chatAgent-1770207244010",
@@ -517,11 +503,24 @@
       "targetHandle": "input-tools",
       "id": "reactflow__edge-gmaps_locations-1772705500946output-tool-chatAgent-1770207244010input-tools",
       "selected": false
+    },
+    {
+      "type": "smoothstep",
+      "animated": true,
+      "style": {
+        "stroke": "#8be9fd",
+        "strokeWidth": 3
+      },
+      "source": "chatAgent-1770207244010",
+      "sourceHandle": "output-main",
+      "target": "telegramSend-1772781312234",
+      "targetHandle": "input-main",
+      "id": "reactflow__edge-chatAgent-1770207244010output-main-telegramSend-1772781312234input-main"
     }
   ],
-  "createdAt": "2026-03-05T04:32:30.897Z",
-  "lastModified": "2026-03-05T05:31:55.000Z",
-  "version": "0.0.42",
+  "createdAt": "2026-03-06T01:21:31.234Z",
+  "lastModified": "2026-03-06T01:45:25.000Z",
+  "version": "0.0.43",
   "nodeParameters": {
     "chatAgent-1770207244010": {
       "provider": "openai",
@@ -652,23 +651,6 @@
       "longTermEnabled": false,
       "retrievalCount": 3
     },
-    "telegramSend-1772705307135": {
-      "recipient_type": "self",
-      "chat_id": "",
-      "message_type": "text",
-      "text": "{{zeenie.response}}",
-      "media_url": "",
-      "caption": "",
-      "latitude": 0,
-      "longitude": 0,
-      "phone_number": "",
-      "first_name": "",
-      "last_name": "",
-      "parse_mode": "",
-      "silent": false,
-      "reply_to_message_id": 0,
-      "label": "Telegram Send"
-    },
     "telegramReceive-1772705308277": {
       "contentTypeFilter": "text",
       "senderFilter": "self",
@@ -738,6 +720,23 @@
       "value_input_option": "USER_ENTERED",
       "insert_data_option": "INSERT_ROWS",
       "label": "Sheets"
+    },
+    "telegramSend-1772781312234": {
+      "recipient_type": "self",
+      "chat_id": "",
+      "message_type": "text",
+      "text": "{{zeenie.response}}",
+      "media_url": "",
+      "caption": "",
+      "latitude": 0,
+      "longitude": 0,
+      "phone_number": "",
+      "first_name": "",
+      "last_name": "",
+      "parse_mode": "Auto",
+      "silent": false,
+      "reply_to_message_id": 0,
+      "label": "Telegram Send"
     }
   }
 }

@@ -1,5 +1,5 @@
 {
-  "id": "example_workflow-1772437472641-wdn3sj4us",
+  "id": "example_example_workflow-1772437472641-wdn3sj4us",
   "name": "AI Employee[Experimental]",
   "nodes": [
     {
@@ -140,7 +140,7 @@
       "type": "duckduckgoSearch",
       "position": {
         "x": -540,
-        "y": 1540
+        "y": 1520
       },
       "data": {
         "label": "DuckDuckGo Search"
@@ -150,7 +150,7 @@
       "selected": false,
       "positionAbsolute": {
         "x": -540,
-        "y": 1540
+        "y": 1520
       },
       "dragging": false
     },
@@ -311,7 +311,7 @@
       "type": "perplexitySearch",
       "position": {
         "x": -660,
-        "y": 1540
+        "y": 1520
       },
       "data": {
         "label": "Perplexity Search"
@@ -321,7 +321,7 @@
       "selected": false,
       "positionAbsolute": {
         "x": -660,
-        "y": 1540
+        "y": 1520
       },
       "dragging": false
     },
@@ -330,7 +330,7 @@
       "type": "gmail",
       "position": {
         "x": -40,
-        "y": 1540
+        "y": 1520
       },
       "data": {
         "label": "Gmail"
@@ -340,7 +340,7 @@
       "selected": false,
       "positionAbsolute": {
         "x": -40,
-        "y": 1540
+        "y": 1520
       },
       "dragging": false
     },
@@ -349,7 +349,7 @@
       "type": "sheets",
       "position": {
         "x": -140,
-        "y": 1540
+        "y": 1520
       },
       "data": {
         "label": "Sheets"
@@ -359,7 +359,7 @@
       "selected": false,
       "positionAbsolute": {
         "x": -140,
-        "y": 1540
+        "y": 1520
       },
       "dragging": false
     },
@@ -368,7 +368,7 @@
       "type": "masterSkill",
       "position": {
         "x": -800,
-        "y": 1540
+        "y": 1520
       },
       "data": {
         "label": "Master Skill 1"
@@ -378,7 +378,7 @@
       "selected": false,
       "positionAbsolute": {
         "x": -800,
-        "y": 1540
+        "y": 1520
       },
       "dragging": false
     },
@@ -387,7 +387,7 @@
       "type": "masterSkill",
       "position": {
         "x": -280,
-        "y": 1540
+        "y": 1520
       },
       "data": {
         "label": "Master Skill 2"
@@ -397,7 +397,7 @@
       "selected": false,
       "positionAbsolute": {
         "x": -280,
-        "y": 1540
+        "y": 1520
       },
       "dragging": false
     },
@@ -444,7 +444,7 @@
       "type": "simpleMemory",
       "position": {
         "x": -900,
-        "y": 1420
+        "y": 1400
       },
       "data": {
         "label": "Simple Memory 1"
@@ -454,9 +454,9 @@
       "selected": false,
       "positionAbsolute": {
         "x": -900,
-        "y": 1420
+        "y": 1400
       },
-      "dragging": false
+      "dragging": true
     },
     {
       "id": "simpleMemory-1772286662040",
@@ -554,25 +554,6 @@
       "dragging": false
     },
     {
-      "id": "telegramSend-1772718415802",
-      "type": "telegramSend",
-      "position": {
-        "x": 100,
-        "y": 640
-      },
-      "data": {
-        "label": "Telegram Send"
-      },
-      "width": 80,
-      "height": 82,
-      "selected": false,
-      "positionAbsolute": {
-        "x": 100,
-        "y": 640
-      },
-      "dragging": false
-    },
-    {
       "id": "telegramReceive-1772718416883",
       "type": "telegramReceive",
       "position": {
@@ -590,6 +571,25 @@
         "y": 620
       },
       "dragging": false
+    },
+    {
+      "id": "telegramSend-1772781417360",
+      "type": "telegramSend",
+      "position": {
+        "x": 100,
+        "y": 640
+      },
+      "data": {
+        "label": "Telegram Send"
+      },
+      "width": 80,
+      "height": 82,
+      "selected": false,
+      "positionAbsolute": {
+        "x": 100,
+        "y": 640
+      },
+      "dragging": true
     }
   ],
   "edges": [
@@ -994,15 +994,15 @@
       },
       "source": "ai_employee-1772283240733",
       "sourceHandle": "output-main",
-      "target": "telegramSend-1772718415802",
+      "target": "telegramSend-1772781417360",
       "targetHandle": "input-main",
-      "id": "reactflow__edge-ai_employee-1772283240733output-main-telegramSend-1772718415802input-main",
+      "id": "reactflow__edge-ai_employee-1772283240733output-main-telegramSend-1772781417360input-main",
       "selected": false
     }
   ],
-  "createdAt": "2026-03-05T04:32:30.655Z",
-  "lastModified": "2026-03-05T16:07:13.122Z",
-  "version": "0.0.42",
+  "createdAt": "2026-03-06T01:21:30.885Z",
+  "lastModified": "2026-03-06T01:47:43.000Z",
+  "version": "0.0.43",
   "nodeParameters": {
     "orchestrator_agent-1772283239381": {
       "provider": "openai",
@@ -1370,7 +1370,16 @@
     "masterSkill-1772437683119": {
       "label": "Master Skill 5"
     },
-    "telegramSend-1772718415802": {
+    "telegramReceive-1772718416883": {
+      "contentTypeFilter": "text",
+      "senderFilter": "self",
+      "chat_id": "",
+      "from_user": "",
+      "keywords": "",
+      "ignoreBots": true,
+      "label": "Telegram Receive"
+    },
+    "telegramSend-1772781417360": {
       "recipient_type": "self",
       "chat_id": "",
       "message_type": "text",
@@ -1382,19 +1391,10 @@
       "phone_number": "",
       "first_name": "",
       "last_name": "",
-      "parse_mode": "",
+      "parse_mode": "Auto",
       "silent": false,
       "reply_to_message_id": 0,
       "label": "Telegram Send"
-    },
-    "telegramReceive-1772718416883": {
-      "contentTypeFilter": "text",
-      "senderFilter": "self",
-      "chat_id": "",
-      "from_user": "",
-      "keywords": "",
-      "ignoreBots": true,
-      "label": "Telegram Receive"
     }
   }
 }
