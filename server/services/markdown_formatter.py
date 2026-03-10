@@ -81,6 +81,16 @@ def to_telegram_html(text: str) -> str:
     # Strip class attributes from <code> (Telegram supports <code> but not class attr)
     html = re.sub(r'<code class="[^"]*">', "<code>", html)
 
+    # Strip ALL unsupported HTML tags (keep only Telegram-supported ones)
+    # Telegram supports: b, i, s, u, code, pre, a, blockquote, tg-spoiler, tg-emoji
+    _TELEGRAM_ALLOWED = frozenset({"b", "i", "s", "u", "code", "pre", "a", "blockquote", "tg-spoiler", "tg-emoji"})
+
+    def _strip_unsupported(m: re.Match) -> str:
+        tag = m.group(1).lower().split()[0].strip("/")
+        return m.group(0) if tag in _TELEGRAM_ALLOWED else ""
+
+    html = re.sub(r"<(/?\s*[a-zA-Z][a-zA-Z0-9-]*)[^>]*>", _strip_unsupported, html)
+
     # Collapse multiple newlines
     html = re.sub(r"\n{3,}", "\n\n", html)
     return html.strip()

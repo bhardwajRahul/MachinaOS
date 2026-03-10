@@ -7,6 +7,7 @@ Singleton service with background polling for receiving updates.
 
 import asyncio
 import logging
+import os
 from datetime import datetime
 from typing import Any, Dict, Optional
 
@@ -54,8 +55,19 @@ class TelegramService:
 
     @property
     def owner_chat_id(self) -> Optional[int]:
-        """Get the bot owner's chat ID (auto-captured from first private message)."""
-        return self._owner_chat_id
+        """Get the bot owner's chat ID (auto-captured from first private message).
+        Falls back to TELEGRAM_OWNER_CHAT_ID env var if not auto-detected."""
+        if self._owner_chat_id:
+            return self._owner_chat_id
+        # Fallback: TELEGRAM_OWNER_CHAT_ID env var
+        env_owner = os.environ.get("TELEGRAM_OWNER_CHAT_ID")
+        if env_owner:
+            try:
+                self._owner_chat_id = int(env_owner)
+                return self._owner_chat_id
+            except ValueError:
+                pass
+        return None
 
     async def set_owner(self, chat_id: int):
         """Set owner chat_id (used to restore from credentials on reconnect)."""

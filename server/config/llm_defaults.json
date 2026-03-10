@@ -1,73 +1,50 @@
 {
-  "version": "2026.02",
-  "last_updated": "2026-02-26",
-  "_description": "Default models, settings, and offline fallback constraints for each LLM provider.",
+  "version": "2026.03",
+  "last_updated": "2026-03-10",
+  "_description": "3 latest + 2 popular models for OpenAI/Anthropic/Gemini, full support for Groq/Cerebras. Auto-enriched by model_registry.json (OpenRouter cache).",
 
   "providers": {
     "openai": {
-      "default_model": "gpt-5.2",
+      "default_model": "gpt-5.4",
       "detection_patterns": ["gpt", "openai", "o1", "o3", "o4"],
       "max_output_tokens": {
+        "gpt-5.4": 128000,
+        "gpt-5.3-chat": 16384,
         "gpt-5.2": 128000,
-        "gpt-5.1": 128000,
-        "gpt-5": 128000,
-        "gpt-5-mini": 128000,
-        "gpt-5-nano": 128000,
-        "gpt-4o": 16384,
-        "gpt-4o-mini": 16384,
-        "gpt-4.1": 32768,
-        "gpt-4.1-mini": 32768,
-        "gpt-4.1-nano": 32768,
-        "o3": 100000,
-        "o3-mini": 100000,
         "o4-mini": 100000,
-        "o1": 100000,
+        "gpt-4.1": 32768,
         "_default": 16384
       },
       "context_length": {
+        "gpt-5.4": 1050000,
+        "gpt-5.3-chat": 128000,
         "gpt-5.2": 400000,
-        "gpt-5.1": 400000,
-        "gpt-5": 400000,
-        "gpt-5-mini": 400000,
-        "gpt-5-nano": 400000,
-        "gpt-4.1": 1047576,
-        "gpt-4.1-mini": 1047576,
-        "gpt-4.1-nano": 1047576,
-        "gpt-4o": 128000,
-        "gpt-4o-mini": 128000,
-        "o3": 200000,
-        "o3-mini": 200000,
         "o4-mini": 200000,
-        "o1": 200000,
+        "gpt-4.1": 1047576,
         "_default": 128000
       },
-      "reasoning_models": ["o1", "o3", "o3-mini", "o4-mini"],
+      "reasoning_models": ["o4-mini"],
       "thinking_models": ["gpt-5"],
       "thinking_type": "effort",
       "temperature_range": [0.0, 2.0]
     },
     "anthropic": {
-      "default_model": "claude-opus-4.6",
+      "default_model": "claude-sonnet-4.6",
       "detection_patterns": ["claude", "anthropic"],
       "max_output_tokens": {
         "claude-opus-4.6": 128000,
-        "claude-sonnet-4.6": 64000,
-        "claude-opus-4.5": 64000,
-        "claude-sonnet-4.5": 64000,
-        "claude-sonnet-4": 64000,
-        "claude-opus-4.1": 32000,
-        "claude-opus-4": 32000,
+        "claude-sonnet-4.6": 128000,
         "claude-haiku-4.5": 64000,
-        "claude-3.5-haiku": 8192,
-        "claude-3-opus": 4096,
-        "claude-3-haiku": 4096,
+        "claude-sonnet-4": 64000,
+        "claude-opus-4": 32000,
         "_default": 8192
       },
       "context_length": {
         "claude-opus-4.6": 1000000,
         "claude-sonnet-4.6": 1000000,
-        "claude-sonnet-4.5": 1000000,
-        "claude-sonnet-4": 1000000,
+        "claude-haiku-4.5": 200000,
+        "claude-sonnet-4": 200000,
+        "claude-opus-4": 200000,
         "_default": 200000
       },
       "thinking_type": "budget",
@@ -77,16 +54,19 @@
       "default_model": "gemini-2.5-flash",
       "detection_patterns": ["gemini", "google"],
       "max_output_tokens": {
-        "gemini-3-pro": 65536,
-        "gemini-3-flash": 65536,
+        "gemini-3.1-pro-preview": 65536,
+        "gemini-3-flash-preview": 65536,
+        "gemini-3-pro-preview": 65536,
         "gemini-2.5-pro": 65536,
-        "gemini-2.5-flash": 65536,
-        "gemini-2.5-flash-lite": 65536,
-        "gemini-2.0-flash": 8192,
-        "gemini-2.0-flash-lite": 8192,
+        "gemini-2.5-flash": 65535,
         "_default": 8192
       },
       "context_length": {
+        "gemini-3.1-pro-preview": 1048576,
+        "gemini-3-flash-preview": 1048576,
+        "gemini-3-pro-preview": 1048576,
+        "gemini-2.5-pro": 1048576,
+        "gemini-2.5-flash": 1048576,
         "_default": 1048576
       },
       "thinking_models": ["gemini-2.5", "gemini-3"],
@@ -94,7 +74,7 @@
       "temperature_range": [0.0, 2.0]
     },
     "openrouter": {
-      "default_model": "anthropic/claude-opus-4.6",
+      "default_model": "anthropic/claude-sonnet-4.6",
       "detection_patterns": ["openrouter"],
       "max_output_tokens": {
         "_default": 4096
@@ -108,15 +88,23 @@
       "default_model": "llama-4-scout",
       "detection_patterns": ["groq"],
       "max_output_tokens": {
-        "llama-3.1-8b": 131072,
-        "llama-3.3-70b": 32768,
-        "llama-4-scout": 8192,
+        "llama-4-scout": 16384,
+        "llama-4-maverick": 16384,
+        "llama-3.3-70b": 16384,
+        "llama-3.1-8b": 8192,
         "qwen3-32b": 40960,
         "gpt-oss-120b": 65536,
-        "gpt-oss-20b": 65536,
+        "gpt-oss-20b": 16384,
         "_default": 8192
       },
       "context_length": {
+        "llama-4-scout": 131072,
+        "llama-4-maverick": 131072,
+        "llama-3.3-70b": 131072,
+        "llama-3.1-8b": 131072,
+        "qwen3-32b": 40960,
+        "gpt-oss-120b": 131072,
+        "gpt-oss-20b": 131072,
         "_default": 131072
       },
       "thinking_models": ["qwen3"],
@@ -124,18 +112,18 @@
       "temperature_range": [0.0, 2.0]
     },
     "cerebras": {
-      "default_model": "llama3.1-8b",
+      "default_model": "qwen-3-235b",
       "detection_patterns": ["cerebras", "llama3.1", "gpt-oss", "qwen-3-235b"],
       "max_output_tokens": {
-        "llama3.1-8b": 8192,
-        "gpt-oss-120b": 8192,
         "qwen-3-235b": 8192,
+        "gpt-oss-120b": 8192,
+        "llama3.1-8b": 8192,
         "_default": 8192
       },
       "context_length": {
-        "llama3.1-8b": 128000,
-        "gpt-oss-120b": 131072,
         "qwen-3-235b": 32768,
+        "gpt-oss-120b": 131072,
+        "llama3.1-8b": 128000,
         "_default": 128000
       },
       "thinking_models": ["qwen-3-235b"],

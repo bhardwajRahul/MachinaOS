@@ -1,5 +1,5 @@
 {
-  "_generated": "2026-03-06T15:18:47.844992+00:00",
+  "_generated": "2026-03-10T10:01:41.781715+00:00",
   "_source": "openrouter",
   "_model_count": 346,
   "models": {
@@ -2795,20 +2795,13 @@
       ],
       "is_reasoning_model": false,
       "supported_parameters": [
-        "frequency_penalty",
-        "logit_bias",
         "max_tokens",
-        "min_p",
         "presence_penalty",
-        "repetition_penalty",
         "response_format",
         "seed",
-        "stop",
-        "structured_outputs",
         "temperature",
         "tool_choice",
         "tools",
-        "top_k",
         "top_p"
       ]
     },
@@ -3920,7 +3913,7 @@
       "name": "Qwen: Qwen3 Next 80B A3B Instruct",
       "provider": "qwen",
       "local_id": "qwen3-next-80b-a3b-instruct",
-      "context_length": 262144,
+      "context_length": 131072,
       "max_output_tokens": 0,
       "input_price_per_mtok": 0.09,
       "output_price_per_mtok": 1.1,
@@ -4089,7 +4082,6 @@
       "supported_parameters": [
         "frequency_penalty",
         "include_reasoning",
-        "logit_bias",
         "max_tokens",
         "min_p",
         "presence_penalty",
@@ -7248,8 +7240,8 @@
       "local_id": "gemma-3-27b-it",
       "context_length": 128000,
       "max_output_tokens": 65536,
-      "input_price_per_mtok": 0.04,
-      "output_price_per_mtok": 0.15,
+      "input_price_per_mtok": 0.03,
+      "output_price_per_mtok": 0.11,
       "supports_thinking": false,
       "thinking_type": "none",
       "temperature_range": [
@@ -7984,7 +7976,6 @@
       "supported_parameters": [
         "frequency_penalty",
         "include_reasoning",
-        "logit_bias",
         "max_tokens",
         "min_p",
         "presence_penalty",
@@ -9399,7 +9390,6 @@
       "is_reasoning_model": false,
       "supported_parameters": [
         "frequency_penalty",
-        "logit_bias",
         "max_tokens",
         "min_p",
         "presence_penalty",

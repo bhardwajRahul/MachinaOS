@@ -84,7 +84,25 @@ Create AI agents that remember conversations, use tools, and work together. Choo
 - Search your files with AI
 
 ### Build Agent Teams
-Create teams of specialized agents that delegate tasks to each other - a coding agent, a web agent, and a task agent working together.
+
+```
+                    +------------------+
+                    |   AI Employee    |
+                    |   (Team Lead)    |
+                    +--------+---------+
+                             | input-teammates
+           +-----------------+------------------+
+           |                 |                  |
+    +------v------+   +------v------+   +-------v-----+
+    | Coding Agent|   |  Web Agent  |   | Task Agent  |
+    +-------------+   +-------------+   +-------------+
+```
+
+- **AI Employee / Orchestrator** - Team lead agents for coordinating multiple specialized agents
+- **Intelligent Delegation** - AI decides when to delegate based on task context
+- **Delegation Tools** - Connected agents become `delegate_to_*` tools automatically
+- **13 Specialized Agents** - Android, Coding, Web, Task, Social, Travel, Tool, Productivity, Payments, Consumer, Autonomous, Orchestrator
+- **Team Monitor** - Real-time visualization of team operations
 
 ### Run Code
 - Execute Python, JavaScript, and TypeScript code

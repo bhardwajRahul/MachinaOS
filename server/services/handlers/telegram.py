@@ -76,7 +76,7 @@ async def handle_telegram_send(
                     "success": False,
                     "node_id": node_id,
                     "node_type": node_type,
-                    "error": "Bot owner not detected. Send any message to your bot first.",
+                    "error": "Bot owner not detected. Send any private message to your bot on Telegram to auto-detect, or set TELEGRAM_OWNER_CHAT_ID in .env",
                     "execution_time": time.time() - start_time,
                     "timestamp": datetime.now().isoformat()
                 }
