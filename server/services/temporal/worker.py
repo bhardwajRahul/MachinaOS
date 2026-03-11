@@ -25,7 +25,6 @@ from temporalio.worker import Worker
 
 from core.logging import get_logger
 from .workflow import MachinaWorkflow
-print(f"[Worker Import] MachinaWorkflow loaded from: {MachinaWorkflow.__module__}")
 from .activities import (
     NodeExecutionActivities,
     create_shared_session,
@@ -108,7 +107,6 @@ class TemporalWorkerManager:
             task_queue=self.task_queue,
             pool_size=self.pool_size,
         )
-        print(f"[Worker] Starting with pool_size={self.pool_size}")
 
         # Run worker in background task
         self._worker_task = asyncio.create_task(
@@ -144,7 +142,6 @@ class TemporalWorkerManager:
         # Close shared session
         if self._session and not self._session.closed:
             await self._session.close()
-            print("[Worker] Closed shared session")
 
         self._worker = None
         self._session = None
@@ -178,12 +175,8 @@ async def run_standalone_worker(
         server_address=server_address,
         namespace=namespace,
         task_queue=task_queue,
+        pool_size=pool_size,
     )
-
-    print(f"[Worker] Connecting to {server_address}")
-    print(f"[Worker] Namespace: {namespace}")
-    print(f"[Worker] Task Queue: {task_queue}")
-    print(f"[Worker] Pool Size: {pool_size}")
 
     # Use custom runtime with heartbeating disabled to avoid warning on older servers
     runtime = create_runtime()
@@ -203,7 +196,6 @@ async def run_standalone_worker(
             max_concurrent_workflow_tasks=10,
         )
 
-        print("[Worker] Running. Press Ctrl+C to stop.")
         logger.info("Worker running. Press Ctrl+C to stop.")
         await worker.run()
 
@@ -211,7 +203,6 @@ async def run_standalone_worker(
         # Cleanup session on shutdown
         if not session.closed:
             await session.close()
-            print("[Worker] Session closed")
 
 
 async def create_worker(

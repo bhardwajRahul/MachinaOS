@@ -49,7 +49,6 @@ class MachinaWorkflow:
 
     @workflow.run
     async def run(self, workflow_data: Dict[str, Any]) -> Dict[str, Any]:
-        print("[Workflow] ========== RUN METHOD CALLED ==========")
         """Execute workflow by orchestrating node activities.
 
         Args:
@@ -72,8 +71,6 @@ class MachinaWorkflow:
         workflow.logger.info(
             f"Starting workflow orchestration: {len(nodes)} nodes, {len(edges)} edges"
         )
-        # Debug print for console visibility
-        print(f"[Workflow] Starting: {len(nodes)} nodes, {len(edges)} edges")
 
         if not nodes:
             return {
@@ -90,7 +87,6 @@ class MachinaWorkflow:
             f"After filtering: {len(exec_nodes)} executable nodes "
             f"(filtered {len(nodes) - len(exec_nodes)} config nodes)"
         )
-        print(f"[Workflow] Executable: {len(exec_nodes)}, Config filtered: {len(nodes) - len(exec_nodes)}")
 
         # 2. Build dependency maps
         deps, node_map = self._build_dependency_maps(exec_nodes, exec_edges)
@@ -118,7 +114,6 @@ class MachinaWorkflow:
                 workflow.logger.info(f"Pre-executed trigger: {node_id}")
 
         workflow.logger.info(f"Pre-executed: {pre_executed_count}, To execute: {len(node_map) - pre_executed_count}")
-        print(f"[Workflow] Pre-executed: {pre_executed_count}, To execute: {len(node_map) - pre_executed_count}")
 
         # 5. Retry policy for node activities
         retry_policy = RetryPolicy(
@@ -133,8 +128,7 @@ class MachinaWorkflow:
             loop_count += 1
             # Find ready nodes (all deps completed, not running/completed)
             ready = self._find_ready_nodes(deps, completed, running, node_map)
-            workflow.logger.info(f"Loop {loop_count}: ready={len(ready)}, running={len(running)}, completed={len(completed)}")
-            print(f"[Workflow] Loop {loop_count}: ready={len(ready)}, running={len(running)}, completed={len(completed)}")
+            workflow.logger.debug(f"Loop {loop_count}: ready={len(ready)}, running={len(running)}, completed={len(completed)}")
 
             # Start activities for ready nodes
             for node_id in ready:
@@ -168,7 +162,6 @@ class MachinaWorkflow:
                 running[node_id] = handle
 
                 workflow.logger.info(f"Scheduled activity for node: {node_id}")
-                print(f"[Workflow] Scheduled: {node_id}")
 
             # Exit if nothing running and nothing ready
             if not running:
@@ -202,7 +195,6 @@ class MachinaWorkflow:
             f"Workflow complete: success={success}, "
             f"executed={len(execution_trace)}/{len(node_map)}"
         )
-        print(f"[Workflow] Complete: success={success}, executed={len(execution_trace)}/{len(node_map)}")
 
         return {
             "success": success,

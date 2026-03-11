@@ -66,6 +66,9 @@
     "client:start": "cd client && npm run start",
     "python:start": "cd server && uv run uvicorn main:app --host 127.0.0.1 --port 3010 --log-level warning",
     "python:daemon": "cd server && uv run uvicorn main:app --host 0.0.0.0 --port 3010 --log-level warning",
+    "temporal:start": "temporal-server start",
+    "temporal:stop": "temporal-server stop",
+    "temporal:status": "temporal-server status",
     "temporal:worker": "cd server && uv run python -m services.temporal.worker",
     "whatsapp:start": "whatsapp-rpc start",
     "whatsapp:stop": "whatsapp-rpc stop",
@@ -102,6 +105,7 @@
     "concurrently": "^9.2.1",
     "cross-env": "^7.0.3",
     "rimraf": "^6.0.1",
+    "temporal-server": "^0.0.4",
     "whatsapp-rpc": "^0.0.12"
   }
 }

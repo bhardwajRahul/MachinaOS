@@ -14,7 +14,7 @@ Architecture:
 """
 
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import aiohttp
 from temporalio import activity
@@ -29,8 +29,8 @@ _settings = Settings()
 MACHINA_URL = f"http://{_settings.host}:{_settings.port}"
 WS_URL = f"ws://{_settings.host}:{_settings.port}/ws/internal"
 
-print(f"[Temporal Activities] MACHINA_URL configured: {MACHINA_URL}")
-print(f"[Temporal Activities] WS_URL configured: {WS_URL}")
+logger.debug(f"MACHINA_URL configured: {MACHINA_URL}")
+logger.debug(f"WS_URL configured: {WS_URL}")
 
 
 class NodeExecutionActivities:
@@ -90,14 +90,13 @@ class NodeExecutionActivities:
             f"Executing node activity: {node_id} ({node_type})",
             extra={"tenant_id": tenant_id, "workflow_id": workflow_id},
         )
-        print(f"[Activity] Starting node: {node_id} (type={node_type})")
 
         # Heartbeat at start to signal activity is alive
         activity.heartbeat(f"Starting {node_type}: {node_id}")
 
         # Handle pre-executed trigger nodes (already have their output)
         if context.get("pre_executed"):
-            print(f"[Activity] Node {node_id} is pre-executed, returning cached result")
+            activity.logger.debug(f"Node {node_id} is pre-executed, returning cached result")
             result = {
                 "success": True,
                 "node_id": node_id,
@@ -111,7 +110,7 @@ class NodeExecutionActivities:
 
         # Handle disabled nodes
         if node_data.get("disabled"):
-            print(f"[Activity] Node {node_id} is disabled, skipping")
+            activity.logger.debug(f"Node {node_id} is disabled, skipping")
             result = {
                 "success": True,
                 "node_id": node_id,
@@ -154,7 +153,7 @@ class NodeExecutionActivities:
                     },
                     workflow_id=workflow_id,
                 )
-                print(f"[Activity] Node {node_id} completed successfully")
+                activity.logger.info(f"Node {node_id} completed successfully")
             else:
                 await self._broadcast_status(
                     node_id=node_id,
@@ -162,7 +161,7 @@ class NodeExecutionActivities:
                     data={"error": result.get("error")},
                     workflow_id=workflow_id,
                 )
-                print(f"[Activity] Node {node_id} failed: {result.get('error')}")
+                activity.logger.warning(f"Node {node_id} failed: {result.get('error')}")
 
             # Heartbeat for activity liveness
             activity.heartbeat(f"Node {node_id} completed")
@@ -171,8 +170,7 @@ class NodeExecutionActivities:
 
         except Exception as e:
             error_msg = f"{type(e).__name__}: {str(e)}"
-            logger.error(f"Node {node_id} execution failed: {error_msg}")
-            print(f"[Activity] Node {node_id} EXCEPTION: {error_msg}")
+            activity.logger.error(f"Node {node_id} execution failed: {error_msg}")
 
             # Broadcast error status
             await self._broadcast_status(
@@ -213,7 +211,7 @@ class NodeExecutionActivities:
             "outputs": context.get("inputs", {}),
         }
 
-        print(f"[Activity] WebSocket execute for {node_id}")
+        activity.logger.debug(f"WebSocket execute for {node_id}")
 
         try:
             # Each activity gets its own WebSocket connection from the pool
@@ -223,14 +221,13 @@ class NodeExecutionActivities:
                 receive_timeout=120,
             ) as ws:
                 await ws.send_json(message)
-                print(f"[Activity] Sent request for {node_id}")
 
                 # Wait for response with matching request_id
                 async for msg in ws:
                     if msg.type == aiohttp.WSMsgType.TEXT:
                         response = json.loads(msg.data)
                         if response.get("request_id") == request_id:
-                            print(f"[Activity] Got response for {node_id}: success={response.get('success')}")
+                            activity.logger.debug(f"Got response for {node_id}: success={response.get('success')}")
                             return response
                     elif msg.type == aiohttp.WSMsgType.ERROR:
                         raise Exception(f"WebSocket error: {ws.exception()}")
@@ -265,11 +262,10 @@ class NodeExecutionActivities:
                 timeout=aiohttp.ClientTimeout(total=5),
             ) as response:
                 if response.status == 200:
-                    print(f"[Activity] Broadcast: {node_id} -> {status}")
+                    logger.debug(f"Broadcast: {node_id} -> {status}")
         except Exception as e:
             # Non-fatal - don't fail execution if broadcast fails
             logger.warning(f"Broadcast failed for {node_id}: {e}")
-            print(f"[Activity] Broadcast failed (non-fatal): {e}")
 
 
 # =============================================================================
@@ -313,35 +309,5 @@ async def create_shared_session(pool_size: int = 100) -> aiohttp.ClientSession:
         connector=connector,
         timeout=timeout,
     )
-    print(f"[Activities] Created shared session with pool_size={pool_size}")
+    logger.info(f"Created shared session with pool_size={pool_size}")
     return session
-
-
-# =============================================================================
-# Standalone activity function (for backwards compatibility)
-# =============================================================================
-
-# Global session for standalone function
-_global_session: Optional[aiohttp.ClientSession] = None
-_global_activities: Optional[NodeExecutionActivities] = None
-
-
-async def _get_global_activities() -> NodeExecutionActivities:
-    """Get or create global activities instance."""
-    global _global_session, _global_activities
-
-    if _global_session is None or _global_session.closed:
-        _global_session = await create_shared_session()
-        _global_activities = NodeExecutionActivities(_global_session)
-
-    return _global_activities
-
-
-@activity.defn
-async def execute_node_activity(context: Dict[str, Any]) -> Dict[str, Any]:
-    """Standalone activity function for backwards compatibility.
-
-    For new code, use NodeExecutionActivities class with shared session.
-    """
-    activities = await _get_global_activities()
-    return await activities.execute_node_activity(context)

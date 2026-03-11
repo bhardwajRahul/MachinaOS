@@ -133,7 +133,6 @@ class TemporalExecutor:
                 execution_id=execution_id,
                 traceback=tb,
             )
-            print(f"[Temporal] Workflow failed with exception:\n{tb}")
 
             return {
                 "success": False,
