@@ -39,6 +39,14 @@ if (config.redisEnabled) {
   console.log('[Docker] Redis profile disabled (REDIS_ENABLED=false in .env)');
 }
 
+// Add Temporal profile if enabled in .env
+if (config.temporalEnabled) {
+  composeArgs.push('--profile', 'temporal');
+  console.log('[Docker] Temporal profile enabled (TEMPORAL_ENABLED=true in .env)');
+} else {
+  console.log('[Docker] Temporal profile disabled (TEMPORAL_ENABLED=false in .env)');
+}
+
 // Add command
 composeArgs.push(command);
 

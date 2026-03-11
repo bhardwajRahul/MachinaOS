@@ -13,21 +13,11 @@ When TEMPORAL_ENABLED=true:
 - Each node is a separate activity with its own retry policy
 - Parallel branches execute concurrently on available workers
 
-When TEMPORAL_ENABLED=false (default):
+When TEMPORAL_ENABLED=false:
 - Falls back to the existing parallel/sequential executor
-
-Note: temporalio is an optional dependency. Import with try/except.
 """
 
 __all__ = ["TemporalExecutor", "TemporalClientWrapper"]
 
-# Lazy imports - temporalio is optional
-TemporalExecutor = None
-TemporalClientWrapper = None
-
-try:
-    from .executor import TemporalExecutor
-    from .client import TemporalClientWrapper
-except ImportError:
-    # temporalio not installed - Temporal features disabled
-    pass
+from .executor import TemporalExecutor
+from .client import TemporalClientWrapper

@@ -30,19 +30,11 @@ from services.user_auth import UserAuthService
 from services.compaction import init_compaction_service
 _clog("all service imports done")
 
-# Temporal is optional - import with fallback
-try:
-    from services.temporal import TemporalClientWrapper
-    _TEMPORAL_AVAILABLE = True
-except ImportError:
-    TemporalClientWrapper = None
-    _TEMPORAL_AVAILABLE = False
+from services.temporal import TemporalClientWrapper
 
 
 def _create_temporal_client(server_address: str, namespace: str):
-    """Factory function for temporal client - returns None if not available."""
-    if not _TEMPORAL_AVAILABLE or TemporalClientWrapper is None:
-        return None
+    """Factory function for temporal client."""
     return TemporalClientWrapper(server_address=server_address, namespace=namespace)
 
 
@@ -82,7 +74,7 @@ class Container(containers.DeclarativeContainer):
         encryption=encryption_service
     )
 
-    # Temporal client (lazy - returns None if temporalio not installed)
+    # Temporal client
     temporal_client = providers.Singleton(
         _create_temporal_client,
         server_address=settings.provided.temporal_server_address,

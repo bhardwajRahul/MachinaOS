@@ -15,6 +15,27 @@ services:
       retries: 3
     command: redis-server --appendonly yes
 
+  # Temporal Server (durable workflow execution)
+  temporal:
+    image: temporalio/auto-setup:latest
+    container_name: machina-temporal
+    networks:
+      - app-network
+    restart: always
+    healthcheck:
+      test: ["CMD", "tctl", "--address", "temporal:7233", "cluster", "health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    environment:
+      - DB=sqlite
+      - SQLITE_DB_PATH=/data/temporal.db
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TZ=UTC
+    volumes:
+      - temporal-data:/data
+
   # Python FastAPI Backend
   backend:
     image: machinaos-backend:latest
@@ -45,12 +66,16 @@ services:
       - ENV=production
       - REDIS_ENABLED=true
       - REDIS_URL=redis://redis:6379
+      - TEMPORAL_ENABLED=true
+      - TEMPORAL_SERVER_ADDRESS=temporal:7233
       - WHATSAPP_RPC_URL=ws://whatsapp:${WHATSAPP_RPC_PORT:-9400}/ws/rpc
       - CREDENTIALS_DB_PATH=/app/credentials/credentials.db
       - CREDENTIAL_BACKEND=${CREDENTIAL_BACKEND:-fernet}
       - TZ=UTC
     depends_on:
       redis:
+        condition: service_healthy
+      temporal:
         condition: service_healthy
       whatsapp:
         condition: service_healthy
@@ -109,6 +134,8 @@ networks:
 
 volumes:
   redis-data:
+    driver: local
+  temporal-data:
     driver: local
   backend-data:
     driver: local

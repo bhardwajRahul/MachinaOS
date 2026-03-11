@@ -189,27 +189,21 @@ async def lifespan(app: FastAPI):
     # Initialize Temporal if enabled
     temporal_worker_manager = None
     if settings.temporal_enabled:
-        try:
-            from services.temporal import TemporalClientWrapper, TemporalExecutor
-            from services.temporal.worker import TemporalWorkerManager
+        from services.temporal import TemporalClientWrapper, TemporalExecutor
+        from services.temporal.worker import TemporalWorkerManager
 
-            # Check if temporal is actually available (temporalio installed)
-            if TemporalClientWrapper is None:
-                raise ImportError("temporalio not installed")
+        logger.info(
+            "Initializing Temporal integration",
+            server_address=settings.temporal_server_address,
+            namespace=settings.temporal_namespace,
+            task_queue=settings.temporal_task_queue,
+        )
 
-            logger.info(
-                "Initializing Temporal integration",
-                server_address=settings.temporal_server_address,
-                namespace=settings.temporal_namespace,
-                task_queue=settings.temporal_task_queue,
-            )
+        # Connect Temporal client (retries 3 times, then falls back)
+        temporal_client_wrapper = container.temporal_client()
+        temporal_client = await temporal_client_wrapper.connect(retries=3, delay=2.0)
 
-            # Connect Temporal client
-            temporal_client_wrapper = container.temporal_client()
-            if temporal_client_wrapper is None:
-                raise ImportError("temporalio not installed")
-            temporal_client = await temporal_client_wrapper.connect()
-
+        if temporal_client is not None:
             # Create and set the Temporal executor on WorkflowService
             temporal_executor = TemporalExecutor(
                 client=temporal_client,
@@ -225,10 +219,14 @@ async def lifespan(app: FastAPI):
             await temporal_worker_manager.start()
 
             logger.info("Temporal integration initialized successfully")
-
-        except Exception as e:
-            logger.warning(f"Temporal not available (optional): {str(e)}")
-            logger.info("Continuing without Temporal - using local parallel/sequential execution")
+        else:
+            logger.warning(
+                f"Temporal server not reachable at {settings.temporal_server_address}. "
+                "Falling back to local parallel/sequential execution. "
+                "Start Temporal server and restart to enable durable workflows."
+            )
+            # Start background reconnect loop (tries every 30s)
+            await temporal_client_wrapper.start_background_reconnect(interval=30.0)
 
     _startup_log("All services initialized")
     print("Application startup complete", flush=True)
@@ -243,7 +241,7 @@ async def lifespan(app: FastAPI):
         await temporal_worker_manager.stop()
         logger.info("Temporal worker stopped")
 
-    # Disconnect Temporal client if connected
+    # Disconnect Temporal client (also cancels background reconnect)
     if settings.temporal_enabled:
         try:
             temporal_client_wrapper = container.temporal_client()

@@ -1,8 +1,9 @@
 """Temporal client wrapper for MachinaOs.
 
-Manages the Temporal client connection lifecycle.
+Manages the Temporal client connection lifecycle with retry support.
 """
 
+import asyncio
 from typing import Optional
 from temporalio.client import Client
 from temporalio.runtime import Runtime, TelemetryConfig
@@ -16,16 +17,11 @@ class TemporalClientWrapper:
     """Wrapper around Temporal client for lifecycle management."""
 
     def __init__(self, server_address: str, namespace: str = "default"):
-        """Initialize the client wrapper.
-
-        Args:
-            server_address: Temporal server address (e.g., "localhost:7233")
-            namespace: Temporal namespace to use
-        """
         self.server_address = server_address
         self.namespace = namespace
         self._client: Optional[Client] = None
         self._runtime: Optional[Runtime] = None
+        self._reconnect_task: Optional[asyncio.Task] = None
 
     @property
     def client(self) -> Optional[Client]:
@@ -37,40 +33,71 @@ class TemporalClientWrapper:
         """Check if client is connected."""
         return self._client is not None
 
-    async def connect(self) -> Client:
-        """Connect to the Temporal server.
+    async def connect(self, retries: int = 3, delay: float = 2.0) -> Optional[Client]:
+        """Connect to the Temporal server with retries.
 
         Returns:
-            The connected Temporal client
+            The connected Temporal client, or None if connection failed.
         """
         if self._client is not None:
             return self._client
 
-        logger.info(
-            "Connecting to Temporal server",
-            server_address=self.server_address,
-            namespace=self.namespace,
-        )
+        # Create runtime once (reusable across reconnects)
+        if self._runtime is None:
+            self._runtime = Runtime(
+                telemetry=TelemetryConfig(),
+                worker_heartbeat_interval=None,
+            )
 
-        # Create runtime with worker heartbeating disabled to avoid warning on older servers
-        self._runtime = Runtime(
-            telemetry=TelemetryConfig(),
-            worker_heartbeat_interval=None,
-        )
+        for attempt in range(1, retries + 1):
+            try:
+                logger.info(
+                    f"Connecting to Temporal server (attempt {attempt}/{retries})",
+                    server_address=self.server_address,
+                    namespace=self.namespace,
+                )
+                self._client = await Client.connect(
+                    self.server_address,
+                    namespace=self.namespace,
+                    runtime=self._runtime,
+                )
+                logger.info("Connected to Temporal server")
+                return self._client
+            except Exception as e:
+                logger.warning(
+                    f"Temporal connection attempt {attempt}/{retries} failed: {e}"
+                )
+                if attempt < retries:
+                    await asyncio.sleep(delay)
 
-        self._client = await Client.connect(
-            self.server_address,
-            namespace=self.namespace,
-            runtime=self._runtime,
+        logger.error(
+            f"Failed to connect to Temporal server at {self.server_address} after {retries} attempts"
         )
+        return None
 
-        logger.info("Connected to Temporal server")
-        return self._client
+    async def start_background_reconnect(self, interval: float = 30.0) -> None:
+        """Start a background task that periodically tries to reconnect."""
+        if self._reconnect_task is not None:
+            return
+
+        async def _reconnect_loop():
+            while True:
+                await asyncio.sleep(interval)
+                if self._client is not None:
+                    continue
+                logger.info("Attempting Temporal reconnect...")
+                client = await self.connect(retries=1, delay=0)
+                if client:
+                    logger.info("Temporal reconnected successfully")
+                    break
+
+        self._reconnect_task = asyncio.create_task(_reconnect_loop())
 
     async def disconnect(self) -> None:
         """Disconnect from the Temporal server."""
+        if self._reconnect_task is not None:
+            self._reconnect_task.cancel()
+            self._reconnect_task = None
         if self._client is not None:
-            # Temporal client doesn't have an explicit close method,
-            # but we clear the reference
             self._client = None
             logger.info("Disconnected from Temporal server")

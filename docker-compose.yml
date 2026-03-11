@@ -19,6 +19,32 @@ services:
       retries: 3
     command: redis-server --appendonly yes
 
+  # Temporal Server (durable workflow execution)
+  temporal:
+    image: temporalio/auto-setup:latest
+    container_name: machina-temporal
+    profiles:
+      - temporal
+    ports:
+      - "7233:7233"   # gRPC frontend
+      - "8233:8233"   # Web UI
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "tctl", "--address", "temporal:7233", "cluster", "health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    environment:
+      - DB=sqlite
+      - SQLITE_DB_PATH=/data/temporal.db
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TZ=UTC
+    volumes:
+      - temporal-data:/data
+
   # Python FastAPI Backend
   backend:
     build:
@@ -47,6 +73,7 @@ services:
       # Override specific vars for Docker networking
       - PORT=${PYTHON_BACKEND_PORT:-3010}
       - REDIS_URL=redis://redis:6379
+      - TEMPORAL_SERVER_ADDRESS=temporal:7233
       - WHATSAPP_RPC_URL=ws://whatsapp:${WHATSAPP_RPC_PORT:-9400}/ws/rpc
       - CREDENTIALS_DB_PATH=/app/credentials/credentials.db
       - TZ=UTC
@@ -100,6 +127,8 @@ networks:
 
 volumes:
   redis-data:
+    driver: local
+  temporal-data:
     driver: local
   backend-data:
     driver: local
