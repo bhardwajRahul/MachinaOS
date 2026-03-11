@@ -2,7 +2,6 @@
 
 interface ImportMetaEnv {
   readonly VITE_ANDROID_RELAY_URL: string;
-  readonly VITE_AUTH_ENABLED: string;
   readonly VITE_CLIENT_PORT: string;
   readonly VITE_PYTHON_BACKEND_URL: string;
 }

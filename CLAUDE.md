@@ -1709,7 +1709,7 @@ deploy_workflow() -> Sets up triggers, returns immediately
 - **Execution Engine**: Routes AI nodes to Python Flask backend with auto-injection of API keys
 
 #### Supported AI Providers & Models
-All 6 providers are available across aiAgent, chatAgent (Zeenie), and all specialized agents. Model parameters (max output, context length, thinking type, temperature range) are managed by `ModelRegistryService` (`server/services/model_registry.py`) which fetches from OpenRouter and falls back to `server/config/llm_defaults.json`.
+4 providers are available for aiAgent, chatAgent (Zeenie), and all specialized agents: OpenAI, Anthropic, Google (Gemini), OpenRouter. Groq and Cerebras are available as standalone chat model nodes only (groqChatModel, cerebrasChatModel). Model parameters (max output, context length, thinking type, temperature range) are managed by `ModelRegistryService` (`server/services/model_registry.py`) which fetches from OpenRouter and falls back to `server/config/llm_defaults.json`.
 
 | Provider | Key Models | Context | Max Output | Thinking | Temp Range |
 |----------|-----------|---------|-----------|----------|------------|

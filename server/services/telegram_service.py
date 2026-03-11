@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 
 from telegram import Bot, Update
-from telegram.error import BadRequest
+from telegram.error import BadRequest, NetworkError
 from telegram.ext import Application, ContextTypes, MessageHandler, filters
 from telegram.helpers import escape_markdown
 
@@ -116,7 +116,20 @@ class TelegramService:
                 logger.info(f"[Telegram] Bot validated: @{me.username} (ID: {me.id})")
 
                 # Build application
-                self._application = Application.builder().token(token).build()
+                self._application = (
+                    Application.builder()
+                    .token(token)
+                    # Long-polling timeouts (get_updates holds connection open ~10s)
+                    .get_updates_read_timeout(30.0)
+                    .get_updates_write_timeout(10.0)
+                    .get_updates_connect_timeout(10.0)
+                    .get_updates_pool_timeout(5.0)
+                    # Regular API call timeouts (send_message, etc.)
+                    .read_timeout(10.0)
+                    .write_timeout(10.0)
+                    .connect_timeout(10.0)
+                    .build()
+                )
                 self._bot = self._application.bot
                 self._token = token
 
@@ -197,6 +210,13 @@ class TelegramService:
             logger.error(f"[Telegram] Disconnect error: {e}")
             return {"success": False, "error": str(e)}
 
+    def _on_polling_error(self, error) -> None:
+        """Handle polling errors (called by PTB's internal retry loop)."""
+        if isinstance(error, NetworkError):
+            logger.debug(f"[Telegram] Network error during polling (auto-retrying): {error}")
+        else:
+            logger.error(f"[Telegram] Polling error: {error}")
+
     async def _run_polling(self):
         """Run polling loop in background."""
         try:
@@ -205,6 +225,7 @@ class TelegramService:
             await self._application.updater.start_polling(
                 drop_pending_updates=True,
                 allowed_updates=Update.ALL_TYPES,
+                error_callback=self._on_polling_error,
             )
 
             # Keep running until cancelled

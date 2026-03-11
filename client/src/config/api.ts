@@ -5,7 +5,6 @@
 
 interface ApiConfig {
   readonly PYTHON_BASE_URL: string;
-  readonly AUTH_ENABLED: boolean;
 }
 
 /**
@@ -22,9 +21,6 @@ function getApiConfig(): ApiConfig {
   return {
     // Python FastAPI backend (port 3010 in dev, same origin in prod)
     PYTHON_BASE_URL: viteEnv.VITE_PYTHON_SERVICE_URL || (isProduction ? '' : 'http://localhost:3010'),
-
-    // Authentication enabled (default true, set VITE_AUTH_ENABLED=false to disable)
-    AUTH_ENABLED: viteEnv.VITE_AUTH_ENABLED !== 'false',
   };
 }
 

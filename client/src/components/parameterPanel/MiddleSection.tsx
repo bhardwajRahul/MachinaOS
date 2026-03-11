@@ -236,6 +236,7 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
           session_id: string;
           total: number;
           threshold: number;
+          context_length?: number;
           count: number;
         }>('get_compaction_stats', {
           session_id: actualSessionId,
@@ -248,6 +249,7 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
             session_id: statsResponse.session_id || actualSessionId,
             total: statsResponse.total || 0,
             threshold: statsResponse.threshold,
+            context_length: statsResponse.context_length || 0,
             count: statsResponse.count || 0
           });
         }
@@ -775,80 +777,101 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
               style={{ marginTop: 16 }}
               items={[{
                 key: 'tokens',
-                label: (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <ThunderboltOutlined />
-                    Token Usage
-                    {compactionStats && (
-                      <Typography.Text type="secondary" style={{ marginLeft: 'auto' }}>
-                        {Math.round(compactionStats.total / 1000)}K / {Math.round(compactionStats.threshold / 1000)}K
-                      </Typography.Text>
-                    )}
-                  </span>
-                ),
+                label: (() => {
+                  const ctxLen = compactionStats?.context_length || 0;
+                  const displayMax = ctxLen > 0 ? ctxLen : compactionStats?.threshold || 0;
+                  return (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <ThunderboltOutlined />
+                      Token Usage
+                      {compactionStats && displayMax > 0 && (
+                        <Typography.Text type="secondary" style={{ marginLeft: 'auto' }}>
+                          {Math.round(compactionStats.total / 1000)}K / {Math.round(displayMax / 1000)}K{ctxLen > 0 ? ' context' : ''}
+                        </Typography.Text>
+                      )}
+                    </span>
+                  );
+                })(),
                 children: compactionLoading ? (
                   <Spin />
-                ) : compactionStats ? (
-                  <>
-                    <Progress
-                      percent={Math.round((compactionStats.total / compactionStats.threshold) * 100)}
-                      status={compactionStats.total >= compactionStats.threshold * 0.8 ? 'exception' : 'active'}
-                    />
-                    <Row gutter={16} style={{ marginTop: 16 }}>
-                      <Col span={8}><Statistic title="Total" value={compactionStats.total} /></Col>
-                      <Col span={8}>
-                        {isEditingThreshold ? (
-                          <div>
-                            <Typography.Text type="secondary" style={{ fontSize: 12 }}>Threshold</Typography.Text>
-                            <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
-                              <InputNumber
-                                size="small"
-                                value={editThresholdValue}
-                                onChange={(v) => setEditThresholdValue(v || compactionStats.threshold)}
-                                min={10000}
-                                max={2000000}
-                                step={10000}
-                                style={{ width: 100 }}
-                              />
-                              <Button
-                                size="small"
-                                type="primary"
-                                icon={<SaveOutlined />}
-                                loading={savingThreshold}
-                                onClick={async () => {
-                                  setSavingThreshold(true);
-                                  try {
-                                    await sendRequest('configure_compaction', {
-                                      session_id: connectedMemorySessionId,
-                                      threshold: editThresholdValue
-                                    });
-                                    if (compactionStats && connectedMemorySessionId && currentWorkflow?.id) {
-                                      updateCompactionStats(currentWorkflow.id, connectedMemorySessionId, { ...compactionStats, threshold: editThresholdValue });
+                ) : compactionStats ? (() => {
+                  const ctxLen = compactionStats.context_length || 0;
+                  const hasContext = ctxLen > 0;
+                  const progressMax = hasContext ? ctxLen : compactionStats.threshold;
+                  const percent = progressMax > 0 ? Math.round((compactionStats.total / progressMax) * 100) : 0;
+                  const isWarning = hasContext
+                    ? compactionStats.total >= ctxLen * 0.8
+                    : compactionStats.total >= compactionStats.threshold * 0.8;
+                  return (
+                    <>
+                      <Progress
+                        percent={Math.min(percent, 100)}
+                        status={isWarning ? 'exception' : 'active'}
+                      />
+                      {hasContext && compactionStats.threshold > 0 && (
+                        <Typography.Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
+                          Compaction at {Math.round(compactionStats.threshold / 1000)}K ({Math.round(compactionStats.threshold / ctxLen * 100)}% of context)
+                        </Typography.Text>
+                      )}
+                      <Row gutter={16} style={{ marginTop: 12 }}>
+                        <Col span={8}><Statistic title="Total" value={compactionStats.total} /></Col>
+                        <Col span={8}>
+                          {isEditingThreshold ? (
+                            <div>
+                              <Typography.Text type="secondary" style={{ fontSize: 12 }}>Threshold</Typography.Text>
+                              <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                                <InputNumber
+                                  size="small"
+                                  value={editThresholdValue}
+                                  onChange={(v) => setEditThresholdValue(v || compactionStats.threshold)}
+                                  min={10000}
+                                  max={2000000}
+                                  step={10000}
+                                  style={{ width: 100 }}
+                                />
+                                <Button
+                                  size="small"
+                                  type="primary"
+                                  icon={<SaveOutlined />}
+                                  loading={savingThreshold}
+                                  onClick={async () => {
+                                    setSavingThreshold(true);
+                                    try {
+                                      await sendRequest('configure_compaction', {
+                                        session_id: connectedMemorySessionId,
+                                        threshold: editThresholdValue
+                                      });
+                                      if (compactionStats && connectedMemorySessionId && currentWorkflow?.id) {
+                                        updateCompactionStats(currentWorkflow.id, connectedMemorySessionId, { ...compactionStats, threshold: editThresholdValue });
+                                      }
+                                      setIsEditingThreshold(false);
+                                      message.success('Threshold updated');
+                                    } catch (_err) {
+                                      message.error('Failed to update threshold');
+                                    } finally {
+                                      setSavingThreshold(false);
                                     }
-                                    setIsEditingThreshold(false);
-                                    message.success('Threshold updated');
-                                  } catch (_err) {
-                                    message.error('Failed to update threshold');
-                                  } finally {
-                                    setSavingThreshold(false);
-                                  }
-                                }}
-                              />
+                                  }}
+                                />
+                              </div>
                             </div>
-                          </div>
-                        ) : (
-                          <div onClick={() => { setEditThresholdValue(compactionStats.threshold); setIsEditingThreshold(true); }} style={{ cursor: 'pointer' }}>
-                            <Statistic title={<span>Threshold <EditOutlined style={{ fontSize: 10, marginLeft: 4 }} /></span>} value={compactionStats.threshold} />
-                          </div>
+                          ) : (
+                            <div onClick={() => { setEditThresholdValue(compactionStats.threshold); setIsEditingThreshold(true); }} style={{ cursor: 'pointer' }}>
+                              <Statistic title={<span>Threshold <EditOutlined style={{ fontSize: 10, marginLeft: 4 }} /></span>} value={compactionStats.threshold} />
+                            </div>
+                          )}
+                        </Col>
+                        <Col span={hasContext ? 4 : 8}><Statistic title="Compactions" value={compactionStats.count} /></Col>
+                        {hasContext && (
+                          <Col span={4}><Statistic title="Context" value={`${Math.round(ctxLen / 1000)}K`} /></Col>
                         )}
-                      </Col>
-                      <Col span={8}><Statistic title="Compactions" value={compactionStats.count} /></Col>
-                    </Row>
-                    <Typography.Text type="secondary" style={{ fontSize: 12, marginTop: 8, display: 'block' }}>
-                      Session: {compactionStats.session_id}
-                    </Typography.Text>
-                  </>
-                ) : (
+                      </Row>
+                      <Typography.Text type="secondary" style={{ fontSize: 12, marginTop: 8, display: 'block' }}>
+                        Session: {compactionStats.session_id}
+                      </Typography.Text>
+                    </>
+                  );
+                })() : (
                   <Typography.Text type="secondary">No data yet. Run the agent to start tracking.</Typography.Text>
                 )
               }]}

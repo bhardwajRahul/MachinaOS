@@ -297,7 +297,7 @@ PROVIDER_CONFIGS: Dict[str, ProviderConfig] = {
         api_key_param='anthropic_api_key',
         max_tokens_param='max_tokens',
         detection_patterns=('claude', 'anthropic'),
-        default_model=_get_default_model('anthropic', 'claude-opus-4.6'),
+        default_model=_get_default_model('anthropic', 'claude-opus-4-6'),
         models_endpoint='https://api.anthropic.com/v1/models',
         models_header_fn=_anthropic_headers
     ),
@@ -1232,85 +1232,43 @@ class AIService:
         model_class = config.model_class or _get_google_genai_class()
         return model_class(**kwargs)
 
+    def _get_curated_models(self, provider: str) -> List[str]:
+        """Get curated model list from llm_defaults.json for a provider.
+
+        Returns model IDs from max_output_tokens keys (excluding _default),
+        preserving config order. Returns empty list if provider has no curated list.
+        """
+        provider_cfg = _LLM_DEFAULTS.get("providers", {}).get(provider, {})
+        max_tokens_map = provider_cfg.get("max_output_tokens", {})
+        return [m for m in max_tokens_map if m != "_default"]
+
     async def fetch_models(self, provider: str, api_key: str) -> List[str]:
-        """Fetch available models from provider API."""
+        """Fetch available models from provider API.
+
+        For providers with curated lists in llm_defaults.json, validates the API key
+        and returns only the curated models (3 latest + 2 popular). For OpenRouter,
+        returns all available models grouped by free/paid.
+        """
+        if provider == 'cerebras' and not CEREBRAS_AVAILABLE:
+            raise ValueError(f"Cerebras provider not available: {CEREBRAS_IMPORT_ERROR or 'langchain-cerebras package not installed'}")
+
+        config = PROVIDER_CONFIGS.get(provider)
+        if not config:
+            raise ValueError(f"Unsupported provider: {provider}")
+
+        curated = self._get_curated_models(provider)
+        endpoint = config.models_endpoint
+        headers = config.models_header_fn(api_key)
+
         async with httpx.AsyncClient(timeout=self.settings.ai_timeout) as client:
-            if provider == 'openai':
-                response = await client.get(
-                    'https://api.openai.com/v1/models',
-                    headers={'Authorization': f'Bearer {api_key}'}
-                )
-                response.raise_for_status()
+            # Gemini uses query param for key instead of header
+            url = f"{endpoint}?key={api_key}" if provider == 'gemini' else endpoint
+            response = await client.get(url, headers=headers)
+            response.raise_for_status()
+
+            # OpenRouter: return all models (aggregator, no curated list)
+            if provider == 'openrouter':
                 data = response.json()
-
-                # Filter for chat models including o-series reasoning models
-                models = []
-                for model in data.get('data', []):
-                    model_id = model['id'].lower()
-                    # Include GPT models and o-series reasoning models (o1, o3, o4)
-                    is_gpt = 'gpt' in model_id
-                    is_o_series = any(f'o{n}' in model_id for n in ['1', '3', '4'])
-                    is_excluded = 'instruct' in model_id or 'embedding' in model_id or 'realtime' in model_id
-                    if (is_gpt or is_o_series) and not is_excluded:
-                        models.append(model['id'])
-
-                # Sort by priority - o-series reasoning models at top
-                def get_priority(model_name: str) -> int:
-                    m = model_name.lower()
-                    # O-series reasoning models first
-                    if 'o4-mini' in m: return 1
-                    if 'o4' in m: return 2
-                    if 'o3-mini' in m: return 3
-                    if 'o3' in m: return 4
-                    if 'o1-mini' in m: return 5
-                    if 'o1' in m: return 6
-                    # Then GPT models
-                    if 'gpt-4o-mini' in m: return 10
-                    if 'gpt-4o' in m: return 11
-                    if 'gpt-4-turbo' in m: return 12
-                    if 'gpt-4' in m: return 13
-                    if 'gpt-3.5' in m: return 20
-                    return 99
-
-                return sorted(models, key=get_priority)
-
-            elif provider == 'anthropic':
-                response = await client.get(
-                    'https://api.anthropic.com/v1/models',
-                    headers={
-                        'x-api-key': api_key,
-                        'anthropic-version': '2023-06-01'
-                    }
-                )
-                response.raise_for_status()
-                data = response.json()
-                return [model['id'] for model in data.get('data', [])
-                       if model.get('type') == 'model']
-
-            elif provider == 'gemini':
-                response = await client.get(
-                    f'https://generativelanguage.googleapis.com/v1beta/models?key={api_key}'
-                )
-                response.raise_for_status()
-                data = response.json()
-
-                models = []
-                for model in data.get('models', []):
-                    name = model.get('name', '')
-                    if ('gemini' in name and
-                        'generateContent' in model.get('supportedGenerationMethods', [])):
-                        models.append(name.replace('models/', ''))
-
-                return sorted(models)
-
-            elif provider == 'openrouter':
-                response = await client.get(
-                    'https://openrouter.ai/api/v1/models',
-                    headers={'Authorization': f'Bearer {api_key}'}
-                )
-                response.raise_for_status()
-                data = response.json()
-
                 free_models = []
                 paid_models = []
                 for model in data.get('data', []):
@@ -1322,57 +1280,20 @@ class AIService:
                         prompt_price = float(pricing.get('prompt', '0') or '0')
                         completion_price = float(pricing.get('completion', '0') or '0')
                         is_free = prompt_price == 0 and completion_price == 0
-                        # Add [FREE] tag to free models
                         display_name = f"[FREE] {model_id}" if is_free else model_id
                         if is_free:
                             free_models.append(display_name)
                         else:
                             paid_models.append(display_name)
-
-                # Return free models first, then paid models (both sorted)
                 return sorted(free_models) + sorted(paid_models)
 
-            elif provider == 'groq':
-                response = await client.get(
-                    'https://api.groq.com/openai/v1/models',
-                    headers={'Authorization': f'Bearer {api_key}'}
-                )
-                response.raise_for_status()
-                data = response.json()
+            # All other providers: return curated list from llm_defaults.json
+            # The API call above validates the key; we return the curated set
+            if curated:
+                return curated
 
-                models = []
-                for model in data.get('data', []):
-                    model_id = model.get('id', '')
-                    # Include all models from Groq API
-                    if model_id:
-                        models.append(model_id)
-
-                return sorted(models)
-
-            elif provider == 'cerebras':
-                if not CEREBRAS_AVAILABLE:
-                    raise ValueError(f"Cerebras provider not available: {CEREBRAS_IMPORT_ERROR or 'langchain-cerebras package not installed'}")
-                response = await client.get(
-                    'https://api.cerebras.ai/v1/models',
-                    headers={'Authorization': f'Bearer {api_key}'}
-                )
-                response.raise_for_status()
-                data = response.json()
-
-                models = []
-                for model in data.get('data', []):
-                    model_id = model.get('id', '')
-                    # Include all models from Cerebras API
-                    if model_id:
-                        models.append(model_id)
-
-                return sorted(models)
-
-            else:
-                # Provide helpful error for Cerebras if import failed
-                if provider == 'cerebras' and not CEREBRAS_AVAILABLE:
-                    raise ValueError(f"Cerebras provider not available: {CEREBRAS_IMPORT_ERROR or 'langchain-cerebras package not installed'}")
-                raise ValueError(f"Unsupported provider: {provider}")
+            # Fallback: return default model if no curated list
+            return [config.default_model]
 
     async def execute_chat(self, node_id: str, node_type: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
         """Execute AI chat model."""

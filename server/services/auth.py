@@ -1,6 +1,8 @@
 """API key management service with encrypted credentials database."""
 
 import hashlib
+import json
+from pathlib import Path
 from typing import Dict, Any, Optional, List
 
 from core.config import Settings

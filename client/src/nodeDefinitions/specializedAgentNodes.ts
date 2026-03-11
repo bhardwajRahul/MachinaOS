@@ -68,9 +68,7 @@ export const AI_AGENT_PROPERTIES: INodeProperties[] = [
       { name: 'OpenAI', value: 'openai' },
       { name: 'Anthropic (Claude)', value: 'anthropic' },
       { name: 'Google (Gemini)', value: 'gemini' },
-      { name: 'Groq', value: 'groq' },
-      { name: 'OpenRouter', value: 'openrouter' },
-      { name: 'Cerebras', value: 'cerebras' }
+      { name: 'OpenRouter', value: 'openrouter' }
     ],
     default: 'openai',
     description: 'The AI provider to use (configure API keys in Credentials)'

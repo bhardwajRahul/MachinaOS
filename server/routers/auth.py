@@ -72,7 +72,13 @@ async def get_auth_status(
     # Check if registration is available
     can_register = await user_auth.can_register()
 
+    # Determine if auth is enabled from server config
+    auth_enabled = True
+    if settings.vite_auth_enabled and settings.vite_auth_enabled.lower() == 'false':
+        auth_enabled = False
+
     return {
+        "auth_enabled": auth_enabled,
         "auth_mode": status["auth_mode"],
         "authenticated": current_user is not None,
         "user": current_user,

@@ -76,16 +76,8 @@ export const aiAgentNodes: Record<string, INodeTypeDescription> = {
             value: 'gemini'
           },
           {
-            name: 'Groq',
-            value: 'groq'
-          },
-          {
             name: 'OpenRouter',
             value: 'openrouter'
-          },
-          {
-            name: 'Cerebras',
-            value: 'cerebras'
           }
         ],
         default: 'openai',
@@ -250,16 +242,8 @@ export const aiAgentNodes: Record<string, INodeTypeDescription> = {
             value: 'gemini'
           },
           {
-            name: 'Groq',
-            value: 'groq'
-          },
-          {
             name: 'OpenRouter',
             value: 'openrouter'
-          },
-          {
-            name: 'Cerebras',
-            value: 'cerebras'
           }
         ],
         default: 'openai',

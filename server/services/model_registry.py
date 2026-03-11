@@ -169,37 +169,65 @@ class ModelRegistryService:
     # Core lookups
     # -------------------------------------------------------------------------
 
+    @staticmethod
+    def _model_variants(model: str) -> List[str]:
+        """Generate dot and hyphen variants of a model ID for fuzzy matching.
+
+        Model IDs use inconsistent version separators across sources:
+        - OpenRouter/registry: dots (claude-sonnet-4.6)
+        - llm_defaults.json:   hyphens (claude-sonnet-4-6)
+
+        Returns the original plus any variants with swapped separators.
+        """
+        variants = [model]
+        # digit-hyphen-digit -> digit.digit  (e.g., claude-sonnet-4-6 -> claude-sonnet-4.6)
+        dot_variant = re.sub(r'(\d)-(\d)', r'\1.\2', model)
+        if dot_variant != model:
+            variants.append(dot_variant)
+        # digit.digit -> digit-digit  (e.g., claude-sonnet-4.6 -> claude-sonnet-4-6)
+        hyphen_variant = re.sub(r'(\d)\.(\d)', r'\1-\2', model)
+        if hyphen_variant != model:
+            variants.append(hyphen_variant)
+        return variants
+
     def get_model_info(self, model: str, provider: str) -> Optional[ModelInfo]:
         """Look up model info with waterfall strategy.
 
-        1. Exact match on provider/model
+        1. Exact match on provider/model (tries dot/hyphen variants)
         2. Prefix match for versioned IDs
         3. Cross-provider check (for OpenRouter models)
         4. Returns None if not found
         """
         # Strip [FREE] prefix if present
         model = model.replace("[FREE] ", "")
+        variants = self._model_variants(model)
 
-        # 1. Exact match
-        key = f"{provider}/{model}"
-        if key in self._models:
-            return self._models[key]
+        # 1. Exact match (try all dot/hyphen variants)
+        for variant in variants:
+            key = f"{provider}/{variant}"
+            if key in self._models:
+                return self._models[key]
 
         # 2. Prefix match (e.g., claude-3-5-sonnet-20241022 -> claude-3-5-sonnet)
         for stored_key, info in self._models.items():
-            if info.provider == provider and model.startswith(info.local_id):
-                return info
+            if info.provider == provider:
+                for variant in variants:
+                    if variant.startswith(info.local_id) or info.local_id.startswith(variant):
+                        return info
 
-        # 3. Cross-provider: try OpenRouter key format directly
-        for stored_key, info in self._models.items():
-            if info.local_id == model:
-                return info
+        # 3. Cross-provider lookup (OpenRouter only - same model on different
+        #    providers can have different context windows and limits)
+        if provider == "openrouter":
+            for stored_key, info in self._models.items():
+                if info.local_id in variants:
+                    return info
 
         # 4. For OpenRouter, try stripping provider prefix from model
         if provider == "openrouter" and "/" in model:
             _, local = model.split("/", 1)
+            local_variants = self._model_variants(local)
             for stored_key, info in self._models.items():
-                if info.local_id == local:
+                if info.local_id in local_variants:
                     return info
 
         return None
@@ -456,15 +484,19 @@ class ModelRegistryService:
         """Fallback: get max output tokens from llm_defaults.json."""
         providers = self._llm_defaults.get("providers", {})
         token_map = providers.get(provider, {}).get("max_output_tokens", {})
+        variants = self._model_variants(model)
 
-        # Exact match
-        if model in token_map:
-            return token_map[model]
+        # Exact match (try dot/hyphen variants)
+        for variant in variants:
+            if variant in token_map:
+                return token_map[variant]
 
-        # Prefix match
+        # Prefix match (try dot/hyphen variants)
         for key, val in token_map.items():
-            if key != "_default" and isinstance(val, int) and model.startswith(key):
-                return val
+            if key != "_default" and isinstance(val, int):
+                for variant in variants:
+                    if variant.startswith(key):
+                        return val
 
         return token_map.get("_default", 4096)
 
@@ -472,15 +504,19 @@ class ModelRegistryService:
         """Fallback: get context length from llm_defaults.json."""
         providers = self._llm_defaults.get("providers", {})
         ctx_map = providers.get(provider, {}).get("context_length", {})
+        variants = self._model_variants(model)
 
-        # Exact match
-        if model in ctx_map:
-            return ctx_map[model]
+        # Exact match (try dot/hyphen variants)
+        for variant in variants:
+            if variant in ctx_map:
+                return ctx_map[variant]
 
-        # Prefix match
+        # Prefix match (try dot/hyphen variants)
         for key, val in ctx_map.items():
-            if key != "_default" and isinstance(val, int) and model.startswith(key):
-                return val
+            if key != "_default" and isinstance(val, int):
+                for variant in variants:
+                    if variant.startswith(key):
+                        return val
 
         return ctx_map.get("_default", 128000)
 

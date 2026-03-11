@@ -183,11 +183,17 @@ class CompactionService:
             ratio = await self._get_compaction_ratio()
             threshold = self.get_model_threshold(model, provider, ratio=ratio)
 
+        # Get the model's full context window size for frontend display
+        from services.model_registry import get_model_registry
+        registry = get_model_registry()
+        context_length = registry.get_context_length(model, provider)
+
         return {
             "total": new_total,
             "total_cost": new_total_cost,
             "cost": cost,
             "threshold": threshold,
+            "context_length": context_length,
             "needs_compaction": self._config.enabled and new_total >= threshold
         }
 
@@ -220,10 +226,18 @@ class CompactionService:
             threshold = self.get_model_threshold(model, provider, ratio=ratio)
         else:
             threshold = self._config.threshold
+        # Get context window size for frontend display
+        context_length = 0
+        if model and provider:
+            from services.model_registry import get_model_registry
+            registry = get_model_registry()
+            context_length = registry.get_context_length(model, provider)
+
         return {
             "session_id": session_id,
             "total": state["cumulative_total"],
             "threshold": threshold,
+            "context_length": context_length,
             "count": state.get("compaction_count", 0),
         }
 

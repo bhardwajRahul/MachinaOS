@@ -30,7 +30,6 @@ export default defineConfig(({ mode }) => {
     // Expose VITE_ prefixed env vars to client code via import.meta.env
     define: {
       __APP_VERSION__: JSON.stringify(version),
-      'import.meta.env.VITE_AUTH_ENABLED': JSON.stringify(getEnv('VITE_AUTH_ENABLED', 'true')),
       'import.meta.env.VITE_PYTHON_SERVICE_URL': JSON.stringify(getEnv('VITE_PYTHON_SERVICE_URL', '')),
       'import.meta.env.VITE_WHATSAPP_SERVICE_URL': JSON.stringify(getEnv('VITE_WHATSAPP_SERVICE_URL', '')),
       'import.meta.env.VITE_ANDROID_RELAY_URL': JSON.stringify(getEnv('VITE_ANDROID_RELAY_URL', '')),

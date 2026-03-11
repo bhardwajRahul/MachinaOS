@@ -214,6 +214,7 @@ export interface CompactionStats {
   session_id: string;
   total: number;
   threshold: number;
+  context_length?: number;
   count: number;
   total_cost?: number;
 }

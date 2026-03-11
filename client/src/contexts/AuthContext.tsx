@@ -19,6 +19,7 @@ export interface User {
 }
 
 export interface AuthStatus {
+  auth_enabled: boolean;
   auth_mode: 'single' | 'multi';
   authenticated: boolean;
   user: User | null;
@@ -43,21 +44,13 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const getApiBase = () => `${API_CONFIG.PYTHON_BASE_URL}/api/auth`;
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // When auth is disabled, bypass authentication entirely
-  const authEnabled = API_CONFIG.AUTH_ENABLED;
-
-  const [user, setUser] = useState<User | null>(authEnabled ? null : { id: 0, email: 'anonymous', display_name: 'Anonymous', is_owner: true });
-  const [isLoading, setIsLoading] = useState(authEnabled);
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [authMode, setAuthMode] = useState<'single' | 'multi'>('single');
   const [canRegister, setCanRegister] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const checkAuth = useCallback(async (retryCount = 0): Promise<void> => {
-    // Skip auth check if auth is disabled
-    if (!authEnabled) {
-      setIsLoading(false);
-      return;
-    }
     const maxRetries = 5;
     const baseDelay = 1000; // 1 second
 
@@ -66,6 +59,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         credentials: 'include'
       });
       const data: AuthStatus = await response.json();
+
+      // Runtime auth check: if backend says auth is disabled, set anonymous user
+      if (data.auth_enabled === false) {
+        setUser({ id: 0, email: 'anonymous', display_name: 'Anonymous', is_owner: true });
+        setIsLoading(false);
+        setError(null);
+        return;
+      }
 
       setAuthMode(data.auth_mode);
       setCanRegister(data.can_register);
@@ -91,7 +92,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsLoading(false);
       }
     }
-  }, [authEnabled]);
+  }, []);
 
   // Check auth status on mount
   useEffect(() => {
