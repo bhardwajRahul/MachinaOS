@@ -70,6 +70,17 @@ server/services/
 ├── markdown_formatter.py    # GFM markdown to platform-specific formatting (Telegram HTML, WhatsApp, plain)
 ├── telegram_service.py      # TelegramService with python-telegram-bot long-polling
 ├── tracked_http.py          # HTTPX event hooks for automatic API cost tracking
+├── llm/                     # Native LLM provider SDKs (replaces LangChain for chat)
+│   ├── __init__.py          # Public API exports
+│   ├── protocol.py          # ThinkingConfig, Message, LLMResponse, LLMProvider Protocol
+│   ├── config.py            # ProviderConfig, resolve_max_tokens, resolve_temperature
+│   ├── factory.py           # create_provider() lazy-import factory
+│   ├── messages.py          # filter_empty_messages, is_valid_message_content
+│   └── providers/           # Per-provider implementations
+│       ├── anthropic.py     # AnthropicProvider (anthropic SDK)
+│       ├── openai.py        # OpenAIProvider (openai SDK)
+│       ├── gemini.py        # GeminiProvider (google-genai SDK)
+│       └── openrouter.py    # OpenRouterProvider (extends OpenAIProvider)
 ├── proxy/                   # Residential proxy provider management
 │   ├── __init__.py          # Exports get_proxy_service, ProxyService
 │   ├── service.py           # ProxyService singleton - provider selection, URL generation
@@ -1711,6 +1722,12 @@ deploy_workflow() -> Sets up triggers, returns immediately
 #### Supported AI Providers & Models
 4 providers are available for aiAgent, chatAgent (Zeenie), and all specialized agents: OpenAI, Anthropic, Google (Gemini), OpenRouter. Groq and Cerebras are available as standalone chat model nodes only (groqChatModel, cerebrasChatModel). Model parameters (max output, context length, thinking type, temperature range) are managed by `ModelRegistryService` (`server/services/model_registry.py`) which fetches from OpenRouter and falls back to `server/config/llm_defaults.json`.
 
+**Dual-path execution architecture:**
+- **Native SDK path** (`execute_chat()`, `fetch_models()`): OpenAI, Anthropic, Gemini, OpenRouter, xAI use native Python SDKs via `services/llm/` layer. Factory: `create_provider(name, api_key)` with lazy imports.
+- **LangChain fallback** (`execute_chat()`): Groq, Cerebras still use LangChain `create_model()` + `chat_model.invoke()`.
+- **Agent execution** (`execute_agent()`, `execute_chat_agent()`): All providers use LangChain + LangGraph for tool calling and agent orchestration.
+- Native types aliased in ai.py: `NativeMessage`, `NativeThinkingConfig`, `LLMResponse` to avoid naming conflicts with LangChain's `ThinkingConfig`.
+
 | Provider | Key Models | Context | Max Output | Thinking | Temp Range |
 |----------|-----------|---------|-----------|----------|------------|
 | **OpenAI** | GPT-5.2/5.1/5/5-mini/5-nano | 400K | 128K | effort (hybrid) | 0-2 |
@@ -1785,7 +1802,7 @@ AI providers support optional proxy-based authentication, allowing requests to r
 **Key Files:**
 | File | Description |
 |------|-------------|
-| `server/services/ai.py` | `create_model()` accepts `proxy_url` parameter, sets `base_url` and token |
+| `server/services/ai.py` | Native path: `create_provider(name, api_key, proxy_url=url)`. LangChain path: `create_model()` with `base_url` kwarg. |
 | `client/src/components/CredentialsModal.tsx` | Proxy URL input for AI providers |
 
 **Backend Implementation** (`server/services/ai.py`):
@@ -3223,7 +3240,8 @@ class AIChatModelParams(BaseNodeParams):
 | `client/src/components/ModelNode.tsx` | Credential mapping and icon detection |
 | `client/src/components/CredentialsModal.tsx` | API key entry UI |
 | `client/src/Dashboard.tsx` | Node type to component mapping |
-| `server/services/ai.py` | Provider configs, model fetching, LangChain integration |
+| `server/services/ai.py` | AI service: native SDK chat (via services/llm), LangChain agents (LangGraph) |
+| `server/services/llm/` | Native LLM provider layer: factory, protocol types, per-provider SDKs |
 | `server/constants.py` | Provider detection function |
 | `server/models/nodes.py` | Pydantic validation (optional) |
 
