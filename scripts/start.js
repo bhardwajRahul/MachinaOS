@@ -60,7 +60,10 @@ async function main() {
   services.push(`"node ${resolve(ROOT, 'scripts', 'serve-client.js').replace(/\\/g, '/')}"`);
   services.push((isWindows || isWSL) ? 'npm:python:start' : 'npm:python:daemon');
   if (!skipWhatsApp) services.push('npm:whatsapp:api');
-  if (config.temporalEnabled) services.push('npm:temporal:worker');
+  if (config.temporalEnabled) {
+    services.push('npm:temporal:start');
+    services.push('npm:temporal:worker');
+  }
 
   // Ready-detection patterns for each service
   const readyPatterns = [
@@ -113,7 +116,10 @@ async function main() {
 
     const serviceNames = ['client', 'server'];
     if (!skipWhatsApp) serviceNames.push('whatsapp');
-    if (config.temporalEnabled) serviceNames.push('temporal');
+    if (config.temporalEnabled) {
+      serviceNames.push('temporal-server');
+      serviceNames.push('temporal-worker');
+    }
 
     const proc = spawn('npx', [
       'concurrently', '--kill-others',

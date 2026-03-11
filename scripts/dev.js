@@ -87,7 +87,10 @@ async function main() {
   }
   services.push(isDaemonMode ? 'npm:python:daemon' : 'npm:python:start');
   if (!skipWhatsApp) services.push('npm:whatsapp:api');
-  if (config.temporalEnabled) services.push('npm:temporal:worker');
+  if (config.temporalEnabled) {
+    services.push('npm:temporal:start');
+    services.push('npm:temporal:worker');
+  }
 
   // Ready-detection patterns for each service
   const readyPatterns = [

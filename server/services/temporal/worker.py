@@ -180,7 +180,23 @@ async def run_standalone_worker(
 
     # Use custom runtime with heartbeating disabled to avoid warning on older servers
     runtime = create_runtime()
-    client = await Client.connect(server_address, namespace=namespace, runtime=runtime)
+
+    # Connect with retries (server may still be starting)
+    client = None
+    for attempt in range(1, 6):
+        try:
+            logger.info(f"Connecting to Temporal server (attempt {attempt}/5)")
+            client = await Client.connect(server_address, namespace=namespace, runtime=runtime)
+            logger.info("Connected to Temporal server")
+            break
+        except Exception as e:
+            logger.warning(f"Temporal connection attempt {attempt}/5 failed: {e}")
+            if attempt < 5:
+                await asyncio.sleep(3.0)
+
+    if client is None:
+        logger.error(f"Could not connect to Temporal server at {server_address} after 5 attempts")
+        return
 
     # Create shared session and activities
     session = await create_shared_session(pool_size)
