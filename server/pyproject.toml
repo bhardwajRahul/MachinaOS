@@ -81,15 +81,15 @@ dependencies = [
     "google-auth>=2.27.0",
     "google-auth-oauthlib>=1.2.0",
     "google-auth-httplib2>=0.2.0",
+
+    # Temporal (durable workflow execution)
+    "temporalio>=1.7.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
     "ruff>=0.8.0",
-]
-temporal = [
-    "temporalio>=1.7.0",
 ]
 docs = [
     "beautifulsoup4>=4.12.0",
