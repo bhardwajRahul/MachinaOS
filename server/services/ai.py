@@ -59,6 +59,20 @@ from constants import ANDROID_SERVICE_NODE_TYPES
 
 logger = get_logger(__name__)
 
+# ---------------------------------------------------------------------------
+# Native LLM provider imports (dual-path: native for chat, LangChain for agents)
+# ---------------------------------------------------------------------------
+from services.llm.factory import create_provider, is_native_provider
+from services.llm.protocol import (
+    Message as NativeMessage,
+    ThinkingConfig as NativeThinkingConfig,
+    LLMResponse,
+)
+from services.llm.config import (
+    resolve_max_tokens as native_resolve_max_tokens,
+    resolve_temperature as native_resolve_temperature,
+)
+
 
 # =============================================================================
 # MARKDOWN MEMORY HELPERS - Parse/append/trim conversation markdown
@@ -1245,10 +1259,15 @@ class AIService:
     async def fetch_models(self, provider: str, api_key: str) -> List[str]:
         """Fetch available models from provider API.
 
-        For providers with curated lists in llm_defaults.json, validates the API key
-        and returns only the curated models (3 latest + 2 popular). For OpenRouter,
-        returns all available models grouped by free/paid.
+        Native providers use their SDK-based fetch_models(). Groq/Cerebras
+        fall back to the LangChain httpx path.
         """
+        # --- Native SDK path ---
+        if is_native_provider(provider):
+            native_provider = create_provider(provider, api_key)
+            return await native_provider.fetch_models(api_key)
+
+        # --- LangChain fallback (groq, cerebras) ---
         if provider == 'cerebras' and not CEREBRAS_AVAILABLE:
             raise ValueError(f"Cerebras provider not available: {CEREBRAS_IMPORT_ERROR or 'langchain-cerebras package not installed'}")
 
@@ -1261,38 +1280,13 @@ class AIService:
         headers = config.models_header_fn(api_key)
 
         async with httpx.AsyncClient(timeout=self.settings.ai_timeout) as client:
-            # Gemini uses query param for key instead of header
-            url = f"{endpoint}?key={api_key}" if provider == 'gemini' else endpoint
+            url = endpoint
             response = await client.get(url, headers=headers)
             response.raise_for_status()
 
-            # OpenRouter: return all models (aggregator, no curated list)
-            if provider == 'openrouter':
-                data = response.json()
-                free_models = []
-                paid_models = []
-                for model in data.get('data', []):
-                    model_id = model.get('id', '')
-                    arch = model.get('architecture', {})
-                    modality = arch.get('modality', '')
-                    if 'text' in modality and model_id:
-                        pricing = model.get('pricing', {})
-                        prompt_price = float(pricing.get('prompt', '0') or '0')
-                        completion_price = float(pricing.get('completion', '0') or '0')
-                        is_free = prompt_price == 0 and completion_price == 0
-                        display_name = f"[FREE] {model_id}" if is_free else model_id
-                        if is_free:
-                            free_models.append(display_name)
-                        else:
-                            paid_models.append(display_name)
-                return sorted(free_models) + sorted(paid_models)
-
-            # All other providers: return curated list from llm_defaults.json
-            # The API call above validates the key; we return the curated set
             if curated:
                 return curated
 
-            # Fallback: return default model if no curated list
             return [config.default_model]
 
     async def execute_chat(self, node_id: str, node_type: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
@@ -1335,13 +1329,10 @@ class AIService:
             else:
                 provider = self.detect_provider(model)
 
-            # Resolve max_tokens and temperature via model registry
-            max_tokens = _resolve_max_tokens(flattened, model, provider)
-
             # Build thinking config from parameters
             thinking_config = None
             if flattened.get('thinkingEnabled'):
-                thinking_config = ThinkingConfig(
+                thinking_config = NativeThinkingConfig(
                     enabled=True,
                     budget=int(flattened.get('thinkingBudget', 2048)),
                     effort=flattened.get('reasoningEffort', 'medium'),
@@ -1349,48 +1340,71 @@ class AIService:
                     format=flattened.get('reasoningFormat', 'parsed'),
                 )
 
-            temperature = _resolve_temperature(flattened, model, provider, bool(thinking_config and thinking_config.enabled))
-
             # Check for proxy URL (stored as {provider}_proxy credential)
             proxy_url = await self.auth.get_api_key(f"{provider}_proxy")
 
-            chat_model = self.create_model(provider, api_key, model, temperature, max_tokens, thinking_config, proxy_url)
+            # --- Native SDK path (openai, anthropic, gemini, openrouter, xai) ---
+            if is_native_provider(provider):
+                max_tokens = native_resolve_max_tokens(flattened, model, provider)
+                temperature = native_resolve_temperature(
+                    flattened, model, provider,
+                    bool(thinking_config and thinking_config.enabled),
+                )
 
-            # Prepare messages
-            messages = []
-            if system_prompt and is_valid_message_content(system_prompt):
-                messages.append(SystemMessage(content=system_prompt))
-            messages.append(HumanMessage(content=prompt))
+                native_provider = create_provider(provider, api_key, proxy_url=proxy_url)
 
-            # Filter messages using standardized utility (handles all providers consistently)
-            filtered_messages = filter_empty_messages(messages)
+                # Build native messages
+                native_msgs: List[NativeMessage] = []
+                if system_prompt and is_valid_message_content(system_prompt):
+                    native_msgs.append(NativeMessage(role="system", content=system_prompt))
+                native_msgs.append(NativeMessage(role="user", content=prompt))
 
-            # Execute
-            response = chat_model.invoke(filtered_messages)
+                llm_resp: LLMResponse = await native_provider.chat(
+                    native_msgs,
+                    model=model,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    thinking=thinking_config,
+                )
 
-            # Debug: Log response structure for o-series reasoning models
-            if thinking_config and thinking_config.enabled:
-                logger.debug(f"[AI Debug] Response type: {type(response).__name__}")
-                logger.debug(f"[AI Debug] Response content type: {type(response.content)}")
-                logger.debug(f"[AI Debug] Response content: {response.content[:500] if isinstance(response.content, str) else response.content}")
-                if hasattr(response, 'content_blocks'):
-                    logger.debug(f"[AI Debug] content_blocks: {response.content_blocks}")
-                if hasattr(response, 'additional_kwargs'):
-                    logger.debug(f"[AI Debug] additional_kwargs: {response.additional_kwargs}")
-                if hasattr(response, 'response_metadata'):
-                    logger.debug(f"[AI Debug] response_metadata: {response.response_metadata}")
+                response_text = llm_resp.content
+                thinking_content = llm_resp.thinking
+                finish_reason = llm_resp.finish_reason
 
-            # Extract text and thinking content from response
-            text_content, thinking_content = extract_thinking_from_response(response)
+            # --- LangChain fallback path (groq, cerebras) ---
+            else:
+                max_tokens = _resolve_max_tokens(flattened, model, provider)
+                temperature = _resolve_temperature(
+                    flattened, model, provider,
+                    bool(thinking_config and thinking_config.enabled),
+                )
 
-            # Debug: Log extraction results
-            logger.debug(f"[AI Debug] Extracted text_content: {repr(text_content[:200] if text_content else None)}")
-            logger.debug(f"[AI Debug] Extracted thinking_content: {repr(thinking_content[:200] if thinking_content else None)}")
+                # Convert NativeThinkingConfig -> LangChain ThinkingConfig if needed
+                lc_thinking = None
+                if thinking_config:
+                    lc_thinking = ThinkingConfig(
+                        enabled=thinking_config.enabled,
+                        budget=thinking_config.budget,
+                        effort=thinking_config.effort,
+                        level=thinking_config.level,
+                        format=thinking_config.format,
+                    )
 
-            # Use extracted text if available, fall back to raw content
-            response_text = text_content if text_content else response.content
+                chat_model = self.create_model(
+                    provider, api_key, model, temperature, max_tokens, lc_thinking, proxy_url
+                )
 
-            logger.debug(f"[AI Debug] Final response_text: {repr(response_text[:200] if response_text else None)}")
+                messages = []
+                if system_prompt and is_valid_message_content(system_prompt):
+                    messages.append(SystemMessage(content=system_prompt))
+                messages.append(HumanMessage(content=prompt))
+
+                filtered_messages = filter_empty_messages(messages)
+                response = chat_model.invoke(filtered_messages)
+
+                text_content, thinking_content = extract_thinking_from_response(response)
+                response_text = text_content if text_content else response.content
+                finish_reason = "stop"
 
             result = {
                 "response": response_text,
@@ -1398,7 +1412,7 @@ class AIService:
                 "thinking_enabled": thinking_config.enabled if thinking_config else False,
                 "model": model,
                 "provider": provider,
-                "finish_reason": "stop",
+                "finish_reason": finish_reason,
                 "timestamp": datetime.now().isoformat(),
                 "input": {
                     "prompt": prompt,
@@ -1409,15 +1423,13 @@ class AIService:
             log_execution_time(logger, "ai_chat", start_time, time.time())
             log_api_call(logger, provider, model, "chat", True)
 
-            final_result = {
+            return {
                 "success": True,
                 "node_id": node_id,
                 "node_type": node_type,
                 "result": result,
                 "execution_time": time.time() - start_time
             }
-            logger.debug(f"[AI Debug] Returning final_result: success={final_result['success']}, result.response={repr(result.get('response', 'MISSING')[:100] if result.get('response') else 'None')}")
-            return final_result
 
         except Exception as e:
             logger.error("AI execution failed", node_id=node_id, error=str(e))
