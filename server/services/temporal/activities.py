@@ -142,25 +142,12 @@ class NodeExecutionActivities:
             result["node_type"] = node_type
             result["timestamp"] = datetime.now().isoformat()
 
-            # Broadcast result status
+            # Status is already broadcast by the WebSocket handler (handle_execute_node)
+            # which calls both update_node_status and update_node_output.
+            # Do NOT duplicate here - late-arriving broadcasts overwrite output data.
             if result.get("success"):
-                await self._broadcast_status(
-                    node_id=node_id,
-                    status="success",
-                    data={
-                        "result": result.get("result"),
-                        "execution_time": result.get("execution_time"),
-                    },
-                    workflow_id=workflow_id,
-                )
                 activity.logger.info(f"Node {node_id} completed successfully")
             else:
-                await self._broadcast_status(
-                    node_id=node_id,
-                    status="error",
-                    data={"error": result.get("error")},
-                    workflow_id=workflow_id,
-                )
                 activity.logger.warning(f"Node {node_id} failed: {result.get('error')}")
 
             # Heartbeat for activity liveness

@@ -153,7 +153,7 @@ async def broadcast_status_for_temporal(request: BroadcastStatusRequest):
     This endpoint allows Temporal activities to send status updates
     to connected WebSocket clients during workflow execution.
     """
-    print(f"[Broadcast] {request.node_id} -> {request.status} (workflow={request.workflow_id})")
+    logger.debug(f"Broadcast: {request.node_id} -> {request.status} (workflow={request.workflow_id})")
 
     broadcaster = get_status_broadcaster()
     await broadcaster.update_node_status(
@@ -176,9 +176,7 @@ async def execute_node_for_temporal(
     This is a simplified endpoint for Temporal activities to call.
     It extracts context and delegates to the existing execute_node method.
     """
-    print(f"[Temporal Endpoint] Received request for node: {request.node_id} (type={request.node_type})")
-    print(f"[Temporal Endpoint] Data: {request.data}")
-    print(f"[Temporal Endpoint] Context keys: {list(request.context.keys())}")
+    logger.debug(f"Temporal execute_node: {request.node_id} (type={request.node_type})")
 
     context = request.context
     try:
