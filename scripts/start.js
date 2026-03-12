@@ -62,7 +62,7 @@ async function main() {
   if (!skipWhatsApp) services.push('npm:whatsapp:api');
   if (config.temporalEnabled) {
     services.push('npm:temporal:start');
-    services.push('npm:temporal:worker');
+    // Worker runs embedded in the backend (main.py TemporalWorkerManager)
   }
 
   // Ready-detection patterns for each service
@@ -118,7 +118,6 @@ async function main() {
     if (!skipWhatsApp) serviceNames.push('whatsapp');
     if (config.temporalEnabled) {
       serviceNames.push('temporal-server');
-      serviceNames.push('temporal-worker');
     }
 
     const proc = spawn('npx', [
