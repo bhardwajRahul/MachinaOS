@@ -40,7 +40,7 @@ services:
       start_period: 30s
     environment:
       - TZ=UTC
-    command: ["server", "start-dev", "--ip", "0.0.0.0", "--db-filename", "/data/temporal.db"]
+    entrypoint: ["sh", "-c", "mkdir -p /data && exec temporal server start-dev --ip 0.0.0.0 --db-filename /data/temporal.db"]
     volumes:
       - temporal-data:/data
 

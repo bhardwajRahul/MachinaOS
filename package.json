@@ -66,7 +66,7 @@
     "client:start": "cd client && npm run start",
     "python:start": "cd server && uv run uvicorn main:app --host 127.0.0.1 --port 3010 --log-level warning",
     "python:daemon": "cd server && uv run uvicorn main:app --host 0.0.0.0 --port 3010 --log-level warning",
-    "temporal:start": "temporal-server start --foreground",
+    "temporal:start": "node -e \"require('fs').mkdirSync(require('path').join(require('path').dirname(require.resolve('temporal-server/package.json')),'data'),{recursive:true})\" && temporal-server start --foreground",
     "temporal:stop": "temporal-server stop",
     "temporal:status": "temporal-server status",
     "temporal:worker": "cd server && uv run python -m services.temporal.worker",
