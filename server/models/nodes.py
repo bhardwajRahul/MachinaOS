@@ -25,6 +25,7 @@ from constants import (
     TEXT_TYPES,
     WORKFLOW_CONTROL_TYPES,
     TRIGGER_TYPES,
+    POLLING_TRIGGER_TYPES,
 )
 
 
@@ -246,6 +247,39 @@ class WorkflowTriggerParams(BaseNodeParams):
     type: Literal["workflowTrigger"]
 
 
+class TaskTriggerParams(BaseNodeParams):
+    """Parameters for task trigger node (fires on delegated agent completion)."""
+    type: Literal["taskTrigger"]
+    task_id: str = Field(default="", alias="taskId")
+    agent_name: str = Field(default="", alias="agentName")
+    status_filter: Literal["all", "completed", "error"] = Field(default="all", alias="statusFilter")
+    parent_node_id: str = Field(default="", alias="parentNodeId")
+
+
+class ChatTriggerParams(BaseNodeParams):
+    """Parameters for chat trigger node."""
+    type: Literal["chatTrigger"]
+
+
+class TelegramReceiveParams(BaseNodeParams):
+    """Parameters for Telegram receive trigger node."""
+    type: Literal["telegramReceive"]
+    sender_filter: str = Field(default="all", alias="senderFilter")
+
+
+class TwitterReceiveParams(BaseNodeParams):
+    """Parameters for Twitter receive trigger node."""
+    type: Literal["twitterReceive"]
+
+
+class GmailReceiveParams(BaseNodeParams):
+    """Parameters for Gmail receive polling trigger node."""
+    type: Literal["gmailReceive"]
+    filter_query: str = Field(default="is:unread", alias="filterQuery")
+    label_filter: str = Field(default="INBOX", alias="labelFilter")
+    poll_interval: int = Field(default=60, alias="pollInterval", ge=10, le=3600)
+
+
 # =============================================================================
 # TEXT NODE MODELS
 # =============================================================================
@@ -316,7 +350,8 @@ HttpNodeParams = Annotated[
 
 # Workflow Control Nodes
 WorkflowNodeParams = Annotated[
-    Union[StartNodeParams, CronSchedulerParams, WorkflowTriggerParams],
+    Union[StartNodeParams, CronSchedulerParams, WorkflowTriggerParams, TaskTriggerParams,
+          ChatTriggerParams, TelegramReceiveParams, TwitterReceiveParams, GmailReceiveParams],
     Field(discriminator="type")
 ]
 
@@ -347,6 +382,8 @@ KnownNodeParams = Annotated[
         HttpRequestParams, WebhookTriggerParams, WebhookResponseParams,
         # Workflow
         StartNodeParams, CronSchedulerParams, WorkflowTriggerParams,
+        # Triggers
+        TaskTriggerParams, ChatTriggerParams, TelegramReceiveParams, TwitterReceiveParams, GmailReceiveParams,
         # Text
         TextGeneratorParams, FileHandlerParams,
         # Chat
@@ -453,5 +490,6 @@ def get_all_node_types() -> set:
         HTTP_TYPES |
         TEXT_TYPES |
         WORKFLOW_CONTROL_TYPES |
-        TRIGGER_TYPES
+        TRIGGER_TYPES |
+        POLLING_TRIGGER_TYPES
     )

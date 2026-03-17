@@ -40,7 +40,7 @@ async function main() {
   log(`Platform: ${getPlatformName()}`);
   log(`Mode: ${isDaemonMode ? 'Daemon (uvicorn)' : 'Development (uvicorn)'}`);
   log(`Ports: ${config.allPorts.join(', ')}`);
-  log(`Temporal: ${config.temporalEnabled ? 'enabled' : 'disabled'}`);
+  log(`Temporal: enabled`);
   log(`WhatsApp: ${skipWhatsApp ? 'skipped' : 'enabled'}`);
 
   // Create .env if not exists
@@ -87,10 +87,8 @@ async function main() {
   }
   services.push(isDaemonMode ? 'npm:python:daemon' : 'npm:python:start');
   if (!skipWhatsApp) services.push('npm:whatsapp:api');
-  if (config.temporalEnabled) {
-    services.push('npm:temporal:start');
-    // Worker runs embedded in the backend (main.py TemporalWorkerManager)
-  }
+  services.push('npm:temporal:start');
+  // Worker runs embedded in the backend (main.py TemporalWorkerManager)
 
   // Ready-detection patterns for each service
   const readyPatterns = [
@@ -100,6 +98,7 @@ async function main() {
   if (!skipWhatsApp) {
     readyPatterns.push({ name: 'WhatsApp', pattern: /listening on|WhatsApp.*ready|API.*started|:9400/i });
   }
+  readyPatterns.push({ name: 'Temporal', pattern: /\[Temporal\] Worker started|temporal.*server.*started/i });
   const readySet = new Set();
   const totalExpected = readyPatterns.length;
 

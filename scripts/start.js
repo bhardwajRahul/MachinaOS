@@ -4,7 +4,7 @@
  * Clean output by default, --verbose for full logs.
  * Usage: machina start [--verbose|-v] [--skip-whatsapp]
  */
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import { existsSync, readFileSync } from 'fs';
 import { resolve } from 'path';
 import {
@@ -48,7 +48,22 @@ async function main() {
   process.env.PYTHONUTF8 = '1';
   ensureEnvFile();
 
-  // Free ports
+  // Check if Temporal is already running via CLI
+  // (temporal-server api exits immediately if already up, which triggers
+  // --kill-others and kills all services)
+  let temporalRunning = false;
+  try {
+    const status = execSync('temporal-server status', { encoding: 'utf-8', timeout: 5000, stdio: 'pipe' });
+    temporalRunning = /running|UP/i.test(status);
+  } catch {
+    temporalRunning = false;
+  }
+
+  if (temporalRunning) {
+    log('Temporal already running, skipping');
+  }
+
+  // Free app ports
   log('Freeing ports...');
   for (const port of config.allPorts) {
     await killPort(port);
@@ -60,10 +75,8 @@ async function main() {
   services.push(`"node ${resolve(ROOT, 'scripts', 'serve-client.js').replace(/\\/g, '/')}"`);
   services.push((isWindows || isWSL) ? 'npm:python:start' : 'npm:python:daemon');
   if (!skipWhatsApp) services.push('npm:whatsapp:api');
-  if (config.temporalEnabled) {
-    services.push('npm:temporal:start');
-    // Worker runs embedded in the backend (main.py TemporalWorkerManager)
-  }
+  if (!temporalRunning) services.push('npm:temporal:start');
+  // Worker runs embedded in the backend (main.py TemporalWorkerManager)
 
   // Ready-detection patterns for each service
   const readyPatterns = [
@@ -72,6 +85,9 @@ async function main() {
   ];
   if (!skipWhatsApp) {
     readyPatterns.push({ name: 'WhatsApp', pattern: /listening on|WhatsApp.*ready|API.*started|:9400/i });
+  }
+  if (!temporalRunning) {
+    readyPatterns.push({ name: 'Temporal', pattern: /\[Temporal\] Worker started|temporal.*server.*started/i });
   }
   const readySet = new Set();
   const totalExpected = readyPatterns.length;
@@ -116,9 +132,7 @@ async function main() {
 
     const serviceNames = ['client', 'server'];
     if (!skipWhatsApp) serviceNames.push('whatsapp');
-    if (config.temporalEnabled) {
-      serviceNames.push('temporal-server');
-    }
+    if (!temporalRunning) serviceNames.push('temporal');
 
     const proc = spawn('npx', [
       'concurrently', '--kill-others',
@@ -133,7 +147,7 @@ async function main() {
     });
 
     // Show only essential output: errors, ready messages, warnings
-    const essential = /error|fatal|exception|failed|started|ready|listening|running|address already in use|application startup complete/i;
+    const essential = /error|fatal|exception|failed|started|ready|listening|running|address already in use|application startup complete|\[Temporal\]/i;
 
     proc.stdout.on('data', (data) => {
       const text = data.toString();

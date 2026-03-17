@@ -348,14 +348,16 @@ class TriggerManager:
 
     @staticmethod
     def find_trigger_nodes(nodes: list, edges: list) -> tuple:
-        """Find trigger nodes, split into start nodes and event triggers."""
-        # Nodes with incoming edges
-        nodes_with_inputs = {e.get('target') for e in edges if e.get('target')}
+        """Find trigger nodes, split into start nodes and event triggers.
 
+        All trigger nodes are independent event listeners that spawn their own
+        execution runs — including downstream triggers (e.g., taskTrigger connected
+        after an AI agent). Each trigger listens for its event type and, when fired,
+        executes its downstream subgraph independently.
+        """
         trigger_types_no_cron = WORKFLOW_TRIGGER_TYPES - {'cronScheduler'}
         triggers = [n for n in nodes
-                   if n.get('type') in trigger_types_no_cron
-                   and n.get('id') not in nodes_with_inputs]
+                   if n.get('type') in trigger_types_no_cron]
 
         start_nodes = [n for n in triggers if n.get('type') == 'start']
         event_triggers = [n for n in triggers if n.get('type') != 'start']

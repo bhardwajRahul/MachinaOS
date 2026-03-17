@@ -118,6 +118,13 @@ while True:
     ready = self._find_ready_nodes(deps, completed, running, node_map)
 
     for node_id in ready:
+        node_type = node_map[node_id].get("type", "unknown")
+
+        # Safety: auto-complete trigger nodes that weren't pre-executed
+        if node_type in TRIGGER_NODE_TYPES and not node.get("_pre_executed"):
+            completed.add(node_id)
+            continue
+
         handle = workflow.start_activity(
             "execute_node_activity",
             args=[context],
@@ -230,7 +237,14 @@ Certain nodes provide configuration rather than executing:
 
 ```python
 # Config handles - nodes connecting via these are filtered out
-CONFIG_HANDLES = {"input-tools", "input-memory", "input-model"}
+CONFIG_HANDLES = {"input-tools", "input-memory", "input-model", "input-skill", "input-task", "input-teammates"}
+
+# Trigger node types - event listeners, never scheduled as blocking activities
+TRIGGER_NODE_TYPES = frozenset([
+    "start", "cronScheduler", "webhookTrigger", "whatsappReceive",
+    "workflowTrigger", "chatTrigger", "taskTrigger",
+    "twitterReceive", "gmailReceive", "telegramReceive",
+])
 
 # Android service types (connect to androidTool)
 ANDROID_SERVICE_TYPES = {
@@ -243,6 +257,11 @@ Config nodes are:
 - Filtered from the execution graph
 - Their configuration is passed to target nodes via node_data
 - Not scheduled as activities
+
+Trigger nodes that aren't the firing trigger are:
+- Auto-completed with `{not_triggered: True}` output
+- Never scheduled as blocking activities (would wait indefinitely for events)
+- Marked `_pre_executed` in deployment runs by `_execute_from_trigger()`
 
 ## Retry & Fault Tolerance
 
@@ -313,6 +332,23 @@ runtime = Runtime(
 client = await Client.connect(server_address, namespace=namespace, runtime=runtime)
 ```
 
+## Server Management
+
+`temporal-server` is installed globally (`npm install -g temporal-server`) and managed via CLI:
+
+```bash
+temporal-server start       # Start in background (daemon)
+temporal-server stop        # Stop server
+temporal-server status      # Show status (all 4 ports)
+temporal-server api         # Start in foreground (blocks)
+temporal-server restart     # Restart server
+temporal-server clean       # Stop + remove bin/, data/
+```
+
+**Port management**: Temporal owns its ports (7233, 8233, 8080, 9090). They are NOT in MachinaOS `allPorts` and NOT killed during port-freeing. Use `temporal-server stop` to stop Temporal.
+
+**Start script integration**: `scripts/start.js` checks `temporal-server status` before building the concurrently service list. If already running, skips adding Temporal (prevents `--kill-others` cascade kill). `scripts/dev.js` always includes Temporal (no `--kill-others`, so early exit is harmless).
+
 ## Debugging
 
 ```bash
@@ -325,6 +361,9 @@ curl "http://localhost:8233/api/v1/namespaces/default/workflows"
 # Get workflow history
 curl "http://localhost:8233/api/v1/namespaces/default/workflows/{id}/history"
 
-# Temporal UI
+# Temporal Web UI
+open http://localhost:8080
+
+# Temporal HTTP API
 open http://localhost:8233
 ```

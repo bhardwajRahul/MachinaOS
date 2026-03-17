@@ -78,6 +78,14 @@ Services will be available at:
 - Message send/receive via JSON-RPC
 - Port configurable via `--port` flag, `PORT` or `WHATSAPP_RPC_PORT` env vars
 
+### Temporal Server (Distributed Execution)
+- Provides durable workflow execution with per-node retry and horizontal scaling
+- Installed globally: `npm install -g temporal-server`
+- Managed via CLI: `temporal-server start/stop/status`
+- Ports: gRPC 7233, HTTP API 8233, Web UI 8080, Metrics 9090
+- Embedded worker runs inside Python backend (`TemporalWorkerManager` in `main.py`)
+- See [Temporal Architecture](./TEMPORAL_ARCHITECTURE.md) and [CLI Services Guide](./cli_services_integration.md)
+
 ### Database (SQLite)
 - **workflows** - Workflow definitions
 - **node_parameters** - Node parameter storage

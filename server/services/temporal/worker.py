@@ -20,7 +20,7 @@ from typing import Optional
 
 import aiohttp
 from temporalio.client import Client
-from temporalio.runtime import Runtime, TelemetryConfig
+from temporalio.runtime import LoggingConfig, Runtime, TelemetryConfig
 from temporalio.worker import Worker
 
 from core.logging import get_logger
@@ -40,7 +40,9 @@ def create_runtime() -> Runtime:
     the warning on older Temporal server versions that don't support it.
     """
     return Runtime(
-        telemetry=TelemetryConfig(),
+        telemetry=TelemetryConfig(
+            logging=LoggingConfig(filter="ERROR"),
+        ),
         worker_heartbeat_interval=None,  # Disable runtime heartbeating
     )
 
@@ -102,6 +104,7 @@ class TemporalWorkerManager:
             max_concurrent_workflow_tasks=10,
         )
 
+        print(f"[Temporal] Worker started (queue={self.task_queue}, pool={self.pool_size})", flush=True)
         logger.info(
             "Starting Temporal worker",
             task_queue=self.task_queue,

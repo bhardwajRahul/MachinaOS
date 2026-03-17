@@ -18,9 +18,17 @@ from temporalio import workflow
 from temporalio.common import RetryPolicy
 
 # Config handles - nodes connecting via these are config nodes (not executed)
-# AI Agent handles: input-memory, input-tools, input-model
+# AI Agent handles: input-memory, input-tools, input-model, input-task, input-teammates
 # Zeenie handles: input-skill, input-tools
-CONFIG_HANDLES = {"input-tools", "input-memory", "input-model", "input-skill"}
+CONFIG_HANDLES = {"input-tools", "input-memory", "input-model", "input-skill", "input-task", "input-teammates"}
+
+# Trigger node types - event listeners that should never be scheduled as blocking activities
+# Must be kept in sync with constants.WORKFLOW_TRIGGER_TYPES
+TRIGGER_NODE_TYPES = frozenset([
+    "start", "cronScheduler", "webhookTrigger", "whatsappReceive",
+    "workflowTrigger", "chatTrigger", "taskTrigger",
+    "twitterReceive", "gmailReceive", "telegramReceive",
+])
 
 # Android service types (connect to androidTool, not executed directly)
 ANDROID_SERVICE_TYPES = {
@@ -133,6 +141,23 @@ class MachinaWorkflow:
             # Start activities for ready nodes
             for node_id in ready:
                 node = node_map[node_id]
+                node_type = node.get("type", "unknown")
+
+                # Safety: auto-complete trigger nodes that weren't pre-executed.
+                # Trigger nodes are event listeners - scheduling them as activities
+                # would block indefinitely waiting for external events.
+                if node_type in TRIGGER_NODE_TYPES and not node.get("_pre_executed"):
+                    workflow.logger.warning(
+                        f"Skipping non-pre-executed trigger: {node_id} ({node_type})"
+                    )
+                    outputs[node_id] = {
+                        "success": True,
+                        "result": {"not_triggered": True},
+                        "skipped_trigger": True,
+                    }
+                    completed.add(node_id)
+                    execution_trace.append(node_id)
+                    continue
 
                 # Build immutable context for this node
                 context = {

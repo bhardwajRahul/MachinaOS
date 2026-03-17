@@ -29,6 +29,8 @@ This is a React Flow-based workflow automation platform implementing n8n-inspire
 | **[Skill Creation Guide](./server/skills/GUIDE.md)** | How to create new skills (folder structure, SKILL.md format, metadata, supporting files) |
 | **[New Service Integration](./docs-internal/new_service_integration.md)** | Complete guide for integrating external services (OAuth, database, handlers, nodes, AI tools) - use Google Workspace as reference |
 | **[Onboarding Service](./docs-internal/onboarding.md)** | First-launch welcome wizard with 5 steps, database persistence, and replay from Settings |
+| **[CLI Services Integration](./docs-internal/cli_services_integration.md)** | Guide for integrating CLI-based services (Temporal, etc.) with proper lifecycle management |
+| **[Temporal Architecture](./docs-internal/TEMPORAL_ARCHITECTURE.md)** | Distributed workflow execution: activities, FIRST_COMPLETED scheduling, horizontal scaling |
 | **[Polyglot Server](../polyglot-server/ARCHITECTURE.md)** | Plugin registry microservice with MCP gateway (optional integration) |
 
 ## Design Principles & Standards
@@ -1306,9 +1308,9 @@ client/src/nodeDefinitions/
 
 **Result**: Frontend and backend run independently, uvicorn reloads don't cascade
 
-### Temporal Distributed Execution (Optional)
+### Temporal Distributed Execution
 
-When `TEMPORAL_ENABLED=true`, workflows execute via Temporal for durability and horizontal scaling.
+Workflows execute via Temporal for durability and horizontal scaling. Temporal is an always-on service (like WhatsApp) started unconditionally by `npm run start` and `npm run dev`.
 
 **Architecture**: Each workflow node executes as an independent Temporal activity:
 - **Per-node retry** - Failed nodes retry independently (up to 3 attempts)
@@ -1318,20 +1320,41 @@ When `TEMPORAL_ENABLED=true`, workflows execute via Temporal for durability and 
 
 **Configuration** (`.env`):
 ```env
-TEMPORAL_ENABLED=true
 TEMPORAL_SERVER_ADDRESS=localhost:7233
 TEMPORAL_NAMESPACE=default
 TEMPORAL_TASK_QUEUE=machina-tasks
 ```
 
-**Start Temporal Server**:
+**Temporal Server** (npm package `temporal-server` v0.0.6):
+The `temporal-server` npm package bundles the official Temporal CLI binary for local dev server with SQLite persistence.
+
+**Ports:**
+| Service   | Port | URL                    |
+|-----------|------|------------------------|
+| gRPC      | 7233 | localhost:7233          |
+| HTTP API  | 8233 | http://localhost:8233   |
+| Web UI    | 8080 | http://localhost:8080   |
+| Metrics   | 9090 | http://localhost:9090   |
+
+**CLI commands** (globally installed `temporal-server`):
 ```bash
-docker run -d --name temporal-sqlite \
-  -p 7233:7233 -p 8233:8233 \
-  -v "d:/startup/projects/temporal/data:/data" \
-  temporalio/temporal:latest server start-dev \
-  --ip 0.0.0.0 --db-filename /data/temporal.db
+temporal-server start       # Start in background (daemon mode)
+temporal-server api         # Start in foreground (blocks)
+temporal-server stop        # Stop server
+temporal-server status      # Show status (all 4 ports)
+temporal-server restart     # Restart server
+temporal-server clean       # Stop + remove bin/, data/
 ```
+
+**Global install** (required for CLI access from scripts):
+```bash
+npm install -g temporal-server
+```
+
+**Start script integration** (`scripts/start.js`):
+The start script checks `temporal-server status` via CLI before building the concurrently service list. If Temporal is already running, it skips adding it to concurrently (prevents `--kill-others` cascade when `temporal-server api` exits immediately with "Already running"). If not running, adds `npm:temporal:start` (`temporal-server api` in foreground mode) to the service list.
+
+**Port management**: Temporal manages its own ports (7233, 8233, 8080, 9090). These ports are NOT included in MachinaOS `allPorts` and are NOT killed during port-freeing. Temporal lifecycle is managed exclusively through its own CLI (`temporal-server start/stop/status`).
 
 **Execution Routing** (`workflow.py`):
 1. If `TEMPORAL_ENABLED=true` and Temporal configured → `_execute_temporal()`
@@ -1339,18 +1362,24 @@ docker run -d --name temporal-sqlite \
 3. Else → `_execute_sequential()` (fallback)
 
 **Running with Temporal**:
-The launch scripts auto-detect `TEMPORAL_ENABLED` from `.env`:
+Temporal server and embedded worker start automatically with all launch scripts:
 ```bash
-npm run start            # Auto-starts temporal worker if TEMPORAL_ENABLED=true
-npm run start:temporal   # Explicit: sets TEMPORAL_ENABLED=true
-npm run stop             # Also kills Temporal worker processes
+npm run start            # Starts Temporal server + all services
+npm run dev              # Starts Temporal server + all services (dev mode)
+npm run stop             # Stops all services including Temporal
 ```
+The embedded Temporal worker runs inside the Python backend (`main.py` lifespan via `TemporalWorkerManager`), not as a separate process.
 
 **Standalone Worker** (horizontal scaling):
 ```bash
 cd server
 python -m services.temporal.worker
 ```
+
+**Node Filtering** (`workflow.py`):
+- Config nodes filtered by handle: `CONFIG_HANDLES = {input-tools, input-memory, input-model, input-skill, input-task, input-teammates}`
+- Trigger nodes (`TRIGGER_NODE_TYPES`) auto-completed if not pre-executed (prevents blocking on event waiter)
+- Android service nodes and skill nodes filtered by type
 
 **Key Files**:
 - `services/temporal/workflow.py` - MachinaWorkflow orchestrator (FIRST_COMPLETED pattern)
@@ -1361,7 +1390,7 @@ python -m services.temporal.worker
 
 **Runtime Configuration**: Worker heartbeating is disabled via `Runtime(worker_heartbeat_interval=None)` to avoid warnings on older Temporal server versions.
 
-**Temporal UI**: http://localhost:8233
+**Temporal UI**: http://localhost:8080 (Web UI), http://localhost:8233 (HTTP API)
 
 ## Development Commands
 
@@ -1378,8 +1407,7 @@ npx machina help       # Show all commands
 ### npm Scripts
 ```bash
 # Core
-npm run start            # Start all services (client, backend, WhatsApp)
-npm run start:temporal   # Start with Temporal worker
+npm run start            # Start all services (client, backend, WhatsApp, Temporal)
 npm run stop             # Stop all services
 npm run build            # Build for production
 npm run clean            # Clean build artifacts
@@ -1700,7 +1728,7 @@ deploy_workflow() -> Sets up triggers, returns immediately
 - **Execution Run**: Each trigger event spawns an independent, isolated run
 - **Concurrent Runs**: Multiple runs execute simultaneously without interference
 - **No Iteration Loop**: Purely event-driven, not polling or sequential iterations
-- **Pre-Executed Triggers**: Trigger nodes are marked complete before downstream execution
+- **Pre-Executed Triggers**: The firing trigger is marked complete before downstream execution. All other trigger nodes in the run are also marked `_pre_executed` with `{not_triggered: True}` to prevent them from blocking as event waiters
 
 **Implementation Files:**
 - `server/services/workflow.py`: Thin facade (~460 lines) delegating to specialized modules
@@ -3907,7 +3935,12 @@ Config handles follow the pattern `input-<type>` where type is NOT 'main':
 - `input-memory` - Memory/context nodes
 - `input-tools` - Tool nodes
 - `input-model` - Model configuration nodes
+- `input-skill` - Skill nodes
+- `input-task` - Task completion trigger nodes
+- `input-teammates` - Team member agent nodes
 - `input-main` - Main data flow (NOT a config handle)
+
+**Note**: Trigger nodes (e.g., `taskTrigger`) connecting via config handles are excluded from downstream inclusion in `_get_downstream_nodes()` to prevent them from blocking as event waiters.
 
 ### Config Node Detection
 Nodes are identified as config nodes by their `group` array in the node definition:

@@ -558,9 +558,15 @@ class DeploymentManager:
             if node['id'] not in run_filter:
                 continue
             node_copy = node.copy()
+            node_type = node.get('type', '')
             if node['id'] == trigger_node_id:
                 node_copy['_pre_executed'] = True
                 node_copy['_trigger_output'] = trigger_output
+            elif node_type in WORKFLOW_TRIGGER_TYPES:
+                # Non-firing triggers: pre-execute to prevent blocking as event waiters
+                node_copy['_pre_executed'] = True
+                node_copy['_trigger_output'] = {'not_triggered': True}
+                logger.debug(f"[Run] Marking non-firing trigger as pre-executed: {node['id']} ({node_type})")
             filtered_nodes.append(node_copy)
 
         filtered_edges = [
@@ -608,10 +614,11 @@ class DeploymentManager:
 
                 target_type = node_types.get(target_id, '')
                 is_trigger = target_type in WORKFLOW_TRIGGER_TYPES
-                has_inputs = target_id in nodes_with_inputs
 
-                # Stop at independent triggers (no inputs)
-                if is_trigger and not has_inputs:
+                # Stop at trigger nodes — they are independent event listeners,
+                # not regular execution nodes. Each trigger spawns its own
+                # execution run when its event fires (n8n pattern).
+                if is_trigger:
                     continue
 
                 downstream_ids.add(target_id)
@@ -627,6 +634,11 @@ class DeploymentManager:
 
             is_config = handle and handle.startswith('input-') and handle != 'input-main'
             if is_config and target in downstream_ids and source not in downstream_ids:
+                # Never include trigger nodes as config dependencies -
+                # they are event listeners, not configuration providers
+                source_type = node_types.get(source, '')
+                if source_type in WORKFLOW_TRIGGER_TYPES:
+                    continue
                 downstream_ids.add(source)
 
         # Include sub-nodes connected to toolkit nodes (n8n Sub-Node pattern)

@@ -18,7 +18,7 @@ async function main() {
   console.log('Stopping MachinaOS services...\n');
   console.log(`Platform: ${getPlatformName()}`);
   console.log(`Ports: ${config.allPorts.join(', ')}`);
-  console.log(`Temporal: ${config.temporalEnabled ? 'enabled' : 'disabled'}\n`);
+  console.log(`Temporal: enabled\n`);
 
   let allStopped = true;
 
@@ -36,11 +36,9 @@ async function main() {
     if (!result.portFree) allStopped = false;
   }
 
-  if (config.temporalEnabled) {
-    const temporalPids = await killByPattern('temporal');
-    if (temporalPids.length > 0) {
-      console.log(`[OK] Temporal: Killed ${temporalPids.length} process(es)`);
-    }
+  const temporalPids = await killByPattern('temporal');
+  if (temporalPids.length > 0) {
+    console.log(`[OK] Temporal: Killed ${temporalPids.length} process(es)`);
   }
 
   // Kill orphaned MachinaOs processes (may hold DB locks after crash)

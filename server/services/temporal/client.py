@@ -6,7 +6,7 @@ Manages the Temporal client connection lifecycle with retry support.
 import asyncio
 from typing import Optional
 from temporalio.client import Client
-from temporalio.runtime import Runtime, TelemetryConfig
+from temporalio.runtime import LoggingConfig, Runtime, TelemetryConfig
 
 from core.logging import get_logger
 
@@ -45,7 +45,9 @@ class TemporalClientWrapper:
         # Create runtime once (reusable across reconnects)
         if self._runtime is None:
             self._runtime = Runtime(
-                telemetry=TelemetryConfig(),
+                telemetry=TelemetryConfig(
+                    logging=LoggingConfig(filter="ERROR"),
+                ),
                 worker_heartbeat_interval=None,
             )
 
@@ -61,15 +63,18 @@ class TemporalClientWrapper:
                     namespace=self.namespace,
                     runtime=self._runtime,
                 )
+                print(f"[Temporal] Connected to {self.server_address}", flush=True)
                 logger.info("Connected to Temporal server")
                 return self._client
             except Exception as e:
+                print(f"[Temporal] Connection attempt {attempt}/{retries} failed: {e}", flush=True)
                 logger.warning(
                     f"Temporal connection attempt {attempt}/{retries} failed: {e}"
                 )
                 if attempt < retries:
                     await asyncio.sleep(delay)
 
+        print(f"[Temporal] Failed to connect after {retries} attempts", flush=True)
         logger.error(
             f"Failed to connect to Temporal server at {self.server_address} after {retries} attempts"
         )

@@ -43,7 +43,7 @@ Run with `npm run <script>` from the project root.
 | Script | Command | Description |
 |--------|---------|-------------|
 | `start` | `node scripts/start.js` | Start all services concurrently |
-| `start:temporal` | `cross-env TEMPORAL_ENABLED=true node scripts/start.js` | Start with Temporal worker |
+| `start:temporal` | `cross-env TEMPORAL_ENABLED=true node scripts/start.js` | Start with Temporal enabled |
 | `stop` | `node scripts/stop.js` | Stop all running services |
 | `build` | `node scripts/build.js` | Build entire project |
 | `clean` | `node scripts/clean.js` | Remove build artifacts |
@@ -59,7 +59,10 @@ Run with `npm run <script>` from the project root.
 | `whatsapp:stop` | `cd server/whatsapp-rpc && npm stop` | Stop WhatsApp service |
 | `whatsapp:status` | `cd server/whatsapp-rpc && npm run status` | Check WhatsApp status |
 | `whatsapp:build` | `cd server/whatsapp-rpc && npm run build` | Build WhatsApp Go binary |
-| `temporal:worker` | `cd server && uv run python -m services.temporal.worker` | Start Temporal worker |
+| `temporal:start` | `temporal-server api` | Start Temporal server (foreground) |
+| `temporal:stop` | `temporal-server stop` | Stop Temporal server |
+| `temporal:status` | `temporal-server status` | Check Temporal server status |
+| `temporal:worker` | `cd server && uv run python -m services.temporal.worker` | Start standalone Temporal worker |
 
 ### Docker Scripts (Development)
 
@@ -98,14 +101,17 @@ Run with `npm run <script>` from the project root.
 Cross-platform start script that runs all services concurrently.
 
 **What it does:**
-1. Creates `.env` from `.env.template` if missing
-2. Installs client dependencies if `client/node_modules` doesn't exist
-3. Frees configured ports by killing existing processes
-4. Starts services via `concurrently`:
-   - `npm:client:start` - React frontend (Vite dev server)
-   - `npm:python:start` - Python backend (uvicorn with hot reload)
-   - `npm:whatsapp:api` - WhatsApp API server
-   - `npm:temporal:worker` - Temporal worker (if `TEMPORAL_ENABLED=true`)
+1. Validates build artifacts exist
+2. Creates `.env` from `.env.template` if missing
+3. Checks if Temporal is already running via `temporal-server status` CLI
+4. Frees configured app ports (client, backend, WhatsApp, Node.js executor)
+5. Starts services via `concurrently` with `--kill-others`:
+   - Static client server (`serve-client.js`)
+   - Python backend (uvicorn)
+   - WhatsApp API server (unless `--skip-whatsapp`)
+   - Temporal server via `npm:temporal:start` (unless already running)
+
+**Temporal handling:** If `temporal-server status` reports the server is already running, Temporal is skipped in the concurrently service list. This prevents `temporal-server api` from exiting immediately with "Already running", which would trigger `--kill-others` and cascade-kill all services.
 
 **Ports (configurable in .env):**
 - `VITE_CLIENT_PORT` - Frontend (default: 3000)
@@ -148,7 +154,7 @@ Cross-platform stop script that kills all MachinaOS processes.
 3. Kills processes including child processes
 4. Verifies processes are stopped
 5. Retries stubborn processes with force kill
-6. Kills Temporal workers if enabled
+6. Kills Temporal processes via `killByPattern('temporal')`
 
 **Platform-specific commands:**
 | Platform | Find processes | Kill process |

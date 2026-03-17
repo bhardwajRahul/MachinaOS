@@ -877,6 +877,12 @@ def build_my_filter(params: Dict) -> Callable[[Dict], bool]:
 FILTER_BUILDERS['myTrigger'] = build_my_filter
 ```
 
+### Temporal/Deployment Safety
+
+Trigger nodes connecting via config handles (e.g., `input-task`) are excluded from downstream inclusion in `_get_downstream_nodes()` (`server/services/deployment/manager.py`). Non-firing trigger nodes in a deployment run are automatically marked `_pre_executed` with `{not_triggered: True}` to prevent them from blocking as event waiters.
+
+The Temporal workflow (`server/services/temporal/workflow.py`) has a safety net: any trigger node reaching the scheduling loop without `_pre_executed` is auto-completed instead of being scheduled as a blocking activity. The trigger type set `TRIGGER_NODE_TYPES` in `workflow.py` must be kept in sync with `WORKFLOW_TRIGGER_TYPES` in `constants.py`.
+
 ### Dispatch Events
 
 From your event source (webhook, WebSocket, etc.):
