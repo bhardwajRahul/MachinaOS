@@ -36,6 +36,10 @@ runs:
     - name: Install uv
       uses: astral-sh/setup-uv@v4
 
+    - name: Install global CLI tools
+      shell: bash
+      run: npm install -g temporal-server
+
     - name: Verify installations
       shell: bash
       run: |
@@ -43,3 +47,4 @@ runs:
         echo "npm: $(npm --version)"
         echo "Python: $(python --version)"
         echo "uv: $(uv --version)"
+        echo "temporal-server: $(temporal-server --version 2>/dev/null || echo 'installed')"

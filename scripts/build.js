@@ -132,6 +132,23 @@ if (uvVersion) {
   }
 }
 
+// temporal-server (global CLI)
+let temporalVersion = getVersion('temporal-server --version');
+if (temporalVersion) {
+  console.log(`  temporal-server: ${temporalVersion}`);
+} else {
+  console.log('  temporal-server: not found, installing...');
+  try {
+    run('npm install -g temporal-server');
+    temporalVersion = getVersion('temporal-server --version');
+    if (temporalVersion) {
+      console.log(`  temporal-server: ${temporalVersion}`);
+    }
+  } catch {
+    console.log('  Warning: temporal-server install failed. Distributed execution unavailable.');
+  }
+}
+
 console.log('\nAll dependencies ready.\n');
 
 // ============================================================================
