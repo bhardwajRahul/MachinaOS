@@ -84,6 +84,9 @@ dependencies = [
 
     # Temporal (durable workflow execution)
     "temporalio>=1.7.0",
+
+    # RLM (Recursive Language Models) agent
+    "rlms>=0.1.2",
 ]
 
 [project.optional-dependencies]

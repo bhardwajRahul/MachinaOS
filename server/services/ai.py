@@ -910,6 +910,9 @@ class AIService:
         self.database = database
         self.cache = cache
         self.settings = settings
+        # RLM service (lazy import to avoid circular deps)
+        from services.rlm import RLMService
+        self.rlm_service = RLMService(auth=self.auth)
 
     def detect_provider(self, model: str) -> str:
         """Detect AI provider from model name."""
@@ -2405,6 +2408,7 @@ class AIService:
             'autonomous_agent': 'delegate_to_autonomous_agent',
             'orchestrator_agent': 'delegate_to_orchestrator_agent',
             'ai_employee': 'delegate_to_ai_employee',
+            'rlm_agent': 'delegate_to_rlm_agent',
             # Android service nodes (direct tool usage)
             'batteryMonitor': 'android_battery',
             'networkMonitor': 'android_network',
@@ -2471,6 +2475,7 @@ class AIService:
             'autonomous_agent': 'ONE-SHOT delegation to Autonomous Agent. Call ONCE per task, returns task_id. Agent works in background using Code Mode patterns - do NOT re-call.',
             'orchestrator_agent': 'ONE-SHOT delegation to Orchestrator Agent. Call ONCE per task, returns task_id. Coordinates multiple agents - do NOT re-call.',
             'ai_employee': 'ONE-SHOT delegation to AI Employee. Call ONCE per task, returns task_id. Coordinates multiple agents - do NOT re-call.',
+            'rlm_agent': 'ONE-SHOT delegation to RLM Agent. Call ONCE per task, returns task_id. Uses recursive REPL-based reasoning with code execution - do NOT re-call.',
             # Android service nodes (direct tool usage)
             'batteryMonitor': 'Monitor Android battery status, level, charging state, temperature, and health.',
             'networkMonitor': 'Monitor Android network connectivity, type, and internet availability.',
@@ -3385,7 +3390,7 @@ class AIService:
             return CheckDelegatedTasksSchema
 
         # AI Agent delegation schema (fire-and-forget async delegation)
-        if node_type in ('aiAgent', 'chatAgent', 'android_agent', 'coding_agent', 'web_agent', 'task_agent', 'social_agent', 'travel_agent', 'tool_agent', 'productivity_agent', 'payments_agent', 'consumer_agent', 'autonomous_agent', 'orchestrator_agent', 'ai_employee'):
+        if node_type in ('aiAgent', 'chatAgent', 'android_agent', 'coding_agent', 'web_agent', 'task_agent', 'social_agent', 'travel_agent', 'tool_agent', 'productivity_agent', 'payments_agent', 'consumer_agent', 'autonomous_agent', 'orchestrator_agent', 'ai_employee', 'rlm_agent'):
             agent_label = params.get('label', node_type)
 
             class DelegateToAgentSchema(BaseModel):

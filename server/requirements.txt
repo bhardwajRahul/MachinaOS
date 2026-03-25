@@ -102,3 +102,6 @@ pypdf>=4.0.0
 # marker-pdf>=1.0.0  # Optional: GPU OCR (requires CUDA)
 # unstructured>=0.16.0  # Optional: Multi-format document parsing
 
+# RLM (Recursive Language Models) agent
+rlms>=0.1.2
+

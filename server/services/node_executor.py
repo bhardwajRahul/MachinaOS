@@ -38,6 +38,7 @@ from services.handlers import (
     handle_task_manager,
     handle_twitter_send, handle_twitter_search, handle_twitter_user,
     handle_brave_search, handle_serper_search, handle_perplexity_search,
+    handle_rlm_agent,
 )
 from services.handlers.telegram import handle_telegram_send
 from services.handlers.apify import handle_apify_actor
@@ -136,6 +137,7 @@ class NodeExecutor:
             'autonomous_agent': partial(handle_chat_agent, ai_service=self.ai_service, database=self.database),
             'orchestrator_agent': partial(handle_chat_agent, ai_service=self.ai_service, database=self.database),
             'ai_employee': partial(handle_chat_agent, ai_service=self.ai_service, database=self.database),
+            'rlm_agent': partial(handle_rlm_agent, ai_service=self.ai_service, database=self.database),
             'simpleMemory': handle_simple_memory,
             # Maps
             'gmaps_create': partial(handle_create_map, maps_service=self.maps_service),

@@ -399,6 +399,62 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
         description: 'Maximum concurrent task executions'
       }
     ]
+  },
+
+  // RLM Agent - Recursive Language Model with REPL-based reasoning
+  rlm_agent: {
+    displayName: 'RLM Agent',
+    name: 'rlm_agent',
+    icon: '🧠',
+    group: ['agent', 'ai'],
+    version: 1,
+    subtitle: 'Recursive Reasoning',
+    description: 'Recursive Language Model agent. Uses REPL code execution with recursive LM calls for complex reasoning tasks.',
+    defaults: { name: 'RLM Agent', color: dracula.orange },
+    inputs: AI_AGENT_INPUTS,
+    outputs: AI_AGENT_OUTPUTS,
+    properties: [
+      ...AI_AGENT_PROPERTIES,
+      {
+        displayName: 'Max Iterations',
+        name: 'maxIterations',
+        type: 'number',
+        default: 30,
+        typeOptions: { minValue: 1, maxValue: 100 },
+        description: 'Maximum REPL loop iterations before stopping'
+      },
+      {
+        displayName: 'Max Depth',
+        name: 'maxDepth',
+        type: 'number',
+        default: 1,
+        typeOptions: { minValue: 0, maxValue: 5 },
+        description: 'Maximum recursion depth for rlm_query() calls'
+      },
+      {
+        displayName: 'Max Budget ($)',
+        name: 'maxBudget',
+        type: 'number',
+        default: 0,
+        typeOptions: { minValue: 0 },
+        description: 'Maximum USD spend (0 = unlimited)'
+      },
+      {
+        displayName: 'Max Timeout (s)',
+        name: 'maxTimeout',
+        type: 'number',
+        default: 0,
+        typeOptions: { minValue: 0 },
+        description: 'Maximum execution time in seconds (0 = unlimited)'
+      },
+      {
+        displayName: 'Verbose',
+        name: 'verbose',
+        type: 'boolean',
+        default: false,
+        description: 'Enable detailed REPL output logging'
+      }
+    ]
   }
 };
 
@@ -407,4 +463,4 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
 // ============================================================================
 
 // List of specialized agent node types for identification
-export const SPECIALIZED_AGENT_TYPES = ['android_agent', 'coding_agent', 'web_agent', 'task_agent', 'social_agent', 'travel_agent', 'tool_agent', 'productivity_agent', 'payments_agent', 'consumer_agent', 'autonomous_agent', 'orchestrator_agent', 'ai_employee'];
+export const SPECIALIZED_AGENT_TYPES = ['android_agent', 'coding_agent', 'web_agent', 'task_agent', 'social_agent', 'travel_agent', 'tool_agent', 'productivity_agent', 'payments_agent', 'consumer_agent', 'autonomous_agent', 'orchestrator_agent', 'ai_employee', 'rlm_agent'];

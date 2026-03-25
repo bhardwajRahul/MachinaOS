@@ -26,7 +26,7 @@ This guide explains how to create new nodes for MachinaOs, covering frontend def
 
 ## Node Types Overview
 
-MachinaOs supports 111 nodes across 19 categories:
+MachinaOs supports 112 nodes across 19 categories:
 
 | Category | Visual Component | Example Nodes | Count |
 |----------|-----------------|---------------|-------|
@@ -34,7 +34,7 @@ MachinaOs supports 111 nodes across 19 categories:
 | **Scheduler** | SquareNode | timer, cronScheduler | 2 |
 | **AI Chat Models** | SquareNode | openaiChatModel, anthropicChatModel, geminiChatModel, openrouterChatModel, groqChatModel, cerebrasChatModel | 6 |
 | **AI Agents** | AIAgentNode | aiAgent, chatAgent | 2 |
-| **Specialized Agents** | AIAgentNode | android_agent, coding_agent, web_agent, task_agent, social_agent, travel_agent, tool_agent, productivity_agent, payments_agent, consumer_agent, autonomous_agent, orchestrator_agent | 12 |
+| **Specialized Agents** | AIAgentNode | android_agent, coding_agent, web_agent, task_agent, social_agent, travel_agent, tool_agent, productivity_agent, payments_agent, consumer_agent, autonomous_agent, orchestrator_agent, rlm_agent | 13 |
 | **AI Memory** | SquareNode | simpleMemory | 1 |
 | **AI Skills** | SquareNode | masterSkill, customSkill + 9 individual skills | 11 |
 | **AI Tools** | SquareNode | calculatorTool, currentTimeTool, duckduckgoSearch, androidTool | 4 |
