@@ -5,6 +5,7 @@ Manages the Temporal client connection lifecycle with retry support.
 
 import asyncio
 from typing import Optional
+from temporalio.api.workflowservice.v1 import DescribeNamespaceRequest
 from temporalio.client import Client
 from temporalio.runtime import LoggingConfig, Runtime, TelemetryConfig
 
@@ -58,11 +59,17 @@ class TemporalClientWrapper:
                     server_address=self.server_address,
                     namespace=self.namespace,
                 )
-                self._client = await Client.connect(
+                client = await Client.connect(
                     self.server_address,
                     namespace=self.namespace,
                     runtime=self._runtime,
                 )
+                # Verify namespace is ready (gRPC port may accept connections
+                # before the server finishes registering namespaces)
+                await client.service_client.workflow_service.describe_namespace(
+                    DescribeNamespaceRequest(namespace=self.namespace)
+                )
+                self._client = client
                 print(f"[Temporal] Connected to {self.server_address}", flush=True)
                 logger.info("Connected to Temporal server")
                 return self._client

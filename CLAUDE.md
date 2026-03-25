@@ -1325,8 +1325,8 @@ TEMPORAL_NAMESPACE=default
 TEMPORAL_TASK_QUEUE=machina-tasks
 ```
 
-**Temporal Server** (npm package `temporal-server` v0.0.6):
-The `temporal-server` npm package bundles the official Temporal CLI binary for local dev server with SQLite persistence.
+**Temporal Server** (`temporal-server` global CLI):
+The `temporal-server` npm package bundles the official Temporal CLI binary for local dev server with SQLite persistence. It is a **global CLI tool** (not a project dependency) — installed automatically by `scripts/install.js` and `scripts/build.js`, or manually via `npm install -g temporal-server`. The package manages its own binary download, data directory, and lifecycle.
 
 **Ports:**
 | Service   | Port | URL                    |
@@ -1336,7 +1336,7 @@ The `temporal-server` npm package bundles the official Temporal CLI binary for l
 | Web UI    | 8080 | http://localhost:8080   |
 | Metrics   | 9090 | http://localhost:9090   |
 
-**CLI commands** (globally installed `temporal-server`):
+**CLI commands**:
 ```bash
 temporal-server start       # Start in background (daemon mode)
 temporal-server api         # Start in foreground (blocks)
@@ -1346,15 +1346,12 @@ temporal-server restart     # Restart server
 temporal-server clean       # Stop + remove bin/, data/
 ```
 
-**Global install** (required for CLI access from scripts):
-```bash
-npm install -g temporal-server
-```
-
 **Start script integration** (`scripts/start.js`):
 The start script checks `temporal-server status` via CLI before building the concurrently service list. If Temporal is already running, it skips adding it to concurrently (prevents `--kill-others` cascade when `temporal-server api` exits immediately with "Already running"). If not running, adds `npm:temporal:start` (`temporal-server api` in foreground mode) to the service list.
 
 **Port management**: Temporal manages its own ports (7233, 8233, 8080, 9090). These ports are NOT included in MachinaOS `allPorts` and are NOT killed during port-freeing. Temporal lifecycle is managed exclusively through its own CLI (`temporal-server start/stop/status`).
+
+**Docker**: Uses official `temporalio/temporal:latest` image as a separate container — the npm package is not needed in Docker.
 
 **Execution Routing** (`workflow.py`):
 1. If `TEMPORAL_ENABLED=true` and Temporal configured → `_execute_temporal()`
