@@ -781,7 +781,7 @@ Search API nodes that work BOTH as standalone workflow nodes AND as AI Agent too
 - Brave Search and Perplexity in **Search** category
 - Serper in **Scrapers** category (Google SERP scraping)
 
-### Specialized AI Agents (13 nodes)
+### Specialized AI Agents (14 nodes)
 Specialized agents are AI Agents pre-configured for specific domains. They inherit full AI Agent functionality (provider, model, prompt, system message, thinking/reasoning) while being tailored for specific capabilities. All specialized agents route to `handle_chat_agent` in the backend and support the same input handles. Node colors use centralized dracula theme constants imported from `client/src/styles/theme.ts`.
 
 **Input Handles:**
@@ -805,16 +805,18 @@ Specialized agents are AI Agents pre-configured for specific domains. They inher
 - **autonomous_agent**: Autonomous Agent - AI agent for autonomous operations using Code Mode patterns. Uses agentic loops, progressive discovery, error recovery, and multi-tool orchestration for 81-98% token savings. Connect autonomous skills via Master Skill.
 - **orchestrator_agent**: Orchestrator Agent - Team lead agent for coordinating multiple agents. Connect specialized agents via `input-teammates` handle; they become `delegate_to_*` tools the AI can invoke.
 - **ai_employee**: AI Employee - Team lead agent similar to orchestrator_agent. Connect specialized agents via `input-teammates` handle for intelligent task delegation.
+- **rlm_agent**: RLM Agent - Recursive Language Model agent using REPL-based code execution with recursive LM calls. Replaces LangGraph tool-calling with RLM's `exec()` REPL loop (`llm_query()`, `rlm_query()`, `FINAL()`). Routes to dedicated `handle_rlm_agent` handler and `RLMService` (not `handle_chat_agent`). Connect AI chat model nodes as small LMs for depth>=1 calls. See `docs-internal/rlm_service.md`.
 
 **Backend Routing:**
-Specialized agents are detected by `SPECIALIZED_AGENT_TYPES` and routed to `handle_chat_agent`:
+Specialized agents are detected by `SPECIALIZED_AGENT_TYPES` and routed to `handle_chat_agent` (except `rlm_agent` which routes to `handle_rlm_agent`):
 ```python
-# In node_executor.py - all specialized agents route to handle_chat_agent
+# In node_executor.py - most specialized agents route to handle_chat_agent
 SPECIALIZED_AGENT_TYPES = {
     'android_agent', 'coding_agent', 'web_agent', 'task_agent', 'social_agent',
     'travel_agent', 'tool_agent', 'productivity_agent', 'payments_agent', 'consumer_agent',
-    'autonomous_agent', 'orchestrator_agent', 'ai_employee'
+    'autonomous_agent', 'orchestrator_agent', 'ai_employee',
 }
+# rlm_agent routes to handle_rlm_agent -> RLMService (dedicated handler + service)
 ```
 
 **Team Lead Types (Agent Teams Pattern):**
@@ -2199,6 +2201,7 @@ The system supports specialized agent variants that inherit from the base AI Age
 | Autonomous | `autonomous_agent` | target | purple |
 | Orchestrator | `orchestrator_agent` | conductor | cyan |
 | AI Employee | `ai_employee` | briefcase | purple |
+| RLM Agent | `rlm_agent` | brain | orange |
 
 All specialized agents share the same handle configuration:
 - **Left**: `input-main` (Input, 30%), `input-memory` (Memory, 55%), `input-task` (Task, 85%)

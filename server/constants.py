@@ -35,6 +35,7 @@ AI_AGENT_TYPES: FrozenSet[str] = frozenset([
     'autonomous_agent',
     'orchestrator_agent',
     'ai_employee',
+    'rlm_agent',
 ])
 
 AI_MEMORY_TYPES: FrozenSet[str] = frozenset([

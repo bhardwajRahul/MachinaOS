@@ -114,6 +114,9 @@ from .search import (
 # Crawlee web scraping handler
 from .crawlee import handle_crawlee_scraper
 
+# RLM agent handler
+from .rlm import handle_rlm_agent
+
 # Tool execution handlers (for AI Agent tool calling)
 from .tools import (
     execute_tool,
@@ -181,6 +184,8 @@ __all__ = [
     'handle_perplexity_search',
     # Crawlee
     'handle_crawlee_scraper',
+    # RLM
+    'handle_rlm_agent',
     # Tools
     'execute_tool',
     'handle_task_manager',

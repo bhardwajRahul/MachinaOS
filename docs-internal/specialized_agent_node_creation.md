@@ -60,6 +60,9 @@ All agent colors use centralized dracula theme constants from `client/src/styles
 | `consumer_agent` | Consumer Agent | Consumer interactions agent | `dracula.purple` |
 | `autonomous_agent` | Autonomous Agent | Autonomous operations with Code Mode patterns | `dracula.purple` |
 | `orchestrator_agent` | Orchestrator Agent | Multi-agent coordination and task delegation | `dracula.cyan` |
+| `rlm_agent` | RLM Agent | Recursive Language Model agent with REPL code execution | `dracula.orange` |
+
+**Note:** `rlm_agent` is unique among specialized agents -- it routes to `handle_rlm_agent` -> `RLMService` (not `handle_chat_agent`). It uses RLM's REPL-based execution instead of LangGraph. See `docs-internal/rlm_service.md` for full details.
 
 ## Shared AI Agent Properties
 

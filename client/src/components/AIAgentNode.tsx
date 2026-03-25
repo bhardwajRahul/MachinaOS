@@ -344,6 +344,23 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
     width: 300,
     height: 200,
   },
+  rlm_agent: {
+    icon: <span style={{ fontSize: '28px' }}>🧠</span>,
+    title: 'RLM Agent',
+    subtitle: 'Recursive Reasoning',
+    themeColorKey: 'orange',
+    bottomHandles: [
+      { id: 'input-skill', label: 'Skill', position: '25%' },
+      { id: 'input-tools', label: 'Tool', position: '75%' },
+    ],
+    leftHandles: [
+      { id: 'input-memory', label: 'Memory', position: '65%' },
+      { id: 'input-task', label: 'Task', position: '85%' },
+    ],
+    topOutputHandle: { id: 'output-top', label: 'Output' },
+    width: 300,
+    height: 200,
+  },
 };
 
 const AIAgentNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectable, selected }) => {
