@@ -56,14 +56,14 @@ class RLMService:
             system_message = parameters.get('systemMessage', '')
 
             # Skill injection (reuse ai.py:833 _build_skill_system_prompt)
+            # Collected as supplementary context -- appended to RLM prompt, never replaces it
             from services.ai import _build_skill_system_prompt
+            supplementary_context = ""
             skill_prompt, has_personality = _build_skill_system_prompt(
                 skill_data, log_prefix="[RLM]"
             )
             if skill_prompt:
-                system_message = skill_prompt if has_personality else (
-                    f"{system_message}\n\n{skill_prompt}" if system_message else skill_prompt
-                )
+                supplementary_context += f"\n\n## Skill Instructions\n{skill_prompt}"
 
             # Options flattening (same as execute_chat_agent line 1995)
             options = parameters.get('options', {})
@@ -88,10 +88,10 @@ class RLMService:
                 "provider": provider, "model": model,
             })
 
-            # === Memory injection ===
+            # === Memory injection (appended to supplementary context, not system prompt) ===
             if memory_data and memory_data.get('memory_content'):
                 memory_text = memory_data['memory_content']
-                system_message = (system_message or "") + f"\n\n## Conversation History\n{memory_text}"
+                supplementary_context += f"\n\n## Conversation History\n{memory_text}"
 
             # === Adapter: Map provider to RLM backend ===
             backend, backend_kwargs = BackendAdapter.adapt(provider, model, api_key)
@@ -105,7 +105,8 @@ class RLMService:
             await broadcast_status("building_tools", {
                 "message": "Bridging connected tools..."
             })
-            custom_tools = ToolBridgeAdapter.bridge(tool_data, context)
+            running_loop = asyncio.get_running_loop()
+            custom_tools = ToolBridgeAdapter.bridge(tool_data, context, loop=running_loop)
 
             # === RLM-specific parameters ===
             max_iterations = int(flattened.get('maxIterations', DEFAULT_MAX_ITERATIONS))
@@ -122,6 +123,20 @@ class RLMService:
                 "tool_count": len(custom_tools),
             })
 
+            # Build augmented prompt: MachinaOS context prepended to user prompt.
+            # We do NOT pass custom_system_prompt to RLM because RLM_SYSTEM_PROMPT
+            # uses Python .format() with {custom_tools_section} placeholder and
+            # double-escaped braces {{chunk}} in examples. Appending to the template
+            # and letting build_rlm_system_prompt() .format() it would break on any
+            # curly braces in the appended text (skills, memory, system message).
+            # Instead, let RLM use its default system prompt (with proper tool
+            # formatting) and inject MachinaOS context into the user prompt.
+            augmented_prompt = prompt
+            if system_message:
+                augmented_prompt = f"## Instructions\n{system_message}\n\n## Task\n{augmented_prompt}"
+            if supplementary_context:
+                augmented_prompt = f"{supplementary_context}\n\n{augmented_prompt}"
+
             def _run_rlm():
                 from rlm import RLM
                 from rlm.logger import RLMLogger
@@ -134,20 +149,19 @@ class RLMService:
                     max_budget=float(max_budget) if max_budget else None,
                     max_timeout=float(max_timeout) if max_timeout else None,
                     max_tokens=int(max_tokens) if max_tokens else None,
-                    custom_system_prompt=system_message if system_message else None,
                     custom_tools=custom_tools if custom_tools else None,
                     logger=RLMLogger(), verbose=verbose,
                 )
-                return rlm_instance.completion(prompt)
+                return rlm_instance.completion(augmented_prompt)
 
             result = await asyncio.to_thread(_run_rlm)
 
             # === Memory save (same pattern as execute_chat_agent) ===
             if memory_data and memory_data.get('node_id'):
-                from services.memory_store import save_message
+                from services.memory_store import add_message
                 session_id = memory_data.get('session_id', 'default')
-                save_message(session_id, "user", prompt)
-                save_message(session_id, "assistant", result.response)
+                add_message(session_id, "user", prompt)
+                add_message(session_id, "assistant", result.response or "")
 
             execution_time = time.time() - start_time
             iterations = len(result.metadata.get("iterations", [])) if result.metadata else 0

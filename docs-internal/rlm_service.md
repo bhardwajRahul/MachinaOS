@@ -230,8 +230,8 @@ return await ai_service.rlm_service.execute(node_id, parameters, ...)
 | `server/services/node_executor.py` | `'rlm_agent': partial(handle_rlm_agent, ...)` in `_build_handler_registry()` |
 | `server/services/handlers/__init__.py` | `from .rlm import handle_rlm_agent` |
 | `server/services/ai.py` | `self.rlm_service = RLMService(auth=self.auth)` in `AIService.__init__()` |
-| `server/requirements.txt` | `rlms>=0.1.2` |
-| `server/pyproject.toml` | `"rlms>=0.1.2"` in `[project] dependencies` |
+| `server/requirements.txt` | `rlms>=0.1.1` |
+| `server/pyproject.toml` | `"rlms>=0.1.1"` in `[project] dependencies` |
 
 ---
 

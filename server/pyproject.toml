@@ -2,7 +2,7 @@
 name = "machinaos-server"
 version = "0.1.0"
 description = "MachinaOS workflow automation backend"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.13"
 dependencies = [
     # Core
     "fastapi>=0.115.0",
@@ -86,7 +86,7 @@ dependencies = [
     "temporalio>=1.7.0",
 
     # RLM (Recursive Language Models) agent
-    "rlms>=0.1.2",
+    "rlms>=0.1.1",
 ]
 
 [project.optional-dependencies]

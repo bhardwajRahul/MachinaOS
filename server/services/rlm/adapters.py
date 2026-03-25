@@ -98,14 +98,14 @@ class ToolBridgeAdapter:
     }
 
     @staticmethod
-    def bridge(tool_data: Optional[List[Dict[str, Any]]], context: Optional[Dict] = None) -> Dict[str, Dict]:
+    def bridge(tool_data: Optional[List[Dict[str, Any]]], context: Optional[Dict] = None, loop: Optional[asyncio.AbstractEventLoop] = None) -> Dict[str, Dict]:
         from constants import AI_AGENT_TYPES, AI_CHAT_MODEL_TYPES
         from services.handlers.tools import execute_tool
 
         if not tool_data:
             return {}
 
-        main_loop = asyncio.get_event_loop()
+        main_loop = loop or asyncio.get_event_loop()
         tools = {}
 
         for tool_info in tool_data:
