@@ -1,13 +1,17 @@
-# Release workflow - predeploy gate, publish, then test install
+# Release workflow - predeploy gate, publish, GitHub release, then test install
 
 name: Release
 
 on:
   push:
     tags: ['v*.*.*']
-  release:
-    types: [published]
   workflow_dispatch:
+
+# Top-level permissions for all jobs (jobs can narrow further)
+permissions:
+  contents: write
+  packages: write
+  id-token: write
 
 jobs:
   predeploy:
@@ -39,9 +43,12 @@ jobs:
           retention-days: 1
 
   publish-npm:
-    name: Publish to npm
+    name: Publish to npm (with provenance)
     needs: build-for-publish
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -67,8 +74,8 @@ jobs:
       - name: Verify package contents
         run: npm pack --dry-run
 
-      - name: Publish to npm
-        run: npm publish --access public
+      - name: Publish to npm with provenance
+        run: npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -115,7 +122,33 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # Create GitHub Release with auto-generated notes
+  create-github-release:
+    name: Create GitHub Release
+    needs: [publish-npm, publish-github-packages]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "MachinaOS ${{ steps.version.outputs.version }}" \
+            --generate-notes \
+            --verify-tag
+
   # Test user installation after publishing
   test-install:
-    needs: [publish-npm, publish-github-packages]
+    needs: [create-github-release]
     uses: ./.github/workflows/test-install.yml

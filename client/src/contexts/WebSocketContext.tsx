@@ -33,6 +33,14 @@ const REQUEST_TIMEOUT = 30000;
 // Trigger node types that wait indefinitely for events
 const TRIGGER_NODE_TYPES = ['whatsappReceive', 'webhookTrigger', 'cronScheduler', 'chatTrigger', 'telegramReceive'];
 
+// Agent node types that can run for minutes (no timeout)
+const LONG_RUNNING_NODE_TYPES = [
+  'aiAgent', 'chatAgent', 'rlm_agent',
+  'android_agent', 'coding_agent', 'web_agent', 'task_agent', 'social_agent',
+  'travel_agent', 'tool_agent', 'productivity_agent', 'payments_agent', 'consumer_agent',
+  'autonomous_agent', 'orchestrator_agent', 'ai_employee',
+];
+
 // Status types
 export interface AndroidStatus {
   connected: boolean;
@@ -1535,9 +1543,9 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     edges?: any[]
   ): Promise<any> => {
     try {
-      // Trigger nodes wait indefinitely for events - no timeout
-      const isTriggerNode = TRIGGER_NODE_TYPES.includes(nodeType);
-      const timeoutMs = isTriggerNode ? -1 : undefined;  // -1 = no timeout
+      // Trigger nodes and long-running agents wait indefinitely - no timeout
+      const noTimeout = TRIGGER_NODE_TYPES.includes(nodeType) || LONG_RUNNING_NODE_TYPES.includes(nodeType);
+      const timeoutMs = noTimeout ? -1 : undefined;  // -1 = no timeout
 
       const response = await sendRequest<any>('execute_node', {
         node_id: nodeId,
@@ -1701,6 +1709,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     edges: any[]
   ): Promise<any> => {
     try {
+      // AI nodes can run for minutes (tool calling, RLM iterations) - no timeout
       const response = await sendRequest<any>('execute_ai_node', {
         node_id: nodeId,
         node_type: nodeType,
@@ -1709,7 +1718,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         workflow_id: workflowId,
         nodes,
         edges
-      });
+      }, -1);
       return response;
     } catch (error) {
       console.error('[WebSocket] Failed to execute AI node:', error);
