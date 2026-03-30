@@ -41,12 +41,12 @@ jobs:
           machina --help
           machina --version
 
-      - name: Check whatsapp-rpc binary
+      - name: Check edgymeow binary
         shell: bash
         run: |
           INSTALL_PATH=$(npm root -g)/machinaos
           echo "Install path: $INSTALL_PATH"
-          ls -la "$INSTALL_PATH/node_modules/whatsapp-rpc/bin/" || echo "whatsapp-rpc bin/ not found"
+          ls -la "$INSTALL_PATH/node_modules/edgymeow/bin/" || echo "edgymeow bin/ not found"
 
       - name: Setup Python venv
         shell: bash
@@ -138,11 +138,11 @@ jobs:
             sleep 10
           done
 
-      - name: Check whatsapp-rpc binary
+      - name: Check edgymeow binary
         shell: bash
         working-directory: MachinaOS
         run: |
-          ls -la node_modules/whatsapp-rpc/bin/ || echo "whatsapp-rpc bin/ not found"
+          ls -la node_modules/edgymeow/bin/ || echo "edgymeow bin/ not found"
 
       - name: Test start (Unix)
         if: runner.os != 'Windows'
