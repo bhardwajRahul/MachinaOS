@@ -1,7 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Select } from 'antd';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAppTheme } from '../../hooks/useAppTheme';
+import { useApiKeys, GlobalModelState } from '../../hooks/useApiKeys';
+import { AI_PROVIDER_META } from '../icons/AIProviderIcons';
 
 interface TopToolbarProps {
   workflowName: string;
@@ -26,6 +29,8 @@ interface TopToolbarProps {
   onExportJSON: () => void;
   onExportFile: () => void;
   onImportJSON: () => void;
+  onGlobalModelChange?: (provider: string, model: string) => void;
+  onOverrideAllAgents?: (provider: string, model: string) => void;
 }
 
 const TopToolbar: React.FC<TopToolbarProps> = ({
@@ -51,6 +56,8 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
   onExportJSON,
   onExportFile,
   onImportJSON,
+  onGlobalModelChange,
+  onOverrideAllAgents,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [tempName, setTempName] = useState(workflowName);
@@ -58,6 +65,43 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
   const { isDarkMode, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
   const theme = useAppTheme();
+
+  // Global Model Selector state
+  const { getValidatedAiProviders, saveGlobalModel, isConnected: apiKeysConnected } = useApiKeys();
+  const [globalModelState, setGlobalModelState] = useState<GlobalModelState>({ providers: [], global_provider: null, global_model: null });
+  const hasFetchedProvidersRef = useRef(false);
+
+  useEffect(() => {
+    if (!apiKeysConnected || hasFetchedProvidersRef.current) return;
+    hasFetchedProvidersRef.current = true;
+    getValidatedAiProviders().then(state => {
+      if (state.providers.length > 0) setGlobalModelState(state);
+    });
+  }, [apiKeysConnected, getValidatedAiProviders]);
+
+  const handleSelectGlobalModel = useCallback((value: string) => {
+    const [provider, ...rest] = value.split('::');
+    const model = rest.join('::');
+    setGlobalModelState(prev => ({ ...prev, global_provider: provider, global_model: model }));
+    saveGlobalModel(provider, model);
+    onGlobalModelChange?.(provider, model);
+  }, [saveGlobalModel, onGlobalModelChange]);
+
+  // Build antd Select options grouped by provider
+  const globalModelOptions = globalModelState.providers.map(vp => {
+    const meta = AI_PROVIDER_META[vp.provider];
+    return {
+      label: <span style={{ color: meta?.color, fontWeight: theme.fontWeight.semibold, fontSize: theme.fontSize.xs }}>{meta?.label || vp.provider}</span>,
+      options: (vp.popular_models.length > 0 ? vp.popular_models : vp.models.slice(0, 5)).map(m => ({
+        label: <span style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.sm }}>{m}</span>,
+        value: `${vp.provider}::${m}`,
+      })),
+    };
+  });
+
+  const globalSelectValue = globalModelState.global_provider && globalModelState.global_model
+    ? `${globalModelState.global_provider}::${globalModelState.global_model}` : undefined;
+  const selectedProviderMeta = AI_PROVIDER_META[globalModelState.global_provider || ''];
 
   const handleNameClick = () => {
     setTempName(workflowName);
@@ -380,6 +424,69 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
           </button>
         )}
       </div>
+
+      {/* Global Model Selector */}
+      {globalModelState.providers.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.sm }}>
+          <Select
+            value={globalSelectValue}
+            onChange={handleSelectGlobalModel}
+            options={globalModelOptions}
+            placeholder="Select model..."
+            showSearch
+            optionFilterProp="label"
+            virtual={false}
+            popupMatchSelectWidth={false}
+            getPopupContainer={(trigger) => trigger.parentElement || document.body}
+            style={{ width: 'auto' }}
+            labelRender={(props) => {
+              if (!globalModelState.global_model) return <span>{props.label}</span>;
+              return (
+                <span style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.sm }}>
+                  {selectedProviderMeta && (
+                    <span style={{
+                      width: theme.nodeSize.statusIndicator,
+                      height: theme.nodeSize.statusIndicator,
+                      borderRadius: '50%',
+                      backgroundColor: selectedProviderMeta.color,
+                      display: 'inline-block',
+                      flexShrink: 0,
+                    }} />
+                  )}
+                  <span style={{ fontSize: theme.fontSize.sm }}>{globalModelState.global_model}</span>
+                </span>
+              );
+            }}
+          />
+          {globalSelectValue && (
+            <button
+              onClick={() => globalModelState.global_provider && globalModelState.global_model && onOverrideAllAgents?.(globalModelState.global_provider, globalModelState.global_model)}
+              style={{
+                ...actionButtonStyle(theme.dracula.orange),
+                height: theme.buttonSize.md,
+                padding: `0 ${theme.spacing.md}`,
+                fontSize: theme.fontSize.xs,
+                whiteSpace: 'nowrap',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = `${theme.dracula.orange}40`;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = `${theme.dracula.orange}25`;
+              }}
+              title="Override all agent nodes in this workflow to use the selected model"
+            >
+              <svg width={theme.iconSize.xs} height={theme.iconSize.xs} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 1l4 4-4 4"/>
+                <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+                <path d="M7 23l-4-4 4-4"/>
+                <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+              </svg>
+              Apply All
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Right Section */}
       <div style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.sm }}>

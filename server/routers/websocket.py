@@ -2670,6 +2670,87 @@ async def handle_save_provider_defaults(data: Dict[str, Any], websocket: WebSock
     return {"success": success, "provider": provider}
 
 
+@ws_handler()
+async def handle_get_validated_ai_providers(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Get all AI providers with stored API keys and their popular models.
+
+    Returns providers that have validated keys, their stored models,
+    and the current global default provider/model from UserSettings.
+    """
+    import json
+    from pathlib import Path
+
+    auth_service = container.auth_service()
+    database = container.database()
+
+    AI_PROVIDERS = ['openai', 'anthropic', 'gemini', 'groq', 'cerebras', 'openrouter']
+
+    # Load popular models from llm_defaults.json
+    defaults_path = Path(__file__).parent.parent / "config" / "llm_defaults.json"
+    try:
+        with open(defaults_path) as f:
+            llm_defaults = json.load(f)
+    except Exception:
+        llm_defaults = {"providers": {}}
+
+    providers = []
+    for provider in AI_PROVIDERS:
+        api_key = await auth_service.get_api_key(provider, data.get("session_id", "default"))
+        if not api_key:
+            continue
+
+        # Get stored models (full list from validation)
+        stored_models = await auth_service.get_stored_models(provider, data.get("session_id", "default"))
+
+        # Get popular models from llm_defaults (the explicit entries, not _default)
+        provider_config = llm_defaults.get("providers", {}).get(provider, {})
+        default_model = provider_config.get("default_model", "")
+        popular_models = [
+            m for m in provider_config.get("max_output_tokens", {}).keys()
+            if m != "_default"
+        ]
+
+        # Get per-provider default model override
+        provider_defaults = await database.get_provider_defaults(provider)
+        if provider_defaults and provider_defaults.get("default_model"):
+            default_model = provider_defaults["default_model"]
+
+        providers.append({
+            "provider": provider,
+            "models": stored_models or [],
+            "popular_models": popular_models,
+            "default_model": default_model,
+        })
+
+    # Get global default from UserSettings
+    user_id = data.get("user_id", "default")
+    settings = await database.get_user_settings(user_id)
+    global_provider = settings.get("default_llm_provider") if settings else None
+    global_model = settings.get("default_llm_model") if settings else None
+
+    return {
+        "providers": providers,
+        "global_provider": global_provider,
+        "global_model": global_model,
+    }
+
+
+@ws_handler()
+async def handle_save_global_model(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Save the global default provider + model to UserSettings."""
+    database = container.database()
+    provider = data.get("provider", "")
+    model = data.get("model", "")
+    user_id = data.get("user_id", "default")
+
+    success = await database.save_user_settings({
+        "default_llm_provider": provider,
+        "default_llm_model": model,
+    }, user_id)
+
+    return {"success": success, "provider": provider, "model": model}
+
+
 # ============================================================================
 # Pricing Config Handlers
 # ============================================================================
@@ -3070,6 +3151,8 @@ MESSAGE_HANDLERS: Dict[str, MessageHandler] = {
     # Provider Defaults
     "get_provider_defaults": handle_get_provider_defaults,
     "save_provider_defaults": handle_save_provider_defaults,
+    "get_validated_ai_providers": handle_get_validated_ai_providers,
+    "save_global_model": handle_save_global_model,
 
     # Compaction
     "get_compaction_stats": handle_get_compaction_stats,

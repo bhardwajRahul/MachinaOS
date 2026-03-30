@@ -188,7 +188,7 @@ try {
   console.log('');
   console.log('Done!');
   console.log('');
-  console.log('WhatsApp RPC installed as npm dependency (whatsapp-rpc)');
+  console.log('WhatsApp RPC installed as npm dependency (edgymeow)');
 
 } catch (err) {
   console.log('');

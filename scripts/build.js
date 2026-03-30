@@ -195,9 +195,9 @@ try {
   // Step 5: Verify WhatsApp RPC package (non-fatal)
   console.log('[5/5] Verifying WhatsApp RPC...');
   try {
-    run('whatsapp-rpc status', ROOT);
+    run('edgymeow status', ROOT);
   } catch {
-    console.log('  Warning: whatsapp-rpc not available. Use --skip-whatsapp when starting.');
+    console.log('  Warning: edgymeow not available. Use --skip-whatsapp when starting.');
   }
 
   console.log('\nBuild complete.');

@@ -3,11 +3,15 @@ import { Node } from 'reactflow';
 import { snapToGrid, getDefaultNodePosition } from '../utils/workflow';
 import { theme } from '../styles/theme';
 import { nodeDefinitions } from '../nodeDefinitions';
+import { SPECIALIZED_AGENT_TYPES } from '../nodeDefinitions/specializedAgentNodes';
+
+const AGENT_TYPES = new Set(['aiAgent', 'chatAgent', ...SPECIALIZED_AGENT_TYPES]);
 
 interface UseDragAndDropProps {
   nodes: Node[];
   setNodes: (nodes: Node[] | ((nodes: Node[]) => Node[])) => void;
   saveNodeParameters?: (nodeId: string, parameters: Record<string, any>) => Promise<boolean>;
+  globalModelDefaults?: { provider: string; model: string } | null;
 }
 
 /**
@@ -36,7 +40,7 @@ export const generateUniqueLabel = (displayName: string, nodeType: string, exist
   return `${displayName} ${suffix}`;
 };
 
-export const useDragAndDrop = ({ nodes, setNodes, saveNodeParameters }: UseDragAndDropProps) => {
+export const useDragAndDrop = ({ nodes, setNodes, saveNodeParameters, globalModelDefaults }: UseDragAndDropProps) => {
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
@@ -85,6 +89,13 @@ export const useDragAndDrop = ({ nodes, setNodes, saveNodeParameters }: UseDragA
 
         // Save full default parameters to DB only (not to node.data)
         const defaults = nodeData.data || {};
+
+        // Apply global model defaults for agent nodes
+        if (globalModelDefaults && AGENT_TYPES.has(nodeData.type)) {
+          defaults.provider = globalModelDefaults.provider;
+          defaults.model = globalModelDefaults.model;
+        }
+
         if (Object.keys(defaults).length > 0 && saveNodeParameters) {
           try {
             await saveNodeParameters(newNode.id, { ...defaults, label: uniqueLabel });
@@ -99,7 +110,7 @@ export const useDragAndDrop = ({ nodes, setNodes, saveNodeParameters }: UseDragA
         console.error('Error dropping node:', error);
       }
     },
-    [setNodes, nodes, saveNodeParameters]
+    [setNodes, nodes, saveNodeParameters, globalModelDefaults]
   );
 
   const handleComponentDragStart = useCallback((event: React.DragEvent, definition: any) => {

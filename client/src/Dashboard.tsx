@@ -341,9 +341,23 @@ const DashboardContent: React.FC = () => {
     deploymentStatus.workflow_id === currentWorkflow?.id;
   const isCurrentWorkflowLocked = workflowLock.locked &&
     workflowLock.workflow_id === currentWorkflow?.id;
-  const { onDragOver, onDrop, handleComponentDragStart } = useDragAndDrop({ nodes, setNodes, saveNodeParameters });
+  const [globalModelDefaults, setGlobalModelDefaults] = React.useState<{ provider: string; model: string } | null>(null);
+  const { onDragOver, onDrop, handleComponentDragStart } = useDragAndDrop({ nodes, setNodes, saveNodeParameters, globalModelDefaults });
   const { onConnect, onNodesDelete, onEdgesDelete } = useReactFlowNodes({ setNodes, setEdges });
   const { copySelectedNodes, pasteNodes } = useCopyPaste({ nodes, edges, setNodes, setEdges, saveNodeParameters });
+
+  // Override all agent nodes to use the global model
+  const AGENT_TYPES_SET = React.useMemo(() => new Set(['aiAgent', 'chatAgent', ...SPECIALIZED_AGENT_TYPES]), []);
+  const handleOverrideAllAgents = React.useCallback(async (provider: string, model: string) => {
+    const agentNodes = nodes.filter(n => AGENT_TYPES_SET.has(n.type || ''));
+    if (agentNodes.length === 0) return;
+    const nodeIds = agentNodes.map(n => n.id);
+    const allParams = await getAllNodeParameters(nodeIds);
+    await Promise.all(agentNodes.map(n => {
+      const existing = allParams[n.id] || {};
+      return saveNodeParameters(n.id, { ...existing, provider, model });
+    }));
+  }, [nodes, AGENT_TYPES_SET, getAllNodeParameters, saveNodeParameters]);
 
   // Toggle disabled state on selected nodes
   const toggleDisableSelected = React.useCallback(() => {
@@ -1147,6 +1161,8 @@ const DashboardContent: React.FC = () => {
           onExportJSON={handleExportJSON}
           onExportFile={handleExportFile}
           onImportJSON={handleImportJSON}
+          onGlobalModelChange={(provider, model) => setGlobalModelDefaults({ provider, model })}
+          onOverrideAllAgents={handleOverrideAllAgents}
         />
         
         {/* Main Content Area */}

@@ -44,6 +44,16 @@ export const AI_PROVIDER_ICONS: Record<string, React.FC<{ size?: number }>> = {
   cerebras: CerebrasIcon,
 };
 
+// Centralized provider metadata (icon, brand color, display label)
+export const AI_PROVIDER_META: Record<string, { Icon: React.FC<{ size?: number }>; color: string; label: string }> = {
+  openai:     { Icon: OpenAIIcon,     color: '#10a37f', label: 'OpenAI' },
+  anthropic:  { Icon: ClaudeIcon,     color: '#d97706', label: 'Anthropic' },
+  gemini:     { Icon: GeminiIcon,     color: '#4285f4', label: 'Gemini' },
+  groq:       { Icon: GroqIcon,       color: '#F55036', label: 'Groq' },
+  cerebras:   { Icon: CerebrasIcon,   color: '#FF6600', label: 'Cerebras' },
+  openrouter: { Icon: OpenRouterIcon, color: '#6366f1', label: 'OpenRouter' },
+};
+
 // Get icon component by provider ID
 export const getAIProviderIcon = (providerId: string): React.FC<{ size?: number }> | null => {
   return AI_PROVIDER_ICONS[providerId] || null;

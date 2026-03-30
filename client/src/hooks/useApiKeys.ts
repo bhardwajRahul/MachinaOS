@@ -78,6 +78,19 @@ export interface APIUsageSummary {
   operations: APIOperationSummary[];
 }
 
+export interface ValidatedProvider {
+  provider: string;
+  models: string[];
+  popular_models: string[];
+  default_model: string | null;
+}
+
+export interface GlobalModelState {
+  providers: ValidatedProvider[];
+  global_provider: string | null;
+  global_model: string | null;
+}
+
 export interface UseApiKeysResult {
   // Validate and store API key
   validateApiKey: (provider: string, apiKey: string) => Promise<ApiKeyValidationResult>;
@@ -118,6 +131,10 @@ export interface UseApiKeysResult {
 
   // Model constraints from registry
   getModelConstraints: (model: string, provider: string) => Promise<ModelConstraints>;
+
+  // Global model selection
+  getValidatedAiProviders: () => Promise<GlobalModelState>;
+  saveGlobalModel: (provider: string, model: string) => Promise<boolean>;
 
   // State
   isValidating: boolean;
@@ -447,6 +464,29 @@ export const useApiKeys = (): UseApiKeysResult => {
     }
   }, [sendRequest, isConnected]);
 
+  const getValidatedAiProviders = useCallback(async (): Promise<GlobalModelState> => {
+    const fallback: GlobalModelState = { providers: [], global_provider: null, global_model: null };
+    if (!isConnected) return fallback;
+    try {
+      const response = await sendRequest<GlobalModelState>('get_validated_ai_providers', {});
+      return response || fallback;
+    } catch (error) {
+      console.warn('Error fetching validated AI providers:', error);
+      return fallback;
+    }
+  }, [sendRequest, isConnected]);
+
+  const saveGlobalModel = useCallback(async (provider: string, model: string): Promise<boolean> => {
+    if (!isConnected) return false;
+    try {
+      const response = await sendRequest<{ success: boolean }>('save_global_model', { provider, model });
+      return response?.success ?? false;
+    } catch (error) {
+      console.warn('Error saving global model:', error);
+      return false;
+    }
+  }, [sendRequest, isConnected]);
+
   return {
     validateApiKey,
     saveApiKey,
@@ -462,6 +502,8 @@ export const useApiKeys = (): UseApiKeysResult => {
     getProviderUsageSummary,
     getAPIUsageSummary,
     getModelConstraints,
+    getValidatedAiProviders,
+    saveGlobalModel,
     isValidating,
     validationError,
     isConnected

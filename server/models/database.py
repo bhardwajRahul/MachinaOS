@@ -257,6 +257,8 @@ class UserSettings(SQLModel, table=True):
     examples_loaded: bool = Field(default=False)  # Track if example workflows were imported
     onboarding_completed: bool = Field(default=False)  # Track if user completed or skipped onboarding
     onboarding_step: int = Field(default=0)  # Last completed onboarding step (for resuming)
+    default_llm_provider: Optional[str] = Field(default=None, max_length=50)  # Global default AI provider
+    default_llm_model: Optional[str] = Field(default=None, max_length=200)  # Global default AI model
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         sa_column=Column(DateTime(timezone=True), server_default=func.now())

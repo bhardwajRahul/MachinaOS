@@ -117,6 +117,18 @@ class Database:
                     ))
                     logger.info("Added compaction_ratio column to user_settings")
 
+                if "default_llm_provider" not in columns:
+                    await conn.execute(text(
+                        "ALTER TABLE user_settings ADD COLUMN default_llm_provider VARCHAR(50)"
+                    ))
+                    logger.info("Added default_llm_provider column to user_settings")
+
+                if "default_llm_model" not in columns:
+                    await conn.execute(text(
+                        "ALTER TABLE user_settings ADD COLUMN default_llm_model VARCHAR(200)"
+                    ))
+                    logger.info("Added default_llm_model column to user_settings")
+
                 # Migrate token_usage_metrics table - add cost columns
                 result = await conn.execute(text("PRAGMA table_info(token_usage_metrics)"))
                 columns = {row[1] for row in result.fetchall()}
@@ -1540,6 +1552,8 @@ class Database:
                     "examples_loaded": settings.examples_loaded,
                     "onboarding_completed": settings.onboarding_completed,
                     "onboarding_step": settings.onboarding_step,
+                    "default_llm_provider": settings.default_llm_provider,
+                    "default_llm_model": settings.default_llm_model,
                     "created_at": settings.created_at.isoformat() if settings.created_at else None,
                     "updated_at": settings.updated_at.isoformat() if settings.updated_at else None
                 }
@@ -1579,6 +1593,10 @@ class Database:
                         existing.onboarding_completed = settings_data["onboarding_completed"]
                     if "onboarding_step" in settings_data:
                         existing.onboarding_step = settings_data["onboarding_step"]
+                    if "default_llm_provider" in settings_data:
+                        existing.default_llm_provider = settings_data["default_llm_provider"]
+                    if "default_llm_model" in settings_data:
+                        existing.default_llm_model = settings_data["default_llm_model"]
                 else:
                     # Create new settings
                     existing = UserSettings(
@@ -1592,7 +1610,9 @@ class Database:
                         compaction_ratio=settings_data.get("compaction_ratio", 0.5),
                         examples_loaded=settings_data.get("examples_loaded", False),
                         onboarding_completed=settings_data.get("onboarding_completed", False),
-                        onboarding_step=settings_data.get("onboarding_step", 0)
+                        onboarding_step=settings_data.get("onboarding_step", 0),
+                        default_llm_provider=settings_data.get("default_llm_provider"),
+                        default_llm_model=settings_data.get("default_llm_model"),
                     )
                     session.add(existing)
 

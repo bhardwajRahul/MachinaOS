@@ -70,11 +70,11 @@
     "temporal:stop": "temporal-server stop",
     "temporal:status": "temporal-server status",
     "temporal:worker": "cd server && uv run python -m services.temporal.worker",
-    "whatsapp:start": "whatsapp-rpc start",
-    "whatsapp:stop": "whatsapp-rpc stop",
-    "whatsapp:status": "whatsapp-rpc status",
-    "whatsapp:api": "whatsapp-rpc api --foreground",
-    "whatsapp:build": "whatsapp-rpc build",
+    "whatsapp:start": "edgymeow start",
+    "whatsapp:stop": "edgymeow stop",
+    "whatsapp:status": "edgymeow status",
+    "whatsapp:api": "edgymeow api --foreground",
+    "whatsapp:build": "edgymeow build",
     "build": "node scripts/build.js",
     "clean": "node scripts/clean.js",
     "stop": "node scripts/stop.js",
@@ -106,6 +106,6 @@
     "cross-env": "^7.0.3",
     "rimraf": "^6.0.1",
     "temporal-server": "^0.0.9",
-    "whatsapp-rpc": "^0.0.12"
+    "edgymeow": "^0.0.18"
   }
 }
