@@ -455,6 +455,80 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
         description: 'Enable detailed REPL output logging'
       }
     ]
+  },
+
+  claude_code_agent: {
+    displayName: 'Claude Code Agent',
+    name: 'claude_code_agent',
+    icon: '>/\_',
+    group: ['agent', 'ai'],
+    version: 1,
+    subtitle: 'Agentic Coding',
+    description: 'AI Agent powered by Claude Code CLI for agentic code generation, file editing, and command execution',
+    defaults: { name: 'Claude Code Agent', color: dracula.cyan },
+    inputs: AI_AGENT_INPUTS,
+    outputs: AI_AGENT_OUTPUTS,
+    properties: [
+      {
+        displayName: 'Prompt',
+        name: 'prompt',
+        type: 'string' as any,
+        default: '',
+        required: true,
+        description: 'Task or instruction for Claude Code',
+        typeOptions: { rows: 4 },
+      },
+      {
+        displayName: 'Model',
+        name: 'model',
+        type: 'options' as any,
+        default: 'claude-sonnet-4-6',
+        options: [
+          { name: 'Claude Opus 4.6', value: 'claude-opus-4-6' },
+          { name: 'Claude Sonnet 4.6', value: 'claude-sonnet-4-6' },
+          { name: 'Claude Haiku 4.5', value: 'claude-haiku-4-5' },
+        ],
+        description: 'Claude model to use',
+      },
+      {
+        displayName: 'System Prompt',
+        name: 'systemPrompt',
+        type: 'string' as any,
+        default: '',
+        description: 'Additional system instructions appended to Claude Code',
+        typeOptions: { rows: 3 },
+      },
+      {
+        displayName: 'Allowed Tools',
+        name: 'allowedTools',
+        type: 'string' as any,
+        default: 'Read,Edit,Bash,Glob,Grep,Write',
+        description: 'Comma-separated Claude Code tools (Read,Edit,Bash,Glob,Grep,Write,WebSearch,WebFetch)',
+      },
+      {
+        displayName: 'Max Turns',
+        name: 'maxTurns',
+        type: 'number' as any,
+        default: 10,
+        typeOptions: { minValue: 1, maxValue: 50 },
+        description: 'Maximum agentic iterations',
+      },
+      {
+        displayName: 'Max Budget (USD)',
+        name: 'maxBudgetUsd',
+        type: 'number' as any,
+        default: 5.0,
+        typeOptions: { minValue: 0, maxValue: 100, numberStepSize: 0.5 },
+        description: 'Maximum USD spend per execution (0 = unlimited)',
+      },
+      {
+        displayName: 'Working Directory',
+        name: 'workingDirectory',
+        type: 'string' as any,
+        default: '',
+        description: 'Working directory for Claude Code (empty = server default)',
+      },
+    ],
   }
 };
 
@@ -463,4 +537,4 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
 // ============================================================================
 
 // List of specialized agent node types for identification
-export const SPECIALIZED_AGENT_TYPES = ['android_agent', 'coding_agent', 'web_agent', 'task_agent', 'social_agent', 'travel_agent', 'tool_agent', 'productivity_agent', 'payments_agent', 'consumer_agent', 'autonomous_agent', 'orchestrator_agent', 'ai_employee', 'rlm_agent'];
+export const SPECIALIZED_AGENT_TYPES = ['android_agent', 'coding_agent', 'web_agent', 'task_agent', 'social_agent', 'travel_agent', 'tool_agent', 'productivity_agent', 'payments_agent', 'consumer_agent', 'autonomous_agent', 'orchestrator_agent', 'ai_employee', 'rlm_agent', 'claude_code_agent'];

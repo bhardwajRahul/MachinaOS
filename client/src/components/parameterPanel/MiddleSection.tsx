@@ -33,7 +33,8 @@ const AGENT_WITH_SKILLS_TYPES = [
   'autonomous_agent',
   'orchestrator_agent',
   'ai_employee',
-  'rlm_agent'
+  'rlm_agent',
+  'claude_code_agent'
 ];
 
 interface ConnectedSkill {

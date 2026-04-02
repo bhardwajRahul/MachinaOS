@@ -6,6 +6,7 @@ import AIAgentExecutionService from '../services/execution/aiAgentExecutionServi
 import { useAppTheme } from '../hooks/useAppTheme';
 import { useNodeStatus } from '../contexts/WebSocketContext';
 import { dracula } from '../styles/theme';
+import { ClaudeIcon } from './icons/AIProviderIcons';
 
 // LangGraph phase icons and labels
 const PHASE_CONFIG: Record<string, { icon: string; label: string; color: string }> = {
@@ -349,6 +350,23 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
     title: 'RLM Agent',
     subtitle: 'Recursive Reasoning',
     themeColorKey: 'orange',
+    bottomHandles: [
+      { id: 'input-skill', label: 'Skill', position: '25%' },
+      { id: 'input-tools', label: 'Tool', position: '75%' },
+    ],
+    leftHandles: [
+      { id: 'input-memory', label: 'Memory', position: '65%' },
+      { id: 'input-task', label: 'Task', position: '85%' },
+    ],
+    topOutputHandle: { id: 'output-top', label: 'Output' },
+    width: 300,
+    height: 200,
+  },
+  claude_code_agent: {
+    icon: <ClaudeIcon size={28} />,
+    title: 'Claude Code',
+    subtitle: 'Agentic Coding',
+    themeColorKey: 'cyan',
     bottomHandles: [
       { id: 'input-skill', label: 'Skill', position: '25%' },
       { id: 'input-tools', label: 'Tool', position: '75%' },
