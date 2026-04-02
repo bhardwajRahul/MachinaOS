@@ -127,7 +127,7 @@
         "_default": 128000
       },
       "thinking_models": ["qwen-3-235b"],
-      "thinking_type": "format",
+      "thinking_type": "budget",
       "temperature_range": [0.0, 1.5]
     }
   }
