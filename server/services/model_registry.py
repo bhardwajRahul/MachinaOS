@@ -47,7 +47,7 @@ THINKING_PATTERNS: List[Tuple[str, str, str]] = [
     ("openai", r"^gpt-5", "effort"),          # GPT-5 hybrid reasoning
     ("gemini", r"gemini-(2\.5|3)", "budget"),
     ("groq", r"qwen3", "format"),
-    ("cerebras", r"qwen", "format"),
+    ("cerebras", r"qwen", "budget"),
 ]
 
 # Default temperature ranges per provider

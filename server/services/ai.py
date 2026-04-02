@@ -1233,6 +1233,7 @@ class AIService:
                     logger.info(f"[AI] Gemini thinking: budget={thinking.budget}")
                 elif provider == 'cerebras':
                     kwargs['thinking_budget'] = thinking.budget
+                    logger.info(f"[AI] Cerebras thinking: budget={thinking.budget}")
             elif thinking_type == 'effort':
                 # OpenAI o-series: reasoning_effort parameter
                 kwargs['reasoning_effort'] = thinking.effort
