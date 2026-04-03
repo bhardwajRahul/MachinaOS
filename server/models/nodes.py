@@ -43,8 +43,8 @@ class BaseNodeParams(BaseModel):
 # =============================================================================
 
 class AIChatModelParams(BaseNodeParams):
-    """Parameters for AI chat model nodes (OpenAI, Anthropic, Gemini, OpenRouter, Groq, Cerebras)."""
-    type: Literal["openaiChatModel", "anthropicChatModel", "geminiChatModel", "openrouterChatModel", "groqChatModel", "cerebrasChatModel"]
+    """Parameters for AI chat model nodes."""
+    type: Literal["openaiChatModel", "anthropicChatModel", "geminiChatModel", "openrouterChatModel", "groqChatModel", "cerebrasChatModel", "deepseekChatModel", "kimiChatModel", "mistralChatModel"]
     prompt: str = ""
     model: str = ""
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
@@ -57,7 +57,7 @@ class AIAgentParams(BaseNodeParams):
     """Parameters for AI agent node."""
     type: Literal["aiAgent"]
     prompt: str = ""
-    provider: Literal["openai", "anthropic", "gemini"] = "openai"
+    provider: Literal["openai", "anthropic", "gemini", "openrouter", "groq", "cerebras", "deepseek", "kimi", "mistral"] = "openai"
     model: str = ""
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     max_tokens: Optional[int] = Field(default=1000, alias="maxTokens")
@@ -68,7 +68,7 @@ class AIAgentParams(BaseNodeParams):
 class ChatAgentParams(BaseNodeParams):
     """Parameters for chat agent node (skill-based)."""
     type: Literal["chatAgent"]
-    provider: Literal["openai", "anthropic", "gemini", "groq", "openrouter", "cerebras"] = "openai"
+    provider: Literal["openai", "anthropic", "gemini", "openrouter", "groq", "cerebras", "deepseek", "kimi", "mistral"] = "openai"
     model: str = ""
     api_key: Optional[str] = Field(default=None, alias="apiKey")
 

@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Select } from 'antd';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { useApiKeys, GlobalModelState } from '../../hooks/useApiKeys';
+import { useWebSocket } from '../../contexts/WebSocketContext';
 import { AI_PROVIDER_META } from '../icons/AIProviderIcons';
 
 interface TopToolbarProps {
@@ -68,16 +69,17 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
 
   // Global Model Selector state
   const { getValidatedAiProviders, saveGlobalModel, isConnected: apiKeysConnected } = useApiKeys();
+  const { apiKeyStatuses } = useWebSocket();
   const [globalModelState, setGlobalModelState] = useState<GlobalModelState>({ providers: [], global_provider: null, global_model: null });
-  const hasFetchedProvidersRef = useRef(false);
 
+  // Re-fetch validated providers when API key statuses change (key added/removed)
+  const apiKeyCount = Object.values(apiKeyStatuses).filter(s => s.hasKey).length;
   useEffect(() => {
-    if (!apiKeysConnected || hasFetchedProvidersRef.current) return;
-    hasFetchedProvidersRef.current = true;
+    if (!apiKeysConnected) return;
     getValidatedAiProviders().then(state => {
-      if (state.providers.length > 0) setGlobalModelState(state);
+      setGlobalModelState(state);
     });
-  }, [apiKeysConnected, getValidatedAiProviders]);
+  }, [apiKeysConnected, apiKeyCount, getValidatedAiProviders]);
 
   const handleSelectGlobalModel = useCallback((value: string) => {
     const [provider, ...rest] = value.split('::');
