@@ -46,6 +46,7 @@ dependencies = [
     "langchain-groq>=0.2.0",
     "langchain-cerebras>=0.1.0",
     "langgraph>=0.2.0",
+    "deepagents>=0.4.12",
 
     # Dependency Injection
     "dependency-injector>=4.40.0",

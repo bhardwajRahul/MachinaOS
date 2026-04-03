@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 # Team lead types that can create teams
-TEAM_LEAD_TYPES = {'orchestrator_agent', 'ai_employee'}
+TEAM_LEAD_TYPES = {'orchestrator_agent', 'ai_employee', 'deep_agent'}
 
 
 async def _collect_agent_connections(
@@ -550,7 +550,6 @@ async def handle_chat_agent(
                 })
             logger.info(f"[Teams] Added {len(teammates)} teammates as delegation tools")
 
-    # Standard execution (no team mode)
     return await ai_service.execute_chat_agent(
         node_id,
         parameters,
@@ -560,7 +559,8 @@ async def handle_chat_agent(
         broadcaster=broadcaster,
         workflow_id=workflow_id,
         context=context,
-        database=database
+        database=database,
+        node_type=node_type,
     )
 
 

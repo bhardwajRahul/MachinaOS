@@ -138,6 +138,7 @@ class NodeExecutor:
             'autonomous_agent': partial(handle_chat_agent, ai_service=self.ai_service, database=self.database),
             'orchestrator_agent': partial(handle_chat_agent, ai_service=self.ai_service, database=self.database),
             'ai_employee': partial(handle_chat_agent, ai_service=self.ai_service, database=self.database),
+            'deep_agent': partial(handle_chat_agent, ai_service=self.ai_service, database=self.database),
             'rlm_agent': partial(handle_rlm_agent, ai_service=self.ai_service, database=self.database),
             'claude_code_agent': partial(handle_claude_code_agent, ai_service=self.ai_service, database=self.database),
             'simpleMemory': handle_simple_memory,

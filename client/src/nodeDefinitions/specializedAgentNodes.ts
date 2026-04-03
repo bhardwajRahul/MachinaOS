@@ -529,6 +529,34 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
         description: 'Working directory for Claude Code (empty = server default)',
       },
     ],
+  },
+
+  // Deep Agent - LangChain DeepAgents powered agent with filesystem, sub-agents, and planning
+  deep_agent: {
+    displayName: 'Deep Agent',
+    name: 'deep_agent',
+    icon: '\u{1F9E0}',
+    group: ['agent', 'ai'],
+    version: 1,
+    subtitle: 'LangChain DeepAgents',
+    description: 'AI Agent powered by LangChain DeepAgents with built-in filesystem tools (read, write, edit, glob, grep, execute), sub-agent delegation, auto-summarization, and todo planning.',
+    defaults: { name: 'Deep Agent', color: dracula.green },
+    inputs: [
+      ...AI_AGENT_INPUTS,
+      { name: 'teammates', displayName: 'Team', type: 'main' as NodeConnectionType, description: 'Connect agents for sub-agent delegation via task tool' }
+    ],
+    outputs: AI_AGENT_OUTPUTS,
+    properties: [
+      ...AI_AGENT_PROPERTIES,
+      {
+        displayName: 'Max Turns',
+        name: 'maxTurns',
+        type: 'number' as any,
+        default: 25,
+        typeOptions: { minValue: 1, maxValue: 100 },
+        description: 'Maximum agentic loop iterations',
+      },
+    ],
   }
 };
 
@@ -537,4 +565,4 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
 // ============================================================================
 
 // List of specialized agent node types for identification
-export const SPECIALIZED_AGENT_TYPES = ['android_agent', 'coding_agent', 'web_agent', 'task_agent', 'social_agent', 'travel_agent', 'tool_agent', 'productivity_agent', 'payments_agent', 'consumer_agent', 'autonomous_agent', 'orchestrator_agent', 'ai_employee', 'rlm_agent', 'claude_code_agent'];
+export const SPECIALIZED_AGENT_TYPES = ['android_agent', 'coding_agent', 'web_agent', 'task_agent', 'social_agent', 'travel_agent', 'tool_agent', 'productivity_agent', 'payments_agent', 'consumer_agent', 'autonomous_agent', 'orchestrator_agent', 'ai_employee', 'rlm_agent', 'claude_code_agent', 'deep_agent'];
