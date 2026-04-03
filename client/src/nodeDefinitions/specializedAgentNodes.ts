@@ -5,6 +5,7 @@ import {
   INodeProperties
 } from '../types/INodeProperties';
 import { dracula } from '../styles/theme';
+import { AI_PROVIDER_OPTIONS } from './aiModelNodes';
 
 // ============================================================================
 // SHARED AI AGENT INPUTS - Used by Specialized Agent Nodes
@@ -64,12 +65,7 @@ export const AI_AGENT_PROPERTIES: INodeProperties[] = [
     displayName: 'AI Provider',
     name: 'provider',
     type: 'options',
-    options: [
-      { name: 'OpenAI', value: 'openai' },
-      { name: 'Anthropic (Claude)', value: 'anthropic' },
-      { name: 'Google (Gemini)', value: 'gemini' },
-      { name: 'OpenRouter', value: 'openrouter' }
-    ],
+    options: AI_PROVIDER_OPTIONS,
     default: 'openai',
     description: 'The AI provider to use (configure API keys in Credentials)'
   },

@@ -173,6 +173,7 @@ class ProviderConfig:
     models_header_fn: Callable[[str], dict]  # Function to create headers
     base_url: str = ''  # Custom base URL for OpenAI-compatible providers
     extra_headers: Optional[Dict[str, str]] = None  # Default headers for API calls
+    supported_params: Optional[List[str]] = None  # API-supported params (from llm_defaults.json)
 
 
 @dataclass
@@ -342,6 +343,7 @@ def _build_provider_configs() -> Dict[str, ProviderConfig]:
             models_header_fn=header_fn,
             base_url=prov.get('base_url', ''),
             extra_headers=prov.get('extra_headers'),
+            supported_params=prov.get('supported_params'),
         )
 
     return configs
@@ -1192,11 +1194,39 @@ class AIService:
             kwargs['base_url'] = proxy_url
             kwargs[config.api_key_param] = "ollama"  # Ollama-style token
             logger.info(f"[AI] Using proxy for {provider}: {proxy_url}")
-        # OpenAI-compatible providers: apply base_url from config
+        # OpenAI-compatible providers: apply base_url + pass only supported params
         elif config.base_url and config.model_class == ChatOpenAI and provider != 'openai':
             kwargs['base_url'] = config.base_url
             if config.extra_headers:
                 kwargs['default_headers'] = config.extra_headers
+            # LangChain ChatOpenAI converts max_tokens -> max_completion_tokens (OpenAI-specific).
+            # Non-OpenAI providers reject this, so pass supported params via extra_body.
+            del kwargs[config.max_tokens_param]
+            extra_body: Dict[str, Any] = {'max_tokens': max_tokens}
+            if config.supported_params:
+                if 'temperature' not in config.supported_params:
+                    kwargs.pop('temperature', None)
+                if 'frequency_penalty' not in config.supported_params:
+                    kwargs.pop('frequency_penalty', None)
+                if 'presence_penalty' not in config.supported_params:
+                    kwargs.pop('presence_penalty', None)
+            # Handle provider-specific constraints from llm_defaults.json
+            prov_json = _LLM_DEFAULTS.get("providers", {}).get(provider, {})
+
+            # Disable thinking for models that have it ON by default (e.g. kimi-k2.5)
+            default_on = prov_json.get("thinking_default_on", [])
+            if default_on and any(model.startswith(m) for m in default_on):
+                if not (thinking and thinking.enabled):
+                    extra_body["thinking"] = {"type": "disabled"}
+
+            # Apply fixed temperature per model (e.g. kimi-k2.5 requires exactly 0.6)
+            fixed_temps = prov_json.get("fixed_temperature", {})
+            for prefix, fixed_temp in fixed_temps.items():
+                if model.startswith(prefix):
+                    kwargs["temperature"] = fixed_temp
+                    break
+
+            kwargs['extra_body'] = extra_body
 
         # Apply thinking/reasoning configuration using model registry
         # The registry determines thinking_type based on model metadata
@@ -1238,10 +1268,6 @@ class AIService:
                 # Groq Qwen/QwQ: reasoning_format parameter
                 format_val = thinking.format if thinking.format in ('parsed', 'hidden') else 'parsed'
                 kwargs['reasoning_format'] = format_val
-            elif thinking_type == 'enabled':
-                # DeepSeek/Kimi: toggle thinking via model_kwargs extra_body
-                kwargs.setdefault('model_kwargs', {})['extra_body'] = {"thinking": {"type": "enabled"}}
-                logger.info(f"[AI] {provider} thinking: enabled via extra_body")
             elif thinking_type == 'none':
                 logger.warning(f"[AI] Model '{model}' ({provider}) may not support thinking mode")
 

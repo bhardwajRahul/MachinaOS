@@ -187,7 +187,7 @@ const deepseekConfig: ChatModelConfig = {
   displayName: 'DeepSeek',
   icon: DEEPSEEK_ICON,
   color: dracula.cyan,
-  description: 'DeepSeek V3 models with Chain-of-Thought reasoning (deepseek-chat, deepseek-reasoner)',
+  description: 'DeepSeek V3 models (deepseek-chat, deepseek-reasoner with always-on CoT)',
   models: [],
   parameters: [
     {
@@ -200,7 +200,6 @@ const deepseekConfig: ChatModelConfig = {
     STANDARD_PARAMETERS.presencePenalty,
     STANDARD_PARAMETERS.timeout,
     STANDARD_PARAMETERS.maxRetries,
-    STANDARD_PARAMETERS.thinkingEnabled,
   ]
 };
 
@@ -210,7 +209,7 @@ const kimiConfig: ChatModelConfig = {
   displayName: 'Kimi',
   icon: KIMI_ICON,
   color: dracula.purple,
-  description: 'Kimi K2 models by Moonshot AI with 256K context and reasoning support',
+  description: 'Kimi K2 models by Moonshot AI with 256K context (thinking on by default)',
   models: [],
   parameters: [
     {
@@ -222,7 +221,6 @@ const kimiConfig: ChatModelConfig = {
     STANDARD_PARAMETERS.topP,
     STANDARD_PARAMETERS.timeout,
     STANDARD_PARAMETERS.maxRetries,
-    STANDARD_PARAMETERS.thinkingEnabled,
   ]
 };
 
@@ -271,6 +269,13 @@ const ALL_CONFIGS = [openaiConfig, claudeConfig, geminiConfig, openrouterConfig,
 export const AI_MODEL_PROVIDER_MAP: Record<string, string> = Object.fromEntries(
   ALL_CONFIGS.map(c => [`${c.providerId}ChatModel`, c.providerId])
 );
+
+// AI provider options for agent node dropdowns -- derived from AI_PROVIDER_META (single source of truth)
+import { AI_PROVIDER_META } from '../components/icons/AIProviderIcons';
+export const AI_PROVIDER_OPTIONS = Object.entries(AI_PROVIDER_META).map(([id, meta]) => ({
+  name: meta.label,
+  value: id,
+}));
 
 // Export configurations and factory for external use
 export { openaiConfig, claudeConfig, geminiConfig, openrouterConfig, groqConfig, cerebrasConfig, deepseekConfig, kimiConfig, mistralConfig, createBaseChatModel };

@@ -173,6 +173,7 @@
       "models_endpoint": "https://api.deepseek.com/models",
       "api_key_param": "api_key",
       "max_tokens_param": "max_tokens",
+      "supported_params": ["temperature", "max_tokens", "top_p", "frequency_penalty", "presence_penalty", "stop", "seed", "tools", "tool_choice", "response_format"],
       "max_output_tokens": {
         "deepseek-chat": 8192,
         "deepseek-reasoner": 65536,
@@ -183,8 +184,7 @@
         "deepseek-reasoner": 131072,
         "_default": 131072
       },
-      "thinking_models": ["deepseek-reasoner", "deepseek-chat"],
-      "thinking_type": "enabled",
+      "reasoning_models": ["deepseek-reasoner"],
       "temperature_range": [0.0, 2.0]
     },
     "kimi": {
@@ -194,24 +194,19 @@
       "models_endpoint": "https://api.moonshot.ai/v1/models",
       "api_key_param": "api_key",
       "max_tokens_param": "max_tokens",
+      "supported_params": ["temperature", "max_tokens", "top_p", "frequency_penalty", "presence_penalty", "stop", "seed", "tools", "tool_choice", "response_format"],
+      "thinking_default_on": ["kimi-k2.5", "kimi-k2-thinking", "kimi-k2-0905-preview"],
+      "fixed_temperature": {"kimi-k2.5": 0.6, "kimi-k2-thinking": 1.0, "kimi-k2-0905-preview": 0.6},
       "max_output_tokens": {
         "kimi-k2.5": 98304,
         "kimi-k2-thinking": 98304,
-        "moonshot-v1-8k": 8192,
-        "moonshot-v1-32k": 32768,
-        "moonshot-v1-128k": 131072,
         "_default": 8192
       },
       "context_length": {
         "kimi-k2.5": 262144,
         "kimi-k2-thinking": 262144,
-        "moonshot-v1-8k": 8192,
-        "moonshot-v1-32k": 32768,
-        "moonshot-v1-128k": 131072,
         "_default": 262144
       },
-      "thinking_models": ["kimi-k2.5", "kimi-k2-thinking"],
-      "thinking_type": "enabled",
       "temperature_range": [0.0, 1.0]
     },
     "mistral": {
@@ -221,21 +216,20 @@
       "models_endpoint": "https://api.mistral.ai/v1/models",
       "api_key_param": "api_key",
       "max_tokens_param": "max_tokens",
+      "supported_params": ["temperature", "max_tokens", "top_p", "frequency_penalty", "presence_penalty", "stop", "seed", "tools", "tool_choice", "response_format"],
       "max_output_tokens": {
         "mistral-large-latest": 131072,
         "mistral-small-latest": 32768,
-        "codestral-latest": 32768,
-        "open-mistral-nemo": 131072,
+        "codestral-latest": 131072,
         "_default": 8192
       },
       "context_length": {
         "mistral-large-latest": 262144,
         "mistral-small-latest": 32768,
-        "codestral-latest": 262144,
-        "open-mistral-nemo": 131072,
+        "codestral-latest": 256000,
         "_default": 131072
       },
-      "temperature_range": [0.0, 1.0]
+      "temperature_range": [0.0, 1.5]
     }
   }
 }

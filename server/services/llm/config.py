@@ -170,6 +170,13 @@ def resolve_temperature(params: dict, model: str, provider: str, thinking_enable
     if thinking_enabled and provider == "anthropic":
         return 1.0
 
+    # Fixed temperature per model from llm_defaults.json (e.g. kimi-k2.5 = 0.6)
+    prov_json = LLM_DEFAULTS.get("providers", {}).get(provider, {})
+    fixed_temps = prov_json.get("fixed_temperature", {})
+    for prefix, fixed_temp in fixed_temps.items():
+        if model.startswith(prefix):
+            return float(fixed_temp)
+
     lo, hi = registry.get_temperature_range(model, provider)
     return max(lo, min(hi, user_temp))
 

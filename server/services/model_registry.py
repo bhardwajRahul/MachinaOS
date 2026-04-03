@@ -48,8 +48,6 @@ THINKING_PATTERNS: List[Tuple[str, str, str]] = [
     ("gemini", r"gemini-(2\.5|3)", "budget"),
     ("groq", r"qwen3", "format"),
     ("cerebras", r"qwen", "budget"),
-    ("deepseek", r"deepseek-(reasoner|chat)", "enabled"),
-    ("kimi", r"kimi-k2", "enabled"),
 ]
 
 # Default temperature ranges per provider

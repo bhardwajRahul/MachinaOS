@@ -428,6 +428,12 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
       {/* Global Model Selector */}
       {globalModelState.providers.length > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.sm }}>
+          <span style={{
+            fontSize: theme.fontSize.sm,
+            color: theme.dracula.cyan,
+            fontWeight: theme.fontWeight.semibold,
+            whiteSpace: 'nowrap',
+          }}>Set Global Model</span>
           <Select
             value={globalSelectValue}
             onChange={handleSelectGlobalModel}

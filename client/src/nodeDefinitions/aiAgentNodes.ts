@@ -3,6 +3,7 @@ import {
   INodeTypeDescription,
   NodeConnectionType
 } from '../types/INodeProperties';
+import { AI_PROVIDER_OPTIONS } from './aiModelNodes';
 
 // ============================================================================
 // AI AGENT AND CHAT NODES
@@ -62,24 +63,7 @@ export const aiAgentNodes: Record<string, INodeTypeDescription> = {
         displayName: 'AI Provider',
         name: 'provider',
         type: 'options',
-        options: [
-          {
-            name: 'OpenAI',
-            value: 'openai'
-          },
-          {
-            name: 'Anthropic (Claude)',
-            value: 'anthropic'
-          },
-          {
-            name: 'Google (Gemini)',
-            value: 'gemini'
-          },
-          {
-            name: 'OpenRouter',
-            value: 'openrouter'
-          }
-        ],
+        options: AI_PROVIDER_OPTIONS,
         default: 'openai',
         description: 'The AI provider to use (configure API keys in Credentials)'
       },
@@ -228,24 +212,7 @@ export const aiAgentNodes: Record<string, INodeTypeDescription> = {
         displayName: 'AI Provider',
         name: 'provider',
         type: 'options',
-        options: [
-          {
-            name: 'OpenAI',
-            value: 'openai'
-          },
-          {
-            name: 'Anthropic (Claude)',
-            value: 'anthropic'
-          },
-          {
-            name: 'Google (Gemini)',
-            value: 'gemini'
-          },
-          {
-            name: 'OpenRouter',
-            value: 'openrouter'
-          }
-        ],
+        options: AI_PROVIDER_OPTIONS,
         default: 'openai',
         description: 'The AI provider to use (configure API keys in Credentials)'
       },
