@@ -456,7 +456,7 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
   claude_code_agent: {
     displayName: 'Claude Code Agent',
     name: 'claude_code_agent',
-    icon: '>/\_',
+    icon: '>/_',
     group: ['agent', 'ai'],
     version: 1,
     subtitle: 'Agentic Coding',
