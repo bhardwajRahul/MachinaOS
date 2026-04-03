@@ -24,6 +24,7 @@ import { useWhatsAppStatus, useAndroidStatus, useTwitterStatus, useGoogleStatus,
 import { useWhatsApp } from '../hooks/useWhatsApp';
 import {
   OpenAIIcon, ClaudeIcon, GeminiIcon, GroqIcon, OpenRouterIcon, CerebrasIcon,
+  DeepSeekIcon, KimiIcon, MistralIcon, AI_PROVIDER_META,
 } from './icons/AIProviderIcons';
 import { ApifyIcons } from '../assets/icons/apify';
 import { SearchIcons } from '../assets/icons/search';
@@ -123,12 +124,15 @@ const CATEGORIES: Category[] = [
     key: 'ai',
     label: 'AI Providers',
     items: [
-      { id: 'openai', name: 'OpenAI', placeholder: 'sk-...', color: '#10a37f', desc: 'GPT-4o, GPT-4, GPT-3.5', Icon: OpenAIIcon },
-      { id: 'anthropic', name: 'Anthropic', placeholder: 'sk-ant-...', color: '#d97706', desc: 'Claude 3.5 Sonnet, Opus', Icon: ClaudeIcon },
-      { id: 'gemini', name: 'Gemini', placeholder: 'AIza...', color: '#4285f4', desc: 'Gemini 2.0, 1.5 Pro/Flash', Icon: GeminiIcon },
-      { id: 'groq', name: 'Groq', placeholder: 'gsk_...', color: '#F55036', desc: 'Llama, Mixtral - Ultra-fast', Icon: GroqIcon },
-      { id: 'cerebras', name: 'Cerebras', placeholder: 'csk-...', color: '#FF6600', desc: 'Llama, Qwen - Ultra-fast', Icon: CerebrasIcon },
-      { id: 'openrouter', name: 'OpenRouter', placeholder: 'sk-or-...', color: '#6366f1', desc: 'Unified API - 200+ models', Icon: OpenRouterIcon },
+      { id: 'openai', name: 'OpenAI', placeholder: 'sk-...', color: AI_PROVIDER_META.openai.color, desc: 'GPT-4o, GPT-4, GPT-3.5', Icon: OpenAIIcon },
+      { id: 'anthropic', name: 'Anthropic', placeholder: 'sk-ant-...', color: AI_PROVIDER_META.anthropic.color, desc: 'Claude 3.5 Sonnet, Opus', Icon: ClaudeIcon },
+      { id: 'gemini', name: 'Gemini', placeholder: 'AIza...', color: AI_PROVIDER_META.gemini.color, desc: 'Gemini 2.0, 1.5 Pro/Flash', Icon: GeminiIcon },
+      { id: 'groq', name: 'Groq', placeholder: 'gsk_...', color: AI_PROVIDER_META.groq.color, desc: 'Llama, Mixtral - Ultra-fast', Icon: GroqIcon },
+      { id: 'cerebras', name: 'Cerebras', placeholder: 'csk-...', color: AI_PROVIDER_META.cerebras.color, desc: 'Llama, Qwen - Ultra-fast', Icon: CerebrasIcon },
+      { id: 'openrouter', name: 'OpenRouter', placeholder: 'sk-or-...', color: AI_PROVIDER_META.openrouter.color, desc: 'Unified API - 200+ models', Icon: OpenRouterIcon },
+      { id: 'deepseek', name: 'DeepSeek', placeholder: 'sk-...', color: AI_PROVIDER_META.deepseek.color, desc: 'DeepSeek V3, Reasoner', Icon: DeepSeekIcon },
+      { id: 'kimi', name: 'Kimi', placeholder: 'sk-...', color: AI_PROVIDER_META.kimi.color, desc: 'Kimi K2.5 - Moonshot AI', Icon: KimiIcon },
+      { id: 'mistral', name: 'Mistral', placeholder: 'sk-...', color: AI_PROVIDER_META.mistral.color, desc: 'Mistral Large, Small, Codestral', Icon: MistralIcon },
     ],
   },
   {

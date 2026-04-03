@@ -252,5 +252,24 @@ export const STANDARD_PARAMETERS = {
     default: 'parsed',
     description: 'How to return reasoning content (Groq)',
     displayOptions: { show: { thinkingEnabled: [true] } }
-  }
+  },
+
+  // Common request parameters (shared by all providers)
+  timeout: {
+    displayName: 'Timeout',
+    name: 'timeout',
+    type: 'number' as const,
+    default: 60000,
+    typeOptions: { minValue: 1000, maxValue: 180000 },
+    description: 'Timeout for the request in milliseconds'
+  },
+
+  maxRetries: {
+    displayName: 'Max Retries',
+    name: 'maxRetries',
+    type: 'number' as const,
+    default: 2,
+    typeOptions: { minValue: 0, maxValue: 5 },
+    description: 'Maximum number of retries'
+  },
 };

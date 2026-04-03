@@ -991,9 +991,9 @@ async def handle_validate_api_key(data: Dict[str, Any], websocket: WebSocket) ->
     broadcaster = get_status_broadcaster()
     provider, api_key = data["provider"].lower(), data["api_key"].strip()
 
-    # Service-only providers don't have models to fetch
-    AI_PROVIDERS = {'openai', 'anthropic', 'gemini', 'openrouter', 'groq', 'cerebras'}
-    models = await ai_service.fetch_models(provider, api_key) if provider in AI_PROVIDERS else []
+    # Fetch models for AI providers (any provider with a models_endpoint in llm_defaults.json)
+    from services.ai import PROVIDER_CONFIGS
+    models = await ai_service.fetch_models(provider, api_key) if provider in PROVIDER_CONFIGS else []
     await auth_service.store_api_key(provider=provider, api_key=api_key, models=models,
                                       session_id=data.get("session_id", "default"))
     # Broadcast with hasKey and models so frontend can update reactively
@@ -2683,7 +2683,8 @@ async def handle_get_validated_ai_providers(data: Dict[str, Any], websocket: Web
     auth_service = container.auth_service()
     database = container.database()
 
-    AI_PROVIDERS = ['openai', 'anthropic', 'gemini', 'groq', 'cerebras', 'openrouter']
+    from services.ai import PROVIDER_CONFIGS
+    AI_PROVIDERS = list(PROVIDER_CONFIGS.keys())
 
     # Load popular models from llm_defaults.json
     defaults_path = Path(__file__).parent.parent / "config" / "llm_defaults.json"

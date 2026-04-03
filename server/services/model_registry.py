@@ -48,6 +48,8 @@ THINKING_PATTERNS: List[Tuple[str, str, str]] = [
     ("gemini", r"gemini-(2\.5|3)", "budget"),
     ("groq", r"qwen3", "format"),
     ("cerebras", r"qwen", "budget"),
+    ("deepseek", r"deepseek-(reasoner|chat)", "enabled"),
+    ("kimi", r"kimi-k2", "enabled"),
 ]
 
 # Default temperature ranges per provider
@@ -58,6 +60,9 @@ DEFAULT_TEMP_RANGES = {
     "groq": (0.0, 2.0),
     "cerebras": (0.0, 1.5),
     "openrouter": (0.0, 2.0),
+    "deepseek": (0.0, 2.0),
+    "kimi": (0.0, 1.0),
+    "mistral": (0.0, 1.0),
 }
 
 

@@ -78,16 +78,9 @@ class OpenAIProvider:
     # ------------------------------------------------------------------
 
     async def fetch_models(self, api_key: str) -> List[str]:
-        import httpx
-        async with httpx.AsyncClient() as client:
-            r = await client.get(
-                "https://api.openai.com/v1/models",
-                headers={"Authorization": f"Bearer {api_key}"},
-                timeout=15.0,
-            )
-            r.raise_for_status()
-            data = r.json()
-        return sorted([m["id"] for m in data.get("data", [])])
+        """Fetch models using the client's configured base_url."""
+        models = await self._client.models.list()
+        return sorted([m.id for m in models.data])
 
     # ------------------------------------------------------------------
     # internals

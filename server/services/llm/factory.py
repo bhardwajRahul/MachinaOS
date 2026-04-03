@@ -9,8 +9,11 @@ from services.llm.protocol import LLMProvider
 
 logger = get_logger(__name__)
 
-# Providers that have native SDK implementations
-NATIVE_PROVIDERS = frozenset({"anthropic", "openai", "gemini", "openrouter", "xai"})
+# Providers with dedicated SDK implementations
+_DEDICATED_PROVIDERS = frozenset({"anthropic", "openai", "gemini", "openrouter"})
+
+# All providers supported by native SDK path (dedicated + OpenAI-compatible via base_url)
+NATIVE_PROVIDERS = _DEDICATED_PROVIDERS | frozenset({"xai", "deepseek", "kimi", "mistral"})
 
 
 def create_provider(
@@ -21,7 +24,8 @@ def create_provider(
 ) -> LLMProvider:
     """Create a native LLM provider instance.
 
-    Lazy-imports the provider module to avoid loading SDKs at startup.
+    Dedicated providers (anthropic, gemini, openrouter) use their own classes.
+    OpenAI-compatible providers use OpenAIProvider with base_url from config.
     """
     if provider == "anthropic":
         from services.llm.providers.anthropic import AnthropicProvider
@@ -39,10 +43,12 @@ def create_provider(
         from services.llm.providers.openrouter import OpenRouterProvider
         return OpenRouterProvider(api_key, proxy_url=proxy_url)
 
-    if provider == "xai":
-        # xAI uses OpenAI-compatible API
+    # OpenAI-compatible providers: use OpenAIProvider with base_url from config
+    from services.llm.config import get_provider_config
+    config = get_provider_config(provider)
+    if config and config.base_url:
         from services.llm.providers.openai import OpenAIProvider
-        return OpenAIProvider(api_key, base_url="https://api.x.ai/v1", proxy_url=proxy_url)
+        return OpenAIProvider(api_key, base_url=config.base_url, proxy_url=proxy_url)
 
     raise ValueError(f"Unknown provider: {provider}")
 

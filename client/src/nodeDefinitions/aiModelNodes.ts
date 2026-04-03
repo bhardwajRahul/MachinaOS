@@ -1,6 +1,8 @@
 // AI Model Node Definitions - Standardized chat model configurations using base factory
 import { INodeTypeDescription } from '../types/INodeProperties';
 import { createBaseChatModel, ChatModelConfig, STANDARD_PARAMETERS } from '../factories/baseChatModelFactory';
+import { dracula } from '../styles/theme';
+import { DEEPSEEK_ICON, KIMI_ICON, MISTRAL_ICON } from '../assets/icons/llm';
 
 // ============================================================================
 // CHAT MODEL CONFIGURATIONS
@@ -13,7 +15,7 @@ const openaiConfig: ChatModelConfig = {
   icon: '🤖',
   color: '#00A67E',
   description: 'OpenAI GPT models for chat completion and generation',
-  models: [], // Models fetched dynamically via API
+  models: [],
   parameters: [
     STANDARD_PARAMETERS.frequencyPenalty,
     {
@@ -27,14 +29,8 @@ const openaiConfig: ChatModelConfig = {
       name: 'responseFormat',
       type: 'options',
       options: [
-        {
-          name: 'Text',
-          value: 'text'
-        },
-        {
-          name: 'JSON Object',
-          value: 'json_object'
-        }
+        { name: 'Text', value: 'text' },
+        { name: 'JSON Object', value: 'json_object' }
       ],
       default: 'text',
       description: 'Format of the response'
@@ -44,30 +40,9 @@ const openaiConfig: ChatModelConfig = {
       ...STANDARD_PARAMETERS.temperature,
       description: 'Controls randomness (0-2). Note: O-series models (o1, o3, o4) only support temperature=1, which is set automatically.'
     },
-    {
-      displayName: 'Timeout',
-      name: 'timeout',
-      type: 'number',
-      default: 60000,
-      typeOptions: {
-        minValue: 1000,
-        maxValue: 180000
-      },
-      description: 'Timeout for the request in milliseconds'
-    },
-    {
-      displayName: 'Max Retries',
-      name: 'maxRetries',
-      type: 'number',
-      default: 2,
-      typeOptions: {
-        minValue: 0,
-        maxValue: 5
-      },
-      description: 'Maximum number of retries'
-    },
+    STANDARD_PARAMETERS.timeout,
+    STANDARD_PARAMETERS.maxRetries,
     STANDARD_PARAMETERS.topP,
-    // Thinking/Reasoning for o-series models (o1, o3, o4)
     STANDARD_PARAMETERS.thinkingEnabled,
     STANDARD_PARAMETERS.reasoningEffort
   ]
@@ -80,11 +55,11 @@ const claudeConfig: ChatModelConfig = {
   icon: '🧠',
   color: '#FF6B35',
   description: 'Anthropic Claude models for conversation and analysis',
-  models: [], // Models fetched dynamically via API
+  models: [],
   parameters: [
     {
       ...STANDARD_PARAMETERS.maxTokens,
-      default: 4096,  // Higher default for Claude to accommodate thinking mode
+      default: 4096,
       typeOptions: { minValue: 1, maxValue: 128000 },
       description: 'Maximum tokens to generate. Must be greater than Thinking Budget when thinking is enabled.'
     },
@@ -95,29 +70,8 @@ const claudeConfig: ChatModelConfig = {
     },
     STANDARD_PARAMETERS.topP,
     STANDARD_PARAMETERS.topK,
-    {
-      displayName: 'Timeout',
-      name: 'timeout',
-      type: 'number',
-      default: 60000,
-      typeOptions: {
-        minValue: 1000,
-        maxValue: 180000
-      },
-      description: 'Timeout for the request in milliseconds'
-    },
-    {
-      displayName: 'Max Retries',
-      name: 'maxRetries',
-      type: 'number',
-      default: 2,
-      typeOptions: {
-        minValue: 0,
-        maxValue: 5
-      },
-      description: 'Maximum number of retries'
-    },
-    // Extended thinking for Claude models
+    STANDARD_PARAMETERS.timeout,
+    STANDARD_PARAMETERS.maxRetries,
     STANDARD_PARAMETERS.thinkingEnabled,
     {
       ...STANDARD_PARAMETERS.thinkingBudget,
@@ -133,7 +87,7 @@ const geminiConfig: ChatModelConfig = {
   icon: '⭐',
   color: '#4285F4',
   description: 'Google Gemini models for multimodal AI capabilities',
-  models: [], // Models fetched dynamically via API
+  models: [],
   parameters: [
     {
       ...STANDARD_PARAMETERS.maxTokens,
@@ -146,55 +100,22 @@ const geminiConfig: ChatModelConfig = {
       default: 0.9,
       typeOptions: { minValue: 0, maxValue: 1, numberStepSize: 0.1 }
     },
-    {
-      ...STANDARD_PARAMETERS.topP,
-      default: 0.95
-    },
+    { ...STANDARD_PARAMETERS.topP, default: 0.95 },
     STANDARD_PARAMETERS.topK,
     {
       displayName: 'Safety Settings',
       name: 'safetySettings',
       type: 'options',
       options: [
-        {
-          name: 'Default',
-          value: 'default'
-        },
-        {
-          name: 'Strict',
-          value: 'strict'
-        },
-        {
-          name: 'Permissive',
-          value: 'permissive'
-        }
+        { name: 'Default', value: 'default' },
+        { name: 'Strict', value: 'strict' },
+        { name: 'Permissive', value: 'permissive' }
       ],
       default: 'default',
       description: 'Content safety filtering level'
     },
-    {
-      displayName: 'Timeout',
-      name: 'timeout',
-      type: 'number',
-      default: 60000,
-      typeOptions: {
-        minValue: 1000,
-        maxValue: 180000
-      },
-      description: 'Timeout for the request in milliseconds'
-    },
-    {
-      displayName: 'Max Retries',
-      name: 'maxRetries',
-      type: 'number',
-      default: 2,
-      typeOptions: {
-        minValue: 0,
-        maxValue: 5
-      },
-      description: 'Maximum number of retries'
-    },
-    // Thinking for Gemini models - uses thinking_budget (token count)
+    STANDARD_PARAMETERS.timeout,
+    STANDARD_PARAMETERS.maxRetries,
     STANDARD_PARAMETERS.thinkingEnabled,
     {
       ...STANDARD_PARAMETERS.thinkingBudget,
@@ -210,35 +131,15 @@ const openrouterConfig: ChatModelConfig = {
   icon: '🔀',
   color: '#6366F1',
   description: 'OpenRouter unified API - access OpenAI, Claude, Gemini, Llama, and more through one API',
-  models: [], // Models fetched dynamically via API
+  models: [],
   parameters: [
     STANDARD_PARAMETERS.temperature,
     STANDARD_PARAMETERS.maxTokens,
     STANDARD_PARAMETERS.topP,
     STANDARD_PARAMETERS.frequencyPenalty,
     STANDARD_PARAMETERS.presencePenalty,
-    {
-      displayName: 'Timeout',
-      name: 'timeout',
-      type: 'number',
-      default: 60000,
-      typeOptions: {
-        minValue: 1000,
-        maxValue: 180000
-      },
-      description: 'Timeout for the request in milliseconds'
-    },
-    {
-      displayName: 'Max Retries',
-      name: 'maxRetries',
-      type: 'number',
-      default: 2,
-      typeOptions: {
-        minValue: 0,
-        maxValue: 5
-      },
-      description: 'Maximum number of retries'
-    }
+    STANDARD_PARAMETERS.timeout,
+    STANDARD_PARAMETERS.maxRetries,
   ]
 };
 
@@ -249,34 +150,13 @@ const groqConfig: ChatModelConfig = {
   icon: '⚡',
   color: '#F55036',
   description: 'Groq - Ultra-fast LLM inference with Llama, Mixtral, and Gemma models',
-  models: [], // Models fetched dynamically via API
+  models: [],
   parameters: [
     STANDARD_PARAMETERS.temperature,
     STANDARD_PARAMETERS.maxTokens,
     STANDARD_PARAMETERS.topP,
-    {
-      displayName: 'Timeout',
-      name: 'timeout',
-      type: 'number',
-      default: 60000,
-      typeOptions: {
-        minValue: 1000,
-        maxValue: 180000
-      },
-      description: 'Timeout for the request in milliseconds'
-    },
-    {
-      displayName: 'Max Retries',
-      name: 'maxRetries',
-      type: 'number',
-      default: 2,
-      typeOptions: {
-        minValue: 0,
-        maxValue: 5
-      },
-      description: 'Maximum number of retries'
-    },
-    // Reasoning for Groq models (Qwen3, QwQ)
+    STANDARD_PARAMETERS.timeout,
+    STANDARD_PARAMETERS.maxRetries,
     STANDARD_PARAMETERS.thinkingEnabled,
     STANDARD_PARAMETERS.reasoningFormat
   ]
@@ -287,38 +167,83 @@ const cerebrasConfig: ChatModelConfig = {
   providerId: 'cerebras',
   displayName: 'Cerebras',
   icon: '🧬',
-  color: '#FF6600',
+  color: dracula.orange,
   description: 'Cerebras - Ultra-fast inference with Llama and Qwen models on custom AI hardware',
-  models: [], // Models fetched dynamically via API
+  models: [],
   parameters: [
     STANDARD_PARAMETERS.temperature,
     STANDARD_PARAMETERS.maxTokens,
     STANDARD_PARAMETERS.topP,
-    {
-      displayName: 'Timeout',
-      name: 'timeout',
-      type: 'number',
-      default: 60000,
-      typeOptions: {
-        minValue: 1000,
-        maxValue: 180000
-      },
-      description: 'Timeout for the request in milliseconds'
-    },
-    {
-      displayName: 'Max Retries',
-      name: 'maxRetries',
-      type: 'number',
-      default: 2,
-      typeOptions: {
-        minValue: 0,
-        maxValue: 5
-      },
-      description: 'Maximum number of retries'
-    },
-    // Thinking for Cerebras models (Qwen, Llama)
+    STANDARD_PARAMETERS.timeout,
+    STANDARD_PARAMETERS.maxRetries,
     STANDARD_PARAMETERS.thinkingEnabled,
     STANDARD_PARAMETERS.thinkingBudget
+  ]
+};
+
+// DeepSeek Chat Model Configuration
+const deepseekConfig: ChatModelConfig = {
+  providerId: 'deepseek',
+  displayName: 'DeepSeek',
+  icon: DEEPSEEK_ICON,
+  color: dracula.cyan,
+  description: 'DeepSeek V3 models with Chain-of-Thought reasoning (deepseek-chat, deepseek-reasoner)',
+  models: [],
+  parameters: [
+    {
+      ...STANDARD_PARAMETERS.temperature,
+      description: 'Controls randomness (0-2). Ignored by deepseek-reasoner.'
+    },
+    STANDARD_PARAMETERS.maxTokens,
+    STANDARD_PARAMETERS.topP,
+    STANDARD_PARAMETERS.frequencyPenalty,
+    STANDARD_PARAMETERS.presencePenalty,
+    STANDARD_PARAMETERS.timeout,
+    STANDARD_PARAMETERS.maxRetries,
+    STANDARD_PARAMETERS.thinkingEnabled,
+  ]
+};
+
+// Kimi (Moonshot AI) Chat Model Configuration
+const kimiConfig: ChatModelConfig = {
+  providerId: 'kimi',
+  displayName: 'Kimi',
+  icon: KIMI_ICON,
+  color: dracula.purple,
+  description: 'Kimi K2 models by Moonshot AI with 256K context and reasoning support',
+  models: [],
+  parameters: [
+    {
+      ...STANDARD_PARAMETERS.temperature,
+      typeOptions: { minValue: 0, maxValue: 1, numberStepSize: 0.1 },
+      description: 'Controls randomness (0-1). Fixed at 1.0 for thinking models.'
+    },
+    STANDARD_PARAMETERS.maxTokens,
+    STANDARD_PARAMETERS.topP,
+    STANDARD_PARAMETERS.timeout,
+    STANDARD_PARAMETERS.maxRetries,
+    STANDARD_PARAMETERS.thinkingEnabled,
+  ]
+};
+
+// Mistral AI Chat Model Configuration
+const mistralConfig: ChatModelConfig = {
+  providerId: 'mistral',
+  displayName: 'Mistral',
+  icon: MISTRAL_ICON,
+  color: dracula.orange,
+  description: 'Mistral AI models for reasoning, coding, and multilingual tasks',
+  models: [],
+  parameters: [
+    {
+      ...STANDARD_PARAMETERS.temperature,
+      typeOptions: { minValue: 0, maxValue: 1, numberStepSize: 0.1 },
+      description: 'Controls randomness (0-1)'
+    },
+    STANDARD_PARAMETERS.maxTokens,
+    STANDARD_PARAMETERS.topP,
+    STANDARD_PARAMETERS.timeout,
+    STANDARD_PARAMETERS.maxRetries,
   ]
 };
 
@@ -332,9 +257,20 @@ export const aiModelNodes: Record<string, INodeTypeDescription> = {
   geminiChatModel: createBaseChatModel(geminiConfig),
   openrouterChatModel: createBaseChatModel(openrouterConfig),
   groqChatModel: createBaseChatModel(groqConfig),
-  cerebrasChatModel: createBaseChatModel(cerebrasConfig)
+  cerebrasChatModel: createBaseChatModel(cerebrasConfig),
+  deepseekChatModel: createBaseChatModel(deepseekConfig),
+  kimiChatModel: createBaseChatModel(kimiConfig),
+  mistralChatModel: createBaseChatModel(mistralConfig),
 };
 
-// Export configurations and factory for external use
-export { openaiConfig, claudeConfig, geminiConfig, openrouterConfig, groqConfig, cerebrasConfig, createBaseChatModel };
+// Node type names for external reference (Dashboard, SquareNode, etc.)
+export const AI_CHAT_MODEL_TYPES = Object.keys(aiModelNodes);
 
+// Map node type -> provider ID for icon/credential lookup
+const ALL_CONFIGS = [openaiConfig, claudeConfig, geminiConfig, openrouterConfig, groqConfig, cerebrasConfig, deepseekConfig, kimiConfig, mistralConfig];
+export const AI_MODEL_PROVIDER_MAP: Record<string, string> = Object.fromEntries(
+  ALL_CONFIGS.map(c => [`${c.providerId}ChatModel`, c.providerId])
+);
+
+// Export configurations and factory for external use
+export { openaiConfig, claudeConfig, geminiConfig, openrouterConfig, groqConfig, cerebrasConfig, deepseekConfig, kimiConfig, mistralConfig, createBaseChatModel };

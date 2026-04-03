@@ -17,6 +17,9 @@ AI_CHAT_MODEL_TYPES: FrozenSet[str] = frozenset([
     'openrouterChatModel',
     'groqChatModel',
     'cerebrasChatModel',
+    'deepseekChatModel',
+    'kimiChatModel',
+    'mistralChatModel',
 ])
 
 AI_AGENT_TYPES: FrozenSet[str] = frozenset([
@@ -322,6 +325,12 @@ def detect_ai_provider(node_type: str, parameters: dict = None) -> str:
     # AI Agent types get provider from parameters
     if node_type in AI_AGENT_TYPES:
         return (parameters or {}).get('provider', 'openai')
+    elif 'deepseek' in node_type.lower():
+        return 'deepseek'
+    elif 'kimi' in node_type.lower():
+        return 'kimi'
+    elif 'mistral' in node_type.lower():
+        return 'mistral'
     elif 'cerebras' in node_type.lower():
         return 'cerebras'
     elif 'groq' in node_type.lower():

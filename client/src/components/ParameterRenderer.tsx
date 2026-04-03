@@ -13,19 +13,18 @@ import { useWebSocket } from '../contexts/WebSocketContext';
 import { useApiKeys } from '../hooks/useApiKeys';
 
 // Map node types to provider keys for AI model nodes
+import { AI_MODEL_PROVIDER_MAP } from '../nodeDefinitions/aiModelNodes';
+
+// Map node types to provider keys for AI model nodes
+// Uses the centralized map from aiModelNodes + legacy aliases
 const NODE_TYPE_TO_PROVIDER: Record<string, string> = {
-  'openaiChatModel': 'openai',
-  'anthropicChatModel': 'anthropic',
+  ...AI_MODEL_PROVIDER_MAP,
+  // Legacy aliases for backward compatibility
   'claudeChatModel': 'anthropic',
   'googleChatModel': 'gemini',
-  'geminiChatModel': 'gemini',
   'azureChatModel': 'azure_openai',
   'cohereChatModel': 'cohere',
   'ollamaChatModel': 'ollama',
-  'mistralChatModel': 'mistral',
-  'openrouterChatModel': 'openrouter',
-  'groqChatModel': 'groq',
-  'cerebrasChatModel': 'cerebras'
 };
 
 // Collection Renderer - n8n official style

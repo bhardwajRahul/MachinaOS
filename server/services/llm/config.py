@@ -28,6 +28,7 @@ class ProviderConfig:
     api_key_header: str  # e.g. "Authorization", "x-api-key"
     api_key_format: str = "Bearer {key}"  # how the header value is built
     extra_headers: Dict[str, str] = field(default_factory=dict)
+    base_url: str = ""  # OpenAI-compatible base URL (e.g. "https://api.deepseek.com")
 
 
 # ---------------------------------------------------------------------------
@@ -54,53 +55,41 @@ def reload_defaults() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Provider registry -- built from llm_defaults.json
+# Provider-specific auth overrides (most providers use Bearer auth)
 # ---------------------------------------------------------------------------
 
-PROVIDER_CONFIGS: Dict[str, ProviderConfig] = {
-    "openai": ProviderConfig(
-        name="openai",
-        default_model=LLM_DEFAULTS.get("providers", {}).get("openai", {}).get("default_model", "gpt-5.2"),
-        detection_patterns=("gpt", "openai", "o1", "o3", "o4"),
-        models_endpoint="https://api.openai.com/v1/models",
-        api_key_header="Authorization",
-        api_key_format="Bearer {key}",
-    ),
-    "anthropic": ProviderConfig(
-        name="anthropic",
-        default_model=LLM_DEFAULTS.get("providers", {}).get("anthropic", {}).get("default_model", "claude-sonnet-4-6"),
-        detection_patterns=("claude", "anthropic"),
-        models_endpoint="https://api.anthropic.com/v1/models",
-        api_key_header="x-api-key",
-        api_key_format="{key}",
-        extra_headers={"anthropic-version": "2023-06-01"},
-    ),
-    "gemini": ProviderConfig(
-        name="gemini",
-        default_model=LLM_DEFAULTS.get("providers", {}).get("gemini", {}).get("default_model", "gemini-2.5-flash"),
-        detection_patterns=("gemini", "google"),
-        models_endpoint="https://generativelanguage.googleapis.com/v1beta/models",
-        api_key_header="",  # API key in URL query param for Gemini
-        api_key_format="",
-    ),
-    "openrouter": ProviderConfig(
-        name="openrouter",
-        default_model=LLM_DEFAULTS.get("providers", {}).get("openrouter", {}).get("default_model", "anthropic/claude-sonnet-4.6"),
-        detection_patterns=("openrouter",),
-        models_endpoint="https://openrouter.ai/api/v1/models",
-        api_key_header="Authorization",
-        api_key_format="Bearer {key}",
-        extra_headers={"HTTP-Referer": "http://localhost:3000", "X-Title": "MachinaOS"},
-    ),
-    "xai": ProviderConfig(
-        name="xai",
-        default_model=LLM_DEFAULTS.get("providers", {}).get("xai", {}).get("default_model", "grok-3"),
-        detection_patterns=("grok", "xai"),
-        models_endpoint="https://api.x.ai/v1/models",
-        api_key_header="Authorization",
-        api_key_format="Bearer {key}",
-    ),
+_AUTH_OVERRIDES: Dict[str, Dict[str, str]] = {
+    "anthropic": {"api_key_header": "x-api-key", "api_key_format": "{key}"},
+    "gemini": {"api_key_header": "", "api_key_format": ""},  # API key in URL query param
 }
+
+
+# ---------------------------------------------------------------------------
+# Provider registry -- built dynamically from llm_defaults.json
+# ---------------------------------------------------------------------------
+
+def _build_provider_configs() -> Dict[str, ProviderConfig]:
+    """Build ProviderConfig entries from llm_defaults.json."""
+    providers = LLM_DEFAULTS.get("providers", {})
+    configs: Dict[str, ProviderConfig] = {}
+
+    for name, prov in providers.items():
+        auth = _AUTH_OVERRIDES.get(name, {})
+        configs[name] = ProviderConfig(
+            name=name,
+            default_model=prov.get("default_model", ""),
+            detection_patterns=tuple(prov.get("detection_patterns", [name])),
+            models_endpoint=prov.get("models_endpoint", ""),
+            api_key_header=auth.get("api_key_header", "Authorization"),
+            api_key_format=auth.get("api_key_format", "Bearer {key}"),
+            extra_headers=prov.get("extra_headers", {}),
+            base_url=prov.get("base_url", ""),
+        )
+
+    return configs
+
+
+PROVIDER_CONFIGS: Dict[str, ProviderConfig] = _build_provider_configs()
 
 
 def get_provider_config(provider: str) -> Optional[ProviderConfig]:

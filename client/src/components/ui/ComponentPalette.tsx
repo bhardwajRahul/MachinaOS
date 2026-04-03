@@ -292,6 +292,8 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
                                 dangerouslySetInnerHTML={{ __html: config.icon.svg }}
                                 style={{ width: '16px', height: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                               />
+                            ) : typeof config.icon === 'string' && (config.icon.startsWith('data:') || config.icon.startsWith('http')) ? (
+                              <img src={config.icon} alt="" style={{ width: '16px', height: '16px', objectFit: 'contain' }} />
                             ) : (
                               config.icon
                             )}

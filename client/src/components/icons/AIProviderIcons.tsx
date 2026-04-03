@@ -1,6 +1,7 @@
 // AI Provider Icons - Using @lobehub/icons for official brand logos
 import React from 'react';
-import { OpenAI, Claude, Gemini, Groq, OpenRouter, Cerebras } from '@lobehub/icons';
+import { OpenAI, Claude, Gemini, Groq, OpenRouter, Cerebras, DeepSeek, Kimi, Mistral } from '@lobehub/icons';
+import { dracula, solarized } from '../../styles/theme';
 
 // Icon size constant for consistency
 const ICON_SIZE = 28;
@@ -34,6 +35,18 @@ export const CerebrasIcon: React.FC<{ size?: number }> = ({ size = ICON_SIZE }) 
   <Cerebras.Color size={size} />
 );
 
+export const DeepSeekIcon: React.FC<{ size?: number }> = ({ size = ICON_SIZE }) => (
+  <DeepSeek.Color size={size} />
+);
+
+export const KimiIcon: React.FC<{ size?: number }> = ({ size = ICON_SIZE }) => (
+  <Kimi.Color size={size} />
+);
+
+export const MistralIcon: React.FC<{ size?: number }> = ({ size = ICON_SIZE }) => (
+  <Mistral.Color size={size} />
+);
+
 // Map provider IDs to their icon components
 export const AI_PROVIDER_ICONS: Record<string, React.FC<{ size?: number }>> = {
   openai: OpenAIIcon,
@@ -42,16 +55,23 @@ export const AI_PROVIDER_ICONS: Record<string, React.FC<{ size?: number }>> = {
   groq: GroqIcon,
   openrouter: OpenRouterIcon,
   cerebras: CerebrasIcon,
+  deepseek: DeepSeekIcon,
+  kimi: KimiIcon,
+  mistral: MistralIcon,
 };
 
-// Centralized provider metadata (icon, brand color, display label)
+// Centralized provider metadata (icon, theme color, display label)
+// Colors use dracula/solarized palette for consistency with the rest of the UI
 export const AI_PROVIDER_META: Record<string, { Icon: React.FC<{ size?: number }>; color: string; label: string }> = {
-  openai:     { Icon: OpenAIIcon,     color: '#10a37f', label: 'OpenAI' },
-  anthropic:  { Icon: ClaudeIcon,     color: '#d97706', label: 'Anthropic' },
-  gemini:     { Icon: GeminiIcon,     color: '#4285f4', label: 'Gemini' },
-  groq:       { Icon: GroqIcon,       color: '#F55036', label: 'Groq' },
-  cerebras:   { Icon: CerebrasIcon,   color: '#FF6600', label: 'Cerebras' },
-  openrouter: { Icon: OpenRouterIcon, color: '#6366f1', label: 'OpenRouter' },
+  openai:     { Icon: OpenAIIcon,     color: dracula.green,      label: 'OpenAI' },
+  anthropic:  { Icon: ClaudeIcon,     color: dracula.orange,     label: 'Anthropic' },
+  gemini:     { Icon: GeminiIcon,     color: solarized.blue,     label: 'Gemini' },
+  groq:       { Icon: GroqIcon,       color: dracula.red,        label: 'Groq' },
+  cerebras:   { Icon: CerebrasIcon,   color: dracula.orange,     label: 'Cerebras' },
+  openrouter: { Icon: OpenRouterIcon, color: solarized.violet,   label: 'OpenRouter' },
+  deepseek:   { Icon: DeepSeekIcon,   color: dracula.cyan,       label: 'DeepSeek' },
+  kimi:       { Icon: KimiIcon,       color: dracula.purple,     label: 'Kimi' },
+  mistral:    { Icon: MistralIcon,    color: dracula.pink,       label: 'Mistral' },
 };
 
 // Get icon component by provider ID

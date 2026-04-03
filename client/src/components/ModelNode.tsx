@@ -41,6 +41,9 @@ const ModelNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectabl
     }
 
     // Fallback: extract provider from node type
+    if (type?.includes('deepseek')) return 'deepseek';
+    if (type?.includes('kimi')) return 'kimi';
+    if (type?.includes('mistral')) return 'mistral';
     if (type?.includes('cerebras')) return 'cerebras';
     if (type?.includes('groq')) return 'groq';
     if (type?.includes('openrouter')) return 'openrouter';
@@ -50,7 +53,6 @@ const ModelNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectabl
     if (type?.includes('azure')) return 'azure_openai';
     if (type?.includes('cohere')) return 'cohere';
     if (type?.includes('ollama')) return 'ollama';
-    if (type?.includes('mistral')) return 'mistral';
 
     return '';
   }, [type, definition?.credentials]);
@@ -102,7 +104,6 @@ const ModelNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectabl
     if (type?.includes('azure')) return <span>☁️</span>;
     if (type?.includes('cohere')) return <span>🌊</span>;
     if (type?.includes('ollama')) return <span>🦙</span>;
-    if (type?.includes('mistral')) return <span>🌪️</span>;
 
     return <span>AI</span>;
   };

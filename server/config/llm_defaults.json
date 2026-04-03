@@ -1,12 +1,16 @@
 {
-  "version": "2026.03",
-  "last_updated": "2026-03-10",
-  "_description": "3 latest + 2 popular models for OpenAI/Anthropic/Gemini, full support for Groq/Cerebras. Auto-enriched by model_registry.json (OpenRouter cache).",
+  "version": "2026.04",
+  "last_updated": "2026-04-03",
+  "_description": "LLM provider defaults. Connection config (base_url, models_endpoint) drives both native SDK and LangChain paths. Model specs auto-enriched by model_registry.json (OpenRouter cache).",
 
   "providers": {
     "openai": {
       "default_model": "gpt-5.4",
       "detection_patterns": ["gpt", "openai", "o1", "o3", "o4"],
+      "base_url": "https://api.openai.com/v1",
+      "models_endpoint": "https://api.openai.com/v1/models",
+      "api_key_param": "openai_api_key",
+      "max_tokens_param": "max_tokens",
       "max_output_tokens": {
         "gpt-5.4": 128000,
         "gpt-5.3-chat": 16384,
@@ -31,6 +35,10 @@
     "anthropic": {
       "default_model": "claude-sonnet-4-6",
       "detection_patterns": ["claude", "anthropic"],
+      "base_url": "https://api.anthropic.com/v1",
+      "models_endpoint": "https://api.anthropic.com/v1/models",
+      "api_key_param": "anthropic_api_key",
+      "max_tokens_param": "max_tokens",
       "max_output_tokens": {
         "claude-opus-4-6": 128000,
         "claude-sonnet-4-6": 128000,
@@ -53,6 +61,10 @@
     "gemini": {
       "default_model": "gemini-2.5-flash",
       "detection_patterns": ["gemini", "google"],
+      "base_url": "https://generativelanguage.googleapis.com/v1beta",
+      "models_endpoint": "https://generativelanguage.googleapis.com/v1beta/models",
+      "api_key_param": "google_api_key",
+      "max_tokens_param": "max_output_tokens",
       "max_output_tokens": {
         "gemini-3.1-pro-preview": 65536,
         "gemini-3-flash-preview": 65536,
@@ -76,6 +88,11 @@
     "openrouter": {
       "default_model": "anthropic/claude-sonnet-4.6",
       "detection_patterns": ["openrouter"],
+      "base_url": "https://openrouter.ai/api/v1",
+      "models_endpoint": "https://openrouter.ai/api/v1/models",
+      "api_key_param": "api_key",
+      "max_tokens_param": "max_tokens",
+      "extra_headers": {"HTTP-Referer": "http://localhost:3000", "X-Title": "MachinaOS"},
       "max_output_tokens": {
         "_default": 4096
       },
@@ -87,14 +104,16 @@
     "groq": {
       "default_model": "llama-4-scout",
       "detection_patterns": ["groq"],
+      "base_url": "https://api.groq.com/openai/v1",
+      "models_endpoint": "https://api.groq.com/openai/v1/models",
+      "api_key_param": "api_key",
+      "max_tokens_param": "max_tokens",
       "max_output_tokens": {
         "llama-4-scout": 8192,
         "llama-4-maverick": 16384,
         "llama-3.3-70b": 32768,
         "llama-3.1-8b": 131072,
         "qwen3-32b": 40960,
-        "gpt-oss-120b": 65536,
-        "gpt-oss-20b": 65536,
         "_default": 8192
       },
       "context_length": {
@@ -103,8 +122,6 @@
         "llama-3.3-70b": 131072,
         "llama-3.1-8b": 131072,
         "qwen3-32b": 131072,
-        "gpt-oss-120b": 131072,
-        "gpt-oss-20b": 131072,
         "_default": 131072
       },
       "thinking_models": ["qwen3"],
@@ -112,23 +129,113 @@
       "temperature_range": [0.0, 2.0]
     },
     "cerebras": {
-      "default_model": "qwen-3-235b",
-      "detection_patterns": ["cerebras", "llama3.1", "gpt-oss", "qwen-3-235b"],
+      "default_model": "llama3.1-8b",
+      "detection_patterns": ["cerebras", "llama3.1", "qwen-3-235b"],
+      "base_url": "https://api.cerebras.ai/v1",
+      "models_endpoint": "https://api.cerebras.ai/v1/models",
+      "api_key_param": "api_key",
+      "max_tokens_param": "max_tokens",
       "max_output_tokens": {
         "qwen-3-235b": 8192,
-        "gpt-oss-120b": 8192,
         "llama3.1-8b": 8192,
         "_default": 8192
       },
       "context_length": {
         "qwen-3-235b": 32768,
-        "gpt-oss-120b": 131072,
         "llama3.1-8b": 128000,
         "_default": 128000
       },
       "thinking_models": ["qwen-3-235b"],
       "thinking_type": "budget",
       "temperature_range": [0.0, 1.5]
+    },
+    "xai": {
+      "default_model": "grok-3",
+      "detection_patterns": ["grok", "xai"],
+      "base_url": "https://api.x.ai/v1",
+      "models_endpoint": "https://api.x.ai/v1/models",
+      "api_key_param": "api_key",
+      "max_tokens_param": "max_tokens",
+      "max_output_tokens": {
+        "grok-3": 131072,
+        "_default": 8192
+      },
+      "context_length": {
+        "grok-3": 131072,
+        "_default": 131072
+      },
+      "temperature_range": [0.0, 2.0]
+    },
+    "deepseek": {
+      "default_model": "deepseek-chat",
+      "detection_patterns": ["deepseek"],
+      "base_url": "https://api.deepseek.com",
+      "models_endpoint": "https://api.deepseek.com/models",
+      "api_key_param": "api_key",
+      "max_tokens_param": "max_tokens",
+      "max_output_tokens": {
+        "deepseek-chat": 8192,
+        "deepseek-reasoner": 65536,
+        "_default": 8192
+      },
+      "context_length": {
+        "deepseek-chat": 131072,
+        "deepseek-reasoner": 131072,
+        "_default": 131072
+      },
+      "thinking_models": ["deepseek-reasoner", "deepseek-chat"],
+      "thinking_type": "enabled",
+      "temperature_range": [0.0, 2.0]
+    },
+    "kimi": {
+      "default_model": "kimi-k2.5",
+      "detection_patterns": ["kimi", "moonshot"],
+      "base_url": "https://api.moonshot.ai/v1",
+      "models_endpoint": "https://api.moonshot.ai/v1/models",
+      "api_key_param": "api_key",
+      "max_tokens_param": "max_tokens",
+      "max_output_tokens": {
+        "kimi-k2.5": 98304,
+        "kimi-k2-thinking": 98304,
+        "moonshot-v1-8k": 8192,
+        "moonshot-v1-32k": 32768,
+        "moonshot-v1-128k": 131072,
+        "_default": 8192
+      },
+      "context_length": {
+        "kimi-k2.5": 262144,
+        "kimi-k2-thinking": 262144,
+        "moonshot-v1-8k": 8192,
+        "moonshot-v1-32k": 32768,
+        "moonshot-v1-128k": 131072,
+        "_default": 262144
+      },
+      "thinking_models": ["kimi-k2.5", "kimi-k2-thinking"],
+      "thinking_type": "enabled",
+      "temperature_range": [0.0, 1.0]
+    },
+    "mistral": {
+      "default_model": "mistral-large-latest",
+      "detection_patterns": ["mistral", "codestral"],
+      "base_url": "https://api.mistral.ai/v1",
+      "models_endpoint": "https://api.mistral.ai/v1/models",
+      "api_key_param": "api_key",
+      "max_tokens_param": "max_tokens",
+      "max_output_tokens": {
+        "mistral-large-latest": 131072,
+        "mistral-small-latest": 32768,
+        "codestral-latest": 32768,
+        "open-mistral-nemo": 131072,
+        "_default": 8192
+      },
+      "context_length": {
+        "mistral-large-latest": 262144,
+        "mistral-small-latest": 32768,
+        "codestral-latest": 262144,
+        "open-mistral-nemo": 131072,
+        "_default": 131072
+      },
+      "temperature_range": [0.0, 1.0]
     }
   }
 }

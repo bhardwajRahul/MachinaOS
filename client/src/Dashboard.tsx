@@ -37,6 +37,7 @@ import { APIFY_NODE_TYPES } from './nodeDefinitions/apifyNodes';
 import { GOOGLE_WORKSPACE_NODE_TYPES } from './nodeDefinitions/googleWorkspaceNodes';
 import { PROXY_NODE_TYPES } from './nodeDefinitions/proxyNodes';
 import { CRAWLEE_NODE_TYPES } from './nodeDefinitions/crawleeNodes';
+import { AI_CHAT_MODEL_TYPES } from './nodeDefinitions/aiModelNodes';
 import ParameterPanel from './ParameterPanel';
 import LocationParameterPanel from './components/LocationParameterPanel';
 import { useAppStore } from './store/useAppStore';
@@ -86,7 +87,7 @@ const createNodeTypes = (): Record<string, React.ComponentType<any>> => {
     // Trigger nodes - no input connections (start workflows)
     if (TRIGGER_NODE_TYPES.includes(type)) {
       types[type] = TriggerNode;
-    } else if (type === 'openaiChatModel' || type === 'anthropicChatModel' || type === 'geminiChatModel' || type === 'openrouterChatModel' || type === 'groqChatModel' || type === 'cerebrasChatModel') {
+    } else if (AI_CHAT_MODEL_TYPES.includes(type)) {
       // AI chat model nodes use square design
       types[type] = SquareNode;
     } else if (type === 'aiAgent' || type === 'chatAgent') {

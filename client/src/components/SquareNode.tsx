@@ -9,6 +9,7 @@ import { useWebSocket, useWhatsAppStatus } from '../contexts/WebSocketContext';
 import { useApiKeys } from '../hooks/useApiKeys';
 import { getAIProviderIcon } from './icons/AIProviderIcons';
 import { PlayCircleFilled, ScheduleOutlined } from '@ant-design/icons';
+import { AI_MODEL_PROVIDER_MAP } from '../nodeDefinitions/aiModelNodes';
 
 // Android service nodes that can connect to Android Toolkit as tools
 const ANDROID_TOOL_CAPABLE_NODES = ANDROID_SERVICE_NODE_TYPES;
@@ -28,15 +29,8 @@ const WHATSAPP_NODE_TYPES = ['whatsappSend', 'whatsappReceive', 'whatsappDb'];
 // Nodes that should not have output handles (input-only nodes)
 const NO_OUTPUT_NODE_TYPES = ['console'];
 
-// AI Model node types with their provider IDs
-const AI_MODEL_NODE_TYPES: Record<string, string> = {
-  'openaiChatModel': 'openai',
-  'anthropicChatModel': 'anthropic',
-  'geminiChatModel': 'gemini',
-  'openrouterChatModel': 'openrouter',
-  'groqChatModel': 'groq',
-  'cerebrasChatModel': 'cerebras',
-};
+// AI Model node types with their provider IDs (derived from aiModelNodes registry)
+const AI_MODEL_NODE_TYPES = AI_MODEL_PROVIDER_MAP;
 
 const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectable, selected }) => {
   const theme = useAppTheme();

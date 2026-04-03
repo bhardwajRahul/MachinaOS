@@ -171,6 +171,8 @@ class ProviderConfig:
     default_model: str  # Default model when none specified
     models_endpoint: str  # API endpoint to fetch models
     models_header_fn: Callable[[str], dict]  # Function to create headers
+    base_url: str = ''  # Custom base URL for OpenAI-compatible providers
+    extra_headers: Optional[Dict[str, str]] = None  # Default headers for API calls
 
 
 @dataclass
@@ -219,6 +221,24 @@ def _cerebras_headers(api_key: str) -> dict:
     return {'Authorization': f'Bearer {api_key}'}
 
 
+def _bearer_headers(api_key: str) -> dict:
+    """Generic Bearer auth headers for OpenAI-compatible providers."""
+    return {'Authorization': f'Bearer {api_key}'}
+
+
+# Map of provider -> (model_class, header_fn) for providers with custom LangChain classes.
+# Providers NOT in this map use ChatOpenAI + _bearer_headers (OpenAI-compatible).
+_PROVIDER_CLASS_MAP: Dict[str, tuple] = {
+    'openai': (ChatOpenAI, _openai_headers),
+    'anthropic': (ChatAnthropic, _anthropic_headers),
+    'gemini': (None, _gemini_headers),  # Lazy-loaded via _get_google_genai_class()
+    'openrouter': (ChatOpenAI, _openrouter_headers),
+    'groq': (ChatGroq, _groq_headers),
+}
+if CEREBRAS_AVAILABLE:
+    _PROVIDER_CLASS_MAP['cerebras'] = (ChatCerebras, _cerebras_headers)
+
+
 # =============================================================================
 # LLM DEFAULTS CONFIGURATION - Load from config/llm_defaults.json
 # =============================================================================
@@ -245,9 +265,10 @@ def _get_default_model(provider: str, fallback: str) -> str:
 
 
 def _resolve_max_tokens(flattened: dict, model: str, provider: str) -> int:
-    """Resolve max_tokens: user param -> model registry -> llm_defaults -> 4096.
+    """Resolve max_tokens: user param (clamped to model max) -> provider default -> 4096.
 
-    Clamps to model's actual maximum if user value exceeds it.
+    When user sets max_tokens explicitly, clamp to model's actual maximum.
+    When user doesn't set it, use the provider's default from llm_defaults.json.
     """
     from services.model_registry import get_model_registry
     registry = get_model_registry()
@@ -260,7 +281,10 @@ def _resolve_max_tokens(flattened: dict, model: str, provider: str) -> int:
             logger.info(f"[AI] Clamping max_tokens from {user_int} to {model_max} for {provider}/{model}")
             return model_max
         return user_int
-    return model_max
+
+    # No user value: use provider default from llm_defaults.json, not model's max capacity
+    provider_default = registry._get_default_max_output_tokens(provider, "_no_match_")
+    return min(provider_default, model_max)
 
 
 def _resolve_temperature(flattened: dict, model: str, provider: str, thinking_enabled: bool) -> float:
@@ -293,75 +317,37 @@ def _resolve_temperature(flattened: dict, model: str, provider: str, thinking_en
     return max(temp_range[0], min(temp_range[1], user_temp))
 
 
-# Provider configurations - defaults from config/llm_defaults.json
-PROVIDER_CONFIGS: Dict[str, ProviderConfig] = {
-    'openai': ProviderConfig(
-        name='openai',
-        model_class=ChatOpenAI,
-        api_key_param='openai_api_key',
-        max_tokens_param='max_tokens',
-        detection_patterns=('gpt', 'openai', 'o1', 'o3', 'o4'),
-        default_model=_get_default_model('openai', 'gpt-5.2'),
-        models_endpoint='https://api.openai.com/v1/models',
-        models_header_fn=_openai_headers
-    ),
-    'anthropic': ProviderConfig(
-        name='anthropic',
-        model_class=ChatAnthropic,
-        api_key_param='anthropic_api_key',
-        max_tokens_param='max_tokens',
-        detection_patterns=('claude', 'anthropic'),
-        default_model=_get_default_model('anthropic', 'claude-opus-4-6'),
-        models_endpoint='https://api.anthropic.com/v1/models',
-        models_header_fn=_anthropic_headers
-    ),
-    'gemini': ProviderConfig(
-        name='gemini',
-        model_class=None,  # Lazy: resolved via _get_google_genai_class() to avoid import hang on Windows
-        api_key_param='google_api_key',
-        max_tokens_param='max_output_tokens',
-        detection_patterns=('gemini', 'google'),
-        default_model=_get_default_model('gemini', 'gemini-2.5-flash'),
-        models_endpoint='https://generativelanguage.googleapis.com/v1beta/models',
-        models_header_fn=_gemini_headers
-    ),
-    'openrouter': ProviderConfig(
-        name='openrouter',
-        model_class=ChatOpenAI,
-        api_key_param='api_key',
-        max_tokens_param='max_tokens',
-        detection_patterns=('openrouter',),
-        default_model=_get_default_model('openrouter', 'anthropic/claude-opus-4.6'),
-        models_endpoint='https://openrouter.ai/api/v1/models',
-        models_header_fn=_openrouter_headers
-    ),
-    'groq': ProviderConfig(
-        name='groq',
-        model_class=ChatGroq,
-        api_key_param='api_key',
-        max_tokens_param='max_tokens',
-        detection_patterns=('groq',),
-        default_model=_get_default_model('groq', 'llama-4-scout'),
-        models_endpoint='https://api.groq.com/openai/v1/models',
-        models_header_fn=_groq_headers
-    ),
-}
+# Provider configurations - built from config/llm_defaults.json
+# Custom model_class/header_fn from _PROVIDER_CLASS_MAP; everything else from JSON.
+def _build_provider_configs() -> Dict[str, ProviderConfig]:
+    """Build PROVIDER_CONFIGS from llm_defaults.json + _PROVIDER_CLASS_MAP."""
+    providers = _LLM_DEFAULTS.get("providers", {})
+    configs: Dict[str, ProviderConfig] = {}
 
-# Add Cerebras only if available (requires Python <3.13)
-if CEREBRAS_AVAILABLE:
-    PROVIDER_CONFIGS['cerebras'] = ProviderConfig(
-        name='cerebras',
-        model_class=ChatCerebras,
-        api_key_param='api_key',
-        max_tokens_param='max_tokens',
-        detection_patterns=('cerebras', 'llama3.1', 'llama-3.3', 'qwen-3', 'qwen3', 'gpt-oss'),
-        default_model=_get_default_model('cerebras', 'llama3.1-8b'),
-        models_endpoint='https://api.cerebras.ai/v1/models',
-        models_header_fn=_cerebras_headers
-    )
-    logger.info("Cerebras provider enabled")
-else:
-    logger.warning(f"Cerebras provider not available: {CEREBRAS_IMPORT_ERROR or 'langchain-cerebras import failed'}")
+    for name, prov in providers.items():
+        # Skip cerebras if not available
+        if name == 'cerebras' and not CEREBRAS_AVAILABLE:
+            logger.warning(f"Cerebras provider not available: {CEREBRAS_IMPORT_ERROR or 'langchain-cerebras import failed'}")
+            continue
+
+        model_class, header_fn = _PROVIDER_CLASS_MAP.get(name, (ChatOpenAI, _bearer_headers))
+        configs[name] = ProviderConfig(
+            name=name,
+            model_class=model_class,
+            api_key_param=prov.get('api_key_param', 'api_key'),
+            max_tokens_param=prov.get('max_tokens_param', 'max_tokens'),
+            detection_patterns=tuple(prov.get('detection_patterns', [name])),
+            default_model=prov.get('default_model', ''),
+            models_endpoint=prov.get('models_endpoint', ''),
+            models_header_fn=header_fn,
+            base_url=prov.get('base_url', ''),
+            extra_headers=prov.get('extra_headers'),
+        )
+
+    return configs
+
+
+PROVIDER_CONFIGS: Dict[str, ProviderConfig] = _build_provider_configs()
 
 
 def detect_provider_from_model(model: str) -> str:
@@ -375,6 +361,9 @@ def detect_provider_from_model(model: str) -> str:
 
 def is_model_valid_for_provider(model: str, provider: str) -> bool:
     """Check if model name matches the provider's patterns."""
+    # OpenRouter is a proxy supporting all models (provider/model format) - always valid
+    if provider == 'openrouter':
+        return True
     config = PROVIDER_CONFIGS.get(provider)
     if not config:
         return True
@@ -1181,6 +1170,14 @@ class AIService:
                 raise ValueError(error_msg)
             raise ValueError(f"Unsupported provider: {provider}")
 
+        # Strip [FREE] prefix if present (added by OpenRouter model list for display)
+        if model.startswith('[FREE] '):
+            model = model[7:]
+
+        # Strip owner prefix for non-OpenRouter providers (e.g. "openai/gpt-oss-120b" → "gpt-oss-120b")
+        if provider != 'openrouter' and '/' in model:
+            model = model.split('/', 1)[-1]
+
         # Build kwargs dynamically from registry config
         kwargs = {
             config.api_key_param: api_key,
@@ -1195,13 +1192,11 @@ class AIService:
             kwargs['base_url'] = proxy_url
             kwargs[config.api_key_param] = "ollama"  # Ollama-style token
             logger.info(f"[AI] Using proxy for {provider}: {proxy_url}")
-        # OpenRouter uses OpenAI-compatible API with custom base_url
-        elif provider == 'openrouter':
-            kwargs['base_url'] = 'https://openrouter.ai/api/v1'
-            kwargs['default_headers'] = {
-                'HTTP-Referer': 'http://localhost:3000',
-                'X-Title': 'MachinaOS'
-            }
+        # OpenAI-compatible providers: apply base_url from config
+        elif config.base_url and config.model_class == ChatOpenAI and provider != 'openai':
+            kwargs['base_url'] = config.base_url
+            if config.extra_headers:
+                kwargs['default_headers'] = config.extra_headers
 
         # Apply thinking/reasoning configuration using model registry
         # The registry determines thinking_type based on model metadata
@@ -1243,6 +1238,10 @@ class AIService:
                 # Groq Qwen/QwQ: reasoning_format parameter
                 format_val = thinking.format if thinking.format in ('parsed', 'hidden') else 'parsed'
                 kwargs['reasoning_format'] = format_val
+            elif thinking_type == 'enabled':
+                # DeepSeek/Kimi: toggle thinking via model_kwargs extra_body
+                kwargs.setdefault('model_kwargs', {})['extra_body'] = {"thinking": {"type": "enabled"}}
+                logger.info(f"[AI] {provider} thinking: enabled via extra_body")
             elif thinking_type == 'none':
                 logger.warning(f"[AI] Model '{model}' ({provider}) may not support thinking mode")
 
@@ -1279,19 +1278,33 @@ class AIService:
         if not config:
             raise ValueError(f"Unsupported provider: {provider}")
 
-        curated = self._get_curated_models(provider)
         endpoint = config.models_endpoint
         headers = config.models_header_fn(api_key)
+        curated = self._get_curated_models(provider)
 
-        async with httpx.AsyncClient(timeout=self.settings.ai_timeout) as client:
-            url = endpoint
-            response = await client.get(url, headers=headers)
-            response.raise_for_status()
+        try:
+            async with httpx.AsyncClient(timeout=self.settings.ai_timeout) as client:
+                response = await client.get(endpoint, headers=headers)
+                response.raise_for_status()
+                data = response.json()
 
-            if curated:
-                return curated
+            # Both Groq and Cerebras use OpenAI-compatible /v1/models format.
+            # Their API may return owner-prefixed IDs (e.g. "openai/gpt-oss-120b")
+            # but their chat API expects flat IDs (e.g. "gpt-oss-120b"), so strip prefixes.
+            raw_ids = [m["id"] for m in data.get("data", []) if m.get("id")]
+            api_models = sorted(set(
+                mid.split("/", 1)[-1] if "/" in mid else mid
+                for mid in raw_ids
+            ))
+            if api_models:
+                return api_models
+        except Exception as e:
+            logger.warning(f"[AI] Failed to fetch models from {provider} API: {e}")
 
-            return [config.default_model]
+        # Fallback to curated list from llm_defaults.json
+        if curated:
+            return curated
+        return [config.default_model]
 
     async def execute_chat(self, node_id: str, node_type: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
         """Execute AI chat model."""
@@ -1323,15 +1336,13 @@ class AIService:
                 raise ValueError("Prompt cannot be empty")
 
             # Determine provider from node_type (more reliable than model name detection)
-            # OpenRouter models have format like "openai/gpt-4o" which would incorrectly detect as openai
-            if node_type == 'openrouterChatModel':
-                provider = 'openrouter'
-            elif node_type == 'groqChatModel':
-                provider = 'groq'
-            elif node_type == 'cerebrasChatModel':
-                provider = 'cerebras'
-            else:
-                provider = self.detect_provider(model)
+            from constants import detect_ai_provider
+            provider = detect_ai_provider(node_type, flattened)
+
+            # Some APIs return owner-prefixed model IDs (e.g. "openai/gpt-oss-120b")
+            # but chat API expects flat IDs — strip prefix for non-OpenRouter providers
+            if provider != 'openrouter' and '/' in model:
+                model = model.split('/', 1)[-1]
 
             # Build thinking config from parameters
             thinking_config = None
@@ -1519,6 +1530,9 @@ class AIService:
             api_key = flattened.get('api_key') or flattened.get('apiKey')
             provider = parameters.get('provider', 'openai')
             model = parameters.get('model', '')
+            # Strip [FREE] prefix if present (added by OpenRouter model list for display)
+            if model.startswith('[FREE] '):
+                model = model[7:]
 
             logger.debug(f"[LangGraph] Agent: {provider}/{model}, tools={len(tool_data) if tool_data else 0}")
 
@@ -2014,6 +2028,9 @@ class AIService:
             api_key = flattened.get('api_key') or flattened.get('apiKey')
             provider = parameters.get('provider', 'openai')
             model = parameters.get('model', '')
+            # Strip [FREE] prefix if present (added by OpenRouter model list for display)
+            if model.startswith('[FREE] '):
+                model = model[7:]
 
             logger.debug(f"[ChatAgent] Provider: {provider}, Model: {model}")
 
