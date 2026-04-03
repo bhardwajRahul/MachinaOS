@@ -388,7 +388,7 @@ class CacheEntry(SQLModel, table=True):
 
 ## Codebase Summary
 - **Hybrid architecture**: Node.js + Python + React TypeScript
-- **93 implemented workflow nodes** with clean service separation (6 AI models + 3 AI agents/memory + 13 specialized agents + 1 skill + 4 dedicated tools + 3 search + 16 Android + 3 WhatsApp + 4 Twitter + 2 Telegram + 2 Social + 3 Location + 3 Code + 6 Utility + 6 Document + 2 Chat + 2 Scheduler + 2 Workflow + 7 Google Workspace + 1 Apify + 1 Crawlee + 3 Proxy)
+- **96 implemented workflow nodes** with clean service separation (9 AI models + 3 AI agents/memory + 13 specialized agents + 1 skill + 4 dedicated tools + 3 search + 16 Android + 3 WhatsApp + 4 Twitter + 2 Telegram + 2 Social + 3 Location + 3 Code + 6 Utility + 6 Document + 2 Chat + 2 Scheduler + 2 Workflow + 7 Google Workspace + 1 Apify + 1 Crawlee + 3 Proxy)
 - **WebSocket-First Architecture**: WebSocket as primary frontend-backend communication (125 message handlers)
 - **Recent optimizations**: REST APIs replaced with WebSocket, AI endpoints migrated to Python, Android automation integrated
 
@@ -550,13 +550,16 @@ The project uses WebSocket as the primary communication method between frontend 
 ## Implemented Node Types
 The following 92 nodes are currently implemented and functional:
 
-### AI Chat Models (6 nodes)
+### AI Chat Models (9 nodes)
 - **openaiChatModel**: OpenAI GPT models with response format options. O-series models (o1, o3, o4) support reasoning effort parameter.
 - **anthropicChatModel**: Claude models with extended thinking support (budget_tokens for claude-3-5-sonnet, claude-3-opus)
 - **geminiChatModel**: Google Gemini models with multimodal capabilities, safety settings, and thinking support for 2.5/Flash Thinking models
 - **openrouterChatModel**: OpenRouter unified API - access 200+ models from OpenAI, Anthropic, Google, Meta, Mistral, and more through a single API. Features free/paid model grouping in dropdown.
 - **groqChatModel**: Groq ultra-fast inference with Llama, Qwen3, and GPT-OSS models. Qwen3-32b supports reasoning_format.
 - **cerebrasChatModel**: Cerebras ultra-fast inference on custom AI hardware with Llama and Qwen models
+- **deepseekChatModel**: DeepSeek V3 models (deepseek-chat, deepseek-reasoner). Reasoner has always-on Chain-of-Thought with reasoning_content in response. 128K context, up to 64K output.
+- **kimiChatModel**: Kimi K2 models by Moonshot AI (kimi-k2.5, kimi-k2-thinking). 256K context, 96K output. Thinking on by default for k2.5 (explicitly disabled for LangGraph agent compatibility). Fixed temperature: 0.6 (instant) / 1.0 (thinking).
+- **mistralChatModel**: Mistral AI models (mistral-large-latest, mistral-small-latest, codestral-latest). Up to 256K context. No thinking support. Temperature 0-1.5.
 
 ### AI Agents & Memory (3 nodes)
 - **aiAgent**: Advanced AI agent with tool calling, memory input handle, and iterative reasoning. Uses LangGraph for structured execution. Parameters: Provider, Model, Prompt, System Message, Options.
@@ -1747,13 +1750,14 @@ deploy_workflow() -> Sets up triggers, returns immediately
 - **Execution Engine**: Routes AI nodes to Python Flask backend with auto-injection of API keys
 
 #### Supported AI Providers & Models
-4 providers are available for aiAgent, chatAgent (Zeenie), and all specialized agents: OpenAI, Anthropic, Google (Gemini), OpenRouter. Groq and Cerebras are available as standalone chat model nodes only (groqChatModel, cerebrasChatModel). Model parameters (max output, context length, thinking type, temperature range) are managed by `ModelRegistryService` (`server/services/model_registry.py`) which fetches from OpenRouter and falls back to `server/config/llm_defaults.json`.
+7 providers are available for aiAgent, chatAgent (Zeenie), and all specialized agents: OpenAI, Anthropic, Google (Gemini), DeepSeek, Kimi (Moonshot), Mistral, OpenRouter. Groq and Cerebras are available as standalone chat model nodes only. Model parameters (max output, context length, thinking type, temperature range) are managed by `ModelRegistryService` (`server/services/model_registry.py`) which fetches from OpenRouter and falls back to `server/config/llm_defaults.json`.
 
 **Dual-path execution architecture:**
-- **Native SDK path** (`execute_chat()`, `fetch_models()`): OpenAI, Anthropic, Gemini, OpenRouter, xAI use native Python SDKs via `services/llm/` layer. Factory: `create_provider(name, api_key)` with lazy imports.
+- **Native SDK path** (`execute_chat()`, `fetch_models()`): OpenAI, Anthropic, Gemini, OpenRouter, xAI, DeepSeek, Kimi, Mistral use the `openai` Python SDK via `services/llm/` layer with config-driven `base_url`. Factory: `create_provider(name, api_key)` with lazy imports.
+- **LangChain agent path** (`execute_agent()`, `execute_chat_agent()`): All providers use `ChatOpenAI` with `base_url` from `llm_defaults.json` + LangGraph for tool calling. OpenAI-compatible providers (DeepSeek, Kimi, Mistral) pass `max_tokens` via `extra_body` to bypass LangChain's `max_completion_tokens` conversion.
 - **LangChain fallback** (`execute_chat()`): Groq, Cerebras still use LangChain `create_model()` + `chat_model.invoke()`.
-- **Agent execution** (`execute_agent()`, `execute_chat_agent()`): All providers use LangChain + LangGraph for tool calling and agent orchestration.
 - Native types aliased in ai.py: `NativeMessage`, `NativeThinkingConfig`, `LLMResponse` to avoid naming conflicts with LangChain's `ThinkingConfig`.
+- Provider configs (base_url, models_endpoint, supported_params, temperature constraints) are driven by `server/config/llm_defaults.json` -- no hardcoded URLs in Python code.
 
 | Provider | Key Models | Context | Max Output | Thinking | Temp Range |
 |----------|-----------|---------|-----------|----------|------------|
@@ -1765,6 +1769,9 @@ deploy_workflow() -> Sets up triggers, returns immediately
 | **Anthropic** | Claude Sonnet 4.6/4.5/4, Opus 4.5, Haiku 4.5 | 200K (1M beta) | 64K | budget | 0-1 |
 | **Anthropic** | Claude Opus 4.1/4 | 200K | 32K | budget | 0-1 |
 | **Google** | Gemini 3-pro/flash, 2.5-pro/flash/flash-lite | 1M | 65K | budget | 0-2 |
+| **DeepSeek** | deepseek-chat (V3), deepseek-reasoner (CoT) | 128K | 8-64K | always-on (reasoner) | 0-2 |
+| **Kimi** | kimi-k2.5, kimi-k2-thinking | 256K | 96K | on by default (disabled for agents) | fixed 0.6/1.0 |
+| **Mistral** | mistral-large, mistral-small, codestral | 256K | 131K | none | 0-1.5 |
 | **Groq** | Llama 4 Scout, Llama 3.x, Qwen3-32b, GPT-OSS | 131K | 8-131K | format (Qwen3) | 0-2 |
 | **OpenRouter** | 200+ models from multiple providers | varies | varies | varies | 0-2 |
 | **Cerebras** | Llama 3.1-8b, GPT-OSS-120b, Qwen-3-235b | 32-131K | 8K | format (Qwen) | 0-1.5 |

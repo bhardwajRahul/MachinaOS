@@ -52,7 +52,7 @@ iwr -useb https://raw.githubusercontent.com/trohitg/MachinaOS/main/install.ps1 |
 git clone https://github.com/trohitg/MachinaOS.git
 cd MachinaOS
 npm run build
-npm run start
+npm run dev
 ```
 
 </details>
@@ -60,7 +60,7 @@ npm run start
 ## What You Can Build
 
 ### Personal AI Assistants
-Create AI agents that remember conversations, use tools, and work together. Choose from OpenAI, Claude, Gemini, Groq, and 200+ models via OpenRouter.
+Create AI agents that remember conversations, use tools, and work together. Choose from OpenAI, Claude, Gemini, DeepSeek, Kimi, Mistral, Groq, and 200+ models via OpenRouter.
 
 ### Automate Your Google Workspace
 - Send and search emails
