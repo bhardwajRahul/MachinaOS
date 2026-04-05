@@ -144,7 +144,7 @@ A contributor's map to the codebase. This section tells you *where things live* 
 
 ### System Overview
 
-[![System Overview](docs/diagrams/system-overview.svg)](docs/diagrams/system-overview.svg)
+[![System Overview](docs/diagrams/system-overview.svg)](https://raw.githubusercontent.com/trohitg/MachinaOS/main/docs/diagrams/system-overview.svg)
 
 At a glance:
 
@@ -157,7 +157,7 @@ At a glance:
 
 ### How Workflows Execute
 
-[![Execution Flow](docs/diagrams/execution-flow.svg)](docs/diagrams/execution-flow.svg)
+[![Execution Flow](docs/diagrams/execution-flow.svg)](https://raw.githubusercontent.com/trohitg/MachinaOS/main/docs/diagrams/execution-flow.svg)
 
 [WorkflowService](server/services/workflow.py) is a thin facade that routes each run through one of three execution modes. Every run has an isolated `ExecutionContext` with no shared global state, orchestrated by Conductor's decide pattern (`_workflow_decide` under a Redis `SETNX` lock). Layers are computed via Kahn's algorithm and each layer runs via `asyncio.gather()`. Results are cached by input hash (Prefect pattern), failed nodes go to a Dead Letter Queue, and a `RecoverySweeper` handles crashes via heartbeats.
 
@@ -165,7 +165,7 @@ Deep dives: [DESIGN.md](docs-internal/DESIGN.md) - [TEMPORAL_ARCHITECTURE.md](do
 
 ### AI Agent System
 
-[![AI Agent Routing](docs/diagrams/ai-agent-routing.svg)](docs/diagrams/ai-agent-routing.svg)
+[![AI Agent Routing](docs/diagrams/ai-agent-routing.svg)](https://raw.githubusercontent.com/trohitg/MachinaOS/main/docs/diagrams/ai-agent-routing.svg)
 
 AI execution splits into two paths. `execute_chat()` for direct chat completions prefers the native SDK layer in [services/llm/](server/services/llm/) (10 providers, lazy imports, normalized `LLMResponse`), falling back to LangChain for Groq and Cerebras. `execute_agent()` and `execute_chat_agent()` always use LangChain + LangGraph because tool-calling, state graphs, and the checkpointer have no native equivalent today. Team leads (`orchestrator_agent`, `ai_employee`) auto-inject `delegate_to_<type>` tools for every agent connected to their `input-teammates` handle.
 
@@ -190,7 +190,7 @@ Deep dives: [agent_architecture.md](docs-internal/agent_architecture.md) - [nati
 
 ### How to Contribute
 
-[![Node Anatomy](docs/diagrams/node-anatomy.svg)](docs/diagrams/node-anatomy.svg)
+[![Node Anatomy](docs/diagrams/node-anatomy.svg)](https://raw.githubusercontent.com/trohitg/MachinaOS/main/docs/diagrams/node-anatomy.svg)
 
 The diagram above shows the full lifecycle of a workflow node from TypeScript definition to Python handler. Use these recipes as a starting point:
 
