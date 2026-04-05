@@ -690,19 +690,55 @@ Both methods live in `server/services/ai.py` and follow the same general pattern
 
 ### Specialized Agent Routing
 
-All 10 specialized agents route to `handle_chat_agent` via the NodeExecutor registry:
+There are **15 specialized agents**. Most route to `handle_chat_agent`; `rlm_agent` and `claude_code_agent` have dedicated handlers:
 
 ```python
 # server/services/node_executor.py
 SPECIALIZED_AGENT_TYPES = {
     'android_agent', 'coding_agent', 'web_agent', 'task_agent', 'social_agent',
-    'travel_agent', 'tool_agent', 'productivity_agent', 'payments_agent', 'consumer_agent'
+    'travel_agent', 'tool_agent', 'productivity_agent', 'payments_agent', 'consumer_agent',
+    'autonomous_agent', 'orchestrator_agent', 'ai_employee',
+    # rlm_agent and claude_code_agent are handled by dedicated handlers, not handle_chat_agent
 }
 
-# All specialized agents map to handle_chat_agent
+# Most specialized agents map to handle_chat_agent
 for agent_type in SPECIALIZED_AGENT_TYPES:
     registry[agent_type] = partial(handle_chat_agent, ai_service=self.ai_service, database=self.database)
+
+# Dedicated handlers for agents that do not use LangGraph tool-calling
+registry['rlm_agent'] = partial(handle_rlm_agent, ai_service=self.ai_service, database=self.database)
+registry['claude_code_agent'] = partial(handle_claude_code_agent, ...)
 ```
+
+**Team leads** (`orchestrator_agent`, `ai_employee`) use the same `handle_chat_agent` routing but add an `input-teammates` handle. Connected agents become `delegate_to_<type>` tools automatically via `_collect_teammate_connections()`. See [agent_teams.md](agent_teams.md).
+
+### RLM Agent Pattern
+
+`rlm_agent` replaces LangGraph tool-calling with a Python REPL executing LM calls recursively. Instead of paying one network round-trip per tool call, the RLM agent writes a code block that orchestrates many model invocations at once:
+
+```python
+# The LLM generates code like this, executed by RLMService
+results = [llm_query(f"summarize: {url}") for url in urls]
+best = rlm_query(f"pick the most relevant: {results}")
+FINAL(best)
+```
+
+Exposed helpers inside the REPL:
+
+| Helper | Purpose |
+|---|---|
+| `llm_query(prompt)` | Call the small model connected to `input-model` |
+| `rlm_query(prompt)` | Recursively invoke the same RLM agent |
+| `FINAL(answer)` | Signal completion and return the final answer |
+
+Routing:
+
+```python
+# server/services/node_executor.py
+registry['rlm_agent'] = partial(handle_rlm_agent, ai_service=self.ai_service, database=self.database)
+```
+
+`handle_rlm_agent` delegates to `RLMService` in `server/services/rlm_service.py`. See [rlm_service.md](rlm_service.md) for full details.
 
 ### Chat Agent Conditional Graph
 

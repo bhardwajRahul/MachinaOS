@@ -31,6 +31,13 @@ This is a React Flow-based workflow automation platform implementing n8n-inspire
 | **[Onboarding Service](./docs-internal/onboarding.md)** | First-launch welcome wizard with 5 steps, database persistence, and replay from Settings |
 | **[CLI Services Integration](./docs-internal/cli_services_integration.md)** | Guide for integrating CLI-based services (Temporal, etc.) with proper lifecycle management |
 | **[Temporal Architecture](./docs-internal/TEMPORAL_ARCHITECTURE.md)** | Distributed workflow execution: activities, FIRST_COMPLETED scheduling, horizontal scaling |
+| **[Native LLM SDK](./docs-internal/native_llm_sdk.md)** | Native SDK layer in services/llm/: Protocol-based providers, config-driven base URLs, 10 providers, native vs LangChain path routing |
+| **[Event Waiter System](./docs-internal/event_waiter_system.md)** | Generic asyncio.Future/Redis-Streams waiter for push-based trigger nodes (WhatsApp, Telegram, Webhook, Chat, Task completion) |
+| **[Credentials Encryption](./docs-internal/credentials_encryption.md)** | Fernet + PBKDF2 encryption pipeline, separate credentials.db, two credential systems (OAuth vs API keys), multi-backend abstraction |
+| **[Status Broadcaster](./docs-internal/status_broadcaster.md)** | WebSocket-first communication: StatusBroadcaster singleton, 89 handlers, broadcast message types, Android two-state model |
+| **[RLM Service](./docs-internal/rlm_service.md)** | Recursive Language Model agent with REPL-based execution (llm_query, rlm_query, FINAL) |
+| **[Claude Code Agent](./docs-internal/claude_code_agent_architecture.md)** | Claude Code SDK integration as a specialized agent node |
+| **[Autonomous Agent Creation](./docs-internal/autonomous_agent_creation.md)** | Creating autonomous agents with Code Mode patterns and agentic loops |
 | **[Polyglot Server](../polyglot-server/ARCHITECTURE.md)** | Plugin registry microservice with MCP gateway (optional integration) |
 
 ## Design Principles & Standards
@@ -388,8 +395,8 @@ class CacheEntry(SQLModel, table=True):
 
 ## Codebase Summary
 - **Hybrid architecture**: Node.js + Python + React TypeScript
-- **96 implemented workflow nodes** with clean service separation (9 AI models + 3 AI agents/memory + 13 specialized agents + 1 skill + 4 dedicated tools + 3 search + 16 Android + 3 WhatsApp + 4 Twitter + 2 Telegram + 2 Social + 3 Location + 3 Code + 6 Utility + 6 Document + 2 Chat + 2 Scheduler + 2 Workflow + 7 Google Workspace + 1 Apify + 1 Crawlee + 3 Proxy)
-- **WebSocket-First Architecture**: WebSocket as primary frontend-backend communication (125 message handlers)
+- **96 implemented workflow nodes** with clean service separation (9 AI models + 3 AI agents/memory + 15 specialized agents + 1 skill + 4 dedicated tools + 3 search + 16 Android + 3 WhatsApp + 4 Twitter + 2 Telegram + 2 Social + 3 Location + 3 Code + 6 Utility + 6 Document + 2 Chat + 2 Scheduler + 2 Workflow + 7 Google Workspace + 1 Apify + 1 Crawlee + 3 Proxy)
+- **WebSocket-First Architecture**: WebSocket as primary frontend-backend communication (89 message handlers)
 - **Recent optimizations**: REST APIs replaced with WebSocket, AI endpoints migrated to Python, Android automation integrated
 
 ## Architecture Refactoring
@@ -413,7 +420,7 @@ The project was completely refactored from schema-based node definitions to expl
 - `src/nodeDefinitions/aiModelNodes.ts` - AI chat model definitions using factory pattern
 - `src/nodeDefinitions/aiAgentNodes.ts` - AI agent and processing components
 - `src/nodeDefinitions/skillNodes.ts` - Skill node definition (masterSkill aggregator)
-- `src/nodeDefinitions/specializedAgentNodes.ts` - Specialized AI agent definitions (13 nodes) with shared AI_AGENT_PROPERTIES and centralized dracula theming
+- `src/nodeDefinitions/specializedAgentNodes.ts` - Specialized AI agent definitions (15 nodes) with shared AI_AGENT_PROPERTIES and centralized dracula theming
 - `src/nodeDefinitions/toolNodes.ts` - AI Agent tool nodes (calculatorTool, currentTimeTool, duckduckgoSearch)
 - `src/nodeDefinitions/searchNodes.ts` - Search API nodes (braveSearch, serperSearch, perplexitySearch)
 - `src/nodeDefinitions/androidServiceNodes.ts` - 16 Android service nodes (monitoring, apps, automation, sensors, media)
@@ -544,7 +551,7 @@ React Flow edges use dynamic Dracula colors via `getEdgeStyles(theme.dracula)`:
 ### WebSocket-First Architecture
 The project uses WebSocket as the primary communication method between frontend and backend, replacing most REST API calls:
 - `src/contexts/WebSocketContext.tsx` - Central WebSocket context with request/response pattern
-- `server/routers/websocket.py` - WebSocket endpoint with 125 message handlers
+- `server/routers/websocket.py` - WebSocket endpoint with 89 message handlers
 - `server/services/status_broadcaster.py` - Connection management and broadcasting
 
 ## Implemented Node Types
@@ -1438,7 +1445,7 @@ See **[Scripts Reference](./docs-internal/SCRIPTS.md)** for full documentation.
 
 ## Current Status
 ✅ **INodeProperties System**: Fully implemented with 93 functional node components
-✅ **WebSocket-First Architecture**: 125 message handlers replacing REST APIs
+✅ **WebSocket-First Architecture**: 89 message handlers replacing REST APIs
 ✅ **Code Editor**: Python, JavaScript, and TypeScript executors with syntax-highlighted editor (react-simple-code-editor + prismjs) and console output
 ✅ **Node.js Executor**: Persistent Node.js server (Express + tsx) for fast JS/TS execution, replacing subprocess spawning
 ✅ **Component Palette**: Emoji icons with distinct dracula-themed category colors, localStorage persistence for collapsed sections
@@ -5005,7 +5012,7 @@ This function:
 - **Performance**: Fast HMR updates and clean TypeScript compilation
 - **AI Architecture**: 5-layer system with factory pattern and secure credential management
 - **Android Architecture**: Factory-based node creation with ADB integration for device automation
-- **WebSocket-First Architecture**: 125 message handlers replace REST APIs for parameters, execution, API keys, Android, WhatsApp, and skill operations
+- **WebSocket-First Architecture**: 89 message handlers replace REST APIs for parameters, execution, API keys, Android, WhatsApp, and skill operations
 - **WebSocket Hooks**: Dedicated React hooks (useWhatsApp, useExecution, useApiKeys, useAndroidOperations, useParameterPanel) for clean component integration
 - **WebSocket Support**: Persistent remote Android device connections via WebSocket proxy with background tasks
   - Connection stays alive across multiple API requests until switched to local ADB

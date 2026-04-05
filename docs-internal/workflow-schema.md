@@ -59,68 +59,104 @@ A workflow JSON document contains:
 }
 ```
 
-## Supported Node Types (67 Total)
+## Supported Node Types (96 Total)
 
-### Workflow Nodes (1 node)
+> Counts are grouped by source file under `client/src/nodeDefinitions/`. The canonical list lives there; this section is a human-readable index.
+
+### Workflow Nodes (2 nodes)
 - `start` - Workflow entry point with initial data
+- `taskTrigger` - Event-driven trigger for delegated child agent completion
 
 ### Scheduler Nodes (2 nodes)
 - `timer` - Delay/wait before continuing (seconds, minutes, hours)
 - `cronScheduler` - Recurring scheduled execution (seconds to months, timezone support)
 
-### AI Chat Model Nodes (6 nodes)
-- `openaiChatModel` - OpenAI GPT models (GPT-4o, GPT-4, o1/o3/o4 series with reasoning)
-- `anthropicChatModel` - Anthropic Claude models (Claude 3.5/3 with extended thinking)
-- `geminiChatModel` - Google Gemini models (2.5/Flash with thinking support)
-- `openrouterChatModel` - OpenRouter unified API (200+ models from multiple providers)
-- `groqChatModel` - Groq ultra-fast inference (Llama, Mixtral, Qwen3/QwQ with reasoning)
+### AI Chat Model Nodes (9 nodes)
+- `openaiChatModel` - OpenAI GPT 4.x/5.x + reasoning models (o1/o3/o4 series)
+- `anthropicChatModel` - Anthropic Claude 4.x with extended thinking
+- `geminiChatModel` - Google Gemini 2.5/3 with thinking support
+- `openrouterChatModel` - OpenRouter unified API (200+ models)
+- `groqChatModel` - Groq ultra-fast inference (Llama, Qwen3, GPT-OSS)
 - `cerebrasChatModel` - Cerebras custom AI hardware (Llama, Qwen)
+- `deepseekChatModel` - DeepSeek V3 (chat + reasoner with Chain-of-Thought)
+- `kimiChatModel` - Moonshot Kimi K2.5 / K2-thinking
+- `mistralChatModel` - Mistral Large / Small / Codestral
 
-### AI Agent Nodes (3 nodes)
-- `aiAgent` - AI agent with tool calling, memory support (LangGraph)
-- `chatAgent` - Conversational agent with skill support
-- `simpleMemory` - Conversation history storage (buffer/window modes)
+### AI Agents and Memory (3 nodes)
+- `aiAgent` - LangGraph-based agent with tool calling
+- `chatAgent` - Conversational agent (Zeenie) with skill support
+- `simpleMemory` - Markdown-based conversation memory with optional vector DB
 
-### AI Skill Nodes (9 nodes)
-Connect to Chat Agent's `input-skill` handle:
-- `claudeSkill` - Default Claude assistant personality
-- `whatsappSkill` - WhatsApp messaging via Chat Agent
-- `memorySkill` - Long-term memory management
-- `mapsSkill` - Location services (geocoding, places, directions)
-- `httpSkill` - HTTP requests to external APIs
-- `schedulerSkill` - Task scheduling (timers, cron)
-- `androidSkill` - Android device control
-- `codeSkill` - Python/JavaScript code execution
-- `customSkill` - User-created custom skills (database-stored)
+### Specialized AI Agents (15 nodes)
+Pre-configured agents for specific domains. All inherit `AI_AGENT_PROPERTIES`. See [agent_architecture.md](agent_architecture.md):
+- `android_agent` - Android device control
+- `coding_agent` - Code execution (Python, JavaScript, TypeScript)
+- `web_agent` - Web automation and scraping
+- `task_agent` - Task management and scheduling
+- `social_agent` - Social messaging (WhatsApp, Telegram)
+- `travel_agent` - Location and maps
+- `tool_agent` - Generic tool orchestration
+- `productivity_agent` - Google Workspace workflows
+- `payments_agent` - Payment processing
+- `consumer_agent` - Customer support
+- `autonomous_agent` - Code Mode with agentic loops
+- `orchestrator_agent` - Team lead for multi-agent coordination
+- `ai_employee` - Team lead (alternate UI/branding)
+- `rlm_agent` - Recursive Language Model (REPL-based, dedicated handler)
+- `claude_code_agent` - Claude Code SDK integration
 
-### AI Tool Nodes (4 nodes)
+### AI Tool Nodes (4 dedicated)
 Connect to AI Agent's `input-tools` handle:
-- `calculatorTool` - Mathematical operations
+- `masterSkill` - Aggregates multiple skills with enable/disable toggles
+- `calculatorTool` - Math operations
 - `currentTimeTool` - Current date/time with timezone
 - `duckduckgoSearch` - DuckDuckGo web search (free, no API key)
-- `androidTool` - Android toolkit aggregator (sub-node pattern)
+- `taskManager` - Task creation and tracking tool
 
-### Search Nodes (3 nodes)
-Dual-purpose nodes (workflow + AI tool). Defined in `searchNodes.ts`:
-- `braveSearch` - Brave Search API web results
-- `serperSearch` - Google SERP via Serper API (web, news, images, places)
-- `perplexitySearch` - Perplexity Sonar AI-powered search with markdown answer and citations
+### Search Nodes (3 dual-purpose)
+Work as both workflow nodes and AI tools. Defined in `searchNodes.ts`:
+- `braveSearch` - Brave Search API
+- `serperSearch` - Google SERP via Serper API
+- `perplexitySearch` - Perplexity Sonar with citations
 
-### Location Nodes (3 nodes)
-- `createMap` - Google Maps creation with center, zoom, map type
-- `addLocations` - Google Maps Geocoding (address to coordinates)
-- `showNearbyPlaces` - Google Places nearbySearch
+### Location Nodes (3 nodes, 2 dual-purpose)
+- `gmaps_create` - Google Maps creation with center, zoom, map type
+- `gmaps_locations` - Geocoding (address to coordinates)
+- `gmaps_nearby_places` - Google Places nearbySearch
 
-### WhatsApp Nodes (4 nodes)
-- `whatsappSend` - Send messages (text, media, location, contact)
-- `whatsappConnect` - Connection status and QR code
-- `whatsappReceive` - Event-driven trigger with filters (type, sender, group, keywords)
-- `whatsappChatHistory` - Retrieve message history
+### Google Workspace Nodes (7 nodes)
+Consolidated operation-based nodes sharing one OAuth connection. See [new_service_integration.md](new_service_integration.md):
+- `gmail` - send / search / read (dual-purpose)
+- `gmailReceive` - Polling trigger for incoming emails
+- `calendar` - create / list / update / delete
+- `drive` - upload / download / list / share
+- `sheets` - read / write / append
+- `tasks` - create / list / complete / update / delete
+- `contacts` - create / list / search / get / update / delete
 
-### Android Nodes (17 nodes)
+### WhatsApp Nodes (3 nodes)
+- `whatsappSend` - Dual-purpose: send text/media/location/contact to contacts, groups, channels
+- `whatsappDb` - Dual-purpose: 18 operations covering chat history, contacts, groups, newsletters
+- `whatsappReceive` - Event-driven trigger with filters (type, sender, group, keywords, channel)
 
-#### Device Setup (1 node)
-- `androidDeviceSetup` - Connect via local ADB or remote WebSocket relay
+### Twitter/X Nodes (4 nodes)
+- `twitterSend` - Dual-purpose: tweet, reply, retweet, like, delete
+- `twitterSearch` - Dual-purpose: rich search with expansions and citations
+- `twitterUser` - Dual-purpose: profiles, followers, following
+- `twitterReceive` - Polling trigger for mentions, DMs, timeline
+
+### Telegram Nodes (2 nodes)
+- `telegramSend` - Dual-purpose: text, photo, document, location, contact
+- `telegramReceive` - Event-driven trigger via long-polling
+
+### Social Nodes (2 nodes)
+Unified multi-platform messaging (WhatsApp, Telegram, Discord, Slack, SMS, Email, Matrix, Teams):
+- `socialReceive` - Normalize messages from platform triggers
+- `socialSend` - Dual-purpose unified send
+
+### Android Nodes (16 nodes)
+
+> Android device connection is now configured via the Credentials modal (Android panel), not a workflow node. Service nodes can be connected directly to any agent's `input-tools` handle.
 
 #### System Monitoring (4 nodes)
 - `batteryMonitor` - Battery status, level, charging, temperature
@@ -148,21 +184,24 @@ Dual-purpose nodes (workflow + AI tool). Defined in `searchNodes.ts`:
 - `cameraControl` - Camera info, take photos
 - `mediaControl` - Media playback, volume
 
-### Utility Nodes (5 nodes)
+### Utility Nodes (6 nodes)
 - `httpRequest` - HTTP requests (GET, POST, PUT, DELETE, PATCH) with optional proxy support (`useProxy: true`)
 - `webhookTrigger` - Incoming HTTP webhook trigger at `/webhook/{path}`
 - `webhookResponse` - Custom response to webhook caller
 - `chatTrigger` - Console message input trigger
 - `console` - Debug logging output
+- `teamMonitor` - Real-time monitoring of Agent Team operations
 
 ### Proxy Nodes (3 nodes)
 - `proxyRequest` - HTTP requests through residential proxy providers with geo-targeting and failover
-- `proxyConfig` - Configure proxy providers, credentials, and routing rules
+- `proxyConfig` - Dual-purpose: configure providers, credentials, routing rules
 - `proxyStatus` - View proxy provider health, scores, and usage statistics
 
-### Code Nodes (2 nodes)
-- `pythonExecutor` - Python code execution with input_data access
-- `javascriptExecutor` - JavaScript code execution
+### Code Nodes (3 nodes)
+All dual-purpose (workflow node + AI tool):
+- `pythonExecutor` - Python code execution (in-process)
+- `javascriptExecutor` - JavaScript execution via persistent Node.js server
+- `typescriptExecutor` - TypeScript execution via persistent Node.js server (tsx)
 
 ### Chat Nodes (2 nodes)
 - `chatSend` - Send via JSON-RPC 2.0 WebSocket
@@ -176,6 +215,10 @@ RAG pipeline nodes for document ingestion, processing, and vector storage:
 - `textChunker` - Split text into overlapping chunks (recursive, markdown, token strategies)
 - `embeddingGenerator` - Generate vector embeddings (HuggingFace, OpenAI, Ollama providers)
 - `vectorStore` - Store/query vectors (ChromaDB, Qdrant, Pinecone backends)
+
+### Web Scraping Nodes (2 nodes)
+- `apifyActor` - Dual-purpose: run Apify pre-built actors (Instagram, TikTok, Twitter, LinkedIn, Google Search, Maps, etc.)
+- `crawleeScraper` - Crawlee web scraping with static and Playwright modes
 
 ## Example Workflow JSON
 

@@ -2,7 +2,91 @@
 
 ## Overview
 
-The MachinaOs execution engine implements a robust workflow orchestration system combining industry-standard patterns from **Netflix Conductor**, **Prefect 3.0**, and **Redis Streams**. This document details the architectural decisions, design patterns, and standards used.
+The MachinaOs execution engine implements a robust workflow orchestration system combining industry-standard patterns from **Netflix Conductor**, **Prefect 3.0**, **Temporal**, and **Redis Streams**. This document details the architectural decisions, design patterns, and standards used.
+
+Related docs:
+- [TEMPORAL_ARCHITECTURE.md](TEMPORAL_ARCHITECTURE.md) - distributed execution via Temporal activities
+- [event_waiter_system.md](event_waiter_system.md) - push-based trigger waiters
+- [native_llm_sdk.md](native_llm_sdk.md) - LLM provider layer
+- [rlm_service.md](rlm_service.md) - Recursive Language Model agent execution
+- [proxy_service.md](proxy_service.md) - residential proxy provider management
+- [workflow-schema.md](workflow-schema.md) - workflow JSON schema and node catalog
+
+---
+
+## Execution Modes
+
+`WorkflowService` in `server/services/workflow.py` is a thin facade (~460 lines) that routes every workflow run through one of three execution modes. Selection is based on available infrastructure:
+
+```
+workflow.execute(workflow_id, workflow_data)
+            |
+            v
+    +---------------------+
+    | TEMPORAL_ENABLED    |  yes --> _execute_temporal()
+    | and Temporal up?    |             |
+    +---------------------+             v
+            | no                   TemporalExecutor
+            v                      (per-node activities,
+    +---------------------+         retries, horizontal scaling)
+    | Redis available?    |
+    +---------------------+
+            | yes --> _execute_parallel()
+            |             |
+            v             v
+            |         WorkflowExecutor
+            |         (decide loop, Kahn layers,
+            |          distributed locking)
+            |
+            | no --> _execute_sequential()
+            v
+        Sequential fallback
+        (simple topological walk)
+```
+
+### 1. Temporal Distributed (primary production mode)
+
+When `TEMPORAL_ENABLED=true` and the Temporal server is reachable, every workflow node executes as an independent Temporal activity on the `machina-tasks` task queue.
+
+- Per-node retries (3 attempts by default) and per-node timeouts (10 min default)
+- Horizontal scaling via worker pool
+- Connection pooling via shared `aiohttp` session for WebSocket-based node execution
+- Pure orchestrator in `services/temporal/workflow.py` using `asyncio.wait(FIRST_COMPLETED)` so dependent nodes start immediately when their specific dependency completes
+- Class-based activities in `services/temporal/activities.py` with lifecycle hooks
+
+See [TEMPORAL_ARCHITECTURE.md](TEMPORAL_ARCHITECTURE.md) for full details.
+
+### 2. Parallel Local (Redis)
+
+When Temporal is not enabled but Redis is available, workflows use `WorkflowExecutor` in `services/execution/executor.py`:
+
+- Conductor's decide pattern in `_workflow_decide()` under distributed Redis SETNX locks
+- Fork/join via `asyncio.gather()` for concurrent node execution
+- Prefect-style result caching keyed by `hash_inputs()` (see `services/execution/cache.py`)
+- Crash recovery via `RecoverySweeper` with heartbeats
+- Dead Letter Queue for failed nodes (`services/execution/dlq.py`)
+
+This is the local-development default when `REDIS_ENABLED=true` is set in `server/.env`.
+
+### 3. Sequential Fallback
+
+When neither Temporal nor Redis is available, workflow execution falls back to a simple topological walk with no parallelism, no caching, and no retry. Intended only for minimal environments and CI smoke tests.
+
+---
+
+## RLM Agent Execution
+
+`rlm_agent` is the only agent node type that does not go through `handle_chat_agent`. It has a dedicated handler `handle_rlm_agent` that routes to `RLMService` in `services/rlm_service.py`.
+
+The Recursive Language Model pattern replaces LangGraph's tool-calling loop with a Python REPL (`exec()`) where the agent writes code that can call:
+
+- `llm_query(prompt)` - invoke the small model connected to `input-model`
+- `rlm_query(prompt)` - recursively invoke the agent itself
+- `FINAL(answer)` - signal completion
+
+This yields 81-98% token savings on tool-heavy workflows because the agent can orchestrate multiple LLM calls in a single code block instead of paying the round-trip cost of tool calling.
+
+See [rlm_service.md](rlm_service.md) for the full design.
 
 ---
 
