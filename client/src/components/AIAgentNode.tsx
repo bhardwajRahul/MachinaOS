@@ -379,6 +379,24 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
     width: 300,
     height: 200,
   },
+  deep_agent: {
+    icon: <span style={{ fontSize: '28px' }}>{'\u{1F9E0}'}</span>,
+    title: 'Deep Agent',
+    subtitle: 'LangChain DeepAgents',
+    themeColorKey: 'green',
+    bottomHandles: [
+      { id: 'input-skill', label: 'Skill', position: '20%' },
+      { id: 'input-teammates', label: 'Team', position: '50%' },
+      { id: 'input-tools', label: 'Tool', position: '80%' },
+    ],
+    leftHandles: [
+      { id: 'input-memory', label: 'Memory', position: '65%' },
+      { id: 'input-task', label: 'Task', position: '85%' },
+    ],
+    topOutputHandle: { id: 'output-top', label: 'Output' },
+    width: 300,
+    height: 200,
+  },
 };
 
 const AIAgentNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectable, selected }) => {

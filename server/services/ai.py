@@ -904,6 +904,9 @@ class AIService:
         # RLM service (lazy import to avoid circular deps)
         from services.rlm import RLMService
         self.rlm_service = RLMService(auth=self.auth)
+        # Deep Agent service (deepagents package)
+        from services.deep_agent_service import DeepAgentService
+        self.deep_agent_service = DeepAgentService(auth=self.auth)
 
     def detect_provider(self, model: str) -> str:
         """Detect AI provider from model name."""
@@ -2454,6 +2457,7 @@ class AIService:
             'ai_employee': 'delegate_to_ai_employee',
             'rlm_agent': 'delegate_to_rlm_agent',
             'claude_code_agent': 'delegate_to_claude_code_agent',
+            'deep_agent': 'delegate_to_deep_agent',
             # Android service nodes (direct tool usage)
             'batteryMonitor': 'android_battery',
             'networkMonitor': 'android_network',
