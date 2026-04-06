@@ -117,10 +117,15 @@ agent = create_deep_agent(
     subagents=None,         # Sequence[SubAgent | CompiledSubAgent | AsyncSubAgent]
     skills=None,            # list[str] (paths to skill dirs)
     memory=None,            # list[str] (paths to AGENTS.md files)
+    response_format=None,   # ResponseFormat | type | dict
+    context_schema=None,    # type[ContextT]
+    checkpointer=None,      # Checkpointer
+    store=None,             # BaseStore
     backend=None,           # BackendProtocol | BackendFactory
     interrupt_on=None,      # dict[str, bool | InterruptOnConfig]
     debug=False,            # bool
     name=None,              # str
+    cache=None,             # BaseCache
 )
 ```
 
@@ -154,6 +159,34 @@ Returns a **`CompiledStateGraph`** -- a compiled LangGraph graph compatible with
 8. **MemoryMiddleware** (conditional) -- Persistent memory from AGENTS.md files
 
 Custom tools passed via `tools=` parameter are added alongside (not replacing) the built-in tools. deepagents uses LangGraph's `ToolNode` which calls `tool.ainvoke()` directly -- tools must have real executor functions.
+
+### Backends
+
+Backends control where filesystem tools operate. MachinaOs uses `FilesystemBackend` with `virtual_mode=True` pointed at a per-workflow workspace directory.
+
+| Backend | Description |
+|---------|-------------|
+| `StateBackend` | Default. Ephemeral files in LangGraph state (in-memory) |
+| `FilesystemBackend` | Direct local filesystem under `root_dir`. `virtual_mode=True` sandboxes paths |
+| `LocalShellBackend` | Extends FilesystemBackend with `execute` tool (unrestricted shell) |
+| `StoreBackend` | Persistent cross-thread storage via LangGraph BaseStore |
+| `CompositeBackend` | Route paths to different backends by prefix |
+
+**MachinaOs configuration** (in `services/agents/service.py`):
+```python
+from deepagents.backends import FilesystemBackend
+
+workspace_dir = parameters.get('workspace_dir')  # From execution context
+backend = FilesystemBackend(root_dir=workspace_dir, virtual_mode=True)
+
+agent = create_deep_agent(
+    model=chat_model,
+    backend=backend,
+    ...
+)
+```
+
+The workspace directory is created per workflow at `data/workspaces/<workflow_id>/`. Nodes (fileDownloader, code executors) save output files there, and the Deep Agent's filesystem tools operate within it. `virtual_mode=True` prevents path traversal outside the workspace.
 
 ### Sub-Agent Types
 

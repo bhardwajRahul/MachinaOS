@@ -1734,6 +1734,33 @@ Console logs are persisted to SQLite database and loaded on page refresh.
 | `server/core/database.py` | Chat message and console log CRUD methods |
 | `server/routers/websocket.py` | WebSocket handlers for chat and console operations |
 
+### Per-Workflow Workspace Directory
+Each workflow execution gets a persistent workspace directory where nodes save output files and AI agents (especially Deep Agent) access them via filesystem tools.
+
+**Directory**: `data/workspaces/<workflow_id>/`
+
+**Configuration** (`server/core/config.py`):
+```python
+workspace_base_dir: str = Field(default="data/workspaces", env="WORKSPACE_BASE_DIR")
+```
+
+**How it works:**
+- `workflow.py` creates the workspace dir and injects `workspace_dir` into the execution context
+- `fileDownloader` saves to `{workspace_dir}/downloads/` by default
+- Code executors (Python/JS/TS) receive `workspace_dir` in their execution namespace
+- Deep Agent uses `FilesystemBackend(root_dir=workspace_dir, virtual_mode=True)` -- its filesystem tools (`read_file`, `write_file`, `edit_file`, `ls`, `glob`, `grep`) operate within the workspace
+- `virtual_mode=True` sandboxes paths to prevent traversal outside workspace
+
+**Key Files:**
+| File | Description |
+|------|-------------|
+| `server/core/config.py` | `workspace_base_dir` setting |
+| `server/services/workflow.py` | `_get_workspace_dir()`, injects into context |
+| `server/services/agents/service.py` | `FilesystemBackend(root_dir=workspace_dir, virtual_mode=True)` |
+| `server/services/handlers/deep_agent.py` | Passes `workspace_dir` from context to service |
+| `server/services/handlers/document.py` | `fileDownloader` uses workspace for downloads |
+| `server/services/handlers/code.py` | `workspace_dir` available in Python/JS/TS execution |
+
 ### Execution System
 - **Supported Components**: AI models, location services, Android automation, WhatsApp messaging, HTTP requests, webhooks
 - **Android Integration**: ADB-based device control with 17 service nodes across monitoring, apps, automation, sensors, and media

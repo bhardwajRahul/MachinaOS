@@ -452,6 +452,9 @@ class ExecutionContext:
     nodes: List[Dict]          # Node definitions
     edges: List[Dict]          # Edge definitions
 
+    # Workspace (per-workflow filesystem for nodes and agents)
+    workspace_dir: str         # Absolute path to data/workspaces/<workflow_id>/
+
     # Execution Progress
     execution_order: List[List[str]]  # Computed layers
     current_layer: int         # Current layer index
