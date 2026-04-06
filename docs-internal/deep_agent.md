@@ -13,9 +13,11 @@ Specialized agent node powered by [LangChain DeepAgents](https://github.com/lang
 2. [Architecture](#architecture)
 3. [DeepAgents Package](#deepagents-package)
 4. [MachinaOs Integration](#machinaos-integration)
-5. [Node Definition](#node-definition)
-6. [Key Files](#key-files)
-7. [Comparison with Other Agent Types](#comparison-with-other-agent-types)
+5. [Tool Execution](#tool-execution)
+6. [Memory Integration](#memory-integration)
+7. [Node Definition](#node-definition)
+8. [Key Files](#key-files)
+9. [Comparison with Other Agent Types](#comparison-with-other-agent-types)
 
 ---
 
@@ -32,11 +34,11 @@ Deep Agent combines MachinaOs's existing agent infrastructure (skill injection, 
 
 **What MachinaOs provides:**
 - Provider/model selection from `llm_defaults.json` (9 providers)
-- Tool node connections (calculator, search, WhatsApp, Android, etc.)
+- Executable tool node connections (calculator, search, WhatsApp, Android, etc.)
 - Skill injection from Master Skill / SKILL.md files
-- Memory via Simple Memory node
+- Memory via Simple Memory node (markdown + vector store)
 - Teammate delegation via `input-teammates` handle
-- Real-time status broadcasting via WebSocket
+- Real-time status broadcasting via WebSocket (including tool node glow effects)
 
 ---
 
@@ -46,56 +48,48 @@ Deep Agent combines MachinaOs's existing agent infrastructure (skill injection, 
 User clicks "Run" on Deep Agent
         |
         v
-useExecution.executeNode()                client/src/hooks/useExecution.ts
-        |
-        v
-WebSocket: handle_execute_node()          server/routers/websocket.py
-        |
-        v
 NodeExecutor._dispatch()                  server/services/node_executor.py
-  Registry: 'deep_agent' -> handle_chat_agent (via partial)
+  Registry: 'deep_agent' -> handle_deep_agent (via partial)
         |
         v
-handle_chat_agent()                       server/services/handlers/ai.py
-  1. _collect_agent_connections()
+handle_deep_agent()                       server/services/handlers/deep_agent.py
+  1. _collect_agent_connections()          [REUSE from handlers/ai.py]
      - input-memory  -> memory_data
      - input-skill   -> skill_data[]
      - input-tools   -> tool_data[]
      - input-main    -> input_data
      - input-task    -> task_data
-  2. deep_agent in TEAM_LEAD_TYPES
-     -> _collect_teammate_connections()
-     -> teammates added as delegation tool_data
-  3. Delegates to execute_chat_agent(node_type='deep_agent')
+  2. _format_task_context()               [REUSE from handlers/ai.py]
+  3. Auto-prompt fallback                 [same pattern as handle_rlm_agent]
+  4. _build_tool_from_node() -> schema stubs
+     _make_executable_tool() -> real async coroutines
+  5. _collect_teammate_connections()       [REUSE from handlers/ai.py]
+  6. Delegates to ai_service.deep_agent_service.execute()
         |
         v
-AIService.execute_chat_agent()            server/services/ai.py
-  Shared setup (same as chatAgent/all specialized agents):
+DeepAgentService.execute()               server/services/deep_agent_service.py
+  Reuses module-level helpers from ai.py:
   - _build_skill_system_prompt() -> system_message
-  - _build_tool_from_node() for each tool_data entry -> all_tools[]
-  - Model validation via is_model_valid_for_provider()
-  - API key resolution
-  - Temperature, max_tokens resolution from model registry
+  - is_model_valid_for_provider(), get_default_model_async()
+  - _resolve_max_tokens(), _resolve_temperature()
+  - self._create_model() -> pre-built BaseChatModel
+  - _parse_memory_markdown(), _get_memory_vector_store()  [memory load]
+  - _append_to_memory_markdown(), _trim_markdown_window()  [memory save]
         |
         v
-  Branch: node_type == 'deep_agent'
+deepagents.create_deep_agent()           deepagents package
+  model = pre-built BaseChatModel (API key baked in)
+  tools = executable MachinaOs tools + deepagents built-in tools
+  system_prompt = system_message (includes skills + long-term memory context)
         |
         v
-deepagents.create_deep_agent()            deepagents package
-  model = "{provider}:{model}"
-  tools = all_tools (MachinaOs connected tools)
-  system_prompt = system_message (includes skills)
-  + built-in: read_file, write_file, edit_file, ls, glob,
-              grep, execute, write_todos, task
+agent.ainvoke(messages)                  LangGraph CompiledStateGraph
+  messages = history from SimpleMemory + current prompt
+  Middleware stack: TodoList -> Filesystem -> SubAgent
+    -> Summarization -> ToolCallPatching -> PromptCaching
         |
         v
-agent.ainvoke(messages, config)
-  Middleware stack processes request:
-  TodoList -> Skills -> Filesystem -> SubAgent
-  -> Summarization -> ToolCallPatching -> PromptCaching
-        |
-        v
-Extract final AI message -> return result
+Extract response + thinking -> save memory -> return result
 ```
 
 ---
@@ -123,7 +117,6 @@ agent = create_deep_agent(
     subagents=None,         # Sequence[SubAgent | CompiledSubAgent | AsyncSubAgent]
     skills=None,            # list[str] (paths to skill dirs)
     memory=None,            # list[str] (paths to AGENTS.md files)
-    response_format=None,   # ResponseFormat | type | dict
     backend=None,           # BackendProtocol | BackendFactory
     interrupt_on=None,      # dict[str, bool | InterruptOnConfig]
     debug=False,            # bool
@@ -133,7 +126,7 @@ agent = create_deep_agent(
 
 Returns a **`CompiledStateGraph`** -- a compiled LangGraph graph compatible with streaming, Studio, checkpointers, and all LangGraph features.
 
-**Default model:** `claude-sonnet-4-6` (via `ChatAnthropic`).
+**Default model:** `claude-sonnet-4-6` (via `ChatAnthropic`). MachinaOs passes a pre-built `BaseChatModel` instance instead to avoid credential resolution issues.
 
 ### Built-in Tools
 
@@ -160,22 +153,7 @@ Returns a **`CompiledStateGraph`** -- a compiled LangGraph graph compatible with
 7. **AnthropicPromptCachingMiddleware** -- Prompt caching (Anthropic models only)
 8. **MemoryMiddleware** (conditional) -- Persistent memory from AGENTS.md files
 
-Custom tools passed via `tools=` parameter are added alongside (not replacing) the built-in tools.
-
-### Backends
-
-Backends control where filesystem tools operate:
-
-| Backend | Description |
-|---------|-------------|
-| `StateBackend` | Default. Files stored in LangGraph state (in-memory, ephemeral) |
-| `FilesystemBackend` | Direct local filesystem access |
-| `LocalShellBackend` | Filesystem + unrestricted shell execution |
-| `StoreBackend` | Persistent storage via LangGraph BaseStore |
-| `LangSmithSandbox` | Remote sandboxed execution |
-| `CompositeBackend` | Route paths to different backends |
-
-The `execute` tool requires a `SandboxBackendProtocol` backend (e.g., `LocalShellBackend`). Without it, `execute` returns an error message.
+Custom tools passed via `tools=` parameter are added alongside (not replacing) the built-in tools. deepagents uses LangGraph's `ToolNode` which calls `tool.ainvoke()` directly -- tools must have real executor functions.
 
 ### Sub-Agent Types
 
@@ -185,79 +163,91 @@ The `execute` tool requires a `SandboxBackendProtocol` backend (e.g., `LocalShel
 | `CompiledSubAgent` | Pre-built runnable (any LangGraph/LangChain Runnable) |
 | `AsyncSubAgent` | Remote/background agent via graph_id + url |
 
-### Model Resolution
-
-Format: `"provider:model"` -- e.g., `"openai:gpt-5.4"`, `"google_genai:gemini-2.5-flash"`, `"anthropic:claude-sonnet-4-6"`, `"openrouter:anthropic/claude-sonnet-4.6"`.
-
-Default: `claude-sonnet-4-6` via `ChatAnthropic`.
-
 ---
 
 ## MachinaOs Integration
 
 ### Execution Path
 
-Deep Agent reuses the **entire** `handle_chat_agent` pipeline. No separate handler or service file exists. The only new code is a branch inside `execute_chat_agent` at the graph creation point:
+Deep Agent has a **dedicated handler and service** following the RLMService pattern:
+
+- **Handler** (`handlers/deep_agent.py`): Thin wrapper that collects connections, builds executable tools, delegates to service
+- **Service** (`deep_agent_service.py`): Execution engine that handles skill injection, model resolution, memory lifecycle, and `create_deep_agent()` invocation
+- **Composition**: `AIService.__init__` creates `self.deep_agent_service = DeepAgentService(auth=self.auth, model_factory=self.create_model)`
+
+### Reused Helpers (from ai.py)
+
+| Helper | Used For |
+|--------|----------|
+| `_build_skill_system_prompt()` | Skill injection into system_message |
+| `_build_tool_from_node()` | Schema-only tool stubs from tool_data |
+| `is_model_valid_for_provider()` | Model validation against provider |
+| `get_default_model_async()` | Default model from llm_defaults.json |
+| `_resolve_max_tokens()` | Max tokens from model registry |
+| `_resolve_temperature()` | Temperature clamped to provider range |
+| `self.create_model()` | Pre-built BaseChatModel with API key |
+| `_parse_memory_markdown()` | Parse SimpleMemory markdown to messages |
+| `_get_memory_vector_store()` | Long-term vector store retrieval |
+| `_append_to_memory_markdown()` | Append exchange to memory |
+| `_trim_markdown_window()` | Trim + archive removed messages |
+| `extract_thinking_from_response()` | Extract thinking/reasoning content |
+| `log_execution_time()`, `log_api_call()` | Metrics tracking |
+
+---
+
+## Tool Execution
+
+### Problem
+`_build_tool_from_node()` returns schema-only stubs with `placeholder_func` that echo kwargs back. deepagents' `ToolNode` calls `tool.ainvoke()` directly, so these stubs fail silently.
+
+### Solution
+The handler wraps each stub with a real async coroutine via `_make_executable_tool()`:
 
 ```python
-# server/services/ai.py - inside execute_chat_agent()
-# After all shared setup: skill injection, tool building, model resolution...
+def _make_executable_tool(tool, config, workflow_id, broadcaster):
+    async def _execute(**kwargs):
+        from services.handlers.tools import execute_tool
+        # Broadcast glow effect to tool node
+        # Call execute_tool(tool_name, kwargs, config)
+        # Broadcast success/error
+        return result
 
-if node_type == 'deep_agent':
-    from deepagents import create_deep_agent
-
-    _da_prefix = {"gemini": "google_genai"}
-    model_id = f"{_da_prefix.get(provider, provider)}:{model}"
-    max_turns = int(parameters.get('maxTurns', 25))
-
-    agent = create_deep_agent(
-        model=model_id,
-        tools=all_tools if all_tools else None,
-        system_prompt=system_message,
+    return StructuredTool.from_function(
+        name=tool.name,
+        description=tool.description,
+        coroutine=_execute,
+        args_schema=tool.get_input_schema(),
     )
-
-    da_result = await agent.ainvoke(
-        {"messages": [{"role": "user", "content": prompt}]},
-        config={"recursion_limit": max_turns * 2},
-    )
-    # ... extract response from last AI message
 ```
 
-### What is Reused (from execute_chat_agent)
+This follows the deepagents pattern: `StructuredTool.from_function(coroutine=async_fn, args_schema=...)`.
 
-| Step | Function | Description |
-|------|----------|-------------|
-| Skill injection | `_build_skill_system_prompt()` | SKILL.md instructions merged into system_message |
-| Tool building | `_build_tool_from_node()` | Connected tool nodes -> LangChain StructuredTool |
-| Model validation | `is_model_valid_for_provider()` | Validates model against provider's model list |
-| Default model | `get_default_model_async()` | Falls back to llm_defaults.json default |
-| API key | `self.auth.get_api_key()` | Fetches from encrypted credentials |
-| Max tokens | `_resolve_max_tokens()` | Resolves from model registry + llm_defaults |
-| Temperature | `_resolve_temperature()` | Clamped to provider range, thinking-aware |
-| Status broadcast | `broadcast_status()` | Real-time UI updates via WebSocket |
-| Token logging | `log_execution_time()`, `log_api_call()` | Metrics tracking |
+Connected MachinaOs tools (calculator, search, WhatsApp, etc.) execute via `handlers/tools.py execute_tool()`, with real-time glow effects broadcast to tool nodes.
 
-### Provider Mapping
+---
 
-MachinaOs providers map to deepagents model prefixes:
+## Memory Integration
 
-| MachinaOs Provider | deepagents Prefix | Example |
-|-------------------|-------------------|---------|
-| `openai` | `openai` | `openai:gpt-5.4` |
-| `anthropic` | `anthropic` | `anthropic:claude-sonnet-4-6` |
-| `gemini` | `google_genai` | `google_genai:gemini-2.5-flash` |
-| `openrouter` | `openrouter` | `openrouter:anthropic/claude-sonnet-4.6` |
-| `groq` | `groq` | `groq:llama-4-scout` |
-| `cerebras` | `cerebras` | `cerebras:llama3.1-8b` |
-| `deepseek` | `deepseek` | `deepseek:deepseek-chat` |
-| `kimi` | `kimi` | `kimi:kimi-k2.5` |
-| `mistral` | `mistral` | `mistral:mistral-large-latest` |
+Deep Agent supports MachinaOs's SimpleMemory node (markdown-based + vector store), following the same lifecycle as `execute_chat_agent`:
 
-Only `gemini` differs (`google_genai`). All others use the MachinaOs provider name directly.
+### Load (before agent invocation)
+1. Parse markdown via `_parse_memory_markdown()` into LangChain messages
+2. If `long_term_enabled`: retrieve relevant context from `_get_memory_vector_store()` via `similarity_search()`, append to system_message
+3. Prepend history messages to the deepagents input messages list
 
-### Team Mode (Teammate Delegation)
+### Save (after agent invocation)
+1. Append human prompt and AI response via `_append_to_memory_markdown()`
+2. Trim to `window_size` via `_trim_markdown_window()`
+3. Archive removed messages to vector store if `long_term_enabled`
+4. Persist updated markdown to database via `save_node_parameters()`
 
-`deep_agent` is in `TEAM_LEAD_TYPES` alongside `orchestrator_agent` and `ai_employee`. Agents connected to the `input-teammates` handle become delegation tools in `tool_data`, which are then built as `delegate_to_*` StructuredTools and passed to `create_deep_agent(tools=...)`.
+### Result Metadata
+```python
+result["memory"] = {
+    "session_id": session_id,
+    "history_loaded": history_count,
+}
+```
 
 ---
 
@@ -299,22 +289,45 @@ Plus one additional property:
 - **Dimensions:** 300x200px
 - **Component:** `AIAgentNode` (shared with all specialized agents)
 
+### Output Schema
+
+Matches `execute_chat_agent` format for frontend compatibility:
+```python
+{
+    "response": str,           # AI text response
+    "thinking": str | None,    # Extracted thinking/reasoning
+    "thinking_enabled": bool,
+    "model": str, "provider": str,
+    "agent_type": str,         # "deep_agent", "deep_agent_with_tools", etc.
+    "iterations": int,         # Tool-call loop count
+    "messages_count": int,
+    "finish_reason": "stop",
+    "timestamp": str,
+    "input": {"prompt": str, "system_message": str},
+    "memory": {"session_id": str, "history_loaded": int},  # if connected
+    "skills": {"connected": [str], "count": int},           # if connected
+    "tools": {"connected": [str], "count": int},            # if connected
+}
+```
+
 ---
 
 ## Key Files
 
-| File | What Changed |
+| File | Description |
 |------|-------------|
+| `server/services/deep_agent_service.py` | DeepAgentService execution engine |
+| `server/services/handlers/deep_agent.py` | Thin handler with `_make_executable_tool()` |
+| `server/services/ai.py` | AIService.__init__ composes `self.deep_agent_service` |
+| `server/services/node_executor.py` | Handler registry entry |
+| `server/services/handlers/__init__.py` | Import/export |
+| `server/services/handlers/tools.py` | Delegation tuple |
+| `server/constants.py` | `AI_AGENT_TYPES` |
 | `client/src/nodeDefinitions/specializedAgentNodes.ts` | Node definition + `SPECIALIZED_AGENT_TYPES` |
 | `client/src/components/AIAgentNode.tsx` | `AGENT_CONFIGS` visual entry |
 | `client/src/components/parameterPanel/MiddleSection.tsx` | `AGENT_WITH_SKILLS_TYPES` |
 | `client/src/components/parameterPanel/InputSection.tsx` | `AGENT_WITH_SKILLS_TYPES` + `aiAgentTypes` |
 | `client/src/contexts/WebSocketContext.tsx` | `LONG_RUNNING_NODE_TYPES` |
-| `server/constants.py` | `AI_AGENT_TYPES` |
-| `server/services/node_executor.py` | Handler registry -> `handle_chat_agent` |
-| `server/services/handlers/ai.py` | `TEAM_LEAD_TYPES`, passes `node_type` to service |
-| `server/services/ai.py` | `execute_chat_agent` branch + delegation tool name |
-| `server/services/handlers/tools.py` | Delegation tuple |
 | `server/requirements.txt` | `deepagents>=0.4.12` |
 | `server/pyproject.toml` | `deepagents>=0.4.12` |
 
@@ -322,17 +335,18 @@ Plus one additional property:
 
 ## Comparison with Other Agent Types
 
-| Aspect | chatAgent | deep_agent | claude_code_agent |
-|--------|-----------|------------|-------------------|
-| **Handler** | `handle_chat_agent` | `handle_chat_agent` | `handle_claude_code_agent` |
-| **Graph creation** | Manual LangGraph `build_agent_graph()` | `deepagents.create_deep_agent()` | Claude Code CLI subprocess |
-| **Built-in tools** | None (only connected tools) | 9 (filesystem, todos, task, execute) | 6 (Read, Edit, Bash, Glob, Grep, Write) |
-| **Connected tools** | Yes (via `input-tools`) | Yes (passed to `create_deep_agent(tools=)`) | No |
-| **Skills** | Yes | Yes | Yes (system prompt only) |
-| **Memory** | Yes (markdown + vector) | No (deepagents manages its own) | No |
-| **Teammates** | Only for team leads | Yes (TEAM_LEAD_TYPES) | No |
-| **Properties** | `AI_AGENT_PROPERTIES` | `AI_AGENT_PROPERTIES` + maxTurns | Custom (prompt, model, allowedTools, etc.) |
-| **Providers** | All 9 | All 9 | Anthropic only |
-| **Middleware** | None | 8-layer stack (auto-summarization, caching, etc.) | None |
-| **Auto-summarization** | No | Yes (SummarizationMiddleware) | No |
-| **Planning** | No | Yes (`write_todos` tool) | No |
+| Aspect | chatAgent | deep_agent | claude_code_agent | rlm_agent |
+|--------|-----------|------------|-------------------|-----------|
+| **Handler** | `handle_chat_agent` | `handle_deep_agent` | `handle_claude_code_agent` | `handle_rlm_agent` |
+| **Service** | `AIService.execute_chat_agent()` | `DeepAgentService.execute()` | `ClaudeCodeService.execute()` | `RLMService.execute()` |
+| **Graph creation** | `build_agent_graph()` | `create_deep_agent()` | Claude Code CLI | RLM REPL loop |
+| **Built-in tools** | None | 9 (filesystem, todos, task) | 6 (Read, Edit, Bash, etc.) | 3 (llm_query, rlm_query, FINAL) |
+| **Connected tools** | Yes | Yes (executable) | No | Yes (bridged) |
+| **Skills** | Yes | Yes | Yes (prompt only) | Yes |
+| **Memory** | Yes (markdown + vector) | Yes (markdown + vector) | No | Yes (context only) |
+| **Teammates** | Team leads only | Yes | No | No |
+| **Providers** | All 9 | All 9 | Anthropic only | All 9 |
+| **Middleware** | None | 8-layer stack | None | None |
+| **Auto-summarization** | No | Yes | No | No |
+| **Planning** | No | Yes (`write_todos`) | No | No |
+| **Tool glow effects** | Yes | Yes | No | No |

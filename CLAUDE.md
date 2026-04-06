@@ -37,6 +37,7 @@ This is a React Flow-based workflow automation platform implementing n8n-inspire
 | **[Status Broadcaster](./docs-internal/status_broadcaster.md)** | WebSocket-first communication: StatusBroadcaster singleton, 89 handlers, broadcast message types, Android two-state model |
 | **[RLM Service](./docs-internal/rlm_service.md)** | Recursive Language Model agent with REPL-based execution (llm_query, rlm_query, FINAL) |
 | **[Claude Code Agent](./docs-internal/claude_code_agent_architecture.md)** | Claude Code SDK integration as a specialized agent node |
+| **[Deep Agent](./docs-internal/deep_agent.md)** | LangChain DeepAgents integration with filesystem tools, sub-agent delegation, auto-summarization, and planning |
 | **[Autonomous Agent Creation](./docs-internal/autonomous_agent_creation.md)** | Creating autonomous agents with Code Mode patterns and agentic loops |
 | **[Polyglot Server](../polyglot-server/ARCHITECTURE.md)** | Plugin registry microservice with MCP gateway (optional integration) |
 
@@ -395,7 +396,7 @@ class CacheEntry(SQLModel, table=True):
 
 ## Codebase Summary
 - **Hybrid architecture**: Node.js + Python + React TypeScript
-- **96 implemented workflow nodes** with clean service separation (9 AI models + 3 AI agents/memory + 15 specialized agents + 1 skill + 4 dedicated tools + 3 search + 16 Android + 3 WhatsApp + 4 Twitter + 2 Telegram + 2 Social + 3 Location + 3 Code + 6 Utility + 6 Document + 2 Chat + 2 Scheduler + 2 Workflow + 7 Google Workspace + 1 Apify + 1 Crawlee + 3 Proxy)
+- **97 implemented workflow nodes** with clean service separation (9 AI models + 3 AI agents/memory + 16 specialized agents + 1 skill + 4 dedicated tools + 3 search + 16 Android + 3 WhatsApp + 4 Twitter + 2 Telegram + 2 Social + 3 Location + 3 Code + 6 Utility + 6 Document + 2 Chat + 2 Scheduler + 2 Workflow + 7 Google Workspace + 1 Apify + 1 Crawlee + 3 Proxy)
 - **WebSocket-First Architecture**: WebSocket as primary frontend-backend communication (89 message handlers)
 - **Recent optimizations**: REST APIs replaced with WebSocket, AI endpoints migrated to Python, Android automation integrated
 
@@ -791,7 +792,7 @@ Search API nodes that work BOTH as standalone workflow nodes AND as AI Agent too
 - Brave Search and Perplexity in **Search** category
 - Serper in **Scrapers** category (Google SERP scraping)
 
-### Specialized AI Agents (14 nodes)
+### Specialized AI Agents (15 nodes)
 Specialized agents are AI Agents pre-configured for specific domains. They inherit full AI Agent functionality (provider, model, prompt, system message, thinking/reasoning) while being tailored for specific capabilities. All specialized agents route to `handle_chat_agent` in the backend and support the same input handles. Node colors use centralized dracula theme constants imported from `client/src/styles/theme.ts`.
 
 **Input Handles:**
@@ -816,9 +817,10 @@ Specialized agents are AI Agents pre-configured for specific domains. They inher
 - **orchestrator_agent**: Orchestrator Agent - Team lead agent for coordinating multiple agents. Connect specialized agents via `input-teammates` handle; they become `delegate_to_*` tools the AI can invoke.
 - **ai_employee**: AI Employee - Team lead agent similar to orchestrator_agent. Connect specialized agents via `input-teammates` handle for intelligent task delegation.
 - **rlm_agent**: RLM Agent - Recursive Language Model agent using REPL-based code execution with recursive LM calls. Replaces LangGraph tool-calling with RLM's `exec()` REPL loop (`llm_query()`, `rlm_query()`, `FINAL()`). Routes to dedicated `handle_rlm_agent` handler and `RLMService` (not `handle_chat_agent`). Connect AI chat model nodes as small LMs for depth>=1 calls. See `docs-internal/rlm_service.md`.
+- **deep_agent**: Deep Agent - AI agent powered by LangChain DeepAgents with built-in filesystem tools (read, write, edit, glob, grep, execute), sub-agent delegation, auto-summarization, and todo planning. Routes to dedicated `handle_deep_agent` handler and `DeepAgentService` (not `handle_chat_agent`). Supports memory, skills, connected tools, and teammate delegation via `input-teammates`. See `docs-internal/deep_agent.md`.
 
 **Backend Routing:**
-Specialized agents are detected by `SPECIALIZED_AGENT_TYPES` and routed to `handle_chat_agent` (except `rlm_agent` which routes to `handle_rlm_agent`):
+Specialized agents are detected by `SPECIALIZED_AGENT_TYPES` and routed to `handle_chat_agent` (except agents with dedicated execution engines):
 ```python
 # In node_executor.py - most specialized agents route to handle_chat_agent
 SPECIALIZED_AGENT_TYPES = {
@@ -827,6 +829,7 @@ SPECIALIZED_AGENT_TYPES = {
     'autonomous_agent', 'orchestrator_agent', 'ai_employee',
 }
 # rlm_agent routes to handle_rlm_agent -> RLMService (dedicated handler + service)
+# deep_agent routes to handle_deep_agent -> DeepAgentService (dedicated handler + service)
 ```
 
 **Team Lead Types (Agent Teams Pattern):**
@@ -834,6 +837,7 @@ Team leads (`orchestrator_agent`, `ai_employee`) have a special `input-teammates
 ```python
 # In handlers/ai.py
 TEAM_LEAD_TYPES = {'orchestrator_agent', 'ai_employee'}
+# deep_agent collects teammates in handle_deep_agent and converts to deepagents SubAgent dicts
 
 # Teammates become delegate_to_* tools automatically
 if node_type in TEAM_LEAD_TYPES:
@@ -2216,6 +2220,7 @@ The system supports specialized agent variants that inherit from the base AI Age
 | Orchestrator | `orchestrator_agent` | conductor | cyan |
 | AI Employee | `ai_employee` | briefcase | purple |
 | RLM Agent | `rlm_agent` | brain | orange |
+| Deep Agent | `deep_agent` | brain (U+1F9E0) | green |
 
 All specialized agents share the same handle configuration:
 - **Left**: `input-main` (Input, 30%), `input-memory` (Memory, 55%), `input-task` (Task, 85%)
