@@ -14,10 +14,6 @@ const COMMANDS = {
   stop: 'Stop all running services',
   build: 'Build the project for production',
   clean: 'Clean build artifacts',
-  'docker:up': 'Start with Docker Compose',
-  'docker:down': 'Stop Docker Compose services',
-  'docker:build': 'Build Docker images',
-  'docker:logs': 'View Docker logs',
   help: 'Show this help message',
   version: 'Show version number',
 };
@@ -41,8 +37,6 @@ Examples:
   machina start -v       # Production with full logs
   machina dev            # Development with hot-reload
   machina build          # Build for production
-  machina docker:up      # Start with Docker
-
 Documentation: https://docs.zeenie.xyz/
 `);
 }

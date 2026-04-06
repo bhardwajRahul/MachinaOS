@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Common utilities for MachinaOS scripts.
- * Shared across: start.js, stop.js, clean.js, docker.js, build.js
+ * Shared across: start.js, stop.js, clean.js, build.js
  *
  * Port/process killing uses Python psutil exclusively (native OS APIs,
  * no shell pipes, works in all terminals including Git Bash on Windows).
