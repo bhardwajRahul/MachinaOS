@@ -913,6 +913,9 @@ class AIService:
         # RLM service (lazy import to avoid circular deps)
         from services.rlm import RLMService
         self.rlm_service = RLMService(auth=self.auth)
+        # Deep Agent service (deepagents package)
+        from services.deep_agent_service import DeepAgentService
+        self.deep_agent_service = DeepAgentService(auth=self.auth)
 
     def detect_provider(self, model: str) -> str:
         """Detect AI provider from model name."""
@@ -1913,8 +1916,7 @@ class AIService:
                                   broadcaster=None,
                                   workflow_id: Optional[str] = None,
                                   context: Optional[Dict[str, Any]] = None,
-                                  database=None,
-                                  node_type: Optional[str] = None) -> Dict[str, Any]:
+                                  database=None) -> Dict[str, Any]:
         """Execute Chat Agent - conversational AI with memory, skills, and tool calling.
 
         Chat Agent supports:
@@ -2121,52 +2123,6 @@ class AIService:
             # Execute with or without tools
             thinking_content = None
             iterations = 1
-
-            # Deep Agent: delegate to deepagents package (create_deep_agent)
-            # All tools, system_message, and model are already resolved above.
-            if node_type == 'deep_agent':
-                from deepagents import create_deep_agent
-
-                # Map provider to deepagents model string format
-                _da_prefix = {"gemini": "google_genai"}
-                model_id = f"{_da_prefix.get(provider, provider)}:{model}"
-                max_turns = int(parameters.get('maxTurns', 25))
-
-                agent = create_deep_agent(
-                    model=model_id,
-                    tools=all_tools if all_tools else None,
-                    system_prompt=system_message,
-                )
-
-                da_result = await agent.ainvoke(
-                    {"messages": [{"role": "user", "content": prompt}]},
-                    config={"recursion_limit": max_turns * 2},
-                )
-
-                da_messages = da_result.get("messages", [])
-                response_content = ""
-                for msg in reversed(da_messages):
-                    if getattr(msg, "type", None) == "ai" and hasattr(msg, "content"):
-                        response_content = msg.content if isinstance(msg.content, str) else str(msg.content)
-                        break
-
-                log_execution_time(logger, "deep_agent", start_time, time.time())
-                log_api_call(logger, provider, model, "deep_agent", True)
-
-                return {
-                    "success": True,
-                    "node_id": node_id,
-                    "node_type": "deep_agent",
-                    "result": {
-                        "response": response_content,
-                        "model": model,
-                        "provider": provider,
-                        "messages_count": len(da_messages),
-                        "finish_reason": "stop",
-                        "timestamp": datetime.now().isoformat(),
-                    },
-                    "execution_time": time.time() - start_time,
-                }
 
             if all_tools:
                 # Use LangGraph for tool execution (like AI Agent)

@@ -117,6 +117,9 @@ from .crawlee import handle_crawlee_scraper
 # RLM agent handler
 from .rlm import handle_rlm_agent
 
+# Deep Agent handler
+from .deep_agent import handle_deep_agent
+
 # Tool execution handlers (for AI Agent tool calling)
 from .tools import (
     execute_tool,
@@ -186,6 +189,8 @@ __all__ = [
     'handle_crawlee_scraper',
     # RLM
     'handle_rlm_agent',
+    # Deep Agent
+    'handle_deep_agent',
     # Tools
     'execute_tool',
     'handle_task_manager',
