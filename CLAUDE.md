@@ -91,6 +91,11 @@ server/services/
 │       ├── openai.py        # OpenAIProvider (openai SDK)
 │       ├── gemini.py        # GeminiProvider (google-genai SDK)
 │       └── openrouter.py    # OpenRouterProvider (extends OpenAIProvider)
+├── agents/                  # Deep Agent execution engine (deepagents package)
+│   ├── __init__.py          # Exports DeepAgentService
+│   ├── service.py           # Orchestration: graph creation + invocation
+│   ├── adapters.py          # ToolAdapter, SubAgentAdapter, ResponseExtractor
+│   └── constants.py         # PROVIDER_PREFIX, DEFAULT_MAX_TURNS
 ├── proxy/                   # Residential proxy provider management
 │   ├── __init__.py          # Exports get_proxy_service, ProxyService
 │   ├── service.py           # ProxyService singleton - provider selection, URL generation
@@ -829,7 +834,7 @@ SPECIALIZED_AGENT_TYPES = {
     'autonomous_agent', 'orchestrator_agent', 'ai_employee',
 }
 # rlm_agent routes to handle_rlm_agent -> RLMService (dedicated handler + service)
-# deep_agent routes to handle_deep_agent -> DeepAgentService (dedicated handler + service)
+# deep_agent routes to handle_deep_agent -> DeepAgentService (services/agents/ package)
 ```
 
 **Team Lead Types (Agent Teams Pattern):**

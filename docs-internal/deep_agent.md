@@ -61,20 +61,21 @@ handle_deep_agent()                       server/services/handlers/deep_agent.py
      - input-task    -> task_data
   2. _format_task_context()               [REUSE from handlers/ai.py]
   3. Auto-prompt fallback                 [same pattern as handle_rlm_agent]
-  4. _build_tool_from_node() -> schema stubs
-     _make_executable_tool() -> real async coroutines
-  5. _collect_teammate_connections()       [REUSE from handlers/ai.py]
-  6. Delegates to ai_service.deep_agent_service.execute()
+  4. _collect_teammate_connections()       [REUSE from handlers/ai.py]
+  5. Passes raw tool_data + build_tool_fn to service
         |
         v
-DeepAgentService.execute()               server/services/deep_agent_service.py
-  Reuses module-level helpers from ai.py:
-  - _build_skill_system_prompt() -> system_message
-  - is_model_valid_for_provider(), get_default_model_async()
-  - _resolve_max_tokens(), _resolve_temperature()
-  - self._create_model() -> pre-built BaseChatModel
-  - _parse_memory_markdown(), _get_memory_vector_store()  [memory load]
-  - _append_to_memory_markdown(), _trim_markdown_window()  [memory save]
+DeepAgentService.execute()               server/services/agents/service.py
+  Orchestration only -- delegates to adapters and shared helpers:
+  - _build_skill_system_prompt()          [ai.py] -> system_message
+  - is_model_valid_for_provider()         [ai.py] -> model validation
+  - self._create_model()                  [ai.py] -> pre-built BaseChatModel
+  - ToolAdapter.build_tools()             [agents/adapters.py] -> executable tools
+  - SubAgentAdapter.convert()             [agents/adapters.py] -> deepagents SubAgent dicts
+  - _parse_memory_markdown()              [ai.py] -> memory load
+  - create_deep_agent() + ainvoke()       [deepagents] -> graph execution
+  - ResponseExtractor.extract()           [agents/adapters.py] -> response + thinking
+  - _append_to_memory_markdown()          [ai.py] -> memory save
         |
         v
 deepagents.create_deep_agent()           deepagents package
@@ -89,7 +90,7 @@ agent.ainvoke(messages)                  LangGraph CompiledStateGraph
     -> Summarization -> ToolCallPatching -> PromptCaching
         |
         v
-Extract response + thinking -> save memory -> return result
+ResponseExtractor.extract() -> save memory -> return result
 ```
 
 ---
@@ -169,11 +170,22 @@ Custom tools passed via `tools=` parameter are added alongside (not replacing) t
 
 ### Execution Path
 
-Deep Agent has a **dedicated handler and service** following the RLMService pattern:
+Deep Agent has a **dedicated handler and modular service package** following the RLMService pattern:
 
-- **Handler** (`handlers/deep_agent.py`): Thin wrapper that collects connections, builds executable tools, delegates to service
-- **Service** (`deep_agent_service.py`): Execution engine that handles skill injection, model resolution, memory lifecycle, and `create_deep_agent()` invocation
+- **Handler** (`handlers/deep_agent.py`): Thin wrapper that collects connections, passes raw `tool_data` to service
+- **Service package** (`services/agents/`): Modular execution engine split into:
+  - `service.py` -- Orchestration: calls adapters and shared helpers
+  - `adapters.py` -- Protocol translation: `ToolAdapter`, `SubAgentAdapter`, `ResponseExtractor`
+  - `constants.py` -- Provider mappings and defaults
 - **Composition**: `AIService.__init__` creates `self.deep_agent_service = DeepAgentService(auth=self.auth, model_factory=self.create_model)`
+
+```
+server/services/agents/              (mirrors services/rlm/)
+  __init__.py          - Public API: exports DeepAgentService
+  service.py           - Orchestration only
+  adapters.py          - ToolAdapter, SubAgentAdapter, ResponseExtractor
+  constants.py         - PROVIDER_PREFIX, DEFAULT_MAX_TURNS
+```
 
 ### Reused Helpers (from ai.py)
 
@@ -201,28 +213,24 @@ Deep Agent has a **dedicated handler and service** following the RLMService patt
 `_build_tool_from_node()` returns schema-only stubs with `placeholder_func` that echo kwargs back. deepagents' `ToolNode` calls `tool.ainvoke()` directly, so these stubs fail silently.
 
 ### Solution
-The handler wraps each stub with a real async coroutine via `_make_executable_tool()`:
+`ToolAdapter` (in `agents/adapters.py`) wraps each schema-only stub with a real async coroutine:
 
 ```python
-def _make_executable_tool(tool, config, workflow_id, broadcaster):
-    async def _execute(**kwargs):
-        from services.handlers.tools import execute_tool
-        # Broadcast glow effect to tool node
-        # Call execute_tool(tool_name, kwargs, config)
-        # Broadcast success/error
-        return result
+# agents/adapters.py - ToolAdapter._wrap()
+async def _execute(**kwargs):
+    from services.handlers.tools import execute_tool
+    result = await execute_tool(tool_name, kwargs, config)
+    return result
 
-    return StructuredTool.from_function(
-        name=tool.name,
-        description=tool.description,
-        coroutine=_execute,
-        args_schema=tool.get_input_schema(),
-    )
+return StructuredTool.from_function(
+    coroutine=_execute,
+    args_schema=tool.get_input_schema(),
+)
 ```
 
 This follows the deepagents pattern: `StructuredTool.from_function(coroutine=async_fn, args_schema=...)`.
 
-Connected MachinaOs tools (calculator, search, WhatsApp, etc.) execute via `handlers/tools.py execute_tool()`, with real-time glow effects broadcast to tool nodes.
+The handler passes raw `tool_data` to the service, which calls `ToolAdapter.build_tools()` to build executable tools. Connected MachinaOs tools (calculator, search, WhatsApp, etc.) execute via `handlers/tools.py execute_tool()`, with real-time glow effects broadcast to tool nodes.
 
 ---
 
@@ -314,20 +322,36 @@ Matches `execute_chat_agent` format for frontend compatibility:
 
 ## Key Files
 
+### Service Package (`server/services/agents/`)
 | File | Description |
 |------|-------------|
-| `server/services/deep_agent_service.py` | DeepAgentService execution engine |
-| `server/services/handlers/deep_agent.py` | Thin handler with `_make_executable_tool()` |
+| `server/services/agents/__init__.py` | Public API: exports `DeepAgentService` |
+| `server/services/agents/service.py` | Orchestration: calls adapters, shared helpers, `create_deep_agent()` |
+| `server/services/agents/adapters.py` | `ToolAdapter`, `SubAgentAdapter`, `ResponseExtractor` |
+| `server/services/agents/constants.py` | `PROVIDER_PREFIX`, `DEFAULT_MAX_TURNS` |
+
+### Handler and Wiring
+| File | Description |
+|------|-------------|
+| `server/services/handlers/deep_agent.py` | Thin handler: collects connections, passes raw tool_data |
+| `server/services/handlers/__init__.py` | Import/export `handle_deep_agent` |
 | `server/services/ai.py` | AIService.__init__ composes `self.deep_agent_service` |
 | `server/services/node_executor.py` | Handler registry entry |
-| `server/services/handlers/__init__.py` | Import/export |
 | `server/services/handlers/tools.py` | Delegation tuple |
 | `server/constants.py` | `AI_AGENT_TYPES` |
+
+### Frontend
+| File | Description |
+|------|-------------|
 | `client/src/nodeDefinitions/specializedAgentNodes.ts` | Node definition + `SPECIALIZED_AGENT_TYPES` |
 | `client/src/components/AIAgentNode.tsx` | `AGENT_CONFIGS` visual entry |
 | `client/src/components/parameterPanel/MiddleSection.tsx` | `AGENT_WITH_SKILLS_TYPES` |
 | `client/src/components/parameterPanel/InputSection.tsx` | `AGENT_WITH_SKILLS_TYPES` + `aiAgentTypes` |
 | `client/src/contexts/WebSocketContext.tsx` | `LONG_RUNNING_NODE_TYPES` |
+
+### Dependencies
+| File | Description |
+|------|-------------|
 | `server/requirements.txt` | `deepagents>=0.4.12` |
 | `server/pyproject.toml` | `deepagents>=0.4.12` |
 

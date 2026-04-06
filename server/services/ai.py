@@ -905,8 +905,8 @@ class AIService:
         from services.rlm import RLMService
         self.rlm_service = RLMService(auth=self.auth)
         # Deep Agent service (deepagents package)
-        from services.deep_agent_service import DeepAgentService
-        self.deep_agent_service = DeepAgentService(auth=self.auth, model_factory=self.create_model)
+        from services.agents import DeepAgentService
+        self.deep_agent_service = DeepAgentService(auth=self.auth, model_factory=self.create_model, token_tracker=self._track_token_usage)
 
     def detect_provider(self, model: str) -> str:
         """Detect AI provider from model name."""
