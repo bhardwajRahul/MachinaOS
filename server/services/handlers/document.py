@@ -145,7 +145,9 @@ async def handle_file_downloader(
 
     try:
         items = parameters.get('items', [])
-        output_dir = Path(parameters.get('outputDir', './data/downloads'))
+        workspace_dir = context.get('workspace_dir', '')
+        default_dir = str(Path(workspace_dir) / 'downloads') if workspace_dir else 'downloads'
+        output_dir = Path(parameters.get('outputDir') or default_dir)
         max_workers = int(parameters.get('maxWorkers', 8))
         skip_existing = parameters.get('skipExisting', True)
         timeout = float(parameters.get('timeout', 60))

@@ -63,7 +63,12 @@ async def handle_deep_agent(
     # 4. Collect teammates
     teammates = await _collect_teammate_connections(node_id, context, database)
 
-    # 5. Delegate to DeepAgentService (raw tool_data, service builds via ToolAdapter)
+    # 5. Pass workspace directory for filesystem tools
+    workspace_dir = context.get('workspace_dir')
+    if workspace_dir:
+        parameters = {**parameters, 'workspace_dir': workspace_dir}
+
+    # 6. Delegate to DeepAgentService (raw tool_data, service builds via ToolAdapter)
     broadcaster = get_status_broadcaster()
     return await ai_service.deep_agent_service.execute(
         node_id, parameters,

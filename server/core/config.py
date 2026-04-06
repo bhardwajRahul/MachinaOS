@@ -128,6 +128,9 @@ class Settings(BaseSettings):
     # Feature Toggles
     ws_logging_enabled: bool = Field(default=True, env="WS_LOGGING_ENABLED")
 
+    # Workspace Configuration (per-workflow file storage for nodes and agents)
+    workspace_base_dir: str = Field(default="data/workspaces", env="WORKSPACE_BASE_DIR")
+
     # Compaction Configuration
     compaction_enabled: bool = Field(default=True, env="COMPACTION_ENABLED")
     compaction_threshold: int = Field(default=100000, env="COMPACTION_THRESHOLD", ge=10000)

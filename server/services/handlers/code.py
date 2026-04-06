@@ -89,6 +89,7 @@ async def handle_python_executor(
         namespace = {
             '__builtins__': safe_builtins,
             'input_data': input_data,
+            'workspace_dir': context.get('workspace_dir', ''),
             'output': None
         }
 
@@ -168,8 +169,9 @@ async def handle_javascript_executor(
                 "timestamp": datetime.now().isoformat()
             }
 
-        # Get input data from connected nodes
+        # Get input data from connected nodes + workspace path
         input_data = connected_outputs or {}
+        input_data['workspace_dir'] = context.get('workspace_dir', '')
 
         # Get Node.js client
         client = get_nodejs_client(
@@ -266,6 +268,7 @@ async def handle_typescript_executor(
             }
 
         input_data = connected_outputs or {}
+        input_data['workspace_dir'] = context.get('workspace_dir', '')
 
         client = get_nodejs_client(
             nodejs_url or "http://localhost:3020",

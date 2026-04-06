@@ -154,7 +154,11 @@ class DeepAgentService:
 
             max_turns = int(parameters.get('maxTurns', DEFAULT_MAX_TURNS))
 
-            await broadcast_status("executing", {"message": f"Running Deep Agent ({provider}/{model})...", "tool_count": len(executable_tools)})
+            await broadcast_status("executing", {
+                "message": f"Running Deep Agent ({provider}/{model})...",
+                "tool_count": len(executable_tools),
+                "workspace": parameters.get('workspace_dir', ''),
+            })
 
             agent = create_agent(
                 model=chat_model,

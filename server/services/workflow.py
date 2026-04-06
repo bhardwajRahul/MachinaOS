@@ -12,6 +12,7 @@ Following n8n/Conductor patterns for clean separation of concerns.
 
 import time
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, Any, List, Optional, TYPE_CHECKING
 
 from core.logging import get_logger
@@ -132,6 +133,14 @@ class WorkflowService:
     # NODE EXECUTION
     # =========================================================================
 
+    def _get_workspace_dir(self, workflow_id: Optional[str]) -> str:
+        """Get or create workspace directory for a workflow."""
+        base = Path(self.settings.workspace_base_dir)
+        wf_id = workflow_id or "default"
+        workspace = base / wf_id
+        workspace.mkdir(parents=True, exist_ok=True)
+        return str(workspace.resolve())
+
     async def execute_node(
         self,
         node_id: str,
@@ -145,12 +154,14 @@ class WorkflowService:
         outputs: Dict[str, Any] = None,
     ) -> Dict[str, Any]:
         """Execute a single workflow node."""
+        workspace_dir = self._get_workspace_dir(workflow_id)
         context = {
             "nodes": nodes,
             "edges": edges,
             "session_id": session_id,
             "execution_id": execution_id,
             "workflow_id": workflow_id,  # For per-workflow status scoping (n8n pattern)
+            "workspace_dir": workspace_dir,  # Per-workflow filesystem for nodes and agents
             "get_output_fn": self.get_node_output,
             "outputs": outputs or {},  # Upstream node outputs for data flow (e.g., taskTrigger -> chatAgent)
         }
@@ -178,7 +189,7 @@ class WorkflowService:
             edges=context.get("edges"),
             session_id=context.get("session_id", "default"),
             execution_id=context.get("execution_id"),
-            workflow_id=context.get("workflow_id"),  # Pass workflow_id for status scoping
+            workflow_id=context.get("workflow_id"),
         )
 
     # =========================================================================
