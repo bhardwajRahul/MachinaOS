@@ -1,8 +1,10 @@
 # pnpm Migration - Incremental Phased Plan
 
+**Status: COMPLETE** -- All 6 phases implemented and CI-verified on branch `pnpm-phased-migration`.
+
 ## Context
 
-MachinaOs uses npm 10 with workspaces but has 3 fragmented Node.js dependency trees (root, `client/`, orphaned `server/nodejs/`), no `packageManager` pinning, no CI cache strategy, and heavy `node_modules` duplication from React 19 + Ant Design 5. This plan breaks the migration into 6 self-contained PRs ordered by performance gain and risk.
+MachinaOs used npm 10 with workspaces but had 3 fragmented Node.js dependency trees (root, `client/`, orphaned `server/nodejs/`), no `packageManager` pinning, no CI cache strategy, and heavy `node_modules` duplication from React 19 + Ant Design 5. This plan broke the migration into 6 self-contained commits ordered by performance gain and risk.
 
 **Pain points:**
 1. **Fragmented lockfiles** -- 3 uncoordinated Node projects with separate `package-lock.json` files that drift over time
@@ -17,7 +19,7 @@ MachinaOs uses npm 10 with workspaces but has 3 fragmented Node.js dependency tr
 
 ---
 
-## Phase 1: Config Files Only (additive, zero-risk)
+## Phase 1: Config Files Only (additive, zero-risk) -- DONE
 
 **Goal**: Land pnpm config files so any developer with pnpm can run `pnpm install`. npm continues to work unchanged.
 
@@ -36,7 +38,7 @@ MachinaOs uses npm 10 with workspaces but has 3 fragmented Node.js dependency tr
 
 ---
 
-## Phase 2: Lockfile Swap + Workspace Unification
+## Phase 2: Lockfile Swap + Workspace Unification -- DONE
 
 **Goal**: Replace `package-lock.json` with `pnpm-lock.yaml`. Bring `server/nodejs` into the workspace. This is the commitment point -- contributors must use pnpm after this.
 
@@ -54,7 +56,7 @@ MachinaOs uses npm 10 with workspaces but has 3 fragmented Node.js dependency tr
 
 ---
 
-## Phase 3: CI Pipeline Migration (biggest perf win)
+## Phase 3: CI Pipeline Migration (biggest perf win) -- DONE
 
 **Goal**: Switch GitHub Actions from npm to pnpm with content-addressable store caching. Expected 30-50% faster CI cold installs.
 
@@ -76,7 +78,7 @@ MachinaOs uses npm 10 with workspaces but has 3 fragmented Node.js dependency tr
 
 ---
 
-## Phase 4: Script Migration (developer experience)
+## Phase 4: Script Migration (developer experience) -- DONE
 
 **Goal**: Internal scripts use pnpm. `pnpm run start/dev/build/clean` all work natively.
 
@@ -98,7 +100,7 @@ MachinaOs uses npm 10 with workspaces but has 3 fragmented Node.js dependency tr
 
 ---
 
-## Phase 5: End-User Hardening + `machina doctor`
+## Phase 5: End-User Hardening + `machina doctor` -- DONE
 
 **Goal**: Better diagnostics, clearer contributor guidance.
 
@@ -120,7 +122,7 @@ MachinaOs uses npm 10 with workspaces but has 3 fragmented Node.js dependency tr
 
 ---
 
-## Phase 6: Strictness + Scale
+## Phase 6: Strictness + Scale -- DONE
 
 **Goal**: Prevent regression, catch lockfile drift, block accidental npm usage.
 
