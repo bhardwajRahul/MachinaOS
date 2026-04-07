@@ -1214,7 +1214,7 @@ Residential proxy provider management with geo-targeting, session control, and a
 - **typescriptExecutor**: **Dual-purpose node** - Execute TypeScript code via persistent Node.js server with type safety, syntax-highlighted editor and console output. Works as workflow node OR AI Agent tool (`typescript_code`).
 
 ### Filesystem & Shell Nodes (4 nodes)
-Dual-purpose tool nodes delegating to `deepagents.backends.LocalShellBackend`. Workspace path configured via `DEEP_AGENT_WORKSPACE` env var (default: `./workspace`). Uses `virtual_mode=True` to confine paths.
+Dual-purpose tool nodes delegating to `deepagents.backends.LocalShellBackend`. Uses per-workflow workspace from execution context (`context["workspace_dir"]` = `data/workspaces/<workflow_id>/`). `virtual_mode=True` confines paths within the workspace.
 
 - **fileRead**: **Dual-purpose node** - Read file contents with line numbers and pagination. Works as workflow node OR AI Agent tool (`file_read`). Parameters: file_path, offset, limit.
 - **fileModify**: **Dual-purpose node** - Write new files or edit existing files with string replacement. Works as workflow node OR AI Agent tool (`file_modify`). Operations: write (create/overwrite), edit (find and replace with old_string/new_string/replace_all).

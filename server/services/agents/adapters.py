@@ -28,6 +28,7 @@ class ToolAdapter:
         build_tool_fn,
         workflow_id: str = None,
         broadcaster=None,
+        workspace_dir: str = "",
     ) -> List[StructuredTool]:
         """Build executable tools from raw tool_data.
 
@@ -36,20 +37,23 @@ class ToolAdapter:
             build_tool_fn: AIService._build_tool_from_node (async).
             workflow_id: For scoped status broadcasts.
             broadcaster: For tool node glow effects.
+            workspace_dir: Per-workflow workspace path for filesystem tools.
 
         Returns:
             List of StructuredTools with real async executors.
         """
         # Return coroutine - must be awaited
-        return ToolAdapter._build_tools_async(tool_data, build_tool_fn, workflow_id, broadcaster)
+        return ToolAdapter._build_tools_async(tool_data, build_tool_fn, workflow_id, broadcaster, workspace_dir)
 
     @staticmethod
-    async def _build_tools_async(tool_data, build_tool_fn, workflow_id, broadcaster):
+    async def _build_tools_async(tool_data, build_tool_fn, workflow_id, broadcaster, workspace_dir=""):
         executable = []
         for tool_info in tool_data:
             try:
                 tool, config = await build_tool_fn(tool_info)
                 if tool and config:
+                    if workspace_dir:
+                        config['workspace_dir'] = workspace_dir
                     executable.append(
                         ToolAdapter._wrap(tool, config, workflow_id, broadcaster)
                     )

@@ -139,7 +139,9 @@ class WorkflowService:
         wf_id = workflow_id or "default"
         workspace = base / wf_id
         workspace.mkdir(parents=True, exist_ok=True)
-        return str(workspace.resolve())
+        resolved = str(workspace.resolve())
+        logger.info("[Workspace] workflow_id=%s -> %s", wf_id, resolved)
+        return resolved
 
     async def execute_node(
         self,

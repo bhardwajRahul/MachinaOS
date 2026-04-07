@@ -14,11 +14,14 @@ from core.logging import get_logger
 logger = get_logger(__name__)
 
 
-def _get_backend(parameters: Dict[str, Any]):
-    """Get a LocalShellBackend rooted at configured workspace."""
+def _get_backend(parameters: Dict[str, Any], context: Dict[str, Any] = None):
+    """Get a LocalShellBackend rooted at per-workflow workspace."""
     from deepagents.backends import LocalShellBackend
-    from core.container import container
-    root = parameters.get('working_directory') or container.settings().deep_agent_workspace or os.getcwd()
+    param_dir = parameters.get('working_directory')
+    ctx_dir = context.get('workspace_dir') if context else None
+    root = param_dir or ctx_dir or os.getcwd()
+    logger.info("[Filesystem] root=%s (param=%s, context=%s, fallback_cwd=%s)",
+                root, param_dir, ctx_dir, os.getcwd())
     return LocalShellBackend(root_dir=root, virtual_mode=True)
 
 
@@ -31,7 +34,7 @@ async def handle_file_read(
         return {"success": False, "node_id": node_id, "error": "file_path is required"}
 
     try:
-        backend = _get_backend(parameters)
+        backend = _get_backend(parameters, context)
         content = backend.read(file_path, offset=int(parameters.get('offset', 0)), limit=int(parameters.get('limit', 100)))
         return {
             "success": True, "node_id": node_id,
@@ -51,7 +54,7 @@ async def handle_file_modify(
         return {"success": False, "node_id": node_id, "error": "file_path is required"}
 
     try:
-        backend = _get_backend(parameters)
+        backend = _get_backend(parameters, context)
 
         if operation == 'write':
             content = parameters.get('content', '')
@@ -93,7 +96,7 @@ async def handle_shell(
 
     try:
         timeout = int(parameters.get('timeout', 30))
-        backend = _get_backend(parameters)
+        backend = _get_backend(parameters, context)
         result = backend.execute(command, timeout=timeout)
         return {
             "success": True, "node_id": node_id,
@@ -117,7 +120,7 @@ async def handle_fs_search(
     pattern = parameters.get('pattern', '')
 
     try:
-        backend = _get_backend(parameters)
+        backend = _get_backend(parameters, context)
 
         if mode == 'ls':
             entries = backend.ls_info(path)

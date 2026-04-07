@@ -109,7 +109,8 @@ class DeepAgentService:
             executable_tools = []
             if tool_data and build_tool_fn:
                 await broadcast_status("building_tools", {"message": f"Building {len(tool_data)} tool(s)..."})
-                executable_tools = await ToolAdapter._build_tools_async(tool_data, build_tool_fn, workflow_id, broadcaster)
+                workspace_dir = parameters.get('workspace_dir', '')
+                executable_tools = await ToolAdapter._build_tools_async(tool_data, build_tool_fn, workflow_id, broadcaster, workspace_dir)
 
             # === Convert teammates via SubAgentAdapter ===
             subagents = SubAgentAdapter.convert(teammates) if teammates else None

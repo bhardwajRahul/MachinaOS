@@ -1742,6 +1742,7 @@ class AIService:
                 if context:
                     config['nodes'] = context.get('nodes', [])
                     config['edges'] = context.get('edges', [])
+                    config['workspace_dir'] = context.get('workspace_dir', '')
 
                 try:
                     result = await execute_tool(tool_name, tool_args, config)
@@ -2206,6 +2207,7 @@ class AIService:
                     if context:
                         config['nodes'] = context.get('nodes', [])
                         config['edges'] = context.get('edges', [])
+                        config['workspace_dir'] = context.get('workspace_dir', '')
 
                     try:
                         # Execute via handlers/tools.py - same pattern as AI Agent

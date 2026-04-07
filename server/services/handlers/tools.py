@@ -47,8 +47,12 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
         Tool execution result dict
     """
     node_type = config.get('node_type', '')
+    node_params = config.get('parameters', {})
 
-    logger.debug(f"[Tool] Executing tool '{tool_name}' (node_type: {node_type})")
+    # Execution context available to all tool handlers (workspace, etc.)
+    context = {'workspace_dir': config.get('workspace_dir', '')}
+
+    logger.info("[Tool] Executing '%s' (node_type=%s, workspace=%s)", tool_name, node_type, context['workspace_dir'])
 
     # Calculator tool
     if node_type == 'calculatorTool':
@@ -56,28 +60,28 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
 
     # HTTP Request tool (existing httpRequest node as tool)
     if node_type in ('httpRequest', 'httpRequestTool'):
-        return await _execute_http_request(tool_args, config.get('parameters', {}))
+        return await _execute_http_request(tool_args, node_params)
 
     # Python executor tool (dual-purpose: workflow node + AI tool)
     if node_type == 'pythonExecutor':
-        return await _execute_python_code(tool_args, config.get('parameters', {}))
+        return await _execute_python_code(tool_args, node_params, context)
 
     # JavaScript executor tool (dual-purpose: workflow node + AI tool)
     if node_type == 'javascriptExecutor':
-        return await _execute_javascript_code(tool_args, config.get('parameters', {}))
+        return await _execute_javascript_code(tool_args, node_params, context)
 
     # Current time tool
     if node_type == 'currentTimeTool':
-        return await _execute_current_time(tool_args, config.get('parameters', {}))
+        return await _execute_current_time(tool_args, node_params)
 
     # DuckDuckGo search tool (free, no API key)
     if node_type == 'duckduckgoSearch':
-        return await _execute_duckduckgo_search(tool_args, config.get('parameters', {}))
+        return await _execute_duckduckgo_search(tool_args, node_params)
 
     # Filesystem and shell tools (deepagents backends)
     if node_type in ('fileRead', 'fileModify', 'shell', 'fsSearch'):
         from services.handlers.filesystem import handle_file_read, handle_file_modify, handle_shell, handle_fs_search
-        params = {**config.get('parameters', {}), **tool_args}
+        params = {**node_params, **tool_args}
         handler_map = {
             'fileRead': handle_file_read,
             'fileModify': handle_file_modify,
@@ -88,7 +92,7 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
             node_id=config.get('node_id', f'tool_{node_type}'),
             node_type=node_type,
             parameters=params,
-            context={},
+            context=context,
         )
 
     # Timer tool (dual-purpose: workflow node + AI tool)
@@ -346,15 +350,14 @@ async def _execute_http_request(args: Dict[str, Any],
 
 
 async def _execute_python_code(args: Dict[str, Any],
-                                node_params: Dict[str, Any]) -> Dict[str, Any]:
+                                node_params: Dict[str, Any],
+                                context: Dict[str, Any] = None) -> Dict[str, Any]:
     """Execute Python code (dual-purpose: workflow node + AI tool).
 
     Args:
         args: Dict with 'code' from LLM (when used as AI tool)
         node_params: Node parameters containing code (when used as workflow node), timeout, etc.
-
-    Returns:
-        Dict with success, result, output, or error
+        context: Execution context with workspace_dir for cwd
     """
     import subprocess
     import tempfile
@@ -409,12 +412,14 @@ except Exception as e:
         temp_path = f.name
 
     try:
-        logger.debug(f"[Python Tool] Executing code (timeout: {timeout}s)")
+        cwd = (context or {}).get('workspace_dir') or None
+        logger.debug(f"[Python Tool] Executing code (timeout: {timeout}s, cwd: {cwd})")
         result = subprocess.run(
             ['python', temp_path],
             capture_output=True,
             text=True,
-            timeout=timeout
+            timeout=timeout,
+            cwd=cwd or None,
         )
 
         if result.returncode == 0:
@@ -438,12 +443,14 @@ except Exception as e:
 
 
 async def _execute_javascript_code(args: Dict[str, Any],
-                                    node_params: Dict[str, Any]) -> Dict[str, Any]:
+                                    node_params: Dict[str, Any],
+                                    context: Dict[str, Any] = None) -> Dict[str, Any]:
     """Execute JavaScript code (dual-purpose: workflow node + AI tool).
 
     Args:
         args: Dict with 'code' from LLM (when used as AI tool)
         node_params: Node parameters containing code (when used as workflow node), timeout, etc.
+        context: Execution context with workspace_dir for cwd
 
     Returns:
         Dict with success, result, output, or error
@@ -491,12 +498,14 @@ try {{
         temp_path = f.name
 
     try:
-        logger.debug(f"[JavaScript Tool] Executing code (timeout: {timeout}s)")
+        cwd = (context or {}).get('workspace_dir') or None
+        logger.debug(f"[JavaScript Tool] Executing code (timeout: {timeout}s, cwd: {cwd})")
         result = subprocess.run(
             ['node', temp_path],
             capture_output=True,
             text=True,
-            timeout=timeout
+            timeout=timeout,
+            cwd=cwd or None,
         )
 
         if result.returncode == 0:

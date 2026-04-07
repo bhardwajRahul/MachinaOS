@@ -65,6 +65,7 @@ async def handle_deep_agent(
 
     # 5. Pass workspace directory for filesystem tools
     workspace_dir = context.get('workspace_dir')
+    logger.info("[Deep Agent] workspace_dir from context: %s", workspace_dir)
     if workspace_dir:
         parameters = {**parameters, 'workspace_dir': workspace_dir}
 
