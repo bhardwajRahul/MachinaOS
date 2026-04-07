@@ -1213,6 +1213,21 @@ Residential proxy provider management with geo-targeting, session control, and a
 - **javascriptExecutor**: **Dual-purpose node** - Execute JavaScript code via persistent Node.js server with syntax-highlighted editor and console output. Works as workflow node OR AI Agent tool (`javascript_code`).
 - **typescriptExecutor**: **Dual-purpose node** - Execute TypeScript code via persistent Node.js server with type safety, syntax-highlighted editor and console output. Works as workflow node OR AI Agent tool (`typescript_code`).
 
+### Filesystem & Shell Nodes (4 nodes)
+Dual-purpose tool nodes delegating to `deepagents.backends.LocalShellBackend`. Workspace path configured via `DEEP_AGENT_WORKSPACE` env var (default: `./workspace`). Uses `virtual_mode=True` to confine paths.
+
+- **fileRead**: **Dual-purpose node** - Read file contents with line numbers and pagination. Works as workflow node OR AI Agent tool (`file_read`). Parameters: file_path, offset, limit.
+- **fileModify**: **Dual-purpose node** - Write new files or edit existing files with string replacement. Works as workflow node OR AI Agent tool (`file_modify`). Operations: write (create/overwrite), edit (find and replace with old_string/new_string/replace_all).
+- **shell**: **Dual-purpose node** - Execute shell commands with timeout. Works as workflow node OR AI Agent tool (`shell_execute`). Returns stdout, exit_code, truncated flag.
+- **fsSearch**: **Dual-purpose node** - Search the filesystem with three modes. Works as workflow node OR AI Agent tool (`fs_search`). Modes: ls (list directory), glob (pattern match), grep (search file contents).
+
+**Key Files:**
+| File | Description |
+|------|-------------|
+| `client/src/nodeDefinitions/filesystemNodes.ts` | 4 dual-purpose node definitions |
+| `server/services/handlers/filesystem.py` | Handlers delegating to `deepagents.backends.LocalShellBackend` |
+| `server/skills/coding_agent/` | Skills: file-read-skill, file-modify-skill, shell-skill, fs-search-skill |
+
 ### Utility Nodes (6 nodes)
 - **httpRequest**: Make HTTP requests to external APIs (GET, POST, PUT, DELETE, PATCH) with configurable headers, body, timeout, and optional proxy support (`useProxy: true` routes through configured residential proxy)
 - **webhookTrigger**: Event-driven trigger that waits for incoming HTTP requests at `/webhook/{path}` with method filtering and authentication options

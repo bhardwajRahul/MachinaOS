@@ -23,22 +23,20 @@ Specialized agent node powered by [LangChain DeepAgents](https://github.com/lang
 
 ## Overview
 
-Deep Agent combines MachinaOs's existing agent infrastructure (skill injection, tool building, model resolution, memory) with the LangChain `deepagents` package, which provides a pre-configured middleware stack inspired by Claude Code.
+Deep Agent uses `langchain.agents.create_agent()` (the lower-level function from the `deepagents` package) to create a LangGraph agent that uses **only MachinaOs connected tool nodes** -- no built-in middleware tools. This ensures all tool executions show glow effects on the canvas.
 
-**What deepagents adds over standard LangGraph agents:**
-- Built-in filesystem tools (read, write, edit, ls, glob, grep, execute)
-- Todo-based planning via `write_todos` tool
-- Sub-agent delegation via `task` tool
-- Auto-summarization when conversations grow long
-- Prompt caching middleware (Anthropic models)
+**How it differs from chatAgent:**
+- Uses `langchain.agents.create_agent()` instead of `build_agent_graph()` for graph creation
+- Supports `PatchToolCallsMiddleware` for tool call formatting
+- 4 dedicated filesystem/shell tool nodes (fileRead, fileModify, shell, fsSearch) delegate to `deepagents.backends.LocalShellBackend`
 
 **What MachinaOs provides:**
 - Provider/model selection from `llm_defaults.json` (9 providers)
-- Executable tool node connections (calculator, search, WhatsApp, Android, etc.)
+- Executable tool node connections with glow effects (fileRead, fileModify, shell, fsSearch, calculator, search, WhatsApp, Android, etc.)
 - Skill injection from Master Skill / SKILL.md files
 - Memory via Simple Memory node (markdown + vector store)
 - Teammate delegation via `input-teammates` handle
-- Real-time status broadcasting via WebSocket (including tool node glow effects)
+- Real-time status broadcasting via WebSocket
 
 ---
 
@@ -73,21 +71,22 @@ DeepAgentService.execute()               server/services/agents/service.py
   - ToolAdapter.build_tools()             [agents/adapters.py] -> executable tools
   - SubAgentAdapter.convert()             [agents/adapters.py] -> deepagents SubAgent dicts
   - _parse_memory_markdown()              [ai.py] -> memory load
-  - create_deep_agent() + ainvoke()       [deepagents] -> graph execution
+  - langchain.agents.create_agent()        [langchain] -> graph creation
+  - agent.ainvoke()                        -> graph execution
   - ResponseExtractor.extract()           [agents/adapters.py] -> response + thinking
   - _append_to_memory_markdown()          [ai.py] -> memory save
         |
         v
-deepagents.create_deep_agent()           deepagents package
+langchain.agents.create_agent()          langchain package (lower-level)
   model = pre-built BaseChatModel (API key baked in)
-  tools = executable MachinaOs tools + deepagents built-in tools
+  tools = ONLY MachinaOs connected tools (with glow effects via ToolAdapter)
   system_prompt = system_message (includes skills + long-term memory context)
+  middleware = [PatchToolCallsMiddleware()] only (no built-in filesystem/todo)
         |
         v
 agent.ainvoke(messages)                  LangGraph CompiledStateGraph
   messages = history from SimpleMemory + current prompt
-  Middleware stack: TodoList -> Filesystem -> SubAgent
-    -> Summarization -> ToolCallPatching -> PromptCaching
+  No built-in middleware tools -- uses only connected MachinaOs tool nodes
         |
         v
 ResponseExtractor.extract() -> save memory -> return result
@@ -127,7 +126,7 @@ agent = create_deep_agent(
 
 Returns a **`CompiledStateGraph`** -- a compiled LangGraph graph compatible with streaming, Studio, checkpointers, and all LangGraph features.
 
-**Default model:** `claude-sonnet-4-6` (via `ChatAnthropic`). MachinaOs passes a pre-built `BaseChatModel` instance instead to avoid credential resolution issues.
+**Default model:** `claude-sonnet-4-6` (via `ChatAnthropic`). MachinaOs uses the lower-level `langchain.agents.create_agent()` instead, passing a pre-built `BaseChatModel` instance and no default middleware -- only connected MachinaOs tool nodes are used.
 
 ### Built-in Tools
 
@@ -326,7 +325,7 @@ Matches `execute_chat_agent` format for frontend compatibility:
 | File | Description |
 |------|-------------|
 | `server/services/agents/__init__.py` | Public API: exports `DeepAgentService` |
-| `server/services/agents/service.py` | Orchestration: calls adapters, shared helpers, `create_deep_agent()` |
+| `server/services/agents/service.py` | Orchestration: calls adapters, shared helpers, `langchain.agents.create_agent()` |
 | `server/services/agents/adapters.py` | `ToolAdapter`, `SubAgentAdapter`, `ResponseExtractor` |
 | `server/services/agents/constants.py` | `PROVIDER_PREFIX`, `DEFAULT_MAX_TURNS` |
 
@@ -378,14 +377,14 @@ These work as standalone workflow nodes AND as AI agent tools when connected to 
 |--------|-----------|------------|-------------------|-----------|
 | **Handler** | `handle_chat_agent` | `handle_deep_agent` | `handle_claude_code_agent` | `handle_rlm_agent` |
 | **Service** | `AIService.execute_chat_agent()` | `DeepAgentService.execute()` | `ClaudeCodeService.execute()` | `RLMService.execute()` |
-| **Graph creation** | `build_agent_graph()` | `create_deep_agent()` | Claude Code CLI | RLM REPL loop |
-| **Built-in tools** | None | 9 (filesystem, todos, task) | 6 (Read, Edit, Bash, etc.) | 3 (llm_query, rlm_query, FINAL) |
-| **Connected tools** | Yes | Yes (executable) | No | Yes (bridged) |
+| **Graph creation** | `build_agent_graph()` | `langchain.agents.create_agent()` | Claude Code CLI | RLM REPL loop |
+| **Built-in tools** | None | None (uses only connected nodes) | 6 (Read, Edit, Bash, etc.) | 3 (llm_query, rlm_query, FINAL) |
+| **Connected tools** | Yes | Yes (executable, with glow) | No | Yes (bridged) |
 | **Skills** | Yes | Yes | Yes (prompt only) | Yes |
 | **Memory** | Yes (markdown + vector) | Yes (markdown + vector) | No | Yes (context only) |
 | **Teammates** | Team leads only | Yes | No | No |
 | **Providers** | All 9 | All 9 | Anthropic only | All 9 |
-| **Middleware** | None | 8-layer stack | None | None |
-| **Auto-summarization** | No | Yes | No | No |
-| **Planning** | No | Yes (`write_todos`) | No | No |
+| **Middleware** | None | PatchToolCallsMiddleware only | None | None |
+| **Auto-summarization** | No | No | No | No |
+| **Planning** | No | No | No | No |
 | **Tool glow effects** | Yes | Yes | No | No |
