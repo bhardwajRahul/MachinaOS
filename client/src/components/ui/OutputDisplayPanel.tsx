@@ -33,7 +33,7 @@ const OutputDisplayPanel: React.FC<OutputDisplayPanelProps> = ({ results, onClea
   };
 
   // Format filesystem/shell results into readable output
-  const formatFilesystemOutput = (data: any, nodeType?: string): string | null => {
+  const formatFilesystemOutput = (data: any): string | null => {
     const r = data?.result || data;
     if (!r) return null;
 
@@ -83,7 +83,7 @@ const OutputDisplayPanel: React.FC<OutputDisplayPanelProps> = ({ results, onClea
     const data = getExecutionData(result);
 
     // Filesystem/shell nodes
-    const fsOutput = formatFilesystemOutput(data, result.nodeType);
+    const fsOutput = formatFilesystemOutput(data);
     if (fsOutput) return fsOutput;
 
     // Handle nested response structure
