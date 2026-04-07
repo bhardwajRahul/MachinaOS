@@ -186,6 +186,32 @@ const NodeOutputPanel: React.FC<NodeOutputPanelProps> = ({
   type StructuredOutput = AndroidOutput | WhatsAppHistoryOutput | MapsNearbyOutput | MapsGeocodeOutput | MapsCreateOutput | SearchResultsOutput;
 
   // Extract the main response text from execution results
+  const formatFilesystemOutput = (r: any): string | null => {
+    if (!r) return null;
+    // fileRead
+    if (r.content && r.file_path) return `File: ${r.file_path}\n\n${r.content}`;
+    // fileModify write
+    if (r.operation === 'write' && r.file_path) return `Written: ${r.file_path}`;
+    // fileModify edit
+    if (r.operation === 'edit' && r.file_path) return `Edited: ${r.file_path} (${r.occurrences || 1} replacement${(r.occurrences || 1) > 1 ? 's' : ''})`;
+    // shell
+    if (r.command !== undefined && r.stdout !== undefined) {
+      return `$ ${r.command}\n[${r.exit_code === 0 ? 'OK' : `Exit ${r.exit_code}`}]\n\n${r.stdout || '(no output)'}`;
+    }
+    // fsSearch ls
+    if (r.entries && Array.isArray(r.entries)) {
+      const lines = r.entries.map((e: any) => `${e.type === 'dir' ? '[DIR]' : '     '} ${e.name}${e.size != null ? ` (${e.size}b)` : ''}`);
+      return `${r.path || '.'} (${r.count || r.entries.length} items)\n\n${lines.join('\n')}`;
+    }
+    // fsSearch glob/grep
+    if (r.matches && Array.isArray(r.matches)) {
+      if (r.matches.length === 0) return `No matches for "${r.pattern}"`;
+      const lines = r.matches.slice(0, 50).map((m: any) => m.line ? `${m.path}:${m.line}: ${m.text}` : (m.path || JSON.stringify(m)));
+      return `${r.count || r.matches.length} match(es) for "${r.pattern}"\n\n${lines.join('\n')}${r.count > 50 ? `\n... and ${r.count - 50} more` : ''}`;
+    }
+    return null;
+  };
+
   const getMainResponse = (result: ExecutionResult): string | StructuredOutput | null => {
     const data = getOutputData(result);
 
@@ -193,6 +219,10 @@ const NodeOutputPanel: React.FC<NodeOutputPanelProps> = ({
     if (data?.output !== undefined) {
       return typeof data.output === 'string' ? data.output : JSON.stringify(data.output, null, 2);
     }
+    // Filesystem/shell nodes
+    const fsOut = formatFilesystemOutput(data?.result) || formatFilesystemOutput(data);
+    if (fsOut) return fsOut;
+
     if (data?.result?.response) return data.result.response;
     if (data?.response) return data.response;
     if (data?.result?.text) return data.result.text;
@@ -1336,6 +1366,26 @@ const NodeOutputPanel: React.FC<NodeOutputPanelProps> = ({
             </div>
           </div>
         )}
+
+        {/* Agent Execution Metadata */}
+        {(() => {
+          const r = outputData?.result || outputData;
+          if (!r?.provider && !r?.agent_type) return null;
+          const tags: [string, string, string][] = [];
+          if (r.provider) tags.push([r.provider, 'cyan', 'Provider']);
+          if (r.model) tags.push([r.model, 'purple', 'Model']);
+          if (r.agent_type) tags.push([r.agent_type.replace(/_/g, ' '), 'green', 'Type']);
+          if (r.iterations > 1) tags.push([`${r.iterations} iterations`, 'orange', '']);
+          if (r.messages_count) tags.push([`${r.messages_count} msgs`, 'default', '']);
+          if (r.tools?.count) tags.push([`${r.tools.count} tool(s)`, 'magenta', '']);
+          if (r.skills?.count) tags.push([`${r.skills.count} skill(s)`, 'blue', '']);
+          if (r.memory?.session_id) tags.push([`${r.memory.history_loaded} history`, 'gold', '']);
+          return (
+            <Space wrap size={[4, 4]} style={{ marginBottom: theme.spacing.md }}>
+              {tags.map(([val, color], i) => <Tag key={i} color={color}>{val}</Tag>)}
+            </Space>
+          );
+        })()}
 
         {/* JSON Output Toggle */}
         <div style={{

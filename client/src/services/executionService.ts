@@ -237,7 +237,12 @@ export class ExecutionService {
       // Proxy Nodes
       'proxyRequest',
       'proxyConfig',
-      'proxyStatus'
+      'proxyStatus',
+      // Filesystem & Shell
+      'fileRead',
+      'fileModify',
+      'shell',
+      'fsSearch'
     ];
 
     return supportedTypes.includes(nodeType);

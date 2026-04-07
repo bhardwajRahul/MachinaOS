@@ -25,6 +25,7 @@ import { searchNodes, SEARCH_NODE_TYPES } from './nodeDefinitions/searchNodes';
 import { googleWorkspaceNodes, GOOGLE_WORKSPACE_NODE_TYPES } from './nodeDefinitions/googleWorkspaceNodes';
 import { proxyNodes, PROXY_NODE_TYPES } from './nodeDefinitions/proxyNodes';
 import { crawleeNodes, CRAWLEE_NODE_TYPES } from './nodeDefinitions/crawleeNodes';
+import { filesystemNodes, FILESYSTEM_NODE_TYPES } from './nodeDefinitions/filesystemNodes';
 
 // ============================================================================
 // MAIN NODE REGISTRY - Combining all modular definitions
@@ -53,7 +54,8 @@ export const nodeDefinitions: Record<string, INodeTypeDescription> = {
   ...searchNodes,
   ...googleWorkspaceNodes,
   ...proxyNodes,
-  ...crawleeNodes
+  ...crawleeNodes,
+  ...filesystemNodes
 };
 
 // ============================================================================
@@ -152,6 +154,10 @@ export const PROXY_NODES = [
 
 export const CRAWLEE_NODES = [
   ...CRAWLEE_NODE_TYPES
+];
+
+export const FILESYSTEM_NODES = [
+  ...FILESYSTEM_NODE_TYPES
 ];
 
 // Re-export types and utilities from modular files for external access

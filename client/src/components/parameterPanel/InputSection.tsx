@@ -722,6 +722,30 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                 crawler_type: 'string',
                 mode: 'string',
                 proxied: 'boolean'
+              },
+              // Filesystem & shell node schemas
+              fileRead: {
+                content: 'string',
+                file_path: 'string',
+                encoding: 'string'
+              },
+              fileModify: {
+                operation: 'string',
+                file_path: 'string',
+                occurrences: 'number'
+              },
+              shell: {
+                stdout: 'string',
+                exit_code: 'number',
+                truncated: 'boolean',
+                command: 'string'
+              },
+              fsSearch: {
+                path: 'string',
+                entries: 'array',
+                matches: 'array',
+                pattern: 'string',
+                count: 'number'
               }
             };
 
@@ -780,6 +804,9 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
             // Crawlee web scraping node detection
             const isCrawlee = nodeType === 'crawleeScraper';
 
+            // Filesystem & shell node detection
+            const isFilesystemNode = ['fileRead', 'fileModify', 'shell', 'fsSearch'].includes(nodeType);
+
             // Select appropriate schema
             if (isAndroidLocation) {
               outputSchema = sampleSchemas.androidLocation;
@@ -810,6 +837,7 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                             isApify ? sampleSchemas.apify :
                             isSearchNode ? sampleSchemas.search :
                             isCrawlee ? sampleSchemas.crawlee :
+                            isFilesystemNode ? (sampleSchemas[nodeType as keyof typeof sampleSchemas] || { data: 'any' }) :
                             { data: 'any' };
             }
 

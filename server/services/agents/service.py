@@ -145,17 +145,22 @@ class DeepAgentService:
 
             input_messages.append({"role": "user", "content": prompt})
 
-            # === Create and invoke deep agent ===
-            from deepagents import create_deep_agent
+            # === Create and invoke agent ===
+            # Use langchain.agents.create_agent directly (not create_deep_agent)
+            # to avoid built-in middleware (filesystem, todo, subagent) that bypasses
+            # MachinaOs tool nodes. Only connected MachinaOs tools are used.
+            from langchain.agents import create_agent
+            from deepagents.middleware.patch_tool_calls import PatchToolCallsMiddleware
+
             max_turns = int(parameters.get('maxTurns', DEFAULT_MAX_TURNS))
 
             await broadcast_status("executing", {"message": f"Running Deep Agent ({provider}/{model})...", "tool_count": len(executable_tools)})
 
-            agent = create_deep_agent(
+            agent = create_agent(
                 model=chat_model,
-                tools=executable_tools or None,
+                tools=executable_tools or [],
                 system_prompt=system_message,
-                subagents=subagents,
+                middleware=[PatchToolCallsMiddleware()],
             )
             result = await agent.ainvoke(
                 {"messages": input_messages},

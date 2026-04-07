@@ -120,6 +120,14 @@ from .rlm import handle_rlm_agent
 # Deep Agent handler
 from .deep_agent import handle_deep_agent
 
+# Filesystem and shell handlers
+from .filesystem import (
+    handle_file_read,
+    handle_file_modify,
+    handle_shell,
+    handle_fs_search,
+)
+
 # Tool execution handlers (for AI Agent tool calling)
 from .tools import (
     execute_tool,
@@ -191,6 +199,11 @@ __all__ = [
     'handle_rlm_agent',
     # Deep Agent
     'handle_deep_agent',
+    # Filesystem & Shell
+    'handle_file_read',
+    'handle_file_modify',
+    'handle_shell',
+    'handle_fs_search',
     # Tools
     'execute_tool',
     'handle_task_manager',

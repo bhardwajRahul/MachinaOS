@@ -64,6 +64,9 @@ class Settings(BaseSettings):
     nodejs_executor_timeout: int = Field(default=30, env="NODEJS_EXECUTOR_TIMEOUT", ge=5, le=300)
     nodejs_executor_port: int = Field(default=3020, env="NODEJS_EXECUTOR_PORT", ge=1024, le=65535)
 
+    # Deep Agent filesystem root (defaults to server working directory)
+    deep_agent_workspace: str = Field(default="", env="DEEP_AGENT_WORKSPACE")
+
     # AI Proxy Configuration (Ollama-style proxy)
     ai_proxy_default_port: int = Field(default=11434, env="AI_PROXY_DEFAULT_PORT")
 

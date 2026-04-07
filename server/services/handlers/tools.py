@@ -74,6 +74,23 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
     if node_type == 'duckduckgoSearch':
         return await _execute_duckduckgo_search(tool_args, config.get('parameters', {}))
 
+    # Filesystem and shell tools (deepagents backends)
+    if node_type in ('fileRead', 'fileModify', 'shell', 'fsSearch'):
+        from services.handlers.filesystem import handle_file_read, handle_file_modify, handle_shell, handle_fs_search
+        params = {**config.get('parameters', {}), **tool_args}
+        handler_map = {
+            'fileRead': handle_file_read,
+            'fileModify': handle_file_modify,
+            'shell': handle_shell,
+            'fsSearch': handle_fs_search,
+        }
+        return await handler_map[node_type](
+            node_id=config.get('node_id', f'tool_{node_type}'),
+            node_type=node_type,
+            parameters=params,
+            context={},
+        )
+
     # Timer tool (dual-purpose: workflow node + AI tool)
     # LLM fills duration/unit via Pydantic schema; calls existing handle_timer handler
     if node_type == 'timer':

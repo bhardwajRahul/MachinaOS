@@ -32,9 +32,60 @@ const OutputDisplayPanel: React.FC<OutputDisplayPanelProps> = ({ results, onClea
     return { message: 'No output data' };
   };
 
+  // Format filesystem/shell results into readable output
+  const formatFilesystemOutput = (data: any, nodeType?: string): string | null => {
+    const r = data?.result || data;
+    if (!r) return null;
+
+    // fileRead: show file content
+    if (r.content && r.file_path) {
+      return `File: ${r.file_path}\n\n${r.content}`;
+    }
+
+    // fileModify: show operation result
+    if (r.operation === 'write' && r.file_path) {
+      return `Written: ${r.file_path}`;
+    }
+    if (r.operation === 'edit' && r.file_path) {
+      return `Edited: ${r.file_path} (${r.occurrences || 1} replacement${(r.occurrences || 1) > 1 ? 's' : ''})`;
+    }
+
+    // shell: show stdout with exit code
+    if (r.command !== undefined && r.stdout !== undefined) {
+      const status = r.exit_code === 0 ? 'OK' : `Exit ${r.exit_code}`;
+      const output = r.stdout || '(no output)';
+      return `$ ${r.command}\n[${status}]\n\n${output}`;
+    }
+
+    // fsSearch ls: show directory listing
+    if (r.entries && Array.isArray(r.entries)) {
+      const lines = r.entries.map((e: any) =>
+        `${e.type === 'dir' ? '[DIR]' : '     '} ${e.name}${e.size != null ? ` (${e.size} bytes)` : ''}`
+      );
+      return `${r.path || '.'} (${r.count || r.entries.length} items)\n\n${lines.join('\n')}`;
+    }
+
+    // fsSearch glob/grep: show matches
+    if (r.matches && Array.isArray(r.matches)) {
+      if (r.matches.length === 0) return `No matches for "${r.pattern}"`;
+      const lines = r.matches.slice(0, 50).map((m: any) =>
+        m.line ? `${m.path}:${m.line}: ${m.text}` : (m.path || JSON.stringify(m))
+      );
+      const suffix = r.count > 50 ? `\n... and ${r.count - 50} more` : '';
+      return `${r.count || r.matches.length} match${(r.count || r.matches.length) > 1 ? 'es' : ''} for "${r.pattern}"\n\n${lines.join('\n')}${suffix}`;
+    }
+
+    return null;
+  };
+
   // Extract the main response text from AI results
   const getMainResponse = (result: ExecutionResult): string | null => {
     const data = getExecutionData(result);
+
+    // Filesystem/shell nodes
+    const fsOutput = formatFilesystemOutput(data, result.nodeType);
+    if (fsOutput) return fsOutput;
+
     // Handle nested response structure
     if (data?.result?.response) return data.result.response;
     if (data?.response) return data.response;

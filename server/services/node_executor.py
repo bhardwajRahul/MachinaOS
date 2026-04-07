@@ -46,6 +46,7 @@ from services.handlers.telegram import handle_telegram_send
 from services.handlers.apify import handle_apify_actor
 from services.handlers.crawlee import handle_crawlee_scraper
 from services.handlers.proxy import handle_proxy_request, handle_proxy_status, handle_proxy_config
+from services.handlers.filesystem import handle_file_read, handle_file_modify, handle_shell, handle_fs_search
 # Consolidated Google Workspace handlers (6 services with operation dispatchers)
 from services.handlers.gmail import handle_google_gmail, handle_gmail_receive
 from services.handlers.calendar import handle_google_calendar
@@ -198,6 +199,11 @@ class NodeExecutor:
             'proxyRequest': handle_proxy_request,
             'proxyStatus': handle_proxy_status,
             'proxyConfig': handle_proxy_config,
+            # Filesystem and shell nodes (deepagents backends)
+            'fileRead': handle_file_read,
+            'fileModify': handle_file_modify,
+            'shell': handle_shell,
+            'fsSearch': handle_fs_search,
             # Note: 'console' handled in _dispatch with connected_outputs
         }
 

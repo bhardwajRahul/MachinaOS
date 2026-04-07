@@ -357,6 +357,21 @@ Matches `execute_chat_agent` format for frontend compatibility:
 
 ---
 
+## Filesystem & Shell Tool Nodes
+
+MachinaOs provides 4 dual-purpose tool nodes that delegate to `deepagents.backends.LocalShellBackend`:
+
+| Node | Tool Name | Description |
+|------|-----------|-------------|
+| `fileRead` | `file_read` | Read file contents with pagination |
+| `fileModify` | `file_modify` | Write new files or edit existing files (string replacement) |
+| `shell` | `shell_execute` | Execute shell commands with timeout |
+| `fsSearch` | `fs_search` | List directories, glob pattern match, or grep file contents |
+
+These work as standalone workflow nodes AND as AI agent tools when connected to any agent's `input-tools` handle. Defined in `client/src/nodeDefinitions/filesystemNodes.ts`, handlers in `server/services/handlers/filesystem.py`.
+
+---
+
 ## Comparison with Other Agent Types
 
 | Aspect | chatAgent | deep_agent | claude_code_agent | rlm_agent |

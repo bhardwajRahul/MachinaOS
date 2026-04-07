@@ -2437,6 +2437,11 @@ class AIService:
             'taskManager': 'task_manager',
             'timer': 'timer',
             'cronScheduler': 'cron_scheduler',
+            # Filesystem and shell tools (deepagents backends)
+            'fileRead': 'file_read',
+            'fileModify': 'file_modify',
+            'shell': 'shell_execute',
+            'fsSearch': 'fs_search',
             # Built-in check tool for delegation results
             '_builtin_check_delegated_tasks': 'check_delegated_tasks',
             # Agent delegation tools
@@ -2506,6 +2511,11 @@ class AIService:
             'taskManager': 'Track delegated sub-agent tasks. Operations: list_tasks (see all tasks), get_task (check specific task status/result), mark_done (cleanup completed tasks).',
             'timer': 'Wait/sleep for a specified duration. Specify duration (1-3600) and unit (seconds, minutes, or hours). Returns timestamp and elapsed time after waiting.',
             'cronScheduler': 'Schedule a delayed or recurring execution. Supports seconds, minutes, hours, daily, weekly, monthly frequencies with timezone. Use frequency to set schedule type, then set the relevant interval/time parameters.',
+            # Filesystem and shell tools (deepagents backends)
+            'fileRead': 'Read file contents with pagination. Returns line-numbered text.',
+            'fileModify': 'Write a new file or edit an existing file with string replacement. Operations: write (create/overwrite), edit (find and replace).',
+            'shell': 'Execute a shell command. Returns stdout, stderr, and exit code.',
+            'fsSearch': 'Search the filesystem. Modes: ls (list directory), glob (pattern match files), grep (search file contents for text).',
             # Built-in check tool for delegation results
             '_builtin_check_delegated_tasks': 'Check status and retrieve results of previously delegated tasks.',
             # Agent delegation tools - ONE-SHOT fire-and-forget pattern
@@ -3175,6 +3185,42 @@ class AIService:
                 )
 
             return NearbyPlacesSchema
+
+        # Filesystem and shell tool schemas (deepagents backends)
+        if node_type == 'fileRead':
+            class FileReadSchema(BaseModel):
+                """Read file contents with pagination."""
+                file_path: str = Field(description="Path to the file to read")
+                offset: int = Field(default=0, description="Line number to start from (0-indexed)")
+                limit: int = Field(default=100, description="Maximum number of lines to read")
+            return FileReadSchema
+
+        if node_type == 'fileModify':
+            class FileModifySchema(BaseModel):
+                """Write a new file or edit an existing file."""
+                operation: str = Field(description="Operation: 'write' (create/overwrite) or 'edit' (find and replace)")
+                file_path: str = Field(description="Path to the file")
+                content: Optional[str] = Field(default=None, description="File content (for write operation)")
+                old_string: Optional[str] = Field(default=None, description="Text to find (for edit operation)")
+                new_string: Optional[str] = Field(default=None, description="Replacement text (for edit operation)")
+                replace_all: bool = Field(default=False, description="Replace all occurrences (for edit operation)")
+            return FileModifySchema
+
+        if node_type == 'shell':
+            class ShellSchema(BaseModel):
+                """Execute a shell command."""
+                command: str = Field(description="Shell command to execute")
+                timeout: int = Field(default=30, description="Timeout in seconds (1-300)")
+            return ShellSchema
+
+        if node_type == 'fsSearch':
+            class FsSearchSchema(BaseModel):
+                """Search the filesystem: list directory, glob pattern match, or grep file contents."""
+                mode: str = Field(default="ls", description="Mode: 'ls' (list dir), 'glob' (pattern match), 'grep' (search contents)")
+                path: str = Field(default=".", description="Directory path to search in")
+                pattern: Optional[str] = Field(default=None, description="Glob pattern or grep search text (required for glob/grep)")
+                file_filter: Optional[str] = Field(default=None, description="Glob to filter files for grep (e.g. '*.py')")
+            return FsSearchSchema
 
         # Task Manager schema (dual-purpose: AI tool + workflow node)
         if node_type == 'taskManager':
