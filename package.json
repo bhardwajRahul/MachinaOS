@@ -32,6 +32,7 @@
   "engines": {
     "node": ">=22.0.0"
   },
+  "packageManager": "pnpm@9.15.0",
   "files": [
     "bin/",
     "scripts/",
@@ -97,5 +98,14 @@
     "rimraf": "^6.0.1",
     "temporal-server": "^0.0.9",
     "edgymeow": "^0.0.18"
+  },
+  "pnpm": {
+    "peerDependencyRules": {
+      "allowedVersions": {
+        "@emoji-mart/react>react": "19",
+        "react-avatar-editor>react": "19",
+        "react-avatar-editor>react-dom": "19"
+      }
+    }
   }
 }

@@ -195,6 +195,12 @@ function Main {
     Write-Host "  Open in browser:"
     Write-Host "    http://localhost:3000"
     Write-Host ""
+    Write-Host "  For development from source, install pnpm:"
+    Write-Host "    npm install -g pnpm"
+    Write-Host ""
+    Write-Host "  Run diagnostics:"
+    Write-Host "    machina doctor"
+    Write-Host ""
 }
 
 # Run main

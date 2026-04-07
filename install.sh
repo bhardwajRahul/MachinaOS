@@ -302,6 +302,12 @@ main() {
   echo "  Optional: Enable JS-rendered web scraping:"
   echo "    playwright install chromium"
   echo ""
+  echo "  For development from source, install pnpm:"
+  echo "    npm install -g pnpm"
+  echo ""
+  echo "  Run diagnostics:"
+  echo "    machina doctor"
+  echo ""
 }
 
 # Run main

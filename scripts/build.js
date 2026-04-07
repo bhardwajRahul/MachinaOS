@@ -54,8 +54,8 @@ function getVersion(cmd) {
   }
 }
 
-function npmInstall(cwd = ROOT) {
-  execSync('npm install', { cwd, stdio: 'inherit', shell: true });
+function pnpmInstall(cwd = ROOT) {
+  execSync('pnpm install', { cwd, stdio: 'inherit', shell: true });
 }
 
 // ============================================================================
@@ -167,14 +167,14 @@ try {
   // Step 1: Install root + client dependencies (workspaces handles both)
   if (!isPostInstall) {
     console.log('[1/5] Installing dependencies...');
-    npmInstall(ROOT);
+    pnpmInstall(ROOT);
   } else {
-    console.log('[1/5] Dependencies already installed by npm');
+    console.log('[1/5] Dependencies already installed by package manager');
   }
 
   // Step 2: Build client
   console.log('[2/5] Building client...');
-  run('npm run build', resolve(ROOT, 'client'));
+  run('pnpm --filter react-flow-client run build');
 
   // Step 3: Install Python dependencies
   console.log('[3/5] Installing Python dependencies...');

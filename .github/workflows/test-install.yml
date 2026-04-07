@@ -103,7 +103,7 @@ jobs:
             exit 1
           }
 
-  # Test git clone + npm run build
+  # Test git clone + pnpm run build (source contributor path)
   test-git-clone:
     runs-on: ${{ matrix.os }}
     strategy:
@@ -111,6 +111,11 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -133,7 +138,7 @@ jobs:
         run: |
           # Retry up to 3 times for transient GitHub CDN failures (HTTP 502)
           for i in 1 2 3; do
-            npm run build && break
+            pnpm run build && break
             echo "Attempt $i failed, retrying in 10s..."
             sleep 10
           done
@@ -142,14 +147,14 @@ jobs:
         shell: bash
         working-directory: MachinaOS
         run: |
-          ls -la node_modules/edgymeow/bin/ || echo "edgymeow bin/ not found"
+          ls -la node_modules/.pnpm/edgymeow@*/node_modules/edgymeow/bin/ || echo "edgymeow bin/ not found"
 
       - name: Test start (Unix)
         if: runner.os != 'Windows'
         shell: bash
         working-directory: MachinaOS
         run: |
-          npm run start -- --skip-whatsapp &
+          pnpm run start -- --skip-whatsapp &
           PID=$!
 
           for i in {1..15}; do
@@ -161,10 +166,10 @@ jobs:
           done
 
           if kill -0 $PID 2>/dev/null; then
-            echo "npm run start: OK"
-            npm run stop || kill $PID 2>/dev/null || true
+            echo "pnpm run start: OK"
+            pnpm run stop || kill $PID 2>/dev/null || true
           else
-            echo "npm run start: FAILED"
+            echo "pnpm run start: FAILED"
             exit 1
           fi
 
@@ -175,7 +180,7 @@ jobs:
         run: |
           $job = Start-Job -ScriptBlock {
             Set-Location $using:PWD
-            npm run start -- --skip-whatsapp
+            pnpm run start -- --skip-whatsapp
           }
           Start-Sleep -Seconds 15
 
@@ -187,11 +192,11 @@ jobs:
           }
 
           if ($job.State -eq "Running") {
-            Write-Host "npm run start: OK"
+            Write-Host "pnpm run start: OK"
             Stop-Job $job
             Remove-Job $job
           } else {
-            Write-Host "npm run start: FAILED"
+            Write-Host "pnpm run start: FAILED"
             Receive-Job $job
             exit 1
           }

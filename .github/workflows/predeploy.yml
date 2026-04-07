@@ -17,16 +17,16 @@ jobs:
         uses: ./.github/actions/setup
 
       - name: Install dependencies
-        run: npm install
+        run: pnpm install --frozen-lockfile
 
       - name: Build all services
-        run: npm run build
+        run: pnpm run build
 
       - name: Lint client
-        run: cd client && npm run lint
+        run: pnpm --filter react-flow-client run lint
 
       - name: TypeScript check
-        run: cd client && npx tsc --noEmit
+        run: pnpm --filter react-flow-client exec tsc --noEmit
 
   # Test build and start from source (cross-platform)
   test-build-start:
@@ -43,7 +43,7 @@ jobs:
         uses: ./.github/actions/setup
 
       - name: Build
-        run: npm run build
+        run: pnpm run build
 
       - name: Verify build artifacts
         shell: bash
@@ -56,7 +56,7 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          npm run start -- --skip-whatsapp &
+          pnpm run start -- --skip-whatsapp &
           PID=$!
 
           for i in {1..15}; do
@@ -68,10 +68,10 @@ jobs:
           done
 
           if kill -0 $PID 2>/dev/null; then
-            echo "npm run start: OK"
-            npm run stop || kill $PID 2>/dev/null || true
+            echo "pnpm run start: OK"
+            pnpm run stop || kill $PID 2>/dev/null || true
           else
-            echo "npm run start: FAILED"
+            echo "pnpm run start: FAILED"
             exit 1
           fi
 
@@ -81,7 +81,7 @@ jobs:
         run: |
           $job = Start-Job -ScriptBlock {
             Set-Location $using:PWD
-            npm run start -- --skip-whatsapp
+            pnpm run start -- --skip-whatsapp
           }
           Start-Sleep -Seconds 15
 
@@ -93,11 +93,11 @@ jobs:
           }
 
           if ($job.State -eq "Running") {
-            Write-Host "npm run start: OK"
+            Write-Host "pnpm run start: OK"
             Stop-Job $job
             Remove-Job $job
           } else {
-            Write-Host "npm run start: FAILED"
+            Write-Host "pnpm run start: FAILED"
             Receive-Job $job
             exit 1
           }

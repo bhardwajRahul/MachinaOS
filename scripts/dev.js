@@ -83,11 +83,11 @@ async function main() {
   if (isProduction) {
     services.push(`"node ${resolve(ROOT, 'scripts', 'serve-client.js').replace(/\\/g, '/')}"`);
   } else {
-    services.push('npm:client:start');
+    services.push('"pnpm run client:start"');
   }
-  services.push(isDaemonMode ? 'npm:python:daemon' : 'npm:python:start');
-  if (!skipWhatsApp) services.push('npm:whatsapp:api');
-  services.push('npm:temporal:start');
+  services.push(isDaemonMode ? '"pnpm run python:daemon"' : '"pnpm run python:start"');
+  if (!skipWhatsApp) services.push('"pnpm run whatsapp:api"');
+  services.push('"pnpm run temporal:start"');
   // Worker runs embedded in the backend (main.py TemporalWorkerManager)
 
   // Ready-detection patterns for each service
@@ -103,7 +103,7 @@ async function main() {
   const totalExpected = readyPatterns.length;
 
   // No --kill-others: uvicorn hot-reloads (exit code 1) would cascade-kill frontend
-  const proc = spawn('npx', ['concurrently', '--raw', ...services], {
+  const proc = spawn('pnpm', ['exec', 'concurrently', '--raw', ...services], {
     cwd: ROOT,
     stdio: ['inherit', 'pipe', 'pipe'],
     shell: true,

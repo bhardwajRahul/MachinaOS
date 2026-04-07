@@ -14,6 +14,7 @@ const COMMANDS = {
   stop: 'Stop all running services',
   build: 'Build the project for production',
   clean: 'Clean build artifacts',
+  doctor: 'Check system dependencies and project health',
   help: 'Show this help message',
   version: 'Show version number',
 };
@@ -102,6 +103,29 @@ function checkDeps() {
   }
 }
 
+function doctor() {
+  console.log('\nMachinaOS Doctor\n');
+  try {
+    execSync('npx envinfo --system --binaries --npmPackages concurrently,edgymeow,temporal-server', {
+      cwd: ROOT, stdio: 'inherit', shell: true,
+    });
+  } catch { /* envinfo not available, continue with manual checks */ }
+
+  console.log('  Additional checks:');
+  const checks = [
+    ['uv', getVersion('uv --version')],
+    ['temporal-server', getVersion('temporal-server --version')],
+  ];
+  for (const [name, ver] of checks) {
+    console.log(ver ? `    ${name}: ${ver}` : `    ${name}: Not Found`);
+  }
+
+  const has = (f) => { try { readFileSync(resolve(ROOT, f)); return true; } catch { return false; } };
+  console.log(has('pnpm-lock.yaml') ? '    Lockfile: pnpm-lock.yaml' : has('package-lock.json') ? '    Lockfile: package-lock.json' : '    Lockfile: Not Found');
+  console.log(has('server/.venv/pyvenv.cfg') ? '    Python venv: OK' : '    Python venv: Missing (run machina build)');
+  console.log('');
+}
+
 function run(script, extraArgs = []) {
   const npmArgs = ['run', script];
   if (extraArgs.length) npmArgs.push('--', ...extraArgs);
@@ -123,6 +147,8 @@ if (cmd === 'help' || cmd === '--help' || cmd === '-h') {
   printHelp();
 } else if (cmd === 'version' || cmd === '--version' || cmd === '-v') {
   console.log(`machina v${PKG.version}`);
+} else if (cmd === 'doctor') {
+  doctor();
 } else if (cmd === 'start' || cmd === 'dev' || cmd === 'build') {
   checkDeps();
   run(cmd, process.argv.slice(3));

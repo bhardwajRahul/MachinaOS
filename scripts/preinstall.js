@@ -20,6 +20,20 @@ if (process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true') {
   process.exit(0);
 }
 
+// Enforce pnpm for source checkouts (pnpm-workspace.yaml exists).
+// Skipped for global npm installs (end users) which don't have the workspace file.
+try {
+  statSync(resolve(__dirname, '..', 'pnpm-workspace.yaml'));
+  const agent = process.env.npm_config_user_agent || '';
+  if (!agent.startsWith('pnpm')) {
+    console.error('This project requires pnpm. Install it: npm install -g pnpm');
+    console.error('Then run: pnpm install');
+    process.exit(1);
+  }
+} catch {
+  // No pnpm-workspace.yaml = global npm install, allow npm
+}
+
 function getGlobalNodeModules() {
   try {
     const prefix = execSync('npm config get prefix', {

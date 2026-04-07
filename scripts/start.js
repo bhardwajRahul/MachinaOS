@@ -73,9 +73,9 @@ async function main() {
   // Services: static client, backend (uvicorn), whatsapp, temporal
   const services = [];
   services.push(`"node ${resolve(ROOT, 'scripts', 'serve-client.js').replace(/\\/g, '/')}"`);
-  services.push((isWindows || isWSL) ? 'npm:python:start' : 'npm:python:daemon');
-  if (!skipWhatsApp) services.push('npm:whatsapp:api');
-  if (!temporalRunning) services.push('npm:temporal:start');
+  services.push((isWindows || isWSL) ? '"pnpm run python:start"' : '"pnpm run python:daemon"');
+  if (!skipWhatsApp) services.push('"pnpm run whatsapp:api"');
+  if (!temporalRunning) services.push('"pnpm run temporal:start"');
   // Worker runs embedded in the backend (main.py TemporalWorkerManager)
 
   // Ready-detection patterns for each service
@@ -106,7 +106,7 @@ async function main() {
 
   if (isVerbose) {
     console.log('\n=== MachinaOS Starting (verbose) ===\n');
-    const proc = spawn('npx', ['concurrently', '--raw', '--kill-others', ...services], {
+    const proc = spawn('pnpm', ['exec', 'concurrently', '--raw', '--kill-others', ...services], {
       cwd: ROOT,
       stdio: ['inherit', 'pipe', 'pipe'],
       shell: true,
@@ -134,8 +134,8 @@ async function main() {
     if (!skipWhatsApp) serviceNames.push('whatsapp');
     if (!temporalRunning) serviceNames.push('temporal');
 
-    const proc = spawn('npx', [
-      'concurrently', '--kill-others',
+    const proc = spawn('pnpm', [
+      'exec', 'concurrently', '--kill-others',
       '-n', serviceNames.join(','),
       '-c', 'blue,green,yellow,magenta',
       ...services,

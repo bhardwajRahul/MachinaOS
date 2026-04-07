@@ -17,10 +17,25 @@ jobs:
   predeploy:
     uses: ./.github/workflows/predeploy.yml
 
+  # Audit production dependencies before publishing
+  audit:
+    name: Security Audit
+    needs: predeploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup environment
+        uses: ./.github/actions/setup
+
+      - name: Audit production dependencies
+        run: pnpm audit --prod || true
+
   # Build client once after predeploy passes, share with publish jobs
   build-for-publish:
     name: Build for Publishing
-    needs: predeploy
+    needs: [predeploy, audit]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -31,9 +46,8 @@ jobs:
 
       - name: Install and build client
         run: |
-          cd client
-          npm install
-          npm run build
+          pnpm install --frozen-lockfile
+          pnpm --filter react-flow-client run build
 
       - name: Upload built client
         uses: actions/upload-artifact@v4
