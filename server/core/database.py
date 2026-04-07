@@ -916,7 +916,8 @@ class Database:
                 result = await session.execute(stmt)
                 logs = result.scalars().all()
 
-                # Return in chronological order (oldest first)
+                # Return in reverse-chronological order (newest first)
+                # Matches real-time prepend convention in WebSocketContext
                 return [
                     {
                         "node_id": log.node_id,
@@ -930,7 +931,7 @@ class Database:
                         "source_node_label": log.source_node_label,
                         "timestamp": log.created_at.isoformat(),
                     }
-                    for log in reversed(logs)
+                    for log in logs
                 ]
 
         except Exception as e:

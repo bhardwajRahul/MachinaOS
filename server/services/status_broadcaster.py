@@ -80,29 +80,17 @@ class StatusBroadcaster:
         }
 
     async def connect(self, websocket: WebSocket):
-        """Accept a new WebSocket connection."""
+        """Accept a new WebSocket connection.
+
+        Sends cached status immediately so the client is unblocked,
+        then refreshes service statuses in a background task.
+        """
         await websocket.accept()
         async with self._lock:
             self._connections.add(websocket)
         logger.info(f"[StatusBroadcaster] Client connected. Total: {len(self._connections)}")
 
-        # Fetch fresh WhatsApp status before sending initial_status
-        # This ensures client sees actual connection state (especially after auto-connect)
-        await self._refresh_whatsapp_status()
-
-        # Fetch Twitter status from stored OAuth tokens
-        await self._refresh_twitter_status()
-
-        # Fetch Google Workspace status from stored OAuth tokens
-        await self._refresh_google_status()
-
-        # Refresh Telegram status from stored token and auto-reconnect
-        await self._refresh_telegram_status()
-
-        # Auto-reconnect Android relay if there's a stored session
-        await self._auto_reconnect_android_relay()
-
-        # Send current full status immediately
+        # Send cached status immediately -- don't block on service refreshes
         try:
             await websocket.send_json({
                 "type": "initial_status",
@@ -111,11 +99,38 @@ class StatusBroadcaster:
         except Exception as e:
             logger.error(f"[StatusBroadcaster] Failed to send initial status: {e}")
 
+        # Refresh service statuses in background -- updates broadcast when ready
+        asyncio.create_task(self._refresh_all_services())
+
     async def disconnect(self, websocket: WebSocket):
         """Remove a WebSocket connection."""
         async with self._lock:
             self._connections.discard(websocket)
         logger.info(f"[StatusBroadcaster] Client disconnected. Total: {len(self._connections)}")
+
+    async def _refresh_all_services(self):
+        """Refresh all service statuses concurrently and broadcast updates.
+
+        Runs as a background task so the WebSocket handshake is never
+        blocked by slow network calls.  Uses asyncio.gather with
+        return_exceptions so one failure does not prevent others.
+        """
+        results = await asyncio.gather(
+            self._refresh_whatsapp_status(),
+            self._refresh_twitter_status(),
+            self._refresh_google_status(),
+            self._refresh_telegram_status(),
+            self._auto_reconnect_android_relay(),
+            return_exceptions=True,
+        )
+        for r in results:
+            if isinstance(r, Exception):
+                logger.warning("[StatusBroadcaster] Service refresh failed: %s", r)
+
+        try:
+            await self.broadcast({"type": "full_status", "data": self._status})
+        except Exception as e:
+            logger.warning("[StatusBroadcaster] Failed to broadcast refreshed status: %s", e)
 
     async def broadcast(self, message: Dict[str, Any]):
         """Broadcast a message to all connected clients using TaskGroup.

@@ -385,8 +385,8 @@ const AGENT_CONFIGS: Record<string, AgentConfig> = {
     subtitle: 'LangChain DeepAgents',
     themeColorKey: 'green',
     bottomHandles: [
-      { id: 'input-skill', label: 'Skill', position: '20%' },
-      { id: 'input-teammates', label: 'Team', position: '50%' },
+      { id: 'input-skill', label: 'Skill', position: '30%' },
+      { id: 'input-teammates', label: 'Team', position: '55%' },
       { id: 'input-tools', label: 'Tool', position: '80%' },
     ],
     leftHandles: [
@@ -627,19 +627,18 @@ const AIAgentNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
       ))}
 
       {/* Bottom Handle Labels */}
-      <div style={{
-        position: 'absolute',
-        bottom: theme.spacing.lg,
-        left: '0',
-        right: '0',
-        display: 'flex',
-        justifyContent: 'space-around',
-        fontSize: theme.fontSize.sm,
-        color: theme.colors.text,
-        fontWeight: theme.fontWeight.medium
-      }}>
-        {config.bottomHandles.map(h => <span key={h.id}>{h.label}</span>)}
-      </div>
+      {config.bottomHandles.map(h => (
+        <span key={`label-${h.id}`} style={{
+          position: 'absolute',
+          bottom: theme.spacing.lg,
+          left: h.position,
+          transform: 'translateX(-50%)',
+          fontSize: theme.fontSize.sm,
+          color: theme.colors.text,
+          fontWeight: theme.fontWeight.medium,
+          whiteSpace: 'nowrap',
+        }}>{h.label}</span>
+      ))}
 
       {/* Bottom Handles */}
       {config.bottomHandles.map(h => (
