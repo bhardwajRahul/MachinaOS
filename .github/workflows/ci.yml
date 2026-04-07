@@ -5,7 +5,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, pnpm-phased-migration]
   pull_request:
     branches: [main]
 
