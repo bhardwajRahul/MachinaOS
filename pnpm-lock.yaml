@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      agent-browser:
+        specifier: latest
+        version: 0.25.3
       concurrently:
         specifier: ^9.2.1
         version: 9.2.1
@@ -1698,6 +1701,10 @@ packages:
   agent-base@6.0.2:
     resolution: {integrity: sha512-RZNwNclF7+MS/8bDg70amg32dyeZGZxiDuQmZxKLAlQjr3jGyLx+4Kkk58UO7D2QdgFIQCovuSuZESne6RG6XQ==}
     engines: {node: '>= 6.0.0'}
+
+  agent-browser@0.25.3:
+    resolution: {integrity: sha512-9qdD8Fe22fXHB9nEfWzZ31/16EjeHBbXXue44SoJt+8LpyZS07dV/aQR2B2LevLL8eCneJBOhqvEBP2lP0NwJw==}
+    hasBin: true
 
   ahooks@3.9.6:
     resolution: {integrity: sha512-Mr7f05swd5SmKlR9SZo5U6M0LsL4ErweLzpdgXjA1JPmnZ78Vr6wzx0jUtvoxrcqGKYnX0Yjc02iEASVxHFPjQ==}
@@ -6229,6 +6236,8 @@ snapshots:
       debug: 4.4.3
     transitivePeerDependencies:
       - supports-color
+
+  agent-browser@0.25.3: {}
 
   ahooks@3.9.6(react-dom@19.2.1(react@19.2.1))(react@19.2.1):
     dependencies:

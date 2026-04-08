@@ -401,7 +401,7 @@ class CacheEntry(SQLModel, table=True):
 
 ## Codebase Summary
 - **Hybrid architecture**: Node.js + Python + React TypeScript
-- **101 implemented workflow nodes** with clean service separation (9 AI models + 3 AI agents/memory + 16 specialized agents + 1 skill + 4 dedicated tools + 3 search + 16 Android + 3 WhatsApp + 4 Twitter + 2 Telegram + 2 Social + 3 Location + 3 Code + 6 Utility + 6 Document + 2 Chat + 2 Scheduler + 2 Workflow + 7 Google Workspace + 1 Apify + 1 Crawlee + 3 Proxy + 4 Filesystem/Shell)
+- **102 implemented workflow nodes** with clean service separation (9 AI models + 3 AI agents/memory + 16 specialized agents + 1 skill + 4 dedicated tools + 3 search + 16 Android + 3 WhatsApp + 4 Twitter + 2 Telegram + 2 Social + 3 Location + 3 Code + 6 Utility + 6 Document + 2 Chat + 2 Scheduler + 2 Workflow + 7 Google Workspace + 1 Apify + 1 Crawlee + 1 Browser + 3 Proxy + 4 Filesystem/Shell)
 - **WebSocket-First Architecture**: WebSocket as primary frontend-backend communication (89 message handlers)
 - **Recent optimizations**: REST APIs replaced with WebSocket, AI endpoints migrated to Python, Android automation integrated
 
@@ -440,6 +440,7 @@ The project was completely refactored from schema-based node definitions to expl
 - `src/nodeDefinitions/proxyNodes.ts` - Proxy nodes (proxyRequest, proxyConfig, proxyStatus) and shared PROXY_PARAMETERS
 - `src/nodeDefinitions/utilityNodes.ts` - HTTP, Webhook, chatTrigger, and console nodes
 - `src/nodeDefinitions/crawleeNodes.ts` - Crawlee web scraping node (crawleeScraper) with static/Playwright modes
+- `src/nodeDefinitions/browserNodes.ts` - Browser automation node (browser) via agent-browser CLI with stealth config
 - `src/nodeDefinitions/documentNodes.ts` - Document processing nodes (httpScraper, fileDownloader, documentParser, textChunker, embeddingGenerator, vectorStore)
 - `src/nodeDefinitions/chatNodes.ts` - Chat send and history nodes
 - `src/nodeDefinitions/schedulerNodes.ts` - Timer and cron scheduler nodes

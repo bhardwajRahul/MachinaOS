@@ -158,6 +158,10 @@ export const CRAWLEE_NODES = [
   ...CRAWLEE_NODE_TYPES
 ];
 
+export const BROWSER_NODES = [
+  ...BROWSER_NODE_TYPES
+];
+
 export const FILESYSTEM_NODES = [
   ...FILESYSTEM_NODE_TYPES
 ];
