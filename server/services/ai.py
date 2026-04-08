@@ -2437,6 +2437,7 @@ class AIService:
             'serperSearch': 'serper_search',
             'perplexitySearch': 'perplexity_search',
             'taskManager': 'task_manager',
+            'writeTodos': 'write_todos',
             'timer': 'timer',
             'cronScheduler': 'cron_scheduler',
             # Filesystem and shell tools (deepagents backends)
@@ -2513,6 +2514,7 @@ class AIService:
             'gmaps_locations': 'Geocode addresses to coordinates or reverse geocode coordinates to addresses using Google Maps.',
             'gmaps_nearby_places': 'Search for nearby places (restaurants, hospitals, banks, etc.) using Google Maps Places API.',
             'taskManager': 'Track delegated sub-agent tasks. Operations: list_tasks (see all tasks), get_task (check specific task status/result), mark_done (cleanup completed tasks).',
+            'writeTodos': 'Create and manage a structured task list for your current work session. This helps you track progress, organize complex tasks, and demonstrate thoroughness to the user. Only use this tool if you think it will be helpful in staying organized. If the user\'s request is trivial and takes less than 3 steps, it is better to NOT use this tool and just do the task directly. Use for complex multi-step tasks (3+ steps), non-trivial planning, or when user explicitly requests a todo list. Task states: pending, in_progress, completed. Mark tasks as in_progress BEFORE beginning work, completed IMMEDIATELY after finishing. Remove irrelevant tasks. Break complex tasks into smaller steps.',
             'timer': 'Wait/sleep for a specified duration. Specify duration (1-3600) and unit (seconds, minutes, or hours). Returns timestamp and elapsed time after waiting.',
             'cronScheduler': 'Schedule a delayed or recurring execution. Supports seconds, minutes, hours, daily, weekly, monthly frequencies with timezone. Use frequency to set schedule type, then set the relevant interval/time parameters.',
             # Filesystem and shell tools (deepagents backends)
@@ -3227,6 +3229,36 @@ class AIService:
                 pattern: Optional[str] = Field(default=None, description="Glob pattern or grep search text (required for glob/grep)")
                 file_filter: Optional[str] = Field(default=None, description="Glob to filter files for grep (e.g. '*.py')")
             return FsSearchSchema
+
+        # Write Todos schema (dedicated AI tool for task planning)
+        if node_type == 'writeTodos':
+            from enum import Enum as PyEnum
+
+            class TodoStatus(str, PyEnum):
+                pending = "pending"
+                in_progress = "in_progress"
+                completed = "completed"
+
+            class TodoItem(BaseModel):
+                """A single todo item."""
+                content: str = Field(description="Task description")
+                status: TodoStatus = Field(
+                    default=TodoStatus.pending,
+                    description="Task status: pending, in_progress, or completed"
+                )
+
+            class WriteTodosSchema(BaseModel):
+                """Create and manage a structured task list for complex multi-step operations.
+
+                Use for tasks requiring 3+ steps. Each todo has content and status.
+                Mark first task(s) as in_progress immediately. Update as you work.
+                Skip this tool for simple tasks that take less than 3 steps.
+                """
+                todos: List[TodoItem] = Field(
+                    description="List of todo items with content and status"
+                )
+
+            return WriteTodosSchema
 
         # Task Manager schema (dual-purpose: AI tool + workflow node)
         if node_type == 'taskManager':

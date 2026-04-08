@@ -184,6 +184,11 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
     if node_type == 'gmaps_nearby_places':
         return await _execute_nearby_places(tool_args, config.get('parameters', {}))
 
+    # Write Todos (dedicated AI tool for task planning)
+    if node_type == 'writeTodos':
+        from services.handlers.todo import execute_write_todos
+        return await execute_write_todos(tool_args, config)
+
     # Task Manager (dual-purpose: AI tool + workflow node)
     if node_type == 'taskManager':
         return await _execute_task_manager(tool_args, config)

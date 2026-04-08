@@ -53,6 +53,7 @@ AI_TOOL_TYPES: FrozenSet[str] = frozenset([
     'currentTimeTool',
     'duckduckgoSearch',
     'androidTool',
+    'writeTodos',
 ])
 
 # Skill node types (connect to Zeenie's input-skill handle)

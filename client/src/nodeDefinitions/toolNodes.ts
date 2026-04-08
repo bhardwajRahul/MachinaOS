@@ -221,6 +221,50 @@ export const toolNodes: Record<string, INodeTypeDescription> = {
         }
       }
     ]
+  },
+
+  // Write Todos Tool - allows AI Agent to plan and track complex multi-step tasks
+  writeTodos: {
+    displayName: 'Write Todos',
+    name: 'writeTodos',
+    icon: '\u{1F4DD}',
+    group: ['tool', 'ai'],
+    version: 1,
+    subtitle: 'Task Planning',
+    description: 'Create and manage a structured task list for complex multi-step operations. Works as AI tool OR standalone workflow node.',
+    defaults: { name: 'Write Todos', color: '#bd93f9' },
+    inputs: [],
+    outputs: [
+      {
+        name: 'tool',
+        displayName: 'Tool',
+        type: 'main' as NodeConnectionType,
+        description: 'Connect to AI Agent tool handle'
+      },
+      {
+        name: 'main',
+        displayName: 'Output',
+        type: 'main' as NodeConnectionType,
+        description: 'Todo list output for workflow use'
+      }
+    ],
+    properties: [
+      {
+        displayName: 'Tool Name',
+        name: 'toolName',
+        type: 'string',
+        default: 'write_todos',
+        description: 'Name visible to the AI agent'
+      },
+      {
+        displayName: 'Tool Description',
+        name: 'toolDescription',
+        type: 'string',
+        default: 'Create and manage a structured task list. Use for complex multi-step tasks (3+ steps). Each todo has content and status (pending, in_progress, completed).',
+        typeOptions: { rows: 3 },
+        description: 'Description for the AI agent'
+      }
+    ]
   }
 };
 
@@ -229,4 +273,4 @@ export const toolNodes: Record<string, INodeTypeDescription> = {
 // ============================================================================
 
 // List of tool node types for identification
-export const TOOL_NODE_TYPES = ['calculatorTool', 'currentTimeTool', 'duckduckgoSearch', 'taskManager'];
+export const TOOL_NODE_TYPES = ['calculatorTool', 'currentTimeTool', 'duckduckgoSearch', 'taskManager', 'writeTodos'];
