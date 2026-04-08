@@ -37,6 +37,7 @@ import { APIFY_NODE_TYPES } from './nodeDefinitions/apifyNodes';
 import { GOOGLE_WORKSPACE_NODE_TYPES } from './nodeDefinitions/googleWorkspaceNodes';
 import { PROXY_NODE_TYPES } from './nodeDefinitions/proxyNodes';
 import { CRAWLEE_NODE_TYPES } from './nodeDefinitions/crawleeNodes';
+import { BROWSER_NODE_TYPES } from './nodeDefinitions/browserNodes';
 import { FILESYSTEM_NODE_TYPES } from './nodeDefinitions/filesystemNodes';
 import { AI_CHAT_MODEL_TYPES } from './nodeDefinitions/aiModelNodes';
 import ParameterPanel from './ParameterPanel';
@@ -149,6 +150,9 @@ const createNodeTypes = (): Record<string, React.ComponentType<any>> => {
       types[type] = SquareNode;
     } else if (CRAWLEE_NODE_TYPES.includes(type)) {
       // Crawlee web scraping nodes use SquareNode component
+      types[type] = SquareNode;
+    } else if (BROWSER_NODE_TYPES.includes(type)) {
+      // Browser automation nodes use SquareNode component
       types[type] = SquareNode;
     } else if (FILESYSTEM_NODE_TYPES.includes(type)) {
       // Filesystem & shell nodes use SquareNode component

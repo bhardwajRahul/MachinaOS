@@ -114,6 +114,9 @@ from .search import (
 # Crawlee web scraping handler
 from .crawlee import handle_crawlee_scraper
 
+# Browser automation handler (agent-browser CLI)
+from .browser import handle_browser
+
 # RLM agent handler
 from .rlm import handle_rlm_agent
 

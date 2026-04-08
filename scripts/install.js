@@ -133,6 +133,22 @@ if (temporalVersion) {
   }
 }
 
+// Check/Install agent-browser (global CLI for browser automation)
+let agentBrowserVersion = getVersion('agent-browser --version');
+if (agentBrowserVersion) {
+  console.log(`  agent-browser: ${agentBrowserVersion}`);
+} else {
+  console.log('  agent-browser: not found, installing...');
+  run('npm install -g agent-browser');
+  agentBrowserVersion = getVersion('agent-browser --version');
+  if (agentBrowserVersion) {
+    console.log(`  agent-browser: ${agentBrowserVersion}`);
+    run('agent-browser install');
+  } else {
+    console.log('  Warning: agent-browser install failed. Browser automation unavailable.');
+  }
+}
+
 console.log('');
 console.log('Installing...');
 console.log('');

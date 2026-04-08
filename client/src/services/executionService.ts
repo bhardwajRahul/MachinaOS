@@ -11,6 +11,7 @@ import { APIFY_NODE_TYPES } from '../nodeDefinitions/apifyNodes';
 import { SEARCH_NODE_TYPES } from '../nodeDefinitions/searchNodes';
 import { TELEGRAM_NODE_TYPES } from '../nodeDefinitions/telegramNodes';
 import { CRAWLEE_NODE_TYPES } from '../nodeDefinitions/crawleeNodes';
+import { BROWSER_NODE_TYPES } from '../nodeDefinitions/browserNodes';
 import { AI_CHAT_MODEL_TYPES } from '../nodeDefinitions/aiModelNodes';
 import { Node, Edge } from 'reactflow';
 import { INodeExecutionData } from '../types/INodeProperties';
@@ -230,6 +231,8 @@ export class ExecutionService {
       ...APIFY_NODE_TYPES,
       // Crawlee web scraping
       ...CRAWLEE_NODE_TYPES,
+      // Browser automation
+      ...BROWSER_NODE_TYPES,
       // Search API nodes
       ...SEARCH_NODE_TYPES,
       // Telegram Nodes

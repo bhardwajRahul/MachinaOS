@@ -192,6 +192,10 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
     if node_type == 'apifyActor':
         return await _execute_apify_actor(tool_args, config.get('parameters', {}))
 
+    # Browser automation (dual-purpose: workflow node + AI tool)
+    if node_type == 'browser':
+        return await _execute_browser(tool_args, config.get('parameters', {}), config)
+
     # Crawlee web scraper (dual-purpose: workflow node + AI tool)
     if node_type == 'crawleeScraper':
         return await _execute_crawlee_scraper(tool_args, config.get('parameters', {}))
@@ -1539,6 +1543,33 @@ async def _execute_apify_actor(args: Dict[str, Any],
         node_type="apifyActor",
         parameters=parameters,
         context={}
+    )
+
+
+async def _execute_browser(args: Dict[str, Any],
+                           node_params: Dict[str, Any],
+                           config: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute browser automation as an AI tool."""
+    from services.handlers.browser import handle_browser
+
+    parameters = {
+        **node_params,
+        'operation': args.get('operation', node_params.get('operation', 'navigate')),
+        'url': args.get('url', node_params.get('url', '')),
+        'selector': args.get('selector', node_params.get('selector', '')),
+        'text': args.get('text', node_params.get('text', '')),
+        'value': args.get('value', node_params.get('value', '')),
+        'expression': args.get('expression', node_params.get('expression', '')),
+        'direction': args.get('direction', node_params.get('direction', 'down')),
+        'amount': args.get('amount', node_params.get('amount', 500)),
+        'fullPage': args.get('fullPage', node_params.get('fullPage', False)),
+    }
+
+    return await handle_browser(
+        node_id=config.get('node_id', 'tool_browser'),
+        node_type='browser',
+        parameters=parameters,
+        context={'execution_id': config.get('execution_id', 'default')},
     )
 
 
