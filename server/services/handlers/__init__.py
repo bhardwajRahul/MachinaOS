@@ -137,6 +137,9 @@ from .tools import (
     handle_task_manager,
 )
 
+# Todo handler
+from .todo import execute_write_todos, handle_write_todos
+
 __all__ = [
     # AI
     'handle_ai_agent',
@@ -210,4 +213,7 @@ __all__ = [
     # Tools
     'execute_tool',
     'handle_task_manager',
+    # Todo
+    'execute_write_todos',
+    'handle_write_todos',
 ]
