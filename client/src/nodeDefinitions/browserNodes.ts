@@ -1,0 +1,197 @@
+// Browser Automation Node - Interactive browser control via agent-browser CLI
+// Dual-purpose node: works as standalone workflow node AND AI Agent tool
+
+import {
+  INodeTypeDescription,
+  NodeConnectionType,
+} from '../types/INodeProperties';
+import { dracula } from '../styles/theme';
+
+export const browserNodes: Record<string, INodeTypeDescription> = {
+  browser: {
+    displayName: 'Browser',
+    name: 'browser',
+    icon: '🌐',
+    group: ['browser', 'tool'],
+    version: 1,
+    subtitle: 'Agent Browser',
+    description: 'Interactive browser automation via agent-browser. Navigate, click, type, fill forms, take screenshots, get accessibility snapshots, and execute JavaScript.',
+    defaults: { name: 'Browser', color: dracula.cyan },
+    inputs: [
+      {
+        name: 'main',
+        displayName: 'Input',
+        type: 'main' as NodeConnectionType,
+        description: 'Input data',
+      },
+    ],
+    outputs: [
+      {
+        name: 'main',
+        displayName: 'Output',
+        type: 'main' as NodeConnectionType,
+        description: 'Browser operation result',
+      },
+      {
+        name: 'tool',
+        displayName: 'Tool',
+        type: 'main' as NodeConnectionType,
+        description: 'Connect to AI Agent tool handle',
+      },
+    ],
+    properties: [
+      // ===== TOOL CONFIG =====
+      {
+        displayName: 'Tool Name',
+        name: 'toolName',
+        type: 'string',
+        default: 'browser',
+        description: 'Name of this tool when used by AI Agent',
+      },
+      {
+        displayName: 'Tool Description',
+        name: 'toolDescription',
+        type: 'string',
+        default: 'Control a web browser. Use snapshot to see the page (returns accessibility tree with @eN refs). Then click/type/fill with those refs. Workflow: navigate -> snapshot -> click/fill -> snapshot.',
+        typeOptions: { rows: 3 },
+        description: 'Description shown to AI Agent for tool usage',
+      },
+
+      // ===== OPERATION =====
+      {
+        displayName: 'Operation',
+        name: 'operation',
+        type: 'options',
+        default: 'navigate',
+        options: [
+          { name: 'Navigate', value: 'navigate', description: 'Open a URL' },
+          { name: 'Click', value: 'click', description: 'Click an element' },
+          { name: 'Type', value: 'type', description: 'Type text keystroke by keystroke' },
+          { name: 'Fill', value: 'fill', description: 'Clear and fill an input field' },
+          { name: 'Screenshot', value: 'screenshot', description: 'Take a screenshot' },
+          { name: 'Snapshot', value: 'snapshot', description: 'Get accessibility tree with @eN refs (AI-optimized)' },
+          { name: 'Get Text', value: 'get_text', description: 'Extract text from an element' },
+          { name: 'Get HTML', value: 'get_html', description: 'Extract innerHTML from an element' },
+          { name: 'Evaluate JS', value: 'eval', description: 'Execute JavaScript in page context' },
+          { name: 'Wait', value: 'wait', description: 'Wait for an element to appear' },
+          { name: 'Scroll', value: 'scroll', description: 'Scroll the page' },
+          { name: 'Select', value: 'select', description: 'Select a dropdown option' },
+          { name: 'Batch', value: 'batch', description: 'Execute multiple commands' },
+        ],
+        description: 'Browser operation to perform',
+      },
+
+      // ===== CONDITIONAL PARAMETERS =====
+      {
+        displayName: 'URL',
+        name: 'url',
+        type: 'string',
+        default: '',
+        required: true,
+        placeholder: 'https://example.com',
+        description: 'URL to navigate to',
+        displayOptions: { show: { operation: ['navigate'] } },
+      },
+      {
+        displayName: 'Selector',
+        name: 'selector',
+        type: 'string',
+        default: '',
+        required: true,
+        placeholder: '@e1 or #login-button or .submit-btn',
+        description: 'CSS selector or @eN ref from snapshot',
+        displayOptions: { show: { operation: ['click', 'type', 'fill', 'get_text', 'get_html', 'wait', 'select'] } },
+      },
+      {
+        displayName: 'Text',
+        name: 'text',
+        type: 'string',
+        default: '',
+        placeholder: 'Text to type',
+        description: 'Text to type into the element',
+        displayOptions: { show: { operation: ['type'] } },
+      },
+      {
+        displayName: 'Value',
+        name: 'value',
+        type: 'string',
+        default: '',
+        placeholder: 'Value to fill or option to select',
+        description: 'Value for fill or select operation',
+        displayOptions: { show: { operation: ['fill', 'select'] } },
+      },
+      {
+        displayName: 'Full Page',
+        name: 'fullPage',
+        type: 'boolean',
+        default: false,
+        description: 'Capture the full scrollable page',
+        displayOptions: { show: { operation: ['screenshot'] } },
+      },
+      {
+        displayName: 'JavaScript Expression',
+        name: 'expression',
+        type: 'string',
+        default: '',
+        required: true,
+        placeholder: 'document.title',
+        typeOptions: { rows: 3 },
+        description: 'JavaScript to execute in page context',
+        displayOptions: { show: { operation: ['eval'] } },
+      },
+      {
+        displayName: 'Direction',
+        name: 'direction',
+        type: 'options',
+        default: 'down',
+        options: [
+          { name: 'Down', value: 'down' },
+          { name: 'Up', value: 'up' },
+          { name: 'Left', value: 'left' },
+          { name: 'Right', value: 'right' },
+        ],
+        description: 'Scroll direction',
+        displayOptions: { show: { operation: ['scroll'] } },
+      },
+      {
+        displayName: 'Amount (px)',
+        name: 'amount',
+        type: 'number',
+        default: 500,
+        typeOptions: { minValue: 100, maxValue: 5000 },
+        description: 'Pixels to scroll',
+        displayOptions: { show: { operation: ['scroll'] } },
+      },
+      {
+        displayName: 'Commands (JSON)',
+        name: 'commands',
+        type: 'string',
+        default: '[]',
+        typeOptions: { rows: 5 },
+        placeholder: '[["open", "https://example.com"], ["snapshot", "-i"]]',
+        description: 'JSON array of commands: [["command", "arg1", "arg2"], ...]',
+        displayOptions: { show: { operation: ['batch'] } },
+      },
+
+      // ===== ADVANCED =====
+      {
+        displayName: 'Session',
+        name: 'session',
+        type: 'string',
+        default: '',
+        placeholder: 'Auto-derived from execution ID',
+        description: 'Browser session name. Leave empty for auto-derived session (shares browser state across chained nodes)',
+      },
+      {
+        displayName: 'Timeout',
+        name: 'timeout',
+        type: 'number',
+        default: 30,
+        typeOptions: { minValue: 5, maxValue: 300 },
+        description: 'Command timeout in seconds',
+      },
+    ],
+  },
+};
+
+export const BROWSER_NODE_TYPES = ['browser'];

@@ -45,6 +45,7 @@ from services.handlers.deep_agent import handle_deep_agent
 from services.handlers.telegram import handle_telegram_send
 from services.handlers.apify import handle_apify_actor
 from services.handlers.crawlee import handle_crawlee_scraper
+from services.handlers.browser import handle_browser
 from services.handlers.proxy import handle_proxy_request, handle_proxy_status, handle_proxy_config
 from services.handlers.filesystem import handle_file_read, handle_file_modify, handle_shell, handle_fs_search
 # Consolidated Google Workspace handlers (6 services with operation dispatchers)
@@ -195,6 +196,8 @@ class NodeExecutor:
             'apifyActor': handle_apify_actor,
             # Crawlee web scraping
             'crawleeScraper': handle_crawlee_scraper,
+            # Browser automation (agent-browser CLI)
+            'browser': handle_browser,
             # Proxy nodes
             'proxyRequest': handle_proxy_request,
             'proxyStatus': handle_proxy_status,

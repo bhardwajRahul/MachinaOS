@@ -2495,6 +2495,8 @@ class AIService:
             'proxyStatus': 'proxy_status',
             # Crawlee web scraping (dual-purpose tool)
             'crawleeScraper': 'web_reader',
+            # Browser automation (dual-purpose tool)
+            'browser': 'browser',
         }
         DEFAULT_TOOL_DESCRIPTIONS = {
             'calculatorTool': 'Perform mathematical calculations. Operations: add, subtract, multiply, divide, power, sqrt, mod, abs',
@@ -2568,6 +2570,8 @@ class AIService:
             'proxyStatus': 'Get proxy provider health stats, scores, and usage statistics. Returns enabled status, provider list with health scores, and aggregated stats.',
             # Crawlee web scraping (dual-purpose tool)
             'crawleeScraper': 'Read and extract content from web pages. Fetches page text, links, and data. Use beautifulsoup for static pages or playwright for JS-rendered pages. You MUST use this tool when the user asks to read, fetch, or get content from any URL.',
+            # Browser automation (dual-purpose tool)
+            'browser': 'Control a web browser interactively. Use snapshot to see the page (returns accessibility tree with @eN refs). Then click/type/fill with those refs. Workflow: navigate -> snapshot -> interact -> snapshot. Operations: navigate, click, type, fill, screenshot, snapshot, get_text, get_html, eval, wait, scroll, select, batch.',
         }
 
         try:
@@ -3539,6 +3543,25 @@ class AIService:
             return ApifyActorSchema
 
         # Crawlee web reader tool schema (dual-purpose: workflow node + AI tool)
+        # Browser automation (dual-purpose: workflow node + AI tool)
+        if node_type == 'browser':
+            class BrowserSchema(BaseModel):
+                """Control a web browser. Use snapshot to see the page (returns @eN refs).
+                Then click/type/fill using those refs. Workflow: navigate -> snapshot -> interact."""
+                operation: str = Field(
+                    description="Operation: navigate, click, type, fill, screenshot, snapshot, get_text, get_html, eval, wait, scroll, select"
+                )
+                url: Optional[str] = Field(default=None, description="[navigate] URL to open")
+                selector: Optional[str] = Field(default=None, description="[click/type/fill/get_text/get_html/wait/select] CSS selector or @eN ref from snapshot")
+                text: Optional[str] = Field(default=None, description="[type] Text to type")
+                value: Optional[str] = Field(default=None, description="[fill/select] Value to fill or option to select")
+                expression: Optional[str] = Field(default=None, description="[eval] JavaScript to execute")
+                direction: Optional[str] = Field(default="down", description="[scroll] up, down, left, right")
+                amount: Optional[int] = Field(default=500, description="[scroll] Pixels to scroll")
+                fullPage: Optional[bool] = Field(default=False, description="[screenshot] Capture full scrollable page")
+
+            return BrowserSchema
+
         if node_type == 'crawleeScraper':
             class CrawleeScraperSchema(BaseModel):
                 """Read content from any web page URL. Call this tool immediately when the user provides a URL.

@@ -709,6 +709,12 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                 success: 'boolean',
                 data: 'any'
               },
+              // Browser automation schema
+              browser: {
+                operation: 'string',
+                data: 'any',
+                session: 'string'
+              },
               // Crawlee web scraping schema
               crawlee: {
                 pages: [{
@@ -801,6 +807,9 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
             const proxyNodeTypes = ['proxyRequest', 'proxyStatus', 'proxyConfig'];
             const isProxyNode = proxyNodeTypes.includes(nodeType);
 
+            // Browser automation node detection
+            const isBrowser = nodeType === 'browser';
+
             // Crawlee web scraping node detection
             const isCrawlee = nodeType === 'crawleeScraper';
 
@@ -836,6 +845,7 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                             isSocialSend ? sampleSchemas.socialSend :
                             isApify ? sampleSchemas.apify :
                             isSearchNode ? sampleSchemas.search :
+                            isBrowser ? sampleSchemas.browser :
                             isCrawlee ? sampleSchemas.crawlee :
                             isFilesystemNode ? (sampleSchemas[nodeType as keyof typeof sampleSchemas] || { data: 'any' }) :
                             { data: 'any' };

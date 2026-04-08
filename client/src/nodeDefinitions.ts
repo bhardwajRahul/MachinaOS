@@ -25,6 +25,7 @@ import { searchNodes, SEARCH_NODE_TYPES } from './nodeDefinitions/searchNodes';
 import { googleWorkspaceNodes, GOOGLE_WORKSPACE_NODE_TYPES } from './nodeDefinitions/googleWorkspaceNodes';
 import { proxyNodes, PROXY_NODE_TYPES } from './nodeDefinitions/proxyNodes';
 import { crawleeNodes, CRAWLEE_NODE_TYPES } from './nodeDefinitions/crawleeNodes';
+import { browserNodes, BROWSER_NODE_TYPES } from './nodeDefinitions/browserNodes';
 import { filesystemNodes, FILESYSTEM_NODE_TYPES } from './nodeDefinitions/filesystemNodes';
 
 // ============================================================================
@@ -55,6 +56,7 @@ export const nodeDefinitions: Record<string, INodeTypeDescription> = {
   ...googleWorkspaceNodes,
   ...proxyNodes,
   ...crawleeNodes,
+  ...browserNodes,
   ...filesystemNodes
 };
 
