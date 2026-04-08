@@ -1,5 +1,5 @@
 {
-  "_generated": "2026-04-06T14:19:35.867475+00:00",
+  "_generated": "2026-04-07T15:49:55.878461+00:00",
   "_source": "openrouter",
   "_model_count": 348,
   "models": {
@@ -8954,11 +8954,11 @@
         "top_p"
       ]
     },
-    "inflection/inflection-3-productivity": {
-      "id": "inflection/inflection-3-productivity",
-      "name": "Inflection: Inflection 3 Productivity",
+    "inflection/inflection-3-pi": {
+      "id": "inflection/inflection-3-pi",
+      "name": "Inflection: Inflection 3 Pi",
       "provider": "inflection",
-      "local_id": "inflection-3-productivity",
+      "local_id": "inflection-3-pi",
       "context_length": 8000,
       "max_output_tokens": 1024,
       "input_price_per_mtok": 2.5,
@@ -8977,11 +8977,11 @@
         "top_p"
       ]
     },
-    "inflection/inflection-3-pi": {
-      "id": "inflection/inflection-3-pi",
-      "name": "Inflection: Inflection 3 Pi",
+    "inflection/inflection-3-productivity": {
+      "id": "inflection/inflection-3-productivity",
+      "name": "Inflection: Inflection 3 Productivity",
       "provider": "inflection",
-      "local_id": "inflection-3-pi",
+      "local_id": "inflection-3-productivity",
       "context_length": 8000,
       "max_output_tokens": 1024,
       "input_price_per_mtok": 2.5,
@@ -9178,15 +9178,15 @@
         "top_p"
       ]
     },
-    "cohere/command-r-plus-08-2024": {
-      "id": "cohere/command-r-plus-08-2024",
-      "name": "Cohere: Command R+ (08-2024)",
+    "cohere/command-r-08-2024": {
+      "id": "cohere/command-r-08-2024",
+      "name": "Cohere: Command R (08-2024)",
       "provider": "cohere",
-      "local_id": "command-r-plus-08-2024",
+      "local_id": "command-r-08-2024",
       "context_length": 128000,
       "max_output_tokens": 4000,
-      "input_price_per_mtok": 2.5,
-      "output_price_per_mtok": 10.0,
+      "input_price_per_mtok": 0.15,
+      "output_price_per_mtok": 0.6,
       "supports_thinking": false,
       "thinking_type": "none",
       "temperature_range": [
@@ -9209,15 +9209,15 @@
         "top_p"
       ]
     },
-    "cohere/command-r-08-2024": {
-      "id": "cohere/command-r-08-2024",
-      "name": "Cohere: Command R (08-2024)",
+    "cohere/command-r-plus-08-2024": {
+      "id": "cohere/command-r-plus-08-2024",
+      "name": "Cohere: Command R+ (08-2024)",
       "provider": "cohere",
-      "local_id": "command-r-08-2024",
+      "local_id": "command-r-plus-08-2024",
       "context_length": 128000,
       "max_output_tokens": 4000,
-      "input_price_per_mtok": 0.15,
-      "output_price_per_mtok": 0.6,
+      "input_price_per_mtok": 2.5,
+      "output_price_per_mtok": 10.0,
       "supports_thinking": false,
       "thinking_type": "none",
       "temperature_range": [
@@ -9704,40 +9704,6 @@
         "top_p"
       ]
     },
-    "openai/gpt-4o-2024-05-13": {
-      "id": "openai/gpt-4o-2024-05-13",
-      "name": "OpenAI: GPT-4o (2024-05-13)",
-      "provider": "openai",
-      "local_id": "gpt-4o-2024-05-13",
-      "context_length": 128000,
-      "max_output_tokens": 4096,
-      "input_price_per_mtok": 5.0,
-      "output_price_per_mtok": 15.0,
-      "supports_thinking": false,
-      "thinking_type": "none",
-      "temperature_range": [
-        0.0,
-        2.0
-      ],
-      "is_reasoning_model": false,
-      "supported_parameters": [
-        "frequency_penalty",
-        "logit_bias",
-        "logprobs",
-        "max_tokens",
-        "presence_penalty",
-        "response_format",
-        "seed",
-        "stop",
-        "structured_outputs",
-        "temperature",
-        "tool_choice",
-        "tools",
-        "top_logprobs",
-        "top_p",
-        "web_search_options"
-      ]
-    },
     "openai/gpt-4o": {
       "id": "openai/gpt-4o",
       "name": "OpenAI: GPT-4o",
@@ -9781,6 +9747,40 @@
       "max_output_tokens": 64000,
       "input_price_per_mtok": 6.0,
       "output_price_per_mtok": 18.0,
+      "supports_thinking": false,
+      "thinking_type": "none",
+      "temperature_range": [
+        0.0,
+        2.0
+      ],
+      "is_reasoning_model": false,
+      "supported_parameters": [
+        "frequency_penalty",
+        "logit_bias",
+        "logprobs",
+        "max_tokens",
+        "presence_penalty",
+        "response_format",
+        "seed",
+        "stop",
+        "structured_outputs",
+        "temperature",
+        "tool_choice",
+        "tools",
+        "top_logprobs",
+        "top_p",
+        "web_search_options"
+      ]
+    },
+    "openai/gpt-4o-2024-05-13": {
+      "id": "openai/gpt-4o-2024-05-13",
+      "name": "OpenAI: GPT-4o (2024-05-13)",
+      "provider": "openai",
+      "local_id": "gpt-4o-2024-05-13",
+      "context_length": 128000,
+      "max_output_tokens": 4096,
+      "input_price_per_mtok": 5.0,
+      "output_price_per_mtok": 15.0,
       "supports_thinking": false,
       "thinking_type": "none",
       "temperature_range": [
@@ -10014,15 +10014,15 @@
         "top_p"
       ]
     },
-    "openai/gpt-4-turbo-preview": {
-      "id": "openai/gpt-4-turbo-preview",
-      "name": "OpenAI: GPT-4 Turbo Preview",
+    "openai/gpt-3.5-turbo-0613": {
+      "id": "openai/gpt-3.5-turbo-0613",
+      "name": "OpenAI: GPT-3.5 Turbo (older v0613)",
       "provider": "openai",
-      "local_id": "gpt-4-turbo-preview",
-      "context_length": 128000,
+      "local_id": "gpt-3.5-turbo-0613",
+      "context_length": 4095,
       "max_output_tokens": 4096,
-      "input_price_per_mtok": 10.0,
-      "output_price_per_mtok": 30.0,
+      "input_price_per_mtok": 1.0,
+      "output_price_per_mtok": 2.0,
       "supports_thinking": false,
       "thinking_type": "none",
       "temperature_range": [
@@ -10047,15 +10047,15 @@
         "top_p"
       ]
     },
-    "openai/gpt-3.5-turbo-0613": {
-      "id": "openai/gpt-3.5-turbo-0613",
-      "name": "OpenAI: GPT-3.5 Turbo (older v0613)",
+    "openai/gpt-4-turbo-preview": {
+      "id": "openai/gpt-4-turbo-preview",
+      "name": "OpenAI: GPT-4 Turbo Preview",
       "provider": "openai",
-      "local_id": "gpt-3.5-turbo-0613",
-      "context_length": 4095,
+      "local_id": "gpt-4-turbo-preview",
+      "context_length": 128000,
       "max_output_tokens": 4096,
-      "input_price_per_mtok": 1.0,
-      "output_price_per_mtok": 2.0,
+      "input_price_per_mtok": 10.0,
+      "output_price_per_mtok": 30.0,
       "supports_thinking": false,
       "thinking_type": "none",
       "temperature_range": [
@@ -10220,6 +10220,33 @@
         "top_p"
       ]
     },
+    "mistralai/mistral-7b-instruct-v0.1": {
+      "id": "mistralai/mistral-7b-instruct-v0.1",
+      "name": "Mistral: Mistral 7B Instruct v0.1",
+      "provider": "mistralai",
+      "local_id": "mistral-7b-instruct-v0.1",
+      "context_length": 2824,
+      "max_output_tokens": 0,
+      "input_price_per_mtok": 0.11,
+      "output_price_per_mtok": 0.19,
+      "supports_thinking": false,
+      "thinking_type": "none",
+      "temperature_range": [
+        0.0,
+        2.0
+      ],
+      "is_reasoning_model": false,
+      "supported_parameters": [
+        "frequency_penalty",
+        "max_tokens",
+        "presence_penalty",
+        "repetition_penalty",
+        "seed",
+        "temperature",
+        "top_k",
+        "top_p"
+      ]
+    },
     "openai/gpt-3.5-turbo-instruct": {
       "id": "openai/gpt-3.5-turbo-instruct",
       "name": "OpenAI: GPT-3.5 Turbo Instruct",
@@ -10248,33 +10275,6 @@
         "structured_outputs",
         "temperature",
         "top_logprobs",
-        "top_p"
-      ]
-    },
-    "mistralai/mistral-7b-instruct-v0.1": {
-      "id": "mistralai/mistral-7b-instruct-v0.1",
-      "name": "Mistral: Mistral 7B Instruct v0.1",
-      "provider": "mistralai",
-      "local_id": "mistral-7b-instruct-v0.1",
-      "context_length": 2824,
-      "max_output_tokens": 0,
-      "input_price_per_mtok": 0.11,
-      "output_price_per_mtok": 0.19,
-      "supports_thinking": false,
-      "thinking_type": "none",
-      "temperature_range": [
-        0.0,
-        2.0
-      ],
-      "is_reasoning_model": false,
-      "supported_parameters": [
-        "frequency_penalty",
-        "max_tokens",
-        "presence_penalty",
-        "repetition_penalty",
-        "seed",
-        "temperature",
-        "top_k",
         "top_p"
       ]
     },
@@ -10448,15 +10448,15 @@
         "top_p"
       ]
     },
-    "openai/gpt-4": {
-      "id": "openai/gpt-4",
-      "name": "OpenAI: GPT-4",
+    "openai/gpt-3.5-turbo": {
+      "id": "openai/gpt-3.5-turbo",
+      "name": "OpenAI: GPT-3.5 Turbo",
       "provider": "openai",
-      "local_id": "gpt-4",
-      "context_length": 8191,
+      "local_id": "gpt-3.5-turbo",
+      "context_length": 16385,
       "max_output_tokens": 4096,
-      "input_price_per_mtok": 30.0,
-      "output_price_per_mtok": 60.0,
+      "input_price_per_mtok": 0.5,
+      "output_price_per_mtok": 1.5,
       "supports_thinking": false,
       "thinking_type": "none",
       "temperature_range": [
@@ -10481,15 +10481,15 @@
         "top_p"
       ]
     },
-    "openai/gpt-3.5-turbo": {
-      "id": "openai/gpt-3.5-turbo",
-      "name": "OpenAI: GPT-3.5 Turbo",
+    "openai/gpt-4": {
+      "id": "openai/gpt-4",
+      "name": "OpenAI: GPT-4",
       "provider": "openai",
-      "local_id": "gpt-3.5-turbo",
-      "context_length": 16385,
+      "local_id": "gpt-4",
+      "context_length": 8191,
       "max_output_tokens": 4096,
-      "input_price_per_mtok": 0.5,
-      "output_price_per_mtok": 1.5,
+      "input_price_per_mtok": 30.0,
+      "output_price_per_mtok": 60.0,
       "supports_thinking": false,
       "thinking_type": "none",
       "temperature_range": [

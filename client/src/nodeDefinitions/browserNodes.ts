@@ -6,12 +6,13 @@ import {
   NodeConnectionType,
 } from '../types/INodeProperties';
 import { dracula } from '../styles/theme';
+import { BROWSER_ICON } from '../assets/icons/browser';
 
 export const browserNodes: Record<string, INodeTypeDescription> = {
   browser: {
     displayName: 'Browser',
     name: 'browser',
-    icon: '🌐',
+    icon: BROWSER_ICON,
     group: ['browser', 'tool'],
     version: 1,
     subtitle: 'Agent Browser',
@@ -174,6 +175,37 @@ export const browserNodes: Record<string, INodeTypeDescription> = {
       },
 
       // ===== ADVANCED =====
+      {
+        displayName: 'Show Browser',
+        name: 'headed',
+        type: 'boolean',
+        default: true,
+        description: 'Open browser in visible (headed) mode instead of headless',
+      },
+      {
+        displayName: 'Action Delay (ms)',
+        name: 'actionDelay',
+        type: 'number',
+        default: 0,
+        typeOptions: { minValue: 0, maxValue: 10000 },
+        description: 'Delay before each action in milliseconds. Simulates human pacing. 0 = instant.',
+      },
+      {
+        displayName: 'User Agent',
+        name: 'userAgent',
+        type: 'string',
+        default: '',
+        placeholder: 'Mozilla/5.0 ...',
+        description: 'Custom user agent string. Empty = Chrome default.',
+      },
+      {
+        displayName: 'Proxy',
+        name: 'proxy',
+        type: 'string',
+        default: '',
+        placeholder: 'http://user:pass@host:port',
+        description: 'Proxy server URL for all browser requests.',
+      },
       {
         displayName: 'Session',
         name: 'session',
