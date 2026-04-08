@@ -78,6 +78,43 @@ const OutputDisplayPanel: React.FC<OutputDisplayPanelProps> = ({ results, onClea
     return null;
   };
 
+  // Format writeTodos results into a readable checklist
+  const formatTodoOutput = (data: any): string | null => {
+    const r = data?.result || data;
+    if (!r) return null;
+
+    // Parse todos from JSON string or array
+    let todos: any[] = [];
+    if (typeof r.todos === 'string') {
+      try { todos = JSON.parse(r.todos); } catch { return null; }
+    } else if (Array.isArray(r.todos)) {
+      todos = r.todos;
+    } else {
+      return null;
+    }
+
+    if (todos.length === 0) return r.message || 'Todo list is empty.';
+
+    const statusIcon: Record<string, string> = {
+      pending: '[ ]',
+      in_progress: '[~]',
+      completed: '[x]',
+    };
+    const lines = todos.map((t: any, i: number) => {
+      const icon = statusIcon[t.status] || '[ ]';
+      return `${i + 1}. ${icon} ${t.content}`;
+    });
+
+    const counts = {
+      pending: todos.filter((t: any) => t.status === 'pending').length,
+      in_progress: todos.filter((t: any) => t.status === 'in_progress').length,
+      completed: todos.filter((t: any) => t.status === 'completed').length,
+    };
+    const summary = `${todos.length} items: ${counts.completed} done, ${counts.in_progress} active, ${counts.pending} pending`;
+
+    return `${summary}\n\n${lines.join('\n')}`;
+  };
+
   // Extract the main response text from AI results
   const getMainResponse = (result: ExecutionResult): string | null => {
     const data = getExecutionData(result);
@@ -85,6 +122,10 @@ const OutputDisplayPanel: React.FC<OutputDisplayPanelProps> = ({ results, onClea
     // Filesystem/shell nodes
     const fsOutput = formatFilesystemOutput(data);
     if (fsOutput) return fsOutput;
+
+    // Todo planning nodes
+    const todoOutput = formatTodoOutput(data);
+    if (todoOutput) return todoOutput;
 
     // Handle nested response structure
     if (data?.result?.response) return data.result.response;

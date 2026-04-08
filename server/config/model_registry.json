@@ -1,8 +1,104 @@
 {
-  "_generated": "2026-04-07T15:49:55.878461+00:00",
+  "_generated": "2026-04-08T16:06:31.039818+00:00",
   "_source": "openrouter",
-  "_model_count": 348,
+  "_model_count": 352,
   "models": {
+    "anthropic/claude-opus-4.6-fast": {
+      "id": "anthropic/claude-opus-4.6-fast",
+      "name": "Anthropic: Claude Opus 4.6 (Fast)",
+      "provider": "anthropic",
+      "local_id": "claude-opus-4.6-fast",
+      "context_length": 1000000,
+      "max_output_tokens": 128000,
+      "input_price_per_mtok": 30.0,
+      "output_price_per_mtok": 150.0,
+      "supports_thinking": true,
+      "thinking_type": "budget",
+      "temperature_range": [
+        0.0,
+        1.0
+      ],
+      "is_reasoning_model": false,
+      "supported_parameters": [
+        "include_reasoning",
+        "max_tokens",
+        "reasoning",
+        "response_format",
+        "stop",
+        "structured_outputs",
+        "temperature",
+        "tool_choice",
+        "tools",
+        "top_p",
+        "verbosity"
+      ]
+    },
+    "z-ai/glm-5.1": {
+      "id": "z-ai/glm-5.1",
+      "name": "Z.ai: GLM 5.1",
+      "provider": "z-ai",
+      "local_id": "glm-5.1",
+      "context_length": 202752,
+      "max_output_tokens": 0,
+      "input_price_per_mtok": 1.26,
+      "output_price_per_mtok": 3.96,
+      "supports_thinking": false,
+      "thinking_type": "none",
+      "temperature_range": [
+        0.0,
+        2.0
+      ],
+      "is_reasoning_model": false,
+      "supported_parameters": [
+        "frequency_penalty",
+        "include_reasoning",
+        "logit_bias",
+        "logprobs",
+        "max_tokens",
+        "min_p",
+        "presence_penalty",
+        "reasoning",
+        "repetition_penalty",
+        "response_format",
+        "seed",
+        "stop",
+        "structured_outputs",
+        "temperature",
+        "tool_choice",
+        "tools",
+        "top_k",
+        "top_logprobs",
+        "top_p"
+      ]
+    },
+    "gemini/gemma-4-26b-a4b-it:free": {
+      "id": "google/gemma-4-26b-a4b-it:free",
+      "name": "Google: Gemma 4 26B A4B  (free)",
+      "provider": "gemini",
+      "local_id": "gemma-4-26b-a4b-it:free",
+      "context_length": 262144,
+      "max_output_tokens": 32768,
+      "input_price_per_mtok": 0.0,
+      "output_price_per_mtok": 0.0,
+      "supports_thinking": false,
+      "thinking_type": "none",
+      "temperature_range": [
+        0.0,
+        2.0
+      ],
+      "is_reasoning_model": false,
+      "supported_parameters": [
+        "include_reasoning",
+        "max_tokens",
+        "reasoning",
+        "response_format",
+        "seed",
+        "temperature",
+        "tool_choice",
+        "tools",
+        "top_p"
+      ]
+    },
     "gemini/gemma-4-26b-a4b-it": {
       "id": "google/gemma-4-26b-a4b-it",
       "name": "Google: Gemma 4 26B A4B ",
@@ -37,6 +133,34 @@
         "tools",
         "top_k",
         "top_logprobs",
+        "top_p"
+      ]
+    },
+    "gemini/gemma-4-31b-it:free": {
+      "id": "google/gemma-4-31b-it:free",
+      "name": "Google: Gemma 4 31B (free)",
+      "provider": "gemini",
+      "local_id": "gemma-4-31b-it:free",
+      "context_length": 262144,
+      "max_output_tokens": 32768,
+      "input_price_per_mtok": 0.0,
+      "output_price_per_mtok": 0.0,
+      "supports_thinking": false,
+      "thinking_type": "none",
+      "temperature_range": [
+        0.0,
+        2.0
+      ],
+      "is_reasoning_model": false,
+      "supported_parameters": [
+        "include_reasoning",
+        "max_tokens",
+        "reasoning",
+        "response_format",
+        "seed",
+        "temperature",
+        "tool_choice",
+        "tools",
         "top_p"
       ]
     },
@@ -77,15 +201,15 @@
         "top_p"
       ]
     },
-    "qwen/qwen3.6-plus:free": {
-      "id": "qwen/qwen3.6-plus:free",
-      "name": "Qwen: Qwen3.6 Plus (free)",
+    "qwen/qwen3.6-plus": {
+      "id": "qwen/qwen3.6-plus",
+      "name": "Qwen: Qwen3.6 Plus",
       "provider": "qwen",
-      "local_id": "qwen3.6-plus:free",
+      "local_id": "qwen3.6-plus",
       "context_length": 1000000,
       "max_output_tokens": 65536,
-      "input_price_per_mtok": 0.0,
-      "output_price_per_mtok": 0.0,
+      "input_price_per_mtok": 0.325,
+      "output_price_per_mtok": 1.95,
       "supports_thinking": false,
       "thinking_type": "none",
       "temperature_range": [
@@ -446,6 +570,7 @@
       "is_reasoning_model": false,
       "supported_parameters": [
         "include_reasoning",
+        "max_completion_tokens",
         "max_tokens",
         "reasoning",
         "response_format",
@@ -473,6 +598,7 @@
       "is_reasoning_model": false,
       "supported_parameters": [
         "include_reasoning",
+        "max_completion_tokens",
         "max_tokens",
         "reasoning",
         "response_format",
@@ -697,6 +823,7 @@
       "is_reasoning_model": false,
       "supported_parameters": [
         "include_reasoning",
+        "max_completion_tokens",
         "max_tokens",
         "reasoning",
         "response_format",
@@ -724,6 +851,7 @@
       "is_reasoning_model": false,
       "supported_parameters": [
         "include_reasoning",
+        "max_completion_tokens",
         "max_tokens",
         "reasoning",
         "response_format",
@@ -778,6 +906,7 @@
       ],
       "is_reasoning_model": false,
       "supported_parameters": [
+        "max_completion_tokens",
         "max_tokens",
         "response_format",
         "seed",
@@ -1095,6 +1224,7 @@
       "is_reasoning_model": false,
       "supported_parameters": [
         "include_reasoning",
+        "max_completion_tokens",
         "max_tokens",
         "reasoning",
         "response_format",
@@ -1176,6 +1306,7 @@
       "is_reasoning_model": false,
       "supported_parameters": [
         "include_reasoning",
+        "max_completion_tokens",
         "max_tokens",
         "reasoning",
         "response_format",
@@ -1408,6 +1539,7 @@
       "is_reasoning_model": false,
       "supported_parameters": [
         "include_reasoning",
+        "max_completion_tokens",
         "max_tokens",
         "reasoning",
         "response_format",
@@ -1583,7 +1715,7 @@
       "provider": "moonshotai",
       "local_id": "kimi-k2.5",
       "context_length": 262144,
-      "max_output_tokens": 262144,
+      "max_output_tokens": 65535,
       "input_price_per_mtok": 0.3827,
       "output_price_per_mtok": 1.72,
       "supports_thinking": false,
@@ -1868,6 +2000,7 @@
       "is_reasoning_model": false,
       "supported_parameters": [
         "include_reasoning",
+        "max_completion_tokens",
         "max_tokens",
         "reasoning",
         "response_format",
@@ -2211,6 +2344,7 @@
       ],
       "is_reasoning_model": false,
       "supported_parameters": [
+        "max_completion_tokens",
         "max_tokens",
         "response_format",
         "seed",
@@ -2264,6 +2398,7 @@
       "is_reasoning_model": false,
       "supported_parameters": [
         "include_reasoning",
+        "max_completion_tokens",
         "max_tokens",
         "reasoning",
         "response_format",
@@ -2460,6 +2595,7 @@
       "is_reasoning_model": false,
       "supported_parameters": [
         "include_reasoning",
+        "max_completion_tokens",
         "max_tokens",
         "reasoning",
         "response_format",
@@ -2961,6 +3097,7 @@
       "is_reasoning_model": false,
       "supported_parameters": [
         "include_reasoning",
+        "max_completion_tokens",
         "max_tokens",
         "reasoning",
         "response_format",
@@ -2987,6 +3124,7 @@
       ],
       "is_reasoning_model": false,
       "supported_parameters": [
+        "max_completion_tokens",
         "max_tokens",
         "response_format",
         "seed",
@@ -3013,6 +3151,7 @@
       "is_reasoning_model": false,
       "supported_parameters": [
         "include_reasoning",
+        "max_completion_tokens",
         "max_tokens",
         "reasoning",
         "response_format",
@@ -3040,6 +3179,7 @@
       "is_reasoning_model": false,
       "supported_parameters": [
         "include_reasoning",
+        "max_completion_tokens",
         "max_tokens",
         "reasoning",
         "response_format",
@@ -3054,10 +3194,10 @@
       "name": "MoonshotAI: Kimi K2 Thinking",
       "provider": "moonshotai",
       "local_id": "kimi-k2-thinking",
-      "context_length": 131072,
+      "context_length": 262144,
       "max_output_tokens": 0,
-      "input_price_per_mtok": 0.47,
-      "output_price_per_mtok": 2.0,
+      "input_price_per_mtok": 0.6,
+      "output_price_per_mtok": 2.5,
       "supports_thinking": false,
       "thinking_type": "none",
       "temperature_range": [
@@ -4489,8 +4629,8 @@
       "name": "MoonshotAI: Kimi K2 0905",
       "provider": "moonshotai",
       "local_id": "kimi-k2-0905",
-      "context_length": 131072,
-      "max_output_tokens": 0,
+      "context_length": 262144,
+      "max_output_tokens": 262144,
       "input_price_per_mtok": 0.4,
       "output_price_per_mtok": 2.0,
       "supports_thinking": false,
@@ -4908,6 +5048,7 @@
       "is_reasoning_model": false,
       "supported_parameters": [
         "include_reasoning",
+        "max_completion_tokens",
         "max_tokens",
         "reasoning",
         "response_format",
@@ -4935,6 +5076,7 @@
       "is_reasoning_model": false,
       "supported_parameters": [
         "include_reasoning",
+        "max_completion_tokens",
         "max_tokens",
         "reasoning",
         "response_format",
@@ -4962,6 +5104,7 @@
       "is_reasoning_model": false,
       "supported_parameters": [
         "include_reasoning",
+        "max_completion_tokens",
         "max_tokens",
         "reasoning",
         "response_format",
@@ -6862,6 +7005,7 @@
       ],
       "is_reasoning_model": false,
       "supported_parameters": [
+        "max_completion_tokens",
         "max_tokens",
         "response_format",
         "seed",
@@ -6889,6 +7033,7 @@
       ],
       "is_reasoning_model": false,
       "supported_parameters": [
+        "max_completion_tokens",
         "max_tokens",
         "response_format",
         "seed",
@@ -6916,6 +7061,7 @@
       ],
       "is_reasoning_model": false,
       "supported_parameters": [
+        "max_completion_tokens",
         "max_tokens",
         "response_format",
         "seed",
@@ -8287,6 +8433,7 @@
       "supported_parameters": [
         "frequency_penalty",
         "include_reasoning",
+        "max_completion_tokens",
         "max_tokens",
         "presence_penalty",
         "reasoning",
@@ -9409,6 +9556,7 @@
         "frequency_penalty",
         "logit_bias",
         "logprobs",
+        "max_completion_tokens",
         "max_tokens",
         "presence_penalty",
         "response_format",
@@ -9577,6 +9725,7 @@
         "frequency_penalty",
         "logit_bias",
         "logprobs",
+        "max_completion_tokens",
         "max_tokens",
         "presence_penalty",
         "response_format",
@@ -9724,6 +9873,7 @@
         "frequency_penalty",
         "logit_bias",
         "logprobs",
+        "max_completion_tokens",
         "max_tokens",
         "presence_penalty",
         "response_format",
@@ -9792,6 +9942,7 @@
         "frequency_penalty",
         "logit_bias",
         "logprobs",
+        "max_completion_tokens",
         "max_tokens",
         "presence_penalty",
         "response_format",
@@ -10034,7 +10185,7 @@
         "frequency_penalty",
         "logit_bias",
         "logprobs",
-        "max_tokens",
+        "max_completion_tokens",
         "presence_penalty",
         "response_format",
         "seed",
@@ -10168,6 +10319,7 @@
         "include_reasoning",
         "logit_bias",
         "logprobs",
+        "max_completion_tokens",
         "max_tokens",
         "min_p",
         "presence_penalty",
@@ -10298,6 +10450,7 @@
         "frequency_penalty",
         "logit_bias",
         "logprobs",
+        "max_completion_tokens",
         "max_tokens",
         "presence_penalty",
         "response_format",
@@ -10501,6 +10654,7 @@
         "frequency_penalty",
         "logit_bias",
         "logprobs",
+        "max_completion_tokens",
         "max_tokens",
         "presence_penalty",
         "response_format",

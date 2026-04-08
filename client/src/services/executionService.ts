@@ -245,7 +245,9 @@ export class ExecutionService {
       'fileRead',
       'fileModify',
       'shell',
-      'fsSearch'
+      'fsSearch',
+      // Todo planning
+      'writeTodos'
     ];
 
     return supportedTypes.includes(nodeType);
