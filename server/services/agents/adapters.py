@@ -111,14 +111,22 @@ class SubAgentAdapter:
 
     @staticmethod
     def convert(teammates: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        return [
-            {
-                "name": tm.get("label", tm.get("node_type", "agent")),
-                "description": f"Delegate tasks to {tm.get('label', tm.get('node_type', 'agent'))}",
-                "system_prompt": tm.get("system_prompt", ""),
-            }
-            for tm in teammates
-        ]
+        subagents = []
+        seen: set = set()
+        for tm in teammates:
+            params = tm.get("parameters", {})
+            label = tm.get("label", tm.get("node_type", "agent"))
+            name = label
+            while name in seen:
+                name = f"{name}_{len(seen)}"
+            seen.add(name)
+            system_prompt = params.get("systemMessage", "")
+            subagents.append({
+                "name": name,
+                "description": f"Delegate tasks to {label}",
+                "system_prompt": system_prompt or f"You are {label}.",
+            })
+        return subagents
 
 
 class ResponseExtractor:
