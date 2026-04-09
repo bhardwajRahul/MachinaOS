@@ -573,7 +573,7 @@ const AIAgentNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
         lineHeight: '1.2',
         marginBottom: theme.spacing.xs
       }}>
-        {config.title}
+        {data?.label || config.title}
       </div>
 
       {/* Subtitle */}

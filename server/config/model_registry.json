@@ -1,7 +1,7 @@
 {
-  "_generated": "2026-04-08T16:06:31.039818+00:00",
+  "_generated": "2026-04-09T16:14:16.145470+00:00",
   "_source": "openrouter",
-  "_model_count": 352,
+  "_model_count": 351,
   "models": {
     "anthropic/claude-opus-4.6-fast": {
       "id": "anthropic/claude-opus-4.6-fast",
@@ -39,9 +39,9 @@
       "provider": "z-ai",
       "local_id": "glm-5.1",
       "context_length": 202752,
-      "max_output_tokens": 0,
-      "input_price_per_mtok": 1.26,
-      "output_price_per_mtok": 3.96,
+      "max_output_tokens": 131072,
+      "input_price_per_mtok": 1.395,
+      "output_price_per_mtok": 4.4,
       "supports_thinking": false,
       "thinking_type": "none",
       "temperature_range": [
@@ -637,6 +637,7 @@
         "temperature",
         "tool_choice",
         "tools",
+        "top_k",
         "top_p"
       ]
     },
@@ -1622,33 +1623,6 @@
         "top_p"
       ]
     },
-    "stepfun/step-3.5-flash:free": {
-      "id": "stepfun/step-3.5-flash:free",
-      "name": "StepFun: Step 3.5 Flash (free)",
-      "provider": "stepfun",
-      "local_id": "step-3.5-flash:free",
-      "context_length": 256000,
-      "max_output_tokens": 256000,
-      "input_price_per_mtok": 0.0,
-      "output_price_per_mtok": 0.0,
-      "supports_thinking": false,
-      "thinking_type": "none",
-      "temperature_range": [
-        0.0,
-        2.0
-      ],
-      "is_reasoning_model": false,
-      "supported_parameters": [
-        "frequency_penalty",
-        "include_reasoning",
-        "max_tokens",
-        "reasoning",
-        "stop",
-        "temperature",
-        "tools",
-        "top_p"
-      ]
-    },
     "stepfun/step-3.5-flash": {
       "id": "stepfun/step-3.5-flash",
       "name": "StepFun: Step 3.5 Flash",
@@ -2109,8 +2083,8 @@
       "provider": "minimax",
       "local_id": "minimax-m2.1",
       "context_length": 196608,
-      "max_output_tokens": 0,
-      "input_price_per_mtok": 0.27,
+      "max_output_tokens": 196608,
+      "input_price_per_mtok": 0.29,
       "output_price_per_mtok": 0.95,
       "supports_thinking": false,
       "thinking_type": "none",

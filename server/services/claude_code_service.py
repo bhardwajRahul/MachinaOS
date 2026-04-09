@@ -48,7 +48,7 @@ class ClaudeCodeService:
         ]
 
         if max_budget_usd > 0:
-            cmd += ["--max-cost", str(max_budget_usd)]
+            cmd += ["--max-budget-usd", str(max_budget_usd)]
 
         # Resume existing session for this node
         session_id = self._session_map.get(node_id)

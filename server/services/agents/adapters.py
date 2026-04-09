@@ -116,7 +116,7 @@ class SubAgentAdapter:
         for tm in teammates:
             params = tm.get("parameters", {})
             label = tm.get("label", tm.get("node_type", "agent"))
-            name = label
+            name = label.lower().replace(" ", "-")
             while name in seen:
                 name = f"{name}_{len(seen)}"
             seen.add(name)

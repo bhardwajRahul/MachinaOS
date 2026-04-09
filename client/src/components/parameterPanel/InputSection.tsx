@@ -64,7 +64,7 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
         // Examples: input-memory, input-tools, input-model, input-skill
         // Non-config (primary data) handles: input-main, input-chat, input-task
         // Note: input-task is for taskTrigger node output which should be visible as draggable variables
-        if (handle.startsWith('input-') && handle !== 'input-main' && handle !== 'input-chat' && handle !== 'input-task') {
+        if (handle.startsWith('input-') && handle !== 'input-main' && handle !== 'input-chat' && handle !== 'input-task' && handle !== 'input-teammates') {
           return true;
         }
         return false;
