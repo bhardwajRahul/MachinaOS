@@ -6,7 +6,7 @@ metadata:
   author: machina
   version: "2.0"
   category: automation
-  icon: "\uD83D\uDCDD"
+  icon: "📝"
   color: "#bd93f9"
 ---
 

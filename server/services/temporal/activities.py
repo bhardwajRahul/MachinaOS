@@ -204,18 +204,21 @@ class NodeExecutionActivities:
             # Each activity gets its own WebSocket connection from the pool
             async with self.session.ws_connect(
                 self.ws_url,
-                heartbeat=20,
-                receive_timeout=120,
+                heartbeat=30,
+                receive_timeout=540,
             ) as ws:
                 await ws.send_json(message)
 
                 # Wait for response with matching request_id
+                # Heartbeat on every non-matching message to stay alive during
+                # long-running operations (DeepAgent, browser, AI multi-tool loops)
                 async for msg in ws:
                     if msg.type == aiohttp.WSMsgType.TEXT:
                         response = json.loads(msg.data)
                         if response.get("request_id") == request_id:
                             activity.logger.debug(f"Got response for {node_id}: success={response.get('success')}")
                             return response
+                        activity.heartbeat(f"Waiting for {node_id}")
                     elif msg.type == aiohttp.WSMsgType.ERROR:
                         raise Exception(f"WebSocket error: {ws.exception()}")
                     elif msg.type == aiohttp.WSMsgType.CLOSED:

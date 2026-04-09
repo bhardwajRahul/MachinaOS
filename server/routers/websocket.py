@@ -42,13 +42,16 @@ _handler_tasks: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
 
 async def _safe_send(websocket: WebSocket, data: dict):
     """Thread-safe WebSocket send with lock to prevent concurrent writes."""
+    # Guard against sending on closed/disconnected WebSocket
+    if websocket.client_state.name != "CONNECTED":
+        return
     if websocket not in _send_locks:
         _send_locks[websocket] = asyncio.Lock()
     async with _send_locks[websocket]:
         try:
             await websocket.send_json(data)
         except Exception as e:
-            logger.error(f"[WebSocket] Send error: {e}")
+            logger.debug("[WebSocket] Send skipped (connection closed): %s", e)
 
 
 # Type for message handlers
