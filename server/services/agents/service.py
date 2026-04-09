@@ -5,8 +5,11 @@ shared helpers from ai.py for config resolution and memory.
 """
 
 import time
+import warnings
 from datetime import datetime
 from typing import Dict, Any, List, Optional
+
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="deepagents.middleware.subagents")
 
 from core.logging import get_logger, log_execution_time, log_api_call
 from .adapters import ToolAdapter, SubAgentAdapter, ResponseExtractor
@@ -161,11 +164,20 @@ class DeepAgentService:
                 "workspace": parameters.get('workspace_dir', ''),
             })
 
+            middleware_list = [PatchToolCallsMiddleware()]
+            if subagents:
+                from deepagents.middleware.subagents import SubAgentMiddleware
+                middleware_list.append(SubAgentMiddleware(
+                    default_model=chat_model,
+                    default_tools=executable_tools or [],
+                    subagents=subagents,
+                ))
+
             agent = create_agent(
                 model=chat_model,
                 tools=executable_tools or [],
                 system_prompt=system_message,
-                middleware=[PatchToolCallsMiddleware()],
+                middleware=middleware_list,
             )
             result = await agent.ainvoke(
                 {"messages": input_messages},
@@ -257,6 +269,8 @@ class DeepAgentService:
                 result_data["skills"] = {"connected": [s.get('skill_name', s.get('node_type', '')) for s in skill_data], "count": len(skill_data)}
             if executable_tools:
                 result_data["tools"] = {"connected": [t.name for t in executable_tools], "count": len(executable_tools)}
+            if subagents:
+                result_data["subagents"] = {"connected": [s["name"] for s in subagents], "count": len(subagents)}
 
             return {"success": True, "node_id": node_id, "node_type": "deep_agent", "result": result_data, "execution_time": time.time() - start_time}
 
