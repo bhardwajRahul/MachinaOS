@@ -49,11 +49,15 @@ iwr -useb https://raw.githubusercontent.com/trohitg/MachinaOS/main/install.ps1 |
 <details>
 <summary><b>Clone & Run (for developers)</b></summary>
 
+Development from source requires [pnpm](https://pnpm.io/) (enforced by `scripts/preinstall.js` via `pnpm-workspace.yaml`):
+
 ```bash
+npm install -g pnpm           # one-time
 git clone https://github.com/trohitg/MachinaOS.git
 cd MachinaOS
-npm run build
-npm run dev
+pnpm install
+pnpm run build
+pnpm run dev
 ```
 
 </details>
@@ -249,12 +253,15 @@ The diagram above shows the full lifecycle of a workflow node from TypeScript de
 
 ### Local Dev Quick Reference
 
+Development from source uses **pnpm** (not npm). The `scripts/preinstall.js` hook enforces this when `pnpm-workspace.yaml` is present. Install pnpm once with `npm install -g pnpm`.
+
 ```bash
-npm run dev            # start frontend + backend + Temporal + WhatsApp
-npm run stop           # stop everything
-npx tsc --noEmit       # typecheck client (from client/)
+pnpm install           # install workspace dependencies
+pnpm run dev           # start frontend + backend + Temporal + WhatsApp
+pnpm run stop          # stop everything
+pnpm run build         # production build
+pnpm exec tsc --noEmit # typecheck client (from client/)
 python -m pytest       # run backend tests (from server/)
-npm run build          # production build
 ```
 
 Full setup and scripts reference: [SETUP.md](docs-internal/SETUP.md) - [SCRIPTS.md](docs-internal/SCRIPTS.md)
