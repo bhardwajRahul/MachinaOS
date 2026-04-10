@@ -19,6 +19,7 @@ This is a React Flow-based workflow automation platform implementing n8n-inspire
 | **[Memory Compaction](./docs-internal/memory_compaction.md)** | Token tracking and model-aware memory compaction using native provider APIs (Anthropic, OpenAI) with threshold = 50% of context window |
 | **[Pricing Service](./docs-internal/pricing_service.md)** | Centralized cost tracking for LLM tokens and API services (Twitter, Google Maps) with HTTPX event hooks |
 | **[Proxy Service](./docs-internal/proxy_service.md)** | Residential proxy provider management with template-based URL formatting, health scoring, and transparent HTTP node injection |
+| **[Email Service](./docs-internal/email_service.md)** | IMAP/SMTP integration via Himalaya CLI with EmailService orchestrator, provider presets, custom credential fallback, and polling triggers |
 | **[CI/CD Pipeline](./docs-internal/ci_cd.md)** | GitHub Actions workflows, predeploy validation, release publishing, and composite setup action |
 | **[Workflow Schema](./docs-internal/workflow-schema.md)** | JSON schema for workflows, edge handle conventions, config node architecture |
 | **[Execution Engine Design](./docs-internal/DESIGN.md)** | Architecture patterns, design standards, and implementation details for the workflow execution engine |
@@ -79,6 +80,18 @@ server/services/
 ├── pricing.py               # LLM and API cost calculation (loads config/pricing.json)
 ├── markdown_formatter.py    # GFM markdown to platform-specific formatting (Telegram HTML, WhatsApp, plain)
 ├── telegram_service.py      # TelegramService with python-telegram-bot long-polling
+├── browser_service.py       # BrowserService singleton wrapping agent-browser CLI
+├── himalaya_service.py      # HimalayaService CLI wrapper for IMAP/SMTP (any email provider)
+├── email_service.py         # EmailService orchestrator (credential resolution, provider presets)
+├── todo_service.py          # TodoService singleton for writeTodos tool (JSON per-session state)
+├── scheduler.py             # APScheduler singleton for cron job management
+├── memory.py                # Markdown-based conversation memory helpers
+├── memory_store.py          # In-memory conversation store (LangChain 0.3+ compatible)
+├── skill_prompt.py          # Skill system prompt builder (injects SKILL.md for personality skills)
+├── text.py                  # TextService (text generation nodes)
+├── chat_client.py           # JSON-RPC 2.0 WebSocket client for chat backend
+├── claude_code_service.py   # Claude Code CLI wrapper (--max-budget-usd, session persistence)
+├── claude_oauth.py          # Isolated Claude CLI auth (~/.claude-machina, no main-session impact)
 ├── tracked_http.py          # HTTPX event hooks for automatic API cost tracking
 ├── llm/                     # Native LLM provider SDKs (replaces LangChain for chat)
 │   ├── __init__.py          # Public API exports
@@ -138,7 +151,9 @@ server/models/
 server/config/
 ├── llm_defaults.json        # Default models per provider (edit to change defaults)
 ├── model_registry.json      # Cached model data from OpenRouter (auto-refreshed)
-└── pricing.json             # LLM and API pricing config
+├── pricing.json             # LLM and API pricing config
+├── google_apis.json         # Google Workspace API endpoints, scopes, OAuth callback paths
+└── email_providers.json     # IMAP/SMTP provider presets (Gmail, Outlook, Yahoo, iCloud, ProtonMail, Fastmail, custom)
 
 server/nodejs/                   # Persistent Node.js server for JS/TS execution
 ├── package.json                 # Dependencies: express, tsx
@@ -401,7 +416,7 @@ class CacheEntry(SQLModel, table=True):
 
 ## Codebase Summary
 - **Hybrid architecture**: Node.js + Python + React TypeScript
-- **102 implemented workflow nodes** with clean service separation (9 AI models + 3 AI agents/memory + 16 specialized agents + 1 skill + 4 dedicated tools + 3 search + 16 Android + 3 WhatsApp + 4 Twitter + 2 Telegram + 2 Social + 3 Location + 3 Code + 6 Utility + 6 Document + 2 Chat + 2 Scheduler + 2 Workflow + 7 Google Workspace + 1 Apify + 1 Crawlee + 1 Browser + 3 Proxy + 4 Filesystem/Shell)
+- **106 implemented workflow nodes** with clean service separation (9 AI models + 3 AI agents/memory + 16 specialized agents + 1 skill + 5 dedicated tools + 3 search + 16 Android + 3 WhatsApp + 4 Twitter + 2 Telegram + 2 Social + 3 Location + 3 Code + 6 Utility + 6 Document + 2 Chat + 2 Scheduler + 2 Workflow + 7 Google Workspace + 1 Apify + 1 Crawlee + 1 Browser + 3 Email + 3 Proxy + 4 Filesystem/Shell)
 - **WebSocket-First Architecture**: WebSocket as primary frontend-backend communication (89 message handlers)
 - **Recent optimizations**: REST APIs replaced with WebSocket, AI endpoints migrated to Python, Android automation integrated
 
@@ -627,16 +642,23 @@ server/skills/
 ├── task_agent/                           # Task management skills
 │   ├── timer-skill/SKILL.md
 │   ├── cron-scheduler-skill/SKILL.md
-│   └── task-manager-skill/SKILL.md
+│   ├── task-manager-skill/SKILL.md
+│   └── write-todos-skill/SKILL.md        # Task planning with plan-work-update loop
 ├── travel_agent/                         # Location and maps skills
 │   ├── geocoding-skill/SKILL.md
 │   └── nearby-places-skill/SKILL.md
+├── rlm_agent/                            # Recursive Language Model agent skills
+│   └── rlm-reasoning-skill/SKILL.md
 └── web_agent/                            # Web automation skills
-    ├── web-search-skill/SKILL.md
     ├── http-request-skill/SKILL.md
     ├── proxy-config-skill/SKILL.md
     ├── apify-skill/SKILL.md
-    └── crawlee-scraper-skill/SKILL.md
+    ├── crawlee-scraper-skill/SKILL.md
+    ├── browser-skill/SKILL.md
+    ├── duckduckgo-search-skill/SKILL.md
+    ├── brave-search-skill/SKILL.md
+    ├── serper-search-skill/SKILL.md
+    └── perplexity-search-skill/SKILL.md
 ```
 
 **SKILL.md Format:**
@@ -770,6 +792,7 @@ if skill_type == 'masterSkill':
 - **currentTimeTool**: Get current date/time with timezone support
 - **duckduckgoSearch**: DuckDuckGo web search (free, uses `ddgs` library, no API key required)
 - **taskManager**: Task management tool for AI agents to create, track, and manage tasks
+- **writeTodos**: Structured task list planning for complex multi-step operations. Connects to any agent's `input-tools` handle. Dual output (`tool` + `main`), dracula purple `#bd93f9`. Backed by `TodoService` singleton (`server/services/todo_service.py`) with JSON-based per-session state keyed by workflow_id. Schema: `WriteTodosSchema` with `TodoItem`/`TodoStatus` Pydantic enum (`pending` | `in_progress` | `completed`). Handler broadcasts `phase: "todo_update"` via WebSocket for real-time UI; `formatTodoOutput()` in `OutputDisplayPanel.tsx` renders as a checklist. Skill: `server/skills/task_agent/write-todos-skill/SKILL.md` teaches the plan-work-update loop.
 
 #### Dual-Purpose Search Nodes (workflow node + AI tool)
 Search API nodes that work BOTH as standalone workflow nodes AND as AI Agent tools. When connected to `input-tools`, the LLM fills the node's parameter schema.
@@ -1167,6 +1190,135 @@ OAuth redirect URIs are derived at runtime from the request/WebSocket context vi
 
 **Google API Pricing:** All Google Workspace APIs are free with rate limits. See `server/config/pricing.json` for configured limits.
 
+### Email Nodes (3 nodes)
+IMAP/SMTP email integration via the [Himalaya CLI](https://github.com/pimalaya/himalaya). Supports any IMAP/SMTP provider -- Gmail, Outlook/Office 365, Yahoo, iCloud, ProtonMail (Bridge), Fastmail, and custom/self-hosted. Credentials are stored via `auth_service.store_api_key()` and TOML config files are generated on the fly for each operation.
+
+- **emailSend**: **Dual-purpose node** - Send emails via SMTP. Works as workflow node OR AI Agent tool. Group: `['email', 'tool']`. Parameters: provider, to, subject, body, cc, bcc, body_type (text/html).
+- **emailRead**: **Dual-purpose node** - Read and manage emails via IMAP. Works as workflow node OR AI Agent tool. Group: `['email', 'tool']`. Operations:
+  - `list`: List envelopes in a folder with pagination
+  - `search`: Search emails by query string (e.g., `from:john subject:meeting`)
+  - `read`: Read full message content by ID
+  - `folders`: List all mailbox folders
+  - `move`: Move message to target folder
+  - `delete`: Delete message
+  - `flag`: Add/remove flag (Seen, Answered, Flagged, Draft, Deleted)
+- **emailReceive**: Polling-based trigger that fires on new emails. Group: `['email', 'trigger']`. Parameters: provider, folder (default `INBOX`), poll_interval (30-3600s), filter_query, mark_as_read. Polls IMAP via Himalaya at the configured interval.
+
+**Architecture:**
+```
+emailSend/Read/Receive node
+    |
+    v
+handle_email_send/read/receive (handlers/email.py)
+    |
+    v
+EmailService (email_service.py)    <-- credential resolution + provider defaults
+    |
+    v
+HimalayaService (himalaya_service.py)    <-- CLI wrapper
+    |
+    v
+himalaya CLI binary    <-- generates TOML config, calls IMAP/SMTP
+```
+
+**Key Files:**
+| File | Description |
+|------|-------------|
+| `client/src/nodeDefinitions/emailNodes.ts` | 3 node definitions with provider presets |
+| `client/src/assets/icons/email/` | Email icons (send, read, receive) loaded via `?raw` + `svgToDataUri` |
+| `client/src/components/CredentialsModal.tsx` | Email credentials panel (provider dropdown, email/password, conditional custom IMAP/SMTP) |
+| `server/services/himalaya_service.py` | Himalaya CLI wrapper -- send, list_envelopes, search, read, move, delete, flag, list_folders |
+| `server/services/email_service.py` | EmailService orchestrator (credential resolution, operation dispatch, polling helpers) |
+| `server/services/handlers/email.py` | handle_email_send, handle_email_read, handle_email_receive (thin handlers) |
+| `server/services/deployment/manager.py` | `_create_email_poll_coroutine` - deployment-mode continuous polling |
+| `server/services/event_waiter.py` | `TRIGGER_REGISTRY['emailReceive']` + `build_email_filter` |
+| `server/config/email_providers.json` | IMAP/SMTP provider presets, defaults, polling config (zero magic numbers) |
+
+**Credential Storage** (via `auth_service.store_api_key()`):
+
+| Key | Scope | Description |
+|-----|-------|-------------|
+| `email_provider` | Always | One of `gmail`, `outlook`, `yahoo`, `icloud`, `protonmail`, `fastmail`, `custom` |
+| `email_address` | Always | Account email (IMAP/SMTP login) |
+| `email_password` | Always | Password or App Password (stored as secret) |
+| `email_imap_host` | Custom only | Fallback when preset empty -- required for `custom` provider |
+| `email_imap_port` | Custom only | Stored as string, coerced to int via `_coerce_port` |
+| `email_imap_encryption` | Custom only | `tls` / `start-tls` / `none` |
+| `email_smtp_host` | Custom only | Fallback SMTP hostname |
+| `email_smtp_port` | Custom only | |
+| `email_smtp_encryption` | Custom only | |
+
+**Credential Resolution Precedence** (per field, in `EmailService.resolve_credentials`):
+
+1. **Node parameter** (per-node override on the workflow node)
+2. **Provider preset** from `email_providers.json` (e.g., `gmail` preset populates `imap_host = "imap.gmail.com"`)
+3. **Stored custom API key** (`email_imap_host`, etc.) -- only reached when the preset is empty, i.e. `provider == 'custom'`
+
+For named providers the preset always wins before the custom-key fallback. Credentials panel saves the custom IMAP/SMTP keys only when the user selects "Custom / Self-hosted".
+
+**Installation Requirement:** The `himalaya` CLI binary must be installed and on PATH. Install via `cargo install himalaya`, `brew install himalaya`, or download from https://github.com/pimalaya/himalaya/releases. `HimalayaService.ensure_binary()` caches the resolved path on the singleton after first detection; missing binary raises `RuntimeError` with install instructions.
+
+**Authentication:** Email/password (or App Password for Gmail/Outlook/Yahoo) stored per provider. ProtonMail requires running the ProtonMail Bridge locally (IMAP: `localhost:1143`, SMTP: `localhost:1025`, encryption: `none`).
+
+See **[Email Service](./docs-internal/email_service.md)** for the full architecture, API reference, and operational details.
+
+---
+
+### Browser Nodes (1 node)
+Interactive browser automation via the [agent-browser](https://www.npmjs.com/package/agent-browser) CLI binary. Wraps a persistent headless Chromium browser with an accessibility-tree-based interaction model designed for AI agents.
+
+- **browser**: **Dual-purpose node** - Interactive browser automation. Works as workflow node OR AI Agent tool. Group: `['browser', 'tool']`. Session persistence across chained operations via `session` parameter (auto-derived from execution_id as `machina_{execution_id}` if not specified). Operations:
+  - `navigate`: Open a URL
+  - `click`: Click an element (CSS selector or `@eN` ref from snapshot)
+  - `type`: Type text keystroke-by-keystroke
+  - `fill`: Clear and fill an input field
+  - `screenshot`: Take visible/full-page screenshot
+  - `snapshot`: Get accessibility tree with `@eN` element refs (AI-optimized, stable within session)
+  - `get_text`: Extract text from element
+  - `get_html`: Extract innerHTML from element
+  - `eval`: Execute JavaScript in page context
+  - `wait`: Wait for element to appear
+  - `scroll`: Scroll the page (up/down/left/right)
+  - `select`: Select dropdown option
+  - `batch`: Execute multiple commands at once
+
+**Recommended Workflow (AI agents):** `navigate` -> `snapshot` -> `click`/`type`/`fill` using `@eN` refs -> `snapshot` again to verify. Prefer `@eN` refs over CSS selectors (more stable), and prefer `snapshot` + `click`/`fill` over raw `eval`.
+
+**Key Files:**
+| File | Description |
+|------|-------------|
+| `client/src/nodeDefinitions/browserNodes.ts` | Node definition with 12 operations and stealth config |
+| `client/src/assets/icons/browser/` | Chrome browser icon (from @ant-design/icons-svg) |
+| `server/services/browser_service.py` | BrowserService singleton -- thin subprocess wrapper, reads first JSON line from stdout |
+| `server/services/handlers/browser.py` | Handler dispatcher mapping operation+params to agent-browser CLI args |
+| `server/skills/web_agent/browser-skill/SKILL.md` | AI agent skill documenting snapshot-act-snapshot loop |
+
+**Installation Requirement:** The `agent-browser` CLI must be installed: `npm install -g agent-browser && agent-browser install`. The handler returns an installation instruction error if the binary is missing.
+
+**Implementation Detail:** `browser_service.py` reads only the **first JSON output line** from agent-browser (which runs a persistent daemon keeping stdout open), then immediately kills the subprocess. Output is truncated at 100KB with ellipsis. Windows uses `shell=True` for the `.CMD` wrapper.
+
+---
+
+### Crawlee Nodes (1 node)
+Python-based web scraping via the [crawlee](https://github.com/apify/crawlee-python) library. Supports static HTML scraping (BeautifulSoup) and JS-rendered content (Playwright) with built-in concurrency, retries, and anti-bot handling.
+
+- **crawleeScraper**: **Dual-purpose node** - Web scraper. Works as workflow node OR AI Agent tool. Group: `['scraper', 'tool']`. Configuration:
+  - **Crawler Type**: `beautifulsoup` (static HTML), `playwright` (full browser), `adaptive` (auto-detect)
+  - **Mode**: `single` (scrape one URL) or `crawl` (follow links with pattern matching)
+  - **Parameters**: url, cssSelector, extractLinks, linkSelector, urlPattern, maxPages, maxDepth, waitForSelector, waitTimeout, takeScreenshot
+- Useful for JavaScript-rendered SPAs where a simple HTTP scraper fails, and for multi-page crawls where concurrency matters.
+
+**Key Files:**
+| File | Description |
+|------|-------------|
+| `client/src/nodeDefinitions/crawleeNodes.ts` | Node definition with crawler type + mode |
+| `server/services/handlers/crawlee.py` | Handler using `BeautifulSoupCrawler` + `PlaywrightCrawler` from crawlee library |
+| `server/skills/web_agent/crawlee-scraper-skill/SKILL.md` | AI agent skill for web scraping |
+
+**Installation Requirement:** The `crawleeScraper` node requires `playwright` chromium for JS-rendered content. The Docker image pre-installs Playwright chromium; for local dev run `playwright install chromium`.
+
+---
+
 ### Apify Nodes (1 node)
 Web scraping service for social media, search engines, and websites using pre-built actors.
 
@@ -1354,6 +1506,7 @@ Workflows execute via Temporal for durability and horizontal scaling. Temporal i
 - **Per-node timeout** - Long AI nodes don't block short nodes (10 min default)
 - **Horizontal scaling** - Activities distributed across worker pool
 - **Connection pooling** - Shared aiohttp session for WebSocket execution
+- **Activity heartbeats** - `activity.heartbeat()` fires on every non-matching WebSocket broadcast inside the read loop (`services/temporal/activities.py`), keeping long-running DeepAgent/browser operations alive. Without this, the 2-min `heartbeat_timeout` would kill activities that normally run 5-10 minutes. Connection config: `heartbeat=30`, `receive_timeout=540`.
 
 **Configuration** (`.env`):
 ```env
@@ -1417,7 +1570,7 @@ python -m services.temporal.worker
 
 **Key Files**:
 - `services/temporal/workflow.py` - MachinaWorkflow orchestrator (FIRST_COMPLETED pattern)
-- `services/temporal/activities.py` - Class-based activities with aiohttp pooling
+- `services/temporal/activities.py` - Class-based activities with aiohttp pooling + per-message heartbeats in WebSocket read loop
 - `services/temporal/worker.py` - TemporalWorkerManager + `run_standalone_worker()`
 - `services/temporal/executor.py` - TemporalExecutor interface matching WorkflowExecutor
 - `services/temporal/client.py` - Client wrapper with runtime heartbeat disabled
@@ -3864,6 +4017,7 @@ Tool nodes display execution status via the standard node status system:
 | currentTimeTool | CurrentTimeSchema | `_execute_current_time()` | Date/time with timezone |
 | duckduckgoSearch | DuckDuckGoSearchSchema | `_execute_duckduckgo_search()` | DuckDuckGo web search (free) |
 | taskManager | TaskManagerSchema | `_execute_task_manager()` | Task creation and management |
+| writeTodos | WriteTodosSchema | `execute_write_todos()` / `handle_write_todos()` | Structured task list planning with checklist rendering |
 | braveSearch | BraveSearchSchema | `handle_brave_search()` | Brave Search API web results |
 | serperSearch | SerperSearchSchema | `handle_serper_search()` | Google SERP via Serper API |
 | perplexitySearch | PerplexitySearchSchema | `handle_perplexity_search()` | AI-powered search with citations |
@@ -4874,7 +5028,7 @@ def has_real_android_devices(self) -> bool:
 
 Updated `client_left` and presence handlers use `has_real_android_devices()` instead of checking total device count.
 
-### WebSocket Message Types (125 Handlers)
+### WebSocket Message Types (127 Handlers)
 
 #### Request/Response Messages (Client -> Server -> Client)
 | Category | Message Types |
@@ -5157,4 +5311,8 @@ This function:
 - **Example Workflows**: Auto-load example workflows from `workflows/` folder on first use. Uses `UserSettings.examples_loaded` flag to track import status. Supports anonymous users (`user_id="default"`). Reuses existing `database.save_workflow()` for import. Embedded `nodeParameters` in example JSON files are saved to the database on import. See "Example Workflows" section for details.
 - **Onboarding Service**: 5-step welcome wizard (Welcome, Concepts, API Keys, Canvas Tour, Get Started) using Ant Design Steps/Card/Button/Typography. Database-backed via `UserSettings.onboarding_completed` + `onboarding_step`. Existing users auto-skip (migration marks `examples_loaded=1` as completed). Replayable from Settings "Help" section. No new WebSocket handlers needed. See [Onboarding Service](./docs-internal/onboarding.md) for details.
 - **Node.js Code Executor**: Persistent Node.js server (Express + tsx) at port 3020 for JavaScript/TypeScript execution, replacing subprocess spawning per execution. Handlers in `server/services/handlers/code.py` call `NodeJSClient` which makes HTTP requests to the Node.js server. All config via environment variables (`NODEJS_EXECUTOR_URL`, `NODEJS_EXECUTOR_PORT`, etc.).
+- **writeTodos Tool Node**: Dedicated AI tool for task planning connecting to any agent's `input-tools` handle. `TodoService` singleton (`server/services/todo_service.py`) stores JSON-based per-session todo state keyed by workflow_id. Handler broadcasts `phase: "todo_update"` via WebSocket on each update for real-time UI; `formatTodoOutput()` in `OutputDisplayPanel.tsx` renders the result as a checklist with `[ ]` / `[~]` / `[x]` icons. Schema uses `TodoItem`/`TodoStatus` Pydantic enum. Skill at `server/skills/task_agent/write-todos-skill/SKILL.md` teaches the plan-work-update loop.
+- **Temporal Activity Heartbeats**: Activities send `activity.heartbeat()` on every non-matching WebSocket broadcast inside the read loop in `services/temporal/activities.py`. This keeps long-running DeepAgent and browser operations alive past the 2-minute `heartbeat_timeout`. Start/end heartbeats alone were causing `TIMEOUT_TYPE_HEARTBEAT` failures on ops taking 5-10 minutes. Connection config: `heartbeat=30`, `receive_timeout=540` (fits within 10-min `start_to_close_timeout`).
+- **WebSocket `_safe_send` Guard**: `server/routers/websocket.py` checks `websocket.client_state.name != "CONNECTED"` before sending and logs at `debug` level (not `error`) on failure. Prevents "ASGI message after websocket.close" errors when broadcasts race with disconnects.
+- **Claude Code CLI Flag**: `server/services/claude_code_service.py` uses `--max-budget-usd <amount>` (previously incorrectly `--max-cost`, which caused "unknown option" errors on every run).
 - never use emojis in prints

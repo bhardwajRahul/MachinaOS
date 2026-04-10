@@ -149,7 +149,11 @@ async def execute_node_activity(self, context: Dict) -> Dict:
     node_type = context["node_type"]
 
     # Execute via WebSocket to MachinaOs
-    async with self.session.ws_connect(self.ws_url) as ws:
+    async with self.session.ws_connect(
+        self.ws_url,
+        heartbeat=30,
+        receive_timeout=540,  # 9 min, fits within start_to_close_timeout=10min
+    ) as ws:
         await ws.send_json({
             "type": "execute_node",
             "node_id": node_id,
@@ -158,13 +162,21 @@ async def execute_node_activity(self, context: Dict) -> Dict:
             ...
         })
 
-        # Wait for response
+        # Wait for matching response, heartbeat on every non-matching broadcast
         async for msg in ws:
-            if msg.data["request_id"] == request_id:
-                return msg.data
-
-    return result
+            if msg.type == aiohttp.WSMsgType.TEXT:
+                response = json.loads(msg.data)
+                if response.get("request_id") == request_id:
+                    return response
+                # Broadcasts (status updates, tool glow) are natural heartbeat points
+                activity.heartbeat(f"Waiting for {node_id}")
 ```
+
+**Heartbeat strategy (critical for long-running activities):**
+
+The 2-minute `heartbeat_timeout` would kill DeepAgent or browser activities that routinely run 5-10 minutes. The fix: `activity.heartbeat()` fires on every non-matching WebSocket message inside the read loop. Since the server broadcasts status updates, tool glow events, and progress messages continuously during execution, these broadcasts serve as natural heartbeat points -- the activity stays alive for as long as *anything* is happening on the WebSocket.
+
+Start/end heartbeats alone are not enough. Without per-message heartbeats, any operation longer than 2 minutes triggers `TIMEOUT_TYPE_HEARTBEAT` and Temporal retries (or fails) the activity.
 
 ## Connection Pooling
 
