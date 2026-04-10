@@ -55,7 +55,12 @@ class EmailService:
     # -- credentials --
 
     async def resolve_credentials(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Merge stored creds + provider presets + param overrides."""
+        """Merge stored creds + provider presets + param overrides.
+
+        Precedence (per field): node params > provider preset > stored custom keys.
+        Stored custom keys (email_imap_host, email_smtp_port, etc.) are used when
+        the provider is 'custom' or when a preset field is empty.
+        """
         from core.container import container
         auth = container.auth_service()
 
@@ -70,17 +75,31 @@ class EmailService:
         if not password:
             raise ValueError("Email password not configured")
 
-        # Every field: param override > provider preset (preset already has port/host/encryption)
+        def _coerce_port(value: Any) -> Any:
+            if value in (None, ""):
+                return None
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return None
+
+        imap_host = params.get("imap_host") or preset.get("imap_host") or await auth.get_api_key("email_imap_host") or ""
+        imap_port = params.get("imap_port") or preset.get("imap_port") or _coerce_port(await auth.get_api_key("email_imap_port"))
+        imap_encryption = params.get("imap_encryption") or preset.get("imap_encryption") or await auth.get_api_key("email_imap_encryption")
+        smtp_host = params.get("smtp_host") or preset.get("smtp_host") or await auth.get_api_key("email_smtp_host") or ""
+        smtp_port = params.get("smtp_port") or preset.get("smtp_port") or _coerce_port(await auth.get_api_key("email_smtp_port"))
+        smtp_encryption = params.get("smtp_encryption") or preset.get("smtp_encryption") or await auth.get_api_key("email_smtp_encryption")
+
         return {
             "email": email,
             "password": password,
             "display_name": params.get("display_name", ""),
-            "imap_host": params.get("imap_host") or preset.get("imap_host", ""),
-            "imap_port": params.get("imap_port") or preset.get("imap_port"),
-            "imap_encryption": params.get("imap_encryption") or preset.get("imap_encryption"),
-            "smtp_host": params.get("smtp_host") or preset.get("smtp_host", ""),
-            "smtp_port": params.get("smtp_port") or preset.get("smtp_port"),
-            "smtp_encryption": params.get("smtp_encryption") or preset.get("smtp_encryption"),
+            "imap_host": imap_host,
+            "imap_port": imap_port,
+            "imap_encryption": imap_encryption,
+            "smtp_host": smtp_host,
+            "smtp_port": smtp_port,
+            "smtp_encryption": smtp_encryption,
         }
 
     def resolve_poll_params(self, params: Dict[str, Any]) -> Dict[str, Any]:

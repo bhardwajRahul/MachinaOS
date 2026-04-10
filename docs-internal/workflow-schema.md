@@ -149,6 +149,12 @@ Consolidated operation-based nodes sharing one OAuth connection. See [new_servic
 - `telegramSend` - Dual-purpose: text, photo, document, location, contact
 - `telegramReceive` - Event-driven trigger via long-polling
 
+### Email Nodes (3 nodes)
+IMAP/SMTP integration via the [Himalaya CLI](https://github.com/pimalaya/himalaya). Supports Gmail, Outlook, Yahoo, iCloud, ProtonMail (Bridge), Fastmail, and custom/self-hosted servers. Credentials stored via `auth_service.store_api_key()` -- see [email_service.md](email_service.md).
+- `emailSend` - Dual-purpose: send via SMTP (to, subject, body, cc, bcc, body_type text/html)
+- `emailRead` - Dual-purpose: list / search / read / folders / move / delete / flag via IMAP
+- `emailReceive` - Polling trigger with baseline detection (poll_interval 30-3600s)
+
 ### Social Nodes (2 nodes)
 Unified multi-platform messaging (WhatsApp, Telegram, Discord, Slack, SMS, Email, Matrix, Teams):
 - `socialReceive` - Normalize messages from platform triggers

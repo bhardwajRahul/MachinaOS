@@ -29,6 +29,7 @@ import {
 import { ApifyIcons } from '../assets/icons/apify';
 import { SearchIcons } from '../assets/icons/search';
 import { TelegramIcons } from '../assets/icons/telegram';
+import { EmailIcons } from '../assets/icons/email';
 
 // ============================================================================
 // SERVICE ICONS
@@ -60,6 +61,13 @@ const XIcon = () => (
 const TelegramIcon = () => (
   <div
     dangerouslySetInnerHTML={{ __html: TelegramIcons.telegram }}
+    style={{ width: 20, height: 20 }}
+  />
+);
+
+const EmailIcon = () => (
+  <div
+    dangerouslySetInnerHTML={{ __html: EmailIcons.read }}
     style={{ width: 20, height: 20 }}
   />
 );
@@ -110,7 +118,7 @@ interface CredentialItem {
   Icon?: React.FC<{ size?: number }>;
   CustomIcon?: React.FC;
   isSpecial?: boolean;
-  panelType?: 'whatsapp' | 'android' | 'twitter' | 'telegram' | 'gmail' | 'google_maps' | 'search';
+  panelType?: 'whatsapp' | 'android' | 'twitter' | 'telegram' | 'gmail' | 'google_maps' | 'search' | 'email';
 }
 
 interface Category {
@@ -149,6 +157,13 @@ const CATEGORIES: Category[] = [
     label: 'Productivity',
     items: [
       { id: 'gmail', name: 'Google Workspace', placeholder: '', color: '#4285F4', desc: 'Gmail, Calendar, Drive, Sheets, Tasks, Contacts', CustomIcon: GoogleWorkspaceIcon, isSpecial: true, panelType: 'gmail' },
+    ],
+  },
+  {
+    key: 'email',
+    label: 'Email',
+    items: [
+      { id: 'email_himalaya', name: 'Email (IMAP/SMTP)', placeholder: '', color: '#268bd2', desc: 'Gmail, Outlook, Yahoo, iCloud, Fastmail, ProtonMail, custom', CustomIcon: EmailIcon, isSpecial: true, panelType: 'email' },
     ],
   },
   {
@@ -427,6 +442,12 @@ const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey,
     if (item.panelType === 'telegram') {
       return { connected: telegramStatus.connected, label: telegramStatus.connected ? `@${telegramStatus.bot_username}` : 'Not Connected' };
     }
+    if (item.panelType === 'email') {
+      return {
+        connected: !!emailStored,
+        label: emailStored && emailAddress ? emailAddress : 'Not configured',
+      };
+    }
     return null;
   };
 
@@ -570,6 +591,18 @@ const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey,
   const [telegramLoading, setTelegramLoading] = useState<string | null>(null);
   const [telegramError, setTelegramError] = useState<string | null>(null);
 
+  // Email (Himalaya IMAP/SMTP) state
+  const [emailProvider, setEmailProvider] = useState<string>('gmail');
+  const [emailAddress, setEmailAddress] = useState<string>('');
+  const [emailPassword, setEmailPassword] = useState<string>('');
+  const [emailImapHost, setEmailImapHost] = useState<string>('');
+  const [emailImapPort, setEmailImapPort] = useState<number>(993);
+  const [emailSmtpHost, setEmailSmtpHost] = useState<string>('');
+  const [emailSmtpPort, setEmailSmtpPort] = useState<number>(465);
+  const [emailStored, setEmailStored] = useState<boolean | null>(null);
+  const [emailLoading, setEmailLoading] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
+
   // Rate limit state
   const [rateLimitConfig, setRateLimitConfig] = useState<RateLimitConfig | null>(null);
   const [rateLimitStats, setRateLimitStats] = useState<RateLimitStats | null>(null);
@@ -629,6 +662,33 @@ const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey,
       });
     }
   }, [visible, hasStoredKey]);
+
+  // Load Email credentials on mount
+  useEffect(() => {
+    if (!visible) return;
+    (async () => {
+      try {
+        const [provider, address, hasPassword, imapHost, imapPort, smtpHost, smtpPort] = await Promise.all([
+          getStoredApiKey('email_provider'),
+          getStoredApiKey('email_address'),
+          hasStoredKey('email_password'),
+          getStoredApiKey('email_imap_host'),
+          getStoredApiKey('email_imap_port'),
+          getStoredApiKey('email_smtp_host'),
+          getStoredApiKey('email_smtp_port'),
+        ]);
+        if (provider) setEmailProvider(provider);
+        if (address) setEmailAddress(address);
+        if (imapHost) setEmailImapHost(imapHost);
+        if (imapPort) setEmailImapPort(parseInt(imapPort, 10));
+        if (smtpHost) setEmailSmtpHost(smtpHost);
+        if (smtpPort) setEmailSmtpPort(parseInt(smtpPort, 10));
+        setEmailStored(!!hasPassword);
+      } catch {
+        setEmailStored(false);
+      }
+    })();
+  }, [visible, getStoredApiKey, hasStoredKey]);
 
   // Twitter handlers
   const handleTwitterSaveCredentials = async () => {
@@ -832,6 +892,68 @@ const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey,
       setTelegramError(err.message || 'Failed to save token');
     } finally {
       setTelegramLoading(null);
+    }
+  };
+
+  // Email handlers (Himalaya IMAP/SMTP)
+  const handleEmailSave = async () => {
+    if (!emailAddress.trim()) {
+      setEmailError('Email address is required');
+      return;
+    }
+    if (!emailPassword.trim() && !emailStored) {
+      setEmailError('Password is required');
+      return;
+    }
+    if (emailProvider === 'custom') {
+      if (!emailImapHost.trim() || !emailSmtpHost.trim()) {
+        setEmailError('IMAP and SMTP host are required for custom provider');
+        return;
+      }
+    }
+    setEmailLoading('save');
+    setEmailError(null);
+    try {
+      await saveApiKey('email_provider', emailProvider);
+      await saveApiKey('email_address', emailAddress.trim());
+      if (emailPassword.trim()) {
+        await saveApiKey('email_password', emailPassword.trim());
+      }
+      if (emailProvider === 'custom') {
+        await saveApiKey('email_imap_host', emailImapHost.trim());
+        await saveApiKey('email_imap_port', String(emailImapPort));
+        await saveApiKey('email_smtp_host', emailSmtpHost.trim());
+        await saveApiKey('email_smtp_port', String(emailSmtpPort));
+      }
+      setEmailStored(true);
+      setEmailPassword('');
+    } catch (err: any) {
+      setEmailError(err.message || 'Failed to save email credentials');
+    } finally {
+      setEmailLoading(null);
+    }
+  };
+
+  const handleEmailRemove = async () => {
+    setEmailLoading('remove');
+    setEmailError(null);
+    try {
+      await removeApiKey('email_password');
+      await removeApiKey('email_address');
+      await removeApiKey('email_provider');
+      await removeApiKey('email_imap_host');
+      await removeApiKey('email_imap_port');
+      await removeApiKey('email_smtp_host');
+      await removeApiKey('email_smtp_port');
+      setEmailStored(false);
+      setEmailAddress('');
+      setEmailPassword('');
+      setEmailImapHost('');
+      setEmailSmtpHost('');
+    } catch (err: any) {
+      setEmailError(err.message || 'Failed to remove credentials');
+    } finally {
+      setEmailLoading(null);
     }
   };
 
@@ -2022,6 +2144,251 @@ const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey,
             >
               Refresh
             </Button>
+          </div>
+        </div>
+      );
+    }
+
+    // Email (Himalaya IMAP/SMTP) panel
+    if (selectedItem.panelType === 'email') {
+      const PROVIDER_OPTIONS = [
+        { label: 'Gmail', value: 'gmail' },
+        { label: 'Outlook / Office 365', value: 'outlook' },
+        { label: 'Yahoo Mail', value: 'yahoo' },
+        { label: 'iCloud Mail', value: 'icloud' },
+        { label: 'ProtonMail (Bridge)', value: 'protonmail' },
+        { label: 'Fastmail', value: 'fastmail' },
+        { label: 'Custom / Self-hosted', value: 'custom' },
+      ];
+      const AUTH_NOTES: Record<string, string> = {
+        gmail: 'Use an App Password from Google Account > Security > 2-Step Verification.',
+        outlook: 'Use your account password or an App Password.',
+        yahoo: 'Use an App Password from Yahoo Account Security.',
+        icloud: 'Use an App-Specific Password from your Apple ID.',
+        protonmail: 'Requires ProtonMail Bridge running locally (127.0.0.1).',
+        fastmail: 'Use an App Password from Settings > Privacy & Security.',
+        custom: 'Enter credentials for your self-hosted IMAP/SMTP server below.',
+      };
+      return (
+        <div style={{ padding: theme.spacing.xl, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+          <Descriptions
+            title={<Space><EmailIcon /> Email (IMAP/SMTP via Himalaya)</Space>}
+            bordered
+            column={1}
+            size="small"
+            style={{
+              marginBottom: theme.spacing.xl,
+              background: theme.colors.backgroundAlt,
+              borderRadius: theme.borderRadius.md,
+            }}
+            styles={{
+              label: {
+                backgroundColor: theme.colors.backgroundPanel,
+                color: theme.colors.textSecondary,
+                fontWeight: theme.fontWeight.medium,
+              },
+              content: {
+                backgroundColor: theme.colors.background,
+                color: theme.colors.text,
+              },
+            }}
+          >
+            <Descriptions.Item label="Status">
+              <Tag style={getTagStyle(emailStored ? 'success' : 'error')}>
+                {emailStored === null ? 'Checking...' : emailStored ? 'Configured' : 'Not configured'}
+              </Tag>
+            </Descriptions.Item>
+            {emailStored && emailAddress && (
+              <Descriptions.Item label="Account">
+                <span style={{ fontFamily: 'monospace', fontSize: theme.fontSize.sm }}>{emailAddress}</span>
+              </Descriptions.Item>
+            )}
+          </Descriptions>
+
+          <div style={{ marginBottom: theme.spacing.lg }}>
+            <label style={{
+              display: 'block',
+              fontSize: theme.fontSize.sm,
+              fontWeight: theme.fontWeight.medium,
+              color: theme.colors.text,
+              marginBottom: theme.spacing.sm,
+            }}>
+              Provider
+            </label>
+            <Select
+              value={emailProvider}
+              onChange={setEmailProvider}
+              options={PROVIDER_OPTIONS}
+              style={{ width: '100%' }}
+            />
+          </div>
+
+          <div style={{ marginBottom: theme.spacing.lg }}>
+            <label style={{
+              display: 'block',
+              fontSize: theme.fontSize.sm,
+              fontWeight: theme.fontWeight.medium,
+              color: theme.colors.text,
+              marginBottom: theme.spacing.sm,
+            }}>
+              Email Address
+            </label>
+            <Input
+              value={emailAddress}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmailAddress(e.target.value)}
+              placeholder="you@example.com"
+              style={{
+                backgroundColor: theme.colors.background,
+                borderColor: theme.colors.border,
+                color: theme.colors.text,
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: theme.spacing.lg }}>
+            <label style={{
+              display: 'block',
+              fontSize: theme.fontSize.sm,
+              fontWeight: theme.fontWeight.medium,
+              color: theme.colors.text,
+              marginBottom: theme.spacing.sm,
+            }}>
+              Password {emailStored && (
+                <span style={{ color: theme.colors.textMuted, fontWeight: theme.fontWeight.normal }}>
+                  (leave blank to keep existing)
+                </span>
+              )}
+            </label>
+            <Input.Password
+              value={emailPassword}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmailPassword(e.target.value)}
+              placeholder={emailStored ? '••••••••' : 'App password or account password'}
+              style={{
+                backgroundColor: theme.colors.background,
+                borderColor: theme.colors.border,
+                color: theme.colors.text,
+                fontFamily: 'monospace',
+              }}
+            />
+            <div style={{
+              fontSize: theme.fontSize.xs,
+              color: theme.colors.textMuted,
+              marginTop: theme.spacing.sm,
+              lineHeight: 1.5,
+            }}>
+              {AUTH_NOTES[emailProvider]}
+            </div>
+          </div>
+
+          {emailProvider === 'custom' && (
+            <div style={{
+              padding: theme.spacing.md,
+              marginBottom: theme.spacing.lg,
+              border: `1px solid ${theme.colors.border}`,
+              borderRadius: theme.borderRadius.md,
+              backgroundColor: theme.colors.backgroundAlt,
+            }}>
+              <div style={{
+                fontSize: theme.fontSize.sm,
+                fontWeight: theme.fontWeight.medium,
+                color: theme.colors.text,
+                marginBottom: theme.spacing.md,
+              }}>
+                Custom IMAP / SMTP
+              </div>
+
+              <div style={{ display: 'flex', gap: theme.spacing.md, marginBottom: theme.spacing.md }}>
+                <div style={{ flex: 2 }}>
+                  <label style={{ display: 'block', fontSize: theme.fontSize.xs, color: theme.colors.textSecondary, marginBottom: theme.spacing.xs }}>
+                    IMAP Host
+                  </label>
+                  <Input
+                    value={emailImapHost}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmailImapHost(e.target.value)}
+                    placeholder="imap.example.com"
+                    style={{ backgroundColor: theme.colors.background, borderColor: theme.colors.border, color: theme.colors.text }}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: theme.fontSize.xs, color: theme.colors.textSecondary, marginBottom: theme.spacing.xs }}>
+                    IMAP Port
+                  </label>
+                  <InputNumber
+                    value={emailImapPort}
+                    onChange={(v) => setEmailImapPort(typeof v === 'number' ? v : 993)}
+                    min={1}
+                    max={65535}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: theme.spacing.md }}>
+                <div style={{ flex: 2 }}>
+                  <label style={{ display: 'block', fontSize: theme.fontSize.xs, color: theme.colors.textSecondary, marginBottom: theme.spacing.xs }}>
+                    SMTP Host
+                  </label>
+                  <Input
+                    value={emailSmtpHost}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmailSmtpHost(e.target.value)}
+                    placeholder="smtp.example.com"
+                    style={{ backgroundColor: theme.colors.background, borderColor: theme.colors.border, color: theme.colors.text }}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: theme.fontSize.xs, color: theme.colors.textSecondary, marginBottom: theme.spacing.xs }}>
+                    SMTP Port
+                  </label>
+                  <InputNumber
+                    value={emailSmtpPort}
+                    onChange={(v) => setEmailSmtpPort(typeof v === 'number' ? v : 465)}
+                    min={1}
+                    max={65535}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {emailError && (
+            <Alert type="error" message={emailError} showIcon style={{ marginBottom: theme.spacing.lg }} />
+          )}
+
+          <div style={{ flex: 1 }} />
+
+          <div style={{
+            display: 'flex',
+            gap: theme.spacing.sm,
+            justifyContent: 'center',
+            paddingTop: theme.spacing.md,
+            borderTop: `1px solid ${theme.colors.border}`,
+          }}>
+            <Button
+              onClick={handleEmailSave}
+              loading={emailLoading === 'save'}
+              disabled={!emailAddress.trim() || (!emailPassword.trim() && !emailStored)}
+              style={{
+                backgroundColor: `${theme.dracula.green}25`,
+                borderColor: `${theme.dracula.green}60`,
+                color: theme.dracula.green,
+              }}
+            >
+              Save
+            </Button>
+            {emailStored && (
+              <Button
+                onClick={handleEmailRemove}
+                loading={emailLoading === 'remove'}
+                style={{
+                  backgroundColor: `${theme.dracula.pink}25`,
+                  borderColor: `${theme.dracula.pink}60`,
+                  color: theme.dracula.pink,
+                }}
+              >
+                Remove
+              </Button>
+            )}
           </div>
         </div>
       );
