@@ -127,9 +127,10 @@ function doctor() {
 }
 
 function run(script, extraArgs = []) {
-  const npmArgs = ['run', script];
-  if (extraArgs.length) npmArgs.push('--', ...extraArgs);
-  const child = spawn(process.platform === 'win32' ? 'npm.cmd' : 'npm', npmArgs, {
+  const pmArgs = ['run', script];
+  if (extraArgs.length) pmArgs.push('--', ...extraArgs);
+  const pm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
+  const child = spawn(pm, pmArgs, {
     cwd: ROOT,
     stdio: 'inherit',
     shell: true,
