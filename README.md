@@ -70,6 +70,11 @@ Create AI agents that remember conversations, use tools, and work together. Choo
 - Update spreadsheets
 - Manage tasks and contacts
 
+### Universal Email (IMAP/SMTP)
+- Send, read, search, and manage emails via the Himalaya CLI
+- Works with Gmail, Outlook, Yahoo, iCloud, ProtonMail, Fastmail, or any custom IMAP/SMTP server
+- Polling-based trigger for incoming email workflows
+
 ### Control Your Devices
 - Send WhatsApp messages automatically
 - Post to Twitter/X
@@ -77,10 +82,19 @@ Create AI agents that remember conversations, use tools, and work together. Choo
 - Control your Android phone (WiFi, Bluetooth, apps, camera)
 - Schedule tasks and reminders
 
-### Process Documents
-- Scrape websites
+### Browse the Web
+- Interactive browser automation with accessibility-tree navigation (agent-browser)
+- Web scraping with BeautifulSoup or Playwright (crawlee)
 - Route requests through residential proxies with geo-targeting
 - Run Apify actors for social media and search engine scraping
+- DuckDuckGo, Brave, Serper (Google), and Perplexity search
+
+### Plan Complex Tasks
+- `writeTodos` tool lets any AI agent create and update structured task lists
+- Real-time checklist rendering in the UI
+- Plan-work-update loop with `pending` / `in_progress` / `completed` states
+
+### Process Documents
 - Parse PDFs and documents
 - Search your files with AI
 
@@ -102,7 +116,7 @@ Create AI agents that remember conversations, use tools, and work together. Choo
 - **AI Employee / Orchestrator** - Team lead agents for coordinating multiple specialized agents
 - **Intelligent Delegation** - AI decides when to delegate based on task context
 - **Delegation Tools** - Connected agents become `delegate_to_*` tools automatically
-- **13 Specialized Agents** - Android, Coding, Web, Task, Social, Travel, Tool, Productivity, Payments, Consumer, Autonomous, Orchestrator
+- **16 Specialized Agents** - Android, Coding, Web, Task, Social, Travel, Tool, Productivity, Payments, Consumer, Autonomous, Orchestrator, AI Employee, RLM, Claude Code, Deep Agent
 - **Team Monitor** - Real-time visualization of team operations
 
 ### Run Code
@@ -148,11 +162,11 @@ A contributor's map to the codebase. This section tells you *where things live* 
 
 At a glance:
 
-- **96 workflow nodes** across 21 categories (AI, agents, social, Android, Google Workspace, documents, code, proxies, utilities)
+- **106 workflow nodes** across 25 categories (AI, agents, social, Android, Google Workspace, email, browser, documents, code, proxies, utilities)
 - **10 LLM providers** via a hybrid native SDK + LangChain architecture
-- **15 specialized AI agents** with the Agent Teams delegation pattern
-- **89 WebSocket handlers** replacing most REST endpoints
-- **49 built-in skills** across 10 categories, editable in-UI with SKILL.md defaults on disk
+- **16 specialized AI agents** with the Agent Teams delegation pattern
+- **127 WebSocket handlers** replacing most REST endpoints
+- **55 built-in skills** across 10 categories, editable in-UI with SKILL.md defaults on disk
 - **Three execution modes** with automatic fallback: Temporal distributed, Redis parallel, sequential
 
 ### How Workflows Execute
@@ -167,7 +181,7 @@ Deep dives: [DESIGN.md](docs-internal/DESIGN.md) - [TEMPORAL_ARCHITECTURE.md](do
 
 [![AI Agent Routing](docs/diagrams/ai-agent-routing.svg)](https://raw.githubusercontent.com/trohitg/MachinaOS/main/docs/diagrams/ai-agent-routing.svg)
 
-AI execution splits into two paths. `execute_chat()` for direct chat completions prefers the native SDK layer in [services/llm/](server/services/llm/) (10 providers, lazy imports, normalized `LLMResponse`), falling back to LangChain for Groq and Cerebras. `execute_agent()` and `execute_chat_agent()` always use LangChain + LangGraph because tool-calling, state graphs, and the checkpointer have no native equivalent today. Team leads (`orchestrator_agent`, `ai_employee`) auto-inject `delegate_to_<type>` tools for every agent connected to their `input-teammates` handle.
+AI execution splits into two paths. `execute_chat()` for direct chat completions prefers the native SDK layer in [services/llm/](server/services/llm/) (10 providers, lazy imports, normalized `LLMResponse`), falling back to LangChain for Groq and Cerebras. `execute_agent()` and `execute_chat_agent()` always use LangChain + LangGraph because tool-calling, state graphs, and the checkpointer have no native equivalent today. Team leads (`orchestrator_agent`, `ai_employee`) auto-inject `delegate_to_<type>` tools for every agent connected to their `input-teammates` handle. The Deep Agent variant uses [LangChain DeepAgents](https://github.com/langchain-ai/deepagents) with built-in filesystem tools, sub-agent delegation, and todo planning; the RLM Agent uses a REPL-based recursive language model pattern. Long-running activities (DeepAgent, browser automation) stay alive across Temporal's 2-minute heartbeat window via per-message `activity.heartbeat()` calls in the WebSocket read loop.
 
 Deep dives: [agent_architecture.md](docs-internal/agent_architecture.md) - [native_llm_sdk.md](docs-internal/native_llm_sdk.md) - [agent_teams.md](docs-internal/agent_teams.md) - [memory_compaction.md](docs-internal/memory_compaction.md)
 
@@ -175,18 +189,18 @@ Deep dives: [agent_architecture.md](docs-internal/agent_architecture.md) - [nati
 
 | Directory | What lives here | Start reading |
 |---|---|---|
-| `client/src/nodeDefinitions/` | 96 workflow node definitions (TypeScript) | [node_creation.md](docs-internal/node_creation.md) |
+| `client/src/nodeDefinitions/` | 106 workflow node definitions across 25 TypeScript files | [node_creation.md](docs-internal/node_creation.md) |
 | `client/src/components/` | React Flow canvas, parameter panel, modals | [CLAUDE.md](CLAUDE.md) |
 | `server/services/` | WorkflowService, NodeExecutor, AI service | [DESIGN.md](docs-internal/DESIGN.md) |
 | `server/services/handlers/` | One handler per node type (dispatch targets) | [node_creation.md](docs-internal/node_creation.md) |
 | `server/services/llm/` | Native LLM SDK layer (10 providers) | [native_llm_sdk.md](docs-internal/native_llm_sdk.md) |
 | `server/services/execution/` | Decide pattern, DLQ, recovery, conditions | [DESIGN.md](docs-internal/DESIGN.md) |
 | `server/services/temporal/` | Distributed execution via Temporal | [TEMPORAL_ARCHITECTURE.md](docs-internal/TEMPORAL_ARCHITECTURE.md) |
-| `server/routers/websocket.py` | 89 WebSocket handlers | [status_broadcaster.md](docs-internal/status_broadcaster.md) |
+| `server/routers/websocket.py` | 127 WebSocket handlers | [status_broadcaster.md](docs-internal/status_broadcaster.md) |
 | `server/core/` | Cache, encryption, DI container, config | [credentials_encryption.md](docs-internal/credentials_encryption.md) |
-| `server/skills/` | 49 skill SKILL.md files in 10 folders | [GUIDE.md](server/skills/GUIDE.md) |
-| `server/config/` | llm_defaults.json, pricing.json, model_registry.json | [pricing_service.md](docs-internal/pricing_service.md) |
-| `docs-internal/` | In-repo architecture deep dives (28 files) | Index below |
+| `server/skills/` | 55 skill SKILL.md files across 10 folders | [GUIDE.md](server/skills/GUIDE.md) |
+| `server/config/` | llm_defaults.json, pricing.json, model_registry.json, email_providers.json, google_apis.json | [pricing_service.md](docs-internal/pricing_service.md) |
+| `docs-internal/` | In-repo architecture deep dives (30 files) | Index below |
 
 ### How to Contribute
 
@@ -252,7 +266,8 @@ Full setup and scripts reference: [SETUP.md](docs-internal/SETUP.md) - [SCRIPTS.
 |---|---|
 | [DESIGN.md](docs-internal/DESIGN.md) | Execution engine architecture, design patterns, execution modes |
 | [TEMPORAL_ARCHITECTURE.md](docs-internal/TEMPORAL_ARCHITECTURE.md) | Distributed execution via Temporal activities |
-| [workflow-schema.md](docs-internal/workflow-schema.md) | Workflow JSON schema and full node catalog (96 nodes) |
+| [workflow-schema.md](docs-internal/workflow-schema.md) | Workflow JSON schema and full node catalog (106 nodes) |
+| [deep_agent.md](docs-internal/deep_agent.md) | LangChain DeepAgents integration with filesystem tools and sub-agents |
 | [ROADMAP.md](docs-internal/ROADMAP.md) | Implementation status and completed phases |
 | [SETUP.md](docs-internal/SETUP.md) | Development environment setup |
 | [SCRIPTS.md](docs-internal/SCRIPTS.md) | npm/shell scripts reference |
