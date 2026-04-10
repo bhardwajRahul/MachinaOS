@@ -11,11 +11,34 @@ import subprocess
 import sys
 from typing import Any, Dict, List, Optional
 
+import psutil
+
 from core.logging import get_logger
 
 logger = get_logger(__name__)
 
 _MAX_OUTPUT = 100_000
+
+
+def _kill_process_tree(pid: int) -> None:
+    """Terminate a process and all its descendants (cross-platform via psutil)."""
+    try:
+        parent = psutil.Process(pid)
+    except psutil.NoSuchProcess:
+        return
+
+    # Collect descendants before killing parent so we don't lose the tree.
+    descendants = parent.children(recursive=True)
+    for child in descendants:
+        try:
+            child.kill()
+        except psutil.NoSuchProcess:
+            pass
+
+    try:
+        parent.kill()
+    except psutil.NoSuchProcess:
+        pass
 
 
 class BrowserService:
@@ -103,7 +126,11 @@ class BrowserService:
 
             return line
         finally:
-            proc.kill()
+            # With shell=True on Windows, proc is the shell wrapper (cmd.exe)
+            # and the real agent-browser daemon runs as its child. Killing only
+            # proc leaves the daemon orphaned. psutil.children(recursive=True)
+            # walks the process tree natively on every platform.
+            _kill_process_tree(proc.pid)
             proc.wait()
 
 
