@@ -685,6 +685,8 @@ class DeploymentManager:
         """
         if node_type == 'gmailReceive':
             return self._create_gmail_poll_coroutine(node_id, params)
+        elif node_type == 'emailReceive':
+            return self._create_email_poll_coroutine(node_id, params)
         elif node_type == 'twitterReceive':
             logger.warning("Twitter polling trigger not yet implemented for deployment")
             return None
@@ -767,6 +769,44 @@ class DeploymentManager:
                     break
                 except Exception as e:
                     logger.error("Gmail poll error",
+                                node_id=node_id, error=str(e))
+
+        return poll
+
+    def _create_email_poll_coroutine(self, node_id: str,
+                                      params: Dict[str, Any]) -> Callable:
+        """Create Himalaya email polling coroutine for deployment mode."""
+        async def poll(queue: asyncio.Queue, is_running_fn: Callable):
+            from services.email_service import get_email_service
+
+            svc = get_email_service()
+            creds = await svc.resolve_credentials(params)
+            cfg = svc.resolve_poll_params(params)
+
+            seen = await svc.poll_ids(creds, cfg["folder"])
+            logger.info("Email poller starting",
+                       node_id=node_id, folder=cfg["folder"], seen=len(seen))
+
+            while is_running_fn():
+                await asyncio.sleep(cfg["interval"])
+                if not is_running_fn():
+                    break
+                try:
+                    for msg_id in await svc.poll_ids(creds, cfg["folder"]) - seen:
+                        seen.add(msg_id)
+                        email_data = await svc.fetch_detail(creds, msg_id, cfg["folder"])
+                        if cfg["mark_as_read"]:
+                            try:
+                                d = svc.defaults
+                                await svc.himalaya.flag_message(
+                                    creds, msg_id, d.get("flag"), d.get("flag_action"), cfg["folder"])
+                            except Exception:
+                                pass
+                        await queue.put(email_data)
+                except asyncio.CancelledError:
+                    break
+                except Exception as e:
+                    logger.error("Email poll error",
                                 node_id=node_id, error=str(e))
 
         return poll

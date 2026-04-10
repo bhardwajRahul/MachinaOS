@@ -752,6 +752,26 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                 matches: 'array',
                 pattern: 'string',
                 count: 'number'
+              },
+              // Email node schemas (Himalaya CLI)
+              emailSend: {
+                from: 'string',
+                to: 'string',
+                subject: 'string'
+              },
+              emailRead: {
+                operation: 'string',
+                folder: 'string',
+                data: 'any'
+              },
+              emailReceive: {
+                message_id: 'string',
+                from: 'string',
+                to: 'string',
+                subject: 'string',
+                date: 'string',
+                body: 'string',
+                folder: 'string'
               }
             };
 
@@ -816,6 +836,9 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
             // Filesystem & shell node detection
             const isFilesystemNode = ['fileRead', 'fileModify', 'shell', 'fsSearch'].includes(nodeType);
 
+            // Email node detection (Himalaya CLI)
+            const isEmailNode = ['emailSend', 'emailRead', 'emailReceive'].includes(nodeType);
+
             // Select appropriate schema
             if (isAndroidLocation) {
               outputSchema = sampleSchemas.androidLocation;
@@ -848,6 +871,7 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                             isBrowser ? sampleSchemas.browser :
                             isCrawlee ? sampleSchemas.crawlee :
                             isFilesystemNode ? (sampleSchemas[nodeType as keyof typeof sampleSchemas] || { data: 'any' }) :
+                            isEmailNode ? (sampleSchemas[nodeType as keyof typeof sampleSchemas] || { data: 'any' }) :
                             { data: 'any' };
             }
 

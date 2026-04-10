@@ -12,6 +12,7 @@ import { SEARCH_NODE_TYPES } from '../nodeDefinitions/searchNodes';
 import { TELEGRAM_NODE_TYPES } from '../nodeDefinitions/telegramNodes';
 import { CRAWLEE_NODE_TYPES } from '../nodeDefinitions/crawleeNodes';
 import { BROWSER_NODE_TYPES } from '../nodeDefinitions/browserNodes';
+import { EMAIL_NODE_TYPES } from '../nodeDefinitions/emailNodes';
 import { AI_CHAT_MODEL_TYPES } from '../nodeDefinitions/aiModelNodes';
 import { Node, Edge } from 'reactflow';
 import { INodeExecutionData } from '../types/INodeProperties';
@@ -247,7 +248,9 @@ export class ExecutionService {
       'shell',
       'fsSearch',
       // Todo planning
-      'writeTodos'
+      'writeTodos',
+      // Email (Himalaya CLI)
+      ...EMAIL_NODE_TYPES,
     ];
 
     return supportedTypes.includes(nodeType);

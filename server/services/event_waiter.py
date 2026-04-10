@@ -125,6 +125,11 @@ TRIGGER_REGISTRY: Dict[str, TriggerConfig] = {
         event_type='telegram_message_received',
         display_name='Telegram Message'
     ),
+    'emailReceive': TriggerConfig(
+        node_type='emailReceive',
+        event_type='email_received',
+        display_name='Email'
+    ),
     # Future triggers - just add to registry:
     # 'mqttTrigger': TriggerConfig('mqttTrigger', 'mqtt_message', 'MQTT Message'),
 }
@@ -546,6 +551,20 @@ def build_telegram_filter(params: Dict) -> Callable[[Dict], bool]:
     return matches
 
 
+def build_email_filter(params: Dict) -> Callable[[Dict], bool]:
+    """Build filter for email events (Himalaya IMAP polling)."""
+    folder_filter = params.get('folder', 'INBOX')
+    filter_query = params.get('filter_query', '')
+
+    def matches(data: Dict) -> bool:
+        if folder_filter and folder_filter != 'all':
+            if data.get('folder', '') != folder_filter:
+                return False
+        return True
+
+    return matches
+
+
 # Registry of filter builders per trigger type
 FILTER_BUILDERS: Dict[str, Callable[[Dict], Callable[[Dict], bool]]] = {
     'whatsappReceive': build_whatsapp_filter,
@@ -555,6 +574,7 @@ FILTER_BUILDERS: Dict[str, Callable[[Dict], Callable[[Dict], bool]]] = {
     'twitterReceive': build_twitter_filter,
     'gmailReceive': build_gmail_filter,
     'telegramReceive': build_telegram_filter,
+    'emailReceive': build_email_filter,
 }
 
 

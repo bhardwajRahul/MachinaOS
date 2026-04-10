@@ -111,6 +111,9 @@ from .search import (
     handle_perplexity_search,
 )
 
+# Email handlers (Himalaya CLI)
+from .email import handle_email_send, handle_email_read, handle_email_receive
+
 # Crawlee web scraping handler
 from .crawlee import handle_crawlee_scraper
 
@@ -210,6 +213,10 @@ __all__ = [
     'handle_file_modify',
     'handle_shell',
     'handle_fs_search',
+    # Email
+    'handle_email_send',
+    'handle_email_read',
+    'handle_email_receive',
     # Tools
     'execute_tool',
     'handle_task_manager',

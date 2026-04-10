@@ -235,6 +235,22 @@ SOCIAL_TOOL_TYPES: FrozenSet[str] = frozenset([
 ])
 
 # =============================================================================
+# EMAIL NODE TYPES (Himalaya CLI-based IMAP/SMTP)
+# =============================================================================
+
+EMAIL_TYPES: FrozenSet[str] = frozenset([
+    'emailSend',
+    'emailRead',
+    'emailReceive',
+])
+
+# Dual-purpose email nodes (workflow node + AI tool)
+EMAIL_TOOL_TYPES: FrozenSet[str] = frozenset([
+    'emailSend',
+    'emailRead',
+])
+
+# =============================================================================
 # CHAT NODE TYPES
 # =============================================================================
 
@@ -298,6 +314,7 @@ TRIGGER_TYPES: FrozenSet[str] = EVENT_TRIGGER_TYPES
 POLLING_TRIGGER_TYPES: FrozenSet[str] = frozenset([
     'gmailReceive',
     'twitterReceive',
+    'emailReceive',
 ])
 
 # =============================================================================
@@ -320,6 +337,7 @@ WORKFLOW_TRIGGER_TYPES: FrozenSet[str] = frozenset([
     'twitterReceive',
     'gmailReceive',
     'telegramReceive',
+    'emailReceive',
 ])
 
 # =============================================================================

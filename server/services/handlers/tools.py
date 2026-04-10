@@ -206,6 +206,10 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
         return await _execute_crawlee_scraper(tool_args, config.get('parameters', {}))
 
     # Proxy nodes (dual-purpose: workflow node + AI tool)
+    # Email nodes (dual-purpose: workflow node + AI tool)
+    if node_type in ('emailSend', 'emailRead'):
+        return await _execute_email_tool(node_type, tool_args, config.get('parameters', {}))
+
     if node_type == 'proxyRequest':
         return await _execute_proxy_request(tool_args, config.get('parameters', {}), config)
     if node_type == 'proxyStatus':
@@ -2505,3 +2509,14 @@ async def _execute_perplexity_search_tool(args: Dict[str, Any],
         parameters=parameters,
         context={}
     )
+
+
+async def _execute_email_tool(node_type: str, args: Dict[str, Any],
+                              node_params: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute email send/read as AI tool via EmailService."""
+    from services.email_service import get_email_service
+    svc = get_email_service()
+    params = {**node_params, **{k: v for k, v in args.items() if v is not None}}
+    if node_type == 'emailSend':
+        return await svc.send(params)
+    return await svc.read(params)

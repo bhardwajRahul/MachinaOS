@@ -27,6 +27,8 @@ import { proxyNodes, PROXY_NODE_TYPES } from './nodeDefinitions/proxyNodes';
 import { crawleeNodes, CRAWLEE_NODE_TYPES } from './nodeDefinitions/crawleeNodes';
 import { browserNodes, BROWSER_NODE_TYPES } from './nodeDefinitions/browserNodes';
 import { filesystemNodes, FILESYSTEM_NODE_TYPES } from './nodeDefinitions/filesystemNodes';
+import { emailNodes, EMAIL_NODE_TYPES } from './nodeDefinitions/emailNodes';
+
 
 // ============================================================================
 // MAIN NODE REGISTRY - Combining all modular definitions
@@ -57,7 +59,8 @@ export const nodeDefinitions: Record<string, INodeTypeDescription> = {
   ...proxyNodes,
   ...crawleeNodes,
   ...browserNodes,
-  ...filesystemNodes
+  ...filesystemNodes,
+  ...emailNodes
 };
 
 // ============================================================================
@@ -164,6 +167,10 @@ export const BROWSER_NODES = [
 
 export const FILESYSTEM_NODES = [
   ...FILESYSTEM_NODE_TYPES
+];
+
+export const EMAIL_NODES = [
+  ...EMAIL_NODE_TYPES
 ];
 
 // Re-export types and utilities from modular files for external access

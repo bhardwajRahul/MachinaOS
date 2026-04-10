@@ -49,6 +49,7 @@ from services.handlers.browser import handle_browser
 from services.handlers.proxy import handle_proxy_request, handle_proxy_status, handle_proxy_config
 from services.handlers.filesystem import handle_file_read, handle_file_modify, handle_shell, handle_fs_search
 from services.handlers.todo import handle_write_todos
+from services.handlers.email import handle_email_send, handle_email_read, handle_email_receive
 # Consolidated Google Workspace handlers (6 services with operation dispatchers)
 from services.handlers.gmail import handle_google_gmail, handle_gmail_receive
 from services.handlers.calendar import handle_google_calendar
@@ -158,6 +159,10 @@ class NodeExecutor:
             'whatsappDb': handle_whatsapp_db,
             # Telegram (telegramReceive routed via generic handle_trigger_node)
             'telegramSend': handle_telegram_send,
+            # Email (Himalaya CLI)
+            'emailSend': handle_email_send,
+            'emailRead': handle_email_read,
+            'emailReceive': handle_email_receive,
             # Twitter/X
             'twitterSend': handle_twitter_send,
             'twitterSearch': handle_twitter_search,

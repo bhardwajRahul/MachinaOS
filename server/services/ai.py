@@ -2498,6 +2498,9 @@ class AIService:
             'crawleeScraper': 'web_reader',
             # Browser automation (dual-purpose tool)
             'browser': 'browser',
+            # Email (Himalaya CLI, dual-purpose tools)
+            'emailSend': 'email_send',
+            'emailRead': 'email_read',
         }
         DEFAULT_TOOL_DESCRIPTIONS = {
             'calculatorTool': 'Perform mathematical calculations. Operations: add, subtract, multiply, divide, power, sqrt, mod, abs',
@@ -2574,6 +2577,9 @@ class AIService:
             'crawleeScraper': 'Read and extract content from web pages. Fetches page text, links, and data. Use beautifulsoup for static pages or playwright for JS-rendered pages. You MUST use this tool when the user asks to read, fetch, or get content from any URL.',
             # Browser automation (dual-purpose tool)
             'browser': 'Control a web browser interactively. Use snapshot to see the page (returns accessibility tree with @eN refs). Then click/type/fill with those refs. Workflow: navigate -> snapshot -> interact -> snapshot. Operations: navigate, click, type, fill, screenshot, snapshot, get_text, get_html, eval, wait, scroll, select, batch.',
+            # Email (Himalaya CLI, dual-purpose tools)
+            'emailSend': 'Send email via SMTP. Specify to, subject, body. Optional: cc, bcc, body_type (text/html).',
+            'emailRead': 'Read and manage emails via IMAP. Operations: list (envelopes), search (query), read (message by ID), folders (list), move, delete, flag.',
         }
 
         try:
@@ -3733,6 +3739,35 @@ class AIService:
                 )
 
             return ProxyConfigSchema
+
+        # Email Send (dual-purpose: workflow node + AI tool)
+        if node_type == 'emailSend':
+            class EmailSendSchema(BaseModel):
+                """Send an email via SMTP."""
+                to: str = Field(description="Recipient email address(es), comma-separated")
+                subject: str = Field(description="Email subject line")
+                body: str = Field(description="Email body content")
+                cc: Optional[str] = Field(default=None, description="CC recipients, comma-separated")
+                bcc: Optional[str] = Field(default=None, description="BCC recipients, comma-separated")
+                body_type: str = Field(default="text", description="Body format: text or html")
+
+            return EmailSendSchema
+
+        # Email Read (dual-purpose: workflow node + AI tool)
+        if node_type == 'emailRead':
+            class EmailReadSchema(BaseModel):
+                """Read and manage emails via IMAP."""
+                operation: str = Field(description="Operation: list, search, read, folders, move, delete, flag")
+                folder: Optional[str] = Field(default=None, description="Mailbox folder")
+                message_id: Optional[str] = Field(default=None, description="Message ID (for read/move/delete/flag)")
+                query: Optional[str] = Field(default=None, description="Search query (for search)")
+                target_folder: Optional[str] = Field(default=None, description="Destination folder (for move)")
+                flag: Optional[str] = Field(default=None, description="Flag: Seen, Answered, Flagged, Draft, Deleted")
+                flag_action: Optional[str] = Field(default=None, description="add or remove")
+                page: Optional[int] = Field(default=None, description="Page number (for list)")
+                page_size: Optional[int] = Field(default=None, description="Results per page (for list)")
+
+            return EmailReadSchema
 
         # Generic schema for other nodes
         class GenericToolSchema(BaseModel):

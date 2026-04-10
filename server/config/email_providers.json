@@ -10,6 +10,22 @@
     "timeout_seconds": 60
   },
 
+  "defaults": {
+    "provider": "gmail",
+    "folder": "INBOX",
+    "body_type": "text",
+    "page_size": 20,
+    "flag": "Seen",
+    "flag_action": "add"
+  },
+
+  "polling": {
+    "interval": 60,
+    "min_interval": 30,
+    "max_interval": 3600,
+    "baseline_page_size": 50
+  },
+
   "config_template": [
     "[accounts.{account}]",
     "email = \"{email}\"",
