@@ -234,6 +234,32 @@ async def handle_get_all_tool_schemas(data: Dict[str, Any], websocket: WebSocket
 
 
 # ============================================================================
+# Credential Registry Handler (Nango-style bulk fetch for 20 -> 5000 providers)
+# ============================================================================
+
+@ws_handler()
+async def handle_get_credential_catalogue(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Return the full credential provider catalogue.
+
+    Response shape: {providers, categories, version}. The version is a
+    content-sha256 of the resolved payload; clients warm-start from
+    IndexedDB and only re-fetch when the version changes. Supports
+    Nango-style bulk fetch at modal-open time (one roundtrip, cached for
+    the app session via TanStack Query + experimental_createPersister).
+    """
+    from services.credential_registry import get_credential_registry
+
+    registry = get_credential_registry()
+    # Optional conditional fetch: if the client already has the current
+    # version in IndexedDB it can send `since` and get a 304-style response.
+    since = data.get("since")
+    version = registry.get_version()
+    if since and since == version:
+        return {"unchanged": True, "version": version}
+    return registry.get_catalogue()
+
+
+# ============================================================================
 # Node Execution Handlers
 # ============================================================================
 
@@ -1021,19 +1047,48 @@ async def handle_get_stored_api_key(data: Dict[str, Any], websocket: WebSocket) 
 
 @ws_handler("provider", "api_key")
 async def handle_save_api_key(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
-    """Save an API key (without validation)."""
-    auth_service = container.auth_service()
-    await auth_service.store_api_key(provider=data["provider"].lower(), api_key=data["api_key"].strip(),
-                                      models=data.get("models", []), session_id=data.get("session_id", "default"))
-    return {"provider": data["provider"]}
+    """Save an API key (without validation).
+
+    Supports client-side idempotency: if the client supplies a
+    `request_id` (opaque UUID), duplicate calls within 60 s return the
+    cached result instead of re-running the mutation. Prevents
+    double-writes on retry / reconnect / double-click.
+    """
+    from services.idempotency import get_idempotency_store
+
+    store = get_idempotency_store("credentials")
+    provider = data["provider"].lower()
+
+    async def _do_save() -> Dict[str, Any]:
+        auth_service = container.auth_service()
+        await auth_service.store_api_key(
+            provider=provider,
+            api_key=data["api_key"].strip(),
+            models=data.get("models", []),
+            session_id=data.get("session_id", "default"),
+        )
+        return {"provider": data["provider"]}
+
+    return await store.run(data.get("request_id"), _do_save)
 
 
 @ws_handler("provider")
 async def handle_delete_api_key(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
-    """Delete stored API key."""
-    auth_service = container.auth_service()
-    await auth_service.remove_api_key(data["provider"].lower(), data.get("session_id", "default"))
-    return {"provider": data["provider"]}
+    """Delete stored API key.
+
+    Idempotent on `request_id` — see `handle_save_api_key`.
+    """
+    from services.idempotency import get_idempotency_store
+
+    store = get_idempotency_store("credentials")
+    provider = data["provider"].lower()
+
+    async def _do_delete() -> Dict[str, Any]:
+        auth_service = container.auth_service()
+        await auth_service.remove_api_key(provider, data.get("session_id", "default"))
+        return {"provider": data["provider"]}
+
+    return await store.run(data.get("request_id"), _do_delete)
 
 
 # ============================================================================
@@ -3057,6 +3112,9 @@ MESSAGE_HANDLERS: Dict[str, MessageHandler] = {
     "save_tool_schema": handle_save_tool_schema,
     "delete_tool_schema": handle_delete_tool_schema,
     "get_all_tool_schemas": handle_get_all_tool_schemas,
+
+    # Credential registry (Nango-style bulk catalogue for credentials panel)
+    "get_credential_catalogue": handle_get_credential_catalogue,
 
     # Node execution
     "execute_node": handle_execute_node,

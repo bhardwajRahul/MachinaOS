@@ -285,6 +285,92 @@ class AuthService:
             logger.error("Failed to get OAuth tokens", provider=provider, error=str(e))
             return None
 
+    async def refresh_oauth_tokens_with_breaker(
+        self,
+        provider: str,
+        refresh_fn,
+    ) -> Dict[str, Any]:
+        """Run an OAuth refresh call under a circuit breaker.
+
+        Phase 7.5c of the credentials-scaling plan. Protects downstream
+        OAuth providers from cascading failures: after 3 consecutive
+        refresh failures within 60 s for a given provider, the breaker
+        opens and all subsequent calls short-circuit for 30 s with a
+        clear error instead of piling on the upstream.
+
+        Args:
+            provider: Provider name (e.g. 'google', 'twitter') — used as
+                the breaker scope so one provider failing does not trip
+                the breaker for another.
+            refresh_fn: Zero-arg callable returning the refresh result
+                dict. Can be sync or async. Typical shape:
+                    ``{"success": True, "access_token": "..."}``
+                or
+                    ``{"success": False, "error": "..."}``.
+
+        Returns:
+            The refresh_fn result on success, or a dict of
+            ``{"success": False, "error": "...", "circuit_open": True,
+               "retry_after_seconds": N}`` when the breaker is open.
+
+        This method is opt-in: legacy call sites that call their OAuth
+        helpers directly are unaffected. New/migrated call sites gain
+        breaker protection by routing through here instead of invoking
+        the refresh helper directly.
+        """
+        import asyncio
+        from services.circuit_breaker import get_circuit_breaker, CircuitBreakerOpen
+
+        breaker = get_circuit_breaker(
+            f"{provider}_oauth_refresh",
+            failure_threshold=3,
+            failure_window=60.0,
+            cooldown_seconds=30.0,
+        )
+
+        async def _call():
+            if asyncio.iscoroutinefunction(refresh_fn):
+                result = await refresh_fn()
+            else:
+                # Run sync callables in a thread to avoid blocking the
+                # event loop when the refresh does a blocking HTTP call
+                # (e.g. google-auth's Credentials.refresh()).
+                result = await asyncio.to_thread(refresh_fn)
+
+            # Treat dict-shaped {"success": False} as a breaker-relevant
+            # failure too, not just raised exceptions. Most OAuth helpers
+            # in this codebase return {"success": False, "error": "..."}
+            # instead of raising.
+            if isinstance(result, dict) and result.get("success") is False:
+                raise RuntimeError(
+                    result.get("error") or "oauth refresh reported failure"
+                )
+            return result
+
+        try:
+            return await breaker.run(_call)
+        except CircuitBreakerOpen as e:
+            logger.warning(
+                "auth: OAuth refresh breaker open for %s (retry after %.0fs)",
+                provider,
+                e.retry_after_seconds,
+            )
+            return {
+                "success": False,
+                "error": str(e),
+                "circuit_open": True,
+                "retry_after_seconds": e.retry_after_seconds,
+                "needs_reauth": False,
+            }
+        except Exception as e:  # noqa: BLE001 — surface non-breaker errors
+            logger.error("auth: OAuth refresh failed for %s: %s", provider, e)
+            return {
+                "success": False,
+                "error": str(e),
+                "circuit_open": False,
+                "needs_reauth": True,
+            }
+
     async def remove_oauth_tokens(
         self,
         provider: str,
