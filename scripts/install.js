@@ -133,20 +133,18 @@ if (temporalVersion) {
   }
 }
 
-// Check/Install agent-browser (global CLI for browser automation)
-let agentBrowserVersion = getVersion('agent-browser --version');
+// agent-browser is a project dependency (see package.json); pnpm/npm
+// already placed it in node_modules/.pnpm/ before this postinstall ran.
+// Download its Chromium runtime once via `npx agent-browser install`.
+// This is version-pinned via the lockfile; no global state.
+const agentBrowserVersion = getVersion('npx --no-install agent-browser --version');
 if (agentBrowserVersion) {
-  console.log(`  agent-browser: ${agentBrowserVersion}`);
-} else {
-  console.log('  agent-browser: not found, installing...');
-  run('npm install -g agent-browser');
-  agentBrowserVersion = getVersion('agent-browser --version');
-  if (agentBrowserVersion) {
-    console.log(`  agent-browser: ${agentBrowserVersion}`);
-    run('agent-browser install');
-  } else {
-    console.log('  Warning: agent-browser install failed. Browser automation unavailable.');
+  console.log(`  agent-browser: ${agentBrowserVersion} (local)`);
+  if (!runSilent('npx --no-install agent-browser install')) {
+    console.log('  Warning: agent-browser runtime install failed. Browser automation may be unavailable.');
   }
+} else {
+  console.log('  Warning: agent-browser not found in node_modules. Run `pnpm install` first.');
 }
 
 console.log('');

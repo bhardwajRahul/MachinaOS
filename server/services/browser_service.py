@@ -1,14 +1,33 @@
 """Thin wrapper around agent-browser CLI.
 
-Stateless client — finds the binary, runs commands via subprocess, parses JSON output.
-The agent-browser daemon manages its own lifecycle (auto-starts, persists between commands).
+Stateless client — finds the binary via npx, runs commands via subprocess,
+parses JSON output. The agent-browser daemon manages its own lifecycle
+(auto-starts, persists between commands).
+
+Invocation strategy
+-------------------
+agent-browser is a pinned project dependency (see package.json). Rather than
+locating its shim manually per-platform, we invoke it via ``npx --no-install``:
+
+    [shutil.which("npx"), "--no-install", "agent-browser", ...args]
+
+This matches the pattern used by ``claude_code_service.py`` and is how npm
+intends locally-pinned CLIs to be invoked. npx handles all the
+cross-platform concerns (local ``node_modules/.bin/`` resolution, Windows
+.CMD vs POSIX shell shim, shebang interpretation) so we don't have to.
+
+``--no-install`` makes the call fail loudly if agent-browser isn't in the
+lockfile, instead of silently pulling from the registry at runtime.
+
+All subprocess calls use ``shell=False`` with list argv — Python handles
+Windows .CMD files natively via ``CreateProcessW``, avoiding the BatBadBut
+(CVE-2024-1874) argument-escaping vulnerabilities that plague shell=True.
 """
 
 import asyncio
 import json
 import shutil
 import subprocess
-import sys
 from typing import Any, Dict, List, Optional
 
 import psutil
@@ -21,14 +40,21 @@ _MAX_OUTPUT = 100_000
 
 
 def _kill_process_tree(pid: int) -> None:
-    """Terminate a process and all its descendants (cross-platform via psutil)."""
+    """Terminate a process and all its descendants (cross-platform via psutil).
+
+    Fast-exiting processes can race between ``Process(pid)`` and
+    ``children()``, so every psutil call is defensively guarded.
+    """
     try:
         parent = psutil.Process(pid)
     except psutil.NoSuchProcess:
         return
 
-    # Collect descendants before killing parent so we don't lose the tree.
-    descendants = parent.children(recursive=True)
+    try:
+        descendants = parent.children(recursive=True)
+    except psutil.NoSuchProcess:
+        descendants = []
+
     for child in descendants:
         try:
             child.kill()
@@ -42,10 +68,15 @@ def _kill_process_tree(pid: int) -> None:
 
 
 class BrowserService:
-    """Subprocess wrapper for the agent-browser CLI."""
+    """Subprocess wrapper for the agent-browser CLI.
 
-    def __init__(self, binary: str) -> None:
-        self._bin = binary
+    Holds a frozen argv prefix (typically ``[npx_path, --no-install,
+    agent-browser]``) plus the logic to spawn the daemon, read its first
+    JSON line, and kill the tree.
+    """
+
+    def __init__(self, argv_prefix: List[str]) -> None:
+        self._prefix = list(argv_prefix)
 
     async def run(
         self,
@@ -63,20 +94,22 @@ class BrowserService:
         daemon process alive. We read just the first line via Popen in a
         thread, then kill the process — never wait for exit.
         """
-        parts = [self._bin, "--session", session, "--json"]
+        argv = [
+            *self._prefix,
+            "--session", session,
+            "--json",
+        ]
         if headed:
-            parts.append("--headed")
+            argv.append("--headed")
         if user_agent:
-            parts.extend(["--user-agent", user_agent])
+            argv.extend(["--user-agent", user_agent])
         if proxy:
-            parts.extend(["--proxy", proxy])
-        parts.extend(args)
+            argv.extend(["--proxy", proxy])
+        argv.extend(args)
 
-        logger.debug("agent-browser exec", cmd=" ".join(parts))
+        logger.debug("agent-browser exec", argv=argv)
 
-        raw = await asyncio.to_thread(
-            self._run_sync, parts, timeout, stdin
-        )
+        raw = await asyncio.to_thread(self._run_sync, argv, timeout, stdin)
 
         if len(raw) > _MAX_OUTPUT:
             raw = raw[:_MAX_OUTPUT] + "\n...(truncated)"
@@ -88,25 +121,26 @@ class BrowserService:
 
     @staticmethod
     def _run_sync(
-        parts: List[str],
+        argv: List[str],
         timeout: int,
         stdin_data: Optional[bytes],
     ) -> str:
-        """Run agent-browser, read first JSON line, kill process.
+        """Spawn agent-browser, read first JSON line, kill the process tree.
 
-        agent-browser daemon keeps stdout open after printing the result.
-        communicate() would hang forever. Instead: readline() + kill().
-        On Windows, shell=True is required (.CMD wrapper).
+        The daemon holds stdout open after emitting its result, so we cannot
+        use communicate() or wait() — either would hang forever. Instead we
+        readline() and then force-kill the tree.
+
+        Uses ``shell=False`` unconditionally with a list argv. This is safe
+        on every platform including .CMD files on Windows (handled natively
+        by CreateProcessW since Python 3.7, hardened against BatBadBut in 3.12+).
         """
-        is_win = sys.platform == "win32"
-        cmd = " ".join(parts) if is_win else parts
-
         proc = subprocess.Popen(
-            cmd,
+            argv,
             stdin=subprocess.PIPE if stdin_data else None,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            shell=is_win,
+            shell=False,
         )
 
         try:
@@ -115,35 +149,47 @@ class BrowserService:
                 proc.stdin.close()
 
             # Read the first line — that's the JSON result.
-            # The daemon keeps the process alive after this, so
-            # we must not call communicate() or wait().
+            # The daemon keeps the process alive after this, so we must
+            # not call communicate() or wait() before killing it.
             line = proc.stdout.readline().decode(errors="replace").strip()
 
             if not line:
-                # No output — check stderr for errors
+                # No output — check stderr for errors.
                 err = proc.stderr.read().decode(errors="replace").strip()
                 raise RuntimeError(err or "agent-browser returned empty output")
 
             return line
         finally:
-            # With shell=True on Windows, proc is the shell wrapper (cmd.exe)
-            # and the real agent-browser daemon runs as its child. Killing only
-            # proc leaves the daemon orphaned. psutil.children(recursive=True)
-            # walks the process tree natively on every platform.
+            # npx -> node -> agent-browser daemon -> Chromium. Killing only
+            # proc.pid leaves the daemon orphaned. psutil.children(recursive=True)
+            # walks the tree natively on every platform.
             _kill_process_tree(proc.pid)
             proc.wait()
 
 
-# -- Module-level lazy singleton (NodeJSClient pattern) --
+# -- Module-level lazy singleton (NodeJSClient pattern) -----------------
 
 _instance: Optional[BrowserService] = None
 
 
+def _find_agent_browser_cmd() -> Optional[List[str]]:
+    """Locate agent-browser via npx (pinned to project lockfile).
+
+    Uses ``npx --no-install`` so the call fails loudly if the package is
+    missing, rather than silently pulling from the registry at runtime.
+    Returns None if npx itself is not on PATH (Node.js not installed).
+    """
+    npx = shutil.which("npx")
+    if not npx:
+        return None
+    return [npx, "--no-install", "agent-browser"]
+
+
 def get_browser_service() -> Optional[BrowserService]:
-    """Get the BrowserService singleton, or None if agent-browser is not installed."""
+    """Return the BrowserService singleton, or None if agent-browser cannot be located."""
     global _instance
     if _instance is None:
-        path = shutil.which("agent-browser")
-        if path:
-            _instance = BrowserService(path)
+        cmd = _find_agent_browser_cmd()
+        if cmd:
+            _instance = BrowserService(cmd)
     return _instance

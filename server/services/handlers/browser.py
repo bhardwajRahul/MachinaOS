@@ -20,7 +20,7 @@ async def handle_browser(
     t0 = time.time()
     svc = get_browser_service()
     if not svc:
-        return _fail("agent-browser not installed. Run: npm install -g agent-browser && agent-browser install", t0)
+        return _fail("agent-browser not installed. Run: pnpm install && npx agent-browser install", t0)
 
     op = parameters.get("operation") or "navigate"
     session = (

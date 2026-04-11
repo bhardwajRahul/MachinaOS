@@ -1293,9 +1293,9 @@ Interactive browser automation via the [agent-browser](https://www.npmjs.com/pac
 | `server/services/handlers/browser.py` | Handler dispatcher mapping operation+params to agent-browser CLI args |
 | `server/skills/web_agent/browser-skill/SKILL.md` | AI agent skill documenting snapshot-act-snapshot loop |
 
-**Installation Requirement:** The `agent-browser` CLI must be installed: `npm install -g agent-browser && agent-browser install`. The handler returns an installation instruction error if the binary is missing.
+**Installation Requirement:** `agent-browser` is a pinned project dependency in [package.json](../package.json). `pnpm install` places it under `node_modules/.pnpm/`, and `scripts/install.js` runs `npx agent-browser install` during postinstall to download the Chromium runtime. The handler returns an installation-instruction error if the binary cannot be located.
 
-**Implementation Detail:** `browser_service.py` reads only the **first JSON output line** from agent-browser (which runs a persistent daemon keeping stdout open), then immediately kills the subprocess. Output is truncated at 100KB with ellipsis. Windows uses `shell=True` for the `.CMD` wrapper.
+**Implementation Detail:** `browser_service.py` invokes the binary via `[shutil.which("npx"), "--no-install", "agent-browser", ...args]` -- the same pattern used by [claude_code_service.py](../server/services/claude_code_service.py). This avoids custom cross-platform shim detection: `npx --no-install` handles local `node_modules/.bin/` resolution, Windows/POSIX shim differences, and shebang interpretation internally. The service reads only the first JSON output line from agent-browser (the daemon holds stdout open), truncates at 100KB, and kills the process tree via `psutil`. All subprocess calls use `shell=False` with list argv to avoid BatBadBut (CVE-2024-1874) on Windows.
 
 ---
 

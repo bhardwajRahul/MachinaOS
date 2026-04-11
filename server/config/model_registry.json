@@ -1,7 +1,7 @@
 {
-  "_generated": "2026-04-09T16:14:16.145470+00:00",
+  "_generated": "2026-04-10T20:32:20.583411+00:00",
   "_source": "openrouter",
-  "_model_count": 351,
+  "_model_count": 350,
   "models": {
     "anthropic/claude-opus-4.6-fast": {
       "id": "anthropic/claude-opus-4.6-fast",
@@ -39,9 +39,9 @@
       "provider": "z-ai",
       "local_id": "glm-5.1",
       "context_length": 202752,
-      "max_output_tokens": 131072,
-      "input_price_per_mtok": 1.395,
-      "output_price_per_mtok": 4.4,
+      "max_output_tokens": 65535,
+      "input_price_per_mtok": 0.95,
+      "output_price_per_mtok": 3.15,
       "supports_thinking": false,
       "thinking_type": "none",
       "temperature_range": [
@@ -106,7 +106,7 @@
       "local_id": "gemma-4-26b-a4b-it",
       "context_length": 262144,
       "max_output_tokens": 262144,
-      "input_price_per_mtok": 0.13,
+      "input_price_per_mtok": 0.12,
       "output_price_per_mtok": 0.4,
       "supports_thinking": false,
       "thinking_type": "none",
@@ -2733,35 +2733,6 @@
         "temperature",
         "tool_choice",
         "tools",
-        "top_p"
-      ]
-    },
-    "arcee-ai/trinity-mini:free": {
-      "id": "arcee-ai/trinity-mini:free",
-      "name": "Arcee AI: Trinity Mini (free)",
-      "provider": "arcee-ai",
-      "local_id": "trinity-mini:free",
-      "context_length": 131072,
-      "max_output_tokens": 0,
-      "input_price_per_mtok": 0.0,
-      "output_price_per_mtok": 0.0,
-      "supports_thinking": false,
-      "thinking_type": "none",
-      "temperature_range": [
-        0.0,
-        2.0
-      ],
-      "is_reasoning_model": false,
-      "supported_parameters": [
-        "include_reasoning",
-        "max_tokens",
-        "reasoning",
-        "response_format",
-        "structured_outputs",
-        "temperature",
-        "tool_choice",
-        "tools",
-        "top_k",
         "top_p"
       ]
     },
