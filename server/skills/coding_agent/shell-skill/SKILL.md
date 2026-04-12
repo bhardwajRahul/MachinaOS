@@ -60,7 +60,9 @@ Execute shell commands with timeout control. Uses deepagents LocalShellBackend.
 
 1. Set appropriate timeouts for long-running commands
 2. Exit code 0 means success, non-zero means failure
-3. Check `truncated` flag -- output may be cut if too large
-4. Use absolute paths when possible
-5. Chain commands with `&&` for sequential execution
-6. Avoid interactive commands that require user input
+3. Exit code 124 means the command timed out
+4. Check `truncated` flag -- output may be cut if too large
+5. Use absolute paths when possible
+6. Chain commands with `&&` for sequential execution
+7. Avoid interactive commands that require user input
+8. **Do NOT start background servers or daemons** (e.g. `python -m http.server`, `npm start`, `start /B`). The shell waits for the process to exit -- daemons will hang until timeout. Use short-lived commands only.

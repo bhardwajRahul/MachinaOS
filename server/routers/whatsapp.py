@@ -81,11 +81,13 @@ class RPCClient:
         self._event_handler = handler
 
     async def connect(self):
-        # 2 second timeout for initial connection (fail fast if Go service not running)
+        # 5 second timeout for initial connection (fail fast if Go service not running).
+        # The WebSocket handshake to the Go service can take 2-3s on Windows,
+        # especially on cold start when Defender is scanning the binary.
         logger.info(f"[WhatsApp RPC] Connecting to {self.url}...")
         self.ws = await asyncio.wait_for(
             websockets.connect(self.url, ping_interval=30, max_size=100*1024*1024),
-            timeout=2.0
+            timeout=5.0
         )
         self._connected = True
         logger.info("[WhatsApp RPC] WebSocket connected, starting receive loop")

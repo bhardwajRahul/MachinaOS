@@ -49,11 +49,11 @@ async function main() {
   ensureEnvFile();
 
   // Check if Temporal is already running via CLI
-  // (temporal-server api exits immediately if already up, which triggers
+  // (temporal api exits immediately if already up, which triggers
   // --kill-others and kills all services)
   let temporalRunning = false;
   try {
-    const status = execSync('temporal-server status', { encoding: 'utf-8', timeout: 5000, stdio: 'pipe' });
+    const status = execSync('temporal status', { encoding: 'utf-8', timeout: 5000, stdio: 'pipe' });
     temporalRunning = /running|UP/i.test(status);
   } catch {
     temporalRunning = false;

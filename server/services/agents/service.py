@@ -115,6 +115,15 @@ class DeepAgentService:
                 workspace_dir = parameters.get('workspace_dir', '')
                 executable_tools = await ToolAdapter._build_tools_async(tool_data, build_tool_fn, workflow_id, broadcaster, workspace_dir)
 
+            # If write_todos tool is connected, add planning instructions to system message
+            has_todos = any(t.get('node_type') == 'writeTodos' for t in (tool_data or []))
+            if has_todos:
+                system_message += (
+                    "\n\nYou have a `write_todos` tool. For any task with 3+ steps, "
+                    "ALWAYS call write_todos first to plan, then update it after each step "
+                    "(mark completed, set next in_progress). The user sees your progress live."
+                )
+
             # === Convert teammates via SubAgentAdapter ===
             subagents = SubAgentAdapter.convert(teammates) if teammates else None
 

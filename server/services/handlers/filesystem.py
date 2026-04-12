@@ -4,8 +4,12 @@ Uses deepagents.backends.LocalShellBackend methods:
   read() -> str, write() -> WriteResult, edit() -> EditResult,
   ls_info() -> list[FileInfo], glob_info() -> list[FileInfo],
   grep_raw() -> list[GrepMatch] | str, execute() -> ExecuteResponse.
+
+All backend calls are synchronous (subprocess.run / file I/O), so they
+run via asyncio.to_thread() to avoid blocking the event loop.
 """
 
+import asyncio
 import os
 from typing import Any, Dict
 
@@ -22,7 +26,7 @@ def _get_backend(parameters: Dict[str, Any], context: Dict[str, Any] = None):
     root = param_dir or ctx_dir or os.getcwd()
     logger.info("[Filesystem] root=%s (param=%s, context=%s, fallback_cwd=%s)",
                 root, param_dir, ctx_dir, os.getcwd())
-    return LocalShellBackend(root_dir=root, virtual_mode=True)
+    return LocalShellBackend(root_dir=root, virtual_mode=True, inherit_env=True)
 
 
 async def handle_file_read(
@@ -35,7 +39,7 @@ async def handle_file_read(
 
     try:
         backend = _get_backend(parameters, context)
-        content = backend.read(file_path, offset=int(parameters.get('offset', 0)), limit=int(parameters.get('limit', 100)))
+        content = await asyncio.to_thread(backend.read, file_path, offset=int(parameters.get('offset', 0)), limit=int(parameters.get('limit', 100)))
         return {
             "success": True, "node_id": node_id,
             "result": {"content": content, "file_path": file_path},
@@ -58,7 +62,7 @@ async def handle_file_modify(
 
         if operation == 'write':
             content = parameters.get('content', '')
-            result = backend.write(file_path, content)
+            result = await asyncio.to_thread(backend.write, file_path, content)
             if result.error:
                 return {"success": False, "node_id": node_id, "error": result.error}
             return {
@@ -73,7 +77,7 @@ async def handle_file_modify(
             if not old_string:
                 return {"success": False, "node_id": node_id, "error": "old_string is required for edit"}
 
-            result = backend.edit(file_path, old_string, new_string, replace_all=replace_all)
+            result = await asyncio.to_thread(backend.edit, file_path, old_string, new_string, replace_all=replace_all)
             if result.error:
                 return {"success": False, "node_id": node_id, "error": result.error}
             return {
@@ -97,7 +101,14 @@ async def handle_shell(
     try:
         timeout = int(parameters.get('timeout', 30))
         backend = _get_backend(parameters, context)
-        result = backend.execute(command, timeout=timeout)
+        logger.info("[Shell] Executing (non-blocking): %s (timeout=%ds)", command[:200], timeout)
+        result = await asyncio.to_thread(backend.execute, command, timeout=timeout)
+        if result.exit_code == 124:
+            logger.warning("[Shell] Timed out after %ds: %s", timeout, command[:100])
+        elif result.exit_code != 0:
+            logger.warning("[Shell] Non-zero exit (%d): %s -> %s", result.exit_code, command[:100], result.output[:300])
+        else:
+            logger.info("[Shell] Completed: exit=%d len=%d", result.exit_code, len(result.output))
         return {
             "success": True, "node_id": node_id,
             "result": {
@@ -108,6 +119,7 @@ async def handle_shell(
             },
         }
     except Exception as e:
+        logger.error("[Shell] Failed: %s -> %s", command[:100], e)
         return {"success": False, "node_id": node_id, "error": str(e)}
 
 
@@ -123,7 +135,7 @@ async def handle_fs_search(
         backend = _get_backend(parameters, context)
 
         if mode == 'ls':
-            entries = backend.ls_info(path)
+            entries = await asyncio.to_thread(backend.ls_info, path)
             return {
                 "success": True, "node_id": node_id,
                 "result": {"path": path, "entries": [dict(e) for e in entries], "count": len(entries)},
@@ -132,7 +144,7 @@ async def handle_fs_search(
         elif mode == 'glob':
             if not pattern:
                 return {"success": False, "node_id": node_id, "error": "pattern is required for glob mode"}
-            matches = backend.glob_info(pattern, path=path)
+            matches = await asyncio.to_thread(backend.glob_info, pattern, path=path)
             return {
                 "success": True, "node_id": node_id,
                 "result": {"path": path, "pattern": pattern, "matches": [dict(m) for m in matches], "count": len(matches)},
@@ -142,7 +154,7 @@ async def handle_fs_search(
             if not pattern:
                 return {"success": False, "node_id": node_id, "error": "pattern is required for grep mode"}
             file_filter = parameters.get('file_filter') or None
-            result = backend.grep_raw(pattern, path=path, glob=file_filter)
+            result = await asyncio.to_thread(backend.grep_raw, pattern, path=path, glob=file_filter)
             # grep_raw returns list[GrepMatch] or str (error message)
             if isinstance(result, str):
                 return {"success": False, "node_id": node_id, "error": result}

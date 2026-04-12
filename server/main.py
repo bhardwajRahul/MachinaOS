@@ -20,6 +20,7 @@ try:
 except ImportError:
     pass  # Windows - uvloop not available, use default asyncio
 
+import asyncio
 from datetime import datetime
 from contextlib import asynccontextmanager
 
@@ -31,7 +32,6 @@ from contextlib import asynccontextmanager
 _startup_log("Importing FastAPI...")
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import ORJSONResponse
 
 _startup_log("Importing DI container + all services...")
 from core.container import container
@@ -128,7 +128,6 @@ async def lifespan(app: FastAPI):
         logger.info("Execution recovery sweeper started")
 
     # Start WebSocket logging handler to broadcast logs to frontend
-    import asyncio
     loop = asyncio.get_running_loop()
     setup_websocket_logging(loop)
     logger.info("WebSocket logging handler started")
@@ -186,50 +185,76 @@ async def lifespan(app: FastAPI):
     # Record startup time for health reporting
     set_startup_time()
 
-    # Initialize Temporal if enabled
-    temporal_worker_manager = None
+    # Initialize Temporal in the background - do NOT block lifespan startup.
+    # scripts/start.js launches the Python backend and temporal-server concurrently,
+    # so on fresh startup temporal-server may take several seconds to become reachable.
+    # Blocking the lifespan here would delay FastAPI HTTP serving and cascade into
+    # frontend ERR_CONNECTION_REFUSED on /api/auth/status. Instead, yield fast and
+    # let Temporal init happen in a background task. WorkflowService falls back to
+    # parallel/sequential execution until Temporal is ready.
+    app.state.temporal_worker_manager = None
+    temporal_init_task: asyncio.Task | None = None
+
     if settings.temporal_enabled:
-        _startup_log(f"[Temporal] Connecting to {settings.temporal_server_address}...")
-        from services.temporal import TemporalClientWrapper, TemporalExecutor
+        from services.temporal import TemporalExecutor
         from services.temporal.worker import TemporalWorkerManager
 
         logger.info(
-            "Initializing Temporal integration",
+            "Scheduling Temporal initialization in background",
             server_address=settings.temporal_server_address,
             namespace=settings.temporal_namespace,
             task_queue=settings.temporal_task_queue,
         )
+        _startup_log(f"[Temporal] Init scheduled for {settings.temporal_server_address}")
 
-        # Connect Temporal client (retries up to 10 times to allow temporal-server startup)
-        temporal_client_wrapper = container.temporal_client()
-        temporal_client = await temporal_client_wrapper.connect(retries=10, delay=3.0)
+        async def _init_temporal_background() -> None:
+            """Connect, wire executor, start worker. Retries every 3s until connected.
 
-        if temporal_client is not None:
-            # Create and set the Temporal executor on WorkflowService
-            temporal_executor = TemporalExecutor(
-                client=temporal_client,
-                task_queue=settings.temporal_task_queue,
-            )
-            container.workflow_service().set_temporal_executor(temporal_executor)
+            This task is the single source of truth for Temporal lifecycle during
+            startup. It replaces the previous blocking-connect + background-reconnect
+            split, which blocked the lifespan for up to 30s and left the executor
+            unwired after an initial failed connect.
+            """
+            temporal_client_wrapper = container.temporal_client()
+            attempt = 0
+            while True:
+                attempt += 1
+                client = await temporal_client_wrapper.connect(retries=1, delay=0)
+                if client is not None:
+                    try:
+                        temporal_executor = TemporalExecutor(
+                            client=client,
+                            task_queue=settings.temporal_task_queue,
+                        )
+                        container.workflow_service().set_temporal_executor(temporal_executor)
 
-            # Start embedded Temporal worker
-            temporal_worker_manager = TemporalWorkerManager(
-                client=temporal_client,
-                task_queue=settings.temporal_task_queue,
-            )
-            await temporal_worker_manager.start()
+                        worker_manager = TemporalWorkerManager(
+                            client=client,
+                            task_queue=settings.temporal_task_queue,
+                        )
+                        await worker_manager.start()
+                        app.state.temporal_worker_manager = worker_manager
 
-            _startup_log("[Temporal] Worker started, execution engine ready")
-            logger.info("Temporal integration initialized successfully")
-        else:
-            _startup_log("[Temporal] Server not reachable, using local execution")
-            logger.warning(
-                f"Temporal server not reachable at {settings.temporal_server_address}. "
-                "Falling back to local parallel/sequential execution. "
-                "Start Temporal server and restart to enable durable workflows."
-            )
-            # Start background reconnect loop (tries every 30s)
-            await temporal_client_wrapper.start_background_reconnect(interval=30.0)
+                        _startup_log(
+                            f"[Temporal] Worker started, execution engine ready (attempt {attempt})"
+                        )
+                        logger.info(
+                            "Temporal integration initialized successfully",
+                            attempts=attempt,
+                        )
+                        return
+                    except Exception as exc:
+                        logger.error(
+                            "Temporal executor/worker setup failed; will retry",
+                            error=str(exc),
+                        )
+                        # Drop the client so the next iteration reconnects cleanly.
+                        await temporal_client_wrapper.disconnect()
+                await asyncio.sleep(3.0)
+
+        temporal_init_task = asyncio.create_task(
+            _init_temporal_background(), name="temporal-init"
+        )
     else:
         _startup_log("[Temporal] Disabled")
 
@@ -241,12 +266,24 @@ async def lifespan(app: FastAPI):
     # Stop WebSocket logging handler
     shutdown_websocket_logging()
 
-    # Stop Temporal worker if running
-    if temporal_worker_manager is not None:
-        await temporal_worker_manager.stop()
-        logger.info("Temporal worker stopped")
+    # Cancel Temporal init task if it's still trying to connect.
+    if temporal_init_task is not None and not temporal_init_task.done():
+        temporal_init_task.cancel()
+        try:
+            await temporal_init_task
+        except (asyncio.CancelledError, Exception):
+            pass
 
-    # Disconnect Temporal client (also cancels background reconnect)
+    # Stop Temporal worker if it successfully started.
+    worker_manager = getattr(app.state, "temporal_worker_manager", None)
+    if worker_manager is not None:
+        try:
+            await worker_manager.stop()
+            logger.info("Temporal worker stopped")
+        except Exception as exc:
+            logger.warning(f"Temporal worker stop raised: {exc}")
+
+    # Disconnect Temporal client.
     if settings.temporal_enabled:
         try:
             temporal_client_wrapper = container.temporal_client()
@@ -264,6 +301,10 @@ async def lifespan(app: FastAPI):
     # Close Android relay client (prevents "Unclosed client session" warning)
     from services.android.manager import close_relay_client
     await close_relay_client(clear_stored_session=False)
+
+    # Shut down agent-browser daemon (prevents orphaned processes and EBUSY file locks)
+    from services.browser_service import shutdown_browser_service
+    await shutdown_browser_service()
 
     # Stop cleanup service
     if cleanup_service is not None:
@@ -286,7 +327,6 @@ app = FastAPI(
     version="3.0.0",
     description="Modern workflow automation backend with AI and Maps integration",
     lifespan=lifespan,
-    default_response_class=ORJSONResponse
 )
 
 # Add exception handler middleware BEFORE CORS to catch all errors

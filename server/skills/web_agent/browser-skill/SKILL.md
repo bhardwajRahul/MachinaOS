@@ -1,10 +1,10 @@
 ---
 name: browser-skill
-description: Interactive browser automation - navigate, click, type, fill forms, take screenshots, get accessibility snapshots.
+description: Interactive browser automation - navigate, click, type, fill forms, take screenshots, get accessibility snapshots. Supports system Chrome/Edge via auto-detection.
 allowed-tools: browser
 metadata:
   author: machina
-  version: "1.0"
+  version: "2.0"
   category: web
   icon: "🌐"
   color: "#8be9fd"
@@ -26,7 +26,7 @@ Use the **snapshot -> act -> snapshot** loop:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| operation | string | Yes | One of: navigate, click, type, fill, screenshot, snapshot, get_text, get_html, eval, wait, scroll, select |
+| operation | string | Yes | One of: navigate, click, type, fill, screenshot, snapshot, get_text, get_html, eval, wait, scroll, select, console, errors |
 | url | string | navigate | URL to open |
 | selector | string | click/type/fill/get_text/get_html/wait/select | CSS selector or `@eN` ref from snapshot |
 | text | string | type | Text to type keystroke by keystroke |
@@ -110,22 +110,61 @@ Select a dropdown option.
 {"operation": "select", "selector": "@e5", "value": "option-value"}
 ```
 
+### console
+Get browser console output (log, warn, error messages).
+```json
+{"operation": "console"}
+```
+Returns `{"messages": [{"text": "hello", "type": "log"}, ...]}`.
+
+### errors
+Get JavaScript errors from the page.
+```json
+{"operation": "errors"}
+```
+Returns `{"errors": [...]}`.
+
+## Using Your Real Browser
+
+By default the browser node uses a bundled Chromium. To use your system browser (with existing logins, extensions, etc.), select it in the **Browser** dropdown under Advanced:
+
+| Option | Description |
+|--------|-------------|
+| **Bundled Chrome** | Default. Downloads and uses its own Chromium. |
+| **Google Chrome** | Auto-detected from system PATH or Windows registry. |
+| **Microsoft Edge** | Auto-detected from system PATH or Windows registry. |
+| **Chromium** | Auto-detected from system PATH or Windows registry. |
+| **Custom Path** | Manually specify an executable path. |
+
+Browser detection uses `shutil.which()` on Linux/macOS (PATH lookup) and the Windows App Paths registry (`HKLM\...\App Paths\chrome.exe`) -- the same method Selenium and Playwright use. No hardcoded paths.
+
+### Additional options
+
+- **New Window**: Opens a new browser window instead of a tab in an existing instance. On by default when using a system browser. Only visible for non-bundled browsers.
+- **Chrome Profile**: Reuse login state from a named Chrome profile (e.g. `Default`, `Profile 1`).
+- **Auto Connect**: Attach to an already-running Chrome with remote debugging:
+  ```
+  chrome --remote-debugging-port=9222
+  ```
+
+### Lifecycle
+
+The browser daemon auto-starts on first use and persists between commands (for session reuse). It is automatically shut down when MachinaOs stops -- no manual cleanup needed.
+
 ## Stealth / Anti-Detection
 
-The browser node supports configurable settings to reduce bot detection:
+These settings reduce bot detection. Configure them in the node's Advanced section, not as tool arguments.
 
-- **Action Delay**: Set `actionDelay` (ms) in node parameters to add a native wait before each action. Simulates human pacing.
-- **User Agent**: Set `userAgent` to a custom string to override the default Chrome user agent.
-- **Proxy**: Set `proxy` to route all browser traffic through a proxy (e.g. `http://user:pass@host:port`).
-
-These are configured in the node's Advanced section, not as tool arguments.
+- **Action Delay**: Native wait (ms) before each action. Set 500-2000ms for bot-protected sites.
+- **User Agent**: Custom user-agent string to override Chrome default.
+- **Proxy**: Route all browser traffic through a proxy (e.g. `http://user:pass@host:port`).
 
 ## Tips
 
-- Always use `snapshot` first to discover element refs before interacting.
+- Always `snapshot` first to discover `@eN` element refs before interacting.
 - Prefer `@eN` refs over CSS selectors -- they are stable across the session.
 - Use `fill` for form inputs (clears first), `type` for search boxes (keystroke events).
-- Use `screenshot` to visually verify the page state when uncertain.
-- Use `wait` before interacting with elements that load dynamically.
+- Use `screenshot` to visually verify page state when uncertain.
+- Use `wait` before interacting with dynamically loaded elements.
 - Use `eval` sparingly -- prefer snapshot + click/fill for most tasks.
-- Set `actionDelay` to 500-2000ms when interacting with bot-protected sites.
+- Select **Google Chrome** or **Microsoft Edge** in the Browser dropdown to use your real browser with existing logins.

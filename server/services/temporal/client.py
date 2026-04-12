@@ -22,7 +22,6 @@ class TemporalClientWrapper:
         self.namespace = namespace
         self._client: Optional[Client] = None
         self._runtime: Optional[Runtime] = None
-        self._reconnect_task: Optional[asyncio.Task] = None
 
     @property
     def client(self) -> Optional[Client]:
@@ -87,29 +86,8 @@ class TemporalClientWrapper:
         )
         return None
 
-    async def start_background_reconnect(self, interval: float = 30.0) -> None:
-        """Start a background task that periodically tries to reconnect."""
-        if self._reconnect_task is not None:
-            return
-
-        async def _reconnect_loop():
-            while True:
-                await asyncio.sleep(interval)
-                if self._client is not None:
-                    continue
-                logger.info("Attempting Temporal reconnect...")
-                client = await self.connect(retries=1, delay=0)
-                if client:
-                    logger.info("Temporal reconnected successfully")
-                    break
-
-        self._reconnect_task = asyncio.create_task(_reconnect_loop())
-
     async def disconnect(self) -> None:
         """Disconnect from the Temporal server."""
-        if self._reconnect_task is not None:
-            self._reconnect_task.cancel()
-            self._reconnect_task = None
         if self._client is not None:
             self._client = None
             logger.info("Disconnected from Temporal server")

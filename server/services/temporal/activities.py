@@ -175,7 +175,15 @@ class NodeExecutionActivities:
 
         Each call creates a new WebSocket connection from the session's pool,
         avoiding race conditions when multiple activities run concurrently.
+
+        Heartbeats are sent both on incoming non-matching messages AND on a
+        30-second timer. This is critical for long-running nodes (DeepAgent,
+        browser, AI multi-tool) where the backend may be processing internally
+        without broadcasting any WS messages for minutes. Without the periodic
+        timer, the 2-minute heartbeat_timeout would cancel the activity even
+        though the node is actively executing.
         """
+        import asyncio
         import json
         import uuid
 
@@ -205,26 +213,33 @@ class NodeExecutionActivities:
             async with self.session.ws_connect(
                 self.ws_url,
                 heartbeat=30,
-                receive_timeout=540,
+                receive_timeout=None,  # No receive timeout — we handle liveness via heartbeats
             ) as ws:
                 await ws.send_json(message)
 
-                # Wait for response with matching request_id
-                # Heartbeat on every non-matching message to stay alive during
-                # long-running operations (DeepAgent, browser, AI multi-tool loops)
-                async for msg in ws:
+                # Read loop with periodic heartbeat timer.
+                # ws.receive() may block for minutes if the backend is doing
+                # heavy processing without broadcasting. The 30s timeout ensures
+                # we heartbeat at least every 30s regardless of message traffic.
+                while True:
+                    try:
+                        msg = await asyncio.wait_for(ws.receive(), timeout=30.0)
+                    except asyncio.TimeoutError:
+                        # No message in 30s — node is still running, send heartbeat
+                        activity.heartbeat(f"Waiting for {node_id} ({node_type})")
+                        continue
+
                     if msg.type == aiohttp.WSMsgType.TEXT:
                         response = json.loads(msg.data)
                         if response.get("request_id") == request_id:
                             activity.logger.debug(f"Got response for {node_id}: success={response.get('success')}")
                             return response
+                        # Non-matching message (broadcast to other clients) — heartbeat
                         activity.heartbeat(f"Waiting for {node_id}")
                     elif msg.type == aiohttp.WSMsgType.ERROR:
                         raise Exception(f"WebSocket error: {ws.exception()}")
-                    elif msg.type == aiohttp.WSMsgType.CLOSED:
+                    elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.CLOSING):
                         raise Exception("WebSocket closed unexpectedly")
-
-                raise Exception(f"No response for request {request_id}")
 
         except aiohttp.ClientError as e:
             raise Exception(f"WebSocket connection error: {e}")

@@ -57,9 +57,12 @@ class ToolAdapter:
                     executable.append(
                         ToolAdapter._wrap(tool, config, workflow_id, broadcaster)
                     )
+                    logger.info("[DeepAgent] Built tool: %s (node=%s, type=%s)",
+                                tool.name, config.get('node_id'), tool_info.get('node_type'))
             except Exception as e:
                 logger.warning("[DeepAgent] Failed to build tool from %s: %s",
                                tool_info.get("node_type"), e)
+        logger.info("[DeepAgent] %d tool(s) ready", len(executable))
         return executable
 
     @staticmethod
@@ -67,9 +70,15 @@ class ToolAdapter:
         """Replace placeholder func with a real async executor."""
         tool_name = tool.name
         tool_node_id = config.get('node_id')
+        tool_node_type = config.get('node_type', '')
 
         async def _execute(**kwargs) -> Any:
+            import time
             from services.handlers.tools import execute_tool
+
+            logger.info("[DeepAgent] Tool call: %s (type=%s) args=%s",
+                        tool_name, tool_node_type, {k: str(v)[:200] for k, v in kwargs.items()})
+            t0 = time.time()
 
             if tool_node_id and broadcaster:
                 await broadcaster.update_node_status(
@@ -81,15 +90,19 @@ class ToolAdapter:
             cfg = {**config, 'workflow_id': workflow_id}
             try:
                 result = await execute_tool(tool_name, kwargs, cfg)
+                elapsed = time.time() - t0
+                logger.info("[DeepAgent] Tool done: %s (%.2fs) success=%s",
+                            tool_name, elapsed, result.get('success', True) if isinstance(result, dict) else True)
                 if tool_node_id and broadcaster:
                     await broadcaster.update_node_status(
                         tool_node_id, "success",
-                        {"message": f"{tool_name} completed"},
+                        {"message": f"{tool_name} completed ({elapsed:.1f}s)"},
                         workflow_id=workflow_id,
                     )
                 return result
             except Exception as e:
-                logger.error("[DeepAgent] Tool %s failed: %s", tool_name, e)
+                elapsed = time.time() - t0
+                logger.error("[DeepAgent] Tool failed: %s (%.2fs) error=%s", tool_name, elapsed, e)
                 if tool_node_id and broadcaster:
                     await broadcaster.update_node_status(
                         tool_node_id, "error",

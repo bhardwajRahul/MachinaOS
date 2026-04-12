@@ -118,14 +118,14 @@ if (uvVersion) {
   }
 }
 
-// Check/Install temporal-server (global CLI)
-let temporalVersion = getVersion('temporal-server --version');
+// Check/Install temporal-server (global CLI, binary name: temporal)
+let temporalVersion = getVersion('temporal --version');
 if (temporalVersion) {
   console.log(`  temporal-server: ${temporalVersion}`);
 } else {
   console.log('  temporal-server: not found, installing...');
   run('npm install -g temporal-server');
-  temporalVersion = getVersion('temporal-server --version');
+  temporalVersion = getVersion('temporal --version');
   if (temporalVersion) {
     console.log(`  temporal-server: ${temporalVersion}`);
   } else {

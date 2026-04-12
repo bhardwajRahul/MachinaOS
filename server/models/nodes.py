@@ -73,6 +73,22 @@ class ChatAgentParams(BaseNodeParams):
     api_key: Optional[str] = Field(default=None, alias="apiKey")
 
 
+class SpecializedAgentParams(BaseNodeParams):
+    """Parameters for all specialized agent nodes (same structure as AIAgentParams)."""
+    type: Literal[
+        "android_agent", "coding_agent", "web_agent", "task_agent",
+        "social_agent", "travel_agent", "tool_agent", "productivity_agent",
+        "payments_agent", "consumer_agent", "autonomous_agent",
+        "orchestrator_agent", "ai_employee", "rlm_agent", "claude_code_agent",
+        "deep_agent",
+    ]
+    prompt: str = ""
+    provider: str = "openai"
+    model: str = ""
+    system_message: Optional[str] = Field(default="", alias="systemMessage")
+    api_key: Optional[str] = Field(default=None, alias="apiKey")
+
+
 class SimpleMemoryParams(BaseNodeParams):
     """Parameters for simple memory node."""
     type: Literal["simpleMemory"]
@@ -320,7 +336,7 @@ class ChatHistoryParams(BaseNodeParams):
 
 # AI Nodes
 AINodeParams = Annotated[
-    Union[AIChatModelParams, AIAgentParams, ChatAgentParams, SimpleMemoryParams],
+    Union[AIChatModelParams, AIAgentParams, ChatAgentParams, SpecializedAgentParams, SimpleMemoryParams],
     Field(discriminator="type")
 ]
 
@@ -371,7 +387,7 @@ ChatNodeParams = Annotated[
 KnownNodeParams = Annotated[
     Union[
         # AI
-        AIChatModelParams, AIAgentParams, ChatAgentParams, SimpleMemoryParams,
+        AIChatModelParams, AIAgentParams, ChatAgentParams, SpecializedAgentParams, SimpleMemoryParams,
         # Maps
         CreateMapParams, GmapsLocationsParams, GmapsNearbyPlacesParams,
         # WhatsApp

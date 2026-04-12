@@ -114,7 +114,7 @@ function doctor() {
   console.log('  Additional checks:');
   const checks = [
     ['uv', getVersion('uv --version')],
-    ['temporal-server', getVersion('temporal-server --version')],
+    ['temporal-server', getVersion('temporal --version')],
   ];
   for (const [name, ver] of checks) {
     console.log(ver ? `    ${name}: ${ver}` : `    ${name}: Not Found`);

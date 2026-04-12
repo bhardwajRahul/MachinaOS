@@ -66,9 +66,9 @@
     "client:start": "cd client && npm run start",
     "python:start": "cd server && uv run uvicorn main:app --host 127.0.0.1 --port 3010 --log-level warning",
     "python:daemon": "cd server && uv run uvicorn main:app --host 0.0.0.0 --port 3010 --log-level warning",
-    "temporal:start": "temporal-server api",
-    "temporal:stop": "temporal-server stop",
-    "temporal:status": "temporal-server status",
+    "temporal:start": "temporal api",
+    "temporal:stop": "temporal stop",
+    "temporal:status": "temporal status",
     "temporal:worker": "cd server && uv run python -m services.temporal.worker",
     "whatsapp:start": "edgymeow start",
     "whatsapp:stop": "edgymeow stop",
@@ -96,9 +96,9 @@
     "concurrently": "^9.2.1",
     "cross-env": "^7.0.3",
     "rimraf": "^6.0.1",
-    "temporal-server": "^0.0.9",
+    "temporal-server": "^0.0.10",
     "agent-browser": "latest",
-    "edgymeow": "^0.0.19"
+    "edgymeow": "^0.0.18"
   },
   "pnpm": {
     "peerDependencyRules": {

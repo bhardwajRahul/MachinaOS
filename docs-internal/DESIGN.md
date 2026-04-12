@@ -11,6 +11,9 @@ Related docs:
 - [rlm_service.md](rlm_service.md) - Recursive Language Model agent execution
 - [proxy_service.md](proxy_service.md) - residential proxy provider management
 - [workflow-schema.md](workflow-schema.md) - workflow JSON schema and node catalog
+- [current_system_architecture_analysis.md](current_system_architecture_analysis.md) - current frontend, backend, serving, and extension model audit
+- [production_scale_architecture_research.md](production_scale_architecture_research.md) - source-backed research for a 1000+ node production architecture
+- [config_driven_node_platform.md](config_driven_node_platform.md) - target config-driven node and panel platform design
 
 ---
 

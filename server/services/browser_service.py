@@ -87,6 +87,10 @@ class BrowserService:
         headed: bool = False,
         user_agent: Optional[str] = None,
         proxy: Optional[str] = None,
+        executable_path: Optional[str] = None,
+        auto_connect: bool = False,
+        chrome_profile: Optional[str] = None,
+        new_window: bool = False,
     ) -> Dict[str, Any]:
         """Execute an agent-browser command and return parsed JSON output.
 
@@ -101,6 +105,14 @@ class BrowserService:
         ]
         if headed:
             argv.append("--headed")
+        if auto_connect:
+            argv.append("--auto-connect")
+        if executable_path:
+            argv.extend(["--executable-path", executable_path])
+        if new_window:
+            argv.extend(["--args", "--new-window"])
+        if chrome_profile:
+            argv.extend(["--profile", chrome_profile])
         if user_agent:
             argv.extend(["--user-agent", user_agent])
         if proxy:
@@ -193,3 +205,25 @@ def get_browser_service() -> Optional[BrowserService]:
         if cmd:
             _instance = BrowserService(cmd)
     return _instance
+
+
+async def shutdown_browser_service() -> None:
+    """Close all browser sessions via `agent-browser close --all`.
+
+    Called during FastAPI lifespan shutdown. This is the daemon's intended
+    cleanup API -- it stops the background process and releases file locks.
+    """
+    svc = get_browser_service()
+    if not svc:
+        return
+    try:
+        await asyncio.to_thread(
+            subprocess.run,
+            [*svc._prefix, "close", "--all"],
+            timeout=5,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        logger.info("agent-browser daemon shut down")
+    except Exception as e:
+        logger.debug("agent-browser shutdown skipped: %s", e)
