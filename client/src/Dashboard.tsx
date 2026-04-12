@@ -1180,6 +1180,7 @@ const DashboardContent: React.FC = () => {
         {/* Main Content Area */}
         <div style={{
           flex: 1,
+          minHeight: 0, // Allow flex item to shrink below content size
           display: 'flex',
           overflow: 'hidden',
         }}>

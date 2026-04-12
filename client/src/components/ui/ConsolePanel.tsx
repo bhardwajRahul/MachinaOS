@@ -101,7 +101,7 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
       const saved = localStorage.getItem(CONSOLE_HEIGHT_KEY);
       if (saved) {
         const height = parseInt(saved, 10);
-        if (!isNaN(height) && height >= minHeight && height <= maxHeight) {
+        if (!isNaN(height) && height >= minHeight) {
           return height;
         }
       }
@@ -187,7 +187,9 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
 
     const handleMouseMove = (e: MouseEvent) => {
       const delta = resizeStartY.current - e.clientY;
-      const newHeight = Math.min(maxHeight, Math.max(minHeight, resizeStartHeight.current + delta));
+      // Cap at viewport minus toolbar (~48px) and panel header (~42px)
+      const dynamicMax = window.innerHeight - 90;
+      const newHeight = Math.min(dynamicMax, Math.max(minHeight, resizeStartHeight.current + delta));
       setPanelHeight(newHeight);
     };
 
@@ -528,6 +530,7 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
 
   const contentStyle: React.CSSProperties = {
     height: isOpen ? `${panelHeight}px` : '0px',
+    maxHeight: 'calc(100vh - 90px)', // toolbar (~48px) + panel header (~42px)
     overflow: 'hidden',
     backgroundColor: isDarkMode ? theme.dracula.background : theme.colors.background,
     transition: (isResizing || isHorizontalResizing) ? 'none' : 'height 0.2s ease-in-out',
@@ -748,7 +751,17 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
   };
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div
+      style={{ position: 'relative' }}
+      onWheel={e => {
+        // Prevent scroll from propagating to the canvas/page when the cursor
+        // is over the panel header, resize handle, or non-scrollable areas.
+        // Scrollable children (chat messages, console logs) handle their own scroll.
+        const target = e.target as HTMLElement;
+        const scrollable = target.closest('[data-scrollable]');
+        if (!scrollable) e.stopPropagation();
+      }}
+    >
       {/* Prism syntax highlighting styles for JSON */}
       <style>{prismStyles}</style>
 
@@ -845,7 +858,7 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
               </button>
             )}
           </div>
-          <div style={chatMessagesStyle}>
+          <div data-scrollable style={chatMessagesStyle}>
             {(!chatMessages || chatMessages.length === 0) ? (
               <div style={emptyStyle}>
                 Send a message to trigger chatTrigger nodes
@@ -1080,7 +1093,7 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
               )}
             </div>
           </div>
-          <div style={{ flex: 1, overflow: 'auto', fontFamily: theme.fontFamily.mono, fontSize: consoleFontSize }}>
+          <div data-scrollable style={{ flex: 1, overflow: 'auto', fontFamily: theme.fontFamily.mono, fontSize: consoleFontSize }}>
             {consoleTab === 'console' ? (
               // Console Logs Tab
               filteredLogs.length === 0 ? (
