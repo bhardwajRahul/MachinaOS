@@ -39,7 +39,7 @@ _startup_log("Importing settings + logging...")
 from core.config import Settings
 from core.logging import configure_logging, get_logger, setup_websocket_logging, shutdown_websocket_logging
 _startup_log("Importing routers...")
-from routers import workflow, database, maps, nodejs_compat, android, websocket, webhook, auth, twitter, google, credentials
+from routers import workflow, database, maps, nodejs_compat, android, websocket, webhook, auth, twitter, google, credentials, schemas
 _startup_log("All imports complete")
 
 # Initialize settings and logging
@@ -398,6 +398,7 @@ app.include_router(webhook.router)
 app.include_router(twitter.router)  # Twitter/X OAuth routes
 app.include_router(google.router)  # Google Workspace OAuth routes (Gmail, Calendar, Drive, Sheets, Tasks, Contacts)
 app.include_router(credentials.router)  # Credentials panel - lazy per-tile icon endpoint (n8n pattern)
+app.include_router(schemas.router)  # Per-node output schema endpoint (GET /api/schemas/nodes/{type}.json)
 
 
 @app.get("/health")

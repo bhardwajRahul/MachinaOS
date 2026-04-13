@@ -234,6 +234,26 @@ async def handle_get_all_tool_schemas(data: Dict[str, Any], websocket: WebSocket
 
 
 # ============================================================================
+# Node Output Schemas (n8n-style: backend as single source of truth for
+# the drag-drop variable panel's "before first run" fallback shape).
+# See docs-internal/schema_source_of_truth_rfc.md.
+# ============================================================================
+
+
+@ws_handler("node_type")
+async def handle_get_node_output_schema(
+    data: Dict[str, Any], websocket: WebSocket
+) -> Dict[str, Any]:
+    """Return the JSON Schema for a node type's runtime output, or
+    ``{schema: null}`` when no schema is declared. Frontend caches the
+    result per node type in-memory (mirrors n8n's schemaPreview.store)."""
+    from services.node_output_schemas import get_node_output_schema
+
+    schema = get_node_output_schema(data["node_type"])
+    return {"node_type": data["node_type"], "schema": schema}
+
+
+# ============================================================================
 # Credential Registry Handler (Nango-style bulk fetch for 20 -> 5000 providers)
 # ============================================================================
 
@@ -3136,6 +3156,10 @@ MESSAGE_HANDLERS: Dict[str, MessageHandler] = {
     "save_tool_schema": handle_save_tool_schema,
     "delete_tool_schema": handle_delete_tool_schema,
     "get_all_tool_schemas": handle_get_all_tool_schemas,
+
+    # Node output schemas (Pydantic-backed registry; see
+    # docs-internal/schema_source_of_truth_rfc.md).
+    "get_node_output_schema": handle_get_node_output_schema,
 
     # Credential registry (Nango-style bulk catalogue for credentials panel)
     "get_credential_catalogue": handle_get_credential_catalogue,
