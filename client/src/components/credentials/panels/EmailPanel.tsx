@@ -1,73 +1,85 @@
 /**
  * EmailPanel — Himalaya IMAP/SMTP credentials.
  *
- * antd Form with:
- *   - Select (provider preset) + per-provider AUTH_NOTES
- *   - Email/Password inputs with "leave blank to keep existing" hint
- *   - Conditional custom IMAP/SMTP block via Form.useWatch('provider')
- *
- * Credentials stored via saveApiKey/removeApiKey as individual keys.
+ * shadcn Form composition (react-hook-form + zod). Provider preset
+ * (Select), email/password inputs, and a conditional custom IMAP/SMTP
+ * block driven by `watch('provider')`. Each save persists fields via
+ * saveApiKey under stable keys.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { Form, Select, Input, InputNumber } from 'antd';
-import { Loader2 } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
 
+import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useAppTheme } from '../../../hooks/useAppTheme';
 import { useApiKeys } from '../../../hooks/useApiKeys';
 import { StatusCard } from '../primitives';
+import {
+  AUTH_NOTES,
+  PROVIDER_OPTIONS,
+  createEmailFormSchema,
+  type EmailFormValues,
+} from './schemas/email';
 import type { ProviderConfig } from '../types';
 
-const PROVIDER_OPTIONS = [
-  { label: 'Gmail', value: 'gmail' },
-  { label: 'Outlook / Office 365', value: 'outlook' },
-  { label: 'Yahoo Mail', value: 'yahoo' },
-  { label: 'iCloud Mail', value: 'icloud' },
-  { label: 'ProtonMail (Bridge)', value: 'protonmail' },
-  { label: 'Fastmail', value: 'fastmail' },
-  { label: 'Custom / Self-hosted', value: 'custom' },
-];
-
-const AUTH_NOTES: Record<string, string> = {
-  gmail: 'Use an App Password from Google Account > Security > 2-Step Verification.',
-  outlook: 'Use your account password or an App Password.',
-  yahoo: 'Use an App Password from Yahoo Account Security.',
-  icloud: 'Use an App-Specific Password from your Apple ID.',
-  protonmail: 'Requires ProtonMail Bridge running locally (127.0.0.1).',
-  fastmail: 'Use an App Password from Settings > Privacy & Security.',
-  custom: 'Enter credentials for your self-hosted IMAP/SMTP server below.',
+const DEFAULT_VALUES: EmailFormValues = {
+  provider: 'gmail',
+  address: '',
+  password: '',
+  imapHost: '',
+  imapPort: 993,
+  smtpHost: '',
+  smtpPort: 465,
 };
-
-interface EmailForm {
-  provider: string;
-  address: string;
-  password: string;
-  imapHost: string;
-  imapPort: number;
-  smtpHost: string;
-  smtpPort: number;
-}
 
 const EmailPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = ({ config, visible }) => {
   const theme = useAppTheme();
   const { saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey, isConnected } = useApiKeys();
 
-  const [form] = Form.useForm<EmailForm>();
-  const provider = Form.useWatch('provider', form) ?? 'gmail';
   const [stored, setStored] = useState(false);
   const [address, setAddress] = useState('');
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [revealPassword, setRevealPassword] = useState(false);
 
-  // Load credentials on mount
+  // Schema is dependent on `stored` (password becomes optional once a key
+  // is on file). Recreate the resolver when that flips.
+  const schema = useMemo(() => createEmailFormSchema(!stored), [stored]);
+
+  const form = useForm<EmailFormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: DEFAULT_VALUES,
+    mode: 'onSubmit',
+  });
+  const provider = form.watch('provider');
+
+  // Load stored credentials when the panel becomes visible.
   useEffect(() => {
     if (!visible || !isConnected) return;
     let cancelled = false;
     (async () => {
       try {
-        const [provider, addr, hasPassword, imapHost, imapPort, smtpHost, smtpPort] = await Promise.all([
+        const [providerKey, addr, hasPassword, imapHost, imapPort, smtpHost, smtpPort] = await Promise.all([
           getStoredApiKey('email_provider'),
           getStoredApiKey('email_address'),
           hasStoredKey('email_password'),
@@ -77,8 +89,8 @@ const EmailPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = ({ co
           getStoredApiKey('email_smtp_port'),
         ]);
         if (cancelled) return;
-        form.setFieldsValue({
-          provider: provider || 'gmail',
+        form.reset({
+          provider: providerKey || 'gmail',
           address: addr || '',
           password: '',
           imapHost: imapHost || '',
@@ -95,16 +107,7 @@ const EmailPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = ({ co
     return () => { cancelled = true; };
   }, [visible, isConnected]);
 
-  const handleSave = useCallback(async () => {
-    const values = form.getFieldsValue();
-    if (!values.address?.trim()) { setError('Email address is required'); return; }
-    if (!values.password?.trim() && !stored) { setError('Password is required'); return; }
-    if (values.provider === 'custom') {
-      if (!values.imapHost?.trim() || !values.smtpHost?.trim()) {
-        setError('IMAP and SMTP host are required for custom provider');
-        return;
-      }
-    }
+  const onSubmit = async (values: EmailFormValues) => {
     setLoading('save');
     setError(null);
     try {
@@ -112,22 +115,22 @@ const EmailPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = ({ co
       await saveApiKey('email_address', values.address.trim());
       if (values.password?.trim()) await saveApiKey('email_password', values.password.trim());
       if (values.provider === 'custom') {
-        await saveApiKey('email_imap_host', values.imapHost.trim());
-        await saveApiKey('email_imap_port', String(values.imapPort));
-        await saveApiKey('email_smtp_host', values.smtpHost.trim());
-        await saveApiKey('email_smtp_port', String(values.smtpPort));
+        if (values.imapHost) await saveApiKey('email_imap_host', values.imapHost.trim());
+        if (values.imapPort != null) await saveApiKey('email_imap_port', String(values.imapPort));
+        if (values.smtpHost) await saveApiKey('email_smtp_host', values.smtpHost.trim());
+        if (values.smtpPort != null) await saveApiKey('email_smtp_port', String(values.smtpPort));
       }
       setStored(true);
       setAddress(values.address.trim());
-      form.setFieldValue('password', '');
+      form.setValue('password', '');
     } catch (err: any) {
       setError(err.message || 'Failed to save email credentials');
     } finally {
       setLoading(null);
     }
-  }, [form, stored, saveApiKey]);
+  };
 
-  const handleRemove = useCallback(async () => {
+  const handleRemove = async () => {
     setLoading('remove');
     setError(null);
     try {
@@ -142,86 +145,184 @@ const EmailPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = ({ co
       ]);
       setStored(false);
       setAddress('');
-      form.resetFields();
+      form.reset(DEFAULT_VALUES);
     } catch (err: any) {
       setError(err.message || 'Failed to remove credentials');
     } finally {
       setLoading(null);
     }
-  }, [form, removeApiKey]);
+  };
 
   const iconSize = parseInt(theme.iconSize.md);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 p-5">
-      <StatusCard icon={<config.icon size={iconSize} />} title={config.name} status={{ stored, address }}
+      <StatusCard
+        icon={<config.icon size={iconSize} />}
+        title={config.name}
+        status={{ stored, address }}
         rows={[
-          { label: 'Status', ok: s => s.stored, trueText: 'Configured', falseText: 'Not configured' },
-          ...(stored && address ? [{
-            label: 'Account',
-            ok: () => true,
-            trueText: address,
-            falseText: '',
-          }] : []),
-        ]} />
+          { label: 'Status', ok: (s) => s.stored, trueText: 'Configured', falseText: 'Not configured' },
+          ...(stored && address
+            ? [{ label: 'Account', ok: () => true, trueText: address, falseText: '' }]
+            : []),
+        ]}
+      />
 
-      <Form form={form} layout="vertical" size="middle" initialValues={{ provider: 'gmail', imapPort: 993, smtpPort: 465 }}>
-        <Form.Item label="Provider" name="provider">
-          <Select options={PROVIDER_OPTIONS} />
-        </Form.Item>
+      <Form {...form}>
+        <form id="email-form" onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
+          <FormField
+            control={form.control}
+            name="provider"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Provider</FormLabel>
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose a provider" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {PROVIDER_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-        <Form.Item label="Email Address" name="address" rules={[{ required: true, message: 'Email address is required' }]}>
-          <Input placeholder="you@example.com" />
-        </Form.Item>
+          <FormField
+            control={form.control}
+            name="address"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Email Address</FormLabel>
+                <FormControl>
+                  <Input placeholder="you@example.com" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-        <Form.Item
-          label={
-            <span className="flex items-center gap-2">
-              Password
-              {stored && (
-                <span className="text-xs font-normal text-muted-foreground">
-                  (leave blank to keep existing)
-                </span>
-              )}
-            </span>
-          }
-          name="password"
-          extra={AUTH_NOTES[provider]}
-        >
-          <Input.Password placeholder={stored ? '••••••••' : 'App password or account password'} style={{ fontFamily: 'monospace' }} />
-        </Form.Item>
+          <FormField
+            control={form.control}
+            name="password"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="flex items-center gap-2">
+                  Password
+                  {stored && (
+                    <span className="text-xs font-normal text-muted-foreground">
+                      (leave blank to keep existing)
+                    </span>
+                  )}
+                </FormLabel>
+                <FormControl>
+                  <div className="relative">
+                    <Input
+                      type={revealPassword ? 'text' : 'password'}
+                      placeholder={stored ? '••••••••' : 'App password or account password'}
+                      className="font-mono pr-9"
+                      {...field}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setRevealPassword((v) => !v)}
+                      className="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      aria-label={revealPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {revealPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </FormControl>
+                <FormDescription>{AUTH_NOTES[provider]}</FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-        <Form.Item shouldUpdate={(p, c) => p.provider !== c.provider} noStyle>
-          {({ getFieldValue }) => getFieldValue('provider') === 'custom' && (
-            <div style={{
-              padding: theme.spacing.md,
-              marginBottom: theme.spacing.lg,
-              border: `1px solid ${theme.colors.border}`,
-              borderRadius: theme.borderRadius.md,
-              backgroundColor: theme.colors.backgroundAlt,
-            }}>
-              <div style={{ fontSize: theme.fontSize.sm, fontWeight: theme.fontWeight.medium, color: theme.colors.text, marginBottom: theme.spacing.md }}>
-                Custom IMAP / SMTP
-              </div>
+          {provider === 'custom' && (
+            <div className="rounded-md border border-border bg-muted p-3">
+              <div className="mb-3 text-sm font-medium">Custom IMAP / SMTP</div>
               <div className="flex gap-3">
-                <Form.Item label="IMAP Host" name="imapHost" style={{ flex: 2 }}>
-                  <Input placeholder="imap.example.com" />
-                </Form.Item>
-                <Form.Item label="IMAP Port" name="imapPort" style={{ flex: 1 }}>
-                  <InputNumber min={1} max={65535} style={{ width: '100%' }} />
-                </Form.Item>
+                <FormField
+                  control={form.control}
+                  name="imapHost"
+                  render={({ field }) => (
+                    <FormItem className="flex-[2]">
+                      <FormLabel>IMAP Host</FormLabel>
+                      <FormControl>
+                        <Input placeholder="imap.example.com" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="imapPort"
+                  render={({ field }) => (
+                    <FormItem className="flex-1">
+                      <FormLabel>IMAP Port</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={65535}
+                          {...field}
+                          value={field.value ?? ''}
+                          onChange={(e) => field.onChange(e.target.value === '' ? undefined : Number(e.target.value))}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
-              <div className="flex gap-3">
-                <Form.Item label="SMTP Host" name="smtpHost" style={{ flex: 2 }}>
-                  <Input placeholder="smtp.example.com" />
-                </Form.Item>
-                <Form.Item label="SMTP Port" name="smtpPort" style={{ flex: 1 }}>
-                  <InputNumber min={1} max={65535} style={{ width: '100%' }} />
-                </Form.Item>
+              <div className="mt-3 flex gap-3">
+                <FormField
+                  control={form.control}
+                  name="smtpHost"
+                  render={({ field }) => (
+                    <FormItem className="flex-[2]">
+                      <FormLabel>SMTP Host</FormLabel>
+                      <FormControl>
+                        <Input placeholder="smtp.example.com" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="smtpPort"
+                  render={({ field }) => (
+                    <FormItem className="flex-1">
+                      <FormLabel>SMTP Port</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={65535}
+                          {...field}
+                          value={field.value ?? ''}
+                          onChange={(e) => field.onChange(e.target.value === '' ? undefined : Number(e.target.value))}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
             </div>
           )}
-        </Form.Item>
+        </form>
       </Form>
 
       {error && (
@@ -234,8 +335,9 @@ const EmailPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = ({ co
 
       <div className="flex justify-center gap-2 border-t border-border pt-3">
         <Button
+          type="submit"
+          form="email-form"
           variant="outline"
-          onClick={handleSave}
           disabled={loading === 'save'}
           style={{
             backgroundColor: `${theme.dracula.green}25`,
@@ -248,6 +350,7 @@ const EmailPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = ({ co
         </Button>
         {stored && (
           <Button
+            type="button"
             variant="outline"
             onClick={handleRemove}
             disabled={loading === 'remove'}
