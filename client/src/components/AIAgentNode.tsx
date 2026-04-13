@@ -8,17 +8,19 @@ import { useNodeStatus } from '../contexts/WebSocketContext';
 import { dracula } from '../styles/theme';
 import { ClaudeIcon } from './icons/AIProviderIcons';
 
-// LangGraph phase icons and labels
+// LangGraph phase icons and labels. Colors reference the dracula token
+// constants so a future palette change in tokens.css propagates without
+// editing each phase entry.
 const PHASE_CONFIG: Record<string, { icon: string; label: string; color: string }> = {
-  initializing: { icon: '⚡', label: 'Initializing', color: '#8be9fd' },
-  loading_memory: { icon: '💾', label: 'Loading Memory', color: '#bd93f9' },
-  memory_loaded: { icon: '✓', label: 'Memory Ready', color: '#50fa7b' },
-  building_tools: { icon: '🔧', label: 'Building Tools', color: '#ffb86c' },
-  building_graph: { icon: '🔗', label: 'Building Graph', color: '#ffb86c' },
-  invoking_llm: { icon: '🧠', label: 'Thinking...', color: '#ff79c6' },
-  executing_tool: { icon: '⚡', label: 'Using Tool', color: '#ff79c6' },
-  tool_completed: { icon: '✓', label: 'Tool Done', color: '#50fa7b' },
-  saving_memory: { icon: '💾', label: 'Saving Memory', color: '#bd93f9' },
+  initializing: { icon: '⚡', label: 'Initializing', color: dracula.cyan },
+  loading_memory: { icon: '💾', label: 'Loading Memory', color: dracula.purple },
+  memory_loaded: { icon: '✓', label: 'Memory Ready', color: dracula.green },
+  building_tools: { icon: '🔧', label: 'Building Tools', color: dracula.orange },
+  building_graph: { icon: '🔗', label: 'Building Graph', color: dracula.orange },
+  invoking_llm: { icon: '🧠', label: 'Thinking...', color: dracula.pink },
+  executing_tool: { icon: '⚡', label: 'Using Tool', color: dracula.pink },
+  tool_completed: { icon: '✓', label: 'Tool Done', color: dracula.green },
+  saving_memory: { icon: '💾', label: 'Saving Memory', color: dracula.purple },
 };
 
 // Theme color keys for accent colors

@@ -1,4 +1,23 @@
 // Unified theme system - consolidated design tokens and component styles
+//
+// PHASE-OUT NOTICE (Phase 3 of docs-internal/ui_migration_plan.md):
+// The single source of truth for color tokens is the :root / .dark
+// blocks in client/src/index.css. New components SHOULD prefer Tailwind
+// utility classes (e.g. `bg-dracula-green`, `text-foreground`,
+// `bg-dracula-orange/15`) over reading these TS exports.
+//
+// Migration cheatsheet:
+//   theme.dracula.green                 -> className="text-dracula-green"
+//   { backgroundColor: theme.dracula.X } -> className="bg-dracula-X"
+//   { color: theme.colors.text }         -> className="text-foreground"
+//   { backgroundColor: theme.colors.X }  -> className="bg-{token}"
+//   theme.dracula.X + '25'               -> className="bg-dracula-X/15"
+//
+// The `dracula` and `solarized` constants stay for cases a Tailwind
+// class can't express (SVG `fill=`, react-flow JS edge styles, prismjs
+// token CSS strings). Spacing / fontSize / fontWeight / nodeSize /
+// iconSize / buttonSize / layout / transitions / constants stay too —
+// they are not color tokens.
 
 // ============================================================================
 // DRACULA COLOR PALETTE (vibrant action colors + dark theme backgrounds)
