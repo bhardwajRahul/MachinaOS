@@ -45,6 +45,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { skillNodes, SKILL_NODE_TYPES } from '../../nodeDefinitions/skillNodes';
@@ -154,8 +155,27 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
   const hasFetchedFolders = useRef(false);
   const editorWrapperRef = useRef<HTMLDivElement>(null);
 
-  // User skills from database
-  const [userSkills, setUserSkills] = useState<UserSkill[]>([]);
+  // User skills from database — TanStack Query owns the cache + refetch
+  // orchestration; save/delete mutations invalidate this key so the list
+  // re-syncs without manual fetchUserSkills() calls scattered through the
+  // handlers. Inline hook because there's exactly one consumer (here).
+  const queryClient = useQueryClient();
+  const userSkillsQuery = useQuery<UserSkill[], Error>({
+    queryKey: ['userSkills'],
+    queryFn: async () => {
+      const response = await sendRequest<{ skills: UserSkill[]; count: number }>(
+        'get_user_skills',
+        { active_only: false },
+      );
+      return response?.skills ?? [];
+    },
+    staleTime: 60_000,
+  });
+  const userSkills = userSkillsQuery.data ?? [];
+  const invalidateUserSkills = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: ['userSkills'] }),
+    [queryClient],
+  );
 
   // Inline editing state (no modal)
   const [isCreatingNew, setIsCreatingNew] = useState(false);
@@ -203,21 +223,8 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
     fetchFolders();
   }, [sendRequest]);
 
-  // Fetch user-created skills from database
-  const fetchUserSkills = useCallback(async () => {
-    try {
-      const response = await sendRequest<{ skills: UserSkill[]; count: number }>('get_user_skills', { active_only: false });
-      if (response?.skills) {
-        setUserSkills(response.skills);
-      }
-    } catch (error) {
-      console.error('[MasterSkillEditor] Failed to fetch user skills:', error);
-    }
-  }, [sendRequest]);
-
-  useEffect(() => {
-    fetchUserSkills();
-  }, [fetchUserSkills]);
+  // (User skills now come from userSkillsQuery above. Save / delete flows
+  // below call invalidateUserSkills() to trigger a refetch.)
 
   // Fetch skills from folder when skillFolder is set
   useEffect(() => {
@@ -525,7 +532,7 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
 
       if (result.skill || result.success) {
         toast.success(isCreatingNew ? 'Skill created' : 'Skill saved');
-        await fetchUserSkills();
+        await invalidateUserSkills();
 
         if (isCreatingNew) {
           // Add to config as enabled
@@ -545,7 +552,7 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
     } finally {
       setSavingSkill(false);
     }
-  }, [pendingSkillData, isCreatingNew, skillFolder, sendRequest, fetchUserSkills, skillsConfig, onConfigChange]);
+  }, [pendingSkillData, isCreatingNew, skillFolder, sendRequest, invalidateUserSkills, skillsConfig, onConfigChange]);
 
   // Delete user skill
   const handleDeleteSkill = useCallback(async (skillName: string) => {
@@ -572,14 +579,14 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
           setPendingSkillData(null);
         }
         // Refresh user skills list from database
-        await fetchUserSkills();
+        await invalidateUserSkills();
       } else {
         toast.error(result.error || 'Failed to delete skill');
       }
     } catch (err: any) {
       toast.error(err.message || 'Failed to delete skill');
     }
-  }, [sendRequest, fetchUserSkills, skillsConfig, onConfigChange, selectedSkillName, nodeId, skillFolder]);
+  }, [sendRequest, invalidateUserSkills, skillsConfig, onConfigChange, selectedSkillName, nodeId, skillFolder]);
 
   const selectedSkillInfo = availableSkills.find(s => s.skillName === selectedSkillName);
   const selectedSkillConfig = selectedSkillName ? skillsConfig[selectedSkillName] : undefined;
