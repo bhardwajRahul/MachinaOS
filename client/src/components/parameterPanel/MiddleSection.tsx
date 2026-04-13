@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Collapse, Progress, Statistic, Spin, Row, Col, Typography, InputNumber, Button } from 'antd';
-import { toast } from '../../design-system';
+import { toast } from 'sonner';
 import { ThunderboltOutlined, EditOutlined, SaveOutlined } from '@ant-design/icons';
 import ParameterRenderer from '../ParameterRenderer';
 import ToolSchemaEditor from './ToolSchemaEditor';

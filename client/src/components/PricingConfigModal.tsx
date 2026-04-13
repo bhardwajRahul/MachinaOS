@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button, Tabs, InputNumber, Collapse, Spin } from 'antd';
-import { toast } from '../design-system';
+import { toast } from 'sonner';
 import {
   SaveOutlined,
   ReloadOutlined,

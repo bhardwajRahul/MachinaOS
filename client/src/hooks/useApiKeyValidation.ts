@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { toast } from '../design-system';
+import { toast } from 'sonner';
 import { useApiKeys } from './useApiKeys';
 
 export type ValidationStatus = 'idle' | 'validating' | 'valid' | 'invalid';

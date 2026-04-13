@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Switch, InputNumber, Slider, Button } from 'antd';
-import { toast } from '../../design-system';
+import { toast } from 'sonner';
 import { QuestionCircleOutlined } from '@ant-design/icons';
 import Modal from './Modal';
 import { useAppTheme } from '../../hooks/useAppTheme';

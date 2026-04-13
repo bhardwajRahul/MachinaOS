@@ -12,7 +12,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Input, Select, Checkbox, Button, Spin, List, Badge, Empty, Tooltip, Alert, Popconfirm } from 'antd';
-import { toast } from '../../design-system';
+import { toast } from 'sonner';
 import { SearchOutlined, ReloadOutlined, InfoCircleOutlined, FolderOutlined, PlusOutlined, DeleteOutlined, SaveOutlined, CloseOutlined } from '@ant-design/icons';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { useWebSocket } from '../../contexts/WebSocketContext';

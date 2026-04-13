@@ -80,6 +80,11 @@ export default defineConfig(({ mode }) => {
       'import.meta.env.VITE_WHATSAPP_SERVICE_URL': JSON.stringify(getEnv('VITE_WHATSAPP_SERVICE_URL', '')),
       'import.meta.env.VITE_ANDROID_RELAY_URL': JSON.stringify(getEnv('VITE_ANDROID_RELAY_URL', '')),
     },
+    resolve: {
+      alias: {
+        '@': resolve(process.cwd(), 'src'),
+      },
+    },
     server: {
       port: parseInt(getEnv('VITE_CLIENT_PORT', '3000')),
       strictPort: false,

@@ -1,226 +1,220 @@
-# Frontend UI Stack Migration — antd → shadcn/ui + Base UI + Tailwind 4
+# Frontend UI Stack Migration — antd → shadcn/ui (canonical, no custom wrappers)
 
 ## Context
 
-The MachinaOs frontend is coupled to Ant Design (40 files, 187-line theme file, `ConfigProvider` at root). Session docs — [frontend_ui_stack_recommendation.md](./frontend_ui_stack_recommendation.md), [frontend_system_design_rfc.md](./frontend_system_design_rfc.md), [frontend_ui_framework_research.md](./frontend_ui_framework_research.md) — prescribe moving to shadcn/ui (ownership model) + Base UI / Radix primitives + React Aria (surgical a11y) + Tailwind 4 + JSON Forms for a schema-driven inspector.
+The MachinaOs frontend is coupled to Ant Design (40 files, 187-line theme file, `ConfigProvider` at root). Session docs — [frontend_ui_stack_recommendation.md](./frontend_ui_stack_recommendation.md), [frontend_system_design_rfc.md](./frontend_system_design_rfc.md), [frontend_ui_framework_research.md](./frontend_ui_framework_research.md) — prescribe shadcn/ui (canonical components copied via CLI registry) + Radix primitives + Tailwind 4 + JSON Forms for a schema-driven inspector. Phase 0/1 commits (`2209dba`, `7ac69fe`) included hand-written primitives and a toast facade — those get **deleted** as part of corrected Phase 0.
 
-Motivation: antd's enterprise chrome blocks distinctive product UI; per-node-type branching in `ParameterRenderer.tsx` doesn't scale; the frontend should be a schema consumer of backend `NodeSpec`. The credentials subsystem is the documented exemplar.
+**Outcome:** every component used in the app comes from `shadcn add` or is a raw HTML element with Tailwind utilities. No owned layout wrappers. No facade layers. Adapters only where the library API genuinely doesn't fit (e.g., custom JSON Forms renderers in Phase 6 — because no library knows about MachinaOs's node-parameter shapes).
 
-Intended outcome: each phase ships independently, app stays green throughout, final state removes antd + styled-components, bundle shrinks ~200-400 KB gzipped, inspector becomes spec-driven.
+## Principles
+
+1. **Use the registry.** `npx shadcn@latest add <component>` for every shadcn primitive. Never re-implement what it ships.
+2. **No owned layout wrappers.** Tailwind utility classes are the API. `<div className="flex flex-col gap-3">` is the answer, not `<Stack gap="3">`.
+3. **No facade layers.** `import { toast } from 'sonner'` directly at call sites. No `lib/toast.ts` wrapper preserving antd's call shape.
+4. **Library defaults beat invented abstractions.** Use shadcn's `Form` composition with `react-hook-form` + `zod` exactly as the docs show. Use `@jsonforms/react`'s built-in renderer registry, don't invent another.
+5. **Tokens are owned.** CSS vars are the one thing shadcn doesn't ship — they're our palette (Solarized + Dracula). One CSS file (`tokens.css`), exported as HSL triplets so Tailwind alpha composition works.
+6. **Each phase ships independently.** App stays green; antd coexists until Phase 7.
 
 ## Codebase facts (from audit, 2026-04-13)
 
-- **antd usage:** 40 files. Top components by import count: `Space` (20), `Button` (16), `Flex` (13), `Tag` (11), `Spin` (10), `Alert` (10), `Typography` (9), `InputNumber` (7), `Collapse` (7), `Input` (6), `Card` (6), `Form` (5), `Statistic` (4), `Select` (4), `Switch` (3)
-- **ConfigProvider:** only in [client/src/App.tsx](../client/src/App.tsx); theme config in [client/src/config/antdTheme.ts](../client/src/config/antdTheme.ts) mirrors [client/src/styles/theme.ts](../client/src/styles/theme.ts)
-- **Already installed:** Tailwind 4.1.13, `@radix-ui/react-dialog`, `@radix-ui/react-collapsible`, `react-hook-form`, `babel-plugin-react-compiler@19.1.0-rc.3` (scoped to `components/credentials/` in [client/vite.config.js](../client/vite.config.js)), `@uiw/react-json-view`
-- **styled-components:** exactly 1 file — [client/src/components/shared/JSONTreeRenderer.tsx](../client/src/components/shared/JSONTreeRenderer.tsx)
-- **Imperative antd APIs:** 26 calls to `message.*` / `notification.*` across 6 files (`MasterSkillEditor`, `MiddleSection`, `PricingConfigModal`, `SettingsPanel`, `useApiKeyValidation`, `formatters`)
-- **antd Form:** 7 files, mostly under `components/credentials/panels/` + `sections/`
-- **Existing Radix primitive:** [client/src/components/ui/Modal.tsx](../client/src/components/ui/Modal.tsx) already uses `@radix-ui/react-dialog`
-- **Exemplar subsystem (credentials):**
-  - Zustand (UI-only): [useCredentialRegistry.ts](../client/src/store/useCredentialRegistry.ts)
-  - TanStack Query + `idb-keyval` warm-start: [useCatalogueQuery.ts](../client/src/hooks/useCatalogueQuery.ts)
-  - Server JSON hydration: [catalogueAdapter.ts](../client/src/components/credentials/catalogueAdapter.ts)
-  - Backend endpoint: `get_credential_catalogue` in [server/routers/websocket.py](../server/routers/websocket.py)
-- **No NodeSpec contract on frontend today.** `nodeDefinitions/*` are static TS modules.
+- **antd usage:** 40 files. Top imports: `Space` (20), `Button` (16), `Flex` (13), `Tag` (11), `Spin` (10), `Alert` (10), `Typography` (9), `InputNumber` (7), `Collapse` (7), `Input` (6), `Card` (6), `Form` (5), `Statistic` (4), `Select` (4), `Switch` (3).
+- **ConfigProvider:** only in [client/src/App.tsx](../client/src/App.tsx); theme in [client/src/config/antdTheme.ts](../client/src/config/antdTheme.ts) mirrors [client/src/styles/theme.ts](../client/src/styles/theme.ts).
+- **Already installed:** Tailwind 4.1.13, `@radix-ui/react-dialog`, `@radix-ui/react-collapsible`, `react-hook-form`, `babel-plugin-react-compiler@19.1.0-rc.3` (scoped to `components/credentials/`), `@uiw/react-json-view`, `class-variance-authority`, `clsx`, `tailwind-merge`, `@radix-ui/react-slot`, `sonner`.
+- **styled-components:** exactly 1 file — [client/src/components/shared/JSONTreeRenderer.tsx](../client/src/components/shared/JSONTreeRenderer.tsx).
+- **Hand-written code to be deleted in corrected Phase 0:** `client/src/design-system/primitives/*` (8 files) and `client/src/design-system/lib/toast.ts` (introduced by commits `2209dba` and `7ac69fe` — the previous mistake).
+- **Imperative antd APIs:** 21 call sites already moved from `message.*`/`notification.*` to a `toast` adapter — they get **re-pointed at `sonner` directly**.
+- **antd Form:** 7 files, mostly under `components/credentials/panels/` + `sections/`.
+- **No NodeSpec contract on frontend today.**
 - **No test runner, no Storybook.**
 
 ## Phases
 
-Each phase is independently shippable. Dependency order: 0 → {1, 2, 3} parallelizable → 4 → 5 → 7; 6 can overlap 5 if staffed separately.
+Dependency order: 0 → {1, 2, 3} parallelizable → 4 → 5 → 7; 6 can overlap 5 if staffed separately.
 
 ---
 
-### Phase 0 — Design-system foundation
+### Phase 0 — Tokens + shadcn bootstrap
 
-**Goal:** owned tokens + core primitives. Nothing removed yet. Blocks everything else.
+**Goal:** delete the hand-written primitives and the toast facade. Bootstrap shadcn properly via the CLI. Tokens stay (they're ours).
 
-**New directory:** `client/src/design-system/`
+**Steps:**
 
-- `tokens/{colors,radius,spacing,typography,motion,elevation}.css` — CSS custom props lifted from [client/src/styles/theme.ts](../client/src/styles/theme.ts) as HSL triplets (no `hsl()` wrapper → Tailwind alpha composition works).
-- `tokens/index.css` — imports + `[data-theme="dark"]` override block.
-- `lib/cn.ts` — `clsx` + `tailwind-merge` helper.
-- `primitives/{Button,Badge,Stack,Inline,Spinner,Alert,Text,Heading}.tsx` — shadcn-style for `Button`/`Badge`/`Alert`; owned thin wrappers for `Stack`/`Inline`/`Spinner`/`Text`/`Heading`.
-- `index.ts` — barrel.
+1. **Path alias.** Add `@/* → src/*` to [client/tsconfig.json](../client/tsconfig.json) (`baseUrl` + `paths`) and [client/vite.config.js](../client/vite.config.js) (`resolve.alias`). shadcn requires this.
+2. **Consolidate tokens to one file.** Collapse `client/src/design-system/tokens/{colors,radius,spacing,typography,motion,elevation}.css` into a single `client/src/design-system/tokens.css` (keep the same vars; just one file). Update the import in `client/src/main.tsx`.
+3. **Delete owned primitives.** Remove `client/src/design-system/primitives/` (8 files) and `client/src/design-system/lib/toast.ts`. Keep `lib/cn.ts` (shadcn convention).
+4. **Run `npx shadcn@latest init` interactively.** Accept its `components.json`; aim for `aliases.ui = "@/design-system/ui"`, `aliases.utils = "@/design-system/lib/cn"`. Reconcile any rewrites against our token names.
+5. **Add the components we'll need across all phases in one shot:**
+   ```
+   npx shadcn@latest add button badge alert card sonner \
+     dialog collapsible popover tooltip dropdown-menu tabs \
+     select switch input label form
+   ```
+6. **Re-point Phase 1's call sites.** The 21 sites currently importing `toast` from the deleted facade now import directly from `sonner`. The shadcn-generated `<Toaster />` lives at `client/src/design-system/ui/sonner.tsx`; mount it in `App.tsx`.
+7. **No new owned files** beyond `tokens.css`, `lib/cn.ts`, and shadcn-generated `ui/*.tsx`.
 
-**Modified files:**
-- [client/tailwind.config.js](../client/tailwind.config.js) — point the existing `hsl(var(--...))` scaffolding at the new token names.
-- `client/src/main.tsx` — `import '@/design-system/tokens/index.css'` before antd stylesheet.
+**Tailwind config:** keep our semantic mappings (`bg`, `fg`, `border`, `primary`, `success`, `warning`, `danger`, `info`, `accent`, `dracula.*`) pointing at our CSS vars. Reconcile with whatever `shadcn init` writes — keep ours where they conflict; we own the palette.
 
-**Deps to add:** `class-variance-authority@^0.7.1`, `clsx@^2.1.1`, `tailwind-merge@^2.5.4`, `@radix-ui/react-slot@^1.1.0`
+**What we explicitly do NOT build:**
+- No `Stack` / `Inline` / `Flex` wrapper. Use `<div className="flex ...">`.
+- No `Text` / `Heading` wrapper. Use `<h2 className="text-xl font-semibold">` etc.
+- No `Spinner`. Use `<Loader2 className="h-4 w-4 animate-spin" />` from `lucide-react` (installed by shadcn).
+- No `toast` facade. `import { toast } from 'sonner'` at call sites.
 
-**Verification:** temporary `/design-system` dev route renders every primitive in both themes; `pnpm build` green; no user-visible app change.
+**Verification:** `pnpm exec tsc --noEmit` green; `pnpm build` green; manually open one screen, confirm theme tokens render, confirm a `sonner` toast fires.
 
-**Effort:** 3-4 days.
-
----
-
-### Phase 1 — Toasts (antd `message` / `notification` → `sonner`)
-
-**Goal:** atomic swap of 26 call-sites across 6 files.
-
-- New: `client/src/design-system/primitives/Toaster.tsx` + `lib/toast.ts` (thin adapter preserving `toast.success/error/info/warning/loading/promise` signatures close to antd's).
-- Modify [client/src/App.tsx](../client/src/App.tsx) — mount `<Toaster />` alongside (not replacing) `ConfigProvider`.
-- Grep replace in: `MasterSkillEditor.tsx`, `MiddleSection.tsx`, `PricingConfigModal.tsx`, `SettingsPanel.tsx`, `hooks/useApiKeyValidation.ts`, `utils/formatters.ts`.
-
-**Deps to add:** `sonner@^1.7.1`
-
-**Verification:** trigger each call-site manually; grep confirms zero `message|notification` imports from `'antd'`.
-
-**Effort:** 0.5-1 day. Independent of all other phases.
+**Effort:** 0.5 day.
 
 ---
 
-### Phase 2 — Visual primitives (`Tag`, `Space`, `Flex`, `Spin`, `Alert`, `Typography`)
+### Phase 1 — Toast direct imports (re-point existing call sites)
 
-**Goal:** replace ~73 pure-presentational call-sites. Zero behavior changes.
+**Goal:** the 21 sites already moved to the `toast` adapter in commit `7ac69fe` get repointed at `sonner` directly. No facade.
 
-Sub-PRs (one per primitive):
-- **2a `Tag` → `Badge`** — map antd `color` prop: `red→danger`, `green→success`, `gold|orange→warning`, `blue|cyan→info`, `purple|magenta→secondary`.
-- **2b `Space` / `Flex` → `Stack` / `Inline`** — `<Space size="middle">` → `<Inline gap="3">`; `direction="vertical"` → `<Stack>`.
-- **2c `Spin` → `Spinner` / `SpinnerOverlay`** — build `SpinnerOverlay` for the `<Spin spinning>{children}</Spin>` idiom.
-- **2d `Alert` → `Alert`** — map `type` to variant; `message` → children; `description` → secondary slot.
-- **2e `Typography`** — `Title level` → `<Heading level>`; `Text type="secondary"` → `<Text muted>`.
+- Replace `import { toast } from '../design-system'` with `import { toast } from 'sonner'`.
+- API is identical for `success`/`error`/`warning`/`info`/`loading`. Callers passing `{ description }` already work — that's sonner's native shape.
 
-**Impact:** `components/shared/*`, `components/credentials/panels/*`, [OutputPanel.tsx](../client/src/components/output/OutputPanel.tsx) (already uses `Flex`/`Tag`/`Space`), inspector panels.
+**Files:** `hooks/useApiKeyValidation.ts`, `utils/formatters.ts`, `components/ui/SettingsPanel.tsx`, `components/PricingConfigModal.tsx`, `components/parameterPanel/MiddleSection.tsx`, `components/parameterPanel/MasterSkillEditor.tsx`.
 
-**Verification:** smoke-test every route/panel; grep confirms zero hits for the 6 component names from `'antd'`.
+**Verification:** trigger each toast manually; grep `from '@/design-system'.*toast` returns zero.
+
+**Effort:** 30 min.
+
+---
+
+### Phase 2 — Replace antd visual chrome (Tag, Space, Flex, Spin, Alert, Typography)
+
+**Goal:** ~73 call sites swapped to shadcn `Badge`/`Alert` and raw Tailwind utilities. Zero behavior changes.
+
+- **`Tag` → `<Badge variant>`** from shadcn. Map antd `color` to variant: `red→destructive`, `green→default with success class via cva extension`, `blue|cyan→secondary`, `purple|magenta→outline`. Extend the generated `badge.tsx` directly if shadcn's stock variants aren't enough.
+- **`Space` / `Flex` → raw Tailwind.** `<Space size="middle">` becomes `<div className="flex items-center gap-2">`. `direction="vertical"` → `flex-col`. No wrapper component.
+- **`Spin` → `<Loader2 className="h-4 w-4 animate-spin" />`** from `lucide-react`. The `<Spin spinning>{children}</Spin>` overlay idiom becomes a 4-line inline `<div className="relative">` + conditional overlay.
+- **`Alert` → shadcn `<Alert>`** with `<AlertTitle>` + `<AlertDescription>`.
+- **`Typography.Title` → raw `<h1>`-`<h5>`** with Tailwind classes. `Typography.Text type="secondary"` → `<span className="text-fg-muted">`.
+
+**Verification:** smoke-test every screen; grep confirms zero `from 'antd'` imports for these 6 components.
 
 **Effort:** 2-3 days.
 
 ---
 
-### Phase 3 — Overlays & disclosure (`Modal`, `Collapse`, `Popover`, `Tooltip`, `Dropdown`, `Tabs`)
+### Phase 3 — Replace overlays (Modal, Collapse, Popover, Tooltip, Dropdown, Tabs)
 
-**Goal:** extend the existing Radix pattern from [client/src/components/ui/Modal.tsx](../client/src/components/ui/Modal.tsx).
+**Goal:** swap to shadcn equivalents (all generated in Phase 0).
 
-- New primitives under `client/src/design-system/primitives/`:
-  - `Dialog.tsx` — absorb existing `Modal` behind same public API
-  - `Collapsible.tsx` — replaces 7 antd `Collapse` sites incl. `OutputPanel`
-  - `Popover.tsx`, `Tooltip.tsx`, `DropdownMenu.tsx`, `Tabs.tsx`
-- Eventually redirect imports from [Modal.tsx](../client/src/components/ui/Modal.tsx) and delete.
-
-**Deps to add:** `@radix-ui/react-popover@^1.1.2`, `@radix-ui/react-tooltip@^1.1.4`, `@radix-ui/react-dropdown-menu@^2.1.2`, `@radix-ui/react-tabs@^1.1.1`
+- **antd `Modal` / existing `client/src/components/ui/Modal.tsx`** → shadcn `<Dialog>`. Update existing `Modal.tsx` to re-export shadcn's API or delete it and update call sites.
+- **antd `Collapse`** → shadcn `<Collapsible>` or shadcn `<Accordion>` (add via `npx shadcn@latest add accordion` if grouped variant needed).
+- **`Popover` / `Tooltip` / `DropdownMenu` / `Tabs`** → direct swap to shadcn versions.
 
 **Verification:** open every modal; expand/collapse every panel; keyboard nav (Tab/Esc/Enter).
 
-**Effort:** 2-3 days.
+**Effort:** 2 days.
 
 ---
 
-### Phase 4 — Simple inputs (`Button`, `Input`, `InputNumber`, `Select`, `Switch`, `Card`, `Statistic`)
+### Phase 4 — Replace inputs (Button, Input, Select, Switch, Card, Statistic, InputNumber)
 
-**Goal:** replace remaining chrome outside `Form` contexts. After this, only antd `Form` + `ParameterRenderer` remain.
+**Goal:** swap to shadcn. `InputNumber` is the only one without a clean shadcn equivalent.
 
-- New primitives:
-  - `Input.tsx` (shadcn)
-  - `NumberField.tsx` (React Aria — locale-aware, stepper)
-  - `Select.tsx` (Radix)
-  - `Switch.tsx` (Radix)
-  - `Card.tsx` (shadcn with `Header`/`Title`/`Description`/`Content`/`Footer`)
-  - `Statistic.tsx` (custom, label+value+delta)
-- Button migration mapping: `type="primary"`→`variant="default"`, `type="link"`→`variant="link"`, `type="text"`→`variant="ghost"`, `danger`→`variant="destructive"`, `loading` prop → compose `<Spinner />`.
+- **`Button`** → shadcn. Map antd props: `type="primary"→variant="default"`, `link→variant="link"`, `text→variant="ghost"`, `danger→variant="destructive"`, `loading` prop → render `<Loader2 className="mr-2 h-4 w-4 animate-spin" />` inside.
+- **`Input` / `Select` / `Switch` / `Card`** → direct swap.
+- **`Statistic`** → no shadcn equivalent. Inline `<div>` with Tailwind classes — 5 lines, used 4 times.
+- **`InputNumber`** → install `react-aria-components` and use its `<NumberField>` (locale-aware, stepper buttons, keyboard arrows). React Aria is the only library that ships a production-quality number field.
 
-**Deps to add:** `@radix-ui/react-select@^2.1.2`, `@radix-ui/react-switch@^1.1.1`, `@radix-ui/react-label@^2.1.0`, `react-aria-components@^1.4.1`
+**Deps to add:** `react-aria-components`.
 
-**Verification:** every button/input/select smoke-tested; `NumberField` step/min/max/precision verified.
+**Verification:** every button/input/select smoke-tested; NumberField step/min/max/precision verified.
+
+**Effort:** 3 days.
+
+---
+
+### Phase 5 — Migrate antd Form to shadcn Form (react-hook-form + zod)
+
+**Goal:** replace 7 antd Form files with shadcn's canonical `Form` composition (already generated in Phase 0).
+
+- For each panel under [client/src/components/credentials/panels/](../client/src/components/credentials/panels/) + [sections/](../client/src/components/credentials/sections/):
+  1. `Form.useForm()` → `useForm<Schema>({ resolver: zodResolver(schema) })`.
+  2. `<Form.Item rules={...}>` → `<FormField name render>`; move validation into a colocated zod schema.
+  3. Per-panel zod schema file: `credentials/panels/schemas/{provider}.ts`.
+- The `useCredentialRegistry` / `useCatalogueQuery` / `catalogueAdapter.ts` flow stays — only the rendering layer changes.
+
+**Deps to add:** `@hookform/resolvers`, `zod`.
+
+**Verification:** CRUD every credential type; validation errors surface on correct fields.
 
 **Effort:** 3-4 days.
 
 ---
 
-### Phase 5 — Form migration (credentials subsystem)
+### Phase 6 — `ParameterRenderer` → JSON Forms with custom renderer registry
 
-**Goal:** replace 7 antd Form files using `react-hook-form` (already installed) + new primitives. Credentials is the exemplar — set the pattern here, reuse elsewhere.
+**Goal:** replace the 15+ branch switch in [client/src/components/ParameterRenderer.tsx](../client/src/components/ParameterRenderer.tsx) with `@jsonforms/react`'s renderer registry. Backend emits `NodeSpec { jsonSchema, uiSchema, _uiHints? }`.
 
-- New primitive: `client/src/design-system/form/Form.tsx` — shadcn composition (`Form`, `FormField`, `FormItem`, `FormLabel`, `FormControl`, `FormDescription`, `FormMessage`).
-- For each panel (mostly under [client/src/components/credentials/panels/](../client/src/components/credentials/panels/) + [sections/](../client/src/components/credentials/sections/)):
-  1. `Form.useForm()` → `useForm<Schema>({ resolver: zodResolver(schema) })`
-  2. `<Form.Item rules={...}>` → `<FormField name render>` + zod schema
-  3. Per-panel schema file: `credentials/panels/schemas/{provider}CredentialSchema.ts`
-- Leave `useCredentialRegistry`, `useCatalogueQuery`, `catalogueAdapter.ts` untouched — only rendering layer changes.
+**Prerequisite (backend):** `get_node_spec` WebSocket handler returning `NodeSpec` per the RFC.
 
-**Deps to add:** `@hookform/resolvers@^3.9.1`, `zod@^3.23.8` (verify)
-
-**Verification:** CRUD every credential type; validation errors surface on correct fields.
-
-**Effort:** 4-6 days. Largest single slice.
-
----
-
-### Phase 6 — `ParameterRenderer` → JSON Forms + renderer registry
-
-**Goal:** replace 15+ branch switch in [ParameterRenderer.tsx](../client/src/components/ParameterRenderer.tsx) with schema-driven system. Depends on backend emitting `NodeSpec`.
-
-**Prerequisite (backend):** `get_node_spec` WebSocket handler returning `NodeSpec { jsonSchema, uiSchema, _uiHints? }` per RFC.
-
-- New directory: `client/src/components/inspector/`
-  - `renderers/` — one file per renderer: `StringRenderer`, `NumberRenderer`, `BooleanRenderer`, `EnumRenderer`, `ObjectRenderer`, `ArrayRenderer`, `CodeRenderer`, `SecretRenderer`, `CredentialRefRenderer`, `ExpressionRenderer`, `FileRenderer`, `DateTimeRenderer` (enumerate from current switch branches)
-  - `renderers/registry.ts` — `[{ tester, renderer }]` priority array, mirrors credentials registry pattern
-  - `NodeInspector.tsx` — wraps `<JsonForms schema uischema renderers data onChange />`
-  - `hooks/useNodeSpec.ts` — TanStack Query + `idb-keyval`, mirrors [useCatalogueQuery.ts](../client/src/hooks/useCatalogueQuery.ts)
-- Wire `_uiHints` into [client/src/components/output/OutputPanel.tsx](../client/src/components/output/OutputPanel.tsx) (currently noted as "future"; this is the natural home).
-- Broaden React Compiler scope in [client/vite.config.js](../client/vite.config.js) to include `components/inspector/`.
+- Use JSON Forms' built-in `[{ tester, renderer }]` registry — don't invent another.
+- Custom renderers under `client/src/components/inspector/renderers/`: `string`, `number`, `boolean`, `enum`, `object`, `array`, `code`, `secret`, `credentialRef`, `expression`, `file`, `dateTime`. Each is `function MyRenderer({ data, handleChange, schema, uischema }) { ... }` wrapped in `withJsonFormsControlProps`.
+- `client/src/components/inspector/NodeInspector.tsx` — single file, ~30 lines: wraps `<JsonForms ...>`.
+- `client/src/hooks/useNodeSpec.ts` — TanStack Query + `idb-keyval`, mirrors [useCatalogueQuery.ts](../client/src/hooks/useCatalogueQuery.ts).
+- Wire `_uiHints` into [client/src/components/output/OutputPanel.tsx](../client/src/components/output/OutputPanel.tsx).
 - Feature flag `VITE_USE_NODESPEC` for phased rollout; delete old `ParameterRenderer.tsx` once stable.
 
-**Deps to add:** `@jsonforms/core@^3.3.0`, `@jsonforms/react@^3.3.0` (NOT material/vanilla renderers — own the registry)
+**Deps to add:** `@jsonforms/core`, `@jsonforms/react`. (Not material/vanilla renderers — we own the registry.)
 
-**Verification:** every node type in `nodeDefinitions/*` renders via inspector; `VITE_USE_NODESPEC=false` falls back to old renderer; no layout jank on 50-parameter nodes.
+**Verification:** every node type renders via inspector; `VITE_USE_NODESPEC=false` falls back; no jank on 50-parameter nodes.
 
-**Effort:** 6-10 days + backend coordination.
+**Effort:** 5-7 days + backend coordination.
 
 ---
 
-### Phase 7 — Retire antd, `ConfigProvider`, styled-components
+### Phase 7 — Retire antd, ConfigProvider, styled-components
 
 **Goal:** delete the old stack. Bundle shrinks ~200-400 KB gzipped.
 
 - Verify zero `from 'antd'` imports remain.
 - Migrate [client/src/components/shared/JSONTreeRenderer.tsx](../client/src/components/shared/JSONTreeRenderer.tsx) — rewrite styled-components as Tailwind classes.
-- Delete: [client/src/config/antdTheme.ts](../client/src/config/antdTheme.ts), `ConfigProvider` wrapper in [client/src/App.tsx](../client/src/App.tsx), antd reset CSS import in `main.tsx`; inline remaining [client/src/styles/theme.ts](../client/src/styles/theme.ts) usages against CSS vars then delete.
-- Remove from [client/package.json](../client/package.json): `antd`, `styled-components`, `@types/styled-components`.
+- Delete: [client/src/config/antdTheme.ts](../client/src/config/antdTheme.ts); `ConfigProvider` wrapper in [client/src/App.tsx](../client/src/App.tsx); antd reset CSS import in `main.tsx`. Inline remaining [client/src/styles/theme.ts](../client/src/styles/theme.ts) usages against CSS vars then delete.
+- Remove from [client/package.json](../client/package.json): `antd`, `@ant-design/icons`, `styled-components`, `@types/styled-components`.
 - Broaden React Compiler scope to whole `src/`.
 
 **Verification:** full app regression; record bundle size before/after; `pnpm build` + `tsc --noEmit` green.
 
 **Rollback:** keep `pre-phase-7` branch; antd reinstalls cleanly if regression found post-deploy.
 
-**Effort:** 1-2 days.
+**Effort:** 1 day.
 
 ---
 
 ## Cross-cutting
 
 ### Testing posture
-No test runner exists. Before Phase 5, decide:
-- **Minimum:** Playwright smoke tests for credential CRUD, inspector edit, output render (~2 days).
-- **Ideal:** Vitest + Testing Library for primitives + Storybook for design system (~4-5 days).
-
-All verification steps above are manual unless tests are added.
+No test runner. Before Phase 5, decide:
+- **Minimum:** Playwright smoke for credential CRUD, inspector edit, output render (~2 days).
+- **Ideal:** Vitest + Testing Library + Storybook (~4-5 days).
 
 ### Total effort
-~22-33 dev-days (~6-8 weeks focused work).
+~17-22 dev-days.
 
 ### Critical files
 - [client/src/App.tsx](../client/src/App.tsx) — `ConfigProvider` removal in Phase 7
 - [client/src/config/antdTheme.ts](../client/src/config/antdTheme.ts) — theme migration source
 - [client/src/styles/theme.ts](../client/src/styles/theme.ts) — token source for Phase 0
 - [client/tailwind.config.js](../client/tailwind.config.js) — Phase 0 rewiring
-- [client/vite.config.js](../client/vite.config.js) — React Compiler scope expansion
+- [client/tsconfig.json](../client/tsconfig.json) + [client/vite.config.js](../client/vite.config.js) — `@/*` alias for shadcn
 - [client/src/components/ParameterRenderer.tsx](../client/src/components/ParameterRenderer.tsx) — Phase 6 target
 - [client/src/components/credentials/](../client/src/components/credentials/) — exemplar for Phase 5 and 6
 - [client/src/components/output/OutputPanel.tsx](../client/src/components/output/OutputPanel.tsx) — `_uiHints` wiring in Phase 6
-- [client/src/components/ui/Modal.tsx](../client/src/components/ui/Modal.tsx) — subsume into `Dialog` in Phase 3
+- [client/src/components/ui/Modal.tsx](../client/src/components/ui/Modal.tsx) — replaced by shadcn `Dialog` in Phase 3
 - [client/src/components/shared/JSONTreeRenderer.tsx](../client/src/components/shared/JSONTreeRenderer.tsx) — last styled-components site
 
 ### Rollout / rollback
-Each phase is behind no flag except Phase 6 (`VITE_USE_NODESPEC`). Rollback = single-PR revert; antd coexists with new stack until Phase 7.
+Each phase behind no flag except Phase 6 (`VITE_USE_NODESPEC`). Rollback = single-PR revert; antd coexists with new stack until Phase 7.
 
 ## End-to-end verification (post Phase 7)
 
-1. `pnpm install && pnpm build` — green, bundle size recorded
-2. `pnpm exec tsc --noEmit` — zero errors
-3. Full manual regression: workflow open/save, node CRUD, credential CRUD per provider type, parameter edit, workflow run, output render (markdown/JSON/error), theme toggle light↔dark, keyboard nav (Tab/Esc/Enter on all modals/menus)
-4. Bundle analyzer (`vite-bundle-visualizer`): confirm antd + moment/dayjs locales removed
-5. `grep -r "from 'antd'" client/src/` returns zero
-6. `grep -r "styled-components" client/src/` returns zero
+1. `pnpm install && pnpm build` — green, bundle size recorded.
+2. `pnpm exec tsc --noEmit` — zero errors.
+3. Full manual regression: workflow open/save, node CRUD, credential CRUD per provider, parameter edit, workflow run, output render (markdown/JSON/error), theme toggle light↔dark, keyboard nav (Tab/Esc/Enter on all overlays).
+4. Bundle analyzer (`ANALYZE=1 pnpm build` then open `dist/stats.html`): confirm antd + dayjs locales removed.
+5. `grep -r "from 'antd'" client/src/` returns zero.
+6. `grep -r "styled-components" client/src/` returns zero.

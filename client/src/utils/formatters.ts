@@ -1,5 +1,5 @@
 // Common utility functions for formatting and clipboard operations
-import { toast } from '../design-system';
+import { toast } from 'sonner';
 
 /**
  * Copy text to clipboard with error handling
