@@ -21,6 +21,13 @@ export const skillNodes: Record<string, INodeTypeDescription> = {
     subtitle: 'Skill Aggregator',
     description: 'Combine built-in and custom skills with enable/disable toggles',
     defaults: { name: 'Master Skill', color: '#9333EA' },
+    uiHints: {
+      hideInputSection: true,
+      hideOutputSection: true,
+      hideRunButton: true,
+      isMasterSkillEditor: true,
+      hasCodeEditor: true,
+    },
     inputs: [],
     outputs: [{
       name: 'skill',

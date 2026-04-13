@@ -226,6 +226,7 @@ export const utilityNodes: Record<string, INodeTypeDescription> = {
     version: 1,
     description: 'Trigger workflow when user sends a chat message from the console input',
     defaults: { name: 'Chat Trigger', color: '#10b981' },
+    uiHints: { isChatTrigger: true },
     inputs: [],
     outputs: [{
       name: 'main',
@@ -259,6 +260,7 @@ export const utilityNodes: Record<string, INodeTypeDescription> = {
     version: 1,
     description: 'Log data to console panel for debugging during execution',
     defaults: { name: 'Console', color: '#8b5cf6' },
+    uiHints: { isConsoleSink: true },
     inputs: [{ name: 'main', displayName: 'Input', type: 'main' as NodeConnectionType, description: 'Data to log' }],
     outputs: [{ name: 'main', displayName: 'Output', type: 'main' as NodeConnectionType, description: 'Passes input through unchanged' }],
     properties: [
@@ -324,6 +326,7 @@ export const utilityNodes: Record<string, INodeTypeDescription> = {
     version: 1,
     description: 'Monitor agent team operations, tasks, and messages in real-time',
     defaults: { name: 'Team Monitor', color: '#8b5cf6' },
+    uiHints: { hideInputSection: true, hideOutputSection: true, isMonitorPanel: true },
     inputs: [{ name: 'team', displayName: 'Team', type: 'main' as NodeConnectionType, description: 'Connect to AI Employee or Orchestrator Agent node' }],
     outputs: [{ name: 'main', displayName: 'Events', type: 'main' as NodeConnectionType, description: 'task_completed, task_failed, message_received, team_status' }],
     properties: [

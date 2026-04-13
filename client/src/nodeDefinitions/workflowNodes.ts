@@ -15,6 +15,7 @@ export const workflowNodes: Record<string, INodeTypeDescription> = {
     subtitle: 'Workflow Entry',
     description: 'Starting point for workflow execution. Provides initial data to connected nodes.',
     defaults: { name: 'Start', color: '#8be9fd' },
+    uiHints: { hideInputSection: true, hideOutputSection: true },
     inputs: [],
     outputs: [{
       name: 'main',

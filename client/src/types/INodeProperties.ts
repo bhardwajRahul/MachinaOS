@@ -174,6 +174,41 @@ export interface INodeOperationDefinition {
 
 
 // Main node type description interface
+/**
+ * Per-node-definition UI hints. Lets panels and the inspector make
+ * rendering decisions from the schema instead of `nodeDefinition.name === '…'`
+ * string compares scattered across the UI tree. Each flag is consumed by
+ * exactly one panel; defaults to `false` (the panel renders normally).
+ */
+export interface INodeUIHints {
+  /** ParameterPanel: skip the Input section (e.g. start, skill, monitor). */
+  hideInputSection?: boolean;
+  /** ParameterPanel: skip the Output section (e.g. start, skill). */
+  hideOutputSection?: boolean;
+  /** ParameterPanel: hide the Run button (e.g. skill / memory / tool nodes). */
+  hideRunButton?: boolean;
+  /** MiddleSection: give the params block extra flex space for an embedded code editor. */
+  hasCodeEditor?: boolean;
+  /** MiddleSection: render the MasterSkillEditor split panel instead of the plain params list. */
+  isMasterSkillEditor?: boolean;
+  /** MiddleSection: render the memory markdown panel + token usage stats. */
+  isMemoryPanel?: boolean;
+  /** MiddleSection: surface the ToolSchemaEditor for connected services. */
+  isToolPanel?: boolean;
+  /** MiddleSection: render the team-monitor panel. */
+  isMonitorPanel?: boolean;
+  /** Special-case panel for gmaps_create with map preview. */
+  showLocationPanel?: boolean;
+  /** ToolSchemaEditor visibility (Android toolkit aggregator). */
+  isAndroidToolkit?: boolean;
+  /** ConsolePanel: this node is a chat-message target. */
+  isChatTrigger?: boolean;
+  /** ConsolePanel: this node consumes console output (filter source). */
+  isConsoleSink?: boolean;
+  /** Agent panels show the connected-skills section. */
+  hasSkills?: boolean;
+}
+
 export interface INodeTypeDescription {
   displayName: string;
   name: string;
@@ -195,6 +230,8 @@ export interface INodeTypeDescription {
   methods?: {
     loadOptions?: Record<string, (this: any) => Promise<INodePropertyOption[]>>;
   };
+  /** Per-node UI hints; see INodeUIHints for each flag. */
+  uiHints?: INodeUIHints;
 }
 
 // Node type interface that nodes must implement

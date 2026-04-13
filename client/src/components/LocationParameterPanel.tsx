@@ -52,8 +52,11 @@ const LocationParameterPanel: React.FC = () => {
     return null;
   }
 
-  // Only show LocationParameterPanel for gmaps_create node
-  if (nodeDefinition.name !== 'gmaps_create') {
+  // Only show LocationParameterPanel for nodes flagged via uiHints; legacy
+  // name fallback for nodes not yet annotated.
+  const showPanel = nodeDefinition.uiHints?.showLocationPanel
+    ?? (nodeDefinition.name === 'gmaps_create');
+  if (!showPanel) {
     return null;
   }
 

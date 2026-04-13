@@ -14,16 +14,18 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { useWebSocket, ConsoleLogEntry } from '../../contexts/WebSocketContext';
+import { nodeDefinitions } from '../../nodeDefinitions';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Input } from '@/components/ui/input';
 import Prism from 'prismjs';
 import 'prismjs/components/prism-json';
 
-// Node types that can be targeted by chat messages
-const CHAT_TRIGGER_TYPES = ['chatTrigger'];
-// Node types that produce console output
-const CONSOLE_NODE_TYPES = ['console'];
+// Schema-driven: a node is a chat target / console sink if its definition
+// sets the matching uiHints flag. Legacy name list kept until every node
+// is annotated.
+const LEGACY_CHAT_TRIGGER_TYPES = ['chatTrigger'];
+const LEGACY_CONSOLE_NODE_TYPES = ['console'];
 
 interface ConsolePanelProps {
   isOpen: boolean;
@@ -56,13 +58,21 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
   const maxFontSize = parseInt(theme.fontSize.xl) * 2;
   const defaultFontSize = parseInt(theme.fontSize.sm);
 
-  // Filter nodes to get chatTrigger and console nodes
+  // Filter nodes via uiHints first, legacy name list as fallback.
   const chatTriggerNodes = useMemo(() =>
-    nodes.filter(n => CHAT_TRIGGER_TYPES.includes(n.type || '')),
+    nodes.filter(n => {
+      const def = n.type ? nodeDefinitions[n.type] : undefined;
+      return def?.uiHints?.isChatTrigger
+        ?? LEGACY_CHAT_TRIGGER_TYPES.includes(n.type || '');
+    }),
     [nodes]
   );
   const consoleNodes = useMemo(() =>
-    nodes.filter(n => CONSOLE_NODE_TYPES.includes(n.type || '')),
+    nodes.filter(n => {
+      const def = n.type ? nodeDefinitions[n.type] : undefined;
+      return def?.uiHints?.isConsoleSink
+        ?? LEGACY_CONSOLE_NODE_TYPES.includes(n.type || '');
+    }),
     [nodes]
   );
 

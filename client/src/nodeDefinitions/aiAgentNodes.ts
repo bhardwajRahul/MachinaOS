@@ -313,6 +313,7 @@ export const aiAgentNodes: Record<string, INodeTypeDescription> = {
     version: 1,
     description: 'Markdown-based conversation memory with optional vector DB for long-term retrieval',
     defaults: { name: 'Memory', color: '#8b5cf6' },
+    uiHints: { isMemoryPanel: true, hasCodeEditor: true, hideRunButton: true },
     inputs: [],  // No input - memory node is passive
     outputs: [{
       name: 'memory',

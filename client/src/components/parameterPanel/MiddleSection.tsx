@@ -170,27 +170,25 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
   const visibleParams = (nodeDefinition.properties || [])
     .filter((param: INodeProperties) => shouldShowParameter(param, parameters));
 
-  // Check if this is a code executor node (Python or JavaScript)
-  const isCodeExecutorNode = nodeDefinition.name === 'pythonExecutor' || nodeDefinition.name === 'javascriptExecutor';
-
-  // Check if this is a skill node with code editor (needs similar flex layout)
-  const isSkillNode = SKILL_NODE_TYPES.includes(nodeDefinition.name) && nodeDefinition.name !== 'customSkill' && nodeDefinition.name !== 'masterSkill';
-
-  // Check if this is a master skill node (needs split panel layout)
-  const isMasterSkillNode = nodeDefinition.name === 'masterSkill';
-  console.log('[MiddleSection] nodeDefinition.name:', nodeDefinition.name, 'isMasterSkillNode:', isMasterSkillNode);
-
-  // Check if this is a memory node with markdown editor
-  const isMemoryNode = nodeDefinition.name === 'simpleMemory';
-
-  // Nodes that need flexible code editor layout
-  const needsCodeEditorLayout = isCodeExecutorNode || isSkillNode || isMemoryNode;
-
-  // Check if this is a tool node that supports schema editing
-  const isToolNode = TOOL_NODE_TYPES.includes(nodeDefinition.name);
-
-  // Check if this is an agent node that supports skills (has input-skill handle)
-  const isAgentWithSkills = AGENT_WITH_SKILLS_TYPES.includes(nodeDefinition.name);
+  // Schema-driven layout flags. Read from nodeDefinition.uiHints first;
+  // fall back to legacy name checks for nodes not yet annotated. The two
+  // legacy arrays (TOOL_NODE_TYPES, AGENT_WITH_SKILLS_TYPES) are also
+  // legacy fallbacks until every agent / tool node sets uiHints.hasSkills
+  // / uiHints.isToolPanel respectively.
+  const hints = nodeDefinition.uiHints ?? {};
+  const isMasterSkillNode = hints.isMasterSkillEditor ?? (nodeDefinition.name === 'masterSkill');
+  const isMemoryNode = hints.isMemoryPanel ?? (nodeDefinition.name === 'simpleMemory');
+  // hasCodeEditor covers code executors, seedable skill nodes, and memory.
+  const isLegacyCodeExecutor = nodeDefinition.name === 'pythonExecutor' || nodeDefinition.name === 'javascriptExecutor';
+  const isLegacySkillWithEditor = SKILL_NODE_TYPES.includes(nodeDefinition.name)
+    && nodeDefinition.name !== 'customSkill'
+    && nodeDefinition.name !== 'masterSkill';
+  const needsCodeEditorLayout = hints.hasCodeEditor ?? (isLegacyCodeExecutor || isLegacySkillWithEditor || isMemoryNode);
+  // Kept as separate flags for downstream JSX that still references them.
+  const isCodeExecutorNode = needsCodeEditorLayout && (hints.hasCodeEditor ?? isLegacyCodeExecutor);
+  const isSkillNode = needsCodeEditorLayout && isLegacySkillWithEditor;
+  const isToolNode = hints.isToolPanel ?? TOOL_NODE_TYPES.includes(nodeDefinition.name);
+  const isAgentWithSkills = hints.hasSkills ?? AGENT_WITH_SKILLS_TYPES.includes(nodeDefinition.name);
 
   // State for Master Skill parameters
   const [masterSkillParams, setMasterSkillParams] = useState<Record<string, any>>({});

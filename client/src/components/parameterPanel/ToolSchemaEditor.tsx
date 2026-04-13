@@ -11,6 +11,7 @@ import { useToolSchema, ToolSchemaConfig, SchemaFieldConfig } from '../../hooks/
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { useAppStore } from '../../store/useAppStore';
 import { ANDROID_SERVICE_NODE_TYPES } from '../../nodeDefinitions/androidServiceNodes';
+import { nodeDefinitions } from '../../nodeDefinitions';
 
 interface ToolSchemaEditorProps {
   nodeId: string;
@@ -54,9 +55,12 @@ const ToolSchemaEditor: React.FC<ToolSchemaEditorProps> = ({ nodeId }) => {
     return currentWorkflow.nodes.find(n => n.id === nodeId);
   }, [currentWorkflow?.nodes, nodeId]);
 
-  const isAndroidTool = currentNode?.type === 'androidTool';
-
-  // Only show for androidTool
+  // Schema-driven gate: only render for nodes flagged as Android toolkits.
+  // Legacy name fallback covers the canonical androidTool until the node
+  // definition is annotated with uiHints.isAndroidToolkit.
+  const currentNodeDef = currentNode?.type ? nodeDefinitions[currentNode.type] : undefined;
+  const isAndroidTool = currentNodeDef?.uiHints?.isAndroidToolkit
+    ?? (currentNode?.type === 'androidTool');
   if (!isAndroidTool) return null;
 
   // Find connected Android service nodes via edges

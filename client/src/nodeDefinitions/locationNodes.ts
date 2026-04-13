@@ -23,6 +23,7 @@ export const locationNodes: Record<string, INodeTypeDescription> = {
     subtitle: 'Initialize Google Map',
     description: 'Creates an interactive Google Map using the Maps JavaScript API with customizable center, zoom, and map type',
     defaults: { name: 'GMaps Create', color: '#1A73E8' },
+    uiHints: { showLocationPanel: true },
     inputs: [{
       name: 'main',
       displayName: 'Map Configuration',

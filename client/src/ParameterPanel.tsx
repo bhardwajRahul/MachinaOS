@@ -116,10 +116,17 @@ const ParameterPanel: React.FC = () => {
   const canExecute = selectedNode && nodeDefinition &&
     ExecutionService.isNodeTypeSupported(nodeDefinition.name);
 
-  // Check if this is a Start node, Skill node, or Monitor node (only show middle section)
-  const isStartNode = nodeDefinition?.name === 'start';
-  const isSkillNode = nodeDefinition?.name && SKILL_NODE_TYPES.includes(nodeDefinition.name);
-  const isMonitorNode = nodeDefinition?.name === 'teamMonitor';
+  // Panel-level visibility hints come from nodeDefinition.uiHints.
+  // Legacy name fallbacks stay for one release for any node not yet annotated.
+  const hints = nodeDefinition?.uiHints;
+  const isStartNode = hints?.hideInputSection && hints?.hideOutputSection
+    ? false  // generic "no input/output" handled by hints below
+    : nodeDefinition?.name === 'start';
+  const isSkillNode = !!nodeDefinition?.name && SKILL_NODE_TYPES.includes(nodeDefinition.name);
+  const isMonitorNode = hints?.isMonitorPanel ?? (nodeDefinition?.name === 'teamMonitor');
+  const hideInputSection = hints?.hideInputSection ?? (isStartNode || isSkillNode || isMonitorNode);
+  const hideOutputSection = hints?.hideOutputSection ?? (isStartNode || isSkillNode || isMonitorNode);
+  const hideRunButton = hints?.hideRunButton ?? (isSkillNode || isMonitorNode);
 
   if (!selectedNode || !nodeDefinition) {
     return null;
@@ -192,7 +199,7 @@ const ParameterPanel: React.FC = () => {
       {/* Buttons: Run, Save, Cancel */}
       <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
         {/* Run Button - hide for monitor nodes since they show live data */}
-        {canExecute && !isMonitorNode && (
+        {canExecute && !hideRunButton && !isMonitorNode && (
           <button
             style={actionButtonStyle(theme.dracula.green, isExecuting)}
             onClick={handleRun}
@@ -293,8 +300,8 @@ const ParameterPanel: React.FC = () => {
         onParameterChange={handleParameterChange}
         executionResults={executionResults}
         onClearResults={handleClearResults}
-        showInputSection={!isStartNode && !isSkillNode && !isMonitorNode}
-        showOutputSection={!isStartNode && !isSkillNode && !isMonitorNode}
+        showInputSection={!hideInputSection}
+        showOutputSection={!hideOutputSection}
         isLoadingParameters={isLoading}
       />
     </Modal>
