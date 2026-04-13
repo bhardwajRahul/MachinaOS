@@ -3,7 +3,7 @@
  * Composes: Card header + ApiKeyInput. Config-driven, zero per-provider JSX.
  */
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Alert, Card, Tag, Flex } from 'antd';
 import { CheckCircleOutlined } from '@ant-design/icons';
 import ApiKeyInput from '../../ui/ApiKeyInput';
@@ -20,6 +20,26 @@ const ApiKeyPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = ({ c
   const iconSize = parseInt(theme.iconSize.md);
   const tagOk = { backgroundColor: `${theme.dracula.green}25`, borderColor: `${theme.dracula.green}60`, color: theme.dracula.green };
 
+  // Local state for the controlled input. antd Form.getFieldValue/setFieldValue
+  // are snapshots that don't trigger re-renders — using them as a controlled
+  // input's value prop causes typing to be silently rejected. useState is the
+  // standard React pattern for controlled inputs.
+  const [inputValue, setInputValue] = useState('');
+
+  // Sync from the form when stored credentials load (useCredentialPanel
+  // populates the form asynchronously via getStoredApiKey on mount).
+  useEffect(() => {
+    if (panel.stored && field) {
+      const v = panel.form.getFieldValue(field.key);
+      if (v) setInputValue(v);
+    }
+  }, [panel.stored, field, panel.form]);
+
+  // Reset input when switching providers
+  useEffect(() => {
+    setInputValue('');
+  }, [config.id]);
+
   return (
     <Flex vertical gap={theme.spacing.xl} style={{ padding: theme.spacing.xl }}>
       <Card size="small" styles={{ body: { padding: theme.spacing.lg } }}
@@ -32,10 +52,10 @@ const ApiKeyPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = ({ c
           </Flex>}
         extra={panel.stored ? <Tag icon={<CheckCircleOutlined />} style={tagOk}>Connected</Tag> : null}>
         {field && <ApiKeyInput
-          value={panel.form.getFieldValue(field.key) || ''}
-          onChange={v => { panel.form.setFieldValue(field.key, v); panel.setStored(false); }}
-          onSave={() => panel.actions.validate(config.id, panel.form.getFieldValue(field.key)?.trim()).then(r => { if (r?.isValid) panel.setStored(true); })}
-          onDelete={panel.stored ? () => panel.actions.remove(config.id) : undefined}
+          value={inputValue}
+          onChange={v => { setInputValue(v); panel.form.setFieldValue(field.key, v); panel.setStored(false); }}
+          onSave={() => panel.actions.validate(config.id, inputValue.trim()).then(r => { if (r?.isValid) panel.setStored(true); })}
+          onDelete={panel.stored ? () => { panel.actions.remove(config.id); setInputValue(''); } : undefined}
           placeholder={field.placeholder}
           loading={panel.loading === 'validate'}
           isStored={panel.stored}

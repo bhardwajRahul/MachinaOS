@@ -34,7 +34,7 @@ import React, {
 import { Command } from 'cmdk';
 import { GroupedVirtuoso } from 'react-virtuoso';
 import fuzzysort from 'fuzzysort';
-import { Flex, Input } from 'antd';
+import { Badge, Flex, Input } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 
 import type { ProviderConfig, CategoryGroup } from './types';
@@ -49,6 +49,8 @@ export interface CredentialsPaletteProps {
   categories: CategoryGroup[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  /** Map of provider id → has stored/validated key. Drives the green status dot. */
+  storedKeys?: Record<string, boolean>;
   /** Height of the scrollable list area. */
   height?: number | string;
   /** Optional placeholder for the search input. */
@@ -175,9 +177,12 @@ const ProviderRow = memo<RowProps>(function ProviderRow({ provider, selected, on
       >
         <Icon size={parseInt(theme.iconSize.sm)} />
       </Flex>
-      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
         {provider.name}
       </span>
+      {provider.stored && (
+        <Badge status="success" />
+      )}
     </Command.Item>
   );
 });

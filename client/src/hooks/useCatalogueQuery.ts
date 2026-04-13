@@ -102,6 +102,8 @@ export interface ServerProviderConfig {
   has_defaults?: boolean;
   has_rate_limits?: boolean;
   usage_service?: string;
+  /** Server-resolved: whether a key/token is stored in the credentials DB. */
+  stored?: boolean;
 }
 
 export interface CatalogueResponse {

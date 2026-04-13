@@ -110,6 +110,8 @@ export interface ProviderConfig {
   hasRateLimits?: boolean;
   /** Service key for API cost tracking section (twitter, google_workspace, google_maps). */
   usageService?: string;
+  /** Server-resolved: whether a key/token exists in the credentials DB. */
+  stored?: boolean;
 }
 
 // ============================================================================

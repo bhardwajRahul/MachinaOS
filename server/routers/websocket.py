@@ -239,24 +239,48 @@ async def handle_get_all_tool_schemas(data: Dict[str, Any], websocket: WebSocket
 
 @ws_handler()
 async def handle_get_credential_catalogue(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
-    """Return the full credential provider catalogue.
+    """Return the full credential provider catalogue with live stored-key status.
 
-    Response shape: {providers, categories, version}. The version is a
-    content-sha256 of the resolved payload; clients warm-start from
-    IndexedDB and only re-fetch when the version changes. Supports
-    Nango-style bulk fetch at modal-open time (one roundtrip, cached for
-    the app session via TanStack Query + experimental_createPersister).
+    Response shape: {providers, categories, version}. Each provider includes
+    a `stored: boolean` field indicating whether a key/token is present in the
+    encrypted credentials database. The frontend renders this directly — no
+    client-side credential checks needed.
     """
     from services.credential_registry import get_credential_registry
 
     registry = get_credential_registry()
-    # Optional conditional fetch: if the client already has the current
-    # version in IndexedDB it can send `since` and get a 304-style response.
     since = data.get("since")
     version = registry.get_version()
     if since and since == version:
         return {"unchanged": True, "version": version}
-    return registry.get_catalogue()
+
+    catalogue = registry.get_catalogue()
+
+    # Enrich each provider with live stored-key status from AuthService.
+    # This keeps credential state as a backend concern — the frontend is
+    # purely a renderer with zero business logic about key existence.
+    auth_service = container.auth_service()
+    for provider in catalogue.get("providers", []):
+        pid = provider.get("id", "")
+        kind = provider.get("kind", "")
+        status_hook = provider.get("status_hook")
+
+        if status_hook:
+            # Status-hook providers (whatsapp, android, twitter, google, telegram)
+            # use OAuth tokens or special connection state.
+            tokens = await auth_service.get_oauth_tokens(status_hook)
+            provider["stored"] = tokens is not None
+        elif kind == "apiKey":
+            # API key providers — check encrypted credentials DB.
+            provider["stored"] = await auth_service.has_valid_key(pid)
+        elif kind == "oauth":
+            # OAuth providers without a status_hook — check token storage.
+            tokens = await auth_service.get_oauth_tokens(pid)
+            provider["stored"] = tokens is not None
+        else:
+            provider["stored"] = False
+
+    return catalogue
 
 
 # ============================================================================

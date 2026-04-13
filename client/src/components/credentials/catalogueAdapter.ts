@@ -20,11 +20,11 @@
 import React from 'react';
 
 import { AI_PROVIDER_META } from '../icons/AIProviderIcons';
-import { ApifyIcons } from '../../assets/icons/apify';
-import { SearchIcons } from '../../assets/icons/search';
-import { TelegramIcons } from '../../assets/icons/telegram';
-import { GoogleIcons } from '../../assets/icons/google';
-import { EmailIcons } from '../../assets/icons/email';
+import { APIFY_ICON } from '../../assets/icons/apify';
+import { BRAVE_SEARCH_ICON, SERPER_ICON, PERPLEXITY_ICON } from '../../assets/icons/search';
+import { TELEGRAM_ICON } from '../../assets/icons/telegram';
+import { GMAIL_ICON } from '../../assets/icons/google';
+import { EMAIL_READ_ICON } from '../../assets/icons/email';
 import { WHATSAPP_CONNECT_ICON } from '../../nodeDefinitions/whatsappNodes';
 import { TWITTER_ICON } from '../../nodeDefinitions/twitterNodes';
 
@@ -48,25 +48,17 @@ import type {
 } from '../../hooks/useCatalogueQuery';
 
 // ============================================================================
-// Icon factories — duplicated from providers.tsx to keep this adapter
-// self-contained. Keep in sync until providers.tsx is deleted in Phase 8.
+// Icon factories — uses <img> with data URIs (the project standard from
+// assets/icons/*/index.ts). No innerHTML, no dangerouslySetInnerHTML,
+// no ref+useEffect. Every icon module already exports svgToDataUri'd
+// constants; we import those directly and render as <img>.
 // ============================================================================
 
 interface IconProps {
   size: number;
 }
 
-const fromRawSvg = (rawSvg: string): React.FC<IconProps> => {
-  const Comp: React.FC<IconProps> = ({ size }) => {
-    const ref = React.useRef<HTMLDivElement>(null);
-    React.useEffect(() => {
-      if (ref.current) ref.current.innerHTML = rawSvg;
-    }, []);
-    return React.createElement('div', { ref, style: { width: size, height: size } });
-  };
-  return Comp;
-};
-
+/** Render a data:image/svg+xml URI as a sized <img>. Project standard. */
 const fromDataUri = (dataUri: string): React.FC<IconProps> => {
   const Comp: React.FC<IconProps> = ({ size }) =>
     React.createElement('img', {
@@ -89,32 +81,23 @@ const fromEmoji = (emoji: string): React.FC<IconProps> => {
   return Comp;
 };
 
-// Apify needs the root <svg> scaled to 100% of the wrapper.
-const ApifyIconC: React.FC<IconProps> = ({ size }) => {
-  const scaled = ApifyIcons.apify.replace('<svg', '<svg width="100%" height="100%"');
-  return React.createElement('div', {
-    dangerouslySetInnerHTML: { __html: scaled },
-    style: { width: size, height: size },
-  });
-};
-
 // ============================================================================
 // Icon ref resolver
 //
 // JSON `icon_ref` values use a small DSL:
-//   "ai:openai"                       → AI_PROVIDER_META[openai].Icon
-//   "raw_svg:SearchIcons.brave"       → fromRawSvg(SearchIcons.brave)
-//   "raw_svg:ApifyIcons.apify"        → ApifyIconC (needs explicit scale)
-//   "data_uri:WHATSAPP_CONNECT_ICON"  → fromDataUri(WHATSAPP_CONNECT_ICON)
-//   "emoji:📱"                         → fromEmoji('📱')
+//   "ai:openai"                       → AI_PROVIDER_META[openai].Icon (@lobehub/icons)
+//   "raw_svg:SearchIcons.brave"       → <img> with pre-exported data URI (BRAVE_SEARCH_ICON)
+//   "data_uri:WHATSAPP_CONNECT_ICON"  → <img> with data URI
+//   "emoji:📱"                         → <span> with emoji text
 // ============================================================================
 
-const RAW_SVG_REGISTRY: Record<string, Record<string, string>> = {
-  SearchIcons,
-  TelegramIcons,
-  GoogleIcons,
-  EmailIcons,
-  ApifyIcons,
+/** Map "Module.key" strings to already-converted data URIs from assets/icons/. */
+const RAW_SVG_DATA_URIS: Record<string, Record<string, string>> = {
+  SearchIcons: { brave: BRAVE_SEARCH_ICON, serper: SERPER_ICON, perplexity: PERPLEXITY_ICON },
+  TelegramIcons: { telegram: TELEGRAM_ICON },
+  GoogleIcons: { gmail: GMAIL_ICON },
+  EmailIcons: { read: EMAIL_READ_ICON },
+  ApifyIcons: { apify: APIFY_ICON },
 };
 
 const DATA_URI_REGISTRY: Record<string, string> = {
@@ -163,12 +146,10 @@ function resolveIcon(iconRef: string | undefined, providerId: string): React.FC<
       return meta?.Icon ?? fallbackIcon(initial);
     }
     case 'raw_svg': {
-      // e.g. "SearchIcons.brave"
+      // e.g. "SearchIcons.brave" → look up pre-exported data URI
       const [module, key] = rest.split('.');
-      if (module === 'ApifyIcons' && key === 'apify') return ApifyIconC;
-      const svgMap = RAW_SVG_REGISTRY[module];
-      const svg = svgMap?.[key];
-      return svg ? fromRawSvg(svg) : fallbackIcon(initial);
+      const uri = RAW_SVG_DATA_URIS[module]?.[key];
+      return uri ? fromDataUri(uri) : fallbackIcon(initial);
     }
     case 'data_uri': {
       const uri = DATA_URI_REGISTRY[rest];
@@ -303,6 +284,7 @@ export function rehydrateProvider(entry: ServerProviderConfig): ProviderConfig {
     hasDefaults: entry.has_defaults,
     hasRateLimits: entry.has_rate_limits,
     usageService: entry.usage_service,
+    stored: entry.stored,
   };
 }
 
