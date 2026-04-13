@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Loader2, Save } from 'lucide-react';
 import { toast } from 'sonner';
+import { useMutation } from '@tanstack/react-query';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +20,7 @@ import MasterSkillEditor from './MasterSkillEditor';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { useAppStore } from '../../store/useAppStore';
 import { useWebSocket, CompactionStats } from '../../contexts/WebSocketContext';
+import { useUserSettingsQuery } from '../../hooks/useUserSettingsQuery';
 import { nodeDefinitions } from '../../nodeDefinitions';
 import { INodeTypeDescription, INodeProperties } from '../../types/INodeProperties';
 import { ExecutionResult } from '../../services/executionService';
@@ -125,7 +127,31 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
   const [compactionLoading, setCompactionLoading] = useState(false);
   const [isEditingThreshold, setIsEditingThreshold] = useState(false);
   const [editThresholdValue, setEditThresholdValue] = useState<number>(0);
-  const [savingThreshold, setSavingThreshold] = useState(false);
+
+  // Threshold edit commit goes through TanStack Query so the WS call,
+  // toast feedback, and context-store patch live in one hook instead of
+  // a setState + try/finally chain inline on the Save button.
+  const configureCompactionMutation = useMutation({
+    mutationFn: async (input: { sessionId: string; threshold: number }) => {
+      await sendRequest('configure_compaction', {
+        session_id: input.sessionId,
+        threshold: input.threshold,
+      });
+      return input;
+    },
+    onSuccess: ({ sessionId, threshold }) => {
+      const existing = contextCompactionStats[sessionId];
+      if (existing && currentWorkflow?.id) {
+        updateCompactionStats(currentWorkflow.id, sessionId, { ...existing, threshold });
+      }
+      setIsEditingThreshold(false);
+      toast.success('Threshold updated');
+    },
+    onError: () => {
+      toast.error('Failed to update threshold');
+    },
+  });
+  const savingThreshold = configureCompactionMutation.isPending;
 
   // Derive compaction stats from WebSocket context for the connected memory session
   const compactionStats: CompactionStats | null = connectedMemorySessionId
@@ -193,25 +219,23 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
   // State for Master Skill parameters
   const [masterSkillParams, setMasterSkillParams] = useState<Record<string, any>>({});
 
-  // Load global memory window size setting for new Memory nodes
+  // Global user settings read via TanStack Query (shared cache with
+  // Onboarding / SettingsPanel — one WS call across the whole app).
+  const { data: userSettings } = useUserSettingsQuery();
+
+  // Apply the global memory_window_size default to new Memory nodes. Only
+  // fires when a Memory node is opened AND the node hasn't had windowSize
+  // set yet (brand-new instance).
   useEffect(() => {
     if (!isMemoryNode) return;
-
-    // Only apply global default if windowSize hasn't been explicitly set yet
-    const loadGlobalWindowSize = async () => {
-      try {
-        const response = await sendRequest<{ settings: any }>('get_user_settings', {});
-        const globalWindowSize = response?.settings?.memory_window_size;
-        if (globalWindowSize !== undefined && parameters.windowSize === undefined) {
-          onParameterChange('windowSize', globalWindowSize);
-        }
-      } catch (err) {
-        console.error('[MiddleSection] Failed to load global memory settings:', err);
-      }
-    };
-
-    loadGlobalWindowSize();
-  }, [nodeId, isMemoryNode]); // Only run when node changes, not on every parameter change
+    const globalWindowSize = userSettings?.memory_window_size;
+    if (globalWindowSize !== undefined && parameters.windowSize === undefined) {
+      onParameterChange('windowSize', globalWindowSize);
+    }
+    // Same dep set as the previous imperative effect — only wake up on
+    // node change, not on every parameter edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodeId, isMemoryNode, userSettings?.memory_window_size]);
 
   // Get connected memory session ID and compaction stats for agent nodes
   useEffect(() => {
@@ -853,24 +877,13 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
                                 />
                                 <Button
                                   size="icon-sm"
-                                  disabled={savingThreshold}
-                                  onClick={async () => {
-                                    setSavingThreshold(true);
-                                    try {
-                                      await sendRequest('configure_compaction', {
-                                        session_id: connectedMemorySessionId,
-                                        threshold: editThresholdValue
-                                      });
-                                      if (compactionStats && connectedMemorySessionId && currentWorkflow?.id) {
-                                        updateCompactionStats(currentWorkflow.id, connectedMemorySessionId, { ...compactionStats, threshold: editThresholdValue });
-                                      }
-                                      setIsEditingThreshold(false);
-                                      toast.success('Threshold updated');
-                                    } catch (_err) {
-                                      toast.error('Failed to update threshold');
-                                    } finally {
-                                      setSavingThreshold(false);
-                                    }
+                                  disabled={savingThreshold || !connectedMemorySessionId}
+                                  onClick={() => {
+                                    if (!connectedMemorySessionId) return;
+                                    configureCompactionMutation.mutate({
+                                      sessionId: connectedMemorySessionId,
+                                      threshold: editThresholdValue,
+                                    });
                                   }}
                                 >
                                   {savingThreshold ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
