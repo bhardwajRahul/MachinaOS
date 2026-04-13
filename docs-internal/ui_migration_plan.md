@@ -47,6 +47,34 @@ A second audit (3 parallel sub-agents) flagged tribal patterns that survived the
 - Settings + onboarding share one cached server read (`['userSettings']`).
 - WhatsApp group / channel / member selectors dispatch from `typeOptions.loadOptionsMethod` instead of parameter-name string compares — schema is the source of truth.
 
+## Wave 2 — schema-driven panels (April 2026)
+
+A second, deeper audit (4 parallel sub-agents — panel audit, library survey, NodeSpec mapping, system-design / file-organisation research) drove a focused Wave 2 against the heavy custom panels and the long-deferred renderer registry. Plan: same `typed-splashing-crown.md` plan file, replaced in place. Hard constraint: **minimise new files** — the research validated colocation (Kent C. Dodds, n8n's monolithic `ParameterInput.vue`, Robin Wieruch's split criteria) over per-widget files.
+
+| Wave 2 phase | Status | Commit | What it removes / introduces |
+|---|---|---|---|
+| 1 — `INodeUIHints` on node definitions | ✅ done | `0e816f3` | 5 panel files were branching on `nodeDefinition.name === '…'`. Now read 14 typed flags (`hideInputSection`, `hasCodeEditor`, `isMasterSkillEditor`, `isMemoryPanel`, `isToolPanel`, `isMonitorPanel`, `showLocationPanel`, `isAndroidToolkit`, `isChatTrigger`, `isConsoleSink`, `hasSkills`, …) from `nodeDefinition.uiHints`. Legacy name fallback retained for one release. |
+| 2 — `outputSchema` registry | ✅ done | `5d8d2b5` | The 350-line `sampleSchemas` map in `InputSection.tsx` was the largest schema-driven gap. New `outputSchema` field on `INodeTypeDescription`; `start`, `taskTrigger`, `chatTrigger`, `simpleMemory`, `python/javascript/typescriptExecutor` annotated as canaries. Legacy map kept as fallback. |
+| 3 — `ConsolePanel` state split | ✅ done | `cde8e6a` | 6 `useState` + 3 `useEffect` localStorage pairs and 2 imperative `addEventListener` resize chains collapsed into one zod-validated `consolePrefsSchema` + one inline `usePanelResize` hook. Both stay colocated at the top of `ConsolePanel.tsx`. |
+| 4 — Editor migrations to RHF + zod | ✅ done | `221848b`, `0c0e197` | `SkillEditorModal` (5 fields + manual `validateForm`) and `ToolSchemaEditor` (dynamic field-array) now run on `useForm` + `zodResolver` + `useFieldArray`. Per-field error messages live in the schema; dirty tracking is RHF-managed. Inputs / Selects / Switch / Checkbox from shadcn primitives. |
+| 5 — `ActionButton` cva helper | ✅ done | `8a68c09` | A 14-line `actionButtonStyle(color, isDisabled)` helper was copy-pasted across 4 files. New `client/src/components/ui/action-button.tsx` with a `tone` cva variant; `ParameterPanel`, `LocationParameterPanel`, `SettingsPanel` migrated. ~210 LOC of inline-style boilerplate gone. |
+| 6 — `ParameterRenderer` → renderer registry | ⏸ deferred | — | Library survey ran; recommended approach is **DIY** (RHF + zod + small `WIDGETS` registry) modeled on n8n's monolithic `ParameterInput.vue`, with `@rjsf/core` v6 + `@rjsf/shadcn` as the documented escape hatch. File budget: 4 files in `inspector/` (vs the original 16-file proposal — research validated the smaller layout). Blocks on backend `get_node_spec` WebSocket handler emitting `NodeSpec { jsonSchema, uiSchema, _uiHints? }`. |
+| 7 — Docs + guardrails | ✅ done (docs) | this commit | This section + frontend_architecture.md updates. ESLint rule + bundle-budget CI assertion deferred (need CI config touch). |
+
+**File budget actuals:** 1 new file across Wave 2 (`action-button.tsx`). All other phases used colocation or extended existing files (`useWorkflowsQuery.ts`, the relevant node definitions, `INodeProperties.ts`). The original draft of this plan proposed ~16 new files for the renderer phase alone — research-driven revision cut that to a 4-file colocated layout.
+
+**Wave 2 numbers:**
+- Hardcoded `nodeDefinition.name === '…'` outside whitelisted utility files: **0** (all panel-visibility checks read `uiHints` first; legacy fallbacks kept for nodes not yet annotated).
+- Hand-rolled forms with >3 fields: **2 → 0** (SkillEditorModal, ToolSchemaEditor — both on RHF + zod). MasterSkillEditor remains; it's a split-panel UI, not a single form.
+- `ConsolePanel` `useState` count: **13 → 7**.
+- `pnpm exec tsc --noEmit` green throughout all 6 commits.
+
+**What's still deferred (intentionally):**
+- Phase 6 — `ParameterRenderer` → DIY widget registry. Backend `get_node_spec` handler is the prerequisite. Frontend layout decided (4 files in `inspector/`); rollout shape decided (5 weekly slices behind `VITE_USE_NODESPEC` with parity test against legacy renderer).
+- Bulk Tailwind sweep of `GenericNode` / `BaseChatModelNode` inline `theme.dracula.*` refs. Visual-regression-prone; needs in-browser verification per file.
+- ESLint rule + bundle-budget CI assertion (Phase 7 leftovers). Both touch CI config, deferred together.
+- `MasterSkillEditor` RHF migration. The editor is a split-panel UI (skill list + content editor + folder dropdown + inline create/edit) — not the >3-field-form pattern Phase 4 targeted. The form-with-validation parts already moved to `SkillEditorModal`; the registry-style list view is genuinely different work.
+
 ## Context
 
 The MachinaOs frontend was coupled to Ant Design (40 files, 187-line theme file, `ConfigProvider` at root). Pre-migration audit + research docs (now deleted; see git history under commit `4cb3dd9` if needed) prescribed shadcn/ui (canonical components copied via CLI registry) + Radix primitives + Tailwind 4 + JSON Forms for a schema-driven inspector. Phase 0/1 commits (`2209dba`, `7ac69fe`) included hand-written primitives and a toast facade — those got deleted as part of corrected Phase 0 (`cdeebb4`).

@@ -370,6 +370,59 @@ This is the rule that keeps the data layer schema-driven instead of imperatively
 - After a mutation, **invalidate the corresponding query key**, don't manually patch a Zustand list. Mutations that need it from non-React code use the `queryClient` singleton at [client/src/lib/queryClient.ts](../client/src/lib/queryClient.ts).
 - Schema metadata for parameter behavior (selectors, validators, dynamic options) belongs in the node-definition `typeOptions`, NOT in `parameter.name === '...'` checks inside `ParameterRenderer`. Phase-5 commit `8353c48` introduced `typeOptions.loadOptionsMethod` for the WhatsApp selectors as the canonical pattern.
 
+## Schema-driven node + panel hints
+
+Wave 2 introduced two typed fields on `INodeTypeDescription` so panels and the inspector can make rendering decisions from the schema instead of `nodeDefinition.name === '…'` string compares.
+
+### `uiHints` — per-node panel visibility flags
+
+Defined on `INodeTypeDescription.uiHints` ([client/src/types/INodeProperties.ts](../client/src/types/INodeProperties.ts)). Each flag is consumed by exactly one panel and defaults to `false` (the panel renders normally). 14 flags today:
+
+| Flag | Read by | Effect |
+|---|---|---|
+| `hideInputSection` | `ParameterPanel`, `InputSection` | Skip the connected-inputs panel (start, skill, monitor) |
+| `hideOutputSection` | `ParameterPanel`, `OutputSection` | Skip the execution-results panel |
+| `hideRunButton` | `ParameterPanel` | Hide the Run button (skill / memory / tool nodes) |
+| `hasCodeEditor` | `MiddleSection` | Give the params block extra flex space for an embedded code editor |
+| `isMasterSkillEditor` | `MiddleSection` | Render the MasterSkillEditor split panel |
+| `isMemoryPanel` | `MiddleSection` | Render the memory markdown panel + token usage stats |
+| `isToolPanel` | `MiddleSection` | Surface the ToolSchemaEditor for connected services |
+| `isMonitorPanel` | `MiddleSection`, `ParameterPanel` | Render the team-monitor panel |
+| `showLocationPanel` | `LocationParameterPanel` | Special-case panel for nodes with map preview |
+| `isAndroidToolkit` | `ToolSchemaEditor` | Toolkit aggregator (Android service hub) |
+| `isChatTrigger` | `ConsolePanel` | This node is a chat-message target |
+| `isConsoleSink` | `ConsolePanel` | This node consumes console output (filter source) |
+| `hasSkills` | Agent panels | Connect the connected-skills section |
+
+Adding new panel behaviour: add a flag to `INodeUIHints`, annotate the relevant node definitions, read the flag in the panel. Don't add another `nodeDefinition.name === '…'` branch.
+
+### `outputSchema` — runtime output shape for InputSection
+
+Defined on `INodeTypeDescription.outputSchema`. Plain primitive type names (`'string' | 'number' | 'boolean' | 'array' | 'object' | 'any'`) at leaves, or nested objects. `InputSection` reads this when populating the draggable variable list for downstream nodes. The legacy 350-line `sampleSchemas` map in `InputSection.tsx` is the fallback for nodes not yet annotated; new node definitions should set `outputSchema` directly.
+
+### Renderer registry shape (Phase 6 — pending)
+
+When the backend `get_node_spec` handler lands, the inspector will own a 4-file colocated layout under `client/src/components/inspector/`:
+
+```
+inspector/
+├── ParameterRenderer.tsx     # dispatcher + 11 inline widgets + drag-drop wrapper + WIDGETS registry
+├── CollectionWidget.tsx      # recursive (>150 LOC, independently testable)
+├── CodeWidget.tsx            # CodeEditor + theme/toolbar plumbing
+└── types.ts                  # WidgetProps discriminated union, registry tester signature
+```
+
+The DIY widget registry (RHF + zod + a tester+rank dispatch) is modeled on n8n's monolithic `ParameterInput.vue`. Library-survey research preferred this over @jsonforms / @rjsf — bundle delta ≤ +50 KB gz vs +60–110 KB for any framework option, and shadcn theming would have to be hand-authored against any of them. `@rjsf/core` v6 + `@rjsf/shadcn` is the documented escape hatch if collection recursion bites.
+
+## Reusable component primitives (Wave 2)
+
+| File | When to use |
+|---|---|
+| [client/src/components/ui/action-button.tsx](../client/src/components/ui/action-button.tsx) | Colored "soft" toolbar button (Run / Save / Cancel / Reset / Stop). One `tone` prop drives bg/border/text against a fixed dracula palette via static Tailwind classes. Replaces the `actionButtonStyle(color, isDisabled)` style helper that was copy-pasted across 4 files. |
+| [client/src/components/ui/sonner.tsx](../client/src/components/ui/sonner.tsx) | The `<Toaster />` mount — call `import { toast } from 'sonner'` directly at use sites; do not wrap. |
+| [client/src/components/ui/Modal.tsx](../client/src/components/ui/Modal.tsx) | Composition primitive on top of shadcn `<Dialog>`. Owns the recurring "title bar with centered headerActions and a close button + size-constrained content panel" 8 panels share. Not an antd facade. |
+| `client/src/components/ui/{button,input,select,switch,checkbox,form,…}.tsx` | shadcn-generated primitives. Add new ones via `npx shadcn@latest add <name>`. Don't re-implement what the registry ships. |
+
 ## Theme + canvas chrome
 
 [index.css](../client/src/index.css) also styles React Flow, scrollbars, and dot grid against the CSS-var palette. No inline hex codes in theme-sensitive surfaces — everything references `hsl(var(--...))` so dark mode flips cleanly.
