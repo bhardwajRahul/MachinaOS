@@ -5,6 +5,75 @@ import { useWebSocket } from '../../contexts/WebSocketContext';
 import { Node, Edge } from 'reactflow';
 import { useDragVariable } from '../../hooks/useDragVariable';
 import { useAppTheme } from '../../hooks/useAppTheme';
+import { queryClient } from '../../lib/queryClient';
+
+// ---------------------------------------------------------------------------
+// Backend-driven node output schema lookup.
+//
+// Mirrors n8n's schemaPreview pattern (see
+// docs-internal/schema_source_of_truth_rfc.md): the shape shown in the
+// drag-drop variable panel for a node that has not been executed yet
+// comes from the backend's Pydantic model registry via the
+// `get_node_output_schema` WS handler. Results are cached per node
+// type in the shared TanStack Query client (in-memory only, matching
+// n8n's approach — schemas are small and the cache is cheap).
+//
+// Kept as a plain async helper (not a hook) because InputSection
+// iterates over connected edges synchronously during render build-up
+// and then needs to populate schemas for each unique node type once.
+// ---------------------------------------------------------------------------
+
+type NodeOutputSchema = Record<string, any> | null;
+
+const nodeOutputSchemaQueryKey = (nodeType: string) =>
+  ['nodeOutputSchema', nodeType] as const;
+
+async function fetchNodeOutputSchema(
+  nodeType: string,
+  sendRequest: (type: string, data: any) => Promise<any>,
+): Promise<NodeOutputSchema> {
+  return queryClient.fetchQuery({
+    queryKey: nodeOutputSchemaQueryKey(nodeType),
+    queryFn: async () => {
+      try {
+        const response = await sendRequest('get_node_output_schema', { node_type: nodeType });
+        return (response?.schema ?? null) as NodeOutputSchema;
+      } catch {
+        return null;
+      }
+    },
+    staleTime: Infinity,
+  });
+}
+
+/**
+ * Flatten a JSON-Schema-7 "object" shape into the plain
+ * { field: 'primitive-type-name' | nestedObject } map the variable
+ * panel expects. Only the fields the UI actually needs; other JSON
+ * Schema keywords (minLength, pattern, etc.) are ignored.
+ */
+function jsonSchemaToShape(schema: Record<string, any> | null | undefined): Record<string, any> | null {
+  if (!schema || typeof schema !== 'object') return null;
+  const props = schema.properties;
+  if (!props || typeof props !== 'object') return null;
+
+  const out: Record<string, any> = {};
+  for (const [key, raw] of Object.entries(props)) {
+    if (!raw || typeof raw !== 'object') continue;
+    const prop = raw as Record<string, any>;
+    if (prop.type === 'object' && prop.properties) {
+      out[key] = jsonSchemaToShape(prop) ?? 'object';
+    } else if (prop.type === 'array') {
+      out[key] = 'array';
+    } else if (typeof prop.type === 'string') {
+      // string | number | integer | boolean | null
+      out[key] = prop.type === 'integer' ? 'number' : prop.type;
+    } else {
+      out[key] = 'any';
+    }
+  }
+  return out;
+}
 
 interface InputSectionProps {
   nodeId: string;
@@ -39,7 +108,7 @@ const renderNodeIcon = (icon: string, size: number = 16) => {
 const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) => {
   const theme = useAppTheme();
   const { currentWorkflow } = useAppStore();
-  const { getNodeOutput } = useWebSocket();
+  const { getNodeOutput, sendRequest } = useWebSocket();
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const [connectedNodes, setConnectedNodes] = useState<NodeData[]>([]);
   const [loading, setLoading] = useState(false);
@@ -175,11 +244,20 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
         } else {
           hasExecutionData = false;
 
-          // No real run data yet. The start node derives its shape from the
-          // user's initialData JSON (genuinely UI-owned). Every other node
-          // falls through to the legacy sampleSchemas map below as a bridge
-          // until the backend schema endpoint ships. See
-          // docs-internal/schema_source_of_truth_rfc.md.
+          // Schema precedence (mirrors n8n VirtualSchema.vue — see
+          // docs-internal/schema_source_of_truth_rfc.md):
+          //   1. real run data (handled above in the `if` branch)
+          //   2. backend-declared schema via get_node_output_schema
+          //   3. legacy sampleSchemas map (removed when coverage complete)
+          //   4. `{ data: 'any' }` empty fallback
+          //
+          // `start` is special-cased: its shape is authored inline by the
+          // user as initialData JSON, so there's no backend schema to
+          // defer to.
+          const backendSchema = nodeType !== 'start'
+            ? jsonSchemaToShape(await fetchNodeOutputSchema(nodeType, sendRequest))
+            : null;
+
           if (nodeType === 'start') {
             try {
               const initialData = sourceNode?.data?.initialData || '{}';
@@ -187,6 +265,8 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
             } catch (e) {
               outputSchema = {};
             }
+          } else if (backendSchema) {
+            outputSchema = backendSchema;
           } else {
             const sampleSchemas: Record<string, Record<string, any>> = {
               location: { latitude: 'number', longitude: 'number', accuracy: 'number', provider: 'string', altitude: 'number' },
