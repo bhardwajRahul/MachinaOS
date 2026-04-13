@@ -1,5 +1,8 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
-import { useWebSocket } from '../contexts/WebSocketContext';
+import { useState, useCallback, useEffect } from 'react';
+import {
+  useUserSettingsQuery,
+  useSaveUserSettingsMutation,
+} from './useUserSettingsQuery';
 
 export interface OnboardingState {
   isVisible: boolean;
@@ -12,7 +15,8 @@ export interface OnboardingState {
 const TOTAL_STEPS = 5;
 
 export const useOnboarding = (reopenTrigger?: number) => {
-  const { sendRequest, isConnected } = useWebSocket();
+  const settingsQuery = useUserSettingsQuery();
+  const saveSettings = useSaveUserSettingsMutation();
   const [state, setState] = useState<OnboardingState>({
     isVisible: false,
     currentStep: 0,
@@ -20,41 +24,38 @@ export const useOnboarding = (reopenTrigger?: number) => {
     isLoading: true,
     hasChecked: false,
   });
-  const hasCheckedRef = useRef(false);
 
-  // Check onboarding status on WebSocket connect (once)
+  // Hydrate UI state from query result.
   useEffect(() => {
-    if (!isConnected || hasCheckedRef.current) return;
-    hasCheckedRef.current = true;
+    if (!settingsQuery.isSuccess) return;
+    const settings = settingsQuery.data;
+    const completed = settings?.onboarding_completed ?? false;
+    const step = settings?.onboarding_step ?? 0;
+    setState((prev) => ({
+      ...prev,
+      // Only flip visibility on first hydration; later renders shouldn't
+      // re-open the wizard if the user manually closed it.
+      isVisible: prev.hasChecked ? prev.isVisible : !completed,
+      currentStep: prev.hasChecked ? prev.currentStep : step,
+      isCompleted: completed,
+      isLoading: false,
+      hasChecked: true,
+    }));
+  }, [settingsQuery.isSuccess, settingsQuery.data]);
 
-    const checkOnboarding = async () => {
-      try {
-        const response = await sendRequest<{ settings: any }>('get_user_settings', {});
-        const settings = response?.settings;
-        const completed = settings?.onboarding_completed ?? false;
-        const step = settings?.onboarding_step ?? 0;
+  // Surface query errors as a non-blocking "checked" state so the app
+  // continues even if the WS round-trip failed.
+  useEffect(() => {
+    if (settingsQuery.isError) {
+      console.error('[Onboarding] Failed to check status:', settingsQuery.error);
+      setState((prev) => ({ ...prev, isLoading: false, hasChecked: true }));
+    }
+  }, [settingsQuery.isError, settingsQuery.error]);
 
-        setState({
-          isVisible: !completed,
-          currentStep: step,
-          isCompleted: completed,
-          isLoading: false,
-          hasChecked: true,
-        });
-      } catch (error) {
-        console.error('[Onboarding] Failed to check status:', error);
-        setState(prev => ({ ...prev, isLoading: false, hasChecked: true }));
-      }
-    };
-
-    checkOnboarding();
-  }, [isConnected, sendRequest]);
-
-  // Handle reopen trigger from SettingsPanel
+  // Replay trigger from SettingsPanel.
   useEffect(() => {
     if (reopenTrigger && reopenTrigger > 0) {
-      hasCheckedRef.current = false;
-      setState(prev => ({
+      setState((prev) => ({
         ...prev,
         isVisible: true,
         currentStep: 0,
@@ -63,21 +64,18 @@ export const useOnboarding = (reopenTrigger?: number) => {
     }
   }, [reopenTrigger]);
 
-  const saveProgress = useCallback(async (step: number, completed: boolean) => {
-    try {
-      await sendRequest('save_user_settings', {
-        settings: {
-          onboarding_step: step,
-          onboarding_completed: completed,
-        }
+  const saveProgress = useCallback(
+    (step: number, completed: boolean) => {
+      saveSettings.mutate({
+        onboarding_step: step,
+        onboarding_completed: completed,
       });
-    } catch (error) {
-      console.error('[Onboarding] Failed to save progress:', error);
-    }
-  }, [sendRequest]);
+    },
+    [saveSettings],
+  );
 
   const nextStep = useCallback(() => {
-    setState(prev => {
+    setState((prev) => {
       const next = prev.currentStep + 1;
       if (next >= TOTAL_STEPS) {
         saveProgress(TOTAL_STEPS, true);
@@ -89,7 +87,7 @@ export const useOnboarding = (reopenTrigger?: number) => {
   }, [saveProgress]);
 
   const prevStep = useCallback(() => {
-    setState(prev => {
+    setState((prev) => {
       const next = Math.max(0, prev.currentStep - 1);
       saveProgress(next, false);
       return { ...prev, currentStep: next };
@@ -98,12 +96,12 @@ export const useOnboarding = (reopenTrigger?: number) => {
 
   const skip = useCallback(() => {
     saveProgress(state.currentStep, true);
-    setState(prev => ({ ...prev, isVisible: false, isCompleted: true }));
+    setState((prev) => ({ ...prev, isVisible: false, isCompleted: true }));
   }, [saveProgress, state.currentStep]);
 
   const complete = useCallback(() => {
     saveProgress(TOTAL_STEPS, true);
-    setState(prev => ({ ...prev, isVisible: false, isCompleted: true }));
+    setState((prev) => ({ ...prev, isVisible: false, isCompleted: true }));
   }, [saveProgress]);
 
   return {
