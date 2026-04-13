@@ -1,19 +1,25 @@
 /**
- * useCredentialPanel — single hook replacing 20 useState calls + 19 handlers.
+ * useCredentialPanel — single hook for credential panel state.
  *
- * Uses antd Form.useForm() for field state management.
- * Provides a generic `execute(key, fn)` that handles try/catch/loading/error
- * identically to every handleTwitterSave, handleGmailLogin, etc.
+ * Plain React state (no antd Form, no react-hook-form). The credential
+ * panels save fields individually via `actions.save(key, value)` rather
+ * than submitting a single form, so a form library is overkill — the
+ * field values are just a key-value bag with stored/loading/error state
+ * around them.
+ *
+ * Provides a generic `execute(key, fn)` that handles try/catch/loading/
+ * error identically to every handleTwitterSave, handleGmailLogin, etc.
  */
 
-import { useState, useEffect, useCallback } from 'react';
-import { Form } from 'antd';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useApiKeys } from '../../hooks/useApiKeys';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import type { ProviderConfig } from './types';
 
+export type CredentialFormValues = Record<string, string>;
+
 export function useCredentialPanel(config: ProviderConfig, visible: boolean) {
-  const [form] = Form.useForm();
+  const [values, setValues] = useState<CredentialFormValues>({});
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [stored, setStored] = useState(false);
@@ -24,22 +30,43 @@ export function useCredentialPanel(config: ProviderConfig, visible: boolean) {
     isConnected } = useApiKeys();
   const { sendRequest } = useWebSocket();
 
+  // Imperative form-like API for compat with existing callers. Stable across
+  // renders so memoized children don't re-render.
+  const valuesRef = useRef(values);
+  valuesRef.current = values;
+
+  const form = useRef({
+    getFieldValue: (key: string): string | undefined => valuesRef.current[key],
+    getFieldsValue: (): CredentialFormValues => ({ ...valuesRef.current }),
+    setFieldValue: (key: string, value: string) => {
+      setValues((prev) => ({ ...prev, [key]: value }));
+    },
+    setFieldsValue: (next: CredentialFormValues) => {
+      setValues((prev) => ({ ...prev, ...next }));
+    },
+    resetFields: () => setValues({}),
+  }).current;
+
   // Load stored values into form when panel becomes visible
   useEffect(() => {
     if (!visible || !isConnected || !config.fields) return;
     let cancelled = false;
     (async () => {
-      const values: Record<string, string> = {};
+      const next: CredentialFormValues = {};
       let anyStored = false;
       for (const field of config.fields!) {
-        const has = await hasStoredKey(field.key === 'apiKey' ? config.id : field.key);
+        const storeKey = field.key === 'apiKey' ? config.id : field.key;
+        const has = await hasStoredKey(storeKey);
         if (has) {
-          const val = await getStoredApiKey(field.key === 'apiKey' ? config.id : field.key);
-          if (val && !cancelled) { values[field.key] = val; anyStored = true; }
+          const val = await getStoredApiKey(storeKey);
+          if (val && !cancelled) {
+            next[field.key] = val;
+            anyStored = true;
+          }
         }
       }
       if (!cancelled) {
-        form.setFieldsValue(values);
+        setValues(next);
         setStored(anyStored);
         setError(null);
       }
@@ -47,7 +74,7 @@ export function useCredentialPanel(config: ProviderConfig, visible: boolean) {
     return () => { cancelled = true; };
   }, [config.id, visible, isConnected]);
 
-  // Generic action executor — replaces all 19 duplicate handler functions
+  // Generic action executor — replaces 19 duplicate handler functions.
   const execute = useCallback(async (key: string, fn: () => Promise<any>) => {
     setLoading(key);
     setError(null);
@@ -65,7 +92,7 @@ export function useCredentialPanel(config: ProviderConfig, visible: boolean) {
     }
   }, []);
 
-  // Pre-built actions that panels call directly
+  // Pre-built actions that panels call directly.
   const actions = {
     validate: (id: string, key: string) => execute('validate', async () => {
       if (config.validateAs === 'google_maps') return validateGoogleMapsKey(key);
@@ -73,7 +100,11 @@ export function useCredentialPanel(config: ProviderConfig, visible: boolean) {
       return validateApiKey(id, key);
     }),
     save: (key: string, value: string) => execute('save', () => saveApiKey(key, value)),
-    remove: (key: string) => execute('remove', async () => { await removeApiKey(key); setStored(false); form.resetFields(); }),
+    remove: (key: string) => execute('remove', async () => {
+      await removeApiKey(key);
+      setStored(false);
+      setValues({});
+    }),
     oauthLogin: () => execute('login', async () => {
       const res = await sendRequest(config.ws!.login, {});
       if (res.success && res.url) window.open(res.url, '_blank');
@@ -85,9 +116,8 @@ export function useCredentialPanel(config: ProviderConfig, visible: boolean) {
   };
 
   return {
-    form, loading, error, stored, setStored, setError,
+    form, values, loading, error, stored, setStored, setError,
     execute, actions, isConnected,
-    // Pass through API methods panels need
     getProviderDefaults, saveProviderDefaults,
     getProviderUsageSummary, getAPIUsageSummary,
     getStoredModels, getModelConstraints,

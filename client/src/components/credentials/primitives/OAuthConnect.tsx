@@ -13,11 +13,15 @@ import FieldRenderer from './FieldRenderer';
 import ActionBar, { type ActionDef } from './ActionBar';
 import StatusCard from './StatusCard';
 import type { ProviderConfig, StatusRowDef } from '../types';
-import type { FormInstance } from 'antd';
+
+interface CredentialFormShim {
+  getFieldValue: (key: string) => string | undefined;
+  setFieldValue: (key: string, value: string) => void;
+}
 
 interface Props {
   config: ProviderConfig;
-  form: FormInstance;
+  form: CredentialFormShim;
   connected: boolean;
   stored: boolean;
   loading: string | null;

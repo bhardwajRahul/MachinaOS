@@ -58,7 +58,7 @@ const QrPairingPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = (
       {field && <ApiKeyInput
         value={panel.form.getFieldValue(field.key) || ''}
         onChange={(v: string) => panel.form.setFieldValue(field.key, v)}
-        onSave={() => panel.actions.save(field.key, panel.form.getFieldValue(field.key)?.trim()).then(() => panel.setStored(true))}
+        onSave={() => panel.actions.save(field.key, (panel.form.getFieldValue(field.key) ?? '').trim()).then(() => panel.setStored(true))}
         onDelete={() => panel.actions.remove(field.key)}
         placeholder={field.placeholder} loading={panel.loading === 'save'} isStored={panel.stored}
       />}
