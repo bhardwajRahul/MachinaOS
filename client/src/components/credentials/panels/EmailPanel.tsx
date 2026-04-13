@@ -11,7 +11,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Form, Select, Input, InputNumber, Button } from 'antd';
-import { Loader2 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAppTheme } from '../../../hooks/useAppTheme';
 import { useApiKeys } from '../../../hooks/useApiKeys';
@@ -232,7 +231,6 @@ const EmailPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = ({ co
 
       <div className="flex justify-center gap-2 border-t border-border pt-3">
         <Button onClick={handleSave} loading={loading === 'save'}
-          icon={loading === 'save' ? <Loader2 className="h-4 w-4 animate-spin" /> : undefined}
           style={{ backgroundColor: `${theme.dracula.green}25`, borderColor: `${theme.dracula.green}60`, color: theme.dracula.green }}>
           Save
         </Button>

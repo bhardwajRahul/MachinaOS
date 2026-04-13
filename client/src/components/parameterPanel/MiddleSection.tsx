@@ -1,7 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Collapse, Progress, Statistic, Row, Col, InputNumber, Button } from 'antd';
+import { Progress, Statistic, Row, Col, InputNumber, Button } from 'antd';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from '@/components/ui/accordion';
 import { ThunderboltOutlined, EditOutlined, SaveOutlined } from '@ant-design/icons';
 import ParameterRenderer from '../ParameterRenderer';
 import ToolSchemaEditor from './ToolSchemaEditor';
@@ -777,27 +783,27 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
 
           {/* Token Usage Section - Only for agent nodes with memory connected */}
           {isAgentWithSkills && connectedMemorySessionId && (
-            <Collapse
-              defaultActiveKey={['tokens']}
-              style={{ marginTop: 16 }}
-              items={[{
-                key: 'tokens',
-                label: (() => {
-                  const ctxLen = compactionStats?.context_length || 0;
-                  const displayMax = ctxLen > 0 ? ctxLen : compactionStats?.threshold || 0;
-                  return (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <ThunderboltOutlined />
-                      Token Usage
-                      {compactionStats && displayMax > 0 && (
-                        <span className="ml-auto text-xs text-muted-foreground">
-                          {Math.round(compactionStats.total / 1000)}K / {Math.round(displayMax / 1000)}K{ctxLen > 0 ? ' context' : ''}
-                        </span>
-                      )}
-                    </span>
-                  );
-                })(),
-                children: compactionLoading ? (
+            <Accordion type="single" collapsible defaultValue="tokens" style={{ marginTop: 16 }}>
+              <AccordionItem value="tokens">
+                <AccordionTrigger>
+                  {(() => {
+                    const ctxLen = compactionStats?.context_length || 0;
+                    const displayMax = ctxLen > 0 ? ctxLen : compactionStats?.threshold || 0;
+                    return (
+                      <span className="flex flex-1 items-center gap-2">
+                        <ThunderboltOutlined />
+                        Token Usage
+                        {compactionStats && displayMax > 0 && (
+                          <span className="ml-auto text-xs text-muted-foreground">
+                            {Math.round(compactionStats.total / 1000)}K / {Math.round(displayMax / 1000)}K{ctxLen > 0 ? ' context' : ''}
+                          </span>
+                        )}
+                      </span>
+                    );
+                  })()}
+                </AccordionTrigger>
+                <AccordionContent>
+                  {compactionLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                 ) : compactionStats ? (() => {
                   const ctxLen = compactionStats.context_length || 0;
@@ -878,9 +884,10 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
                   );
                 })() : (
                   <span className="text-xs text-muted-foreground">No data yet. Run the agent to start tracking.</span>
-                )
-              }]}
-            />
+                )}
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
           )}
 
           {/* Connected Skills Section - Only for Zeenie nodes */}

@@ -4,9 +4,15 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Form, Collapse, InputNumber, Switch, Button } from 'antd';
+import { Form, InputNumber, Switch, Button } from 'antd';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from '@/components/ui/accordion';
 import { useAppTheme } from '../../../hooks/useAppTheme';
 import { useWebSocket, type RateLimitConfig, type RateLimitStats } from '../../../contexts/WebSocketContext';
 
@@ -67,19 +73,22 @@ const RateLimitSection: React.FC = () => {
   }, [unpauseWhatsAppRateLimit]);
 
   return (
-    <Collapse items={[{
-      key: 'ratelimits',
-      label: 'Rate Limits',
-      extra: (
-        <span onClick={e => e.stopPropagation()}>
-          <Form form={form} component={false}>
-            <Form.Item name="enabled" valuePropName="checked" noStyle>
-              <Switch size="small" onChange={() => setDirty(true)} />
-            </Form.Item>
-          </Form>
-        </span>
-      ),
-      children: !loaded ? (
+    <Accordion type="single" collapsible>
+      <AccordionItem value="ratelimits">
+        <AccordionTrigger>
+          <div className="flex w-full items-center justify-between gap-2">
+            <span>Rate Limits</span>
+            <span onClick={(e) => e.stopPropagation()}>
+              <Form form={form} component={false}>
+                <Form.Item name="enabled" valuePropName="checked" noStyle>
+                  <Switch size="small" onChange={() => setDirty(true)} />
+                </Form.Item>
+              </Form>
+            </span>
+          </div>
+        </AccordionTrigger>
+        <AccordionContent>
+          {!loaded ? (
         <div className="flex justify-center p-4 text-sm text-muted-foreground">Loading...</div>
       ) : (
         <Form form={form} layout="vertical" size="small" onValuesChange={() => setDirty(true)}>
@@ -156,8 +165,10 @@ const RateLimitSection: React.FC = () => {
             Save Changes
           </Button>
         </Form>
-      ),
-    }]} />
+          )}
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
   );
 };
 

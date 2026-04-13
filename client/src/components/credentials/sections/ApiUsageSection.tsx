@@ -4,11 +4,17 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Collapse, Button } from 'antd';
+import { Button } from 'antd';
 import { DollarSign, RefreshCw, Loader2 } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from '@/components/ui/accordion';
 import { useApiKeys, type APIUsageSummary } from '../../../hooks/useApiKeys';
 
 interface Props {
@@ -39,17 +45,16 @@ const ApiUsageSection: React.FC<Props> = ({ service, serviceName }) => {
   ) : null;
 
   return (
-    <Collapse
-      items={[
-        {
-          key: 'usage',
-          label: (
-            <span className="flex items-center gap-2">
-              <DollarSign className="h-4 w-4 text-dracula-yellow" />
-              API Usage &amp; Costs {costBadge}
-            </span>
-          ),
-          children: loading ? (
+    <Accordion type="single" collapsible>
+      <AccordionItem value="usage">
+        <AccordionTrigger>
+          <span className="flex items-center gap-2">
+            <DollarSign className="h-4 w-4 text-dracula-yellow" />
+            API Usage &amp; Costs {costBadge}
+          </span>
+        </AccordionTrigger>
+        <AccordionContent>
+          {loading ? (
             <div className="flex justify-center p-4">
               <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
             </div>
@@ -93,10 +98,10 @@ const ApiUsageSection: React.FC<Props> = ({ service, serviceName }) => {
                 Refresh
               </Button>
             </div>
-          ),
-        },
-      ]}
-    />
+          )}
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
   );
 };
 

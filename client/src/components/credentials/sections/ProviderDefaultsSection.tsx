@@ -10,10 +10,16 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Form, Collapse, Select, InputNumber, Switch, Button } from 'antd';
+import { Form, Select, InputNumber, Switch, Button } from 'antd';
 import { Settings } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from '@/components/ui/accordion';
 import { useAppTheme } from '../../../hooks/useAppTheme';
 import { useApiKeys, type ProviderDefaults, type ModelConstraints } from '../../../hooks/useApiKeys';
 
@@ -92,16 +98,16 @@ const ProviderDefaultsSection: React.FC<Props> = ({ providerId }) => {
   });
 
   return (
-    <Collapse ghost defaultActiveKey={['defaults']} items={[{
-      key: 'defaults',
-      label: (
-        <span className="flex items-center gap-2">
-          <Settings className="h-4 w-4" /> Default Parameters
-        </span>
-      ),
-      children: (
-        <div className={loading ? 'pointer-events-none opacity-60' : ''}>
-          <Form form={form} layout="vertical" size="small" onValuesChange={() => setDirty(true)} preserve>
+    <Accordion type="single" collapsible defaultValue="defaults">
+      <AccordionItem value="defaults">
+        <AccordionTrigger>
+          <span className="flex items-center gap-2">
+            <Settings className="h-4 w-4" /> Default Parameters
+          </span>
+        </AccordionTrigger>
+        <AccordionContent>
+          <div className={loading ? 'pointer-events-none opacity-60' : ''}>
+            <Form form={form} layout="vertical" size="small" onValuesChange={() => setDirty(true)} preserve>
             <Form.Item
               label="Default Model"
               name="default_model"
@@ -176,9 +182,10 @@ const ProviderDefaultsSection: React.FC<Props> = ({ providerId }) => {
               Save Defaults
             </Button>
           </Form>
-        </div>
-      ),
-    }]} />
+          </div>
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
   );
 };
 

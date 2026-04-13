@@ -3,10 +3,16 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Collapse, Button } from 'antd';
+import { Button } from 'antd';
 import { DollarSign, RefreshCw, Loader2 } from 'lucide-react';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from '@/components/ui/accordion';
 import { useApiKeys, type ProviderUsageSummary } from '../../../hooks/useApiKeys';
 
 interface Props {
@@ -47,20 +53,19 @@ const LlmUsageSection: React.FC<Props> = ({ providerId, providerName }) => {
   }, [expanded, load]);
 
   return (
-    <Collapse
-      ghost
-      onChange={(keys) =>
-        setExpanded(Array.isArray(keys) ? keys.includes('usage') : keys === 'usage')
-      }
-      items={[
-        {
-          key: 'usage',
-          label: (
-            <span className="flex items-center gap-2">
-              <DollarSign className="h-4 w-4" /> Usage &amp; Costs
-            </span>
-          ),
-          children: loading ? (
+    <Accordion
+      type="single"
+      collapsible
+      onValueChange={(value) => setExpanded(value === 'usage')}
+    >
+      <AccordionItem value="usage">
+        <AccordionTrigger>
+          <span className="flex items-center gap-2">
+            <DollarSign className="h-4 w-4" /> Usage &amp; Costs
+          </span>
+        </AccordionTrigger>
+        <AccordionContent>
+          {loading ? (
             <div className="flex justify-center p-4">
               <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
             </div>
@@ -130,10 +135,10 @@ const LlmUsageSection: React.FC<Props> = ({ providerId, providerName }) => {
                 Refresh
               </Button>
             </div>
-          ),
-        },
-      ]}
-    />
+          )}
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
   );
 };
 
