@@ -28,6 +28,7 @@ This is a React Flow-based workflow automation platform implementing n8n-inspire
 | **[Scripts Reference](./docs-internal/SCRIPTS.md)** | Available npm/shell scripts and their usage |
 | **[Server Documentation](./docs-internal/server-readme.md)** | Python backend architecture and API documentation |
 | **[Skill Creation Guide](./server/skills/GUIDE.md)** | How to create new skills (folder structure, SKILL.md format, metadata, supporting files) |
+| **[Known Errors & Troubleshooting](./docs-internal/errors.md)** | Documented root causes and fixes for common errors (SQLAlchemy Windows hang, Temporal issues, WhatsApp timeouts) |
 | **[New Service Integration](./docs-internal/new_service_integration.md)** | Complete guide for integrating external services (OAuth, database, handlers, nodes, AI tools) - use Google Workspace as reference |
 | **[Onboarding Service](./docs-internal/onboarding.md)** | First-launch welcome wizard with 5 steps, database persistence, and replay from Settings |
 | **[CLI Services Integration](./docs-internal/cli_services_integration.md)** | Guide for integrating CLI-based services (Temporal, etc.) with proper lifecycle management |

@@ -21,10 +21,9 @@ const targets = [
   'client/node_modules',
   'client/dist',
   'client/.vite',
-  'server/data',
+  'server/data',         // DBs (workflow.db, credentials.db) + workspaces
   'server/.venv',
-  'server/credentials.db',  // Encrypted credentials database
-  '.venv',  // Root venv (stale, should not exist)
+  '.venv',               // Root venv (stale, should not exist)
 ];
 
 async function main() {

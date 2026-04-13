@@ -70,7 +70,7 @@ class Container(containers.DeclarativeContainer):
     # Credentials database (separate encrypted database for API keys and OAuth tokens)
     credentials_database = providers.Singleton(
         CredentialsDatabase,
-        db_path=settings.provided.credentials_db_path,
+        db_path=settings.provided.credentials_db_resolved,
         encryption=encryption_service
     )
 

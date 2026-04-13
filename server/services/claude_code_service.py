@@ -60,7 +60,7 @@ class ClaudeCodeService:
 
         if not cwd:
             from core.config import Settings
-            cwd = os.path.join(Settings().workspace_base_dir, 'default')
+            cwd = os.path.join(Settings().workspace_base_resolved, 'default')
             os.makedirs(cwd, exist_ok=True)
         work_dir = cwd
 

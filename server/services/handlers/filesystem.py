@@ -24,7 +24,7 @@ def _get_backend(parameters: Dict[str, Any], context: Dict[str, Any] = None):
     from core.config import Settings
     param_dir = parameters.get('working_directory')
     ctx_dir = context.get('workspace_dir') if context else None
-    root = param_dir or ctx_dir or os.path.join(Settings().workspace_base_dir, 'default')
+    root = param_dir or ctx_dir or os.path.join(Settings().workspace_base_resolved, 'default')
     os.makedirs(root, exist_ok=True)
     logger.info("[Filesystem] root=%s", root)
     return LocalShellBackend(root_dir=root, virtual_mode=True)

@@ -104,7 +104,7 @@ class ProcessService:
         argv = shlex.split(command)
         env = {**os.environ, "PYTHONUNBUFFERED": "1"}
         from core.config import Settings
-        workspace_base = Path(Settings().workspace_base_dir).resolve()
+        workspace_base = Path(Settings().workspace_base_resolved).resolve()
 
         if not working_directory:
             working_directory = str(workspace_base / 'default')

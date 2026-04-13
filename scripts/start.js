@@ -44,6 +44,36 @@ async function main() {
     process.exit(1);
   }
 
+  // Preflight: time-boxed sqlalchemy import probe.
+  // On Windows, Defender's minifilter driver (MpFilter.sys) can cache stale
+  // "pending scan" entries that block .pyd LoadLibrary calls even after
+  // adding exclusions. See docs-internal/errors.md #1 and #1a.
+  const pyExe = resolve(ROOT, 'server', '.venv', 'Scripts', isWindows ? 'python.exe' : 'python');
+  const pyFallback = resolve(ROOT, 'server', '.venv', 'bin', 'python');
+  const py = existsSync(pyExe) ? pyExe : pyFallback;
+  if (existsSync(py)) {
+    const probeStart = Date.now();
+    try {
+      execSync(`"${py}" -c "import sqlalchemy"`, { timeout: 15000, stdio: 'pipe' });
+      const elapsed = Date.now() - probeStart;
+      if (elapsed > 5000) {
+        console.warn(`Warning: sqlalchemy import took ${(elapsed / 1000).toFixed(1)}s (expected <1s).`);
+        console.warn('  See docs-internal/errors.md #1 for Windows Defender remediation.');
+      }
+    } catch (e) {
+      const elapsed = Date.now() - probeStart;
+      console.error(`Error: Python venv health check failed (${(elapsed / 1000).toFixed(1)}s).`);
+      console.error('  sqlalchemy import hung or crashed.');
+      console.error('  Likely cause: Windows Defender scan cache or stale kernel state.');
+      console.error('  Fix options:');
+      console.error('    1. Restart-Service WinDefend  (admin PowerShell)');
+      console.error('    2. Reboot the machine');
+      console.error('    3. Add D:\\...\\server\\.venv to Defender exclusions');
+      console.error('  See docs-internal/errors.md #1 and #1a for details.');
+      process.exit(1);
+    }
+  }
+
   const config = loadEnvConfig();
   process.env.PYTHONUTF8 = '1';
   ensureEnvFile();

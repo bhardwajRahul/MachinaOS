@@ -135,7 +135,7 @@ class WorkflowService:
 
     def _get_workspace_dir(self, workflow_id: Optional[str]) -> str:
         """Get or create workspace directory for a workflow."""
-        base = Path(self.settings.workspace_base_dir)
+        base = Path(self.settings.workspace_base_resolved)
         wf_id = workflow_id or "default"
         workspace = base / wf_id
         workspace.mkdir(parents=True, exist_ok=True)

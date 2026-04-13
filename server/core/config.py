@@ -86,7 +86,11 @@ class Settings(BaseSettings):
     api_key_encryption_key: str = Field(env="API_KEY_ENCRYPTION_KEY", min_length=32)
     api_key_cache_ttl: int = Field(default=2592000, env="API_KEY_CACHE_TTL", ge=3600)
 
+    # Data directory (base for all persistent storage: DBs, workspaces, logs)
+    data_dir: str = Field(default="data", env="DATA_DIR")
+
     # Credentials Database (separate encrypted database for API keys and OAuth tokens)
+    # Resolved relative to data_dir unless absolute
     credentials_db_path: str = Field(default="credentials.db", env="CREDENTIALS_DB_PATH")
 
     # Credential Backend Selection
@@ -126,7 +130,8 @@ class Settings(BaseSettings):
     ws_logging_enabled: bool = Field(default=True, env="WS_LOGGING_ENABLED")
 
     # Workspace Configuration (per-workflow file storage for nodes and agents)
-    workspace_base_dir: str = Field(default="data/workspaces", env="WORKSPACE_BASE_DIR")
+    # Workspace base -- relative to data_dir unless absolute
+    workspace_base_dir: str = Field(default="workspaces", env="WORKSPACE_BASE_DIR")
 
     # Compaction Configuration
     compaction_enabled: bool = Field(default=True, env="COMPACTION_ENABLED")
@@ -159,6 +164,23 @@ class Settings(BaseSettings):
     def is_production(self) -> bool:
         """Check if running in production mode."""
         return not self.debug
+
+    def _resolve_under_data(self, path: str) -> str:
+        """Resolve a path relative to data_dir, unless already absolute."""
+        p = Path(path)
+        if p.is_absolute():
+            return str(p)
+        return str(Path(self.data_dir) / p)
+
+    @property
+    def credentials_db_resolved(self) -> str:
+        """Full credentials DB path, rooted under data_dir."""
+        return self._resolve_under_data(self.credentials_db_path)
+
+    @property
+    def workspace_base_resolved(self) -> str:
+        """Full workspace base path, rooted under data_dir."""
+        return self._resolve_under_data(self.workspace_base_dir)
 
     model_config = {
         "env_file": "../.env",
