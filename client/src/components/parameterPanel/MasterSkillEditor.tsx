@@ -11,8 +11,19 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Input, Select, Checkbox, List, Badge, Empty } from 'antd';
-import { Loader2, Info, Plus, Trash2, Save, X, RotateCcw } from 'lucide-react';
+import { Loader2, Info, Plus, Trash2, Save, X, RotateCcw, Search, Folder, Inbox } from 'lucide-react';
+
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Badge as DSBadge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 import { Button } from '@/components/ui/button';
 import { Alert as DSAlert, AlertDescription } from '@/components/ui/alert';
@@ -34,7 +45,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { SearchOutlined, FolderOutlined, PlusOutlined } from '@ant-design/icons';
+import { PlusOutlined } from '@ant-design/icons';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { skillNodes, SKILL_NODE_TYPES } from '../../nodeDefinitions/skillNodes';
@@ -607,7 +618,12 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
             Skills
           </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.xs }}>
-            <Badge count={enabledCount} style={{ backgroundColor: theme.dracula.purple }} showZero />
+            <DSBadge
+              style={{ backgroundColor: theme.dracula.purple, color: '#fff' }}
+              className="h-5 min-w-5 justify-center rounded-full px-1.5"
+            >
+              {enabledCount}
+            </DSBadge>
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -632,38 +648,52 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
         </div>
 
         {/* Search */}
-        <div style={{ padding: theme.spacing.sm, borderBottom: `1px solid ${theme.colors.border}` }}>
-          <Input
-            placeholder="Search skills..."
-            prefix={<SearchOutlined style={{ color: theme.colors.textSecondary }} />}
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            allowClear
-            style={{
-              backgroundColor: theme.colors.background,
-              borderColor: theme.colors.border,
-            }}
-          />
+        <div className="border-b border-border p-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute top-1/2 left-2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search skills..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="h-9 pl-8 pr-8"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label="Clear search"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Skill Folder Dropdown */}
-        <div style={{ padding: theme.spacing.sm, borderBottom: `1px solid ${theme.colors.border}`, flexShrink: 0 }}>
+        <div className="shrink-0 border-b border-border p-2">
           <Select
             value={skillFolder || 'assistant'}
-            onChange={(value) => {
+            onValueChange={(value) => {
               onSkillFolderChange?.(value);
               setSelectedSkillName(null);
             }}
-            loading={!foldersLoaded}
             disabled={!foldersLoaded}
-            getPopupContainer={(trigger) => trigger.parentElement || document.body}
-            style={{ width: '100%' }}
-            suffixIcon={<FolderOutlined style={{ color: theme.colors.textSecondary }} />}
-            options={availableFolders.map(f => ({
-              value: f.name,
-              label: `${f.name} (${f.skill_count})`,
-            }))}
-          />
+          >
+            <SelectTrigger className="w-full">
+              <div className="flex items-center gap-2">
+                <Folder className="h-4 w-4 text-muted-foreground" />
+                <SelectValue placeholder="Choose folder" />
+              </div>
+            </SelectTrigger>
+            <SelectContent>
+              {availableFolders.map((f) => (
+                <SelectItem key={f.name} value={f.name}>
+                  {f.name} ({f.skill_count})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Skills List */}
@@ -674,26 +704,23 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
               Scanning folder...
             </div>
           ) : filteredSkills.length === 0 ? (
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={skillFolder ? `No skills found in skills/${skillFolder}/` : 'No skills found'}
-              style={{ marginTop: theme.spacing.lg }}
-            />
+            <div className="mt-6 flex flex-col items-center gap-2 p-6 text-center text-sm text-muted-foreground">
+              <Inbox className="h-10 w-10 opacity-50" />
+              <p>{skillFolder ? `No skills found in skills/${skillFolder}/` : 'No skills found'}</p>
+            </div>
           ) : (
-            <List
-              size="small"
-              dataSource={filteredSkills}
-              renderItem={(skill) => {
+            <div className="divide-y divide-border">
+              {filteredSkills.map((skill) => {
                 const config = skillsConfig[skill.skillName];
                 const isSelected = selectedSkillName === skill.skillName && !isCreatingNew;
                 const isEnabled = config?.enabled || false;
                 const isCustomized = config?.isCustomized || false;
 
                 return (
-                  <List.Item
+                  <div
+                    key={skill.skillName}
                     onClick={() => {
                       if (isCreatingNew) {
-                        // Confirm cancel if creating new
                         if (hasUnsavedChanges) {
                           if (!confirm('Discard unsaved changes?')) return;
                         }
@@ -701,33 +728,28 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
                       }
                       setSelectedSkillName(skill.skillName);
                     }}
+                    className="cursor-pointer border-l-[3px] px-3 py-2 transition-colors"
                     style={{
-                      padding: `${theme.spacing.sm} ${theme.spacing.md}`,
-                      cursor: 'pointer',
                       backgroundColor: isSelected ? `${skill.color}15` : 'transparent',
-                      borderLeft: isSelected ? `3px solid ${skill.color}` : '3px solid transparent',
-                      transition: 'all 0.15s ease'
+                      borderLeftColor: isSelected ? skill.color : 'transparent',
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.sm, width: '100%' }}>
+                    <div className="flex w-full items-center gap-2">
                       <Checkbox
                         checked={isEnabled}
-                        onChange={(e) => {
-                          e.stopPropagation();
-                          handleToggleSkill(skill.skillName, e.target.checked);
+                        onCheckedChange={(checked) => {
+                          handleToggleSkill(skill.skillName, checked === true);
                         }}
                         onClick={(e) => e.stopPropagation()}
                       />
                       {renderSkillIcon(skill.icon || '', 16)}
-                      <span style={{
-                        flex: 1,
-                        fontSize: theme.fontSize.sm,
-                        fontWeight: isSelected ? theme.fontWeight.semibold : theme.fontWeight.medium,
-                        color: isEnabled ? theme.colors.text : theme.colors.textSecondary,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap'
-                      }}>
+                      <span
+                        className="flex-1 overflow-hidden text-sm whitespace-nowrap text-ellipsis"
+                        style={{
+                          fontWeight: isSelected ? theme.fontWeight.semibold : theme.fontWeight.medium,
+                          color: isEnabled ? theme.colors.text : theme.colors.textSecondary,
+                        }}
+                      >
                         {skill.displayName}
                       </span>
                       {isCustomized && (
@@ -735,13 +757,8 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <div
-                                style={{
-                                  width: 8,
-                                  height: 8,
-                                  borderRadius: '50%',
-                                  backgroundColor: theme.dracula.orange,
-                                  flexShrink: 0,
-                                }}
+                                className="h-2 w-2 shrink-0 rounded-full"
+                                style={{ backgroundColor: theme.dracula.orange }}
                               />
                             </TooltipTrigger>
                             <TooltipContent>Customized</TooltipContent>
@@ -749,23 +766,21 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
                         </TooltipProvider>
                       )}
                       {skill.isUserSkill && (
-                        <Badge
-                          count="Custom"
+                        <DSBadge
+                          className="h-4 px-1 text-[10px]"
                           style={{
                             backgroundColor: `${theme.dracula.cyan}20`,
                             color: theme.dracula.cyan,
-                            fontSize: 10,
-                            padding: '0 4px',
-                            height: 16,
-                            lineHeight: '16px'
                           }}
-                        />
+                        >
+                          Custom
+                        </DSBadge>
                       )}
                     </div>
-                  </List.Item>
+                  </div>
                 );
-              }}
-            />
+              })}
+            </div>
           )}
         </div>
       </div>
@@ -904,19 +919,13 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
                 <label style={{ display: 'block', fontSize: theme.fontSize.xs, color: theme.colors.textSecondary, marginBottom: 4 }}>
                   Instructions *
                 </label>
-                <Input.TextArea
+                <Textarea
                   value={pendingSkillData.instructions}
-                  onChange={(e) => handlePendingDataChange('instructions', e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handlePendingDataChange('instructions', e.target.value)}
                   placeholder="# Skill Instructions..."
                   spellCheck={false}
-                  autoSize={false}
+                  className="flex-1 min-h-0 resize-none font-mono text-[13px] leading-[1.5]"
                   style={{
-                    flex: 1,
-                    minHeight: 0,
-                    resize: 'none',
-                    fontFamily: "'Consolas', 'Monaco', 'Fira Code', monospace",
-                    fontSize: 13,
-                    lineHeight: 1.5,
                     backgroundColor: theme.colors.backgroundAlt,
                     color: theme.colors.text,
                     borderColor: theme.colors.border,
@@ -962,14 +971,15 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
                   }}>
                     {selectedSkillInfo.displayName}
                     {selectedSkillConfig?.isCustomized && (
-                      <Badge
-                        count="Customized"
+                      <DSBadge
+                        className="h-4 text-xs"
                         style={{
                           backgroundColor: `${theme.dracula.orange}20`,
                           color: theme.dracula.orange,
-                          fontSize: theme.fontSize.xs
                         }}
-                      />
+                      >
+                        Customized
+                      </DSBadge>
                     )}
                   </div>
                 )}
@@ -1074,13 +1084,13 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
                   Loading...
                 </div>
               ) : (
-                <Input.TextArea
+                <Textarea
                   value={
                     isEditingUserSkill
                       ? pendingSkillData?.instructions || ''
                       : (selectedSkillConfig?.instructions || defaultInstructions[selectedSkillName!] || '')
                   }
-                  onChange={(e) => {
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
                     if (isEditingUserSkill) {
                       handlePendingDataChange('instructions', e.target.value);
                     } else {
@@ -1089,14 +1099,8 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
                   }}
                   placeholder="Loading skill instructions..."
                   spellCheck={false}
-                  autoSize={false}
+                  className="flex-1 min-h-0 resize-none font-mono text-[13px] leading-[1.5]"
                   style={{
-                    flex: 1,
-                    minHeight: 0,
-                    resize: 'none',
-                    fontFamily: "'Consolas', 'Monaco', 'Fira Code', monospace",
-                    fontSize: 13,
-                    lineHeight: 1.5,
                     backgroundColor: theme.colors.backgroundAlt,
                     color: theme.colors.text,
                     borderColor: theme.colors.border,
@@ -1117,10 +1121,10 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
             </div>
           </>
         ) : (
-          <Empty
-            description="Select a skill to view instructions"
-            style={{ margin: 'auto' }}
-          />
+          <div className="m-auto flex flex-col items-center gap-2 p-6 text-center text-sm text-muted-foreground">
+            <Inbox className="h-10 w-10 opacity-50" />
+            <p>Select a skill to view instructions</p>
+          </div>
         )}
       </div>
     </div>

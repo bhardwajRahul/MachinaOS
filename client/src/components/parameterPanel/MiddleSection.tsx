@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Progress, Statistic, Row, Col, InputNumber } from 'antd';
 import { Loader2, Save } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Progress } from '@/components/ui/progress';
+import { cn } from '@/lib/utils';
 import {
   Accordion,
   AccordionItem,
@@ -25,6 +27,13 @@ import { SKILL_NODE_TYPES, skillNodes } from '../../nodeDefinitions/skillNodes';
 
 // Tool node types that support schema editing
 const TOOL_NODE_TYPES = ['androidTool', 'calculatorTool', 'currentTimeTool', 'duckduckgoSearch'];
+
+const Stat: React.FC<{ title: React.ReactNode; value: React.ReactNode }> = ({ title, value }) => (
+  <div className="flex flex-col">
+    <span className="text-xs text-muted-foreground">{title}</span>
+    <span className="text-lg font-semibold tabular-nums">{value}</span>
+  </div>
+);
 
 // Agent node types that support skills (have input-skill handle)
 const AGENT_WITH_SKILLS_TYPES = [
@@ -818,29 +827,31 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
                   return (
                     <>
                       <Progress
-                        percent={Math.min(percent, 100)}
-                        status={isWarning ? 'exception' : 'active'}
+                        value={Math.min(percent, 100)}
+                        className={cn(isWarning && '[&>div]:bg-destructive')}
                       />
                       {hasContext && compactionStats.threshold > 0 && (
                         <span className="mt-1 block text-[11px] text-muted-foreground">
                           Compaction at {Math.round(compactionStats.threshold / 1000)}K ({Math.round(compactionStats.threshold / ctxLen * 100)}% of context)
                         </span>
                       )}
-                      <Row gutter={16} style={{ marginTop: 12 }}>
-                        <Col span={8}><Statistic title="Total" value={compactionStats.total} /></Col>
-                        <Col span={8}>
+                      <div className="mt-3 grid grid-cols-12 gap-4">
+                        <div className="col-span-4">
+                          <Stat title="Total" value={compactionStats.total} />
+                        </div>
+                        <div className="col-span-4">
                           {isEditingThreshold ? (
                             <div>
                               <span className="text-xs text-muted-foreground">Threshold</span>
-                              <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
-                                <InputNumber
-                                  size="small"
+                              <div className="mt-1 flex gap-1">
+                                <Input
+                                  type="number"
                                   value={editThresholdValue}
-                                  onChange={(v) => setEditThresholdValue(v || compactionStats.threshold)}
+                                  onChange={(e) => setEditThresholdValue(Number(e.target.value) || compactionStats.threshold)}
                                   min={10000}
                                   max={2000000}
                                   step={10000}
-                                  style={{ width: 100 }}
+                                  className="h-7 w-28 text-xs"
                                 />
                                 <Button
                                   size="icon-sm"
@@ -869,16 +880,28 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
                               </div>
                             </div>
                           ) : (
-                            <div onClick={() => { setEditThresholdValue(compactionStats.threshold); setIsEditingThreshold(true); }} style={{ cursor: 'pointer' }}>
-                              <Statistic title={<span>Threshold <EditOutlined style={{ fontSize: 10, marginLeft: 4 }} /></span>} value={compactionStats.threshold} />
+                            <div onClick={() => { setEditThresholdValue(compactionStats.threshold); setIsEditingThreshold(true); }} className="cursor-pointer">
+                              <Stat
+                                title={
+                                  <span className="inline-flex items-center gap-1">
+                                    Threshold
+                                    <EditOutlined style={{ fontSize: 10 }} />
+                                  </span>
+                                }
+                                value={compactionStats.threshold}
+                              />
                             </div>
                           )}
-                        </Col>
-                        <Col span={hasContext ? 4 : 8}><Statistic title="Compactions" value={compactionStats.count} /></Col>
+                        </div>
+                        <div className={hasContext ? 'col-span-2' : 'col-span-4'}>
+                          <Stat title="Compactions" value={compactionStats.count} />
+                        </div>
                         {hasContext && (
-                          <Col span={4}><Statistic title="Context" value={`${Math.round(ctxLen / 1000)}K`} /></Col>
+                          <div className="col-span-2">
+                            <Stat title="Context" value={`${Math.round(ctxLen / 1000)}K`} />
+                          </div>
                         )}
-                      </Row>
+                      </div>
                       <span className="mt-2 block text-xs text-muted-foreground">
                         Session: {compactionStats.session_id}
                       </span>

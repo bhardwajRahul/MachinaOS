@@ -1,8 +1,8 @@
 import React from 'react';
-import { Steps } from 'antd';
 import { ArrowLeft, ArrowRight, Check } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import Modal from '../ui/Modal';
 import { useOnboarding } from '../../hooks/useOnboarding';
 import { useAppTheme } from '../../hooks/useAppTheme';
@@ -69,12 +69,43 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onOpenCredentials, 
         padding: '16px 20px 12px',
       }}>
         {/* Progress steps */}
-        <Steps
-          current={currentStep}
-          size="small"
-          items={stepItems}
-          style={{ marginBottom: 16 }}
-        />
+        <ol className="mb-4 flex w-full items-center">
+          {stepItems.map((item, idx) => {
+            const status: 'completed' | 'active' | 'upcoming' =
+              idx < currentStep ? 'completed' : idx === currentStep ? 'active' : 'upcoming';
+            const isLast = idx === stepItems.length - 1;
+            return (
+              <li key={item.title} className="flex flex-1 items-center gap-2">
+                <div
+                  className={cn(
+                    'flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-xs font-medium transition-colors',
+                    status === 'completed' && 'border-primary bg-primary text-primary-foreground',
+                    status === 'active' && 'border-primary text-primary',
+                    status === 'upcoming' && 'border-border text-muted-foreground',
+                  )}
+                >
+                  {status === 'completed' ? <Check className="h-4 w-4" /> : idx + 1}
+                </div>
+                <span
+                  className={cn(
+                    'whitespace-nowrap text-xs',
+                    status === 'upcoming' ? 'text-muted-foreground' : 'text-foreground',
+                  )}
+                >
+                  {item.title}
+                </span>
+                {!isLast && (
+                  <div
+                    className={cn(
+                      'h-px flex-1',
+                      idx < currentStep ? 'bg-primary' : 'bg-border',
+                    )}
+                  />
+                )}
+              </li>
+            );
+          })}
+        </ol>
 
         {/* Step content */}
         <div style={{

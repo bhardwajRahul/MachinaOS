@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { InputNumber, Slider } from 'antd';
 import { toast } from 'sonner';
 import { HelpCircle } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import { Slider } from '@/components/ui/slider';
+import { Input } from '@/components/ui/input';
 import Modal from './Modal';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { useWebSocket } from '../../contexts/WebSocketContext';
@@ -396,17 +397,21 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   <div style={labelTextStyle}>Auto-save Interval</div>
                   <div style={descriptionStyle}>How often to auto-save (10-300 seconds)</div>
                 </div>
-                <InputNumber
-                  
-                  min={10}
-                  max={300}
-                  step={5}
-                  value={settings.autoSaveInterval}
-                  onChange={(value) => handleChange('autoSaveInterval', value ?? 30)}
-                  disabled={isSaving}
-                  style={{ width: 80 }}
-                  suffix="s"
-                />
+                <div className="relative w-24">
+                  <Input
+                    type="number"
+                    min={10}
+                    max={300}
+                    step={5}
+                    value={settings.autoSaveInterval}
+                    onChange={(e) => handleChange('autoSaveInterval', Number(e.target.value) || 30)}
+                    disabled={isSaving}
+                    className="pr-6"
+                  />
+                  <span className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-xs text-muted-foreground">
+                    s
+                  </span>
+                </div>
               </div>
             )}
           </div>
@@ -423,15 +428,15 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 <div style={labelTextStyle}>Default Window Size</div>
                 <div style={descriptionStyle}>Number of message pairs to keep in short-term memory (1-100)</div>
               </div>
-              <InputNumber
-                
+              <Input
+                type="number"
                 min={1}
                 max={100}
                 step={1}
                 value={settings.memoryWindowSize}
-                onChange={(value) => handleChange('memoryWindowSize', value ?? 100)}
+                onChange={(e) => handleChange('memoryWindowSize', Number(e.target.value) || 100)}
                 disabled={isSaving}
-                style={{ width: 80 }}
+                className="w-20"
               />
             </div>
 
@@ -459,16 +464,16 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 min={10}
                 max={90}
                 step={5}
-                value={Math.round(settings.compactionRatio * 100)}
-                onChange={(value) => handleChange('compactionRatio', value / 100)}
+                value={[Math.round(settings.compactionRatio * 100)]}
+                onValueChange={(value) => handleChange('compactionRatio', (value[0] ?? 50) / 100)}
                 disabled={isSaving}
-                tooltip={{ formatter: (val) => `${val}%` }}
-                marks={{
-                  10: { label: '10%', style: { fontSize: 10, color: theme.colors.textMuted } },
-                  50: { label: '50%', style: { fontSize: 10, color: theme.colors.textMuted } },
-                  90: { label: '90%', style: { fontSize: 10, color: theme.colors.textMuted } },
-                }}
+                className="my-3"
               />
+              <div className="flex justify-between text-[10px] text-muted-foreground">
+                <span>10%</span>
+                <span>50%</span>
+                <span>90%</span>
+              </div>
               <div style={{
                 fontSize: theme.fontSize.xs,
                 color: theme.colors.textMuted,
@@ -492,15 +497,15 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 <div style={labelTextStyle}>Max Concurrent Processes</div>
                 <div style={descriptionStyle}>Maximum number of running processes per workflow (1-50)</div>
               </div>
-              <InputNumber
-                
+              <Input
+                type="number"
                 min={1}
                 max={50}
                 step={1}
                 value={settings.maxProcesses ?? 10}
-                onChange={(value) => handleChange('maxProcesses', value ?? 10)}
+                onChange={(e) => handleChange('maxProcesses', Number(e.target.value) || 10)}
                 disabled={isSaving}
-                style={{ width: 80 }}
+                className="w-20"
               />
             </div>
           </div>

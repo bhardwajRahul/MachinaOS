@@ -16,7 +16,7 @@ import remarkBreaks from 'remark-breaks';
 import { useWebSocket, ConsoleLogEntry } from '../../contexts/WebSocketContext';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { useTheme } from '../../contexts/ThemeContext';
-import { InputNumber } from 'antd';
+import { Input } from '@/components/ui/input';
 import Prism from 'prismjs';
 import 'prismjs/components/prism-json';
 
@@ -1068,14 +1068,16 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
                   Pretty
                 </label>
               )}
-              <InputNumber
-                size="small"
+              <Input
+                type="number"
                 value={consoleFontSize}
-                onChange={v => v != null && setConsoleFontSize(v)}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  if (!Number.isNaN(v)) setConsoleFontSize(v);
+                }}
                 min={minFontSize}
                 max={maxFontSize}
-                style={{ width: 52 }}
-                controls={false}
+                className="h-7 w-14 text-xs"
               />
               {((consoleTab === 'console' && consoleLogs.length > 0) || (consoleTab === 'terminal' && terminalLogs.length > 0)) && (
                 <button
