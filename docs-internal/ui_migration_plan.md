@@ -24,6 +24,29 @@
 - `grep -rln "styled-components" client/src/` → **0**
 - `pnpm build` green throughout all 17 commits on `feature/credentials-scaling-v2`
 
+## Post-antd cleanup (April 2026)
+
+A second audit (3 parallel sub-agents) flagged tribal patterns that survived the antd retirement and didn't match the schema-driven design system. A focused 5-phase follow-up plan ([typed-splashing-crown](../../../.claude/plans/typed-splashing-crown.md)) addresses them:
+
+| Follow-up phase | Status | Commit | What it removes |
+|---|---|---|---|
+| 1 — Workflow list to TanStack Query | ✅ done | `c3a7aa4` | `savedWorkflows` array + `loadSavedWorkflows` action duplicating server data in Zustand |
+| 2 — `useParameterPanel` / `useOnboarding` to Query hooks | ✅ done | `b2b6fba` | hand-rolled `useState + useEffect` over `WebSocketContext.sendRequest` |
+| 3 — Theme tokens to CSS vars (kickoff) | ✅ done | `8b19808` | `theme.ts` deprecation banner + `AIAgentNode` PHASE_CONFIG hex literals (bulk migration of `GenericNode` / `SettingsPanel` / `BaseChatModelNode` deferred) |
+| 4 — `SettingsPanel` to zod + Phase-2 hooks | ✅ done | `2901f0a` | duplicated camel↔snake mappers + hand-rolled load/save WS calls |
+| 5 — Schema-drive WhatsApp selectors | ✅ done | `8353c48` | `parameter.name === 'group_id'` / `'channel_jid'` / `'senderNumber'` branches in `ParameterRenderer` (now `typeOptions.loadOptionsMethod`) |
+
+**What's still tribal (deferred):**
+- Bulk inline-style migration in `GenericNode`, `SettingsPanel` non-button styles, `BaseChatModelNode`. The Tailwind classes are wired and the deprecation banner is in place; per-component conversion is mechanical but visual-regression-prone, so left for follow-up commits with browser verification.
+- `parameter.name === 'apiKey'` / `'model'` specials in `ParameterRenderer` — same migration path (`typeOptions.loadOptionsMethod = 'providerModels'` etc.), parked until the WhatsApp pattern proves stable.
+- `ConsolePanel` 11 × `useState` → `useReducer` + zod schema. Independent edit-state domain; won't be touched until a behavior change forces it.
+
+**New canonical patterns introduced:**
+- Workflows + node params + user settings live in TanStack Query (`useWorkflowsQuery`, `useNodeParamsQuery`, `useUserSettingsQuery`), not Zustand or component-local state.
+- Module-singleton `QueryClient` at [client/src/lib/queryClient.ts](../client/src/lib/queryClient.ts) so imperative code (Zustand actions) can invalidate without going through React context.
+- Settings + onboarding share one cached server read (`['userSettings']`).
+- WhatsApp group / channel / member selectors dispatch from `typeOptions.loadOptionsMethod` instead of parameter-name string compares — schema is the source of truth.
+
 ## Context
 
 The MachinaOs frontend was coupled to Ant Design (40 files, 187-line theme file, `ConfigProvider` at root). Pre-migration audit + research docs (now deleted; see git history under commit `4cb3dd9` if needed) prescribed shadcn/ui (canonical components copied via CLI registry) + Radix primitives + Tailwind 4 + JSON Forms for a schema-driven inspector. Phase 0/1 commits (`2209dba`, `7ac69fe`) included hand-written primitives and a toast facade — those got deleted as part of corrected Phase 0 (`cdeebb4`).

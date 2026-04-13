@@ -140,11 +140,15 @@ client/src/
 ├── hooks/
 │   ├── useAppTheme.ts              # Bridges ThemeContext + Solarized/Dracula palettes
 │   ├── useCatalogueQuery.ts        # TanStack Query + idb-keyval warm-start (exemplar)
+│   ├── useWorkflowsQuery.ts        # Workflow list + save/delete mutations (Query)
+│   ├── useNodeParamsQuery.ts       # Per-node parameter Query + save mutation
+│   ├── useUserSettingsQuery.ts     # user_settings row Query + save mutation
 │   ├── useApiKeys.ts               # WS-based API key CRUD
 │   ├── useApiKeyValidation.ts      # Provider-specific validation helpers
 │   ├── useComponentPalette.ts / useDragAndDrop.ts / useExecution.ts
-│   ├── useOnboarding.ts / useParameterPanel.ts / usePricing.ts
-│   ├── useToolSchema.ts / useWhatsApp.ts / useAndroidOperations.ts
+│   ├── useOnboarding.ts            # Reads via useUserSettingsQuery; writes via mutation
+│   ├── useParameterPanel.ts        # Thin orchestrator over useNodeParamsQuery + save mutation
+│   ├── usePricing.ts / useToolSchema.ts / useWhatsApp.ts / useAndroidOperations.ts
 │   └── useCopyPaste.ts / useRename.ts
 │
 ├── store/
@@ -152,6 +156,9 @@ client/src/
 │   └── useCredentialRegistry.ts    # UI-only: selectedId + paletteOpen + query
 │
 ├── lib/
+│   ├── queryClient.ts              # Module-singleton QueryClient so imperative
+│   │                               # code (Zustand actions) can invalidate without
+│   │                               # going through React context.
 │   └── utils.ts                    # cn() = clsx + tailwind-merge (shadcn convention)
 │
 ├── styles/
@@ -345,6 +352,23 @@ See [ui_migration_plan.md](./ui_migration_plan.md) Phase 6.
 - `useEffect` fetch-on-mount is banned for anything the backend can push. Subscribe to the context slice instead.
 - All modifying operations go through WebSocket — REST is reserved for auth + webhooks.
 - No polling. If a component wants fresh data, call `sendRequest` once (or use TanStack Query with `staleTime: Infinity` + manual `invalidate`).
+
+## Ownership boundary: TanStack Query vs Zustand vs WebSocketContext
+
+This is the rule that keeps the data layer schema-driven instead of imperatively glued together.
+
+| Owns | What goes here | Examples |
+|---|---|---|
+| **TanStack Query** | Anything the server has authoritative state for. List / single-record / settings reads. Mutations that change server state. | `useWorkflowsQuery`, `useNodeParamsQuery`, `useUserSettingsQuery`, `useCatalogueQuery`, `useSaveWorkflowMutation`, `useSaveNodeParamsMutation`, `useSaveUserSettingsMutation` |
+| **Zustand** | UI-only state that survives navigation. The active edit buffer for the current workflow. Sidebar/panel visibility flags. | `useAppStore.currentWorkflow` (mutable buffer), `sidebarVisible`, `proMode`, `renamingNodeId`, `useCredentialRegistry.selectedId` |
+| **`useState` / `useReducer`** | Per-component transient state. Form-field drafts. Hover/focus. | text-input drafts, dropdown-open, inline-edit toggles |
+| **`WebSocketContext`** | Raw WS connection, `sendRequest`, push-only broadcast slices (node status, workflow progress, android status). | `nodeStatuses`, `androidStatus`, `consoleLogs`, broadcast streams |
+
+**Hard rules:**
+- A list of server records (`workflows`, `nodeParameters`, `userSettings`, `credentialCatalogue`) lives in TanStack Query. Never duplicate it in Zustand. Phase-1 follow-up commit `c3a7aa4` removed `savedWorkflows` from `useAppStore` for exactly this reason.
+- Imperative WebSocket request/response inside a component (`useEffect` + `sendRequest` + `setState`) is a code smell — wrap it in a `useQuery` hook. Phase-2 commit `b2b6fba` did this for `useParameterPanel` and `useOnboarding`.
+- After a mutation, **invalidate the corresponding query key**, don't manually patch a Zustand list. Mutations that need it from non-React code use the `queryClient` singleton at [client/src/lib/queryClient.ts](../client/src/lib/queryClient.ts).
+- Schema metadata for parameter behavior (selectors, validators, dynamic options) belongs in the node-definition `typeOptions`, NOT in `parameter.name === '...'` checks inside `ParameterRenderer`. Phase-5 commit `8353c48` introduced `typeOptions.loadOptionsMethod` for the WhatsApp selectors as the canonical pattern.
 
 ## Theme + canvas chrome
 
