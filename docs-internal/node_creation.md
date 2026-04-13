@@ -640,31 +640,21 @@ outputs: [{
 }]
 ```
 
-### Sample Schemas for Common Nodes
+### Declaring the runtime output shape (backend)
 
-Add sample schemas in `InputSection.tsx` for better drag-and-drop UX:
+The node's output shape lives on the **backend** — the frontend fetches it lazy (see [schema_source_of_truth_rfc.md](./schema_source_of_truth_rfc.md)). Add a Pydantic model to [server/services/node_output_schemas.py](../server/services/node_output_schemas.py) and register it in `NODE_OUTPUT_SCHEMAS`:
 
-```typescript
-const sampleSchemas: Record<string, Record<string, string>> = {
-  aiAgent: {
-    response: 'string',
-    model: 'string',
-    provider: 'string',
-    iterations: 'number',
-    timestamp: 'string'
-  },
-  httpRequest: {
-    status: 'number',
-    data: 'object',
-    headers: 'object'
-  },
-  yourNewNode: {
-    field1: 'string',
-    field2: 'number',
-    // ... document your output fields
-  }
-};
+```python
+# server/services/node_output_schemas.py
+class YourNewNodeOutput(_OutputBase):
+    field1: Optional[str] = None
+    field2: Optional[int] = None
+    # ...
+
+NODE_OUTPUT_SCHEMAS["yourNewNode"] = YourNewNodeOutput
 ```
+
+That's it — the editor's Input panel picks it up on next open via `GET /api/schemas/nodes/yourNewNode.json`. No frontend change. If you skip this, InputSection falls back to real run data (once the node executes) and then to an empty `{ data: 'any' }` state.
 
 ---
 

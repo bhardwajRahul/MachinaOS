@@ -86,17 +86,18 @@ Under that finding, the in-flight Wave 3 Phase 1 was reversed: the backend owns 
 | 1a — Revert frontend outputSchema annotations | ✅ done | `cd252c1`, `5866821` | 30-file frontend annotation revert; `outputSchema` field removed from `INodeTypeDescription`; the 7 Wave-2-canary annotations (start/chatTrigger/taskTrigger/simpleMemory/python+js+ts executors) also removed — same principle |
 | 1b — Backend schema registry + endpoint | ✅ done | `0d98c88`, `4a4a439` | `server/services/node_output_schemas.py` — **98 node-type entries** across agents / chat models / triggers / memory / code executors / Google Workspace / WhatsApp / search / location / filesystem / HTTP / Android / documents / proxy / email / telegram / twitter / social / browser / apify / crawlee / cronScheduler. Pydantic models colocated. `GET /api/schemas/nodes/{node_type}.json` (Cache-Control public, max-age=86400) + `get_node_output_schema` WS handler |
 | 1c — Frontend three-tier dispatch + delete sampleSchemas | ✅ done | `327f792`, `4a4a439` | `InputSection.tsx` 1,673 → 972 LOC (−701). `sampleSchemas` map + 20-line `is{Android,Google,…}Node` detection constants + 60-line pattern-match else-if chain all gone. Schema precedence: real run data → backend fetch (cached in TanStack Query, in-memory only, matches n8n's `schemaPreview.store` pattern) → `{ data: 'any' }` empty |
-| 2 — MiddleSection decompose | 🟡 partial | `2c5f227` | Two tractable wins landed: `sendRequest('get_user_settings')` → shared `useUserSettingsQuery`; `sendRequest('configure_compaction')` threshold-edit → TanStack `useMutation`. Full 6-sub-panel extraction deferred — 1,248 LOC with deeply-tangled useEffect chains needs in-browser verification |
-| 3 — MasterSkillEditor decompose | ⏸ deferred | — | 1,133 LOC + 8 imperative `sendRequest + setState` sites across multiple useEffect chains + native capture-phase keydown escape. Safe decomposition requires UI smoke testing across folder-scan / user-skill CRUD / skill-content fetch |
+| 2 — MiddleSection decompose | 🟡 partial | `2c5f227`, `61bf23c` | Three wins landed: (a) `sendRequest('get_user_settings')` → shared `useUserSettingsQuery`; (b) `sendRequest('configure_compaction')` threshold-edit → TanStack `useMutation`; (c) both hand-rolled confirmation modals (Clear Memory, Reset Skill) → shadcn `AlertDialog` primitives — 180 LOC of inline modal JSX + 40 LOC of trigger-button styles gone, accessibility (focus trap / escape / aria) from Radix. Net: 1,248 → 1,120 LOC. Full 6-sub-panel extraction still deferred for the deeply-tangled connected-skills / token-usage / console-output regions |
+| 3 — MasterSkillEditor decompose | 🟡 partial | `7706afb` | One read-path migration landed: `get_user_skills` imperative fetch → inline `useQuery(['userSkills'])` + `invalidateUserSkills()` helper. The `useState(userSkills)` + `useCallback(fetchUserSkills)` + bootstrap `useEffect` + two `await fetchUserSkills()` call sites all collapse into one query hook with automatic invalidation on save / delete. Three remaining imperative sites (folder list, folder scan, skill content fetch) still pending |
 | 4 — ConsolePanel Tailwind sweep | ⏸ deferred | — | 58 inline-style blocks, dynamic resize/layout behaviour. Wave 2 Phase 3 already fixed the state architecture (zod prefs + usePanelResize); visual cleanup is the remaining debt |
 | 5 — Docs | ✅ done | this commit | This section + frontend_architecture.md updates |
 
-**Wave 3 numbers:**
-- Frontend LOC: `InputSection.tsx` −701; `MiddleSection.tsx` −5 + structural cleanup.
-- Frontend `sendRequest + setState` anti-patterns: 2 retired (1 in MiddleSection memory-window-size seed, 1 in compaction threshold save).
+**Wave 3 numbers (cumulative across all 10 commits):**
+- Frontend LOC: `InputSection.tsx` −701; `MiddleSection.tsx` −133 (128 from AlertDialog + 5 from Query-hook swaps); `MasterSkillEditor.tsx` net +7 with one imperative fetch retired.
+- Frontend `sendRequest + setState` anti-patterns retired: **5** — memory-window-size seed, compaction threshold save, `get_user_settings` pre-seed, plus the two modal stacks moved to declarative Radix primitives, plus `get_user_skills` in MasterSkillEditor.
+- Hand-rolled dialog stacks replaced: 2 → shadcn `AlertDialog` (focus trap / escape / aria roles from Radix).
 - Backend: +2 files (`node_output_schemas.py`, `routers/schemas.py`), +1 WS handler, +1 router registration. **98 Pydantic models** seeded.
-- `pnpm exec tsc --noEmit` green throughout all 8 commits.
-- New frontend files: 0.
+- `pnpm exec tsc --noEmit` green throughout all 10 commits.
+- New frontend files: **0**.
 
 **Architectural delta (permanent):**
 - Node output shapes now live on the backend **exclusively**. New node types get a Pydantic model in `server/services/node_output_schemas.py` — no frontend change needed.

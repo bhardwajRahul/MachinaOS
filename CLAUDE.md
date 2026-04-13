@@ -9,8 +9,9 @@ This is a React Flow-based workflow automation platform implementing n8n-inspire
 
 | Document | Description |
 |----------|-------------|
-| **[Frontend Architecture](./docs-internal/frontend_architecture.md)** | Current frontend stack (React 19 + Vite + Tailwind v4 + shadcn/ui + Radix + RHF/zod + TanStack Query + Zustand). Tokens, primitives, forms, credentials exemplar. |
-| **[UI Migration Plan](./docs-internal/ui_migration_plan.md)** | antd → shadcn/ui migration plan + completion log. Phases 0-5, 7 done; phase 6 (ParameterRenderer → JSON Forms) deferred. |
+| **[Frontend Architecture](./docs-internal/frontend_architecture.md)** | Current frontend stack (React 19 + Vite + Tailwind v4 + shadcn/ui + Radix + RHF/zod + TanStack Query + Zustand). Tokens, primitives, forms, credentials exemplar, ownership boundary, `uiHints` catalogue. |
+| **[UI Migration Plan](./docs-internal/ui_migration_plan.md)** | antd → shadcn/ui migration plan + completion log. Waves 1–3 done; Phase 6 (ParameterRenderer → widget registry) deferred pending backend `get_node_spec`. |
+| **[Schema Source of Truth RFC](./docs-internal/schema_source_of_truth_rfc.md)** | Wave 3 decision: node output shapes live on the backend (Pydantic → JSON Schema) and the frontend fetches them lazy, n8n-style. Defines `GET /api/schemas/nodes/{type}.json` + `get_node_output_schema` WS handler. |
 | **[Node Creation Guide](./docs-internal/node_creation.md)** | Complete guide for creating new nodes (frontend definitions, backend handlers, config nodes, triggers) |
 | **[AI Tool Node Guide](./docs-internal/ai_tool_node_creation.md)** | Detailed guide for creating dedicated AI Agent tool nodes (schemas, handlers, toolkits) |
 | **[Specialized Agent Guide](./docs-internal/specialized_agent_node_creation.md)** | Guide for creating specialized AI agents (Android, Coding, Web, Task, Social, Travel, Tool, Productivity, Payments, Consumer) with full AI configuration |
@@ -2210,27 +2211,33 @@ def extract_thinking_from_response(response, provider: str) -> Optional[str]:
 #### Output Schema for Connected Nodes
 The `thinking` field is available in Input Data & Variables for downstream nodes. This schema applies to all AI nodes including chat models and specialized agents.
 
-```typescript
-// In InputSection.tsx
-const sampleSchemas = {
-  ai: {
-    response: 'string',
-    thinking: 'string',  // Available for drag-and-drop mapping
-    model: 'string',
-    provider: 'string',
-    finish_reason: 'string',
-    timestamp: 'string'
-  }
-};
+**Source of truth (Wave 3, April 2026):** runtime output shapes live on the **backend**, not the frontend. Declared in Pydantic models at `server/services/node_output_schemas.py` and served lazy via `GET /api/schemas/nodes/{node_type}.json` / the `get_node_output_schema` WebSocket handler. The frontend's InputSection prefers real execution data, falls back to the backend schema, then an empty state. See [docs-internal/schema_source_of_truth_rfc.md](./docs-internal/schema_source_of_truth_rfc.md).
 
-// Node types that use the AI output schema
-const aiAgentTypes = [
-  'aiAgent', 'chatAgent',
-  'android_agent', 'coding_agent', 'web_agent', 'task_agent', 'social_agent',
-  'travel_agent', 'tool_agent', 'productivity_agent', 'payments_agent', 'consumer_agent'
-];
-const isAI = nodeTypeLower.includes('chatmodel') || aiAgentTypes.includes(nodeType);
+```python
+# server/services/node_output_schemas.py
+class AIAgentOutput(_OutputBase):
+    response: Optional[str] = None
+    thinking: Optional[str] = None  # Available for drag-and-drop mapping
+    model: Optional[str] = None
+    provider: Optional[str] = None
+    finish_reason: Optional[str] = None
+    timestamp: Optional[str] = None
+
+# Shared across every LLM-backed agent + chat model:
+_AGENT_TYPES = ['aiAgent', 'chatAgent', 'android_agent', 'coding_agent',
+                'web_agent', 'task_agent', 'social_agent', 'travel_agent',
+                'tool_agent', 'productivity_agent', 'payments_agent',
+                'consumer_agent', 'autonomous_agent', 'orchestrator_agent',
+                'ai_employee', 'rlm_agent', 'claude_code_agent', 'deep_agent']
+_CHAT_MODEL_TYPES = ['openaiChatModel', 'anthropicChatModel', 'geminiChatModel', ...]
+NODE_OUTPUT_SCHEMAS = {
+    **{t: AIAgentOutput for t in _AGENT_TYPES},
+    **{t: AIAgentOutput for t in _CHAT_MODEL_TYPES},
+    # ...
+}
 ```
+
+Adding a new node type's output shape: define one Pydantic model, register it in `NODE_OUTPUT_SCHEMAS`. Zero frontend change.
 
 #### UI Display (`client/src/components/ui/NodeOutputPanel.tsx`)
 - **ThinkingBlock Component**: Collapsible display for thinking content
@@ -4746,37 +4753,33 @@ whatsappReceive: {
 }
 ```
 
-#### Output Schema (`client/src/components/parameterPanel/InputSection.tsx`)
-Provides draggable variables for downstream nodes:
-```typescript
-const sampleSchemas = {
-  whatsapp: {
-    message_id: 'string',
-    sender: 'string',
-    sender_phone: 'string',  // Resolved phone number (Go RPC resolves LIDs before sending event)
-    chat_id: 'string',
-    message_type: 'string',
-    text: 'string',
-    timestamp: 'string',
-    is_group: 'boolean',
-    is_from_me: 'boolean',
-    push_name: 'string',
-    is_forwarded: 'boolean',
-    forwarding_score: 'number',
-    media: 'object',
-    group_info: {
-      group_jid: 'string',
-      sender_jid: 'string',
-      sender_phone: 'string',  // Resolved phone number (Go RPC resolves LIDs)
-      sender_name: 'string'
-    },
-    newsletter_meta: {
-      edit_ts: 'number',
-      original_ts: 'number'
-    }
-  }
-};
+#### Output Schema (backend, `server/services/node_output_schemas.py`)
+Runtime output shapes live on the backend and are fetched lazy by InputSection per the Wave 3 source-of-truth decision. The WhatsApp Receive schema:
+```python
+class WhatsAppGroupInfo(BaseModel):
+    group_jid: Optional[str] = None
+    sender_jid: Optional[str] = None
+    sender_phone: Optional[str] = None   # Resolved phone number (Go RPC resolves LIDs before sending event)
+    sender_name: Optional[str] = None
+
+class WhatsAppReceiveOutput(_OutputBase):
+    message_id: Optional[str] = None
+    sender: Optional[str] = None
+    sender_phone: Optional[str] = None
+    chat_id: Optional[str] = None
+    message_type: Optional[str] = None
+    text: Optional[str] = None
+    timestamp: Optional[str] = None
+    is_group: Optional[bool] = None
+    is_from_me: Optional[bool] = None
+    push_name: Optional[str] = None
+    media: Optional[dict] = None
+    group_info: Optional[WhatsAppGroupInfo] = None
+    newsletter_meta: Optional[dict] = None
+
+NODE_OUTPUT_SCHEMAS["whatsappReceive"] = WhatsAppReceiveOutput
 ```
+Served via `GET /api/schemas/nodes/whatsappReceive.json` + `get_node_output_schema` WS handler. See [docs-internal/schema_source_of_truth_rfc.md](./docs-internal/schema_source_of_truth_rfc.md).
 
 ### Task Trigger Node
 

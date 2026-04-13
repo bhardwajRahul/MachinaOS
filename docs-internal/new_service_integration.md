@@ -669,29 +669,24 @@ async def _execute_{operation1}(args: Dict[str, Any], node_params: Dict[str, Any
 
 ---
 
-## Step 8: Output Schemas
+## Step 8: Output Schemas (backend)
 
-Add output schemas in `client/src/components/parameterPanel/InputSection.tsx`:
+Output shapes live on the backend — the editor fetches them lazy (see [schema_source_of_truth_rfc.md](./schema_source_of_truth_rfc.md)). Add one Pydantic model per node type to [server/services/node_output_schemas.py](../server/services/node_output_schemas.py) and register it:
 
-```typescript
-const sampleSchemas: Record<string, Record<string, string>> = {
-  // ... existing schemas
+```python
+# server/services/node_output_schemas.py
 
-  {service}: {
-    result_id: 'string',
-    field1: 'string',
-    field2: 'array',
-    timestamp: 'string',
-  },
-};
+class YourServiceOutput(_OutputBase):
+    result_id: Optional[str] = None
+    field1: Optional[str] = None
+    field2: Optional[list] = None
+    timestamp: Optional[str] = None
 
-// Add node type detection
-const {service}Types = ['{operation1}Node', '{operation2}Node'];
-const is{Service} = {service}Types.includes(nodeType);
-if (is{Service}) {
-  schema = sampleSchemas.{service};
-}
+# In NODE_OUTPUT_SCHEMAS:
+NODE_OUTPUT_SCHEMAS["yourServiceOperationNode"] = YourServiceOutput
 ```
+
+InputSection consumes these automatically via `GET /api/schemas/nodes/{node_type}.json`. No frontend change needed. Shape shared across operations? Assign the same model to multiple keys in `NODE_OUTPUT_SCHEMAS` (see how `_SEARCH_TYPES` aliases `SearchOutput`).
 
 ---
 

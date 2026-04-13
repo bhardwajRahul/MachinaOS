@@ -1,6 +1,15 @@
 # Schema source of truth — RFC
 
-**Status:** accepted · **Owner:** frontend + backend platform · **Date:** 2026-04-14
+**Status:** ✅ **implemented** · **Owner:** frontend + backend platform · **Date:** 2026-04-14 · **Landed across:** commits `cd252c1` → `4a4a439` (8 commits on `feature/credentials-scaling-v2`)
+
+## Landed outcome
+
+- Backend registry seeded with **98 Pydantic models** in [server/services/node_output_schemas.py](../server/services/node_output_schemas.py) covering every node type the deleted `sampleSchemas` map covered, plus all 18 specialized agents and 9 chat models.
+- `GET /api/schemas/nodes/{node_type}.json` serves static JSON Schema (Cache-Control `public, max-age=86400`). 404 for unknown types.
+- `get_node_output_schema` WebSocket handler for authenticated editor fetches.
+- [InputSection.tsx](../client/src/components/parameterPanel/InputSection.tsx) consumes schemas lazy via `queryClient.fetchQuery(['nodeOutputSchema', nodeType])`, in-memory cache only. **1,673 → 972 LOC** (−701). sampleSchemas map, 20 `isXxxNode` detection constants, and 60-line pattern-match chain all gone.
+- `outputSchema` field removed from `INodeTypeDescription` — the frontend type no longer has any shape-describing surface for runtime output.
+- Adding a new node type's output shape: one Pydantic model in `node_output_schemas.py`. Zero frontend change.
 
 ## Problem
 
