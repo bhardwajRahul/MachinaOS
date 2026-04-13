@@ -58,14 +58,6 @@ export const aiAgentNodes: Record<string, INodeTypeDescription> = {
       type: 'main' as NodeConnectionType,
       description: 'Agent output'
     }],
-    outputSchema: {
-      response: 'string',
-      thinking: 'string',
-      model: 'string',
-      provider: 'string',
-      finish_reason: 'string',
-      timestamp: 'string',
-    },
     properties: [
       {
         displayName: 'AI Provider',
@@ -215,14 +207,6 @@ export const aiAgentNodes: Record<string, INodeTypeDescription> = {
       type: 'main' as NodeConnectionType,
       description: 'response, model, provider, timestamp'
     }],
-    outputSchema: {
-      response: 'string',
-      thinking: 'string',
-      model: 'string',
-      provider: 'string',
-      finish_reason: 'string',
-      timestamp: 'string',
-    },
     properties: [
       {
         displayName: 'AI Provider',

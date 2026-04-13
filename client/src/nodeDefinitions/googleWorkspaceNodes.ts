@@ -74,22 +74,6 @@ export const gmailNode: INodeTypeDescription = {
       description: 'Connect to AI Agent tool handle'
     }
   ],
-  outputSchema: {
-    operation: 'string',
-    // send
-    message_id: 'string',
-    thread_id: 'string',
-    // search / read
-    emails: 'array',
-    count: 'number',
-    subject: 'string',
-    from: 'string',
-    to: 'string',
-    date: 'string',
-    body: 'string',
-    snippet: 'string',
-    labels: 'array',
-  },
   properties: [
     // ===== OPERATION SELECTOR =====
     {
@@ -271,19 +255,6 @@ export const gmailReceiveNode: INodeTypeDescription = {
     type: 'main' as NodeConnectionType,
     description: 'Received email (message_id, from, to, subject, body, date, labels, attachments)'
   }],
-  outputSchema: {
-    message_id: 'string',
-    thread_id: 'string',
-    from: 'string',
-    to: 'string',
-    subject: 'string',
-    body: 'string',
-    snippet: 'string',
-    date: 'string',
-    labels: 'array',
-    attachments: 'array',
-    is_unread: 'boolean',
-  },
   properties: [
     ACCOUNT_MODE_PROPERTY,
     CUSTOMER_ID_PROPERTY,
@@ -363,20 +334,6 @@ export const calendarNode: INodeTypeDescription = {
       description: 'Connect to AI Agent tool handle'
     }
   ],
-  outputSchema: {
-    operation: 'string',
-    event_id: 'string',
-    summary: 'string',
-    start: 'string',
-    end: 'string',
-    location: 'string',
-    description: 'string',
-    attendees: 'array',
-    status: 'string',
-    events: 'array',
-    count: 'number',
-    deleted: 'boolean',
-  },
   properties: [
     // ===== OPERATION SELECTOR =====
     {
@@ -681,22 +638,6 @@ export const driveNode: INodeTypeDescription = {
       description: 'Connect to AI Agent tool handle'
     }
   ],
-  outputSchema: {
-    operation: 'string',
-    file_id: 'string',
-    name: 'string',
-    mime_type: 'string',
-    web_view_link: 'string',
-    web_content_link: 'string',
-    size: 'number',
-    content: 'string',
-    files: 'array',
-    count: 'number',
-    next_page_token: 'string',
-    permission_id: 'string',
-    role: 'string',
-    email: 'string',
-  },
   properties: [
     // ===== OPERATION SELECTOR =====
     {
@@ -960,19 +901,6 @@ export const sheetsNode: INodeTypeDescription = {
       description: 'Connect to AI Agent tool handle'
     }
   ],
-  outputSchema: {
-    operation: 'string',
-    values: 'array',
-    range: 'string',
-    rows: 'number',
-    columns: 'number',
-    major_dimension: 'string',
-    updated_range: 'string',
-    updated_rows: 'number',
-    updated_columns: 'number',
-    updated_cells: 'number',
-    table_range: 'string',
-  },
   properties: [
     // ===== OPERATION SELECTOR =====
     {
@@ -1123,18 +1051,6 @@ export const tasksNode: INodeTypeDescription = {
       description: 'Connect to AI Agent tool handle'
     }
   ],
-  outputSchema: {
-    operation: 'string',
-    task_id: 'string',
-    title: 'string',
-    notes: 'string',
-    due: 'string',
-    status: 'string',
-    completed: 'string',
-    tasks: 'array',
-    count: 'number',
-    deleted: 'boolean',
-  },
   properties: [
     // ===== OPERATION SELECTOR =====
     {
@@ -1336,22 +1252,6 @@ export const contactsNode: INodeTypeDescription = {
       description: 'Connect to AI Agent tool handle'
     }
   ],
-  outputSchema: {
-    operation: 'string',
-    resource_name: 'string',
-    display_name: 'string',
-    given_name: 'string',
-    family_name: 'string',
-    email: 'string',
-    phone: 'string',
-    company: 'string',
-    job_title: 'string',
-    contacts: 'array',
-    count: 'number',
-    total_people: 'number',
-    next_page_token: 'string',
-    deleted: 'boolean',
-  },
   properties: [
     // ===== OPERATION SELECTOR =====
     {

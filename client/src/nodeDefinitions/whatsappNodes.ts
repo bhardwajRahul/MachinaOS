@@ -105,13 +105,6 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         description: 'Connect to AI Agent tool handle'
       }
     ],
-    outputSchema: {
-      success: 'boolean',
-      message_id: 'string',
-      chat_id: 'string',
-      timestamp: 'string',
-      message_type: 'string',
-    },
     properties: [
       // ===== RECIPIENT =====
       {
@@ -437,29 +430,6 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
       type: 'main' as NodeConnectionType,
       description: 'Received message data (message_id, sender, sender_phone, chat_id, message_type, text, timestamp, is_group, is_from_me, group_info.sender_jid, group_info.sender_phone, group_info.sender_name)'
     }],
-    outputSchema: {
-      message_id: 'string',
-      sender: 'string',
-      sender_phone: 'string',
-      chat_id: 'string',
-      message_type: 'string',
-      text: 'string',
-      timestamp: 'string',
-      is_group: 'boolean',
-      is_from_me: 'boolean',
-      push_name: 'string',
-      media: 'object',
-      group_info: {
-        group_jid: 'string',
-        sender_jid: 'string',
-        sender_phone: 'string',
-        sender_name: 'string',
-      },
-      newsletter_meta: {
-        edit_ts: 'number',
-        original_ts: 'number',
-      },
-    },
     properties: [
       // ===== MESSAGE TYPE FILTER =====
       {
@@ -711,47 +681,6 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         description: 'Connect to AI Agent tool handle'
       }
     ],
-    outputSchema: {
-      operation: 'string',
-      // chat_history
-      messages: [{
-        text: 'string',
-        sender: 'string',
-        sender_phone: 'string',
-        message_type: 'string',
-        timestamp: 'string',
-        message_id: 'string',
-        is_from_me: 'boolean',
-        is_group: 'boolean',
-        push_name: 'string',
-        index: 'number',
-      }],
-      total: 'number',
-      has_more: 'boolean',
-      count: 'number',
-      chat_type: 'string',
-      // search_groups / list_contacts
-      groups: [{ jid: 'string', name: 'string', participant_count: 'number' }],
-      contacts: [{ jid: 'string', phone: 'string', name: 'string', push_name: 'string' }],
-      // get_group_info
-      participants: [{ jid: 'string', phone: 'string', name: 'string', is_admin: 'boolean' }],
-      // get_contact_info
-      jid: 'string',
-      phone: 'string',
-      name: 'string',
-      push_name: 'string',
-      business_name: 'string',
-      is_business: 'boolean',
-      is_contact: 'boolean',
-      profile_pic: 'string',
-      // channel operations
-      channels: [{ jid: 'string', name: 'string', subscriber_count: 'number' }],
-      channel_jid: 'string',
-      timestamp: 'string',
-      muted: 'boolean',
-      server_ids: 'string',
-      status: 'string',
-    },
     properties: [
       // ===== OPERATION SELECTOR =====
       {
