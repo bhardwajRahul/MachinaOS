@@ -10,9 +10,10 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Form, Select, InputNumber, Switch, Button } from 'antd';
-import { Settings } from 'lucide-react';
+import { Form, Select, InputNumber, Switch } from 'antd';
+import { Settings, Loader2 } from 'lucide-react';
 
+import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
   Accordion,
@@ -173,12 +174,22 @@ const ProviderDefaultsSection: React.FC<Props> = ({ providerId }) => {
               </Form.Item>
             )}
 
-            <Button onClick={handleSave} disabled={!dirty} loading={loading} block
-              style={{
-                backgroundColor: dirty ? `${theme.dracula.green}25` : undefined,
-                borderColor: dirty ? `${theme.dracula.green}60` : undefined,
-                color: dirty ? theme.dracula.green : undefined,
-              }}>
+            <Button
+              onClick={handleSave}
+              disabled={!dirty || loading}
+              variant="outline"
+              className="w-full"
+              style={
+                dirty
+                  ? {
+                      backgroundColor: `${theme.dracula.green}25`,
+                      borderColor: `${theme.dracula.green}60`,
+                      color: theme.dracula.green,
+                    }
+                  : undefined
+              }
+            >
+              {loading && <Loader2 className="h-4 w-4 animate-spin" />}
               Save Defaults
             </Button>
           </Form>

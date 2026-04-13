@@ -4,9 +4,9 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Button } from 'antd';
 import { DollarSign, RefreshCw, Loader2 } from 'lucide-react';
 
+import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
@@ -94,7 +94,8 @@ const ApiUsageSection: React.FC<Props> = ({ service, serviceName }) => {
                 </div>
               )}
 
-              <Button size="small" icon={<RefreshCw className="h-3 w-3" />} onClick={load} loading={loading}>
+              <Button size="sm" variant="outline" onClick={load} disabled={loading}>
+                {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
                 Refresh
               </Button>
             </div>

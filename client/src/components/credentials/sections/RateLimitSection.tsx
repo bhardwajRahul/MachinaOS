@@ -4,8 +4,10 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Form, InputNumber, Switch, Button } from 'antd';
+import { Form, InputNumber, Switch } from 'antd';
+import { Loader2 } from 'lucide-react';
 
+import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Accordion,
@@ -109,7 +111,7 @@ const RateLimitSection: React.FC = () => {
             <Alert variant="warning" className="mb-3">
               <AlertDescription className="flex items-center justify-between gap-3">
                 <span>{stats.pause_reason || 'Paused'}</span>
-                <Button size="small" onClick={handleUnpause}>Unpause</Button>
+                <Button size="sm" variant="outline" onClick={handleUnpause}>Unpause</Button>
               </AlertDescription>
             </Alert>
           )}
@@ -156,12 +158,22 @@ const RateLimitSection: React.FC = () => {
             </Form.Item>
           </div>
 
-          <Button onClick={handleSave} loading={loading} disabled={!dirty} block
-            style={{
-              backgroundColor: dirty ? `${theme.dracula.green}25` : undefined,
-              borderColor: dirty ? `${theme.dracula.green}60` : undefined,
-              color: dirty ? theme.dracula.green : undefined,
-            }}>
+          <Button
+            onClick={handleSave}
+            disabled={!dirty || loading}
+            variant="outline"
+            className="w-full"
+            style={
+              dirty
+                ? {
+                    backgroundColor: `${theme.dracula.green}25`,
+                    borderColor: `${theme.dracula.green}60`,
+                    color: theme.dracula.green,
+                  }
+                : undefined
+            }
+          >
+            {loading && <Loader2 className="h-4 w-4 animate-spin" />}
             Save Changes
           </Button>
         </Form>

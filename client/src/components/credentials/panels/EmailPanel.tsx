@@ -10,7 +10,10 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Form, Select, Input, InputNumber, Button } from 'antd';
+import { Form, Select, Input, InputNumber } from 'antd';
+import { Loader2 } from 'lucide-react';
+
+import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAppTheme } from '../../../hooks/useAppTheme';
 import { useApiKeys } from '../../../hooks/useApiKeys';
@@ -230,13 +233,31 @@ const EmailPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = ({ co
       <div className="flex-1" />
 
       <div className="flex justify-center gap-2 border-t border-border pt-3">
-        <Button onClick={handleSave} loading={loading === 'save'}
-          style={{ backgroundColor: `${theme.dracula.green}25`, borderColor: `${theme.dracula.green}60`, color: theme.dracula.green }}>
+        <Button
+          variant="outline"
+          onClick={handleSave}
+          disabled={loading === 'save'}
+          style={{
+            backgroundColor: `${theme.dracula.green}25`,
+            borderColor: `${theme.dracula.green}60`,
+            color: theme.dracula.green,
+          }}
+        >
+          {loading === 'save' && <Loader2 className="h-4 w-4 animate-spin" />}
           Save
         </Button>
         {stored && (
-          <Button onClick={handleRemove} loading={loading === 'remove'}
-            style={{ backgroundColor: `${theme.dracula.pink}25`, borderColor: `${theme.dracula.pink}60`, color: theme.dracula.pink }}>
+          <Button
+            variant="outline"
+            onClick={handleRemove}
+            disabled={loading === 'remove'}
+            style={{
+              backgroundColor: `${theme.dracula.pink}25`,
+              borderColor: `${theme.dracula.pink}60`,
+              color: theme.dracula.pink,
+            }}
+          >
+            {loading === 'remove' && <Loader2 className="h-4 w-4 animate-spin" />}
             Remove
           </Button>
         )}
