@@ -40,16 +40,17 @@ export default defineConfig(({ mode }) => {
   //
   // Ref: docs-internal/credentials_scaling/research_react_stack.md
   //      docs-internal/platform_refactor/PLATFORM_REFACTOR_RFC.md Phase 7.5
+  // Phase 7: broadened from credentials-only to the whole src/ now that
+  // antd is retired. Exclude node_modules and the generated shadcn ui/
+  // files (they don't benefit from the compiler and it can confuse CVA).
   const reactCompilerConfig = {
     target: '19',
     sources: (filename) => {
       if (typeof filename !== 'string') return false
       const normalized = filename.replace(/\\/g, '/')
-      return (
-        normalized.includes('/src/components/credentials/') ||
-        normalized.includes('/src/hooks/useCatalogueQuery.ts') ||
-        normalized.includes('/src/store/useCredentialRegistry.ts')
-      )
+      if (!normalized.includes('/src/')) return false
+      if (normalized.includes('/src/components/ui/')) return false
+      return true
     },
   }
 

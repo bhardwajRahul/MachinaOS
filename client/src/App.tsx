@@ -1,29 +1,31 @@
-import React from 'react';
-import { ConfigProvider, theme as antdThemeAlgorithm } from 'antd';
+import React, { useEffect } from 'react';
 import Dashboard from './Dashboard';
 import ProtectedRoute from './components/auth/ProtectedRoute';
-import { lightTheme, darkTheme } from './config/antdTheme';
 import { useTheme } from './contexts/ThemeContext';
 import { Toaster } from '@/components/ui/sonner';
 
 const App: React.FC = () => {
   const { isDarkMode } = useTheme();
 
-  const currentTheme = isDarkMode ? {
-    ...darkTheme,
-    algorithm: antdThemeAlgorithm.darkAlgorithm,
-  } : lightTheme;
+  // Sync the theme flag onto <html> so Tailwind `dark:` variants and the
+  // [data-theme=dark] tokens in tokens.css both resolve correctly. Replaces
+  // the antd ConfigProvider algorithm switch.
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle('dark', isDarkMode);
+    root.dataset.theme = isDarkMode ? 'dark' : 'light';
+  }, [isDarkMode]);
 
   return (
-    <ConfigProvider theme={currentTheme}>
+    <>
       <ProtectedRoute>
-        <div style={{ width: '100vw', height: '100vh', display: 'flex' }}>
+        <div className="flex h-screen w-screen">
           <Dashboard />
         </div>
       </ProtectedRoute>
       <Toaster position="top-right" richColors closeButton />
-    </ConfigProvider>
+    </>
   );
-}
+};
 
-export default App
+export default App;

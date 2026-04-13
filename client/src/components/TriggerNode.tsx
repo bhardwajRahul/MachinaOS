@@ -13,7 +13,7 @@ import { useAppStore } from '../store/useAppStore';
 import { nodeDefinitions } from '../nodeDefinitions';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { useWebSocket, useWhatsAppStatus } from '../contexts/WebSocketContext';
-import { PlayCircleFilled, ScheduleOutlined } from '@ant-design/icons';
+import { PlayCircle, CalendarClock } from 'lucide-react';
 import { Google } from '@lobehub/icons';
 
 const TriggerNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectable, selected }) => {
@@ -186,14 +186,14 @@ const TriggerNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
 
   // Get trigger icon for display
   const getTriggerIcon = () => {
-    // Start node - use PlayCircleFilled icon
+    // Start node - use PlayCircle icon
     if (type === 'start') {
-      return <PlayCircleFilled style={{ fontSize: 28, color: theme.dracula.cyan }} />;
+      return <PlayCircle className="h-7 w-7" style={{ color: theme.dracula.cyan }} />;
     }
 
-    // Cron Scheduler - use ScheduleOutlined
+    // Cron Scheduler - use CalendarClock
     if (type === 'cronScheduler') {
-      return <ScheduleOutlined style={{ fontSize: 28, color: definition?.defaults?.color || nodeColor }} />;
+      return <CalendarClock className="h-7 w-7" style={{ color: definition?.defaults?.color || nodeColor }} />;
     }
 
     // Use the icon from the node definition if available

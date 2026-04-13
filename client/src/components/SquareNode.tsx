@@ -8,7 +8,7 @@ import { ANDROID_SERVICE_NODE_TYPES } from '../nodeDefinitions/androidServiceNod
 import { useWebSocket, useWhatsAppStatus } from '../contexts/WebSocketContext';
 import { useApiKeys } from '../hooks/useApiKeys';
 import { getAIProviderIcon } from './icons/AIProviderIcons';
-import { PlayCircleFilled, ScheduleOutlined } from '@ant-design/icons';
+import { PlayCircle, CalendarClock } from 'lucide-react';
 import { AI_MODEL_PROVIDER_MAP } from '../nodeDefinitions/aiModelNodes';
 
 // Android service nodes that can connect to Android Toolkit as tools
@@ -485,14 +485,14 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
 
   // Get service icon for display
   const getServiceIcon = () => {
-    // Priority 0: Start node - use PlayCircleFilled icon with cyan color (neutral "begin" color)
+    // Priority 0: Start node - use PlayCircle icon with cyan color (neutral "begin" color)
     if (type === 'start') {
-      return <PlayCircleFilled style={{ fontSize: 28, color: theme.dracula.cyan }} />;
+      return <PlayCircle className="h-7 w-7" style={{ color: theme.dracula.cyan }} />;
     }
 
-    // Cron Scheduler node - use ScheduleOutlined with node definition color
+    // Cron Scheduler node - use CalendarClock with node definition color
     if (type === 'cronScheduler') {
-      return <ScheduleOutlined style={{ fontSize: 28, color: definition?.defaults?.color || nodeColor }} />;
+      return <CalendarClock className="h-7 w-7" style={{ color: definition?.defaults?.color || nodeColor }} />;
     }
 
     // Priority 1: Check if this is an AI model node - use official provider icons

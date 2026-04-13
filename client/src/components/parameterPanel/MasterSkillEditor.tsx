@@ -45,7 +45,6 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { PlusOutlined } from '@ant-design/icons';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { skillNodes, SKILL_NODE_TYPES } from '../../nodeDefinitions/skillNodes';
@@ -817,7 +816,7 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
                 justifyContent: 'center',
                 border: `2px dashed ${pendingSkillData.color}`
               }}>
-                {pendingSkillData.icon ? renderSkillIcon(pendingSkillData.icon, 20) : <PlusOutlined style={{ color: pendingSkillData.color }} />}
+                {pendingSkillData.icon ? renderSkillIcon(pendingSkillData.icon, 20) : <Plus className="h-5 w-5" style={{ color: pendingSkillData.color }} />}
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{

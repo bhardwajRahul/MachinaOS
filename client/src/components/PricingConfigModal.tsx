@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Loader2, RefreshCw, Save } from 'lucide-react';
+import { Loader2, RefreshCw, Save, DollarSign } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,7 +16,6 @@ import {
 } from '@/components/ui/accordion';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { DollarOutlined } from '@ant-design/icons';
 import Modal from './ui/Modal';
 import { usePricing, PricingConfig, LLMPricing } from '../hooks/usePricing';
 import { useAppTheme } from '../hooks/useAppTheme';
@@ -382,7 +381,7 @@ const PricingConfigModal: React.FC<Props> = ({ visible, onClose }) => {
               borderRadius: theme.borderRadius.sm,
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <DollarOutlined style={{ color: theme.dracula.yellow }} />
+                <DollarSign className="h-4 w-4" style={{ color: theme.dracula.yellow }} />
                 <span style={{ color: theme.colors.textSecondary }}>
                   Version: <strong style={{ color: theme.colors.text }}>{config.version}</strong>
                 </span>

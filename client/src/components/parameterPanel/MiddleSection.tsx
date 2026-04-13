@@ -12,7 +12,7 @@ import {
   AccordionTrigger,
   AccordionContent,
 } from '@/components/ui/accordion';
-import { ThunderboltOutlined, EditOutlined } from '@ant-design/icons';
+import { Zap, Pencil } from 'lucide-react';
 import ParameterRenderer from '../ParameterRenderer';
 import ToolSchemaEditor from './ToolSchemaEditor';
 import MasterSkillEditor from './MasterSkillEditor';
@@ -802,7 +802,7 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
                     const displayMax = ctxLen > 0 ? ctxLen : compactionStats?.threshold || 0;
                     return (
                       <span className="flex flex-1 items-center gap-2">
-                        <ThunderboltOutlined />
+                        <Zap className="h-4 w-4" />
                         Token Usage
                         {compactionStats && displayMax > 0 && (
                           <span className="ml-auto text-xs text-muted-foreground">
@@ -885,7 +885,7 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
                                 title={
                                   <span className="inline-flex items-center gap-1">
                                     Threshold
-                                    <EditOutlined style={{ fontSize: 10 }} />
+                                    <Pencil className="h-3 w-3" />
                                   </span>
                                 }
                                 value={compactionStats.threshold}

@@ -3,7 +3,7 @@ import { Handle, Position, NodeProps } from 'reactflow';
 import { NodeData } from '../types/NodeTypes';
 import { useAppStore } from '../store/useAppStore';
 import { useAppTheme } from '../hooks/useAppTheme';
-import { PlayCircleFilled } from '@ant-design/icons';
+import { PlayCircle } from 'lucide-react';
 
 const StartNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectable, selected }) => {
   const { setSelectedNode, renamingNodeId, setRenamingNodeId, updateNodeData } = useAppStore();
@@ -106,7 +106,7 @@ const StartNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectabl
         }}
       >
         {/* Play Icon */}
-        <PlayCircleFilled style={{ fontSize: 28, color: nodeColor }} />
+        <PlayCircle className="h-7 w-7" style={{ color: nodeColor }} />
 
         {/* Parameters Button */}
         <button

@@ -6,7 +6,7 @@ import { useAppStore } from './store/useAppStore';
 import { useWebSocket } from './contexts/WebSocketContext';
 import { ExecutionService, ExecutionResult } from './services/executionService';
 import { useAppTheme } from './hooks/useAppTheme';
-import { ScheduleOutlined, PlayCircleFilled } from '@ant-design/icons';
+import { CalendarClock, PlayCircle } from 'lucide-react';
 import { SKILL_NODE_TYPES } from './nodeDefinitions/skillNodes';
 
 const ParameterPanel: React.FC = () => {
@@ -131,10 +131,10 @@ const ParameterPanel: React.FC = () => {
   const renderIcon = (icon: string) => {
     // Handle Ant Design icon names
     if (icon === 'schedule') {
-      return <ScheduleOutlined style={{ fontSize: 20, color: theme.colors.actionDeploy }} />;
+      return <CalendarClock className="h-5 w-5" style={{ color: theme.colors.actionDeploy }} />;
     }
     if (icon === 'play' || nodeDefinition?.name === 'start') {
-      return <PlayCircleFilled style={{ fontSize: 20, color: theme.dracula.cyan }} />;
+      return <PlayCircle className="h-5 w-5" style={{ color: theme.dracula.cyan }} />;
     }
     // Handle image URLs
     if (icon.startsWith('data:') || icon.startsWith('http') || icon.startsWith('/')) {
