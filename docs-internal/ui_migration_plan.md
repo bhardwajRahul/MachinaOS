@@ -75,6 +75,34 @@ A second, deeper audit (4 parallel sub-agents — panel audit, library survey, N
 - ESLint rule + bundle-budget CI assertion (Phase 7 leftovers). Both touch CI config, deferred together.
 - `MasterSkillEditor` RHF migration. The editor is a split-panel UI (skill list + content editor + folder dropdown + inline create/edit) — not the >3-field-form pattern Phase 4 targeted. The form-with-validation parts already moved to `SkillEditorModal`; the registry-style list view is genuinely different work.
 
+## Wave 3 — backend as schema source of truth (April 2026)
+
+The Wave 3 plan started as "port `sampleSchemas` to per-node frontend `outputSchema`" but flipped after a raw-GitHub-API study of **n8n**, **Activepieces**, and **Nango**. None of them hardcode node output shapes on the frontend. n8n specifically serves JSON Schema files per node as static assets and fetches them lazy from the editor (`schemaPreview.api.ts`, `VirtualSchema.vue`); Activepieces skips declared output schemas entirely and relies on real-run data. The full research is in [docs-internal/schema_source_of_truth_rfc.md](./schema_source_of_truth_rfc.md).
+
+Under that finding, the in-flight Wave 3 Phase 1 was reversed: the backend owns the schemas via Pydantic models, the frontend consumes them lazy via a WS handler, and the 350-line `sampleSchemas` map is deleted.
+
+| Phase | Status | Commits | Outcome |
+|---|---|---|---|
+| 1a — Revert frontend outputSchema annotations | ✅ done | `cd252c1`, `5866821` | 30-file frontend annotation revert; `outputSchema` field removed from `INodeTypeDescription`; the 7 Wave-2-canary annotations (start/chatTrigger/taskTrigger/simpleMemory/python+js+ts executors) also removed — same principle |
+| 1b — Backend schema registry + endpoint | ✅ done | `0d98c88`, `4a4a439` | `server/services/node_output_schemas.py` — **98 node-type entries** across agents / chat models / triggers / memory / code executors / Google Workspace / WhatsApp / search / location / filesystem / HTTP / Android / documents / proxy / email / telegram / twitter / social / browser / apify / crawlee / cronScheduler. Pydantic models colocated. `GET /api/schemas/nodes/{node_type}.json` (Cache-Control public, max-age=86400) + `get_node_output_schema` WS handler |
+| 1c — Frontend three-tier dispatch + delete sampleSchemas | ✅ done | `327f792`, `4a4a439` | `InputSection.tsx` 1,673 → 972 LOC (−701). `sampleSchemas` map + 20-line `is{Android,Google,…}Node` detection constants + 60-line pattern-match else-if chain all gone. Schema precedence: real run data → backend fetch (cached in TanStack Query, in-memory only, matches n8n's `schemaPreview.store` pattern) → `{ data: 'any' }` empty |
+| 2 — MiddleSection decompose | 🟡 partial | `2c5f227` | Two tractable wins landed: `sendRequest('get_user_settings')` → shared `useUserSettingsQuery`; `sendRequest('configure_compaction')` threshold-edit → TanStack `useMutation`. Full 6-sub-panel extraction deferred — 1,248 LOC with deeply-tangled useEffect chains needs in-browser verification |
+| 3 — MasterSkillEditor decompose | ⏸ deferred | — | 1,133 LOC + 8 imperative `sendRequest + setState` sites across multiple useEffect chains + native capture-phase keydown escape. Safe decomposition requires UI smoke testing across folder-scan / user-skill CRUD / skill-content fetch |
+| 4 — ConsolePanel Tailwind sweep | ⏸ deferred | — | 58 inline-style blocks, dynamic resize/layout behaviour. Wave 2 Phase 3 already fixed the state architecture (zod prefs + usePanelResize); visual cleanup is the remaining debt |
+| 5 — Docs | ✅ done | this commit | This section + frontend_architecture.md updates |
+
+**Wave 3 numbers:**
+- Frontend LOC: `InputSection.tsx` −701; `MiddleSection.tsx` −5 + structural cleanup.
+- Frontend `sendRequest + setState` anti-patterns: 2 retired (1 in MiddleSection memory-window-size seed, 1 in compaction threshold save).
+- Backend: +2 files (`node_output_schemas.py`, `routers/schemas.py`), +1 WS handler, +1 router registration. **98 Pydantic models** seeded.
+- `pnpm exec tsc --noEmit` green throughout all 8 commits.
+- New frontend files: 0.
+
+**Architectural delta (permanent):**
+- Node output shapes now live on the backend **exclusively**. New node types get a Pydantic model in `server/services/node_output_schemas.py` — no frontend change needed.
+- `InputSection` is a pure consumer of backend-declared shapes. Schema precedence there is the n8n pattern: real execution data wins, declared schema fills in, empty state otherwise.
+- Phase 6 (ParameterRenderer → widget registry) remains blocked on backend `get_node_spec`, but the `jsonSchema` slice of that future contract is the handler shipped in Wave 3 Phase 1b — Phase 6 extends it with `uiSchema` + `_uiHints`, doesn't replace it.
+
 ## Context
 
 The MachinaOs frontend was coupled to Ant Design (40 files, 187-line theme file, `ConfigProvider` at root). Pre-migration audit + research docs (now deleted; see git history under commit `4cb3dd9` if needed) prescribed shadcn/ui (canonical components copied via CLI registry) + Radix primitives + Tailwind 4 + JSON Forms for a schema-driven inspector. Phase 0/1 commits (`2209dba`, `7ac69fe`) included hand-written primitives and a toast facade — those got deleted as part of corrected Phase 0 (`cdeebb4`).

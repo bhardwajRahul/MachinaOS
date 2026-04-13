@@ -396,9 +396,20 @@ Defined on `INodeTypeDescription.uiHints` ([client/src/types/INodeProperties.ts]
 
 Adding new panel behaviour: add a flag to `INodeUIHints`, annotate the relevant node definitions, read the flag in the panel. Don't add another `nodeDefinition.name === '…'` branch.
 
-### `outputSchema` — runtime output shape for InputSection
+### Node output shape — backend as single source of truth
 
-Defined on `INodeTypeDescription.outputSchema`. Plain primitive type names (`'string' | 'number' | 'boolean' | 'array' | 'object' | 'any'`) at leaves, or nested objects. `InputSection` reads this when populating the draggable variable list for downstream nodes. The legacy 350-line `sampleSchemas` map in `InputSection.tsx` is the fallback for nodes not yet annotated; new node definitions should set `outputSchema` directly.
+Frontend does **not** declare output shapes anymore. The backend owns them exclusively via Pydantic models in [server/services/node_output_schemas.py](../server/services/node_output_schemas.py) (98 entries today). JSON Schema is emitted via Pydantic's `model_json_schema()` and exposed two ways:
+
+- `GET /api/schemas/nodes/{node_type}.json` — static, long-cache (`Cache-Control: public, max-age=86400`), no auth. n8n-style static-asset pattern.
+- `get_node_output_schema` WebSocket handler — authenticated editor path.
+
+[InputSection.tsx](../client/src/components/parameterPanel/InputSection.tsx) consumes schemas lazy via `fetchNodeOutputSchema(nodeType)` (inline helper wrapping `queryClient.fetchQuery` with `staleTime: Infinity`). The draggable variable list's shape precedence is:
+
+1. Real execution data from the last run (primary).
+2. Backend-declared schema fetched on demand (fallback).
+3. `{ data: 'any' }` empty state (final fallback — the legacy `sampleSchemas` map was deleted in Wave 3).
+
+**Adding a new node type's output shape:** define a Pydantic model in `node_output_schemas.py`, register it in `NODE_OUTPUT_SCHEMAS`. The frontend picks it up automatically — no client change, no rebuild. Research and rationale in [docs-internal/schema_source_of_truth_rfc.md](./schema_source_of_truth_rfc.md).
 
 ### Renderer registry shape (Phase 6 — pending)
 
