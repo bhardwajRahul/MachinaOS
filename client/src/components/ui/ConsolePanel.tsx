@@ -13,6 +13,7 @@ import { Node } from 'reactflow';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
+import { z } from 'zod';
 import { useWebSocket, ConsoleLogEntry } from '../../contexts/WebSocketContext';
 import { nodeDefinitions } from '../../nodeDefinitions';
 import { useAppTheme } from '../../hooks/useAppTheme';
@@ -20,6 +21,91 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { Input } from '@/components/ui/input';
 import Prism from 'prismjs';
 import 'prismjs/components/prism-json';
+
+// ---------------------------------------------------------------------------
+// Inline reusable bits (kept colocated per the colocation principle — none of
+// these have a second consumer in the codebase).
+// ---------------------------------------------------------------------------
+
+/**
+ * Single zod schema owns the validated shape of every persisted preference
+ * the console panel keeps in localStorage. Adding a pref means one edit
+ * here (default value + range), not three (state + load + save).
+ */
+const consolePrefsSchema = z.object({
+  panelHeight: z.number().min(80).max(2000).default(250),
+  chatWidthPercent: z.number().min(20).max(80).default(50),
+  fontSize: z.number().min(8).max(40).default(12),
+  autoScroll: z.boolean().default(true),
+  prettyPrint: z.boolean().default(true),
+  consoleTab: z.enum(['console', 'terminal']).default('console'),
+});
+type ConsolePrefs = z.infer<typeof consolePrefsSchema>;
+const CONSOLE_PREFS_KEY = 'console_panel_prefs_v1';
+
+function loadConsolePrefs(): ConsolePrefs {
+  try {
+    const raw = localStorage.getItem(CONSOLE_PREFS_KEY);
+    if (raw) {
+      const parsed = consolePrefsSchema.safeParse(JSON.parse(raw));
+      if (parsed.success) return parsed.data;
+    }
+  } catch { /* fall through to defaults */ }
+  return consolePrefsSchema.parse({});
+}
+
+function saveConsolePrefs(prefs: ConsolePrefs): void {
+  try {
+    localStorage.setItem(CONSOLE_PREFS_KEY, JSON.stringify(prefs));
+  } catch { /* ignore */ }
+}
+
+/**
+ * Imperative drag-resize wrapped as a hook. Returns a `start` handler to
+ * spread on the resize handle plus a boolean for "resizing now" so the
+ * cursor / userSelect overlay can be synced. Two consumers in this file
+ * (vertical panel height + horizontal chat/console split).
+ */
+function usePanelResize(opts: {
+  axis: 'y' | 'x';
+  cursor: 'ns-resize' | 'ew-resize';
+  onMove: (deltaPx: number, startValue: number) => void;
+  getStartValue: () => number;
+}) {
+  const [isResizing, setIsResizing] = useState(false);
+  const startCoordRef = useRef(0);
+  const startValueRef = useRef(0);
+  const { axis, cursor, onMove, getStartValue } = opts;
+
+  const start = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    startCoordRef.current = axis === 'y' ? e.clientY : e.clientX;
+    startValueRef.current = getStartValue();
+    setIsResizing(true);
+  }, [axis, getStartValue]);
+
+  useEffect(() => {
+    if (!isResizing) return;
+    const handleMove = (e: MouseEvent) => {
+      const cur = axis === 'y' ? e.clientY : e.clientX;
+      onMove(cur - startCoordRef.current, startValueRef.current);
+    };
+    const handleUp = () => setIsResizing(false);
+    document.addEventListener('mousemove', handleMove);
+    document.addEventListener('mouseup', handleUp);
+    document.body.style.cursor = cursor;
+    document.body.style.userSelect = 'none';
+    return () => {
+      document.removeEventListener('mousemove', handleMove);
+      document.removeEventListener('mouseup', handleUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isResizing, axis, cursor, onMove]);
+
+  return { start, isResizing };
+}
 
 // Schema-driven: a node is a chat target / console sink if its definition
 // sets the matching uiHints flag. Legacy name list kept until every node
@@ -36,17 +122,13 @@ interface ConsolePanelProps {
   nodes?: Node[];  // Workflow nodes for dropdown selection
 }
 
-// Storage keys for persisting state
-const CONSOLE_HEIGHT_KEY = 'console_panel_height';
-const CHAT_WIDTH_KEY = 'console_chat_width_percent';
-const CONSOLE_FONT_SIZE_KEY = 'console_font_size';
-
 const ConsolePanel: React.FC<ConsolePanelProps> = ({
   isOpen,
   onToggle,
-  defaultHeight = 250,
+  // defaultHeight + maxHeight props are no longer read — defaults live in
+  // consolePrefsSchema; max is computed from window.innerHeight at resize.
+  // Kept on the prop type for backwards compatibility with existing callers.
   minHeight = 100,
-  maxHeight = 600,
   nodes = []
 }) => {
   const theme = useAppTheme();
@@ -82,177 +164,67 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
   const [filter, setFilter] = useState('');
   const [terminalFilter, setTerminalFilter] = useState('');
   const [terminalLogLevel, setTerminalLogLevel] = useState<'all' | 'error' | 'warning' | 'info' | 'debug'>('all');
-  const [autoScroll, setAutoScroll] = useState(true);
-  const [prettyPrint, setPrettyPrint] = useState(true);
-  const [consoleTab, setConsoleTab] = useState<'console' | 'terminal'>('console');
+  // Persisted prefs (validated by zod, written through to localStorage).
+  // One `setPref` updater replaces three pairs of useState + useEffect.
+  const [prefs, setPrefs] = useState<ConsolePrefs>(loadConsolePrefs);
+  const setPref = useCallback(<K extends keyof ConsolePrefs>(key: K, value: ConsolePrefs[K]) => {
+    setPrefs((prev) => {
+      const next = { ...prev, [key]: value };
+      saveConsolePrefs(next);
+      return next;
+    });
+  }, []);
+  const { autoScroll, prettyPrint, consoleTab, panelHeight, chatWidthPercent, fontSize: consoleFontSize } = prefs;
   const logsEndRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
 
-  // Font size with localStorage persistence
-  const [consoleFontSize, setConsoleFontSize] = useState(() => {
-    try {
-      const saved = localStorage.getItem(CONSOLE_FONT_SIZE_KEY);
-      if (saved) {
-        const size = parseInt(saved, 10);
-        if (!isNaN(size) && size >= minFontSize && size <= maxFontSize) return size;
-      }
-    } catch { /* ignore */ }
-    return defaultFontSize;
-  });
-
-  // Chat input state
+  // Chat input state — transient, stays as plain useState.
   const [chatInput, setChatInput] = useState('');
   const [isSending, setIsSending] = useState(false);
 
-  // Panel height state with localStorage persistence
-  const [panelHeight, setPanelHeight] = useState(() => {
-    try {
-      const saved = localStorage.getItem(CONSOLE_HEIGHT_KEY);
-      if (saved) {
-        const height = parseInt(saved, 10);
-        if (!isNaN(height) && height >= minHeight) {
-          return height;
-        }
-      }
-    } catch {
-      // Ignore localStorage errors
-    }
-    return defaultHeight;
-  });
-
-  // Chat section width (percentage) with localStorage persistence
-  const [chatWidthPercent, setChatWidthPercent] = useState(() => {
-    try {
-      const saved = localStorage.getItem(CHAT_WIDTH_KEY);
-      if (saved) {
-        const width = parseFloat(saved);
-        if (!isNaN(width) && width >= 20 && width <= 80) {
-          return width;
-        }
-      }
-    } catch {
-      // Ignore localStorage errors
-    }
-    return 50; // Default 50%
-  });
-
-  // Vertical resize state (panel height)
-  const [isResizing, setIsResizing] = useState(false);
-  const resizeStartY = useRef(0);
-  const resizeStartHeight = useRef(0);
-
-  // Horizontal resize state (chat/console split)
-  const [isHorizontalResizing, setIsHorizontalResizing] = useState(false);
-  const resizeStartX = useRef(0);
-  const resizeStartWidth = useRef(0);
+  // Container ref for the horizontal resize math (needs the live width).
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Save height to localStorage when it changes
-  useEffect(() => {
-    try {
-      localStorage.setItem(CONSOLE_HEIGHT_KEY, panelHeight.toString());
-    } catch {
-      // Ignore localStorage errors
-    }
-  }, [panelHeight]);
-
-  // Save chat width to localStorage when it changes
-  useEffect(() => {
-    try {
-      localStorage.setItem(CHAT_WIDTH_KEY, chatWidthPercent.toString());
-    } catch {
-      // Ignore localStorage errors
-    }
-  }, [chatWidthPercent]);
-
-  // Save font size to localStorage when it changes
-  useEffect(() => {
-    try {
-      localStorage.setItem(CONSOLE_FONT_SIZE_KEY, consoleFontSize.toString());
-    } catch { /* ignore */ }
-  }, [consoleFontSize]);
-
-  // Handle vertical resize start (panel height)
-  const handleResizeStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsResizing(true);
-    resizeStartY.current = e.clientY;
-    resizeStartHeight.current = panelHeight;
-  }, [panelHeight]);
-
-  // Handle horizontal resize start (chat/console split)
-  const handleHorizontalResizeStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsHorizontalResizing(true);
-    resizeStartX.current = e.clientX;
-    resizeStartWidth.current = chatWidthPercent;
-  }, [chatWidthPercent]);
-
-  // Handle vertical resize move
-  useEffect(() => {
-    if (!isResizing) return;
-
-    const handleMouseMove = (e: MouseEvent) => {
-      const delta = resizeStartY.current - e.clientY;
-      // Cap at viewport minus toolbar (~48px) and panel header (~42px)
+  // Vertical resize: drag handle adjusts panelHeight against the viewport cap.
+  const verticalResize = usePanelResize({
+    axis: 'y',
+    cursor: 'ns-resize',
+    getStartValue: () => panelHeight,
+    onMove: (delta, start) => {
       const dynamicMax = window.innerHeight - 90;
-      const newHeight = Math.min(dynamicMax, Math.max(minHeight, resizeStartHeight.current + delta));
-      setPanelHeight(newHeight);
-    };
+      const next = Math.min(dynamicMax, Math.max(minHeight, start - delta));
+      setPref('panelHeight', next);
+    },
+  });
+  const isResizing = verticalResize.isResizing;
+  const handleResizeStart = verticalResize.start;
 
-    const handleMouseUp = () => {
-      setIsResizing(false);
-    };
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-
-    // Add cursor style to body during resize
-    document.body.style.cursor = 'ns-resize';
-    document.body.style.userSelect = 'none';
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-  }, [isResizing, minHeight, maxHeight]);
-
-  // Handle horizontal resize move
-  useEffect(() => {
-    if (!isHorizontalResizing || !containerRef.current) return;
-
-    const handleMouseMove = (e: MouseEvent) => {
+  // Horizontal resize: drag handle adjusts chat/console split against the
+  // container width (re-read each move so window resizes don't desync).
+  const horizontalResize = usePanelResize({
+    axis: 'x',
+    cursor: 'ew-resize',
+    getStartValue: () => chatWidthPercent,
+    onMove: (delta) => {
       const container = containerRef.current;
       if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const newPercent = ((delta / rect.width) * 100) + chatWidthPercent;
+      setPref('chatWidthPercent', Math.min(80, Math.max(20, newPercent)));
+    },
+  });
+  const isHorizontalResizing = horizontalResize.isResizing;
+  const handleHorizontalResizeStart = horizontalResize.start;
 
-      const containerRect = container.getBoundingClientRect();
-      const newWidth = ((e.clientX - containerRect.left) / containerRect.width) * 100;
-      const clampedWidth = Math.min(80, Math.max(20, newWidth));
-      setChatWidthPercent(clampedWidth);
-    };
-
-    const handleMouseUp = () => {
-      setIsHorizontalResizing(false);
-    };
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-
-    document.body.style.cursor = 'ew-resize';
-    document.body.style.userSelect = 'none';
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-  }, [isHorizontalResizing]);
+  // Clamp font size on first mount so out-of-band saved values can't escape
+  // the [min, max] derived from the active theme.
+  useEffect(() => {
+    if (consoleFontSize < minFontSize || consoleFontSize > maxFontSize) {
+      setPref('fontSize', defaultFontSize);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Filter console logs based on search input and selected console node
   const filteredLogs = useMemo(() => {
@@ -952,7 +924,7 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
             {/* Tab Buttons */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
               <button
-                onClick={() => setConsoleTab('console')}
+                onClick={() => setPref('consoleTab', 'console')}
                 style={{
                   ...buttonStyle,
                   padding: '3px 8px',
@@ -972,7 +944,7 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
                 )}
               </button>
               <button
-                onClick={() => setConsoleTab('terminal')}
+                onClick={() => setPref('consoleTab', 'terminal')}
                 style={{
                   ...buttonStyle,
                   padding: '3px 8px',
@@ -1050,7 +1022,7 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
                 <input
                   type="checkbox"
                   checked={autoScroll}
-                  onChange={e => setAutoScroll(e.target.checked)}
+                  onChange={e => setPref('autoScroll', e.target.checked)}
                   style={{ cursor: 'pointer', width: '12px', height: '12px' }}
                 />
                 Auto
@@ -1072,7 +1044,7 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
                   <input
                     type="checkbox"
                     checked={prettyPrint}
-                    onChange={e => setPrettyPrint(e.target.checked)}
+                    onChange={e => setPref('prettyPrint', e.target.checked)}
                     style={{ cursor: 'pointer', width: '12px', height: '12px' }}
                   />
                   Pretty
@@ -1083,7 +1055,7 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
                 value={consoleFontSize}
                 onChange={(e) => {
                   const v = Number(e.target.value);
-                  if (!Number.isNaN(v)) setConsoleFontSize(v);
+                  if (!Number.isNaN(v)) setPref('fontSize', v);
                 }}
                 min={minFontSize}
                 max={maxFontSize}
