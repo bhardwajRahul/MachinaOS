@@ -4,9 +4,18 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Form, Collapse, InputNumber, Switch, Button, Alert, Space, Statistic, Flex } from 'antd';
+import { Form, Collapse, InputNumber, Switch, Button } from 'antd';
+
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAppTheme } from '../../../hooks/useAppTheme';
 import { useWebSocket, type RateLimitConfig, type RateLimitStats } from '../../../contexts/WebSocketContext';
+
+const Stat: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
+  <div className="flex flex-col">
+    <span className="text-xs text-muted-foreground">{label}</span>
+    <span className="text-lg font-semibold">{value}</span>
+  </div>
+);
 
 const RateLimitSection: React.FC = () => {
   const theme = useAppTheme();
@@ -71,48 +80,50 @@ const RateLimitSection: React.FC = () => {
         </span>
       ),
       children: !loaded ? (
-        <Flex justify="center" style={{ padding: theme.spacing.lg }}>Loading...</Flex>
+        <div className="flex justify-center p-4 text-sm text-muted-foreground">Loading...</div>
       ) : (
         <Form form={form} layout="vertical" size="small" onValuesChange={() => setDirty(true)}>
           {stats && (
-            <Flex gap={theme.spacing.md} wrap="wrap" style={{ marginBottom: theme.spacing.md }}>
-              <Statistic title="Last Minute" value={stats.messages_sent_last_minute} />
-              <Statistic title="Last Hour" value={stats.messages_sent_last_hour} />
-              <Statistic title="Today" value={stats.messages_sent_today} />
-              <Statistic title="New Contacts" value={stats.new_contacts_today} />
-              <Statistic title="Responses" value={stats.responses_received} />
-              <Statistic title="Response Rate" value={Math.round((stats.response_rate || 0) * 100)} suffix="%" />
-            </Flex>
+            <div className="mb-3 flex flex-wrap gap-4">
+              <Stat label="Last Minute" value={stats.messages_sent_last_minute} />
+              <Stat label="Last Hour" value={stats.messages_sent_last_hour} />
+              <Stat label="Today" value={stats.messages_sent_today} />
+              <Stat label="New Contacts" value={stats.new_contacts_today} />
+              <Stat label="Responses" value={stats.responses_received} />
+              <Stat
+                label="Response Rate"
+                value={`${Math.round((stats.response_rate || 0) * 100)}%`}
+              />
+            </div>
           )}
           {stats?.is_paused && (
-            <Alert type="warning" message={stats.pause_reason || 'Paused'}
-              action={<Button size="small" onClick={handleUnpause}>Unpause</Button>}
-              style={{ marginBottom: theme.spacing.md }} />
+            <Alert variant="warning" className="mb-3">
+              <AlertDescription className="flex items-center justify-between gap-3">
+                <span>{stats.pause_reason || 'Paused'}</span>
+                <Button size="small" onClick={handleUnpause}>Unpause</Button>
+              </AlertDescription>
+            </Alert>
           )}
 
-          <div style={{ fontSize: theme.fontSize.xs, color: theme.colors.textSecondary, marginBottom: theme.spacing.xs, fontWeight: theme.fontWeight.medium }}>
+          <div className="mb-1 text-xs font-medium text-muted-foreground">
             Message Delays (milliseconds)
           </div>
-          <Flex gap={theme.spacing.sm} wrap="wrap">
+          <div className="flex flex-wrap gap-2">
             <Form.Item label="Min Delay" name="min_delay_ms"><InputNumber style={{ width: 120 }} /></Form.Item>
             <Form.Item label="Max Delay" name="max_delay_ms"><InputNumber style={{ width: 120 }} /></Form.Item>
             <Form.Item label="Typing Duration" name="typing_delay_ms"><InputNumber style={{ width: 120 }} /></Form.Item>
             <Form.Item label="Link Extra Delay" name="link_extra_delay_ms"><InputNumber style={{ width: 120 }} /></Form.Item>
-          </Flex>
-
-          <div style={{ fontSize: theme.fontSize.xs, color: theme.colors.textSecondary, marginBottom: theme.spacing.xs, fontWeight: theme.fontWeight.medium }}>
-            Message Limits
           </div>
-          <Flex gap={theme.spacing.sm} wrap="wrap">
+
+          <div className="mb-1 text-xs font-medium text-muted-foreground">Message Limits</div>
+          <div className="flex flex-wrap gap-2">
             <Form.Item label="Per Minute" name="max_messages_per_minute"><InputNumber style={{ width: 120 }} /></Form.Item>
             <Form.Item label="Per Hour" name="max_messages_per_hour"><InputNumber style={{ width: 120 }} /></Form.Item>
             <Form.Item label="New Contacts/Day" name="max_new_contacts_per_day"><InputNumber style={{ width: 140 }} /></Form.Item>
-          </Flex>
-
-          <div style={{ fontSize: theme.fontSize.xs, color: theme.colors.textSecondary, marginBottom: theme.spacing.xs, fontWeight: theme.fontWeight.medium }}>
-            Behavior
           </div>
-          <Space direction="vertical" size="small" style={{ width: '100%', marginBottom: theme.spacing.md }}>
+
+          <div className="mb-1 text-xs font-medium text-muted-foreground">Behavior</div>
+          <div className="mb-3 flex w-full flex-col gap-2">
             <Form.Item label="Simulate Typing" name="simulate_typing" valuePropName="checked"
               extra="Show typing indicator before sending" style={{ marginBottom: 0 }}>
               <Switch />
@@ -134,7 +145,7 @@ const RateLimitSection: React.FC = () => {
                 </Form.Item>
               )}
             </Form.Item>
-          </Space>
+          </div>
 
           <Button onClick={handleSave} loading={loading} disabled={!dirty} block
             style={{

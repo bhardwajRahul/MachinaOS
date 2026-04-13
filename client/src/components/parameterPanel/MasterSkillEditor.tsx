@@ -11,9 +11,11 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Input, Select, Checkbox, Button, Spin, List, Badge, Empty, Tooltip, Alert, Popconfirm } from 'antd';
+import { Input, Select, Checkbox, Button, List, Badge, Empty, Tooltip, Popconfirm } from 'antd';
+import { Loader2, Info } from 'lucide-react';
+import { Alert as DSAlert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
-import { SearchOutlined, ReloadOutlined, InfoCircleOutlined, FolderOutlined, PlusOutlined, DeleteOutlined, SaveOutlined, CloseOutlined } from '@ant-design/icons';
+import { SearchOutlined, ReloadOutlined, FolderOutlined, PlusOutlined, DeleteOutlined, SaveOutlined, CloseOutlined } from '@ant-design/icons';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { skillNodes, SKILL_NODE_TYPES } from '../../nodeDefinitions/skillNodes';
@@ -641,8 +643,9 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
         {/* Skills List */}
         <div style={{ flex: 1, overflowY: 'auto' }}>
           {folderLoading ? (
-            <div style={{ display: 'flex', justifyContent: 'center', marginTop: theme.spacing.lg }}>
-              <Spin tip="Scanning folder..." />
+            <div className="mt-4 flex items-center justify-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Scanning folder...
             </div>
           ) : filteredSkills.length === 0 ? (
             <Empty
@@ -1014,8 +1017,9 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
             {/* Skill Instructions Editor */}
             <div ref={editorWrapperRef} style={{ flex: 1, padding: theme.spacing.md, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               {isLoading ? (
-                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Spin tip="Loading..." />
+                <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading...
                 </div>
               ) : (
                 <Input.TextArea
@@ -1051,17 +1055,12 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
 
               {/* Enable hint */}
               {!selectedSkillConfig?.enabled && (
-                <Alert
-                  type="info"
-                  showIcon
-                  icon={<InfoCircleOutlined />}
-                  message="Enable this skill to include it when running the AI Agent."
-                  style={{
-                    marginTop: theme.spacing.md,
-                    backgroundColor: `${theme.dracula.cyan}10`,
-                    border: `1px solid ${theme.dracula.cyan}30`,
-                  }}
-                />
+                <DSAlert variant="info" className="mt-3">
+                  <Info className="h-4 w-4" />
+                  <AlertDescription>
+                    Enable this skill to include it when running the AI Agent.
+                  </AlertDescription>
+                </DSAlert>
               )}
             </div>
           </>

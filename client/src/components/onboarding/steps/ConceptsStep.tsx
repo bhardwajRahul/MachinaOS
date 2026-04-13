@@ -1,46 +1,37 @@
 import React from 'react';
-import { Typography, Space } from 'antd';
-import {
-  AppstoreOutlined,
-  BranchesOutlined,
-  RobotOutlined,
-  ToolOutlined,
-  SwapOutlined,
-} from '@ant-design/icons';
+import { LayoutGrid, GitBranch, Bot, Wrench, ArrowLeftRight } from 'lucide-react';
 import { useAppTheme } from '../../../hooks/useAppTheme';
-
-const { Title, Text, Paragraph } = Typography;
 
 const ConceptsStep: React.FC = () => {
   const theme = useAppTheme();
 
   const concepts = [
     {
-      icon: <AppstoreOutlined />,
+      Icon: LayoutGrid,
       title: 'Nodes',
       desc: 'Building blocks of your workflow. Each node performs a specific action like sending a message, calling an AI model, or processing data.',
       color: theme.dracula.cyan,
     },
     {
-      icon: <BranchesOutlined />,
+      Icon: GitBranch,
       title: 'Edges',
       desc: "Connections between nodes that define data flow. Drag from one node's output to another's input to connect them.",
       color: theme.dracula.green,
     },
     {
-      icon: <RobotOutlined />,
+      Icon: Bot,
       title: 'AI Agents',
       desc: 'Intelligent nodes that use LLMs (Claude, GPT, Gemini) to reason, call tools, and complete tasks autonomously.',
       color: theme.dracula.purple,
     },
     {
-      icon: <ToolOutlined />,
+      Icon: Wrench,
       title: 'Skills & Tools',
       desc: 'Connect skills and tools to agents to extend their capabilities. Skills provide instructions, tools provide actions.',
       color: theme.dracula.orange,
     },
     {
-      icon: <SwapOutlined />,
+      Icon: ArrowLeftRight,
       title: 'Normal vs Dev Mode',
       desc: 'Normal mode shows AI-focused nodes for simple workflows. Dev mode unlocks all 108+ nodes for advanced automation.',
       color: theme.dracula.pink,
@@ -48,53 +39,41 @@ const ConceptsStep: React.FC = () => {
   ];
 
   return (
-    <div style={{ padding: '4px 0' }}>
-      <div style={{ textAlign: 'center', marginBottom: 16 }}>
-        <Title level={4} style={{ margin: '0 0 4px 0' }}>Key Concepts</Title>
-        <Text type="secondary" style={{ fontSize: 12 }}>
+    <div className="py-1">
+      <div className="mb-4 text-center">
+        <h4 className="m-0 mb-1 text-lg font-semibold">Key Concepts</h4>
+        <p className="text-xs text-muted-foreground">
           Understanding these will help you build powerful workflows
-        </Text>
+        </p>
       </div>
 
-      <Space direction="vertical" size={10} style={{ width: '100%' }}>
+      <div className="flex w-full flex-col gap-2.5">
         {concepts.map((c) => (
           <div
             key={c.title}
+            className="flex items-start gap-3 rounded-md border p-3"
             style={{
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: 12,
-              padding: 12,
               backgroundColor: `${c.color}10`,
-              border: `1px solid ${c.color}25`,
-              borderRadius: 6,
+              borderColor: `${c.color}25`,
             }}
           >
-            <div style={{
-              width: 32,
-              height: 32,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: `${c.color}20`,
-              borderRadius: 6,
-              fontSize: 16,
-              color: c.color,
-              flexShrink: 0,
-            }}>
-              {c.icon}
+            <div
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md"
+              style={{ backgroundColor: `${c.color}20`, color: c.color }}
+            >
+              <c.Icon className="h-4 w-4" />
             </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <Text strong style={{ fontSize: 13, color: c.color, display: 'block', marginBottom: 2 }}>
+            <div className="min-w-0 flex-1">
+              <div className="mb-0.5 text-sm font-semibold" style={{ color: c.color }}>
                 {c.title}
-              </Text>
-              <Paragraph type="secondary" style={{ fontSize: 12, margin: 0, lineHeight: 1.5 }}>
+              </div>
+              <p className="m-0 text-xs leading-relaxed text-muted-foreground">
                 {c.desc}
-              </Paragraph>
+              </p>
             </div>
           </div>
         ))}
-      </Space>
+      </div>
     </div>
   );
 };

@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { Form, Input, Space } from 'antd';
+import { Form, Input } from 'antd';
 import { useAppTheme } from '../../../hooks/useAppTheme';
 import type { FieldDef } from '../types';
 import type { FormInstance } from 'antd';
@@ -23,7 +23,7 @@ const FieldRenderer: React.FC<Props> = ({ fields, form }) => {
   };
 
   return (
-    <Space direction="vertical" size="small" style={{ width: '100%' }}>
+    <div className="flex w-full flex-col gap-2">
       {fields.map(f => (
         <Form.Item key={f.key} label={f.label} required={f.required}
           style={{ marginBottom: theme.spacing.xs }}>
@@ -44,7 +44,7 @@ const FieldRenderer: React.FC<Props> = ({ fields, form }) => {
           )}
         </Form.Item>
       ))}
-    </Space>
+    </div>
   );
 };
 

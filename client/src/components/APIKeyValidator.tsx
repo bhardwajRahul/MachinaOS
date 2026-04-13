@@ -1,7 +1,12 @@
 import React, { useEffect } from 'react';
-import { Input, Button, Space, Tag, Tooltip } from 'antd';
-import { CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined, DeleteOutlined } from '@ant-design/icons';
+import { CheckCircle, XCircle, Loader2, Trash2 } from 'lucide-react';
+
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useApiKeyValidation } from '../hooks/useApiKeyValidation';
+import { cn } from '@/lib/utils';
 
 interface APIKeyValidatorProps {
   value: string;
@@ -34,84 +39,77 @@ const APIKeyValidator: React.FC<APIKeyValidatorProps> = ({
     onSuccess: onValidationSuccess
   });
 
-  // Auto-load stored key on mount
   useEffect(() => {
     if (hasStoredKey && !value) {
-      getStoredKey().then(storedKey => {
+      getStoredKey().then((storedKey) => {
         if (storedKey) onChange(storedKey);
       });
     }
   }, [hasStoredKey, value, onChange, getStoredKey]);
 
   const handleValidate = () => validate(value);
-
   const handleClear = async () => {
     await clear();
     onChange('');
   };
 
-  const getStatusIcon = () => {
-    if (isValidating) return <LoadingOutlined />;
-    if (isValid) return <CheckCircleOutlined style={{ color: '#52c41a' }} />;
-    if (status === 'invalid') return <CloseCircleOutlined style={{ color: '#ff4d4f' }} />;
-    return null;
-  };
-
-  const getStatusTag = () => {
-    if (hasStoredKey && isValid) {
-      return (
-        <Tag color="success" icon={<CheckCircleOutlined />}>
-          Validated
-        </Tag>
-      );
-    }
-    return null;
-  };
-
   return (
-    <Space direction="vertical" style={{ width: '100%' }} size="small">
-      <Space.Compact style={{ width: '100%' }}>
-        <Input.Password
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder || 'Enter API key...'}
-          onDragOver={onDragOver}
-          onDragLeave={onDragLeave}
-          onDrop={onDrop}
-          suffix={getStatusIcon()}
-          status={status === 'invalid' ? 'error' : undefined}
-          style={{
-            fontFamily: 'monospace',
-            borderColor: isDragOver ? '#1890ff' : undefined,
-            backgroundColor: isDragOver ? '#e6f7ff' : undefined
-          }}
-        />
+    <div className="flex w-full flex-col gap-1.5">
+      <div className="flex w-full items-stretch gap-1">
+        <div className="relative flex-1">
+          <Input
+            type="password"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={placeholder || 'Enter API key...'}
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
+            onDrop={onDrop}
+            aria-invalid={status === 'invalid' || undefined}
+            className={cn(
+              'font-mono pr-8',
+              isDragOver && 'border-primary bg-primary/10'
+            )}
+          />
+          <div className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2">
+            {isValidating && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+            {!isValidating && isValid && <CheckCircle className="h-4 w-4 text-success" />}
+            {!isValidating && status === 'invalid' && <XCircle className="h-4 w-4 text-destructive" />}
+          </div>
+        </div>
 
         {validationConfig.showValidateButton && (
           <Button
-            type={isValid ? 'primary' : 'default'}
-            loading={isValidating}
+            variant={isValid ? 'default' : 'outline'}
             disabled={!value?.trim() || isValidating}
             onClick={handleValidate}
           >
+            {isValidating && <Loader2 className="h-4 w-4 animate-spin" />}
             {isValidating ? 'Validating' : isValid ? 'Valid' : 'Validate'}
           </Button>
         )}
 
         {hasStoredKey && (
-          <Tooltip title="Clear stored API key">
-            <Button
-              icon={<DeleteOutlined />}
-              onClick={handleClear}
-              type="text"
-              size="small"
-            />
-          </Tooltip>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={handleClear}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Clear stored API key</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         )}
-      </Space.Compact>
+      </div>
 
-      {getStatusTag()}
-    </Space>
+      {hasStoredKey && isValid && (
+        <Badge variant="success" className="w-fit gap-1">
+          <CheckCircle className="h-3 w-3" />
+          Validated
+        </Badge>
+      )}
+    </div>
   );
 };
 

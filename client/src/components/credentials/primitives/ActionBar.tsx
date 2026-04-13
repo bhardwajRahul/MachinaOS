@@ -4,8 +4,8 @@
  */
 
 import React from 'react';
-import { Button, Flex } from 'antd';
-import { useAppTheme } from '../../../hooks/useAppTheme';
+import { Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 export interface ActionDef {
   key: string;
@@ -24,21 +24,30 @@ interface Props {
 }
 
 const ActionBar: React.FC<Props> = ({ actions, loading }) => {
-  const theme = useAppTheme();
   return (
-    <Flex gap={theme.spacing.sm} justify="center"
-      style={{ paddingTop: theme.spacing.md, borderTop: `1px solid ${theme.colors.border}` }}>
-      {actions.filter(a => !a.hidden).map(a => (
-        <Button key={a.key}
-          onClick={a.onClick}
-          loading={loading === a.key}
-          disabled={a.disabled}
-          icon={a.icon}
-          style={{ backgroundColor: `${a.color}25`, borderColor: `${a.color}60`, color: a.color }}>
-          {a.label}
-        </Button>
-      ))}
-    </Flex>
+    <div className="flex justify-center gap-2 border-t border-border pt-3">
+      {actions
+        .filter((a) => !a.hidden)
+        .map((a) => {
+          const isLoading = loading === a.key;
+          return (
+            <Button
+              key={a.key}
+              variant="outline"
+              onClick={a.onClick}
+              disabled={a.disabled || isLoading}
+              style={{
+                backgroundColor: `${a.color}25`,
+                borderColor: `${a.color}60`,
+                color: a.color,
+              }}
+            >
+              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : a.icon}
+              {a.label}
+            </Button>
+          );
+        })}
+    </div>
   );
 };
 

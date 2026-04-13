@@ -1,12 +1,11 @@
 import React from 'react';
-import { Typography, Button, Space, Alert } from 'antd';
-import { KeyOutlined, LinkOutlined } from '@ant-design/icons';
+import { Key, ExternalLink } from 'lucide-react';
+
+import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   OpenAIIcon, ClaudeIcon, GeminiIcon, GroqIcon, OpenRouterIcon, CerebrasIcon,
 } from '../../icons/AIProviderIcons';
-import { useAppTheme } from '../../../hooks/useAppTheme';
-
-const { Title, Text } = Typography;
 
 interface ApiKeyStepProps {
   onOpenCredentials: () => void;
@@ -22,68 +21,48 @@ const providers = [
 ];
 
 const ApiKeyStep: React.FC<ApiKeyStepProps> = ({ onOpenCredentials }) => {
-  const theme = useAppTheme();
-
   return (
-    <div style={{ padding: '4px 0' }}>
-      <div style={{ textAlign: 'center', marginBottom: 16 }}>
-        <Title level={4} style={{ margin: '0 0 4px 0' }}>
-          <KeyOutlined style={{ marginRight: 8, color: theme.dracula.yellow }} />
+    <div className="py-1">
+      <div className="mb-4 text-center">
+        <h4 className="m-0 mb-1 flex items-center justify-center gap-2 text-lg font-semibold">
+          <Key className="h-4 w-4 text-dracula-yellow" />
           API Key Setup
-        </Title>
-        <Text type="secondary" style={{ fontSize: 12 }}>
+        </h4>
+        <p className="text-xs text-muted-foreground">
           Configure at least one AI provider to use AI agents
-        </Text>
+        </p>
       </div>
 
-      <Space direction="vertical" size={8} style={{ width: '100%' }}>
+      <div className="flex w-full flex-col gap-2">
         {providers.map((p) => (
           <div
             key={p.name}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              padding: '8px 12px',
-              backgroundColor: theme.colors.backgroundAlt,
-              border: `1px solid ${theme.colors.border}`,
-              borderRadius: 6,
-            }}
+            className="flex items-center gap-2.5 rounded-md border border-border bg-muted/50 px-3 py-2"
           >
-            <div style={{ width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              {p.icon}
+            <div className="flex h-6 w-6 shrink-0 items-center justify-center">{p.icon}</div>
+            <div className="min-w-0 flex-1">
+              <div className="block text-sm font-semibold">{p.name}</div>
+              <div className="text-xs text-muted-foreground">{p.desc}</div>
             </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <Text strong style={{ fontSize: 13, display: 'block' }}>{p.name}</Text>
-              <Text type="secondary" style={{ fontSize: 11 }}>{p.desc}</Text>
+            <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+              <ExternalLink className="h-3 w-3" /> {p.url}
             </div>
-            <Text type="secondary" style={{ fontSize: 10 }}>
-              <LinkOutlined /> {p.url}
-            </Text>
           </div>
         ))}
-      </Space>
+      </div>
 
-      <div style={{ textAlign: 'center', marginTop: 20 }}>
-        <Button
-          type="primary"
-          icon={<KeyOutlined />}
-          onClick={onOpenCredentials}
-          style={{
-            backgroundColor: theme.dracula.cyan,
-            borderColor: theme.dracula.cyan,
-          }}
-        >
+      <div className="mt-5 text-center">
+        <Button onClick={onOpenCredentials} className="gap-2">
+          <Key className="h-4 w-4" />
           Open Credentials
         </Button>
       </div>
 
-      <Alert
-        type="info"
-        showIcon
-        message="You can always change API keys later from the toolbar credentials button."
-        style={{ marginTop: 16, fontSize: 12 }}
-      />
+      <Alert variant="info" className="mt-4">
+        <AlertDescription className="text-xs">
+          You can always change API keys later from the toolbar credentials button.
+        </AlertDescription>
+      </Alert>
     </div>
   );
 };

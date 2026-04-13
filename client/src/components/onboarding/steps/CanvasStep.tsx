@@ -1,17 +1,8 @@
 import React from 'react';
-import { Typography, Tag, Space } from 'antd';
-import {
-  LayoutOutlined,
-  ToolOutlined,
-  CodeOutlined,
-} from '@ant-design/icons';
-import { useAppTheme } from '../../../hooks/useAppTheme';
-
-const { Title, Text } = Typography;
+import { Layout, Wrench, Terminal } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 const CanvasStep: React.FC = () => {
-  const theme = useAppTheme();
-
   const shortcuts = [
     { keys: 'Ctrl+S', action: 'Save workflow' },
     { keys: 'F2', action: 'Rename node' },
@@ -20,128 +11,95 @@ const CanvasStep: React.FC = () => {
   ];
 
   return (
-    <div style={{ padding: '4px 0' }}>
-      <div style={{ textAlign: 'center', marginBottom: 16 }}>
-        <Title level={4} style={{ margin: '0 0 4px 0' }}>Canvas Tour</Title>
-        <Text type="secondary" style={{ fontSize: 12 }}>
+    <div className="py-1">
+      <div className="mb-4 text-center">
+        <h4 className="m-0 mb-1 text-lg font-semibold">Canvas Tour</h4>
+        <p className="text-xs text-muted-foreground">
           Navigate the main interface regions
-        </Text>
+        </p>
       </div>
 
       {/* Visual layout diagram */}
-      <div style={{
-        border: `1px solid ${theme.colors.border}`,
-        borderRadius: 8,
-        overflow: 'hidden',
-        marginBottom: 16,
-      }}>
+      <div className="mb-4 overflow-hidden rounded-lg border border-border">
         {/* Toolbar */}
-        <div style={{
-          padding: '6px 10px',
-          backgroundColor: `${theme.dracula.orange}15`,
-          borderBottom: `1px solid ${theme.colors.border}`,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-        }}>
-          <ToolOutlined style={{ color: theme.dracula.orange, fontSize: 12 }} />
-          <Text style={{ fontSize: 11, color: theme.dracula.orange }} strong>Toolbar</Text>
-          <div style={{ flex: 1 }} />
-          <Tag color="orange" style={{ fontSize: 10, margin: 0, lineHeight: '18px' }}>Run</Tag>
-          <Tag color="purple" style={{ fontSize: 10, margin: 0, lineHeight: '18px' }}>Start</Tag>
-          <Tag color="cyan" style={{ fontSize: 10, margin: 0, lineHeight: '18px' }}>Save</Tag>
+        <div
+          className="flex items-center gap-1.5 border-b border-border px-2.5 py-1.5"
+          style={{ backgroundColor: 'hsl(var(--dracula-orange) / 0.12)' }}
+        >
+          <Wrench className="h-3 w-3 text-dracula-orange" />
+          <span className="text-xs font-semibold text-dracula-orange">Toolbar</span>
+          <div className="flex-1" />
+          <Badge variant="warning" className="text-[10px]">Run</Badge>
+          <Badge variant="secondary" className="text-[10px]">Start</Badge>
+          <Badge variant="info" className="text-[10px]">Save</Badge>
         </div>
 
         {/* Main area */}
-        <div style={{ display: 'flex', height: 120 }}>
+        <div className="flex h-[120px]">
           {/* Sidebar */}
-          <div style={{
-            width: 80,
-            backgroundColor: `${theme.dracula.cyan}10`,
-            borderRight: `1px solid ${theme.colors.border}`,
-            padding: 6,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 3,
-          }}>
-            <Text style={{ fontSize: 9, color: theme.dracula.cyan }} strong>Sidebar</Text>
-            {['Workflow 1', 'Workflow 2'].map(w => (
-              <div key={w} style={{
-                fontSize: 8,
-                padding: '2px 4px',
-                backgroundColor: theme.colors.backgroundAlt,
-                borderRadius: 3,
-                color: theme.colors.textSecondary,
-              }}>{w}</div>
+          <div
+            className="flex w-20 flex-col gap-1 border-r border-border p-1.5"
+            style={{ backgroundColor: 'hsl(var(--dracula-cyan) / 0.08)' }}
+          >
+            <span className="text-[9px] font-semibold text-dracula-cyan">Sidebar</span>
+            {['Workflow 1', 'Workflow 2'].map((w) => (
+              <div key={w} className="rounded-sm bg-muted px-1 py-0.5 text-[8px] text-muted-foreground">
+                {w}
+              </div>
             ))}
           </div>
 
           {/* Canvas */}
-          <div style={{
-            flex: 1,
-            backgroundColor: `${theme.dracula.purple}08`,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            position: 'relative',
-          }}>
-            <div style={{ textAlign: 'center' }}>
-              <LayoutOutlined style={{ fontSize: 20, color: theme.dracula.purple, opacity: 0.5 }} />
-              <div style={{ fontSize: 9, color: theme.dracula.purple, marginTop: 2 }}>Canvas</div>
+          <div
+            className="relative flex flex-1 items-center justify-center"
+            style={{ backgroundColor: 'hsl(var(--dracula-purple) / 0.06)' }}
+          >
+            <div className="text-center">
+              <Layout className="mx-auto h-5 w-5 text-dracula-purple opacity-50" />
+              <div className="mt-0.5 text-[9px] text-dracula-purple">Canvas</div>
             </div>
           </div>
 
           {/* Palette */}
-          <div style={{
-            width: 80,
-            backgroundColor: `${theme.dracula.green}10`,
-            borderLeft: `1px solid ${theme.colors.border}`,
-            padding: 6,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 3,
-          }}>
-            <Text style={{ fontSize: 9, color: theme.dracula.green }} strong>Palette</Text>
-            {['AI Agents', 'AI Models', 'Skills'].map(c => (
-              <div key={c} style={{
-                fontSize: 8,
-                padding: '2px 4px',
-                backgroundColor: theme.colors.backgroundAlt,
-                borderRadius: 3,
-                color: theme.colors.textSecondary,
-              }}>{c}</div>
+          <div
+            className="flex w-20 flex-col gap-1 border-l border-border p-1.5"
+            style={{ backgroundColor: 'hsl(var(--dracula-green) / 0.08)' }}
+          >
+            <span className="text-[9px] font-semibold text-dracula-green">Palette</span>
+            {['AI Agents', 'AI Models', 'Skills'].map((c) => (
+              <div key={c} className="rounded-sm bg-muted px-1 py-0.5 text-[8px] text-muted-foreground">
+                {c}
+              </div>
             ))}
           </div>
         </div>
 
         {/* Console */}
-        <div style={{
-          padding: '6px 10px',
-          backgroundColor: `${theme.dracula.pink}10`,
-          borderTop: `1px solid ${theme.colors.border}`,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-        }}>
-          <CodeOutlined style={{ color: theme.dracula.pink, fontSize: 12 }} />
-          <Text style={{ fontSize: 11, color: theme.dracula.pink }} strong>Console</Text>
-          <div style={{ flex: 1 }} />
-          <Tag style={{ fontSize: 9, margin: 0, lineHeight: '16px' }}>Chat</Tag>
-          <Tag style={{ fontSize: 9, margin: 0, lineHeight: '16px' }}>Logs</Tag>
+        <div
+          className="flex items-center gap-1.5 border-t border-border px-2.5 py-1.5"
+          style={{ backgroundColor: 'hsl(var(--dracula-pink) / 0.08)' }}
+        >
+          <Terminal className="h-3 w-3 text-dracula-pink" />
+          <span className="text-xs font-semibold text-dracula-pink">Console</span>
+          <div className="flex-1" />
+          <Badge variant="outline" className="text-[9px]">Chat</Badge>
+          <Badge variant="outline" className="text-[9px]">Logs</Badge>
         </div>
       </div>
 
       {/* Keyboard shortcuts */}
       <div>
-        <Text strong style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>Keyboard Shortcuts</Text>
-        <Space wrap size={[8, 6]}>
+        <div className="mb-2 block text-xs font-semibold">Keyboard Shortcuts</div>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
           {shortcuts.map((s) => (
-            <span key={s.keys} style={{ fontSize: 12 }}>
-              <Tag style={{ fontSize: 11, fontFamily: 'monospace' }}>{s.keys}</Tag>
-              <Text type="secondary" style={{ fontSize: 11 }}>{s.action}</Text>
+            <span key={s.keys} className="inline-flex items-center gap-1.5 text-xs">
+              <Badge variant="outline" className="font-mono text-[11px]">
+                {s.keys}
+              </Badge>
+              <span className="text-xs text-muted-foreground">{s.action}</span>
             </span>
           ))}
-        </Space>
+        </div>
       </div>
     </div>
   );

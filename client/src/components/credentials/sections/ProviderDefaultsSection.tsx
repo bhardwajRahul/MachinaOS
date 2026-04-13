@@ -10,8 +10,10 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Form, Collapse, Select, InputNumber, Switch, Button, Tag, Space, Spin } from 'antd';
-import { SettingOutlined } from '@ant-design/icons';
+import { Form, Collapse, Select, InputNumber, Switch, Button } from 'antd';
+import { Settings } from 'lucide-react';
+
+import { Badge } from '@/components/ui/badge';
 import { useAppTheme } from '../../../hooks/useAppTheme';
 import { useApiKeys, type ProviderDefaults, type ModelConstraints } from '../../../hooks/useApiKeys';
 
@@ -86,16 +88,19 @@ const ProviderDefaultsSection: React.FC<Props> = ({ providerId }) => {
   const fixedTemp = constraints?.is_reasoning_model && tempMin === tempMax;
 
   const chipStyle = (bg: string): React.CSSProperties => ({
-    margin: 0, fontSize: theme.fontSize.xs,
     backgroundColor: `${bg}20`, borderColor: `${bg}50`, color: bg,
   });
 
   return (
     <Collapse ghost defaultActiveKey={['defaults']} items={[{
       key: 'defaults',
-      label: <Space><SettingOutlined /> Default Parameters</Space>,
+      label: (
+        <span className="flex items-center gap-2">
+          <Settings className="h-4 w-4" /> Default Parameters
+        </span>
+      ),
       children: (
-        <Spin spinning={loading}>
+        <div className={loading ? 'pointer-events-none opacity-60' : ''}>
           <Form form={form} layout="vertical" size="small" onValuesChange={() => setDirty(true)} preserve>
             <Form.Item
               label="Default Model"
@@ -113,13 +118,13 @@ const ProviderDefaultsSection: React.FC<Props> = ({ providerId }) => {
             </Form.Item>
 
             {constraints && (
-              <Space wrap size="small" style={{ marginBottom: theme.spacing.md }}>
-                {maxOut != null && <Tag style={chipStyle(theme.dracula.green)}>Max Output: {maxOut.toLocaleString()}</Tag>}
-                {constraints.context_length != null && <Tag style={chipStyle(theme.dracula.cyan)}>Context: {constraints.context_length.toLocaleString()}</Tag>}
-                <Tag style={chipStyle(theme.dracula.purple)}>Temp: {tempMin}-{tempMax}</Tag>
-                {canThink && <Tag style={chipStyle(theme.dracula.orange)}>Thinking: {thinkType}</Tag>}
-                {constraints.is_reasoning_model && <Tag style={chipStyle(theme.dracula.pink)}>Reasoning</Tag>}
-              </Space>
+              <div className="mb-3 flex flex-wrap items-center gap-1.5">
+                {maxOut != null && <Badge style={chipStyle(theme.dracula.green)}>Max Output: {maxOut.toLocaleString()}</Badge>}
+                {constraints.context_length != null && <Badge style={chipStyle(theme.dracula.cyan)}>Context: {constraints.context_length.toLocaleString()}</Badge>}
+                <Badge style={chipStyle(theme.dracula.purple)}>Temp: {tempMin}-{tempMax}</Badge>
+                {canThink && <Badge style={chipStyle(theme.dracula.orange)}>Thinking: {thinkType}</Badge>}
+                {constraints.is_reasoning_model && <Badge style={chipStyle(theme.dracula.pink)}>Reasoning</Badge>}
+              </div>
             )}
 
             {!fixedTemp && (
@@ -171,7 +176,7 @@ const ProviderDefaultsSection: React.FC<Props> = ({ providerId }) => {
               Save Defaults
             </Button>
           </Form>
-        </Spin>
+        </div>
       ),
     }]} />
   );

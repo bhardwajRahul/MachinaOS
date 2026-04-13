@@ -5,8 +5,9 @@
  */
 
 import React from 'react';
-import { Button, Alert, Flex, Space } from 'antd';
-import { ReloadOutlined } from '@ant-design/icons';
+import { Loader2, RotateCcw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAppTheme } from '../../../hooks/useAppTheme';
 import FieldRenderer from './FieldRenderer';
 import ActionBar, { type ActionDef } from './ActionBar';
@@ -44,46 +45,74 @@ const OAuthConnect: React.FC<Props> = ({
   const actions: ActionDef[] = [
     { key: 'login', label: `Login with ${config.name}`, color: theme.dracula.green, onClick: onLogin, disabled: !stored, hidden: connected },
     { key: 'logout', label: 'Disconnect', color: theme.dracula.pink, onClick: onLogout, hidden: !connected },
-    { key: 'refresh', label: 'Refresh', color: theme.dracula.cyan, onClick: onRefresh, icon: <ReloadOutlined /> },
+    { key: 'refresh', label: 'Refresh', color: theme.dracula.cyan, onClick: onRefresh, icon: <RotateCcw className="h-4 w-4" /> },
   ];
 
+  const isSaving = loading === 'save';
+
   return (
-    <Flex vertical gap={theme.spacing.lg} style={{ flex: 1, minHeight: 0 }}>
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
       <StatusCard icon={icon} title={config.name} rows={statusRows} status={null} />
 
       {!connected && config.fields && (
-        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+        <div className="flex w-full flex-col gap-3">
           <FieldRenderer fields={config.fields} form={form} />
-          <Button onClick={onSaveCredentials} loading={loading === 'save'}
-            style={{ backgroundColor: `${theme.dracula.purple}25`, borderColor: `${theme.dracula.purple}60`, color: theme.dracula.purple }}>
+          <Button
+            variant="outline"
+            onClick={onSaveCredentials}
+            disabled={isSaving}
+            style={{
+              backgroundColor: `${theme.dracula.purple}25`,
+              borderColor: `${theme.dracula.purple}60`,
+              color: theme.dracula.purple,
+            }}
+          >
+            {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
             Save Credentials
           </Button>
           {config.instructions && (
-            <div style={{ fontSize: theme.fontSize.xs, color: theme.colors.textMuted, lineHeight: 1.5 }}>
+            <div className="text-xs leading-relaxed text-muted-foreground">
               {config.instructions}
-              {config.callbackUrl && <><br/>Callback URL: <code style={{ color: theme.dracula.cyan }}>{config.callbackUrl}</code></>}
+              {config.callbackUrl && (
+                <>
+                  <br />
+                  Callback URL:{' '}
+                  <code className="text-dracula-cyan">{config.callbackUrl}</code>
+                </>
+              )}
             </div>
           )}
-        </Space>
+        </div>
       )}
 
-      {error && <Alert type="error" message={error} showIcon />}
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
-      <div style={{ padding: theme.spacing.md, borderRadius: theme.borderRadius.md,
-        backgroundColor: `${theme.dracula.cyan}10`, border: `1px solid ${theme.dracula.cyan}30` }}>
-        <div style={{ fontSize: theme.fontSize.sm, color: theme.colors.textSecondary, lineHeight: 1.5 }}>
-          {connected ? `Your ${config.name} account is connected.`
-            : stored ? 'Click Login to authorize.'
-            : 'Enter your credentials above to get started.'}
+      <div
+        className="rounded-md border p-3"
+        style={{
+          backgroundColor: `${theme.dracula.cyan}10`,
+          borderColor: `${theme.dracula.cyan}30`,
+        }}
+      >
+        <div className="text-sm leading-relaxed text-muted-foreground">
+          {connected
+            ? `Your ${config.name} account is connected.`
+            : stored
+              ? 'Click Login to authorize.'
+              : 'Enter your credentials above to get started.'}
         </div>
       </div>
 
       {extraSection}
 
-      <div style={{ flex: 1 }} />
+      <div className="flex-1" />
 
       <ActionBar actions={actions} loading={loading} />
-    </Flex>
+    </div>
   );
 };
 

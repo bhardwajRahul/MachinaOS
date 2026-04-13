@@ -10,7 +10,9 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Form, Select, Input, InputNumber, Button, Alert, Flex, Space } from 'antd';
+import { Form, Select, Input, InputNumber, Button } from 'antd';
+import { Loader2 } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAppTheme } from '../../../hooks/useAppTheme';
 import { useApiKeys } from '../../../hooks/useApiKeys';
 import { StatusCard } from '../primitives';
@@ -149,7 +151,7 @@ const EmailPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = ({ co
   const iconSize = parseInt(theme.iconSize.md);
 
   return (
-    <Flex vertical gap={theme.spacing.lg} style={{ padding: theme.spacing.xl, flex: 1, minHeight: 0 }}>
+    <div className="flex min-h-0 flex-1 flex-col gap-4 p-5">
       <StatusCard icon={<config.icon size={iconSize} />} title={config.name} status={{ stored, address }}
         rows={[
           { label: 'Status', ok: s => s.stored, trueText: 'Configured', falseText: 'Not configured' },
@@ -171,7 +173,16 @@ const EmailPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = ({ co
         </Form.Item>
 
         <Form.Item
-          label={<Space>Password {stored && <span style={{ color: theme.colors.textMuted, fontWeight: theme.fontWeight.normal, fontSize: theme.fontSize.xs }}>(leave blank to keep existing)</span>}</Space>}
+          label={
+            <span className="flex items-center gap-2">
+              Password
+              {stored && (
+                <span className="text-xs font-normal text-muted-foreground">
+                  (leave blank to keep existing)
+                </span>
+              )}
+            </span>
+          }
           name="password"
           extra={AUTH_NOTES[provider]}
         >
@@ -190,33 +201,38 @@ const EmailPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = ({ co
               <div style={{ fontSize: theme.fontSize.sm, fontWeight: theme.fontWeight.medium, color: theme.colors.text, marginBottom: theme.spacing.md }}>
                 Custom IMAP / SMTP
               </div>
-              <Flex gap={theme.spacing.md}>
+              <div className="flex gap-3">
                 <Form.Item label="IMAP Host" name="imapHost" style={{ flex: 2 }}>
                   <Input placeholder="imap.example.com" />
                 </Form.Item>
                 <Form.Item label="IMAP Port" name="imapPort" style={{ flex: 1 }}>
                   <InputNumber min={1} max={65535} style={{ width: '100%' }} />
                 </Form.Item>
-              </Flex>
-              <Flex gap={theme.spacing.md}>
+              </div>
+              <div className="flex gap-3">
                 <Form.Item label="SMTP Host" name="smtpHost" style={{ flex: 2 }}>
                   <Input placeholder="smtp.example.com" />
                 </Form.Item>
                 <Form.Item label="SMTP Port" name="smtpPort" style={{ flex: 1 }}>
                   <InputNumber min={1} max={65535} style={{ width: '100%' }} />
                 </Form.Item>
-              </Flex>
+              </div>
             </div>
           )}
         </Form.Item>
       </Form>
 
-      {error && <Alert type="error" message={error} showIcon />}
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
-      <div style={{ flex: 1 }} />
+      <div className="flex-1" />
 
-      <Flex gap={theme.spacing.sm} justify="center" style={{ paddingTop: theme.spacing.md, borderTop: `1px solid ${theme.colors.border}` }}>
+      <div className="flex justify-center gap-2 border-t border-border pt-3">
         <Button onClick={handleSave} loading={loading === 'save'}
+          icon={loading === 'save' ? <Loader2 className="h-4 w-4 animate-spin" /> : undefined}
           style={{ backgroundColor: `${theme.dracula.green}25`, borderColor: `${theme.dracula.green}60`, color: theme.dracula.green }}>
           Save
         </Button>
@@ -226,8 +242,8 @@ const EmailPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = ({ co
             Remove
           </Button>
         )}
-      </Flex>
-    </Flex>
+      </div>
+    </div>
   );
 };
 

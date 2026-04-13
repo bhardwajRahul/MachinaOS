@@ -4,9 +4,11 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Collapse, Statistic, Alert, Button, Tag, Space, Spin, Flex, Descriptions } from 'antd';
-import { DollarOutlined, ReloadOutlined } from '@ant-design/icons';
-import { useAppTheme } from '../../../hooks/useAppTheme';
+import { Collapse, Button } from 'antd';
+import { DollarSign, RefreshCw, Loader2 } from 'lucide-react';
+
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useApiKeys, type APIUsageSummary } from '../../../hooks/useApiKeys';
 
 interface Props {
@@ -15,7 +17,6 @@ interface Props {
 }
 
 const ApiUsageSection: React.FC<Props> = ({ service, serviceName }) => {
-  const theme = useAppTheme();
   const { getAPIUsageSummary, isConnected } = useApiKeys();
   const [data, setData] = useState<APIUsageSummary | null>(null);
   const [loading, setLoading] = useState(false);
@@ -25,7 +26,7 @@ const ApiUsageSection: React.FC<Props> = ({ service, serviceName }) => {
     setLoading(true);
     try {
       const services = await getAPIUsageSummary(service);
-      setData(services.find(s => s.service === service) ?? null);
+      setData(services.find((s) => s.service === service) ?? null);
     } finally {
       setLoading(false);
     }
@@ -33,52 +34,81 @@ const ApiUsageSection: React.FC<Props> = ({ service, serviceName }) => {
 
   useEffect(() => { load(); }, [load]);
 
-  const costTag = data ? (
-    <Tag style={{ backgroundColor: `${theme.dracula.green}25`, borderColor: `${theme.dracula.green}60`, color: theme.dracula.green }}>
-      ${data.total_cost.toFixed(4)}
-    </Tag>
+  const costBadge = data ? (
+    <Badge variant="success">${data.total_cost.toFixed(4)}</Badge>
   ) : null;
 
   return (
-    <Collapse items={[{
-      key: 'usage',
-      label: <Space><DollarOutlined style={{ color: theme.dracula.yellow }} /> API Usage &amp; Costs {costTag}</Space>,
-      children: loading ? (
-        <Flex justify="center" style={{ padding: theme.spacing.lg }}><Spin size="small" /></Flex>
-      ) : !data ? (
-        <Alert type="info" showIcon
-          message={`No usage data yet. Use ${serviceName} nodes in your workflows to track costs.`} />
-      ) : (
-        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-          <Flex gap={theme.spacing.md} wrap="wrap">
-            <Statistic title="Total Cost" value={data.total_cost} precision={4} prefix="$"
-              valueStyle={{ color: theme.dracula.green, fontSize: theme.fontSize.lg }} />
-            <Statistic title="API Calls" value={data.execution_count}
-              valueStyle={{ color: theme.dracula.cyan, fontSize: theme.fontSize.lg }} />
-            <Statistic title="Resources" value={data.total_resources}
-              valueStyle={{ color: theme.dracula.purple, fontSize: theme.fontSize.lg }} />
-          </Flex>
+    <Collapse
+      items={[
+        {
+          key: 'usage',
+          label: (
+            <span className="flex items-center gap-2">
+              <DollarSign className="h-4 w-4 text-dracula-yellow" />
+              API Usage &amp; Costs {costBadge}
+            </span>
+          ),
+          children: loading ? (
+            <div className="flex justify-center p-4">
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            </div>
+          ) : !data ? (
+            <Alert variant="info">
+              <AlertDescription>
+                No usage data yet. Use {serviceName} nodes in your workflows to track costs.
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <div className="flex w-full flex-col gap-4">
+              <div className="flex flex-wrap gap-4">
+                <Stat label="Total Cost" value={`$${data.total_cost.toFixed(4)}`} className="text-dracula-green" />
+                <Stat label="API Calls" value={data.execution_count} className="text-dracula-cyan" />
+                <Stat label="Resources" value={data.total_resources} className="text-dracula-purple" />
+              </div>
 
-          {data.operations?.length > 0 && (
-            <Descriptions size="small" column={1} bordered title="Operations Breakdown">
-              {data.operations.map(op => (
-                <Descriptions.Item key={op.operation} label={<code>{op.operation}</code>}>
-                  <Space>
-                    <Tag>{op.resource_count} resources</Tag>
-                    <Tag style={{ backgroundColor: `${theme.dracula.green}15`, color: theme.dracula.green, border: 'none' }}>
-                      ${op.total_cost.toFixed(4)}
-                    </Tag>
-                  </Space>
-                </Descriptions.Item>
-              ))}
-            </Descriptions>
-          )}
+              {data.operations?.length > 0 && (
+                <div className="overflow-hidden rounded-md border border-border">
+                  <div className="border-b border-border bg-muted px-3 py-1.5 text-xs font-semibold">
+                    Operations Breakdown
+                  </div>
+                  <div className="divide-y divide-border">
+                    {data.operations.map((op) => (
+                      <div
+                        key={op.operation}
+                        className="grid grid-cols-[1fr_auto] items-center gap-3 px-3 py-2 text-sm"
+                      >
+                        <code className="text-xs text-muted-foreground">{op.operation}</code>
+                        <div className="flex items-center gap-1.5">
+                          <Badge variant="outline">{op.resource_count} resources</Badge>
+                          <Badge variant="success">${op.total_cost.toFixed(4)}</Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-          <Button size="small" icon={<ReloadOutlined />} onClick={load} loading={loading}>Refresh</Button>
-        </Space>
-      ),
-    }]} />
+              <Button size="small" icon={<RefreshCw className="h-3 w-3" />} onClick={load} loading={loading}>
+                Refresh
+              </Button>
+            </div>
+          ),
+        },
+      ]}
+    />
   );
 };
+
+const Stat: React.FC<{ label: string; value: React.ReactNode; className?: string }> = ({
+  label,
+  value,
+  className,
+}) => (
+  <div className="flex flex-col">
+    <span className="text-xs text-muted-foreground">{label}</span>
+    <span className={`text-lg font-semibold ${className ?? ''}`}>{value}</span>
+  </div>
+);
 
 export default ApiUsageSection;

@@ -34,9 +34,9 @@ import React, {
 import { Command } from 'cmdk';
 import { GroupedVirtuoso } from 'react-virtuoso';
 import fuzzysort from 'fuzzysort';
-import { Badge, Flex, Input } from 'antd';
-import { SearchOutlined } from '@ant-design/icons';
+import { Search, X } from 'lucide-react';
 
+import { Input } from '@/components/ui/input';
 import type { ProviderConfig, CategoryGroup } from './types';
 import { useAppTheme } from '../../hooks/useAppTheme';
 
@@ -170,18 +170,17 @@ const ProviderRow = memo<RowProps>(function ProviderRow({ provider, selected, on
         fontSize: theme.fontSize.sm,
       }}
     >
-      <Flex
-        align="center"
-        justify="center"
-        style={{ width: 24, height: 24, flexShrink: 0, color: theme.colors.text }}
-      >
+      <div className="flex h-6 w-6 shrink-0 items-center justify-center text-foreground">
         <Icon size={parseInt(theme.iconSize.sm)} />
-      </Flex>
-      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+      </div>
+      <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
         {provider.name}
       </span>
       {provider.stored && (
-        <Badge status="success" />
+        <span
+          aria-label="Credential stored"
+          className="h-2 w-2 rounded-full bg-success"
+        />
       )}
     </Command.Item>
   );
@@ -281,31 +280,36 @@ const CredentialsPalette: React.FC<CredentialsPaletteProps> = ({
       label="Credential providers"
       style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%' }}
     >
-      <div style={{ padding: theme.spacing.sm, borderBottom: `1px solid ${theme.colors.border}` }}>
-        <Input
-          value={query}
-          onChange={handleQueryChange}
-          placeholder={placeholder}
-          prefix={<SearchOutlined style={{ color: theme.colors.textSecondary }} />}
-          allowClear
-          size="middle"
-          autoFocus
-        />
+      <div className="border-b border-border p-2">
+        <div className="relative">
+          <Search className="pointer-events-none absolute top-1/2 left-2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={handleQueryChange}
+            placeholder={placeholder}
+            className="h-9 pl-8 pr-8"
+            autoFocus
+          />
+          {query && (
+            <button
+              type="button"
+              onClick={() => {
+                setQuery('');
+                startTransition(() => setFiltered(filterProviders('', prepared)));
+              }}
+              className="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              aria-label="Clear search"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
       </div>
-      <div style={{ flex: 1, minHeight: 0 }}>
+      <div className="min-h-0 flex-1">
         {grouped.flatItems.length === 0 ? (
-          <Flex
-            align="center"
-            justify="center"
-            style={{
-              height: '100%',
-              color: theme.colors.textSecondary,
-              fontSize: theme.fontSize.sm,
-              opacity: 0.7,
-            }}
-          >
+          <div className="flex h-full items-center justify-center text-sm text-muted-foreground opacity-70">
             No providers match &ldquo;{query}&rdquo;
-          </Flex>
+          </div>
         ) : (
           <GroupedVirtuoso
             style={{ height }}

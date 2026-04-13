@@ -5,7 +5,7 @@
  */
 
 import React, { useMemo } from 'react';
-import { Alert, Flex } from 'antd';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import ApiKeyInput from '../../ui/ApiKeyInput';
 import QRCodeDisplay from '../../ui/QRCodeDisplay';
 import { useAppTheme } from '../../../hooks/useAppTheme';
@@ -54,7 +54,7 @@ const QrPairingPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = (
   }));
 
   return (
-    <Flex vertical gap={theme.spacing.lg} style={{ padding: theme.spacing.xl, flex: 1, minHeight: 0 }}>
+    <div className="flex min-h-0 flex-1 flex-col gap-4 p-5">
       {field && <ApiKeyInput
         value={panel.form.getFieldValue(field.key) || ''}
         onChange={(v: string) => panel.form.setFieldValue(field.key, v)}
@@ -63,17 +63,20 @@ const QrPairingPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = (
         placeholder={field.placeholder} loading={panel.loading === 'save'} isStored={panel.stored}
       />}
       {config.statusRows && <StatusCard icon={<config.icon size={parseInt(theme.iconSize.md)} />} title={config.name} rows={config.statusRows} status={status} />}
-      <Flex vertical align="center" justify="center"
-        style={{ backgroundColor: theme.colors.backgroundAlt, borderRadius: theme.borderRadius.lg, padding: theme.spacing.xl, flex: 1, minHeight: 300 }}>
+      <div className="flex min-h-[300px] flex-1 flex-col items-center justify-center rounded-lg bg-muted p-5">
         <QRCodeDisplay value={qrData} isConnected={connected} size={280}
           connectedTitle={qr.connectedTitle} connectedSubtitle={qr.connectedSubtitle(status)}
           loading={qr.isLoading(status)} emptyText={qr.emptyText(status, panel.stored)} />
-        {!connected && qrData && <div style={{ marginTop: theme.spacing.md, color: theme.colors.textSecondary, fontSize: theme.fontSize.sm }}>{qr.scanText}</div>}
-      </Flex>
+        {!connected && qrData && <div className="mt-3 text-sm text-muted-foreground">{qr.scanText}</div>}
+      </div>
       {config.hasRateLimits && connected && <RateLimitSection />}
-      {panel.error && <Alert type="error" message={panel.error} showIcon />}
+      {panel.error && (
+        <Alert variant="destructive">
+          <AlertDescription>{panel.error}</AlertDescription>
+        </Alert>
+      )}
       <ActionBar actions={actions} loading={panel.loading} />
-    </Flex>
+    </div>
   );
 };
 

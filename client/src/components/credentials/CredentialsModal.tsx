@@ -14,11 +14,10 @@
  */
 
 import React, { useMemo } from 'react';
-import { Tag, Flex, Spin } from 'antd';
-import { SafetyOutlined } from '@ant-design/icons';
+import { Loader2, ShieldCheck } from 'lucide-react';
 
 import Modal from '../ui/Modal';
-import { useAppTheme } from '../../hooks/useAppTheme';
+import { Badge } from '@/components/ui/badge';
 import { CATEGORIES as CLIENT_CATEGORIES, PROVIDERS as CLIENT_PROVIDERS } from './providers';
 import PanelRenderer from './PanelRenderer';
 import CredentialsPalette from './CredentialsPalette';
@@ -32,8 +31,6 @@ interface Props {
 }
 
 const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
-  const theme = useAppTheme();
-
   // UI state lives in the Zustand store (no catalogue data ever).
   const selectedId = useCredentialRegistry((s) => s.selectedId);
   const setSelectedId = useCredentialRegistry((s) => s.setSelectedId);
@@ -73,58 +70,24 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
   const isLoadingServer = catalogue.isLoading && !catalogue.data;
 
   const headerActions = (
-    <Flex align="center" gap={theme.spacing.md}>
-      <Flex
-        align="center"
-        gap={theme.spacing.sm}
-        style={{
-          fontSize: theme.fontSize.base,
-          fontWeight: theme.fontWeight.semibold,
-          color: theme.colors.text,
-        }}
-      >
-        <SafetyOutlined style={{ color: theme.dracula.yellow }} />
+    <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 text-base font-semibold">
+        <ShieldCheck className="h-4 w-4 text-dracula-yellow" />
         <span>API Credentials</span>
-      </Flex>
-      <Tag
-        style={{
-          margin: 0,
-          fontSize: theme.fontSize.xs,
-          backgroundColor: `${theme.dracula.green}25`,
-          borderColor: `${theme.dracula.green}60`,
-          color: theme.dracula.green,
-        }}
-      >
-        {providers.length} providers
-      </Tag>
+      </div>
+      <Badge variant="success">{providers.length} providers</Badge>
       {isLoadingServer && (
-        <Tag
-          style={{
-            margin: 0,
-            fontSize: theme.fontSize.xs,
-            backgroundColor: `${theme.dracula.cyan}25`,
-            borderColor: `${theme.dracula.cyan}60`,
-            color: theme.dracula.cyan,
-          }}
-        >
-          <Spin size="small" /> loading
-        </Tag>
+        <Badge variant="info" className="gap-1">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          loading
+        </Badge>
       )}
       {!usingServerData && !isLoadingServer && (
-        <Tag
-          style={{
-            margin: 0,
-            fontSize: theme.fontSize.xs,
-            backgroundColor: `${theme.dracula.orange}25`,
-            borderColor: `${theme.dracula.orange}60`,
-            color: theme.dracula.orange,
-          }}
-          title="Using bundled fallback catalogue"
-        >
+        <Badge variant="warning" title="Using bundled fallback catalogue">
           offline
-        </Tag>
+        </Badge>
       )}
-    </Flex>
+    </div>
   );
 
   return (
@@ -135,16 +98,8 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
       maxHeight="95vh"
       headerActions={headerActions}
     >
-      <Flex style={{ height: '100%', overflow: 'hidden' }}>
-        <div
-          style={{
-            width: parseInt(theme.layout?.parameterPanelWidth ?? '280px'),
-            borderRight: `1px solid ${theme.colors.border}`,
-            flexShrink: 0,
-            display: 'flex',
-            flexDirection: 'column',
-          }}
-        >
+      <div className="flex h-full overflow-hidden">
+        <div className="flex w-[280px] shrink-0 flex-col border-r border-border">
           <CredentialsPalette
             providers={providers}
             categories={categories}
@@ -152,18 +107,10 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
             onSelect={setSelectedId}
           />
         </div>
-        <div
-          style={{
-            flex: 1,
-            overflow: 'auto',
-            backgroundColor: theme.colors.background,
-            display: 'flex',
-            flexDirection: 'column',
-          }}
-        >
+        <div className="flex flex-1 flex-col overflow-auto bg-background">
           <PanelRenderer config={selected} visible={visible} />
         </div>
-      </Flex>
+      </div>
     </Modal>
   );
 };

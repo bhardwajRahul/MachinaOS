@@ -1,5 +1,5 @@
 import React from 'react';
-import { Steps, Button, Space } from 'antd';
+import { Steps, Button } from 'antd';
 import { ArrowLeftOutlined, ArrowRightOutlined, CheckOutlined } from '@ant-design/icons';
 import Modal from '../ui/Modal';
 import { useOnboarding } from '../../hooks/useOnboarding';
@@ -99,7 +99,7 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onOpenCredentials, 
           </Button>
 
           {/* Right: Back + Next/Finish */}
-          <Space>
+          <div className="flex items-center gap-2">
             {currentStep > 0 && (
               <Button
                 icon={<ArrowLeftOutlined />}
@@ -135,7 +135,7 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onOpenCredentials, 
                 Next <ArrowRightOutlined />
               </Button>
             )}
-          </Space>
+          </div>
         </div>
       </div>
     </Modal>

@@ -4,7 +4,6 @@
  */
 
 import React from 'react';
-import { Flex } from 'antd';
 import { useAppTheme } from '../../../hooks/useAppTheme';
 import { useCredentialPanel } from '../useCredentialPanel';
 import { useProviderStatus } from '../hooks';
@@ -19,7 +18,7 @@ const OAuthPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = ({ co
   const connected = !!status?.connected;
 
   return (
-    <Flex vertical style={{ padding: theme.spacing.xl, flex: 1, minHeight: 0 }}>
+    <div className="flex min-h-0 flex-1 flex-col p-5">
       <OAuthConnect
         config={config} form={panel.form} connected={connected}
         stored={panel.stored} loading={panel.loading} error={panel.error}
@@ -38,7 +37,7 @@ const OAuthPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = ({ co
         onRefresh={() => panel.actions.oauthRefresh()}
         extraSection={config.usageService && <ApiUsageSection service={config.usageService} serviceName={config.name} />}
       />
-    </Flex>
+    </div>
   );
 };
 

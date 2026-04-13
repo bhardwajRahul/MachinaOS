@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Collapse, Progress, Statistic, Spin, Row, Col, Typography, InputNumber, Button } from 'antd';
+import { Collapse, Progress, Statistic, Row, Col, InputNumber, Button } from 'antd';
+import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { ThunderboltOutlined, EditOutlined, SaveOutlined } from '@ant-design/icons';
 import ParameterRenderer from '../ParameterRenderer';
@@ -789,15 +790,15 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
                       <ThunderboltOutlined />
                       Token Usage
                       {compactionStats && displayMax > 0 && (
-                        <Typography.Text type="secondary" style={{ marginLeft: 'auto' }}>
+                        <span className="ml-auto text-xs text-muted-foreground">
                           {Math.round(compactionStats.total / 1000)}K / {Math.round(displayMax / 1000)}K{ctxLen > 0 ? ' context' : ''}
-                        </Typography.Text>
+                        </span>
                       )}
                     </span>
                   );
                 })(),
                 children: compactionLoading ? (
-                  <Spin />
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                 ) : compactionStats ? (() => {
                   const ctxLen = compactionStats.context_length || 0;
                   const hasContext = ctxLen > 0;
@@ -813,16 +814,16 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
                         status={isWarning ? 'exception' : 'active'}
                       />
                       {hasContext && compactionStats.threshold > 0 && (
-                        <Typography.Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
+                        <span className="mt-1 block text-[11px] text-muted-foreground">
                           Compaction at {Math.round(compactionStats.threshold / 1000)}K ({Math.round(compactionStats.threshold / ctxLen * 100)}% of context)
-                        </Typography.Text>
+                        </span>
                       )}
                       <Row gutter={16} style={{ marginTop: 12 }}>
                         <Col span={8}><Statistic title="Total" value={compactionStats.total} /></Col>
                         <Col span={8}>
                           {isEditingThreshold ? (
                             <div>
-                              <Typography.Text type="secondary" style={{ fontSize: 12 }}>Threshold</Typography.Text>
+                              <span className="text-xs text-muted-foreground">Threshold</span>
                               <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
                                 <InputNumber
                                   size="small"
@@ -870,13 +871,13 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
                           <Col span={4}><Statistic title="Context" value={`${Math.round(ctxLen / 1000)}K`} /></Col>
                         )}
                       </Row>
-                      <Typography.Text type="secondary" style={{ fontSize: 12, marginTop: 8, display: 'block' }}>
+                      <span className="mt-2 block text-xs text-muted-foreground">
                         Session: {compactionStats.session_id}
-                      </Typography.Text>
+                      </span>
                     </>
                   );
                 })() : (
-                  <Typography.Text type="secondary">No data yet. Run the agent to start tracking.</Typography.Text>
+                  <span className="text-xs text-muted-foreground">No data yet. Run the agent to start tracking.</span>
                 )
               }]}
             />

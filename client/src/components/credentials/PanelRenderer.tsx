@@ -12,7 +12,7 @@
  */
 
 import React, { Suspense, useMemo } from 'react';
-import { Flex, Result, Spin } from 'antd';
+import { Loader2, Info, AlertTriangle } from 'lucide-react';
 import type { ProviderConfig, PanelKind } from './types';
 
 // Vite will emit one chunk per panel under dist/assets/ApiKeyPanel-*.js,
@@ -47,9 +47,16 @@ interface Props {
 }
 
 const PanelFallback: React.FC = () => (
-  <Flex align="center" justify="center" style={{ width: '100%', height: '100%', minHeight: 240 }}>
-    <Spin />
-  </Flex>
+  <div className="flex h-full min-h-[240px] w-full items-center justify-center">
+    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+  </div>
+);
+
+const EmptyState: React.FC<{ icon: React.ReactNode; message: string }> = ({ icon, message }) => (
+  <div className="flex h-full w-full flex-col items-center justify-center gap-3 p-8 text-center">
+    {icon}
+    <p className="text-sm text-muted-foreground">{message}</p>
+  </div>
 );
 
 const PanelRenderer: React.FC<Props> = ({ config, visible }) => {
@@ -59,10 +66,20 @@ const PanelRenderer: React.FC<Props> = ({ config, visible }) => {
   }, [config]);
 
   if (!config) {
-    return <Result status="info" subTitle="Select a credential to configure" />;
+    return (
+      <EmptyState
+        icon={<Info className="h-8 w-8 text-muted-foreground" />}
+        message="Select a credential to configure"
+      />
+    );
   }
   if (!Lazy) {
-    return <Result status="warning" subTitle={`Unknown credential kind: ${config.kind}`} />;
+    return (
+      <EmptyState
+        icon={<AlertTriangle className="h-8 w-8 text-warning" />}
+        message={`Unknown credential kind: ${config.kind}`}
+      />
+    );
   }
 
   return (

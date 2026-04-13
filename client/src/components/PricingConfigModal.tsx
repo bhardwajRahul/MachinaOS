@@ -4,7 +4,8 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Button, Tabs, InputNumber, Collapse, Spin } from 'antd';
+import { Button, Tabs, InputNumber, Collapse } from 'antd';
+import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   SaveOutlined,
@@ -384,8 +385,8 @@ const PricingConfigModal: React.FC<Props> = ({ visible, onClose }) => {
     >
       <div style={{ padding: 16 }}>
         {loading ? (
-          <div style={{ textAlign: 'center', padding: 40 }}>
-            <Spin size="large" />
+          <div className="flex items-center justify-center p-10">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
         ) : config ? (
           <>
