@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { Node, Edge } from 'reactflow';
-import { SavedWorkflow } from '../components/ui/WorkflowSidebar';
 import { generateWorkflowId } from '../utils/workflow';
 import { theme } from '../styles/theme';
 import {
@@ -11,6 +10,12 @@ import {
 } from '../utils/workflowExport';
 import type { ImportedWorkflow } from '../utils/workflowExport';
 import { workflowApi } from '../services/workflowApi';
+import { queryClient } from '../lib/queryClient';
+import { WORKFLOWS_QUERY_KEY } from '../hooks/useWorkflowsQuery';
+
+const invalidateWorkflowsList = (): void => {
+  void queryClient.invalidateQueries({ queryKey: WORKFLOWS_QUERY_KEY });
+};
 
 export interface WorkflowData {
   nodes: Node[];
@@ -46,16 +51,12 @@ interface AppStore {
   proMode: boolean;  // false = noob mode (only AI categories), true = pro mode (all categories)
   renamingNodeId: string | null;
 
-  // Saved workflows
-  savedWorkflows: SavedWorkflow[];
-
   // Workflow actions
   setCurrentWorkflow: (workflow: WorkflowData) => void;
   updateWorkflow: (updates: Partial<Omit<WorkflowData, 'id' | 'createdAt'>>) => void;
   createNewWorkflow: () => void;
   saveWorkflow: () => Promise<void>;
   loadWorkflow: (id: string) => Promise<void>;
-  loadSavedWorkflows: () => Promise<void>;
   deleteWorkflow: (id: string) => Promise<boolean>;
   migrateCurrentWorkflow: () => Promise<void>;
 
@@ -163,8 +164,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   consolePanelVisible: loadBooleanFromStorage(STORAGE_KEYS.consolePanelVisible, false),
   proMode: loadBooleanFromStorage(STORAGE_KEYS.proMode, false),  // Default to noob mode
   renamingNodeId: null,
-  savedWorkflows: [],
-  
+
   // Workflow management
   setCurrentWorkflow: (workflow) => {
     set({ currentWorkflow: workflow, hasUnsavedChanges: false });
@@ -196,7 +196,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
   
   saveWorkflow: async () => {
-    const { currentWorkflow, savedWorkflows } = get();
+    const { currentWorkflow } = get();
     if (!currentWorkflow) return;
 
     const updatedWorkflow = {
@@ -217,30 +217,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
       return;
     }
 
-    // Update local saved workflows list
-    const existingIndex = savedWorkflows.findIndex(w => w.id === updatedWorkflow.id);
-
-    const workflowSummary: SavedWorkflow = {
-      id: updatedWorkflow.id,
-      name: updatedWorkflow.name,
-      createdAt: updatedWorkflow.createdAt,
-      lastModified: updatedWorkflow.lastModified,
-      nodeCount: updatedWorkflow.nodes.length,
-    };
-
-    let newSavedWorkflows: SavedWorkflow[];
-    if (existingIndex >= 0) {
-      newSavedWorkflows = [...savedWorkflows];
-      newSavedWorkflows[existingIndex] = workflowSummary;
-    } else {
-      newSavedWorkflows = [workflowSummary, ...savedWorkflows];
-    }
-
     set({
       currentWorkflow: updatedWorkflow,
-      savedWorkflows: newSavedWorkflows,
       hasUnsavedChanges: false,
     });
+    invalidateWorkflowsList();
   },
   
   loadWorkflow: async (id) => {
@@ -267,31 +248,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
   },
   
-  loadSavedWorkflows: async () => {
-    const workflows = await workflowApi.getAllWorkflows();
-    const savedWorkflows: SavedWorkflow[] = workflows.map(w => ({
-      id: w.id,
-      name: w.name,
-      nodeCount: w.nodeCount,
-      createdAt: new Date(w.createdAt),
-      lastModified: new Date(w.lastModified),
-    }));
-    set({ savedWorkflows });
-
-    // Auto-load the most recent workflow if no current workflow is set
-    const { currentWorkflow } = get();
-    if (!currentWorkflow && savedWorkflows.length > 0) {
-      // Sort by lastModified descending and load the first one
-      const sortedWorkflows = [...savedWorkflows].sort(
-        (a, b) => b.lastModified.getTime() - a.lastModified.getTime()
-      );
-      const mostRecent = sortedWorkflows[0];
-      await get().loadWorkflow(mostRecent.id);
-    }
-  },
-
   deleteWorkflow: async (id) => {
-    const { currentWorkflow, savedWorkflows } = get();
+    const { currentWorkflow } = get();
 
     const success = await workflowApi.deleteWorkflow(id);
     if (!success) {
@@ -299,22 +257,17 @@ export const useAppStore = create<AppStore>((set, get) => ({
       return false;
     }
 
-    // Remove from saved workflows list
-    const newSavedWorkflows = savedWorkflows.filter(w => w.id !== id);
-
     // If deleting current workflow, create a new one
     if (currentWorkflow?.id === id) {
       const newWorkflow = createDefaultWorkflow();
       set({
         currentWorkflow: newWorkflow,
-        savedWorkflows: newSavedWorkflows,
         hasUnsavedChanges: false,
         selectedNode: null,
       });
-    } else {
-      set({ savedWorkflows: newSavedWorkflows });
     }
 
+    invalidateWorkflowsList();
     return true;
   },
 
@@ -345,6 +298,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         currentWorkflow: migratedWorkflow,
         hasUnsavedChanges: false
       });
+      invalidateWorkflowsList();
     }
   },
 

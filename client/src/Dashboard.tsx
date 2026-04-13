@@ -55,6 +55,9 @@ import ErrorBoundary from './components/ui/ErrorBoundary';
 import ConsolePanel from './components/ui/ConsolePanel';
 import { useAppTheme } from './hooks/useAppTheme';
 import { useWorkflowManagement } from './hooks/useWorkflowManagement';
+import { useWorkflowsQuery, WORKFLOWS_QUERY_KEY } from './hooks/useWorkflowsQuery';
+import { useQueryClient } from '@tanstack/react-query';
+import { workflowApi } from './services/workflowApi';
 import { useDragAndDrop } from './hooks/useDragAndDrop';
 import { useComponentPalette } from './hooks/useComponentPalette';
 import { useReactFlowNodes } from './hooks/useReactFlowNodes';
@@ -290,11 +293,10 @@ const DashboardContent: React.FC = () => {
   const {
     currentWorkflow,
     hasUnsavedChanges,
-    savedWorkflows,
     sidebarVisible,
     componentPaletteVisible,
     updateWorkflow,
-    loadSavedWorkflows,
+    loadWorkflow,
     createNewWorkflow,
     saveWorkflow,
     deleteWorkflow,
@@ -350,6 +352,10 @@ const DashboardContent: React.FC = () => {
   const { collapsedSections, searchQuery, setSearchQuery, toggleSection } = useComponentPalette();
   const { saveNodeParameters, getAllNodeParameters, executeWorkflow, deployWorkflow, cancelDeployment, nodeStatuses, deploymentStatus, workflowLock, isConnected, sendRequest } = useWebSocket();
   const applyUIDefaults = useAppStore((state) => state.applyUIDefaults);
+
+  // Workflows list: server-owned data, cached by TanStack Query.
+  const queryClient = useQueryClient();
+  const { data: savedWorkflows = [] } = useWorkflowsQuery();
 
   // Scope deployment and lock to current workflow (n8n pattern)
   // Only show as "running" or "locked" if it applies to the currently viewed workflow
@@ -916,10 +922,28 @@ const DashboardContent: React.FC = () => {
       currentWorkflowId: currentWorkflow?.id,
     });
 
+    const fetchWorkflowsList = () => queryClient.fetchQuery({
+      queryKey: WORKFLOWS_QUERY_KEY,
+      queryFn: async () => {
+        const summaries = await workflowApi.getAllWorkflows();
+        return summaries.map(w => ({
+          id: w.id,
+          name: w.name,
+          nodeCount: w.nodeCount,
+          createdAt: new Date(w.createdAt),
+          lastModified: new Date(w.lastModified),
+        }));
+      },
+    });
+
     const initWorkflows = async () => {
-      await loadSavedWorkflows();
-      // loadSavedWorkflows auto-loads the most recent workflow if none is set
-      // Only create new if still no workflow after loading
+      const list = await fetchWorkflowsList();
+      if (list.length > 0) {
+        const mostRecent = [...list].sort(
+          (a, b) => b.lastModified.getTime() - a.lastModified.getTime()
+        )[0];
+        await loadWorkflow(mostRecent.id);
+      }
       const state = useAppStore.getState();
       if (!state.currentWorkflow) {
         console.log('[Dashboard] No saved workflows found, creating new one');
@@ -933,9 +957,9 @@ const DashboardContent: React.FC = () => {
       console.log('[Dashboard] Migrating current workflow');
       migrateCurrentWorkflow();
       hasMigrated.current = true;
-      loadSavedWorkflows(); // Still load sidebar list
+      void fetchWorkflowsList(); // seed sidebar list cache
     }
-  }, [loadSavedWorkflows, currentWorkflow, createNewWorkflow, migrateCurrentWorkflow]);
+  }, [queryClient, currentWorkflow, loadWorkflow, createNewWorkflow, migrateCurrentWorkflow]);
 
   // Sync workflow state → ReactFlow state (when loading workflows or data changes)
   // Note: Database is the source of truth for parameters - node.data should NOT store parameters
