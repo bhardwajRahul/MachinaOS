@@ -19,6 +19,8 @@ function createAndroidServiceNode(config: {
   group: string[];
   description: string;
   defaultAction: string;
+  /** Per-service output shape for InputSection's variable list. */
+  outputSchema?: Record<string, any>;
   additionalProperties?: Array<{
     displayName: string;
     name: string;
@@ -62,6 +64,12 @@ function createAndroidServiceNode(config: {
         description: 'Connect to Android Toolkit (top handle)'
       }
     ],
+    outputSchema: config.outputSchema ?? {
+      service_id: 'string',
+      action: 'string',
+      data: 'object',
+      success: 'boolean',
+    },
     properties: [
       // Hidden service_id - automatically set based on node type
       {
@@ -156,7 +164,14 @@ export const androidServiceNodes: Record<string, INodeTypeDescription> = {
     color: '#4CAF50',
     group: ['android', 'monitoring'],
     description: 'Monitor battery status, level, charging state, temperature, and health',
-    defaultAction: 'status'
+    defaultAction: 'status',
+    outputSchema: {
+      battery_level: 'number',
+      is_charging: 'boolean',
+      temperature_celsius: 'number',
+      health: 'string',
+      voltage: 'number',
+    },
   }),
 
   networkMonitor: createAndroidServiceNode({
@@ -167,7 +182,13 @@ export const androidServiceNodes: Record<string, INodeTypeDescription> = {
     color: '#2196F3',
     group: ['android', 'monitoring'],
     description: 'Monitor network connectivity status, type, and internet availability',
-    defaultAction: 'status'
+    defaultAction: 'status',
+    outputSchema: {
+      connected: 'boolean',
+      type: 'string',
+      wifi_ssid: 'string',
+      ip_address: 'string',
+    },
   }),
 
   systemInfo: createAndroidServiceNode({
@@ -178,7 +199,15 @@ export const androidServiceNodes: Record<string, INodeTypeDescription> = {
     color: '#9C27B0',
     group: ['android', 'monitoring'],
     description: 'Get device and OS information including Android version, API level, memory, and hardware details',
-    defaultAction: 'info'
+    defaultAction: 'info',
+    outputSchema: {
+      device_model: 'string',
+      android_version: 'string',
+      api_level: 'number',
+      manufacturer: 'string',
+      total_memory: 'number',
+      available_memory: 'number',
+    },
   }),
 
   location: createAndroidServiceNode({
@@ -189,7 +218,16 @@ export const androidServiceNodes: Record<string, INodeTypeDescription> = {
     color: '#F44336',
     group: ['android', 'monitoring'],
     description: 'GPS location tracking with latitude, longitude, accuracy, and provider information',
-    defaultAction: 'current'
+    defaultAction: 'current',
+    outputSchema: {
+      latitude: 'number',
+      longitude: 'number',
+      accuracy: 'number',
+      provider: 'string',
+      altitude: 'number',
+      speed: 'number',
+      bearing: 'number',
+    },
   }),
 
   // ============================================================================
@@ -205,6 +243,11 @@ export const androidServiceNodes: Record<string, INodeTypeDescription> = {
     group: ['android', 'apps'],
     description: 'Launch applications by package name',
     defaultAction: 'launch',
+    outputSchema: {
+      package_name: 'string',
+      launched: 'boolean',
+      app_name: 'string',
+    },
     additionalProperties: [
       {
         displayName: 'Package Name',
@@ -231,7 +274,8 @@ export const androidServiceNodes: Record<string, INodeTypeDescription> = {
     color: '#00BCD4',
     group: ['android', 'apps'],
     description: 'Get list of installed applications with package names, versions, and metadata',
-    defaultAction: 'list'
+    defaultAction: 'list',
+    outputSchema: { apps: 'array', count: 'number' },
   }),
 
   // ============================================================================
@@ -246,7 +290,13 @@ export const androidServiceNodes: Record<string, INodeTypeDescription> = {
     color: '#3F51B5',
     group: ['android', 'automation'],
     description: 'WiFi control and scanning - enable, disable, get status, scan for networks',
-    defaultAction: 'status'
+    defaultAction: 'status',
+    outputSchema: {
+      wifi_enabled: 'boolean',
+      ssid: 'string',
+      ip_address: 'string',
+      signal_strength: 'number',
+    },
   }),
 
   bluetoothAutomation: createAndroidServiceNode({
@@ -257,7 +307,12 @@ export const androidServiceNodes: Record<string, INodeTypeDescription> = {
     color: '#2196F3',
     group: ['android', 'automation'],
     description: 'Bluetooth control - enable, disable, get status, and paired devices',
-    defaultAction: 'status'
+    defaultAction: 'status',
+    outputSchema: {
+      bluetooth_enabled: 'boolean',
+      paired_devices: 'array',
+      connected_devices: 'array',
+    },
   }),
 
   audioAutomation: createAndroidServiceNode({
@@ -268,7 +323,12 @@ export const androidServiceNodes: Record<string, INodeTypeDescription> = {
     color: '#E91E63',
     group: ['android', 'automation'],
     description: 'Volume and audio control - get/set volume, mute, unmute',
-    defaultAction: 'get_volume'
+    defaultAction: 'get_volume',
+    outputSchema: {
+      music_volume: 'number',
+      ring_volume: 'number',
+      muted: 'boolean',
+    },
   }),
 
   deviceStateAutomation: createAndroidServiceNode({

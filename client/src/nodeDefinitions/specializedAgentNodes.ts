@@ -55,6 +55,17 @@ export const AI_AGENT_OUTPUTS = [
   }
 ];
 
+// Runtime output shape shared by every LLM-backed agent node. Consumed by
+// InputSection to populate the draggable variable list for downstream nodes.
+export const AI_AGENT_OUTPUT_SCHEMA = {
+  response: 'string',
+  thinking: 'string',
+  model: 'string',
+  provider: 'string',
+  finish_reason: 'string',
+  timestamp: 'string',
+};
+
 // ============================================================================
 // SHARED AI AGENT PROPERTIES - Used by Specialized Agent Nodes
 // ============================================================================
@@ -173,7 +184,8 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
     defaults: { name: 'Android Control Agent', color: dracula.green },
     inputs: AI_AGENT_INPUTS,
     outputs: AI_AGENT_OUTPUTS,
-    properties: AI_AGENT_PROPERTIES
+    properties: AI_AGENT_PROPERTIES,
+    outputSchema: AI_AGENT_OUTPUT_SCHEMA,
   },
 
   // Coding Agent - AI Agent with code execution capabilities
@@ -188,7 +200,8 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
     defaults: { name: 'Coding Agent', color: dracula.cyan },
     inputs: AI_AGENT_INPUTS,
     outputs: AI_AGENT_OUTPUTS,
-    properties: AI_AGENT_PROPERTIES
+    properties: AI_AGENT_PROPERTIES,
+    outputSchema: AI_AGENT_OUTPUT_SCHEMA,
   },
 
   // Web Control Agent - AI Agent with web automation capabilities
@@ -203,7 +216,8 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
     defaults: { name: 'Web Control Agent', color: dracula.pink },
     inputs: AI_AGENT_INPUTS,
     outputs: AI_AGENT_OUTPUTS,
-    properties: AI_AGENT_PROPERTIES
+    properties: AI_AGENT_PROPERTIES,
+    outputSchema: AI_AGENT_OUTPUT_SCHEMA,
   },
 
   // Task Management Agent - AI Agent with task automation capabilities
@@ -218,7 +232,8 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
     defaults: { name: 'Task Management Agent', color: dracula.purple },
     inputs: AI_AGENT_INPUTS,
     outputs: AI_AGENT_OUTPUTS,
-    properties: AI_AGENT_PROPERTIES
+    properties: AI_AGENT_PROPERTIES,
+    outputSchema: AI_AGENT_OUTPUT_SCHEMA,
   },
 
   // Social Media Agent - AI Agent with social messaging capabilities
@@ -233,7 +248,8 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
     defaults: { name: 'Social Media Agent', color: dracula.green },
     inputs: AI_AGENT_INPUTS,
     outputs: AI_AGENT_OUTPUTS,
-    properties: AI_AGENT_PROPERTIES
+    properties: AI_AGENT_PROPERTIES,
+    outputSchema: AI_AGENT_OUTPUT_SCHEMA,
   },
 
   // Travel Agent - AI Agent with travel planning capabilities
@@ -248,7 +264,8 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
     defaults: { name: 'Travel Agent', color: dracula.orange },
     inputs: AI_AGENT_INPUTS,
     outputs: AI_AGENT_OUTPUTS,
-    properties: AI_AGENT_PROPERTIES
+    properties: AI_AGENT_PROPERTIES,
+    outputSchema: AI_AGENT_OUTPUT_SCHEMA,
   },
 
   // Tool Agent - AI Agent for orchestrating multiple tools
@@ -263,7 +280,8 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
     defaults: { name: 'Tool Agent', color: dracula.yellow },
     inputs: AI_AGENT_INPUTS,
     outputs: AI_AGENT_OUTPUTS,
-    properties: AI_AGENT_PROPERTIES
+    properties: AI_AGENT_PROPERTIES,
+    outputSchema: AI_AGENT_OUTPUT_SCHEMA,
   },
 
   // Productivity Agent - AI Agent for productivity and time management
@@ -278,7 +296,8 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
     defaults: { name: 'Productivity Agent', color: dracula.cyan },
     inputs: AI_AGENT_INPUTS,
     outputs: AI_AGENT_OUTPUTS,
-    properties: AI_AGENT_PROPERTIES
+    properties: AI_AGENT_PROPERTIES,
+    outputSchema: AI_AGENT_OUTPUT_SCHEMA,
   },
 
   // Payments Agent - AI Agent for payment processing and financial operations
@@ -293,7 +312,8 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
     defaults: { name: 'Payments Agent', color: dracula.green },
     inputs: AI_AGENT_INPUTS,
     outputs: AI_AGENT_OUTPUTS,
-    properties: AI_AGENT_PROPERTIES
+    properties: AI_AGENT_PROPERTIES,
+    outputSchema: AI_AGENT_OUTPUT_SCHEMA,
   },
 
   // Consumer Agent - AI Agent for consumer interactions and support
@@ -308,7 +328,8 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
     defaults: { name: 'Consumer Agent', color: dracula.purple },
     inputs: AI_AGENT_INPUTS,
     outputs: AI_AGENT_OUTPUTS,
-    properties: AI_AGENT_PROPERTIES
+    properties: AI_AGENT_PROPERTIES,
+    outputSchema: AI_AGENT_OUTPUT_SCHEMA,
   },
 
   // Autonomous Agent - AI Agent for autonomous operations with Code Mode patterns
@@ -323,7 +344,8 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
     defaults: { name: 'Autonomous Agent', color: dracula.purple },
     inputs: AI_AGENT_INPUTS,
     outputs: AI_AGENT_OUTPUTS,
-    properties: AI_AGENT_PROPERTIES
+    properties: AI_AGENT_PROPERTIES,
+    outputSchema: AI_AGENT_OUTPUT_SCHEMA,
   },
 
   // Orchestrator Agent - Coordinates multiple agents for complex workflows
@@ -355,7 +377,8 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
         default: '',
         description: 'Enable team mode to coordinate connected teammate agents'
       }
-    ]
+    ],
+    outputSchema: AI_AGENT_OUTPUT_SCHEMA,
   },
 
   // AI Employee - Team lead node for coordinating multiple agents
@@ -394,7 +417,8 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
         typeOptions: { minValue: 1, maxValue: 20 },
         description: 'Maximum concurrent task executions'
       }
-    ]
+    ],
+    outputSchema: AI_AGENT_OUTPUT_SCHEMA,
   },
 
   // RLM Agent - Recursive Language Model with REPL-based reasoning
@@ -450,7 +474,8 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
         default: false,
         description: 'Enable detailed REPL output logging'
       }
-    ]
+    ],
+    outputSchema: AI_AGENT_OUTPUT_SCHEMA,
   },
 
   claude_code_agent: {
@@ -525,6 +550,7 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
         description: 'Working directory for Claude Code (empty = server default)',
       },
     ],
+    outputSchema: AI_AGENT_OUTPUT_SCHEMA,
   },
 
   // Deep Agent - LangChain DeepAgents powered agent with filesystem, sub-agents, and planning
@@ -553,6 +579,7 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
         description: 'Maximum agentic loop iterations',
       },
     ],
+    outputSchema: AI_AGENT_OUTPUT_SCHEMA,
   }
 };
 

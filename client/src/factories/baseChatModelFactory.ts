@@ -85,6 +85,14 @@ export function createBaseChatModel(config: ChatModelConfig): INodeTypeDescripti
         }
       }
     }],
+    outputSchema: {
+      response: 'string',
+      thinking: 'string',
+      model: 'string',
+      provider: 'string',
+      finish_reason: 'string',
+      timestamp: 'string',
+    },
     properties: [
       {
         displayName: 'Model',
