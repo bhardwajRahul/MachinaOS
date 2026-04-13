@@ -14,11 +14,8 @@ Related docs:
 - [current_system_architecture_analysis.md](current_system_architecture_analysis.md) - current frontend, backend, serving, and extension model audit
 - [production_scale_architecture_research.md](production_scale_architecture_research.md) - source-backed research for a 1000+ node production architecture
 - [config_driven_node_platform.md](config_driven_node_platform.md) - target config-driven node and panel platform design
-- [frontend_architecture_analysis.md](frontend_architecture_analysis.md) - current frontend shell, state, realtime, and editor audit
-- [frontend_component_functionality_and_design.md](frontend_component_functionality_and_design.md) - component and subsystem design notes for the current frontend
-- [frontend_system_design_rfc.md](frontend_system_design_rfc.md) - proposed frontend modularization RFC
-- [frontend_ui_framework_research.md](frontend_ui_framework_research.md) - primary-source research on modern UI runtimes, primitives, forms, and virtualization
-- [frontend_ui_stack_recommendation.md](frontend_ui_stack_recommendation.md) - recommended replacement stack and migration architecture for the frontend UI
+- [frontend_architecture.md](frontend_architecture.md) - current frontend architecture (React 19 + Vite + Tailwind v4 + shadcn/ui + Radix + RHF/zod + TanStack Query + Zustand). Tokens, primitives, state, forms, credentials exemplar.
+- [ui_migration_plan.md](ui_migration_plan.md) - antd → shadcn/ui migration plan and completion log
 
 ---
 

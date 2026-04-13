@@ -9,6 +9,8 @@ This is a React Flow-based workflow automation platform implementing n8n-inspire
 
 | Document | Description |
 |----------|-------------|
+| **[Frontend Architecture](./docs-internal/frontend_architecture.md)** | Current frontend stack (React 19 + Vite + Tailwind v4 + shadcn/ui + Radix + RHF/zod + TanStack Query + Zustand). Tokens, primitives, forms, credentials exemplar. |
+| **[UI Migration Plan](./docs-internal/ui_migration_plan.md)** | antd → shadcn/ui migration plan + completion log. Phases 0-5, 7 done; phase 6 (ParameterRenderer → JSON Forms) deferred. |
 | **[Node Creation Guide](./docs-internal/node_creation.md)** | Complete guide for creating new nodes (frontend definitions, backend handlers, config nodes, triggers) |
 | **[AI Tool Node Guide](./docs-internal/ai_tool_node_creation.md)** | Detailed guide for creating dedicated AI Agent tool nodes (schemas, handlers, toolkits) |
 | **[Specialized Agent Guide](./docs-internal/specialized_agent_node_creation.md)** | Guide for creating specialized AI agents (Android, Coding, Web, Task, Social, Travel, Tool, Productivity, Payments, Consumer) with full AI configuration |

@@ -1,8 +1,32 @@
 # Frontend UI Stack Migration — antd → shadcn/ui (canonical, no custom wrappers)
 
+> **Status (2026-04-14):** Phases 0–5 + 7 **complete**. Phase 6 (`ParameterRenderer` → JSON Forms) deferred pending backend `NodeSpec` handler. Zero antd / `@ant-design/icons` / styled-components imports remain. For the current state of the frontend see [frontend_architecture.md](./frontend_architecture.md) — that doc supersedes this plan as the source of truth for what the frontend IS; this doc documents how we got there.
+
+## Completion table
+
+| Phase | Status | Commits |
+|---|---|---|
+| 0 — Tokens + shadcn CLI bootstrap | ✅ done | `cdeebb4` (`2209dba`, `7ac69fe` were hand-written false-starts, superseded) |
+| 0.5 — Shadcn components via CLI | ✅ done | `8bade71` |
+| 0.6 — **Tailwind v4 vite plugin wired** (required for utility compilation) | ✅ done | `5aa7c11` |
+| 1 — Toasts to sonner (direct import, no facade) | ✅ done | `cdeebb4` (replaced earlier `7ac69fe` adapter) |
+| 2 — Visual chrome (Tag/Space/Flex/Spin/Alert/Typography) | ✅ done | `1222c8c` |
+| 3 — Overlays (Modal/Collapse/Popover/Tooltip/Dropdown/Tabs/AlertDialog) | ✅ done | `af88ec5`, `11ea62e` |
+| 4 — Inputs (Button/Input/Select/Switch/InputNumber/Slider/Checkbox/Card/Statistic) | ✅ done | `a3c4314`, `3cf0cd7`, `0c2d218`, `376a1d2`, `cbea6c3` |
+| 5 — Forms (credentials: EmailPanel + ProviderDefaults + RateLimit on RHF + zod; FieldRenderer+useCredentialPanel drop antd Form) | ✅ done | `ccf9bd5`, `7bbcfef`, `bbc056f` |
+| 6 — `ParameterRenderer` → JSON Forms + renderer registry | ⏸ deferred | (needs backend `get_node_spec`) |
+| 7 — Retire antd, ConfigProvider, styled-components | ✅ done | `b9e0c74` |
+
+**Outcome metrics:**
+- Main JS bundle: **1.7 MB** (was 2.35 MB pre-Phase-7 — saved ~650 KB from antd + `@ant-design/icons` + dayjs locale payload)
+- `grep -rln "from 'antd'" client/src/` → **0**
+- `grep -rln "from '@ant-design" client/src/` → **0**
+- `grep -rln "styled-components" client/src/` → **0**
+- `pnpm build` green throughout all 17 commits on `feature/credentials-scaling-v2`
+
 ## Context
 
-The MachinaOs frontend is coupled to Ant Design (40 files, 187-line theme file, `ConfigProvider` at root). Session docs — [frontend_ui_stack_recommendation.md](./frontend_ui_stack_recommendation.md), [frontend_system_design_rfc.md](./frontend_system_design_rfc.md), [frontend_ui_framework_research.md](./frontend_ui_framework_research.md) — prescribe shadcn/ui (canonical components copied via CLI registry) + Radix primitives + Tailwind 4 + JSON Forms for a schema-driven inspector. Phase 0/1 commits (`2209dba`, `7ac69fe`) included hand-written primitives and a toast facade — those get **deleted** as part of corrected Phase 0.
+The MachinaOs frontend was coupled to Ant Design (40 files, 187-line theme file, `ConfigProvider` at root). Pre-migration audit + research docs (now deleted; see git history under commit `4cb3dd9` if needed) prescribed shadcn/ui (canonical components copied via CLI registry) + Radix primitives + Tailwind 4 + JSON Forms for a schema-driven inspector. Phase 0/1 commits (`2209dba`, `7ac69fe`) included hand-written primitives and a toast facade — those got deleted as part of corrected Phase 0 (`cdeebb4`).
 
 **Outcome:** every component used in the app comes from `shadcn add` or is a raw HTML element with Tailwind utilities. No owned layout wrappers. No facade layers. Adapters only where the library API genuinely doesn't fit (e.g., custom JSON Forms renderers in Phase 6 — because no library knows about MachinaOs's node-parameter shapes).
 
