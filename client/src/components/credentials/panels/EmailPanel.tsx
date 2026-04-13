@@ -66,7 +66,7 @@ const EmailPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = ({ co
   // is on file). Recreate the resolver when that flips.
   const schema = useMemo(() => createEmailFormSchema(!stored), [stored]);
 
-  const form = useForm<EmailFormValues>({
+  const form = useForm({
     resolver: zodResolver(schema),
     defaultValues: DEFAULT_VALUES,
     mode: 'onSubmit',

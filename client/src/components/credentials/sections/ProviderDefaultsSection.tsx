@@ -1,28 +1,57 @@
 /**
- * ProviderDefaultsSection — antd Form bound to a remote ProviderDefaults object.
+ * ProviderDefaultsSection — provider default LLM parameters.
  *
- * Uses:
- *   - Form.useForm() + setFieldsValue() — replaces manual defaults state
- *   - Form.Item with label+extra — replaces custom label/desc styling
- *   - Form.Item shouldUpdate — reactive conditional fields from Form state
- *   - Form.useWatch — react to default_model changes to refetch constraints
- *   - Collapse native header — no custom rendering
+ * shadcn Form composition (react-hook-form + zod). Watches `default_model`
+ * to refetch model constraints, and toggles conditional thinking / reasoning
+ * fields based on `thinking_enabled` + the constraint's thinking_type.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { Form, Select, InputNumber, Switch } from 'antd';
-import { Settings, Loader2 } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Loader2, Settings } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
 import {
   Accordion,
+  AccordionContent,
   AccordionItem,
   AccordionTrigger,
-  AccordionContent,
 } from '@/components/ui/accordion';
 import { useAppTheme } from '../../../hooks/useAppTheme';
 import { useApiKeys, type ProviderDefaults, type ModelConstraints } from '../../../hooks/useApiKeys';
+
+const formSchema = z.object({
+  default_model: z.string().optional().default(''),
+  temperature: z.number().optional(),
+  max_tokens: z.number().int().min(1).optional(),
+  thinking_enabled: z.boolean().optional().default(false),
+  thinking_budget: z.number().int().min(1024).max(16000).optional(),
+  reasoning_effort: z.enum(['low', 'medium', 'high']).optional(),
+  reasoning_format: z.enum(['parsed', 'hidden']).optional(),
+});
+
+type FormValues = z.infer<typeof formSchema>;
 
 interface Props {
   providerId: string;
@@ -32,28 +61,32 @@ const ProviderDefaultsSection: React.FC<Props> = ({ providerId }) => {
   const theme = useAppTheme();
   const { getProviderDefaults, saveProviderDefaults, getStoredModels, getModelConstraints, isConnected } = useApiKeys();
 
-  const [form] = Form.useForm<ProviderDefaults>();
   const [models, setModels] = useState<string[]>([]);
   const [constraints, setConstraints] = useState<ModelConstraints | null>(null);
   const [loading, setLoading] = useState(false);
-  const [dirty, setDirty] = useState(false);
 
-  // Watch default_model from the Form — refetch constraints when it changes
-  const selectedModel = Form.useWatch('default_model', form);
-  const thinkingEnabled = Form.useWatch('thinking_enabled', form);
+  const form = useForm({
+    resolver: zodResolver(formSchema),
+    defaultValues: {},
+  });
+  const selectedModel = form.watch('default_model');
+  const thinkingEnabled = form.watch('thinking_enabled');
+  const { isDirty } = form.formState;
 
-  // Load defaults + models on mount
+  // Load defaults + models on mount.
   useEffect(() => {
     if (!isConnected) return;
     let cancelled = false;
     (async () => {
       setLoading(true);
       try {
-        const [d, m] = await Promise.all([getProviderDefaults(providerId), getStoredModels(providerId)]);
+        const [d, m] = await Promise.all([
+          getProviderDefaults(providerId),
+          getStoredModels(providerId),
+        ]);
         if (!cancelled) {
-          form.setFieldsValue(d);
+          form.reset((d as Partial<ProviderDefaults>) ?? {});
           if (m?.length) setModels(m);
-          setDirty(false);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -62,41 +95,55 @@ const ProviderDefaultsSection: React.FC<Props> = ({ providerId }) => {
     return () => { cancelled = true; };
   }, [providerId, isConnected]);
 
-  // Refetch constraints when selected model changes
+  // Refetch constraints when selected model changes.
   useEffect(() => {
     if (!isConnected || !selectedModel) return;
     let cancelled = false;
-    getModelConstraints(selectedModel, providerId).then(c => {
+    getModelConstraints(selectedModel, providerId).then((c) => {
       if (cancelled) return;
       setConstraints(c);
-      if (c?.max_output_tokens && form.getFieldValue('max_tokens') !== c.max_output_tokens) {
-        form.setFieldValue('max_tokens', c.max_output_tokens);
+      if (c?.max_output_tokens && form.getValues('max_tokens') !== c.max_output_tokens) {
+        form.setValue('max_tokens', c.max_output_tokens, { shouldDirty: false });
       }
     });
     return () => { cancelled = true; };
   }, [selectedModel, providerId, isConnected]);
 
-  const handleSave = useCallback(async () => {
-    setLoading(true);
-    try {
-      const values = form.getFieldsValue();
-      const ok = await saveProviderDefaults(providerId, values);
-      if (ok) setDirty(false);
-    } finally {
-      setLoading(false);
-    }
-  }, [form, providerId, saveProviderDefaults]);
+  const onSubmit = useCallback(
+    async (values: FormValues) => {
+      setLoading(true);
+      try {
+        const ok = await saveProviderDefaults(providerId, values as ProviderDefaults);
+        if (ok) form.reset(values);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [providerId, saveProviderDefaults, form],
+  );
 
-  // Derived from constraints
   const [tempMin, tempMax] = constraints?.temperature_range ?? [0, 2];
   const maxOut = constraints?.max_output_tokens;
   const thinkType = constraints?.thinking_type;
   const canThink = constraints?.supports_thinking;
   const fixedTemp = constraints?.is_reasoning_model && tempMin === tempMax;
 
-  const chipStyle = (bg: string): React.CSSProperties => ({
-    backgroundColor: `${bg}20`, borderColor: `${bg}50`, color: bg,
-  });
+  const chipStyle = useMemo(
+    () =>
+      (bg: string): React.CSSProperties => ({
+        backgroundColor: `${bg}20`,
+        borderColor: `${bg}50`,
+        color: bg,
+      }),
+    [],
+  );
+
+  const numberOnChange =
+    (field: { onChange: (v: number | undefined) => void }) =>
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const raw = e.target.value;
+      field.onChange(raw === '' ? undefined : Number(raw));
+    };
 
   return (
     <Accordion type="single" collapsible defaultValue="defaults">
@@ -108,91 +155,228 @@ const ProviderDefaultsSection: React.FC<Props> = ({ providerId }) => {
         </AccordionTrigger>
         <AccordionContent>
           <div className={loading ? 'pointer-events-none opacity-60' : ''}>
-            <Form form={form} layout="vertical" size="small" onValuesChange={() => setDirty(true)} preserve>
-            <Form.Item
-              label="Default Model"
-              name="default_model"
-              extra="Model used when none specified"
-            >
-              <Select showSearch placeholder="Select model"
-                options={models.map(m => ({ label: m, value: m }))}
-                filterOption={(input, option) => (option?.label ?? '').toLowerCase().includes(input.toLowerCase())}
-                notFoundContent={models.length ? 'No models found' : 'Validate API key first'}
-                popupMatchSelectWidth={false}
-                getPopupContainer={trigger => trigger.parentElement || document.body}
-                listHeight={300}
-              />
-            </Form.Item>
+            <Form {...form}>
+              <form
+                id={`provider-defaults-form-${providerId}`}
+                onSubmit={form.handleSubmit(onSubmit)}
+                className="flex flex-col gap-3"
+              >
+                <FormField
+                  control={form.control}
+                  name="default_model"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Default Model</FormLabel>
+                      <Select value={field.value ?? ''} onValueChange={field.onChange}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue
+                              placeholder={models.length ? 'Select model' : 'Validate API key first'}
+                            />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {models.map((m) => (
+                            <SelectItem key={m} value={m}>
+                              {m}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>Model used when none specified</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            {constraints && (
-              <div className="mb-3 flex flex-wrap items-center gap-1.5">
-                {maxOut != null && <Badge style={chipStyle(theme.dracula.green)}>Max Output: {maxOut.toLocaleString()}</Badge>}
-                {constraints.context_length != null && <Badge style={chipStyle(theme.dracula.cyan)}>Context: {constraints.context_length.toLocaleString()}</Badge>}
-                <Badge style={chipStyle(theme.dracula.purple)}>Temp: {tempMin}-{tempMax}</Badge>
-                {canThink && <Badge style={chipStyle(theme.dracula.orange)}>Thinking: {thinkType}</Badge>}
-                {constraints.is_reasoning_model && <Badge style={chipStyle(theme.dracula.pink)}>Reasoning</Badge>}
-              </div>
-            )}
+                {constraints && (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {maxOut != null && (
+                      <Badge style={chipStyle(theme.dracula.green)}>
+                        Max Output: {maxOut.toLocaleString()}
+                      </Badge>
+                    )}
+                    {constraints.context_length != null && (
+                      <Badge style={chipStyle(theme.dracula.cyan)}>
+                        Context: {constraints.context_length.toLocaleString()}
+                      </Badge>
+                    )}
+                    <Badge style={chipStyle(theme.dracula.purple)}>
+                      Temp: {tempMin}-{tempMax}
+                    </Badge>
+                    {canThink && (
+                      <Badge style={chipStyle(theme.dracula.orange)}>Thinking: {thinkType}</Badge>
+                    )}
+                    {constraints.is_reasoning_model && (
+                      <Badge style={chipStyle(theme.dracula.pink)}>Reasoning</Badge>
+                    )}
+                  </div>
+                )}
 
-            {!fixedTemp && (
-              <Form.Item label="Temperature" name="temperature" extra={`Controls randomness (${tempMin}-${tempMax})`}>
-                <InputNumber min={tempMin} max={tempMax} step={0.1} style={{ width: 100 }} />
-              </Form.Item>
-            )}
+                {!fixedTemp && (
+                  <FormField
+                    control={form.control}
+                    name="temperature"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Temperature</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min={tempMin}
+                            max={tempMax}
+                            step={0.1}
+                            className="w-24"
+                            value={field.value ?? ''}
+                            onChange={numberOnChange(field)}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Controls randomness ({tempMin}-{tempMax})
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
 
-            <Form.Item label="Max Tokens" name="max_tokens"
-              extra={maxOut != null ? `Up to ${maxOut.toLocaleString()}` : 'Maximum response length'}>
-              <InputNumber min={1} max={maxOut || undefined} style={{ width: 140 }} />
-            </Form.Item>
+                <FormField
+                  control={form.control}
+                  name="max_tokens"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Max Tokens</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={maxOut || undefined}
+                          className="w-32"
+                          value={field.value ?? ''}
+                          onChange={numberOnChange(field)}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {maxOut != null ? `Up to ${maxOut.toLocaleString()}` : 'Maximum response length'}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            {canThink && (
-              <Form.Item label="Thinking / Reasoning" name="thinking_enabled" valuePropName="checked"
-                extra={`Extended thinking (${thinkType})`}>
-                <Switch />
-              </Form.Item>
-            )}
+                {canThink && (
+                  <FormField
+                    control={form.control}
+                    name="thinking_enabled"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-md border border-border p-3">
+                        <div className="space-y-0.5">
+                          <FormLabel>Thinking / Reasoning</FormLabel>
+                          <FormDescription>Extended thinking ({thinkType})</FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch checked={!!field.value} onCheckedChange={field.onChange} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                )}
 
-            {canThink && thinkType === 'budget' && thinkingEnabled && (
-              <Form.Item label="Thinking Budget" name="thinking_budget" extra="Token budget (1024-16000)">
-                <InputNumber min={1024} max={16000} style={{ width: 120 }} />
-              </Form.Item>
-            )}
+                {canThink && thinkType === 'budget' && thinkingEnabled && (
+                  <FormField
+                    control={form.control}
+                    name="thinking_budget"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Thinking Budget</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min={1024}
+                            max={16000}
+                            className="w-28"
+                            value={field.value ?? ''}
+                            onChange={numberOnChange(field)}
+                          />
+                        </FormControl>
+                        <FormDescription>Token budget (1024-16000)</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
 
-            {canThink && thinkType === 'effort' && thinkingEnabled && (
-              <Form.Item label="Reasoning Effort" name="reasoning_effort" extra="Low, medium, or high">
-                <Select style={{ width: 130 }}
-                  options={[{ label: 'Low', value: 'low' }, { label: 'Medium', value: 'medium' }, { label: 'High', value: 'high' }]}
-                  getPopupContainer={trigger => trigger.parentElement || document.body} />
-              </Form.Item>
-            )}
+                {canThink && thinkType === 'effort' && thinkingEnabled && (
+                  <FormField
+                    control={form.control}
+                    name="reasoning_effort"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Reasoning Effort</FormLabel>
+                        <Select value={field.value ?? ''} onValueChange={field.onChange}>
+                          <FormControl>
+                            <SelectTrigger className="w-32">
+                              <SelectValue placeholder="Select" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="low">Low</SelectItem>
+                            <SelectItem value="medium">Medium</SelectItem>
+                            <SelectItem value="high">High</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>Low, medium, or high</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
 
-            {canThink && thinkType === 'format' && thinkingEnabled && (
-              <Form.Item label="Reasoning Format" name="reasoning_format" extra="Parsed or hidden">
-                <Select style={{ width: 130 }}
-                  options={[{ label: 'Parsed', value: 'parsed' }, { label: 'Hidden', value: 'hidden' }]}
-                  getPopupContainer={trigger => trigger.parentElement || document.body} />
-              </Form.Item>
-            )}
+                {canThink && thinkType === 'format' && thinkingEnabled && (
+                  <FormField
+                    control={form.control}
+                    name="reasoning_format"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Reasoning Format</FormLabel>
+                        <Select value={field.value ?? ''} onValueChange={field.onChange}>
+                          <FormControl>
+                            <SelectTrigger className="w-32">
+                              <SelectValue placeholder="Select" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="parsed">Parsed</SelectItem>
+                            <SelectItem value="hidden">Hidden</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>Parsed or hidden</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
 
-            <Button
-              onClick={handleSave}
-              disabled={!dirty || loading}
-              variant="outline"
-              className="w-full"
-              style={
-                dirty
-                  ? {
-                      backgroundColor: `${theme.dracula.green}25`,
-                      borderColor: `${theme.dracula.green}60`,
-                      color: theme.dracula.green,
-                    }
-                  : undefined
-              }
-            >
-              {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-              Save Defaults
-            </Button>
-          </Form>
+                <Button
+                  type="submit"
+                  disabled={!isDirty || loading}
+                  variant="outline"
+                  className="w-full"
+                  style={
+                    isDirty
+                      ? {
+                          backgroundColor: `${theme.dracula.green}25`,
+                          borderColor: `${theme.dracula.green}60`,
+                          color: theme.dracula.green,
+                        }
+                      : undefined
+                  }
+                >
+                  {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Save Defaults
+                </Button>
+              </form>
+            </Form>
           </div>
         </AccordionContent>
       </AccordionItem>
