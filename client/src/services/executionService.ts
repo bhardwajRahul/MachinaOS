@@ -249,6 +249,8 @@ export class ExecutionService {
       'fsSearch',
       // Todo planning
       'writeTodos',
+      // Process manager
+      'processManager',
       // Email (Himalaya CLI)
       ...EMAIL_NODE_TYPES,
     ];

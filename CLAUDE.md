@@ -416,7 +416,7 @@ class CacheEntry(SQLModel, table=True):
 
 ## Codebase Summary
 - **Hybrid architecture**: Node.js + Python + React TypeScript
-- **106 implemented workflow nodes** with clean service separation (9 AI models + 3 AI agents/memory + 16 specialized agents + 1 skill + 5 dedicated tools + 3 search + 16 Android + 3 WhatsApp + 4 Twitter + 2 Telegram + 2 Social + 3 Location + 3 Code + 6 Utility + 6 Document + 2 Chat + 2 Scheduler + 2 Workflow + 7 Google Workspace + 1 Apify + 1 Crawlee + 1 Browser + 3 Email + 3 Proxy + 4 Filesystem/Shell)
+- **107 implemented workflow nodes** with clean service separation (9 AI models + 3 AI agents/memory + 16 specialized agents + 1 skill + 5 dedicated tools + 3 search + 16 Android + 3 WhatsApp + 4 Twitter + 2 Telegram + 2 Social + 3 Location + 3 Code + 6 Utility + 6 Document + 2 Chat + 2 Scheduler + 2 Workflow + 7 Google Workspace + 1 Apify + 1 Crawlee + 1 Browser + 3 Email + 3 Proxy + 4 Filesystem/Shell + 1 Process Manager)
 - **WebSocket-First Architecture**: WebSocket as primary frontend-backend communication (89 message handlers)
 - **Recent optimizations**: REST APIs replaced with WebSocket, AI endpoints migrated to Python, Android automation integrated
 
@@ -623,9 +623,12 @@ server/skills/
 │   ├── progressive-discovery-skill/SKILL.md
 │   ├── error-recovery-skill/SKILL.md
 │   └── multi-tool-orchestration-skill/SKILL.md
-├── coding_agent/                         # Code execution skills
+├── coding_agent/                         # Code execution & filesystem skills
 │   ├── python-skill/SKILL.md
-│   └── javascript-skill/SKILL.md
+│   ├── javascript-skill/SKILL.md
+│   ├── file-read-skill/SKILL.md
+│   ├── file-modify-skill/SKILL.md
+│   └── fs-search-skill/SKILL.md
 ├── productivity_agent/                   # Google Workspace skills
 │   ├── gmail-skill/SKILL.md              # Send, search, read emails
 │   ├── calendar-skill/SKILL.md           # Create, list, update, delete events
@@ -649,6 +652,12 @@ server/skills/
 │   └── nearby-places-skill/SKILL.md
 ├── rlm_agent/                            # Recursive Language Model agent skills
 │   └── rlm-reasoning-skill/SKILL.md
+├── terminal/                             # Shell, process management, OS-specific terminals
+│   ├── shell-skill/SKILL.md              # Sandboxed shell (no system PATH)
+│   ├── process-manager-skill/SKILL.md    # Long-running processes (full PATH, streams output)
+│   ├── bash-skill/SKILL.md               # Linux/macOS terminal patterns
+│   ├── powershell-skill/SKILL.md         # Windows terminal patterns
+│   └── wsl-skill/SKILL.md               # WSL bridge for Linux tools on Windows
 └── web_agent/                            # Web automation skills
     ├── http-request-skill/SKILL.md
     ├── proxy-config-skill/SKILL.md
@@ -1367,11 +1376,11 @@ Residential proxy provider management with geo-targeting, session control, and a
 - **typescriptExecutor**: **Dual-purpose node** - Execute TypeScript code via persistent Node.js server with type safety, syntax-highlighted editor and console output. Works as workflow node OR AI Agent tool (`typescript_code`).
 
 ### Filesystem & Shell Nodes (4 nodes)
-Dual-purpose tool nodes delegating to `deepagents.backends.LocalShellBackend`. Uses per-workflow workspace from execution context (`context["workspace_dir"]` = `data/workspaces/<workflow_id>/`). `virtual_mode=True` confines paths within the workspace.
+Dual-purpose tool nodes delegating to `deepagents.backends.LocalShellBackend`. Uses per-workflow workspace from execution context (`context["workspace_dir"]` = `data/workspaces/<workflow_id>/`). `virtual_mode=True` confines paths within the workspace. Fallback uses `Settings().workspace_base_dir` (never `os.getcwd()`).
 
 - **fileRead**: **Dual-purpose node** - Read file contents with line numbers and pagination. Works as workflow node OR AI Agent tool (`file_read`). Parameters: file_path, offset, limit.
 - **fileModify**: **Dual-purpose node** - Write new files or edit existing files with string replacement. Works as workflow node OR AI Agent tool (`file_modify`). Operations: write (create/overwrite), edit (find and replace with old_string/new_string/replace_all).
-- **shell**: **Dual-purpose node** - Execute shell commands with timeout. Works as workflow node OR AI Agent tool (`shell_execute`). Returns stdout, exit_code, truncated flag.
+- **shell**: **Dual-purpose node** - Execute shell commands with timeout. Works as workflow node OR AI Agent tool (`shell_execute`). **Sandboxed: no system PATH** -- use process_manager for npm/python/node commands. All backend calls wrapped in `asyncio.to_thread()` to avoid blocking the event loop. Returns stdout, exit_code, truncated flag.
 - **fsSearch**: **Dual-purpose node** - Search the filesystem with three modes. Works as workflow node OR AI Agent tool (`fs_search`). Modes: ls (list directory), glob (pattern match), grep (search file contents).
 
 **Key Files:**
@@ -1379,7 +1388,28 @@ Dual-purpose tool nodes delegating to `deepagents.backends.LocalShellBackend`. U
 |------|-------------|
 | `client/src/nodeDefinitions/filesystemNodes.ts` | 4 dual-purpose node definitions |
 | `server/services/handlers/filesystem.py` | Handlers delegating to `deepagents.backends.LocalShellBackend` |
-| `server/skills/coding_agent/` | Skills: file-read-skill, file-modify-skill, shell-skill, fs-search-skill |
+| `server/skills/coding_agent/` | Skills: file-read-skill, file-modify-skill, fs-search-skill |
+| `server/skills/terminal/` | Skills: shell-skill, process-manager-skill, bash-skill, powershell-skill, wsl-skill |
+
+### Process Manager Node (1 node)
+Cross-platform process manager for long-running subprocesses (dev servers, watchers, build tools). Uses `asyncio.create_subprocess_exec` with full system PATH (`env={**os.environ}`). Output streams to Terminal tab via `broadcast_terminal_log()` and persists to log files in the workspace.
+
+- **processManager**: **Dual-purpose node** - Start, stop, restart, and manage long-running processes. Works as workflow node OR AI Agent tool (`process_manager`). Operations: start, stop, restart, list, send_input, get_output. Max concurrent processes configurable in Settings (default: 10).
+
+**Key Architecture:**
+- **ProcessService** singleton (`server/services/process_service.py`) tracks running processes per workflow
+- Each process writes stdout/stderr to `{workspace}/{agent_node_id}/.processes/{name}/stdout.log` and `stderr.log`
+- AI agents read output selectively via `get_output(name, stream, tail)` with pagination
+- Process tree cleanup via `psutil.children(recursive=True)` on stop and server shutdown
+- `PYTHONUNBUFFERED=1` injected for line-buffered Python output
+
+**Key Files:**
+| File | Description |
+|------|-------------|
+| `server/services/process_service.py` | ProcessService singleton with start/stop/restart/list/send_input/get_output/shutdown |
+| `server/services/handlers/process.py` | Dual-purpose handler (workflow + AI tool) |
+| `client/src/nodeDefinitions/processNodes.ts` | Node definition with operation dropdown |
+| `server/skills/terminal/process-manager-skill/` | Skill for AI agents |
 
 ### Utility Nodes (6 nodes)
 - **httpRequest**: Make HTTP requests to external APIs (GET, POST, PUT, DELETE, PATCH) with configurable headers, body, timeout, and optional proxy support (`useProxy: true` routes through configured residential proxy)

@@ -21,12 +21,13 @@ logger = get_logger(__name__)
 def _get_backend(parameters: Dict[str, Any], context: Dict[str, Any] = None):
     """Get a LocalShellBackend rooted at per-workflow workspace."""
     from deepagents.backends import LocalShellBackend
+    from core.config import Settings
     param_dir = parameters.get('working_directory')
     ctx_dir = context.get('workspace_dir') if context else None
-    root = param_dir or ctx_dir or os.getcwd()
-    logger.info("[Filesystem] root=%s (param=%s, context=%s, fallback_cwd=%s)",
-                root, param_dir, ctx_dir, os.getcwd())
-    return LocalShellBackend(root_dir=root, virtual_mode=True, inherit_env=True)
+    root = param_dir or ctx_dir or os.path.join(Settings().workspace_base_dir, 'default')
+    os.makedirs(root, exist_ok=True)
+    logger.info("[Filesystem] root=%s", root)
+    return LocalShellBackend(root_dir=root, virtual_mode=True)
 
 
 async def handle_file_read(

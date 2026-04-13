@@ -13,6 +13,7 @@ export interface WorkflowSettings {
   consolePanelDefaultOpen: boolean;
   memoryWindowSize: number;
   compactionRatio: number;
+  maxProcesses: number;
 }
 
 export const defaultSettings: WorkflowSettings = {
@@ -23,6 +24,7 @@ export const defaultSettings: WorkflowSettings = {
   consolePanelDefaultOpen: false,
   memoryWindowSize: 100,
   compactionRatio: 0.5,
+  maxProcesses: 10,
 };
 
 interface SettingsPanelProps {
@@ -66,6 +68,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
           consolePanelDefaultOpen: dbSettings.console_panel_default_open ?? defaultSettings.consolePanelDefaultOpen,
           memoryWindowSize: dbSettings.memory_window_size ?? defaultSettings.memoryWindowSize,
           compactionRatio: dbSettings.compaction_ratio ?? defaultSettings.compactionRatio,
+          maxProcesses: dbSettings.max_processes ?? defaultSettings.maxProcesses,
         });
       }
     } catch (error) {
@@ -87,6 +90,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
           console_panel_default_open: newSettings.consolePanelDefaultOpen,
           memory_window_size: newSettings.memoryWindowSize,
           compaction_ratio: newSettings.compactionRatio,
+          max_processes: newSettings.maxProcesses,
         }
       });
       if (showMessage) {
@@ -469,6 +473,31 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               }}>
                 Lower = compact sooner (saves tokens, loses detail). Higher = compact later (preserves context, uses more tokens).
               </div>
+            </div>
+          </div>
+
+          {/* Process Manager Section */}
+          <div style={sectionStyle}>
+            <div style={sectionHeaderStyle}>
+              <div style={{ ...sectionIconStyle, backgroundColor: `${theme.dracula.orange}20` }}>{'\u2699\uFE0F'}</div>
+              <div style={sectionTitleStyle}>Process Manager</div>
+            </div>
+
+            <div style={settingRowStyle}>
+              <div style={settingLabelStyle}>
+                <div style={labelTextStyle}>Max Concurrent Processes</div>
+                <div style={descriptionStyle}>Maximum number of running processes per workflow (1-50)</div>
+              </div>
+              <InputNumber
+                size="small"
+                min={1}
+                max={50}
+                step={1}
+                value={settings.maxProcesses ?? 10}
+                onChange={(value) => handleChange('maxProcesses', value ?? 10)}
+                disabled={isSaving}
+                style={{ width: 80 }}
+              />
             </div>
           </div>
 

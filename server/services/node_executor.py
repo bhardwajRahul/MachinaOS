@@ -49,6 +49,7 @@ from services.handlers.browser import handle_browser
 from services.handlers.proxy import handle_proxy_request, handle_proxy_status, handle_proxy_config
 from services.handlers.filesystem import handle_file_read, handle_file_modify, handle_shell, handle_fs_search
 from services.handlers.todo import handle_write_todos
+from services.handlers.process import handle_process_manager
 from services.handlers.email import handle_email_send, handle_email_read, handle_email_receive
 # Consolidated Google Workspace handlers (6 services with operation dispatchers)
 from services.handlers.gmail import handle_google_gmail, handle_gmail_receive
@@ -198,6 +199,8 @@ class NodeExecutor:
             'taskManager': handle_task_manager,
             # Todo planning (dual-purpose: workflow node + AI tool)
             'writeTodos': handle_write_todos,
+            # Process manager (dual-purpose: workflow node + AI tool)
+            'processManager': handle_process_manager,
             # Team monitoring
             'teamMonitor': handle_team_monitor,
             # Apify web scraping

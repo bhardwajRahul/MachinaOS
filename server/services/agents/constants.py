@@ -7,4 +7,4 @@ PROVIDER_PREFIX = {
     "gemini": "google_genai",
 }
 
-DEFAULT_MAX_TURNS = 25
+DEFAULT_MAX_TURNS = 200

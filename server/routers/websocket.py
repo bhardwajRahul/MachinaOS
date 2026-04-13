@@ -2247,6 +2247,41 @@ async def handle_clear_terminal_logs(data: Dict[str, Any], websocket: WebSocket)
     return {"success": True, "message": "Terminal logs cleared"}
 
 
+# =============================================================================
+# Process Manager Handlers
+# =============================================================================
+
+@ws_handler()
+async def handle_process_list(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """List running processes."""
+    from services.process_service import get_process_service
+    svc = get_process_service()
+    workflow_id = data.get("workflow_id", "default")
+    return {"success": True, "processes": svc.list_processes(workflow_id), "max_processes": svc.max_processes}
+
+
+@ws_handler("name")
+async def handle_process_get_output(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Get output from a process's log file."""
+    from services.process_service import get_process_service
+    name = data["name"]
+    workflow_id = data.get("workflow_id", "default")
+    stream = data.get("stream", "stdout")
+    tail = int(data.get("tail", 50))
+    offset = int(data.get("offset", 0))
+    return {"success": True, **get_process_service().get_output(name, workflow_id, stream, tail, offset)}
+
+
+@ws_handler("name", "text")
+async def handle_process_send_input(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Send stdin text to a running process."""
+    from services.process_service import get_process_service
+    name = data["name"]
+    text = data["text"]
+    workflow_id = data.get("workflow_id", "default")
+    return await get_process_service().send_input(name, workflow_id, text)
+
+
 # ============================================================================
 # User Skills Handlers
 # ============================================================================
@@ -2616,6 +2651,11 @@ async def handle_save_user_settings(data: Dict[str, Any], websocket: WebSocket) 
     success = await database.save_user_settings(settings_data, user_id)
 
     if success:
+        # Sync process limit if changed
+        if "max_processes" in settings_data:
+            from services.process_service import get_process_service
+            get_process_service().max_processes = int(settings_data["max_processes"])
+
         # Fetch the saved settings to return
         settings = await database.get_user_settings(user_id)
         return {"settings": settings}
@@ -3130,6 +3170,11 @@ MESSAGE_HANDLERS: Dict[str, MessageHandler] = {
     # Terminal logs
     "get_terminal_logs": handle_get_terminal_logs,
     "clear_terminal_logs": handle_clear_terminal_logs,
+
+    # Process Manager
+    "process_list": handle_process_list,
+    "process_get_output": handle_process_get_output,
+    "process_send_input": handle_process_send_input,
 
     # User Skills
     "get_user_skills": handle_get_user_skills,

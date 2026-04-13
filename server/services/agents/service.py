@@ -4,6 +4,7 @@ Delegates to adapters for protocol translation and reuses
 shared helpers from ai.py for config resolution and memory.
 """
 
+import os
 import time
 import warnings
 from datetime import datetime
@@ -112,7 +113,11 @@ class DeepAgentService:
             executable_tools = []
             if tool_data and build_tool_fn:
                 await broadcast_status("building_tools", {"message": f"Building {len(tool_data)} tool(s)..."})
-                workspace_dir = parameters.get('workspace_dir', '')
+                # Each agent gets its own subfolder: {workspace}/{node_id}/
+                base_workspace = parameters.get('workspace_dir', '')
+                workspace_dir = os.path.join(base_workspace, node_id) if base_workspace else ''
+                if workspace_dir:
+                    os.makedirs(workspace_dir, exist_ok=True)
                 executable_tools = await ToolAdapter._build_tools_async(tool_data, build_tool_fn, workflow_id, broadcaster, workspace_dir)
 
             # If write_todos tool is connected, add planning instructions to system message

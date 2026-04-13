@@ -189,6 +189,11 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
         from services.handlers.todo import execute_write_todos
         return await execute_write_todos(tool_args, config)
 
+    # Process Manager (dual-purpose: AI tool + workflow node)
+    if node_type == 'processManager':
+        from services.handlers.process import execute_process_manager
+        return await execute_process_manager(tool_args, config)
+
     # Task Manager (dual-purpose: AI tool + workflow node)
     if node_type == 'taskManager':
         return await _execute_task_manager(tool_args, config)

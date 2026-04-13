@@ -27,6 +27,7 @@ import { proxyNodes, PROXY_NODE_TYPES } from './nodeDefinitions/proxyNodes';
 import { crawleeNodes, CRAWLEE_NODE_TYPES } from './nodeDefinitions/crawleeNodes';
 import { browserNodes, BROWSER_NODE_TYPES } from './nodeDefinitions/browserNodes';
 import { filesystemNodes, FILESYSTEM_NODE_TYPES } from './nodeDefinitions/filesystemNodes';
+import { processNodes } from './nodeDefinitions/processNodes';
 import { emailNodes, EMAIL_NODE_TYPES } from './nodeDefinitions/emailNodes';
 
 
@@ -60,6 +61,7 @@ export const nodeDefinitions: Record<string, INodeTypeDescription> = {
   ...crawleeNodes,
   ...browserNodes,
   ...filesystemNodes,
+  ...processNodes,
   ...emailNodes
 };
 

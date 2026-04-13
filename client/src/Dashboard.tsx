@@ -39,6 +39,7 @@ import { PROXY_NODE_TYPES } from './nodeDefinitions/proxyNodes';
 import { CRAWLEE_NODE_TYPES } from './nodeDefinitions/crawleeNodes';
 import { BROWSER_NODE_TYPES } from './nodeDefinitions/browserNodes';
 import { FILESYSTEM_NODE_TYPES } from './nodeDefinitions/filesystemNodes';
+import { PROCESS_NODE_TYPES } from './nodeDefinitions/processNodes';
 import { AI_CHAT_MODEL_TYPES } from './nodeDefinitions/aiModelNodes';
 import ParameterPanel from './ParameterPanel';
 import LocationParameterPanel from './components/LocationParameterPanel';
@@ -159,6 +160,9 @@ const createNodeTypes = (): Record<string, React.ComponentType<any>> => {
       types[type] = SquareNode;
     } else if (FILESYSTEM_NODE_TYPES.includes(type)) {
       // Filesystem & shell nodes use SquareNode component
+      types[type] = SquareNode;
+    } else if (PROCESS_NODE_TYPES.includes(type)) {
+      // Process manager nodes use SquareNode component
       types[type] = SquareNode;
     } else if (SOCIAL_NODE_TYPES.includes(type)) {
       // Social nodes use AIAgentNode for multiple output handles support

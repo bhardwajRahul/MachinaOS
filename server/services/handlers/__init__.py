@@ -143,6 +143,9 @@ from .tools import (
 # Todo handler
 from .todo import execute_write_todos, handle_write_todos
 
+# Process manager handler
+from .process import execute_process_manager, handle_process_manager
+
 __all__ = [
     # AI
     'handle_ai_agent',

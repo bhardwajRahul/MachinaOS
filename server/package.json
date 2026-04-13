@@ -5,5 +5,9 @@
   "scripts": {
     "start": "python -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-3010}",
     "dev": "python -m uvicorn main:app --host 127.0.0.1 --port ${PORT:-3010} --reload --reload-dir . --reload-exclude \"*.pyc\" --reload-exclude \"__pycache__\" --log-level warning"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "morgan": "^1.10.1"
   }
 }

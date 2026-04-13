@@ -2438,6 +2438,7 @@ class AIService:
             'perplexitySearch': 'perplexity_search',
             'taskManager': 'task_manager',
             'writeTodos': 'write_todos',
+            'processManager': 'process_manager',
             'timer': 'timer',
             'cronScheduler': 'cron_scheduler',
             # Filesystem and shell tools (deepagents backends)
@@ -2518,6 +2519,7 @@ class AIService:
             'gmaps_nearby_places': 'Search for nearby places (restaurants, hospitals, banks, etc.) using Google Maps Places API.',
             'taskManager': 'Track delegated sub-agent tasks. Operations: list_tasks (see all tasks), get_task (check specific task status/result), mark_done (cleanup completed tasks).',
             'writeTodos': 'Create and manage a structured task list for your current work session. This helps you track progress, organize complex tasks, and demonstrate thoroughness to the user. Only use this tool if you think it will be helpful in staying organized. If the user\'s request is trivial and takes less than 3 steps, it is better to NOT use this tool and just do the task directly. Use for complex multi-step tasks (3+ steps), non-trivial planning, or when user explicitly requests a todo list. Task states: pending, in_progress, completed. Mark tasks as in_progress BEFORE beginning work, completed IMMEDIATELY after finishing. Remove irrelevant tasks. Break complex tasks into smaller steps.',
+            'processManager': 'Start, stop, and manage long-running processes (dev servers, watchers, build tools). Operations: start (spawn a process), stop (kill process tree), restart, list (show all running), send_input (write to stdin), get_output (read recent output lines). Output streams to Terminal tab. Use get_output to check what a process printed.',
             'timer': 'Wait/sleep for a specified duration. Specify duration (1-3600) and unit (seconds, minutes, or hours). Returns timestamp and elapsed time after waiting.',
             'cronScheduler': 'Schedule a delayed or recurring execution. Supports seconds, minutes, hours, daily, weekly, monthly frequencies with timezone. Use frequency to set schedule type, then set the relevant interval/time parameters.',
             # Filesystem and shell tools (deepagents backends)
@@ -3265,6 +3267,29 @@ class AIService:
                 )
 
             return WriteTodosSchema
+
+        # Process Manager schema (dual-purpose: AI tool + workflow node)
+        if node_type == 'processManager':
+            class ProcessManagerSchema(BaseModel):
+                """Start, stop, and manage long-running processes.
+
+                Use for dev servers, watchers, build tools. Use get_output to read process output.
+                - start: Launch a process (requires command)
+                - stop: Kill a process by name
+                - restart: Stop then start with same command
+                - list: Show all running processes
+                - send_input: Write text to process stdin
+                - get_output: Read recent output lines from a process
+                """
+                operation: str = Field(description="Operation: start, stop, restart, list, send_input, get_output")
+                name: Optional[str] = Field(default=None, description="Process name (required for stop/restart/send_input/get_output)")
+                command: Optional[str] = Field(default=None, description="Shell command to run (required for start)")
+                working_directory: Optional[str] = Field(default=None, description="Working directory for the process")
+                text: Optional[str] = Field(default=None, description="Text to send to stdin (for send_input)")
+                stream: Optional[str] = Field(default="stdout", description="Which stream to read: stdout or stderr (for get_output)")
+                tail: Optional[int] = Field(default=50, description="Number of lines from end to return, 0 for all (for get_output)")
+
+            return ProcessManagerSchema
 
         # Task Manager schema (dual-purpose: AI tool + workflow node)
         if node_type == 'taskManager':

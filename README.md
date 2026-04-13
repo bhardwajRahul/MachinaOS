@@ -123,9 +123,11 @@ Create AI agents that remember conversations, use tools, and work together. Choo
 - **16 Specialized Agents** - Android, Coding, Web, Task, Social, Travel, Tool, Productivity, Payments, Consumer, Autonomous, Orchestrator, AI Employee, RLM, Claude Code, Deep Agent
 - **Team Monitor** - Real-time visualization of team operations
 
-### Run Code
+### Run Code & Manage Processes
 - Execute Python, JavaScript, and TypeScript code
 - Persistent Node.js server for fast JS/TS execution
+- **Process Manager** - Start, stop, and manage long-running processes (dev servers, watchers, build tools) with output streaming to Terminal tab
+- OS-specific terminal skills (Bash, PowerShell, WSL)
 
 ## Visual Workflow Builder
 

@@ -170,6 +170,18 @@ async def lifespan(app: FastAPI):
     from services.agent_team import init_agent_team_service
     from services.status_broadcaster import get_status_broadcaster
     init_agent_team_service(container.database(), get_status_broadcaster())
+
+    # Wire process service to broadcaster for Terminal tab streaming
+    from services.process_service import get_process_service
+    proc_svc = get_process_service()
+    proc_svc.set_broadcaster(get_status_broadcaster())
+    # Load max_processes from user settings if configured
+    try:
+        user_settings = await container.database().get_user_settings("default")
+        if user_settings and "max_processes" in user_settings:
+            proc_svc.max_processes = int(user_settings["max_processes"])
+    except Exception:
+        pass
     logger.info("Agent team service initialized")
 
     # Initialize proxy service (loads providers from DB, reads credentials)
@@ -305,6 +317,10 @@ async def lifespan(app: FastAPI):
     # Shut down agent-browser daemon (prevents orphaned processes and EBUSY file locks)
     from services.browser_service import shutdown_browser_service
     await shutdown_browser_service()
+
+    # Kill all managed processes (process manager node)
+    from services.process_service import shutdown_process_service
+    await shutdown_process_service()
 
     # Stop cleanup service
     if cleanup_service is not None:
