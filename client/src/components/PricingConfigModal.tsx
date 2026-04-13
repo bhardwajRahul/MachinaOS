@@ -4,8 +4,15 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Button, Tabs, InputNumber, Collapse } from 'antd';
+import { Button, InputNumber } from 'antd';
 import { Loader2 } from 'lucide-react';
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from '@/components/ui/accordion';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import {
   SaveOutlined,
@@ -243,11 +250,8 @@ const PricingConfigModal: React.FC<Props> = ({ visible, onClose }) => {
     const providers = Object.keys(config.llm).sort();
 
     return (
-      <Collapse
-        defaultActiveKey={providers.slice(0, 2)}
-        style={{ background: 'transparent' }}
-      >
-        {providers.map(provider => {
+      <Accordion type="multiple" defaultValue={providers.slice(0, 2)} className="bg-transparent">
+        {providers.map((provider) => {
           const models = config.llm[provider];
           const modelNames = Object.keys(models).sort((a, b) => {
             if (a === '_default') return 1;
@@ -256,33 +260,33 @@ const PricingConfigModal: React.FC<Props> = ({ visible, onClose }) => {
           });
 
           return (
-            <Collapse.Panel
-              key={provider}
-              header={
-                <span style={{ textTransform: 'capitalize', fontWeight: 500 }}>
+            <AccordionItem key={provider} value={provider}>
+              <AccordionTrigger>
+                <span className="font-medium capitalize">
                   {provider}
-                  <span style={{ marginLeft: 8, fontSize: 12, color: theme.colors.textSecondary }}>
+                  <span className="ml-2 text-xs text-muted-foreground">
                     ({modelNames.length} models)
                   </span>
                 </span>
-              }
-            >
-              <div style={{ fontSize: 11, color: theme.colors.textSecondary, padding: '4px 12px' }}>
-                Prices in USD per million tokens (MTok)
-              </div>
-              {modelNames.map(model => (
-                <LLMModelRow
-                  key={model}
-                  model={model}
-                  pricing={models[model]}
-                  onChange={(field, value) => updateLLMPricing(provider, model, field, value)}
-                  theme={theme}
-                />
-              ))}
-            </Collapse.Panel>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="px-3 py-1 text-[11px] text-muted-foreground">
+                  Prices in USD per million tokens (MTok)
+                </div>
+                {modelNames.map((model) => (
+                  <LLMModelRow
+                    key={model}
+                    model={model}
+                    pricing={models[model]}
+                    onChange={(field, value) => updateLLMPricing(provider, model, field, value)}
+                    theme={theme}
+                  />
+                ))}
+              </AccordionContent>
+            </AccordionItem>
           );
         })}
-      </Collapse>
+      </Accordion>
     );
   };
 
@@ -293,59 +297,56 @@ const PricingConfigModal: React.FC<Props> = ({ visible, onClose }) => {
     const services = Object.keys(config.api).sort();
 
     return (
-      <Collapse
-        defaultActiveKey={services}
-        style={{ background: 'transparent' }}
-      >
-        {services.map(service => {
+      <Accordion type="multiple" defaultValue={services} className="bg-transparent">
+        {services.map((service) => {
           const operations = config.api[service];
-          const opNames = Object.keys(operations).filter(k => !k.startsWith('_')).sort();
+          const opNames = Object.keys(operations).filter((k) => !k.startsWith('_')).sort();
           const description = (operations as Record<string, string | number>)._description as string | undefined;
           const source = (operations as Record<string, string | number>)._source as string | undefined;
 
           return (
-            <Collapse.Panel
-              key={service}
-              header={
-                <span style={{ textTransform: 'capitalize', fontWeight: 500 }}>
+            <AccordionItem key={service} value={service}>
+              <AccordionTrigger>
+                <span className="font-medium capitalize">
                   {service}
-                  <span style={{ marginLeft: 8, fontSize: 12, color: theme.colors.textSecondary }}>
+                  <span className="ml-2 text-xs text-muted-foreground">
                     ({opNames.length} operations)
                   </span>
                 </span>
-              }
-            >
-              {description && (
-                <div style={{ fontSize: 12, color: theme.colors.textSecondary, padding: '4px 12px 8px' }}>
-                  {description}
-                  {source && (
-                    <a
-                      href={source}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{ marginLeft: 8, color: theme.dracula.cyan }}
-                    >
-                      Source
-                    </a>
-                  )}
+              </AccordionTrigger>
+              <AccordionContent>
+                {description && (
+                  <div className="px-3 py-1 pb-2 text-xs text-muted-foreground">
+                    {description}
+                    {source && (
+                      <a
+                        href={source}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ml-2 text-dracula-cyan"
+                      >
+                        Source
+                      </a>
+                    )}
+                  </div>
+                )}
+                <div className="px-3 py-1 text-[11px] text-muted-foreground">
+                  Prices in USD per resource/request
                 </div>
-              )}
-              <div style={{ fontSize: 11, color: theme.colors.textSecondary, padding: '0 12px 4px' }}>
-                Prices in USD per resource/request
-              </div>
-              {opNames.map(operation => (
-                <APIPricingRow
-                  key={operation}
-                  operation={operation}
-                  price={(operations as Record<string, number>)[operation]}
-                  onChange={(value) => updateAPIPricing(service, operation, value)}
-                  theme={theme}
-                />
-              ))}
-            </Collapse.Panel>
+                {opNames.map((operation) => (
+                  <APIPricingRow
+                    key={operation}
+                    operation={operation}
+                    price={(operations as Record<string, number>)[operation]}
+                    onChange={(value) => updateAPIPricing(service, operation, value)}
+                    theme={theme}
+                  />
+                ))}
+              </AccordionContent>
+            </AccordionItem>
           );
         })}
-      </Collapse>
+      </Accordion>
     );
   };
 
@@ -412,21 +413,14 @@ const PricingConfigModal: React.FC<Props> = ({ visible, onClose }) => {
             </div>
 
             {/* Tabs */}
-            <Tabs
-              defaultActiveKey="llm"
-              items={[
-                {
-                  key: 'llm',
-                  label: 'LLM Pricing',
-                  children: renderLLMTab(),
-                },
-                {
-                  key: 'api',
-                  label: 'API Pricing',
-                  children: renderAPITab(),
-                },
-              ]}
-            />
+            <Tabs defaultValue="llm">
+              <TabsList>
+                <TabsTrigger value="llm">LLM Pricing</TabsTrigger>
+                <TabsTrigger value="api">API Pricing</TabsTrigger>
+              </TabsList>
+              <TabsContent value="llm">{renderLLMTab()}</TabsContent>
+              <TabsContent value="api">{renderAPITab()}</TabsContent>
+            </Tabs>
           </>
         ) : (
           <div style={{ textAlign: 'center', padding: 40, color: theme.colors.textSecondary }}>

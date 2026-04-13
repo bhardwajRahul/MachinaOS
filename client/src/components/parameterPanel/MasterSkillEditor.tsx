@@ -11,9 +11,26 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Input, Select, Checkbox, Button, List, Badge, Empty, Tooltip, Popconfirm } from 'antd';
+import { Input, Select, Checkbox, Button, List, Badge, Empty } from 'antd';
 import { Loader2, Info } from 'lucide-react';
 import { Alert as DSAlert, AlertDescription } from '@/components/ui/alert';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { SearchOutlined, ReloadOutlined, FolderOutlined, PlusOutlined, DeleteOutlined, SaveOutlined, CloseOutlined } from '@ant-design/icons';
 import { useAppTheme } from '../../hooks/useAppTheme';
@@ -589,19 +606,24 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
           </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.xs }}>
             <Badge count={enabledCount} style={{ backgroundColor: theme.dracula.purple }} showZero />
-            <Tooltip title="Create new skill">
-              <Button
-                size="small"
-                icon={<PlusOutlined />}
-                onClick={handleCreateSkill}
-                disabled={isCreatingNew}
-                style={{
-                  backgroundColor: `${theme.dracula.green}20`,
-                  borderColor: theme.dracula.green,
-                  color: theme.dracula.green,
-                }}
-              />
-            </Tooltip>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="small"
+                    icon={<PlusOutlined />}
+                    onClick={handleCreateSkill}
+                    disabled={isCreatingNew}
+                    style={{
+                      backgroundColor: `${theme.dracula.green}20`,
+                      borderColor: theme.dracula.green,
+                      color: theme.dracula.green,
+                    }}
+                  />
+                </TooltipTrigger>
+                <TooltipContent>Create new skill</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </div>
 
@@ -705,15 +727,22 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
                         {skill.displayName}
                       </span>
                       {isCustomized && (
-                        <Tooltip title="Customized">
-                          <div style={{
-                            width: 8,
-                            height: 8,
-                            borderRadius: '50%',
-                            backgroundColor: theme.dracula.orange,
-                            flexShrink: 0
-                          }} />
-                        </Tooltip>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div
+                                style={{
+                                  width: 8,
+                                  height: 8,
+                                  borderRadius: '50%',
+                                  backgroundColor: theme.dracula.orange,
+                                  flexShrink: 0,
+                                }}
+                              />
+                            </TooltipTrigger>
+                            <TooltipContent>Customized</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       )}
                       {skill.isUserSkill && (
                         <Badge
@@ -974,25 +1003,39 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
                       Save
                     </Button>
                   )}
-                  <Popconfirm
-                    title="Delete this skill?"
-                    onConfirm={() => handleDeleteSkill(selectedSkillName!)}
-                    okText="Delete"
-                    cancelText="Cancel"
-                    okButtonProps={{ danger: true }}
-                  >
-                    <Button
-                      icon={<DeleteOutlined />}
-                      size="small"
-                      danger
-                      style={{
-                        backgroundColor: `${theme.dracula.red}15`,
-                        borderColor: `${theme.dracula.red}40`,
-                      }}
-                    >
-                      Delete
-                    </Button>
-                  </Popconfirm>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        icon={<DeleteOutlined />}
+                        size="small"
+                        danger
+                        style={{
+                          backgroundColor: `${theme.dracula.red}15`,
+                          borderColor: `${theme.dracula.red}40`,
+                        }}
+                      >
+                        Delete
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Delete this skill?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This action cannot be undone. The skill and any custom
+                          instructions will be permanently removed.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => handleDeleteSkill(selectedSkillName!)}
+                          className="bg-destructive text-white hover:bg-destructive/90"
+                        >
+                          Delete
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </>
               )}
 
