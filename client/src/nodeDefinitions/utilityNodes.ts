@@ -227,11 +227,6 @@ export const utilityNodes: Record<string, INodeTypeDescription> = {
     description: 'Trigger workflow when user sends a chat message from the console input',
     defaults: { name: 'Chat Trigger', color: '#10b981' },
     uiHints: { isChatTrigger: true },
-    outputSchema: {
-      message: 'string',
-      timestamp: 'string',
-      session_id: 'string',
-    },
     inputs: [],
     outputs: [{
       name: 'main',

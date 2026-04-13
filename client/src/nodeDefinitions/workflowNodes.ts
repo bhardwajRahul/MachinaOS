@@ -16,10 +16,6 @@ export const workflowNodes: Record<string, INodeTypeDescription> = {
     description: 'Starting point for workflow execution. Provides initial data to connected nodes.',
     defaults: { name: 'Start', color: '#8be9fd' },
     uiHints: { hideInputSection: true, hideOutputSection: true },
-    outputSchema: {
-      timestamp: 'string',
-      data: 'any',
-    },
     inputs: [],
     outputs: [{
       name: 'main',
@@ -52,16 +48,6 @@ export const workflowNodes: Record<string, INodeTypeDescription> = {
     subtitle: 'Child Agent Completed',
     description: 'Triggers when a delegated child agent completes its task (success or error)',
     defaults: { name: 'Task Completed', color: '#bd93f9' },
-    outputSchema: {
-      task_id: 'string',
-      status: 'string',          // 'completed' | 'error'
-      agent_name: 'string',
-      agent_node_id: 'string',
-      parent_node_id: 'string',
-      result: 'string',          // present when status === 'completed'
-      error: 'string',           // present when status === 'error'
-      workflow_id: 'string',
-    },
     inputs: [],
     outputs: [{
       name: 'main',

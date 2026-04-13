@@ -175,11 +175,11 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
         } else {
           hasExecutionData = false;
 
-          // Schema-driven first: if the node definition declares an
-          // outputSchema, use it directly. The `start` node's runtime
-          // shape is data-driven from the user's initialData JSON, so
-          // it keeps the legacy parsing path for now.
-          const declaredSchema = nodeDef?.outputSchema;
+          // No real run data yet. The start node derives its shape from the
+          // user's initialData JSON (genuinely UI-owned). Every other node
+          // falls through to the legacy sampleSchemas map below as a bridge
+          // until the backend schema endpoint ships. See
+          // docs-internal/schema_source_of_truth_rfc.md.
           if (nodeType === 'start') {
             try {
               const initialData = sourceNode?.data?.initialData || '{}';
@@ -187,8 +187,6 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
             } catch (e) {
               outputSchema = {};
             }
-          } else if (declaredSchema) {
-            outputSchema = declaredSchema;
           } else {
             const sampleSchemas: Record<string, Record<string, any>> = {
               location: { latitude: 'number', longitude: 'number', accuracy: 'number', provider: 'string', altitude: 'number' },

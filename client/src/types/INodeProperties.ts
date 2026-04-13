@@ -232,14 +232,10 @@ export interface INodeTypeDescription {
   };
   /** Per-node UI hints; see INodeUIHints for each flag. */
   uiHints?: INodeUIHints;
-  /**
-   * JSON-Schema-shaped descriptor of this node's runtime output. Used by
-   * InputSection to populate the draggable variable list for downstream
-   * nodes; if absent, falls back to the legacy `sampleSchemas` map.
-   * Use plain primitive type names ('string' | 'number' | 'boolean' |
-   * 'array' | 'object' | 'any') for leaves, or nested objects.
-   */
-  outputSchema?: Record<string, any>;
+  // NOTE: runtime output shape is no longer declared on the frontend. It is
+  // served lazy by the backend at GET /api/schemas/nodes/{nodeType}.json and
+  // consumed by InputSection via useNodeOutputSchemaQuery. See
+  // docs-internal/schema_source_of_truth_rfc.md.
 }
 
 // Node type interface that nodes must implement
