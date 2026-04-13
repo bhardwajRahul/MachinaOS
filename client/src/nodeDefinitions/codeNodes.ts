@@ -12,6 +12,7 @@ export const codeNodes: Record<string, INodeTypeDescription> = {
     description: 'Execute Python code with input data access',
     defaults: { name: 'Python Executor', color: '#3776AB' },
     uiHints: { hasCodeEditor: true },
+    outputSchema: { output: 'any' },
     inputs: [{ name: 'main', displayName: 'Input', type: 'main' as NodeConnectionType, description: 'Input data as input_data variable' }],
     outputs: [{ name: 'main', displayName: 'Output', type: 'main' as NodeConnectionType, description: 'Python execution result' }],
     properties: [
@@ -37,6 +38,7 @@ export const codeNodes: Record<string, INodeTypeDescription> = {
     description: 'Execute JavaScript code with input data access',
     defaults: { name: 'JavaScript Executor', color: '#F7DF1E' },
     uiHints: { hasCodeEditor: true },
+    outputSchema: { output: 'any' },
     inputs: [{ name: 'main', displayName: 'Input', type: 'main' as NodeConnectionType, description: 'Input data as input_data variable' }],
     outputs: [{ name: 'main', displayName: 'Output', type: 'main' as NodeConnectionType, description: 'JavaScript execution result' }],
     properties: [
@@ -62,6 +64,7 @@ export const codeNodes: Record<string, INodeTypeDescription> = {
     description: 'Execute TypeScript code with input data access and type safety',
     defaults: { name: 'TypeScript Executor', color: '#3178C6' },
     uiHints: { hasCodeEditor: true },
+    outputSchema: { output: 'any' },
     inputs: [{ name: 'main', displayName: 'Input', type: 'main' as NodeConnectionType, description: 'Input data as input_data variable' }],
     outputs: [{ name: 'main', displayName: 'Output', type: 'main' as NodeConnectionType, description: 'TypeScript execution result' }],
     properties: [

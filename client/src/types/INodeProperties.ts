@@ -232,6 +232,14 @@ export interface INodeTypeDescription {
   };
   /** Per-node UI hints; see INodeUIHints for each flag. */
   uiHints?: INodeUIHints;
+  /**
+   * JSON-Schema-shaped descriptor of this node's runtime output. Used by
+   * InputSection to populate the draggable variable list for downstream
+   * nodes; if absent, falls back to the legacy `sampleSchemas` map.
+   * Use plain primitive type names ('string' | 'number' | 'boolean' |
+   * 'array' | 'object' | 'any') for leaves, or nested objects.
+   */
+  outputSchema?: Record<string, any>;
 }
 
 // Node type interface that nodes must implement
