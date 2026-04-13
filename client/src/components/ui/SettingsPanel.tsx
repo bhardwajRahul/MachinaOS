@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Switch, InputNumber, Slider } from 'antd';
+import { InputNumber, Slider } from 'antd';
 import { toast } from 'sonner';
 import { HelpCircle } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import Modal from './Modal';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { useWebSocket } from '../../contexts/WebSocketContext';
@@ -335,9 +336,9 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 <div style={descriptionStyle}>Show the sidebar panel when the application starts</div>
               </div>
               <Switch
-                size="small"
+                
                 checked={settings.sidebarDefaultOpen}
-                onChange={(checked) => handleChange('sidebarDefaultOpen', checked)}
+                onCheckedChange={(checked) => handleChange('sidebarDefaultOpen', checked)}
                 disabled={isSaving}
               />
             </div>
@@ -348,9 +349,9 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 <div style={descriptionStyle}>Show the component palette when the application starts</div>
               </div>
               <Switch
-                size="small"
+                
                 checked={settings.componentPaletteDefaultOpen}
-                onChange={(checked) => handleChange('componentPaletteDefaultOpen', checked)}
+                onCheckedChange={(checked) => handleChange('componentPaletteDefaultOpen', checked)}
                 disabled={isSaving}
               />
             </div>
@@ -361,9 +362,9 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 <div style={descriptionStyle}>Show the console/chat panel at the bottom when the application starts</div>
               </div>
               <Switch
-                size="small"
+                
                 checked={settings.consolePanelDefaultOpen}
-                onChange={(checked) => handleChange('consolePanelDefaultOpen', checked)}
+                onCheckedChange={(checked) => handleChange('consolePanelDefaultOpen', checked)}
                 disabled={isSaving}
               />
             </div>
@@ -382,9 +383,9 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 <div style={descriptionStyle}>Automatically save the workflow at regular intervals</div>
               </div>
               <Switch
-                size="small"
+                
                 checked={settings.autoSave}
-                onChange={(checked) => handleChange('autoSave', checked)}
+                onCheckedChange={(checked) => handleChange('autoSave', checked)}
                 disabled={isSaving}
               />
             </div>
@@ -396,7 +397,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   <div style={descriptionStyle}>How often to auto-save (10-300 seconds)</div>
                 </div>
                 <InputNumber
-                  size="small"
+                  
                   min={10}
                   max={300}
                   step={5}
@@ -423,7 +424,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 <div style={descriptionStyle}>Number of message pairs to keep in short-term memory (1-100)</div>
               </div>
               <InputNumber
-                size="small"
+                
                 min={1}
                 max={100}
                 step={1}
@@ -492,7 +493,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 <div style={descriptionStyle}>Maximum number of running processes per workflow (1-50)</div>
               </div>
               <InputNumber
-                size="small"
+                
                 min={1}
                 max={50}
                 step={1}
