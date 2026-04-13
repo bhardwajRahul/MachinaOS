@@ -293,6 +293,438 @@ class FsSearchOutput(_OutputBase):
 
 
 # ---------------------------------------------------------------------------
+# Scheduler
+# ---------------------------------------------------------------------------
+
+
+class CronSchedulerOutput(_OutputBase):
+    timestamp: Optional[str] = None
+    iteration: Optional[int] = None
+    start_mode: Optional[str] = None
+    frequency: Optional[str] = None
+    timezone: Optional[str] = None
+    schedule: Optional[str] = None
+    scheduled_time: Optional[str] = None
+    triggered_at: Optional[str] = None
+    waited_seconds: Optional[float] = None
+    message: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Google Workspace — remaining
+# ---------------------------------------------------------------------------
+
+
+class DriveOutput(_OutputBase):
+    operation: Optional[str] = None
+    file_id: Optional[str] = None
+    name: Optional[str] = None
+    mime_type: Optional[str] = None
+    web_view_link: Optional[str] = None
+    web_content_link: Optional[str] = None
+    size: Optional[int] = None
+    content: Optional[str] = None
+    files: Optional[list] = None
+    count: Optional[int] = None
+    next_page_token: Optional[str] = None
+    permission_id: Optional[str] = None
+    role: Optional[str] = None
+    email: Optional[str] = None
+
+
+class SheetsOutput(_OutputBase):
+    operation: Optional[str] = None
+    values: Optional[list] = None
+    range: Optional[str] = None
+    rows: Optional[int] = None
+    columns: Optional[int] = None
+    major_dimension: Optional[str] = None
+    updated_range: Optional[str] = None
+    updated_rows: Optional[int] = None
+    updated_columns: Optional[int] = None
+    updated_cells: Optional[int] = None
+    table_range: Optional[str] = None
+
+
+class TasksOutput(_OutputBase):
+    operation: Optional[str] = None
+    task_id: Optional[str] = None
+    title: Optional[str] = None
+    notes: Optional[str] = None
+    due: Optional[str] = None
+    status: Optional[str] = None
+    completed: Optional[str] = None
+    tasks: Optional[list] = None
+    count: Optional[int] = None
+    deleted: Optional[bool] = None
+
+
+class ContactsOutput(_OutputBase):
+    operation: Optional[str] = None
+    resource_name: Optional[str] = None
+    display_name: Optional[str] = None
+    given_name: Optional[str] = None
+    family_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    company: Optional[str] = None
+    job_title: Optional[str] = None
+    contacts: Optional[list] = None
+    count: Optional[int] = None
+    total_people: Optional[int] = None
+    next_page_token: Optional[str] = None
+    deleted: Optional[bool] = None
+
+
+# ---------------------------------------------------------------------------
+# Messaging: Telegram, WhatsApp DB, Social
+# ---------------------------------------------------------------------------
+
+
+class TelegramReceiveOutput(_OutputBase):
+    message_id: Optional[int] = None
+    chat_id: Optional[int] = None
+    chat_type: Optional[str] = None
+    chat_title: Optional[str] = None
+    from_id: Optional[int] = None
+    from_username: Optional[str] = None
+    from_first_name: Optional[str] = None
+    from_last_name: Optional[str] = None
+    is_bot: Optional[bool] = None
+    text: Optional[str] = None
+    content_type: Optional[str] = None
+    date: Optional[str] = None
+    reply_to_message_id: Optional[int] = None
+    photo: Optional[dict] = None
+    document: Optional[dict] = None
+    location: Optional[dict] = None
+    contact: Optional[dict] = None
+
+
+class WhatsAppDbOutput(_OutputBase):
+    """Composite — different operations surface different subsets of these
+    fields. We keep them all optional so the variable panel shows the union."""
+
+    operation: Optional[str] = None
+    messages: Optional[list] = None
+    total: Optional[int] = None
+    has_more: Optional[bool] = None
+    count: Optional[int] = None
+    chat_type: Optional[str] = None
+    groups: Optional[list] = None
+    contacts: Optional[list] = None
+    participants: Optional[list] = None
+    jid: Optional[str] = None
+    phone: Optional[str] = None
+    name: Optional[str] = None
+    push_name: Optional[str] = None
+    business_name: Optional[str] = None
+    is_business: Optional[bool] = None
+    is_contact: Optional[bool] = None
+    profile_pic: Optional[str] = None
+    channels: Optional[list] = None
+    channel_jid: Optional[str] = None
+    timestamp: Optional[str] = None
+    muted: Optional[bool] = None
+    server_ids: Optional[str] = None
+    status: Optional[str] = None
+
+
+class SocialReceiveOutput(_OutputBase):
+    """socialReceive has four output handles (message / media / contact /
+    metadata) plus top-level fields for backwards compatibility. The
+    variable panel dispatches per-handle via edge.sourceHandle, reading
+    the nested object at the matching key."""
+
+    message: Optional[str] = None
+    media: Optional[dict] = None
+    contact: Optional[dict] = None
+    metadata: Optional[dict] = None
+    # backwards-compat top-level fields:
+    message_id: Optional[str] = None
+    sender: Optional[str] = None
+    sender_phone: Optional[str] = None
+    sender_name: Optional[str] = None
+    chat_id: Optional[str] = None
+    channel: Optional[str] = None
+    text: Optional[str] = None
+    timestamp: Optional[str] = None
+    is_group: Optional[bool] = None
+    is_from_me: Optional[bool] = None
+
+
+class SocialSendOutput(_OutputBase):
+    success: Optional[bool] = None
+    message_id: Optional[str] = None
+    channel: Optional[str] = None
+    recipient: Optional[str] = None
+    message_type: Optional[str] = None
+    timestamp: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Twitter / X
+# ---------------------------------------------------------------------------
+
+
+class TwitterSendOutput(_OutputBase):
+    tweet_id: Optional[str] = None
+    text: Optional[str] = None
+    author_id: Optional[str] = None
+    created_at: Optional[str] = None
+    action: Optional[str] = None
+
+
+class TwitterSearchOutput(_OutputBase):
+    tweets: Optional[list] = None
+    count: Optional[int] = None
+    query: Optional[str] = None
+
+
+class TwitterUserOutput(_OutputBase):
+    id: Optional[str] = None
+    username: Optional[str] = None
+    name: Optional[str] = None
+    profile_image_url: Optional[str] = None
+    verified: Optional[bool] = None
+
+
+# ---------------------------------------------------------------------------
+# Document processing
+# ---------------------------------------------------------------------------
+
+
+class HttpScraperOutput(_OutputBase):
+    items: Optional[list] = None
+    item_count: Optional[int] = None
+    errors: Optional[list] = None
+
+
+class FileDownloaderOutput(_OutputBase):
+    downloaded: Optional[int] = None
+    skipped: Optional[int] = None
+    failed: Optional[int] = None
+    files: Optional[list] = None
+    output_dir: Optional[str] = None
+
+
+class DocumentParserOutput(_OutputBase):
+    documents: Optional[list] = None
+    parsed_count: Optional[int] = None
+    failed: Optional[list] = None
+
+
+class TextChunkerOutput(_OutputBase):
+    chunks: Optional[list] = None
+    chunk_count: Optional[int] = None
+
+
+class EmbeddingGeneratorOutput(_OutputBase):
+    embeddings: Optional[list] = None
+    embedding_count: Optional[int] = None
+    dimensions: Optional[int] = None
+    chunks: Optional[list] = None
+
+
+class VectorStoreOutput(_OutputBase):
+    stored_count: Optional[int] = None
+    matches: Optional[list] = None
+    collection_name: Optional[str] = None
+    backend: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Web scrapers / browser
+# ---------------------------------------------------------------------------
+
+
+class ApifyOutput(_OutputBase):
+    run_id: Optional[str] = None
+    actor_id: Optional[str] = None
+    status: Optional[str] = None
+    dataset_id: Optional[str] = None
+    items: Optional[list] = None
+    item_count: Optional[int] = None
+    compute_units: Optional[float] = None
+    started_at: Optional[str] = None
+    finished_at: Optional[str] = None
+
+
+class BrowserOutput(_OutputBase):
+    operation: Optional[str] = None
+    data: Optional[Any] = None
+    session: Optional[str] = None
+
+
+class CrawleeOutput(_OutputBase):
+    pages: Optional[list] = None
+    page_count: Optional[int] = None
+    crawler_type: Optional[str] = None
+    mode: Optional[str] = None
+    proxied: Optional[bool] = None
+
+
+# ---------------------------------------------------------------------------
+# Proxy nodes
+# ---------------------------------------------------------------------------
+
+
+class ProxyRequestOutput(_OutputBase):
+    status: Optional[int] = None
+    data: Optional[Any] = None
+    headers: Optional[dict] = None
+    url: Optional[str] = None
+    method: Optional[str] = None
+    proxy_provider: Optional[str] = None
+    latency_ms: Optional[float] = None
+    bytes_transferred: Optional[int] = None
+    attempt: Optional[int] = None
+
+
+class ProxyStatusOutput(_OutputBase):
+    enabled: Optional[bool] = None
+    providers: Optional[list] = None
+    stats: Optional[dict] = None
+
+
+class ProxyConfigOutput(_OutputBase):
+    operation: Optional[str] = None
+    success: Optional[bool] = None
+    data: Optional[Any] = None
+
+
+# ---------------------------------------------------------------------------
+# Email (Himalaya)
+# ---------------------------------------------------------------------------
+
+
+class EmailSendOutput(_OutputBase):
+    from_: Optional[str] = Field(None, alias="from")
+    to: Optional[str] = None
+    subject: Optional[str] = None
+
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+
+class EmailReadOutput(_OutputBase):
+    operation: Optional[str] = None
+    folder: Optional[str] = None
+    data: Optional[Any] = None
+
+
+class EmailReceiveOutput(_OutputBase):
+    message_id: Optional[str] = None
+    from_: Optional[str] = Field(None, alias="from")
+    to: Optional[str] = None
+    subject: Optional[str] = None
+    date: Optional[str] = None
+    body: Optional[str] = None
+    folder: Optional[str] = None
+
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+
+# ---------------------------------------------------------------------------
+# Android services (remaining — monitoring / apps / automation / sensors / media)
+# ---------------------------------------------------------------------------
+
+
+class BatteryMonitorOutput(_OutputBase):
+    battery_level: Optional[float] = None
+    is_charging: Optional[bool] = None
+    temperature_celsius: Optional[float] = None
+    health: Optional[str] = None
+    voltage: Optional[float] = None
+
+
+class SystemInfoOutput(_OutputBase):
+    device_model: Optional[str] = None
+    android_version: Optional[str] = None
+    api_level: Optional[int] = None
+    manufacturer: Optional[str] = None
+    total_memory: Optional[int] = None
+    available_memory: Optional[int] = None
+
+
+class NetworkMonitorOutput(_OutputBase):
+    connected: Optional[bool] = None
+    type: Optional[str] = None
+    wifi_ssid: Optional[str] = None
+    ip_address: Optional[str] = None
+
+
+class WifiAutomationOutput(_OutputBase):
+    wifi_enabled: Optional[bool] = None
+    ssid: Optional[str] = None
+    ip_address: Optional[str] = None
+    signal_strength: Optional[float] = None
+
+
+class BluetoothAutomationOutput(_OutputBase):
+    bluetooth_enabled: Optional[bool] = None
+    paired_devices: Optional[list] = None
+    connected_devices: Optional[list] = None
+
+
+class AudioAutomationOutput(_OutputBase):
+    music_volume: Optional[float] = None
+    ring_volume: Optional[float] = None
+    muted: Optional[bool] = None
+
+
+class AppLauncherOutput(_OutputBase):
+    package_name: Optional[str] = None
+    launched: Optional[bool] = None
+    app_name: Optional[str] = None
+
+
+class AppListOutput(_OutputBase):
+    apps: Optional[list] = None
+    count: Optional[int] = None
+
+
+class DeviceStateAutomationOutput(_OutputBase):
+    airplane_mode: Optional[bool] = None
+    screen_on: Optional[bool] = None
+    brightness: Optional[float] = None
+
+
+class ScreenControlAutomationOutput(_OutputBase):
+    brightness: Optional[float] = None
+    auto_brightness: Optional[bool] = None
+    screen_timeout: Optional[int] = None
+
+
+class AirplaneModeControlOutput(_OutputBase):
+    airplane_mode_enabled: Optional[bool] = None
+
+
+class MotionDetectionOutput(_OutputBase):
+    accelerometer: Optional[dict] = None
+    gyroscope: Optional[dict] = None
+    motion_detected: Optional[bool] = None
+
+
+class EnvironmentalSensorsOutput(_OutputBase):
+    temperature: Optional[float] = None
+    humidity: Optional[float] = None
+    pressure: Optional[float] = None
+    light_level: Optional[float] = None
+
+
+class CameraControlOutput(_OutputBase):
+    cameras: Optional[list] = None
+    photo_path: Optional[str] = None
+    success: Optional[bool] = None
+
+
+class MediaControlOutput(_OutputBase):
+    volume: Optional[float] = None
+    is_playing: Optional[bool] = None
+    current_track: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
 # Map node type (matches `nodeDefinition.name` on the frontend) -> Pydantic
@@ -345,6 +777,7 @@ NODE_OUTPUT_SCHEMAS: dict[str, type[BaseModel]] = {
     "chatTrigger": ChatTriggerOutput,
     "taskTrigger": TaskTriggerOutput,
     "webhookTrigger": WebhookTriggerOutput,
+    "cronScheduler": CronSchedulerOutput,
     # AI
     **{t: AIAgentOutput for t in _AGENT_TYPES},
     **{t: AIAgentOutput for t in _CHAT_MODEL_TYPES},
@@ -356,10 +789,26 @@ NODE_OUTPUT_SCHEMAS: dict[str, type[BaseModel]] = {
     # whatsapp
     "whatsappReceive": WhatsAppReceiveOutput,
     "whatsappSend": WhatsAppSendOutput,
+    "whatsappDb": WhatsAppDbOutput,
+    # telegram / twitter
+    "telegramReceive": TelegramReceiveOutput,
+    "telegram": TelegramReceiveOutput,  # legacy alias
+    "twitterSend": TwitterSendOutput,
+    "twitter": TwitterSendOutput,  # legacy alias
+    "twitterSearch": TwitterSearchOutput,
+    "twitterUser": TwitterUserOutput,
+    # social
+    "socialReceive": SocialReceiveOutput,
+    "social": SocialReceiveOutput,  # legacy alias
+    "socialSend": SocialSendOutput,
     # google workspace
     "gmail": GmailOutput,
     "gmailReceive": GmailReceiveOutput,
     "calendar": CalendarOutput,
+    "drive": DriveOutput,
+    "sheets": SheetsOutput,
+    "tasks": TasksOutput,
+    "contacts": ContactsOutput,
     # search
     **{t: SearchOutput for t in _SEARCH_TYPES},
     # location
@@ -371,6 +820,46 @@ NODE_OUTPUT_SCHEMAS: dict[str, type[BaseModel]] = {
     "fileModify": FileModifyOutput,
     "shell": ShellOutput,
     "fsSearch": FsSearchOutput,
+    # document processing
+    "httpScraper": HttpScraperOutput,
+    "fileDownloader": FileDownloaderOutput,
+    "documentParser": DocumentParserOutput,
+    "textChunker": TextChunkerOutput,
+    "embeddingGenerator": EmbeddingGeneratorOutput,
+    "vectorStore": VectorStoreOutput,
+    # web scrapers / browser
+    "apifyActor": ApifyOutput,
+    "apify": ApifyOutput,  # legacy alias
+    "browser": BrowserOutput,
+    "crawleeScraper": CrawleeOutput,
+    "crawlee": CrawleeOutput,  # legacy alias
+    # proxy
+    "proxyRequest": ProxyRequestOutput,
+    "proxyStatus": ProxyStatusOutput,
+    "proxyConfig": ProxyConfigOutput,
+    # email
+    "emailSend": EmailSendOutput,
+    "emailRead": EmailReadOutput,
+    "emailReceive": EmailReceiveOutput,
+    # android (monitoring)
+    "batteryMonitor": BatteryMonitorOutput,
+    "systemInfo": SystemInfoOutput,
+    "networkMonitor": NetworkMonitorOutput,
+    # android (apps)
+    "appLauncher": AppLauncherOutput,
+    "appList": AppListOutput,
+    # android (automation)
+    "wifiAutomation": WifiAutomationOutput,
+    "bluetoothAutomation": BluetoothAutomationOutput,
+    "audioAutomation": AudioAutomationOutput,
+    "deviceStateAutomation": DeviceStateAutomationOutput,
+    "screenControlAutomation": ScreenControlAutomationOutput,
+    "airplaneModeControl": AirplaneModeControlOutput,
+    # android (sensors / media)
+    "motionDetection": MotionDetectionOutput,
+    "environmentalSensors": EnvironmentalSensorsOutput,
+    "cameraControl": CameraControlOutput,
+    "mediaControl": MediaControlOutput,
 }
 
 
