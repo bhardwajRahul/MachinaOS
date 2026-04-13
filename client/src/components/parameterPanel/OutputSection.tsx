@@ -29,17 +29,20 @@ const OutputSection: React.FC<OutputSectionProps> = ({
   const combinedResults = React.useMemo(() => {
     const results = [...executionResults];
 
-    // Check if there's output from workflow execution in nodeStatuses
+    // Check if there's output from workflow execution in nodeStatuses.
+    // WebSocket node_output messages store data in the `output` field,
+    // while node_status messages use `data`. Check both so the formatted
+    // response renderer (getMainResponse → ReactMarkdown) receives the
+    // actual AI response object instead of falling through to raw JSON.
     const nodeStatus = nodeStatuses[selectedNode.id];
-    if (nodeStatus && nodeStatus.data && (nodeStatus.status === 'success' || nodeStatus.status === 'error')) {
-      // Check if this output is already in executionResults
+    const statusData = nodeStatus?.data || nodeStatus?.output;
+    if (nodeStatus && statusData && (nodeStatus.status === 'success' || nodeStatus.status === 'error')) {
       const alreadyExists = results.some(r =>
         r.nodeId === selectedNode.id &&
-        JSON.stringify(r.outputs) === JSON.stringify(nodeStatus.data)
+        JSON.stringify(r.outputs) === JSON.stringify(statusData)
       );
 
       if (!alreadyExists) {
-        // Create ExecutionResult from nodeStatus (from workflow execution)
         const wsResult: ExecutionResult = {
           success: nodeStatus.status === 'success',
           nodeId: selectedNode.id,
@@ -47,11 +50,10 @@ const OutputSection: React.FC<OutputSectionProps> = ({
           nodeName: selectedNode.type || 'Node',
           timestamp: new Date().toISOString(),
           executionTime: 0,
-          outputs: nodeStatus.data,
-          nodeData: [[{ json: nodeStatus.data }]],
-          error: nodeStatus.status === 'error' ? nodeStatus.data?.error : undefined
+          outputs: statusData,
+          nodeData: [[{ json: statusData }]],
+          error: nodeStatus.status === 'error' ? statusData?.error : undefined
         };
-        // Add WebSocket result to the beginning (most recent)
         results.unshift(wsResult);
       }
     }

@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
+import Prism from 'prismjs';
+import 'prismjs/components/prism-json';
 import { ExecutionResult } from '../../services/executionService';
 import { copyToClipboard, formatTimestamp } from '../../utils/formatters';
 import { useAppTheme } from '../../hooks/useAppTheme';
+import { styles as themeStyles, getPrismTokenCSS } from '../../styles/theme';
 
 interface OutputDisplayPanelProps {
   results: ExecutionResult[];
@@ -428,26 +431,30 @@ const OutputDisplayPanel: React.FC<OutputDisplayPanelProps> = ({ results, onClea
                   </button>
                 </div>
 
-                {/* Expanded JSON */}
+                {/* Expanded JSON with prismjs highlighting (theme from styles/theme.ts) */}
                 {isExpanded && (
-                  <pre style={{
-                    margin: 0,
+                  <div style={{
+                    ...themeStyles.codeBlock.container,
                     marginTop: theme.spacing.sm,
                     padding: theme.spacing.md,
-                    fontSize: theme.fontSize.xs,
-                    fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
-                    lineHeight: 1.5,
-                    overflow: 'auto',
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-word',
                     maxHeight: '300px',
-                    backgroundColor: theme.colors.backgroundElevated,
+                    backgroundColor: theme.colors.backgroundAlt,
                     color: theme.dracula.foreground,
                     borderRadius: theme.borderRadius.sm,
                     border: `1px solid ${theme.colors.border}`,
                   }}>
-                    {JSON.stringify(executionData, null, 2)}
-                  </pre>
+                    <style>{getPrismTokenCSS(theme)}</style>
+                    <code
+                      className="prism-code"
+                      dangerouslySetInnerHTML={{
+                        __html: Prism.highlight(
+                          JSON.stringify(executionData, null, 2),
+                          Prism.languages.json,
+                          'json',
+                        ),
+                      }}
+                    />
+                  </div>
                 )}
               </div>
             </div>
