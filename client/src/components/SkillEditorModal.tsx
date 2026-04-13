@@ -1,30 +1,55 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import Modal from './ui/Modal';
 import CodeEditor from './ui/CodeEditor';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { useWebSocket } from '../contexts/WebSocketContext';
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 
-interface UserSkill {
-  id?: number;
-  name: string;
-  display_name: string;
-  description: string;
-  instructions: string;
-  allowed_tools: string[];
-  category: string;
-  icon: string;
-  color: string;
-  is_active: boolean;
-}
+// ---------------------------------------------------------------------------
+// Schema (one source of truth for type, defaults, and validation).
+// ---------------------------------------------------------------------------
 
-interface SkillEditorModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  skill?: UserSkill | null;
-  onSave?: (skill: UserSkill) => void;
-}
+const userSkillSchema = z.object({
+  id: z.number().optional(),
+  name: z
+    .string()
+    .min(1, 'Internal name is required')
+    .regex(/^[a-z0-9-]+$/, 'Use lowercase letters, digits, and hyphens only'),
+  display_name: z.string().min(1, 'Display name is required'),
+  description: z.string().min(1, 'Description is required'),
+  instructions: z.string().min(1, 'Instructions are required'),
+  allowed_tools: z.array(z.string()).default([]),
+  category: z.string().default('custom'),
+  icon: z.string().default('star'),
+  color: z.string().default('#6366F1'),
+  is_active: z.boolean().default(true),
+});
 
-const DEFAULT_SKILL: UserSkill = {
+export type UserSkill = z.infer<typeof userSkillSchema>;
+
+const DEFAULT_SKILL: UserSkill = userSkillSchema.parse({
   name: '',
   display_name: '',
   description: '',
@@ -42,23 +67,7 @@ Explain when and how the Zeenie should use this skill.
 **User**: "Example request"
 **Action**: Describe what the skill does in response
 `,
-  allowed_tools: [],
-  category: 'custom',
-  icon: 'star',
-  color: '#6366F1',
-  is_active: true
-};
-
-const ICON_OPTIONS = [
-  { value: 'star', label: 'Star', icon: '...' },
-  { value: 'sparkles', label: 'Sparkles', icon: '...' },
-  { value: 'brain', label: 'Brain', icon: '...' },
-  { value: 'code', label: 'Code', icon: '...' },
-  { value: 'globe', label: 'Globe', icon: '...' },
-  { value: 'chat', label: 'Chat', icon: '...' },
-  { value: 'calendar', label: 'Calendar', icon: '...' },
-  { value: 'settings', label: 'Settings', icon: '...' },
-];
+});
 
 const CATEGORY_OPTIONS = [
   { value: 'custom', label: 'Custom' },
@@ -69,277 +78,290 @@ const CATEGORY_OPTIONS = [
   { value: 'utility', label: 'Utility' },
 ];
 
-const COLOR_OPTIONS = [
-  '#6366F1', // Indigo
-  '#8B5CF6', // Purple
-  '#EC4899', // Pink
-  '#EF4444', // Red
-  '#F59E0B', // Amber
-  '#10B981', // Emerald
-  '#3B82F6', // Blue
-  '#06B6D4', // Cyan
+const ICON_OPTIONS = [
+  { value: 'star', label: 'Star' },
+  { value: 'sparkles', label: 'Sparkles' },
+  { value: 'brain', label: 'Brain' },
+  { value: 'code', label: 'Code' },
+  { value: 'globe', label: 'Globe' },
+  { value: 'chat', label: 'Chat' },
+  { value: 'calendar', label: 'Calendar' },
+  { value: 'settings', label: 'Settings' },
 ];
+
+const COLOR_OPTIONS = [
+  '#6366F1', '#8B5CF6', '#EC4899', '#EF4444',
+  '#F59E0B', '#10B981', '#3B82F6', '#06B6D4',
+];
+
+interface SkillEditorModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  skill?: UserSkill | null;
+  onSave?: (skill: UserSkill) => void;
+}
 
 const SkillEditorModal: React.FC<SkillEditorModalProps> = ({
   isOpen,
   onClose,
   skill,
-  onSave
+  onSave,
 }) => {
   const theme = useAppTheme();
   const { sendRequest } = useWebSocket();
-  const [formData, setFormData] = useState<UserSkill>(DEFAULT_SKILL);
-  const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'details' | 'instructions'>('details');
+  const [activeTab, setActiveTab] = React.useState<'details' | 'instructions'>('details');
+  const [submitError, setSubmitError] = React.useState<string | null>(null);
 
-  // Reset form when skill changes or modal opens
+  const form = useForm({
+    resolver: zodResolver(userSkillSchema),
+    defaultValues: skill ?? DEFAULT_SKILL,
+    mode: 'onSubmit',
+  });
+
+  // Reset form when modal opens or the edited skill changes.
   useEffect(() => {
-    if (isOpen) {
-      if (skill) {
-        setFormData(skill);
-      } else {
-        setFormData(DEFAULT_SKILL);
-      }
-      setError(null);
-    }
-  }, [isOpen, skill]);
+    if (!isOpen) return;
+    form.reset(skill ?? DEFAULT_SKILL);
+    setSubmitError(null);
+  }, [isOpen, skill, form]);
 
-  const handleInputChange = useCallback((field: keyof UserSkill, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  }, []);
-
-  const handleNameChange = useCallback((value: string) => {
-    // Auto-generate internal name from display name (lowercase, hyphenated)
-    const internalName = value.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-    setFormData(prev => ({
-      ...prev,
-      display_name: value,
-      name: prev.id ? prev.name : internalName // Only auto-generate for new skills
-    }));
-  }, []);
-
-  const validateForm = (): boolean => {
-    if (!formData.name.trim()) {
-      setError('Skill name is required');
-      return false;
+  const handleDisplayNameChange = (value: string) => {
+    form.setValue('display_name', value, { shouldValidate: false, shouldDirty: true });
+    // Auto-derive internal name only for new skills (no id).
+    if (!form.getValues('id')) {
+      const derived = value.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      form.setValue('name', derived, { shouldValidate: false, shouldDirty: true });
     }
-    if (!formData.display_name.trim()) {
-      setError('Display name is required');
-      return false;
-    }
-    if (!formData.description.trim()) {
-      setError('Description is required');
-      return false;
-    }
-    if (!formData.instructions.trim()) {
-      setError('Instructions are required');
-      return false;
-    }
-    return true;
   };
 
-  const handleSave = async () => {
-    if (!validateForm()) return;
-
-    setIsSaving(true);
-    setError(null);
-
+  const onSubmit = async (values: UserSkill) => {
+    setSubmitError(null);
     try {
-      const messageType = skill?.id ? 'update_user_skill' : 'create_user_skill';
-      const response = await sendRequest(messageType, {
-        ...formData,
-        allowed_tools: formData.allowed_tools.join(',')
-      });
-
+      const messageType = values.id ? 'update_user_skill' : 'create_user_skill';
+      const response = await sendRequest<{ success?: boolean; skill?: UserSkill; error?: string }>(
+        messageType,
+        { ...values, allowed_tools: values.allowed_tools.join(',') },
+      );
       if (response?.success) {
-        onSave?.(response.skill);
+        onSave?.(response.skill ?? values);
         onClose();
       } else {
-        setError(response?.error || 'Failed to save skill');
+        setSubmitError(response?.error || 'Failed to save skill');
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to save skill');
-    } finally {
-      setIsSaving(false);
+      setSubmitError(err?.message || 'Failed to save skill');
     }
   };
 
-  const inputStyle: React.CSSProperties = {
-    width: '100%',
-    padding: theme.spacing.sm,
-    backgroundColor: theme.colors.backgroundAlt,
-    border: `1px solid ${theme.colors.border}`,
-    borderRadius: theme.borderRadius.md,
-    color: theme.colors.text,
-    fontSize: theme.fontSize.sm,
-    outline: 'none'
-  };
-
-  const labelStyle: React.CSSProperties = {
-    display: 'block',
-    marginBottom: theme.spacing.xs,
-    fontSize: theme.fontSize.sm,
-    color: theme.colors.textSecondary,
-    fontWeight: theme.fontWeight.medium
-  };
-
-  const tabStyle = (isActive: boolean): React.CSSProperties => ({
-    padding: `${theme.spacing.sm} ${theme.spacing.lg}`,
-    backgroundColor: isActive ? theme.colors.backgroundPanel : 'transparent',
-    border: 'none',
-    borderBottom: isActive ? `2px solid ${theme.dracula.purple}` : '2px solid transparent',
-    color: isActive ? theme.colors.text : theme.colors.textSecondary,
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.medium,
-    cursor: 'pointer',
-    transition: `all ${theme.transitions.fast}`
-  });
+  const isSaving = form.formState.isSubmitting;
+  const isExisting = !!form.watch('id');
+  const tabBaseClass =
+    'px-4 py-2 text-sm font-medium border-b-2 border-transparent transition-colors';
+  const tabActiveClass = 'border-dracula-purple text-foreground';
+  const tabInactiveClass = 'text-muted-foreground hover:text-foreground';
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={skill?.id ? 'Edit Skill' : 'Create Skill'}
+      title={isExisting ? 'Edit Skill' : 'Create Skill'}
       maxWidth="700px"
       maxHeight="85vh"
     >
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-        {/* Tabs */}
-        <div style={{
-          display: 'flex',
-          borderBottom: `1px solid ${theme.colors.border}`,
-          backgroundColor: theme.colors.background
-        }}>
-          <button style={tabStyle(activeTab === 'details')} onClick={() => setActiveTab('details')}>
-            Details
-          </button>
-          <button style={tabStyle(activeTab === 'instructions')} onClick={() => setActiveTab('instructions')}>
-            Instructions
-          </button>
-        </div>
+      <Form {...form}>
+        <form
+          onSubmit={form.handleSubmit(onSubmit)}
+          className="flex h-full flex-col"
+        >
+          {/* Tabs */}
+          <div className="flex border-b border-border bg-background">
+            <button
+              type="button"
+              className={`${tabBaseClass} ${activeTab === 'details' ? tabActiveClass : tabInactiveClass}`}
+              onClick={() => setActiveTab('details')}
+            >
+              Details
+            </button>
+            <button
+              type="button"
+              className={`${tabBaseClass} ${activeTab === 'instructions' ? tabActiveClass : tabInactiveClass}`}
+              onClick={() => setActiveTab('instructions')}
+            >
+              Instructions
+            </button>
+          </div>
 
-        {/* Tab Content */}
-        <div style={{ flex: 1, overflow: 'auto', padding: theme.spacing.lg }}>
-          {activeTab === 'details' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.lg }}>
-              {/* Display Name */}
-              <div>
-                <label style={labelStyle}>Display Name *</label>
-                <input
-                  type="text"
-                  value={formData.display_name}
-                  onChange={(e) => handleNameChange(e.target.value)}
-                  placeholder="My Custom Skill"
-                  style={inputStyle}
+          <div className="flex-1 overflow-auto p-4">
+            {activeTab === 'details' && (
+              <div className="flex flex-col gap-4">
+                <FormField
+                  control={form.control}
+                  name="display_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Display Name *</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          placeholder="My Custom Skill"
+                          onChange={(e) => handleDisplayNameChange(e.target.value)}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-              </div>
 
-              {/* Internal Name (readonly for existing skills) */}
-              <div>
-                <label style={labelStyle}>Internal Name *</label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => handleInputChange('name', e.target.value.toLowerCase().replace(/\s+/g, '-'))}
-                  placeholder="my-custom-skill"
-                  style={{ ...inputStyle, opacity: skill?.id ? 0.7 : 1 }}
-                  readOnly={!!skill?.id}
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Internal Name *</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          placeholder="my-custom-skill"
+                          readOnly={isExisting}
+                          className={isExisting ? 'opacity-70' : undefined}
+                          onChange={(e) =>
+                            field.onChange(e.target.value.toLowerCase().replace(/\s+/g, '-'))
+                          }
+                        />
+                      </FormControl>
+                      <FormDescription>Used internally to identify the skill.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-                <span style={{ fontSize: theme.fontSize.xs, color: theme.colors.textMuted }}>
-                  Used internally to identify the skill
-                </span>
-              </div>
 
-              {/* Description */}
-              <div>
-                <label style={labelStyle}>Description *</label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) => handleInputChange('description', e.target.value)}
-                  placeholder="A short description of what this skill does..."
-                  rows={3}
-                  style={{ ...inputStyle, resize: 'vertical', minHeight: '80px' }}
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Description *</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          {...field}
+                          rows={3}
+                          placeholder="A short description of what this skill does..."
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Shown in the skill registry to help the agent decide when to use it.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-                <span style={{ fontSize: theme.fontSize.xs, color: theme.colors.textMuted }}>
-                  This appears in the skill registry to help the Zeenie decide when to use it
-                </span>
-              </div>
 
-              {/* Category & Color Row */}
-              <div style={{ display: 'flex', gap: theme.spacing.lg }}>
-                <div style={{ flex: 1 }}>
-                  <label style={labelStyle}>Category</label>
-                  <select
-                    value={formData.category}
-                    onChange={(e) => handleInputChange('category', e.target.value)}
-                    style={inputStyle}
-                  >
-                    {CATEGORY_OPTIONS.map(opt => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                  </select>
+                <div className="flex gap-4">
+                  <FormField
+                    control={form.control}
+                    name="category"
+                    render={({ field }) => (
+                      <FormItem className="flex-1">
+                        <FormLabel>Category</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {CATEGORY_OPTIONS.map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="color"
+                    render={({ field }) => (
+                      <FormItem className="flex-1">
+                        <FormLabel>Color</FormLabel>
+                        <div className="flex flex-wrap gap-1">
+                          {COLOR_OPTIONS.map((color) => (
+                            <button
+                              key={color}
+                              type="button"
+                              onClick={() => field.onChange(color)}
+                              className="h-7 w-7 rounded cursor-pointer"
+                              style={{
+                                backgroundColor: color,
+                                border: field.value === color ? '2px solid white' : 'none',
+                                boxShadow: field.value === color ? `0 0 0 2px ${color}` : 'none',
+                              }}
+                            />
+                          ))}
+                        </div>
+                      </FormItem>
+                    )}
+                  />
                 </div>
-                <div style={{ flex: 1 }}>
-                  <label style={labelStyle}>Color</label>
-                  <div style={{ display: 'flex', gap: theme.spacing.xs, flexWrap: 'wrap' }}>
-                    {COLOR_OPTIONS.map(color => (
-                      <button
-                        key={color}
-                        onClick={() => handleInputChange('color', color)}
-                        style={{
-                          width: '28px',
-                          height: '28px',
-                          borderRadius: theme.borderRadius.sm,
-                          backgroundColor: color,
-                          border: formData.color === color ? '2px solid white' : 'none',
-                          cursor: 'pointer',
-                          boxShadow: formData.color === color ? `0 0 0 2px ${color}` : 'none'
-                        }}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </div>
 
-              {/* Icon */}
-              <div>
-                <label style={labelStyle}>Icon</label>
-                <select
-                  value={formData.icon}
-                  onChange={(e) => handleInputChange('icon', e.target.value)}
-                  style={inputStyle}
-                >
-                  {ICON_OPTIONS.map(opt => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Active Toggle */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.sm }}>
-                <input
-                  type="checkbox"
-                  checked={formData.is_active}
-                  onChange={(e) => handleInputChange('is_active', e.target.checked)}
-                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                <FormField
+                  control={form.control}
+                  name="icon"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Icon</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {ICON_OPTIONS.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </FormItem>
+                  )}
                 />
-                <label style={{ ...labelStyle, margin: 0 }}>Skill is active</label>
-              </div>
-            </div>
-          )}
 
-          {activeTab === 'instructions' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.md, height: '100%' }}>
-              <div style={{ fontSize: theme.fontSize.sm, color: theme.colors.textSecondary }}>
-                Write markdown instructions for the Zeenie. Include capabilities, usage guidelines, and examples.
+                <FormField
+                  control={form.control}
+                  name="is_active"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center gap-2 space-y-0">
+                      <FormControl>
+                        <Switch checked={field.value} onCheckedChange={field.onChange} />
+                      </FormControl>
+                      <FormLabel className="!mt-0">Skill is active</FormLabel>
+                    </FormItem>
+                  )}
+                />
               </div>
-              <div style={{ flex: 1, minHeight: '400px' }}>
-                <CodeEditor
-                  value={formData.instructions}
-                  onChange={(value) => handleInputChange('instructions', value)}
-                  language="markdown"
-                  placeholder="# Skill Instructions
+            )}
+
+            {activeTab === 'instructions' && (
+              <div className="flex h-full flex-col gap-3">
+                <div className="text-sm text-muted-foreground">
+                  Write markdown instructions for the agent. Include capabilities, usage
+                  guidelines, and examples.
+                </div>
+                <FormField
+                  control={form.control}
+                  name="instructions"
+                  render={({ field }) => (
+                    <FormItem className="flex-1 min-h-[400px]">
+                      <FormControl>
+                        <CodeEditor
+                          value={field.value}
+                          onChange={field.onChange}
+                          language="markdown"
+                          placeholder={`# Skill Instructions
 
 ## Capabilities
 - ...
@@ -348,68 +370,42 @@ const SkillEditorModal: React.FC<SkillEditorModalProps> = ({
 ...
 
 ## Examples
-..."
+...`}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
               </div>
+            )}
+          </div>
+
+          {submitError && (
+            <div
+              className="border-t border-border bg-dracula-red/15 px-4 py-3 text-sm text-dracula-red"
+            >
+              {submitError}
             </div>
           )}
-        </div>
 
-        {/* Error */}
-        {error && (
-          <div style={{
-            padding: theme.spacing.md,
-            backgroundColor: `${theme.dracula.red}20`,
-            color: theme.dracula.red,
-            fontSize: theme.fontSize.sm,
-            borderTop: `1px solid ${theme.colors.border}`
-          }}>
-            {error}
+          <div
+            className="flex justify-end gap-3 border-t border-border bg-card px-4 py-3"
+            style={{ backgroundColor: theme.colors.backgroundPanel }}
+          >
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={isSaving}
+              className="bg-dracula-purple text-white hover:bg-dracula-purple/90"
+            >
+              {isSaving ? 'Saving...' : isExisting ? 'Update Skill' : 'Create Skill'}
+            </Button>
           </div>
-        )}
-
-        {/* Footer */}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'flex-end',
-          gap: theme.spacing.md,
-          padding: theme.spacing.lg,
-          borderTop: `1px solid ${theme.colors.border}`,
-          backgroundColor: theme.colors.backgroundPanel
-        }}>
-          <button
-            onClick={onClose}
-            style={{
-              padding: `${theme.spacing.sm} ${theme.spacing.lg}`,
-              backgroundColor: 'transparent',
-              border: `1px solid ${theme.colors.border}`,
-              borderRadius: theme.borderRadius.md,
-              color: theme.colors.text,
-              fontSize: theme.fontSize.sm,
-              cursor: 'pointer'
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={isSaving}
-            style={{
-              padding: `${theme.spacing.sm} ${theme.spacing.lg}`,
-              backgroundColor: theme.dracula.purple,
-              border: 'none',
-              borderRadius: theme.borderRadius.md,
-              color: 'white',
-              fontSize: theme.fontSize.sm,
-              fontWeight: theme.fontWeight.medium,
-              cursor: isSaving ? 'not-allowed' : 'pointer',
-              opacity: isSaving ? 0.7 : 1
-            }}
-          >
-            {isSaving ? 'Saving...' : (skill?.id ? 'Update Skill' : 'Create Skill')}
-          </button>
-        </div>
-      </div>
+        </form>
+      </Form>
     </Modal>
   );
 };
