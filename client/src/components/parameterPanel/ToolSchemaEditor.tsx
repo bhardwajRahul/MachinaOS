@@ -1,17 +1,40 @@
 /**
- * ToolSchemaEditor - Schema editor for Android Toolkit node
+ * ToolSchemaEditor - Schema editor for the Android Toolkit node.
  *
- * Shows connected Android service nodes and schema fields for the LLM
+ * Lets the user customise the LLM-visible schema (description + fields)
+ * for each connected Android service node. The form runs on RHF + zod
+ * so per-field validation, dirty tracking, and the dynamic add/remove
+ * row workflow come from the library instead of hand-rolled state.
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Node } from 'reactflow';
+import { useForm, useFieldArray, useFormContext } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { useAppTheme } from '../../hooks/useAppTheme';
-import { useToolSchema, ToolSchemaConfig, SchemaFieldConfig } from '../../hooks/useToolSchema';
+import { useToolSchema, ToolSchemaConfig } from '../../hooks/useToolSchema';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { useAppStore } from '../../store/useAppStore';
 import { ANDROID_SERVICE_NODE_TYPES } from '../../nodeDefinitions/androidServiceNodes';
 import { nodeDefinitions } from '../../nodeDefinitions';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormMessage,
+} from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 
 interface ToolSchemaEditorProps {
   nodeId: string;
@@ -19,29 +42,84 @@ interface ToolSchemaEditorProps {
   toolDescription: string;
 }
 
+// ---------------------------------------------------------------------------
+// Schema (one source of truth for type, defaults, validation).
+// ---------------------------------------------------------------------------
+
 const FIELD_TYPES = ['string', 'number', 'integer', 'boolean', 'object', 'array'] as const;
 
-// Default schema for androidTool
-const DEFAULT_SCHEMA: ToolSchemaConfig = {
+const schemaFieldSchema = z.object({
+  name: z
+    .string()
+    .min(1, 'Required')
+    .regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/, 'Letters / digits / underscore only'),
+  type: z.enum(FIELD_TYPES),
+  description: z.string().default(''),
+  required: z.boolean().default(false),
+});
+type SchemaField = z.infer<typeof schemaFieldSchema>;
+
+const toolSchemaFormSchema = z.object({
+  description: z.string().default(''),
+  fields: z.array(schemaFieldSchema),
+});
+type ToolSchemaFormValues = z.infer<typeof toolSchemaFormSchema>;
+
+// Default schema for androidTool (matches the legacy DEFAULT_SCHEMA).
+const DEFAULT_FORM_VALUES: ToolSchemaFormValues = {
   description: 'Control Android device via connected services',
-  fields: {
-    service_id: {
-      type: 'string',
+  fields: [
+    { name: 'service_id', type: 'string',
       description: 'Service to use (determined by connected Android nodes)',
-      required: true
-    },
-    action: {
-      type: 'string',
+      required: true },
+    { name: 'action', type: 'string',
       description: 'Action to perform (see service list for available actions)',
-      required: true
-    },
-    parameters: {
-      type: 'object',
+      required: true },
+    { name: 'parameters', type: 'object',
       description: 'Action parameters. Examples: {package_name: "com.app"} for app_launcher',
-      required: false
-    }
-  }
+      required: false },
+  ],
 };
+
+function defaultFormForService(service: Node | null): ToolSchemaFormValues {
+  if (!service) return DEFAULT_FORM_VALUES;
+  const serviceName = service.data?.label || service.type || 'service';
+  return {
+    description: `Control ${serviceName} on Android device`,
+    fields: [
+      { name: 'action', type: 'string',
+        description: `Action to perform on ${serviceName}`, required: true },
+      { name: 'parameters', type: 'object',
+        description: `Parameters for the ${serviceName} action`, required: false },
+    ],
+  };
+}
+
+function configToFormValues(cfg: ToolSchemaConfig): ToolSchemaFormValues {
+  return {
+    description: cfg.description ?? '',
+    fields: Object.entries(cfg.fields ?? {}).map(([name, c]) => ({
+      name,
+      type: (FIELD_TYPES as readonly string[]).includes(c.type as string)
+        ? (c.type as SchemaField['type'])
+        : 'string',
+      description: c.description ?? '',
+      required: !!c.required,
+    })),
+  };
+}
+
+function formValuesToConfig(values: ToolSchemaFormValues): ToolSchemaConfig {
+  const fields: ToolSchemaConfig['fields'] = {};
+  for (const f of values.fields) {
+    fields[f.name] = { type: f.type, description: f.description, required: f.required };
+  }
+  return { description: values.description, fields };
+}
+
+// ---------------------------------------------------------------------------
+// Editor
+// ---------------------------------------------------------------------------
 
 const ToolSchemaEditor: React.FC<ToolSchemaEditorProps> = ({ nodeId }) => {
   const theme = useAppTheme();
@@ -49,30 +127,23 @@ const ToolSchemaEditor: React.FC<ToolSchemaEditorProps> = ({ nodeId }) => {
   const { isConnected } = useWebSocket();
   const { currentWorkflow } = useAppStore();
 
-  // Get the current node
   const currentNode = useMemo(() => {
     if (!currentWorkflow?.nodes) return null;
-    return currentWorkflow.nodes.find(n => n.id === nodeId);
+    return currentWorkflow.nodes.find((n) => n.id === nodeId);
   }, [currentWorkflow?.nodes, nodeId]);
 
-  // Schema-driven gate: only render for nodes flagged as Android toolkits.
-  // Legacy name fallback covers the canonical androidTool until the node
-  // definition is annotated with uiHints.isAndroidToolkit.
+  // Schema-driven gate: render only for nodes flagged as Android toolkits.
   const currentNodeDef = currentNode?.type ? nodeDefinitions[currentNode.type] : undefined;
-  const isAndroidTool = currentNodeDef?.uiHints?.isAndroidToolkit
-    ?? (currentNode?.type === 'androidTool');
+  const isAndroidTool =
+    currentNodeDef?.uiHints?.isAndroidToolkit ?? (currentNode?.type === 'androidTool');
   if (!isAndroidTool) return null;
 
-  // Find connected Android service nodes via edges
   const connectedServices = useMemo(() => {
     if (!currentWorkflow?.edges || !currentWorkflow?.nodes) return [];
-
-    // Find all edges targeting this androidTool node
-    const incomingEdges = currentWorkflow.edges.filter(edge => edge.target === nodeId);
-
+    const incomingEdges = currentWorkflow.edges.filter((edge) => edge.target === nodeId);
     const services: Node[] = [];
     for (const edge of incomingEdges) {
-      const sourceNode = currentWorkflow.nodes.find(n => n.id === edge.source);
+      const sourceNode = currentWorkflow.nodes.find((n) => n.id === edge.source);
       if (sourceNode && ANDROID_SERVICE_NODE_TYPES.includes(sourceNode.type || '')) {
         services.push(sourceNode);
       }
@@ -81,131 +152,84 @@ const ToolSchemaEditor: React.FC<ToolSchemaEditorProps> = ({ nodeId }) => {
   }, [currentWorkflow?.edges, currentWorkflow?.nodes, nodeId]);
 
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
-  const [localSchema, setLocalSchema] = useState<ToolSchemaConfig>(DEFAULT_SCHEMA);
-  const [hasChanges, setHasChanges] = useState(false);
   const [isExpanded, setIsExpanded] = useState(true);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
-  // Auto-select first connected service if none selected
+  // Auto-select the first connected service; reset if the current selection
+  // is no longer connected.
   useEffect(() => {
-    if (connectedServices.length > 0 && !selectedServiceId) {
-      setSelectedServiceId(connectedServices[0].id);
-    } else if (connectedServices.length === 0) {
+    if (connectedServices.length === 0) {
       setSelectedServiceId(null);
-    } else if (selectedServiceId && !connectedServices.find(s => s.id === selectedServiceId)) {
-      // Selected service was disconnected, select first available
-      setSelectedServiceId(connectedServices[0]?.id || null);
+      return;
+    }
+    if (!selectedServiceId || !connectedServices.find((s) => s.id === selectedServiceId)) {
+      setSelectedServiceId(connectedServices[0].id);
     }
   }, [connectedServices, selectedServiceId]);
 
-  const selectedService = useMemo(() => {
-    if (!selectedServiceId) return null;
-    return connectedServices.find(s => s.id === selectedServiceId) || null;
-  }, [connectedServices, selectedServiceId]);
+  const selectedService = useMemo(
+    () => connectedServices.find((s) => s.id === selectedServiceId) ?? null,
+    [connectedServices, selectedServiceId],
+  );
 
-  // Build default schema for selected service
-  const getDefaultSchemaForService = useCallback((service: Node | null): ToolSchemaConfig => {
-    if (!service) return DEFAULT_SCHEMA;
+  const form = useForm({
+    resolver: zodResolver(toolSchemaFormSchema),
+    defaultValues: DEFAULT_FORM_VALUES,
+    mode: 'onChange',
+  });
+  const { fields, append, remove } = useFieldArray({ control: form.control, name: 'fields' });
 
-    const serviceType = service.type || 'unknown';
-    const serviceName = service.data?.label || serviceType;
-
-    // Create service-specific default schema
-    return {
-      description: `Control ${serviceName} on Android device`,
-      fields: {
-        action: {
-          type: 'string',
-          description: `Action to perform on ${serviceName}`,
-          required: true
-        },
-        parameters: {
-          type: 'object',
-          description: `Parameters for the ${serviceName} action`,
-          required: false
-        }
-      }
-    };
-  }, []);
-
-  // Load existing schema for selected service
+  // Reload form whenever the selected service changes.
   useEffect(() => {
-    const loadSchema = async () => {
+    let cancelled = false;
+    const load = async () => {
       if (!isConnected || !selectedServiceId) {
-        setLocalSchema(DEFAULT_SCHEMA);
+        form.reset(DEFAULT_FORM_VALUES);
         return;
       }
-
-      // Use service node ID as the key for storing schema
-      const schema = await getToolSchema(selectedServiceId);
-      if (schema?.schema_config && Object.keys(schema.schema_config.fields || {}).length > 0) {
-        setLocalSchema(schema.schema_config);
+      const stored = await getToolSchema(selectedServiceId);
+      if (cancelled) return;
+      if (stored?.schema_config && Object.keys(stored.schema_config.fields || {}).length > 0) {
+        form.reset(configToFormValues(stored.schema_config));
       } else {
-        // Use service-specific default
-        setLocalSchema(getDefaultSchemaForService(selectedService));
+        form.reset(defaultFormForService(selectedService));
       }
-      setHasChanges(false);
     };
-    loadSchema();
-  }, [selectedServiceId, selectedService, isConnected, getToolSchema, getDefaultSchemaForService]);
+    void load();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedServiceId, isConnected]);
 
-  const handleAddField = useCallback(() => {
-    const newFieldName = `field_${Object.keys(localSchema.fields).length + 1}`;
-    setLocalSchema(prev => ({
-      ...prev,
-      fields: {
-        ...prev.fields,
-        [newFieldName]: { type: 'string', description: '', required: false }
-      }
-    }));
-    setHasChanges(true);
-  }, [localSchema.fields]);
-
-  const handleRemoveField = useCallback((fieldName: string) => {
-    setLocalSchema(prev => {
-      const { [fieldName]: _, ...rest } = prev.fields;
-      return { ...prev, fields: rest };
-    });
-    setHasChanges(true);
-  }, []);
-
-  const handleFieldChange = useCallback((oldName: string, newName: string, config: SchemaFieldConfig) => {
-    setLocalSchema(prev => {
-      const fields = { ...prev.fields };
-      if (oldName !== newName) delete fields[oldName];
-      fields[newName] = config;
-      return { ...prev, fields };
-    });
-    setHasChanges(true);
-  }, []);
-
-  const handleSave = useCallback(async () => {
+  const onSubmit = async (values: ToolSchemaFormValues) => {
     if (!selectedServiceId || !selectedService) return;
     setSaveStatus('saving');
     const serviceName = selectedService.data?.label || selectedService.type || 'unknown';
-    const success = await saveToolSchema(selectedServiceId, serviceName, localSchema.description, localSchema);
-    setSaveStatus(success ? 'saved' : 'error');
-    if (success) setHasChanges(false);
+    const config = formValuesToConfig(values);
+    const ok = await saveToolSchema(selectedServiceId, serviceName, config.description, config);
+    setSaveStatus(ok ? 'saved' : 'error');
+    if (ok) form.reset(values); // clears dirty state without losing values
     setTimeout(() => setSaveStatus('idle'), 2000);
-  }, [selectedServiceId, selectedService, localSchema, saveToolSchema]);
+  };
 
-  const handleReset = useCallback(async () => {
+  const handleReset = async () => {
     if (!selectedServiceId) return;
     await deleteToolSchema(selectedServiceId);
-    setLocalSchema(getDefaultSchemaForService(selectedService));
-    setHasChanges(false);
-  }, [selectedServiceId, selectedService, deleteToolSchema, getDefaultSchemaForService]);
+    form.reset(defaultFormForService(selectedService));
+  };
 
-  const fieldEntries = Object.entries(localSchema.fields);
+  const hasChanges = form.formState.isDirty;
 
   return (
-    <div style={{
-      backgroundColor: theme.colors.background,
-      border: `1px solid ${theme.colors.border}`,
-      borderRadius: theme.borderRadius.md,
-      overflow: 'hidden'
-    }}>
-      {/* Header */}
+    <div
+      style={{
+        backgroundColor: theme.colors.background,
+        border: `1px solid ${theme.colors.border}`,
+        borderRadius: theme.borderRadius.md,
+        overflow: 'hidden',
+      }}
+    >
       <div
         onClick={() => setIsExpanded(!isExpanded)}
         style={{
@@ -215,7 +239,7 @@ const ToolSchemaEditor: React.FC<ToolSchemaEditorProps> = ({ nodeId }) => {
           padding: theme.spacing.md,
           backgroundColor: theme.colors.backgroundAlt,
           cursor: 'pointer',
-          borderBottom: isExpanded ? `1px solid ${theme.colors.border}` : 'none'
+          borderBottom: isExpanded ? `1px solid ${theme.colors.border}` : 'none',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.sm }}>
@@ -230,208 +254,164 @@ const ToolSchemaEditor: React.FC<ToolSchemaEditorProps> = ({ nodeId }) => {
       </div>
 
       {isExpanded && (
-        <div style={{ padding: theme.spacing.md }}>
-          {/* Service Selector Dropdown */}
-          {connectedServices.length > 0 ? (
-            <div style={{ marginBottom: theme.spacing.md }}>
-              <label style={{
-                display: 'block',
-                fontSize: theme.fontSize.sm,
-                color: theme.colors.textSecondary,
-                marginBottom: theme.spacing.xs
-              }}>
-                Select Service
-              </label>
-              <select
-                value={selectedServiceId || ''}
-                onChange={(e) => setSelectedServiceId(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: `${theme.spacing.sm} ${theme.spacing.md}`,
-                  borderRadius: theme.borderRadius.sm,
-                  border: `1px solid ${theme.colors.border}`,
-                  backgroundColor: theme.colors.background,
-                  color: theme.colors.text,
-                  fontSize: theme.fontSize.sm,
-                  cursor: 'pointer'
-                }}
-              >
-                {connectedServices.map(service => (
-                  <option key={service.id} value={service.id}>
-                    {service.data?.label || service.type}
-                  </option>
-                ))}
-              </select>
-              {selectedService && (
-                <div style={{
-                  marginTop: theme.spacing.xs,
-                  fontSize: theme.fontSize.xs,
-                  color: theme.colors.textMuted
-                }}>
-                  Type: {selectedService.type}
-                </div>
-              )}
-            </div>
-          ) : (
-            <div style={{
-              padding: theme.spacing.sm,
-              backgroundColor: `${theme.dracula.orange}10`,
-              borderRadius: theme.borderRadius.sm,
-              border: `1px solid ${theme.dracula.orange}30`,
-              fontSize: theme.fontSize.sm,
-              color: theme.dracula.orange,
-              marginBottom: theme.spacing.md
-            }}>
-              Connect Android nodes to the input handle
-            </div>
-          )}
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="p-3">
+            {connectedServices.length > 0 ? (
+              <div className="mb-3">
+                <label className="mb-1 block text-sm text-muted-foreground">Select Service</label>
+                <Select
+                  value={selectedServiceId ?? undefined}
+                  onValueChange={(v) => setSelectedServiceId(v)}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Choose a connected service" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {connectedServices.map((service) => (
+                      <SelectItem key={service.id} value={service.id}>
+                        {service.data?.label || service.type}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {selectedService && (
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    Type: {selectedService.type}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="mb-3 rounded border border-dracula-orange/30 bg-dracula-orange/10 p-2 text-sm text-dracula-orange">
+                Connect Android nodes to the input handle
+              </div>
+            )}
 
-          {/* Schema Fields */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.spacing.sm }}>
-            <label style={{ fontSize: theme.fontSize.sm, color: theme.colors.textSecondary }}>
-              Schema Fields
-            </label>
-            <button
-              onClick={handleAddField}
-              style={{
-                padding: `2px ${theme.spacing.sm}`,
-                backgroundColor: `${theme.dracula.cyan}20`,
-                color: theme.dracula.cyan,
-                border: `1px solid ${theme.dracula.cyan}40`,
-                borderRadius: theme.borderRadius.sm,
-                cursor: 'pointer',
-                fontSize: theme.fontSize.xs
-              }}
-            >
-              + Add
-            </button>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.xs }}>
-            {fieldEntries.map(([name, config]) => (
-              <FieldRow
-                key={name}
-                fieldName={name}
-                config={config}
-                onChange={(newName, newConfig) => handleFieldChange(name, newName, newConfig)}
-                onRemove={() => handleRemoveField(name)}
-                theme={theme}
-              />
-            ))}
-          </div>
-
-          {/* Save/Reset */}
-          {hasChanges && (
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: theme.spacing.sm, marginTop: theme.spacing.md }}>
-              <button
-                onClick={handleReset}
-                style={{
-                  padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
-                  backgroundColor: 'transparent',
-                  color: theme.colors.textSecondary,
-                  border: `1px solid ${theme.colors.border}`,
-                  borderRadius: theme.borderRadius.sm,
-                  cursor: 'pointer',
-                  fontSize: theme.fontSize.sm
-                }}
+            <div className="mb-2 flex items-center justify-between">
+              <label className="text-sm text-muted-foreground">Schema Fields</label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 border-dracula-cyan/40 bg-dracula-cyan/15 text-dracula-cyan hover:bg-dracula-cyan/25"
+                onClick={() =>
+                  append({
+                    name: `field_${fields.length + 1}`,
+                    type: 'string',
+                    description: '',
+                    required: false,
+                  })
+                }
               >
-                Reset
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={isLoading}
-                style={{
-                  padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
-                  backgroundColor: `${theme.dracula.green}20`,
-                  color: theme.dracula.green,
-                  border: `1px solid ${theme.dracula.green}40`,
-                  borderRadius: theme.borderRadius.sm,
-                  cursor: 'pointer',
-                  fontSize: theme.fontSize.sm
-                }}
-              >
-                {saveStatus === 'saving' ? 'Saving...' : saveStatus === 'saved' ? 'Saved!' : 'Save'}
-              </button>
+                + Add
+              </Button>
             </div>
-          )}
-        </div>
+
+            <div className="flex flex-col gap-1">
+              {fields.map((field, index) => (
+                <FieldRow key={field.id} index={index} onRemove={() => remove(index)} />
+              ))}
+            </div>
+
+            {hasChanges && (
+              <div className="mt-3 flex justify-end gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={handleReset}>
+                  Reset
+                </Button>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={isLoading || saveStatus === 'saving'}
+                  className="border-dracula-green/40 bg-dracula-green/15 text-dracula-green hover:bg-dracula-green/25"
+                >
+                  {saveStatus === 'saving' ? 'Saving...' : saveStatus === 'saved' ? 'Saved!' : 'Save'}
+                </Button>
+              </div>
+            )}
+          </form>
+        </Form>
       )}
     </div>
   );
 };
 
-// Field Row Component
-const FieldRow: React.FC<{
-  fieldName: string;
-  config: SchemaFieldConfig;
-  onChange: (newName: string, newConfig: SchemaFieldConfig) => void;
-  onRemove: () => void;
-  theme: any;
-}> = ({ fieldName, config, onChange, onRemove, theme }) => {
-  const [localName, setLocalName] = useState(fieldName);
+// ---------------------------------------------------------------------------
+// Field row — connected to RHF via parent <Form/>; uses useFormContext.
+// ---------------------------------------------------------------------------
 
-  useEffect(() => {
-    setLocalName(fieldName);
-  }, [fieldName]);
-
+const FieldRow: React.FC<{ index: number; onRemove: () => void }> = ({ index, onRemove }) => {
+  const { control } = useFormContext<ToolSchemaFormValues>();
   return (
-    <div style={{
-      padding: theme.spacing.sm,
-      backgroundColor: theme.colors.backgroundAlt,
-      borderRadius: theme.borderRadius.sm,
-      border: `1px solid ${theme.colors.border}`
-    }}>
-      <div style={{ display: 'flex', gap: theme.spacing.xs, alignItems: 'center', marginBottom: '4px' }}>
-        <input
-          value={localName}
-          onChange={(e) => setLocalName(e.target.value.replace(/\s/g, '_'))}
-          onBlur={() => localName !== fieldName && onChange(localName, config)}
-          style={{
-            flex: 1,
-            padding: '4px 8px',
-            borderRadius: theme.borderRadius.sm,
-            border: `1px solid ${theme.colors.border}`,
-            backgroundColor: theme.colors.background,
-            color: theme.colors.text,
-            fontSize: theme.fontSize.sm
-          }}
+    <div className="rounded border border-border bg-card p-2">
+      <div className="mb-1 flex items-center gap-1">
+        <FormField
+          control={control}
+          name={`fields.${index}.name`}
+          render={({ field }) => (
+            <FormItem className="flex-1">
+              <FormControl>
+                <Input
+                  {...field}
+                  className="h-8"
+                  onChange={(e) => field.onChange(e.target.value.replace(/\s/g, '_'))}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
         />
-        <select
-          value={config.type}
-          onChange={(e) => onChange(fieldName, { ...config, type: e.target.value as any })}
-          style={{
-            padding: '4px',
-            borderRadius: theme.borderRadius.sm,
-            border: `1px solid ${theme.colors.border}`,
-            backgroundColor: theme.colors.background,
-            color: theme.colors.text,
-            fontSize: theme.fontSize.xs
-          }}
+        <FormField
+          control={control}
+          name={`fields.${index}.type`}
+          render={({ field }) => (
+            <FormItem>
+              <Select onValueChange={field.onChange} value={field.value}>
+                <FormControl>
+                  <SelectTrigger className="h-8 w-[110px] text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {FIELD_TYPES.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {t}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={control}
+          name={`fields.${index}.required`}
+          render={({ field }) => (
+            <FormItem className="flex items-center gap-1 space-y-0 px-1 text-xs text-muted-foreground">
+              <FormControl>
+                <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+              </FormControl>
+              <span>Req</span>
+            </FormItem>
+          )}
+        />
+        <Button
+          type="button"
+          size="sm"
+          onClick={onRemove}
+          className="h-7 border-none bg-dracula-red/15 px-2 text-xs text-dracula-red hover:bg-dracula-red/25"
         >
-          {FIELD_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-        </select>
-        <label style={{ display: 'flex', alignItems: 'center', gap: '2px', fontSize: theme.fontSize.xs, color: theme.colors.textSecondary }}>
-          <input type="checkbox" checked={config.required || false} onChange={(e) => onChange(fieldName, { ...config, required: e.target.checked })} />
-          Req
-        </label>
-        <button onClick={onRemove} style={{ padding: '2px 6px', backgroundColor: `${theme.dracula.red}20`, color: theme.dracula.red, border: 'none', borderRadius: theme.borderRadius.sm, cursor: 'pointer', fontSize: theme.fontSize.xs }}>
           X
-        </button>
+        </Button>
       </div>
-      <input
-        value={config.description}
-        onChange={(e) => onChange(fieldName, { ...config, description: e.target.value })}
-        placeholder="Description..."
-        style={{
-          width: '100%',
-          padding: '4px 8px',
-          borderRadius: theme.borderRadius.sm,
-          border: `1px solid ${theme.colors.border}`,
-          backgroundColor: theme.colors.background,
-          color: theme.colors.text,
-          fontSize: theme.fontSize.xs,
-          boxSizing: 'border-box'
-        }}
+      <FormField
+        control={control}
+        name={`fields.${index}.description`}
+        render={({ field }) => (
+          <FormItem>
+            <FormControl>
+              <Input {...field} placeholder="Description..." className="h-7 text-xs" />
+            </FormControl>
+          </FormItem>
+        )}
       />
     </div>
   );
