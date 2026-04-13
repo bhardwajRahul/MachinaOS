@@ -11,8 +11,10 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Input, Select, Checkbox, Button, List, Badge, Empty } from 'antd';
-import { Loader2, Info } from 'lucide-react';
+import { Input, Select, Checkbox, List, Badge, Empty } from 'antd';
+import { Loader2, Info, Plus, Trash2, Save, X, RotateCcw } from 'lucide-react';
+
+import { Button } from '@/components/ui/button';
 import { Alert as DSAlert, AlertDescription } from '@/components/ui/alert';
 import {
   Tooltip,
@@ -32,7 +34,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { SearchOutlined, ReloadOutlined, FolderOutlined, PlusOutlined, DeleteOutlined, SaveOutlined, CloseOutlined } from '@ant-design/icons';
+import { SearchOutlined, FolderOutlined, PlusOutlined } from '@ant-design/icons';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { skillNodes, SKILL_NODE_TYPES } from '../../nodeDefinitions/skillNodes';
@@ -610,8 +612,8 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
-                    size="small"
-                    icon={<PlusOutlined />}
+                    size="icon-sm"
+                    variant="outline"
                     onClick={handleCreateSkill}
                     disabled={isCreatingNew}
                     style={{
@@ -619,7 +621,9 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
                       borderColor: theme.dracula.green,
                       color: theme.dracula.green,
                     }}
-                  />
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </Button>
                 </TooltipTrigger>
                 <TooltipContent>Create new skill</TooltipContent>
               </Tooltip>
@@ -813,8 +817,8 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
                 </div>
               </div>
               <Button
-                icon={<CloseOutlined />}
-                size="small"
+                size="sm"
+                variant="outline"
                 onClick={handleCancelCreate}
                 style={{
                   backgroundColor: `${theme.dracula.red}15`,
@@ -822,19 +826,21 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
                   color: theme.dracula.red,
                 }}
               >
+                <X className="h-3.5 w-3.5" />
                 Cancel
               </Button>
               <Button
-                icon={<SaveOutlined />}
-                size="small"
+                size="sm"
+                variant="outline"
                 onClick={handleSaveSkill}
-                loading={savingSkill}
+                disabled={savingSkill}
                 style={{
                   backgroundColor: `${theme.dracula.green}15`,
                   borderColor: `${theme.dracula.green}40`,
                   color: theme.dracula.green,
                 }}
               >
+                {savingSkill ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                 Save
               </Button>
             </div>
@@ -990,30 +996,32 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
                 <>
                   {hasUnsavedChanges && (
                     <Button
-                      icon={<SaveOutlined />}
-                      size="small"
+                      size="sm"
+                      variant="outline"
                       onClick={handleSaveSkill}
-                      loading={savingSkill}
+                      disabled={savingSkill}
                       style={{
                         backgroundColor: `${theme.dracula.green}15`,
                         borderColor: `${theme.dracula.green}40`,
                         color: theme.dracula.green,
                       }}
                     >
+                      {savingSkill ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                       Save
                     </Button>
                   )}
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <Button
-                        icon={<DeleteOutlined />}
-                        size="small"
-                        danger
+                        size="sm"
+                        variant="outline"
                         style={{
                           backgroundColor: `${theme.dracula.red}15`,
                           borderColor: `${theme.dracula.red}40`,
+                          color: theme.dracula.red,
                         }}
                       >
+                        <Trash2 className="h-3.5 w-3.5" />
                         Delete
                       </Button>
                     </AlertDialogTrigger>
@@ -1042,16 +1050,17 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
               {/* Reset Button for built-in skills */}
               {!isEditingUserSkill && selectedSkillConfig?.isCustomized && (
                 <Button
-                  icon={<ReloadOutlined />}
-                  size="small"
+                  size="sm"
+                  variant="outline"
                   onClick={() => handleResetToDefault(selectedSkillName!)}
-                  loading={isLoading}
+                  disabled={isLoading}
                   style={{
                     backgroundColor: `${theme.dracula.orange}15`,
                     borderColor: `${theme.dracula.orange}40`,
                     color: theme.dracula.orange,
                   }}
                 >
+                  {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
                   Reset
                 </Button>
               )}

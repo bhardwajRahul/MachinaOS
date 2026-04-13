@@ -4,8 +4,10 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Button, InputNumber } from 'antd';
-import { Loader2 } from 'lucide-react';
+import { InputNumber } from 'antd';
+import { Loader2, RefreshCw, Save } from 'lucide-react';
+
+import { Button } from '@/components/ui/button';
 import {
   Accordion,
   AccordionItem,
@@ -14,11 +16,7 @@ import {
 } from '@/components/ui/accordion';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import {
-  SaveOutlined,
-  ReloadOutlined,
-  DollarOutlined,
-} from '@ant-design/icons';
+import { DollarOutlined } from '@ant-design/icons';
 import Modal from './ui/Modal';
 import { usePricing, PricingConfig, LLMPricing } from '../hooks/usePricing';
 import { useAppTheme } from '../hooks/useAppTheme';
@@ -359,26 +357,24 @@ const PricingConfigModal: React.FC<Props> = ({ visible, onClose }) => {
       maxHeight="85vh"
       headerActions={
         <div style={{ display: 'flex', gap: 8 }}>
-          <Button
-            size="small"
-            icon={<ReloadOutlined />}
-            onClick={loadConfig}
-            loading={loading}
-          >
+          <Button size="sm" variant="outline" onClick={loadConfig} disabled={loading}>
+            {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
             Reload
           </Button>
           <Button
-            type="primary"
-            size="small"
-            icon={<SaveOutlined />}
+            size="sm"
             onClick={handleSave}
-            loading={saving}
-            disabled={!isDirty}
-            style={{
-              backgroundColor: isDirty ? theme.dracula.green : undefined,
-              borderColor: isDirty ? theme.dracula.green : undefined,
-            }}
+            disabled={!isDirty || saving}
+            style={
+              isDirty
+                ? {
+                    backgroundColor: theme.dracula.green,
+                    borderColor: theme.dracula.green,
+                  }
+                : undefined
+            }
           >
+            {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
             Save
           </Button>
         </div>

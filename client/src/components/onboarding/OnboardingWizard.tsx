@@ -1,6 +1,8 @@
 import React from 'react';
-import { Steps, Button } from 'antd';
-import { ArrowLeftOutlined, ArrowRightOutlined, CheckOutlined } from '@ant-design/icons';
+import { Steps } from 'antd';
+import { ArrowLeft, ArrowRight, Check } from 'lucide-react';
+
+import { Button } from '@/components/ui/button';
 import Modal from '../ui/Modal';
 import { useOnboarding } from '../../hooks/useOnboarding';
 import { useAppTheme } from '../../hooks/useAppTheme';
@@ -94,45 +96,39 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onOpenCredentials, 
           borderTop: `1px solid ${theme.colors.border}`,
         }}>
           {/* Left: Skip */}
-          <Button type="text" onClick={skip} size="small" style={{ color: theme.colors.textSecondary }}>
+          <Button variant="ghost" size="sm" onClick={skip} className="text-muted-foreground">
             Skip for now
           </Button>
 
           {/* Right: Back + Next/Finish */}
           <div className="flex items-center gap-2">
             {currentStep > 0 && (
-              <Button
-                icon={<ArrowLeftOutlined />}
-                onClick={prevStep}
-                size="middle"
-              >
+              <Button variant="outline" onClick={prevStep}>
+                <ArrowLeft className="h-4 w-4" />
                 Back
               </Button>
             )}
             {isLastStep ? (
               <Button
-                type="primary"
-                icon={<CheckOutlined />}
                 onClick={complete}
-                size="middle"
                 style={{
                   backgroundColor: theme.dracula.green,
                   borderColor: theme.dracula.green,
                 }}
               >
+                <Check className="h-4 w-4" />
                 Start Building
               </Button>
             ) : (
               <Button
-                type="primary"
                 onClick={nextStep}
-                size="middle"
                 style={{
                   backgroundColor: theme.dracula.purple,
                   borderColor: theme.dracula.purple,
                 }}
               >
-                Next <ArrowRightOutlined />
+                Next
+                <ArrowRight className="h-4 w-4" />
               </Button>
             )}
           </div>

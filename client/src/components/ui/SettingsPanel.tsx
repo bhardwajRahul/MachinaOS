@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Switch, InputNumber, Slider, Button } from 'antd';
+import { Switch, InputNumber, Slider } from 'antd';
 import { toast } from 'sonner';
-import { QuestionCircleOutlined } from '@ant-design/icons';
+import { HelpCircle } from 'lucide-react';
+
+import { Button } from '@/components/ui/button';
 import Modal from './Modal';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { useWebSocket } from '../../contexts/WebSocketContext';
@@ -506,7 +508,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
           <div style={sectionStyle}>
             <div style={sectionHeaderStyle}>
               <div style={{ ...sectionIconStyle, backgroundColor: `${theme.dracula.cyan}20` }}>
-                <QuestionCircleOutlined style={{ color: theme.dracula.cyan }} />
+                <HelpCircle className="h-4 w-4" style={{ color: theme.dracula.cyan }} />
               </div>
               <div style={sectionTitleStyle}>Help</div>
             </div>
@@ -517,8 +519,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 <div style={descriptionStyle}>Show the onboarding wizard again to review platform features</div>
               </div>
               <Button
-                size="small"
-                icon={<QuestionCircleOutlined />}
+                size="sm"
+                variant="outline"
                 onClick={onReplayOnboarding}
                 disabled={!onReplayOnboarding}
                 style={{
@@ -527,6 +529,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   borderColor: `${theme.dracula.cyan}60`,
                 }}
               >
+                <HelpCircle className="h-3.5 w-3.5" />
                 Replay
               </Button>
             </div>
