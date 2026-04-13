@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Switch, InputNumber, Slider, Button, message } from 'antd';
+import { Switch, InputNumber, Slider, Button } from 'antd';
+import { toast } from '../../design-system';
 import { QuestionCircleOutlined } from '@ant-design/icons';
 import Modal from './Modal';
 import { useAppTheme } from '../../hooks/useAppTheme';
@@ -94,13 +95,13 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
         }
       });
       if (showMessage) {
-        message.success('Settings saved successfully');
+        toast.success('Settings saved successfully');
       }
       console.log('[SettingsPanel] Settings saved to database');
     } catch (error) {
       console.error('[SettingsPanel] Failed to save settings:', error);
       if (showMessage) {
-        message.error('Failed to save settings');
+        toast.error('Failed to save settings');
       }
     } finally {
       setIsSaving(false);

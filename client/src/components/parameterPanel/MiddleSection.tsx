@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Collapse, Progress, Statistic, Spin, Row, Col, Typography, InputNumber, Button, message } from 'antd';
+import { Collapse, Progress, Statistic, Spin, Row, Col, Typography, InputNumber, Button } from 'antd';
+import { toast } from '../../design-system';
 import { ThunderboltOutlined, EditOutlined, SaveOutlined } from '@ant-design/icons';
 import ParameterRenderer from '../ParameterRenderer';
 import ToolSchemaEditor from './ToolSchemaEditor';
@@ -848,9 +849,9 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
                                         updateCompactionStats(currentWorkflow.id, connectedMemorySessionId, { ...compactionStats, threshold: editThresholdValue });
                                       }
                                       setIsEditingThreshold(false);
-                                      message.success('Threshold updated');
+                                      toast.success('Threshold updated');
                                     } catch (_err) {
-                                      message.error('Failed to update threshold');
+                                      toast.error('Failed to update threshold');
                                     } finally {
                                       setSavingThreshold(false);
                                     }

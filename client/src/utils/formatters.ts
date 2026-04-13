@@ -1,5 +1,5 @@
 // Common utility functions for formatting and clipboard operations
-import { message } from 'antd';
+import { toast } from '../design-system';
 
 /**
  * Copy text to clipboard with error handling
@@ -9,7 +9,7 @@ export const copyToClipboard = async (data: any, successMessage?: string): Promi
     const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
     await navigator.clipboard.writeText(text);
     if (successMessage) {
-      message.success(successMessage);
+      toast.success(successMessage);
     }
     return true;
   } catch (error) {

@@ -11,7 +11,8 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Input, Select, Checkbox, Button, Spin, List, Badge, Empty, Tooltip, Alert, Popconfirm, message } from 'antd';
+import { Input, Select, Checkbox, Button, Spin, List, Badge, Empty, Tooltip, Alert, Popconfirm } from 'antd';
+import { toast } from '../../design-system';
 import { SearchOutlined, ReloadOutlined, InfoCircleOutlined, FolderOutlined, PlusOutlined, DeleteOutlined, SaveOutlined, CloseOutlined } from '@ant-design/icons';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { useWebSocket } from '../../contexts/WebSocketContext';
@@ -452,11 +453,11 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
 
     // Validate required fields
     if (!pendingSkillData.display_name.trim()) {
-      message.error('Display name is required');
+      toast.error('Display name is required');
       return;
     }
     if (!pendingSkillData.instructions.trim()) {
-      message.error('Instructions are required');
+      toast.error('Instructions are required');
       return;
     }
 
@@ -470,7 +471,7 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
           .replace(/^-|-$/g, '');
       }
       if (!skillName || !/^[a-z0-9-]+$/.test(skillName)) {
-        message.error('Invalid skill ID. Use lowercase letters, numbers, and hyphens only.');
+        toast.error('Invalid skill ID. Use lowercase letters, numbers, and hyphens only.');
         return;
       }
     }
@@ -492,7 +493,7 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
       const result = await sendRequest<{ skill?: UserSkill; success?: boolean; error?: string }>(handler, payload);
 
       if (result.skill || result.success) {
-        message.success(isCreatingNew ? 'Skill created' : 'Skill saved');
+        toast.success(isCreatingNew ? 'Skill created' : 'Skill saved');
         await fetchUserSkills();
 
         if (isCreatingNew) {
@@ -506,10 +507,10 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
         }
         setHasUnsavedChanges(false);
       } else {
-        message.error(result.error || 'Failed to save skill');
+        toast.error(result.error || 'Failed to save skill');
       }
     } catch (err: any) {
-      message.error(err.message || 'Failed to save skill');
+      toast.error(err.message || 'Failed to save skill');
     } finally {
       setSavingSkill(false);
     }
@@ -520,7 +521,7 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
     try {
       const result = await sendRequest<{ success: boolean; error?: string }>('delete_user_skill', { name: skillName });
       if (result.success) {
-        message.success('Skill deleted');
+        toast.success('Skill deleted');
         // Remove from config
         const newConfig = { ...skillsConfig };
         delete newConfig[skillName];
@@ -542,10 +543,10 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
         // Refresh user skills list from database
         await fetchUserSkills();
       } else {
-        message.error(result.error || 'Failed to delete skill');
+        toast.error(result.error || 'Failed to delete skill');
       }
     } catch (err: any) {
-      message.error(err.message || 'Failed to delete skill');
+      toast.error(err.message || 'Failed to delete skill');
     }
   }, [sendRequest, fetchUserSkills, skillsConfig, onConfigChange, selectedSkillName, nodeId, skillFolder]);
 

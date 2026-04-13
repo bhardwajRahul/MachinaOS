@@ -30,3 +30,7 @@ export type { TextProps } from './primitives/Text';
 
 export { Heading } from './primitives/Heading';
 export type { HeadingProps } from './primitives/Heading';
+
+export { Toaster } from './primitives/Toaster';
+export { toast } from './lib/toast';
+export type { Toast } from './lib/toast';

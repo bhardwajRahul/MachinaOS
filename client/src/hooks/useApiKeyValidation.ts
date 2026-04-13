@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { notification } from 'antd';
+import { toast } from '../design-system';
 import { useApiKeys } from './useApiKeys';
 
 export type ValidationStatus = 'idle' | 'validating' | 'valid' | 'invalid';
@@ -49,7 +49,7 @@ export const useApiKeyValidation = ({ provider, onSuccess }: UseApiKeyValidation
 
   const validate = useCallback(async (apiKey: string) => {
     if (!provider || !apiKey.trim()) {
-      notification.error({ message: 'Please enter an API key' });
+      toast.error('Please enter an API key');
       return;
     }
 
@@ -61,18 +61,18 @@ export const useApiKeyValidation = ({ provider, onSuccess }: UseApiKeyValidation
       if (result.isValid) {
         setStatus('valid');
         setHasStoredKeyState(true);
-        notification.success({ message: 'API key validated successfully!' });
+        toast.success('API key validated successfully!');
 
         if (result.models?.length && onSuccess) {
           onSuccess(result.models);
         }
       } else {
         setStatus('invalid');
-        notification.error({ message: result.error || 'Invalid API key' });
+        toast.error(result.error || 'Invalid API key');
       }
     } catch (error: any) {
       setStatus('invalid');
-      notification.error({ message: error.message || 'Validation failed' });
+      toast.error(error.message || 'Validation failed');
     }
   }, [provider, onSuccess, wsValidateApiKey]);
 
@@ -83,9 +83,9 @@ export const useApiKeyValidation = ({ provider, onSuccess }: UseApiKeyValidation
       await wsRemoveApiKey(provider);
       setHasStoredKeyState(false);
       setStatus('idle');
-      notification.success({ message: 'API key cleared' });
+      toast.success('API key cleared');
     } catch (error) {
-      notification.error({ message: 'Failed to clear API key' });
+      toast.error('Failed to clear API key');
     }
   }, [provider, wsRemoveApiKey]);
 

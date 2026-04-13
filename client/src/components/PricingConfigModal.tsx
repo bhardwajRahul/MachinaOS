@@ -4,7 +4,8 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Button, Tabs, InputNumber, Collapse, Spin, message } from 'antd';
+import { Button, Tabs, InputNumber, Collapse, Spin } from 'antd';
+import { toast } from '../design-system';
 import {
   SaveOutlined,
   ReloadOutlined,
@@ -165,7 +166,7 @@ const PricingConfigModal: React.FC<Props> = ({ visible, onClose }) => {
       setConfig(data);
       setIsDirty(false);
     } catch (error) {
-      message.error('Failed to load pricing config');
+      toast.error('Failed to load pricing config');
     } finally {
       setLoading(false);
     }
@@ -184,13 +185,13 @@ const PricingConfigModal: React.FC<Props> = ({ visible, onClose }) => {
     try {
       const success = await savePricingConfig(config);
       if (success) {
-        message.success('Pricing config saved');
+        toast.success('Pricing config saved');
         setIsDirty(false);
       } else {
-        message.error('Failed to save pricing config');
+        toast.error('Failed to save pricing config');
       }
     } catch (error) {
-      message.error('Failed to save pricing config');
+      toast.error('Failed to save pricing config');
     } finally {
       setSaving(false);
     }
