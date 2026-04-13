@@ -1,0 +1,83 @@
+/**
+ * Color tokens — HSL triplets (space-separated, no hsl() wrapper) so Tailwind
+ * utilities can compose alpha via `hsl(var(--color-x) / 0.5)`.
+ *
+ * Source of truth: client/src/styles/theme.ts (lightColors, darkColors, dracula).
+ * Keep both in sync until Phase 7 removes the old theme.ts.
+ */
+
+:root,
+[data-theme="light"] {
+  /* Surfaces */
+  --color-bg: 218 22% 97%;              /* #f5f7fa */
+  --color-bg-alt: 215 18% 95%;          /* #eef1f5 */
+  --color-bg-canvas: 215 17% 92%;       /* #e8ecf1 */
+  --color-surface: 0 0% 100%;           /* #ffffff */
+  --color-surface-raised: 0 0% 100%;    /* #ffffff */
+  --color-surface-hover: 0 0% 0% / 0.05;
+  --color-surface-active: 0 0% 0% / 0.08;
+
+  /* Text */
+  --color-fg: 214 11% 12%;              /* #1a1d21 */
+  --color-fg-secondary: 218 14% 27%;    /* #374151 */
+  --color-fg-muted: 217 12% 34%;        /* #4b5563 */
+
+  /* Borders */
+  --color-border: 216 12% 84%;          /* #d1d5db */
+  --color-border-hover: 218 11% 65%;    /* #9ca3af */
+  --color-border-focus: 217 91% 60%;    /* #3b82f6 */
+
+  /* Semantic */
+  --color-primary: 221 83% 53%;         /* #2563eb */
+  --color-primary-fg: 0 0% 100%;
+  --color-success: 161 94% 30%;         /* #059669 */
+  --color-warning: 32 95% 44%;          /* #d97706 */
+  --color-danger: 0 74% 51%;            /* #dc2626 */
+  --color-info: 192 91% 36%;            /* #0891b2 */
+
+  /* Accent */
+  --color-accent: 262 83% 58%;          /* #7c3aed — template variables */
+}
+
+[data-theme="dark"] {
+  /* Surfaces (Solarized dark) */
+  --color-bg: 192 100% 11%;             /* #002b36 base03 */
+  --color-bg-alt: 192 81% 14%;          /* #073642 base02 */
+  --color-bg-canvas: 192 100% 11%;      /* base03 */
+  --color-surface: 192 81% 14%;         /* base02 */
+  --color-surface-raised: 206 55% 12%;  /* #0d1f2d */
+  --color-surface-hover: 0 0% 100% / 0.04;
+  --color-surface-active: 0 0% 100% / 0.08;
+
+  /* Text (Dracula foreground for contrast) */
+  --color-fg: 60 30% 96%;               /* #f8f8f2 */
+  --color-fg-secondary: 0 0% 75%;       /* #bfbfbf */
+  --color-fg-muted: 225 27% 51%;        /* #6272a4 dracula comment */
+
+  /* Borders */
+  --color-border: 194 14% 40% / 0.4;    /* #586e75 base01 @ 0.4 */
+  --color-border-hover: 194 14% 40%;    /* #586e75 */
+  --color-border-focus: 205 69% 49%;    /* #268bd2 blue */
+
+  /* Semantic (Solarized) */
+  --color-primary: 205 69% 49%;         /* #268bd2 */
+  --color-primary-fg: 60 30% 96%;
+  --color-success: 68 100% 30%;         /* #859900 */
+  --color-warning: 45 100% 35%;         /* #b58900 */
+  --color-danger: 1 71% 52%;            /* #dc322f */
+  --color-info: 175 59% 40%;            /* #2aa198 */
+
+  /* Accent */
+  --color-accent: 191 97% 77%;          /* dracula cyan */
+}
+
+/* Dracula action palette — same across themes, used for vibrant buttons/edges */
+:root {
+  --color-dracula-green: 135 94% 65%;   /* #50fa7b */
+  --color-dracula-purple: 265 89% 78%;  /* #bd93f9 */
+  --color-dracula-pink: 326 100% 74%;   /* #ff79c6 */
+  --color-dracula-cyan: 191 97% 77%;    /* #8be9fd */
+  --color-dracula-red: 0 100% 67%;      /* #ff5555 */
+  --color-dracula-orange: 27 100% 71%;  /* #ffb86c */
+  --color-dracula-yellow: 65 92% 76%;   /* #f1fa8c */
+}
