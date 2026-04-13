@@ -4,7 +4,7 @@ import Dashboard from './Dashboard';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import { lightTheme, darkTheme } from './config/antdTheme';
 import { useTheme } from './contexts/ThemeContext';
-import { Toaster } from 'sonner';
+import { Toaster } from '@/components/ui/sonner';
 
 const App: React.FC = () => {
   const { isDarkMode } = useTheme();
@@ -21,7 +21,7 @@ const App: React.FC = () => {
           <Dashboard />
         </div>
       </ProtectedRoute>
-      <Toaster theme={isDarkMode ? 'dark' : 'light'} position="top-right" richColors closeButton />
+      <Toaster position="top-right" richColors closeButton />
     </ConfigProvider>
   );
 }
