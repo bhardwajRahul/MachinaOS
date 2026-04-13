@@ -103,7 +103,20 @@ class ProcessService:
 
         argv = shlex.split(command)
         env = {**os.environ, "PYTHONUNBUFFERED": "1"}
-        cwd = working_directory or os.getcwd()
+        from core.config import Settings
+        workspace_base = Path(Settings().workspace_base_dir).resolve()
+
+        if not working_directory:
+            working_directory = str(workspace_base / 'default')
+            os.makedirs(working_directory, exist_ok=True)
+        cwd = working_directory
+
+        # Guardrail: cwd must resolve inside workspace base
+        if not Path(cwd).resolve().is_relative_to(workspace_base):
+            return {
+                "success": False,
+                "error": f"Working directory must be inside workspace ({workspace_base}).",
+            }
 
         # Create log directory inside the workflow workspace
         # Layout: {workspace}/.processes/{name}/stdout.log, stderr.log

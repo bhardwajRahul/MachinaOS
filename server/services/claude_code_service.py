@@ -58,7 +58,11 @@ class ClaudeCodeService:
         if system_prompt:
             cmd += ["--append-system-prompt", system_prompt]
 
-        work_dir = cwd or os.getcwd()
+        if not cwd:
+            from core.config import Settings
+            cwd = os.path.join(Settings().workspace_base_dir, 'default')
+            os.makedirs(cwd, exist_ok=True)
+        work_dir = cwd
 
         proc = await asyncio.create_subprocess_exec(
             *cmd,

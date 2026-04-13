@@ -1,6 +1,6 @@
 {
-  "id": "example_workflow-1772437472641-wdn3sj4us",
-  "name": "AI Employee[Experimental]",
+  "id": "ai-employee-experimental",
+  "name": "AI Employee (Experimental)",
   "nodes": [
     {
       "id": "orchestrator_agent-1772283239381",
