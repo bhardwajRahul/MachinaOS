@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useEffect } from 'react';
 import { toast } from 'sonner';
 import { HelpCircle } from 'lucide-react';
 
@@ -8,29 +8,20 @@ import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
 import Modal from './Modal';
 import { useAppTheme } from '../../hooks/useAppTheme';
-import { useWebSocket } from '../../contexts/WebSocketContext';
+import {
+  useUserSettingsQuery,
+  useSaveUserSettingsMutation,
+} from '../../hooks/useUserSettingsQuery';
+import {
+  workflowSettingsSchema,
+  defaultSettings,
+  fromServerRow,
+  toServerRow,
+  type WorkflowSettings,
+} from './settingsPanel/schema';
 
-export interface WorkflowSettings {
-  autoSave: boolean;
-  autoSaveInterval: number;
-  sidebarDefaultOpen: boolean;
-  componentPaletteDefaultOpen: boolean;
-  consolePanelDefaultOpen: boolean;
-  memoryWindowSize: number;
-  compactionRatio: number;
-  maxProcesses: number;
-}
-
-export const defaultSettings: WorkflowSettings = {
-  autoSave: true,
-  autoSaveInterval: 30,
-  sidebarDefaultOpen: true,
-  componentPaletteDefaultOpen: true,
-  consolePanelDefaultOpen: false,
-  memoryWindowSize: 100,
-  compactionRatio: 0.5,
-  maxProcesses: 10,
-};
+export type { WorkflowSettings } from './settingsPanel/schema';
+export { defaultSettings } from './settingsPanel/schema';
 
 interface SettingsPanelProps {
   isOpen: boolean;
@@ -48,87 +39,53 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   onReplayOnboarding,
 }) => {
   const theme = useAppTheme();
-  const { sendRequest, isConnected } = useWebSocket();
-  const [isLoading, setIsLoading] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  const settingsQuery = useUserSettingsQuery();
+  const saveMutation = useSaveUserSettingsMutation();
+  const isLoading = settingsQuery.isLoading;
+  const isSaving = saveMutation.isPending;
 
-  // Load settings from database on open
+  // Hydrate Dashboard's controlled state from the cached settings row
+  // exactly once per open. The query is shared with useOnboarding so
+  // cross-component reads stay in sync.
   useEffect(() => {
-    if (isOpen && isConnected) {
-      loadSettingsFromDB();
-    }
-  }, [isOpen, isConnected]);
+    if (!isOpen || !settingsQuery.data) return;
+    onSettingsChange(fromServerRow(settingsQuery.data));
+    // onSettingsChange identity may change every parent render; only
+    // re-hydrate when the modal opens or fresh data lands.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, settingsQuery.data]);
 
-  const loadSettingsFromDB = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const response = await sendRequest<{ settings: any }>('get_user_settings', {});
-      if (response?.settings) {
-        const dbSettings = response.settings;
-        onSettingsChange({
-          autoSave: dbSettings.auto_save ?? defaultSettings.autoSave,
-          autoSaveInterval: dbSettings.auto_save_interval ?? defaultSettings.autoSaveInterval,
-          sidebarDefaultOpen: dbSettings.sidebar_default_open ?? defaultSettings.sidebarDefaultOpen,
-          componentPaletteDefaultOpen: dbSettings.component_palette_default_open ?? defaultSettings.componentPaletteDefaultOpen,
-          consolePanelDefaultOpen: dbSettings.console_panel_default_open ?? defaultSettings.consolePanelDefaultOpen,
-          memoryWindowSize: dbSettings.memory_window_size ?? defaultSettings.memoryWindowSize,
-          compactionRatio: dbSettings.compaction_ratio ?? defaultSettings.compactionRatio,
-          maxProcesses: dbSettings.max_processes ?? defaultSettings.maxProcesses,
-        });
-      }
-    } catch (error) {
-      console.error('[SettingsPanel] Failed to load settings:', error);
-    } finally {
-      setIsLoading(false);
+  const persist = async (next: WorkflowSettings, withToast: boolean) => {
+    // Validate before persisting so an out-of-range field never reaches
+    // the server. Surface zod errors as a toast and refuse the save.
+    const parsed = workflowSettingsSchema.safeParse(next);
+    if (!parsed.success) {
+      const message = parsed.error.issues[0]?.message ?? 'Invalid settings';
+      toast.error(message);
+      return;
     }
-  }, [sendRequest, onSettingsChange]);
-
-  const saveSettingsToDB = useCallback(async (newSettings: WorkflowSettings, showMessage = false) => {
-    setIsSaving(true);
     try {
-      await sendRequest('save_user_settings', {
-        settings: {
-          auto_save: newSettings.autoSave,
-          auto_save_interval: newSettings.autoSaveInterval,
-          sidebar_default_open: newSettings.sidebarDefaultOpen,
-          component_palette_default_open: newSettings.componentPaletteDefaultOpen,
-          console_panel_default_open: newSettings.consolePanelDefaultOpen,
-          memory_window_size: newSettings.memoryWindowSize,
-          compaction_ratio: newSettings.compactionRatio,
-          max_processes: newSettings.maxProcesses,
-        }
-      });
-      if (showMessage) {
-        toast.success('Settings saved successfully');
-      }
-      console.log('[SettingsPanel] Settings saved to database');
+      await saveMutation.mutateAsync(toServerRow(parsed.data));
+      if (withToast) toast.success('Settings saved successfully');
     } catch (error) {
       console.error('[SettingsPanel] Failed to save settings:', error);
-      if (showMessage) {
-        toast.error('Failed to save settings');
-      }
-    } finally {
-      setIsSaving(false);
+      if (withToast) toast.error('Failed to save settings');
     }
-  }, [sendRequest]);
+  };
 
   const handleChange = (key: keyof WorkflowSettings, value: number | boolean) => {
-    const newSettings = {
-      ...settings,
-      [key]: value,
-    };
-    onSettingsChange(newSettings);
-    // Auto-save to database (without message)
-    saveSettingsToDB(newSettings, false);
+    const next = { ...settings, [key]: value } as WorkflowSettings;
+    onSettingsChange(next);
+    void persist(next, false);
   };
 
   const handleReset = async () => {
     onSettingsChange(defaultSettings);
-    await saveSettingsToDB(defaultSettings, true);
+    await persist(defaultSettings, true);
   };
 
   const handleSave = async () => {
-    await saveSettingsToDB(settings, true);
+    await persist(settings, true);
   };
 
   // Section card style
