@@ -1,5 +1,5 @@
 import React from 'react';
-import NodeOutputPanel from '../ui/NodeOutputPanel';
+import OutputPanel from '../output/OutputPanel';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { ExecutionResult } from '../../services/executionService';
 import { Node } from 'reactflow';
@@ -71,7 +71,7 @@ const OutputSection: React.FC<OutputSectionProps> = ({
       overflow: 'hidden',
       position: 'relative'
     }}>
-      <NodeOutputPanel
+      <OutputPanel
         results={combinedResults}
         onClear={onClearResults}
         selectedNode={selectedNode}
