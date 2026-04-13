@@ -1530,8 +1530,13 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
         if (parameter.type === 'string' && parameter.name === 'model') {
         }
 
-        // Special case for group_id parameter - add Load Groups button
-        if (parameter.name === 'group_id') {
+        // Schema-driven WhatsApp selectors. Behaviour is keyed off
+        // `typeOptions.loadOptionsMethod` set in the node definition,
+        // not the parameter name. Legacy `parameter.name` fallback is
+        // kept for any node not yet annotated; remove once Phase 5
+        // sweeps all definitions.
+        const loadMethod = (parameter as any).typeOptions?.loadOptionsMethod as string | undefined;
+        if (loadMethod === 'whatsappGroups' || parameter.name === 'group_id') {
           const storedGroupName = allParameters?.group_name || '';
           return (
             <GroupIdSelector
@@ -1549,8 +1554,7 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
           );
         }
 
-        // Special case for channel_jid parameter - add Load Channels button
-        if (parameter.name === 'channel_jid') {
+        if (loadMethod === 'whatsappChannels' || parameter.name === 'channel_jid') {
           const storedChannelName = allParameters?.channel_display_name || '';
           return (
             <ChannelJidSelector
@@ -1568,8 +1572,7 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
           );
         }
 
-        // Special case for senderNumber parameter - add Load Members button (uses group_id)
-        if (parameter.name === 'senderNumber') {
+        if (loadMethod === 'whatsappGroupMembers' || parameter.name === 'senderNumber') {
           const groupId = resolvedParameters?.group_id || allParameters?.group_id || '';
           const storedSenderName = allParameters?.sender_name || '';
           return (

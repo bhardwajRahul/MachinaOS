@@ -1,8 +1,12 @@
 /**
- * Modal — thin wrapper around shadcn Dialog.
+ * Modal — composition primitive on top of shadcn Dialog.
  *
- * Preserves the existing API (`isOpen`, `onClose`, `title`, `maxWidth`,
- * `maxHeight`, `headerActions`, `autoHeight`) so call sites don't churn.
+ * Owns the recurring "title bar with centered headerActions and a close
+ * button + size-constrained content panel" layout that 8 call sites
+ * share. Not a facade preserving an old library's API — the call sites
+ * use this because the composition is genuinely reused. Don't add new
+ * panels by re-implementing this with raw <Dialog>; extend Modal here
+ * if you need a new prop.
  */
 
 import React from 'react';

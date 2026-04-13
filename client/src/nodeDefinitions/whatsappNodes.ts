@@ -140,6 +140,7 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         required: true,
         placeholder: '123456789@g.us',
         description: 'Group JID to send message to (use Load button to select)',
+        typeOptions: { loadOptionsMethod: 'whatsappGroups' },
         displayOptions: {
           show: { recipient_type: ['group'] }
         }
@@ -152,6 +153,7 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         required: true,
         placeholder: '120363198765432101@newsletter',
         description: 'Newsletter JID (use Load button to select). Admin/owner role required to send.',
+        typeOptions: { loadOptionsMethod: 'whatsappChannels' },
         displayOptions: {
           show: { recipient_type: ['channel'] }
         }
@@ -483,6 +485,7 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         type: 'string',
         default: '',
         required: true,
+        typeOptions: { loadOptionsMethod: 'whatsappGroups' },
         displayOptions: {
           show: { filter: ['group'] }
         },
@@ -494,6 +497,7 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         name: 'senderNumber',
         type: 'string',
         default: '',
+        typeOptions: { loadOptionsMethod: 'whatsappGroupMembers', loadOptionsDependsOn: ['group_id'] },
         displayOptions: {
           show: { filter: ['group'] }
         },
@@ -506,6 +510,7 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         type: 'string',
         default: '',
         required: true,
+        typeOptions: { loadOptionsMethod: 'whatsappChannels' },
         displayOptions: {
           show: { filter: ['channel'] }
         },
@@ -741,6 +746,7 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         required: true,
         placeholder: '123456789@g.us',
         description: 'Group JID',
+        typeOptions: { loadOptionsMethod: 'whatsappGroups' },
         displayOptions: {
           show: { operation: ['chat_history', 'get_group_info'], chat_type: ['group'] }
         }
@@ -883,6 +889,7 @@ export const whatsappNodes: Record<string, INodeTypeDescription> = {
         required: true,
         placeholder: '120363198765432101@newsletter or https://whatsapp.com/channel/...',
         description: 'Newsletter JID or invite link (use Load button to select)',
+        typeOptions: { loadOptionsMethod: 'whatsappChannels' },
         displayOptions: {
           show: { operation: ['get_channel_info', 'channel_messages', 'channel_stats', 'channel_follow', 'channel_unfollow', 'channel_mute', 'channel_mark_viewed', 'newsletter_react', 'newsletter_live_updates'] }
         }
