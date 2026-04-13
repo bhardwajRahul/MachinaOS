@@ -192,7 +192,14 @@ class ProcessService:
             managed.exit_code = -1
 
         logger.info("[Process] Stopped: %s (exit=%s)", name, managed.exit_code)
-        return {"success": True, "result": self._info(managed)}
+        result = self._info(managed)
+
+        # Schedule cleanup after 60s to allow output reading
+        asyncio.get_event_loop().call_later(
+            60, lambda: self._cleanup_completed(workflow_id, name)
+        )
+
+        return {"success": True, "result": result}
 
     async def restart(self, name: str, workflow_id: str = "default") -> Dict[str, Any]:
         """Restart a process with the same command."""
@@ -268,13 +275,54 @@ class ProcessService:
 
         return {"lines": lines, "total": total, "file": str(log_file)}
 
-    def cleanup_logs(self, name: str, workflow_id: str = "default") -> None:
-        """Remove log files for a process."""
+    def _cleanup_completed(self, workflow_id: str, name: str) -> None:
+        """Remove log files and process entry for a completed process.
+
+        Called automatically 60s after process exits, giving time to read output.
+        Also cleans the parent .processes/ dir if empty.
+        """
         key = self._key(workflow_id, name)
         managed = self._processes.get(key)
-        if managed and managed.log_dir.exists():
+        if not managed or managed.status == "running":
+            return
+
+        # Remove log directory
+        if managed.log_dir.exists():
             shutil.rmtree(managed.log_dir, ignore_errors=True)
-            logger.info("[Process] Cleaned logs: %s", managed.log_dir)
+
+        # Remove parent .processes/ if empty
+        parent = managed.log_dir.parent
+        if parent.exists() and parent.name == ".processes" and not any(parent.iterdir()):
+            parent.rmdir()
+
+        # Remove from tracking dict
+        self._processes.pop(key, None)
+        logger.info("[Process] Cleaned up: %s (workflow=%s)", name, workflow_id)
+
+    async def stop_workflow(self, workflow_id: str) -> int:
+        """Stop all processes for a workflow and clean up immediately."""
+        killed = 0
+        for key in list(self._processes.keys()):
+            wid, name = key
+            if wid != workflow_id:
+                continue
+            managed = self._processes[key]
+            if managed.status == "running":
+                _kill_process_tree(managed.pid)
+                for task in (managed.stdout_task, managed.stderr_task):
+                    if task and not task.done():
+                        task.cancel()
+                killed += 1
+                logger.info("[Process] Killed for workflow stop: %s (pid=%d)", name, managed.pid)
+            # Clean log files and remove entry
+            if managed.log_dir.exists():
+                shutil.rmtree(managed.log_dir, ignore_errors=True)
+            self._processes.pop(key, None)
+
+        # Clean parent .processes/ dirs if empty
+        if killed:
+            logger.info("[Process] Stopped %d process(es) for workflow %s", killed, workflow_id)
+        return killed
 
     async def shutdown(self) -> None:
         """Kill all managed processes and clean up log files."""
@@ -339,6 +387,11 @@ class ProcessService:
                 managed.exit_code = managed.process.returncode
             managed.status = "stopped" if managed.exit_code == 0 else "error"
             logger.info("[Process] Exited: %s (exit=%s)", managed.name, managed.exit_code)
+
+            # Schedule auto-cleanup of log files and process entry after delay
+            asyncio.get_event_loop().call_later(
+                60, lambda: self._cleanup_completed(managed.workflow_id, managed.name)
+            )
 
     @staticmethod
     def _info(m: ManagedProcess) -> Dict[str, Any]:

@@ -161,7 +161,18 @@ def _build_args(op: str, p: Dict[str, Any]) -> list:
         case "fill":
             return ["fill", _req_sel(s), p.get("value") or ""]
         case "screenshot":
-            return ["screenshot"] + (["--full"] if p.get("fullPage") else [])
+            args = ["screenshot"]
+            if p.get("fullPage"):
+                args.append("--full")
+            if p.get("annotate"):
+                args.append("--annotate")
+            fmt = p.get("screenshotFormat", "png")
+            if fmt and fmt != "png":
+                args.extend(["--screenshot-format", fmt])
+                quality = p.get("screenshotQuality")
+                if quality and fmt == "jpeg":
+                    args.extend(["--screenshot-quality", str(quality)])
+            return args
         case "snapshot":
             return ["snapshot", "-i"]
         case "get_text":

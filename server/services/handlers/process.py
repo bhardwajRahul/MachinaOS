@@ -42,33 +42,41 @@ async def handle_process_manager(
     return result
 
 
+def _clean_arg(val: str) -> str:
+    """LLMs sometimes pass literal 'None' string instead of omitting the field."""
+    if not val or val == "None":
+        return ""
+    return val
+
+
 async def execute_process_manager(tool_args: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any]:
     """AI tool entry point. Dispatches by operation."""
     svc = get_process_service()
     op = tool_args.get("operation", "list")
     workflow_id = config.get("workflow_id", "default")
-    name = tool_args.get("name", "")
+    name = _clean_arg(tool_args.get("name", ""))
+    workspace_dir = config.get("workspace_dir", "")
 
-    logger.info("[ProcessManager] op=%s name=%s", op, name)
+    logger.info("[ProcessManager] op=%s name=%s workspace=%s", op, name, workspace_dir)
 
     if op == "start":
         return await svc.start(
             name=name,
-            command=tool_args.get("command", ""),
+            command=_clean_arg(tool_args.get("command", "")),
             workflow_id=workflow_id,
-            working_directory=tool_args.get("working_directory", config.get("workspace_dir", "")),
+            working_directory=_clean_arg(tool_args.get("working_directory", "")) or workspace_dir,
         )
     elif op == "stop":
         return await svc.stop(name, workflow_id)
     elif op == "restart":
         return await svc.restart(name, workflow_id)
     elif op == "send_input":
-        return await svc.send_input(name, workflow_id, tool_args.get("text", ""))
+        return await svc.send_input(name, workflow_id, _clean_arg(tool_args.get("text", "")))
     elif op == "list":
         return {"success": True, "result": {"processes": svc.list_processes(workflow_id)}}
     elif op == "get_output":
-        stream = tool_args.get("stream", "stdout")
-        tail = int(tool_args.get("tail", 50))
+        stream = _clean_arg(tool_args.get("stream", "")) or "stdout"
+        tail = int(tool_args.get("tail", 50) or 50)
         offset = int(tool_args.get("offset", 0))
         return {"success": True, "result": svc.get_output(name, workflow_id, stream, tail, offset)}
     else:

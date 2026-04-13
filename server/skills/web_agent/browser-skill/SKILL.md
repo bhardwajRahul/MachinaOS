@@ -35,6 +35,9 @@ Use the **snapshot -> act -> snapshot** loop:
 | direction | string | scroll | up, down, left, right (default: down) |
 | amount | int | scroll | Pixels to scroll (default: 500) |
 | fullPage | bool | screenshot | Capture full scrollable page (default: false) |
+| annotate | bool | screenshot | Add numbered labels to elements (default: false) |
+| screenshotFormat | string | screenshot | Image format: png (default) or jpeg |
+| screenshotQuality | int | screenshot | JPEG quality 1-100 (default: 80, only for jpeg) |
 
 ## Operations
 
@@ -78,6 +81,16 @@ Clear an input field and fill it with a value.
 Take a screenshot of the current page.
 ```json
 {"operation": "screenshot", "fullPage": true}
+```
+
+**Annotated screenshot** (numbered labels on interactive elements -- best for AI vision):
+```json
+{"operation": "screenshot", "annotate": true}
+```
+
+**JPEG format** (smaller file size):
+```json
+{"operation": "screenshot", "screenshotFormat": "jpeg", "screenshotQuality": 80}
 ```
 
 ### get_text

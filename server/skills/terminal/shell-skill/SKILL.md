@@ -4,7 +4,7 @@ description: Execute short-lived shell commands in a sandboxed environment. No P
 allowed-tools: shell_execute
 metadata:
   author: machina
-  version: "2.0"
+  version: "3.0"
   category: execution
   icon: "\U0001F4BB"
   color: "#ff79c6"
@@ -23,15 +23,6 @@ Execute short-lived shell commands in a sandboxed workspace. The shell runs with
 | command | string | Yes | Shell command to execute |
 | timeout | int | No | Timeout in seconds (default: 30, max: 300) |
 
-### Examples
-
-```json
-{"command": "ls -la"}
-{"command": "cat README.md"}
-{"command": "echo hello > output.txt"}
-{"command": "find . -name '*.py' -type f"}
-```
-
 ### Response
 
 ```json
@@ -39,7 +30,7 @@ Execute short-lived shell commands in a sandboxed workspace. The shell runs with
   "stdout": "command output",
   "exit_code": 0,
   "truncated": false,
-  "command": "ls -la"
+  "command": "dir"
 }
 ```
 
@@ -51,36 +42,69 @@ Execute short-lived shell commands in a sandboxed workspace. The shell runs with
 | 124 | Timed out |
 | non-zero | Failure |
 
+## OS-Specific Commands
+
+The shell uses the system's native shell (`cmd.exe` on Windows, `/bin/sh` on Linux/macOS). Use the correct commands for the platform.
+
+### Detect OS first
+
+```json
+{"command": "ver"}
+```
+If output contains `Windows`, use Windows commands. Otherwise use Unix commands.
+
+### Windows (cmd.exe)
+
+| Task | Command |
+|------|---------|
+| List files | `dir` |
+| List with details | `dir /a` |
+| Read file | `type README.md` |
+| Write to file | `echo hello > output.txt` |
+| Find files | `dir /s /b *.py` |
+| Search content | `findstr /s /i "pattern" *.py` |
+| Copy file | `copy src.txt dst.txt` |
+| Move file | `move src.txt dst.txt` |
+| Delete file | `del output.txt` |
+| Delete folder | `rmdir /s /q folder` |
+| Create folder | `mkdir newfolder` |
+| Show current dir | `cd` |
+
+### Linux / macOS (sh)
+
+| Task | Command |
+|------|---------|
+| List files | `ls -la` |
+| Read file | `cat README.md` |
+| Write to file | `echo hello > output.txt` |
+| Find files | `find . -name '*.py' -type f` |
+| Search content | `grep -r "pattern" --include='*.py' .` |
+| Copy file | `cp src.txt dst.txt` |
+| Move file | `mv src.txt dst.txt` |
+| Delete file | `rm output.txt` |
+| Delete folder | `rm -rf folder` |
+| Create folder | `mkdir -p newfolder` |
+| Show current dir | `pwd` |
+
 ## Shell vs Process Manager
 
 | Need | Tool | Why |
 |------|------|-----|
-| List files, read files, move/copy | **shell_execute** | Sandboxed, safe |
-| Delete files (`rm`, `del`) | **shell_execute** | Confined to workspace |
-| Search content (grep, find) | **shell_execute** | Fast, no PATH needed |
-| Echo, cat, simple file ops | **shell_execute** | Sandboxed |
+| List/read/copy/move files | **shell_execute** | Sandboxed, safe |
+| Delete files | **shell_execute** | Confined to workspace |
+| Search file content | **shell_execute** | Fast, no PATH needed |
 | `npm install`, `pip install` | **process_manager** | Needs PATH |
 | `python script.py`, `node app.js` | **process_manager** | Needs PATH |
-| Dev servers, watchers, build tools | **process_manager** | Long-running |
+| Dev servers, watchers | **process_manager** | Long-running |
 
-The shell is the **only safe tool for file deletion**. It runs inside the agent's workspace with `virtual_mode=True` (path traversal blocked). The process_manager blocks destructive commands like `rm` since it has full PATH and could reach outside the workspace.
-
-## OS-Specific Commands
-
-For OS-specific syntax and tools, refer to:
-- **bash-skill** -- Linux/macOS commands (find, grep, apt, brew)
-- **powershell-skill** -- Windows commands (Get-ChildItem, Select-String)
-- **wsl-skill** -- Running Linux tools on Windows via WSL
-
-These skills are in the `terminal` skill folder alongside this one.
+The shell is the **only safe tool for file deletion**. It runs inside the agent's workspace with `virtual_mode=True` (path traversal blocked). The process_manager blocks destructive commands since it has full PATH.
 
 ## Guidelines
 
-1. **Short-lived commands only** -- the shell waits for completion
-2. **No system PATH** -- `npm`, `python`, `node` will not be found. Use process_manager
-3. **No daemons/servers** -- commands that don't exit will hang until timeout
-4. Exit code 124 = timed out
-5. Check `truncated` flag for large output
-6. Use relative paths (workspace is the working directory)
-7. Chain with `&&` for sequential execution
-8. Avoid interactive commands requiring user input
+1. **Detect OS first** -- use `ver` to check Windows vs Unix, then use correct commands
+2. **Short-lived commands only** -- the shell waits for completion
+3. **No system PATH** -- `npm`, `python`, `node` will not be found. Use process_manager
+4. **No daemons/servers** -- commands that don't exit will hang until timeout
+5. Use relative paths (workspace is the working directory)
+6. Chain with `&&` for sequential execution
+7. Avoid interactive commands requiring user input

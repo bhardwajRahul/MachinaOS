@@ -161,6 +161,13 @@ class ResponseExtractor:
             if getattr(msg, "type", None) == "ai" and getattr(msg, "tool_calls", None):
                 iterations += 1
 
+        # Log all messages for debugging
+        for i, msg in enumerate(messages):
+            msg_type = getattr(msg, "type", "?")
+            has_tools = bool(getattr(msg, "tool_calls", None))
+            content_preview = str(getattr(msg, "content", ""))[:150]
+            logger.info("[DeepAgent] msg[%d] type=%s tool_calls=%s content=%s", i, msg_type, has_tools, content_preview)
+
         # Extract final AI response
         for msg in reversed(messages):
             if getattr(msg, "type", None) == "ai" and hasattr(msg, "content"):
@@ -184,6 +191,11 @@ class ResponseExtractor:
                 from services.ai import extract_thinking_from_response
                 _, thinking_content = extract_thinking_from_response(msg)
                 break
+
+        logger.info("[DeepAgent] Extracted: response_len=%d thinking=%s iterations=%d",
+                    len(response_content), thinking_content is not None, max(iterations, 1))
+        if not response_content:
+            logger.warning("[DeepAgent] Empty response extracted from %d messages", len(messages))
 
         return {
             "response": response_content,
