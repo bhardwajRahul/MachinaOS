@@ -8,6 +8,7 @@ import { ExecutionService, ExecutionResult } from './services/executionService';
 import { useAppTheme } from './hooks/useAppTheme';
 import { CalendarClock, PlayCircle } from 'lucide-react';
 import { SKILL_NODE_TYPES } from './nodeDefinitions/skillNodes';
+import { ActionButton } from './components/ui/action-button';
 
 const ParameterPanel: React.FC = () => {
   const theme = useAppTheme();
@@ -156,128 +157,53 @@ const ParameterPanel: React.FC = () => {
     return <span>{icon}</span>;
   };
 
-  // Action button style helper - Dracula theme for visibility
-  const actionButtonStyle = (color: string, isDisabled = false): React.CSSProperties => ({
-    height: '32px',
-    padding: '0 14px',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    backgroundColor: isDisabled ? `${theme.colors.primary}15` : `${color}25`,
-    color: isDisabled ? theme.colors.primary : color,
-    border: `1px solid ${isDisabled ? `${theme.colors.primary}40` : `${color}60`}`,
-    borderRadius: theme.borderRadius.sm,
-    fontSize: '13px',
-    fontWeight: 600,
-    cursor: isDisabled ? 'not-allowed' : 'pointer',
-    transition: `all ${theme.transitions.fast}`,
-    fontFamily: 'system-ui, sans-serif',
-  });
-
   // Header actions with node name and buttons in middle area
   const headerActions = (
-    <div style={{
-      display: 'flex',
-      gap: '16px',
-      alignItems: 'center'
-    }}>
-      {/* Node Name */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        fontSize: '15px',
-        fontWeight: 600,
-        color: theme.colors.text,
-        fontFamily: 'system-ui, sans-serif'
-      }}>
+    <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 text-[15px] font-semibold text-foreground">
         {renderIcon(nodeDefinition.icon)}
         <span>{nodeDefinition.displayName}</span>
         {hasUnsavedChanges && <span style={{ color: theme.accent.orange }}>*</span>}
       </div>
-
-      {/* Buttons: Run, Save, Cancel */}
-      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-        {/* Run Button - hide for monitor nodes since they show live data */}
+      <div className="flex items-center gap-2">
         {canExecute && !hideRunButton && !isMonitorNode && (
-          <button
-            style={actionButtonStyle(theme.dracula.green, isExecuting)}
+          <ActionButton
+            tone="green"
             onClick={handleRun}
             disabled={isExecuting}
             title={isExecuting ? 'Execution in progress...' : 'Execute this node'}
-            onMouseEnter={(e) => {
-              if (!isExecuting) {
-                e.currentTarget.style.backgroundColor = `${theme.dracula.green}40`;
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!isExecuting) {
-                e.currentTarget.style.backgroundColor = `${theme.dracula.green}25`;
-              }
-            }}
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M8 5v14l11-7z"/>
+              <path d="M8 5v14l11-7z" />
             </svg>
             {isExecuting ? 'Running...' : 'Run'}
-          </button>
+          </ActionButton>
         )}
-
-        {/* Save Button */}
-        <button
-          style={actionButtonStyle(theme.dracula.purple, !hasUnsavedChanges)}
-          onClick={handleSave}
-          disabled={!hasUnsavedChanges}
-          onMouseEnter={(e) => {
-            if (hasUnsavedChanges) {
-              e.currentTarget.style.backgroundColor = `${theme.dracula.purple}40`;
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (hasUnsavedChanges) {
-              e.currentTarget.style.backgroundColor = `${theme.dracula.purple}25`;
-            }
-          }}
-        >
+        <ActionButton tone="purple" onClick={handleSave} disabled={!hasUnsavedChanges}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-            <polyline points="17 21 17 13 7 13 7 21"/>
-            <polyline points="7 3 7 8 15 8"/>
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+            <polyline points="17 21 17 13 7 13 7 21" />
+            <polyline points="7 3 7 8 15 8" />
           </svg>
           Save
-        </button>
-
-        {/* Cancel/Stop Button */}
-        <button
-          style={actionButtonStyle(theme.dracula.pink, false)}
+        </ActionButton>
+        <ActionButton
+          tone="pink"
           onClick={async () => {
             if (isWaiting && selectedNode) {
-              // Cancel the event wait for trigger nodes - don't close modal, let execution complete
-              console.log('[ParameterPanel] Cancelling event wait:', {
-                nodeId: selectedNode.id,
-                waiterId: nodeStatus?.data?.waiter_id,
-                nodeStatus
-              });
               const result = await cancelEventWait(selectedNode.id, nodeStatus?.data?.waiter_id);
               console.log('[ParameterPanel] Cancel result:', result);
-              // Don't call handleCancel() - let the execution complete with cancelled state
               return;
             }
             handleCancel();
           }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = `${theme.dracula.pink}40`;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = `${theme.dracula.pink}25`;
-          }}
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18"/>
-            <line x1="6" y1="6" x2="18" y2="18"/>
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
           </svg>
           {isWaiting ? 'Stop' : 'Cancel'}
-        </button>
+        </ActionButton>
       </div>
     </div>
   );

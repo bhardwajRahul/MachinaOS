@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { HelpCircle } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { ActionButton } from '@/components/ui/action-button';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
@@ -147,113 +148,46 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     color: theme.colors.text,
   };
 
-  // Button style helper following ParameterPanel pattern
-  const actionButtonStyle = (color: string, isDisabled = false): React.CSSProperties => ({
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    padding: '6px 12px',
-    backgroundColor: isDisabled ? `${theme.colors.primary}15` : `${color}25`,
-    color: isDisabled ? theme.colors.primary : color,
-    border: `1px solid ${isDisabled ? `${theme.colors.primary}40` : `${color}60`}`,
-    borderRadius: theme.borderRadius.sm,
-    fontSize: '13px',
-    fontWeight: 600,
-    cursor: isDisabled ? 'not-allowed' : 'pointer',
-    transition: `all ${theme.transitions.fast}`,
-    fontFamily: 'system-ui, sans-serif',
-  });
-
   // Header actions with title and buttons
   const headerActions = (
-    <div style={{
-      display: 'flex',
-      gap: '16px',
-      alignItems: 'center'
-    }}>
-      {/* Title */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        fontSize: '15px',
-        fontWeight: 600,
-        color: theme.colors.text,
-        fontFamily: 'system-ui, sans-serif'
-      }}>
+    <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 text-[15px] font-semibold text-foreground">
         <span>{'\u2699'}</span>
         <span>Settings</span>
       </div>
-
-      {/* Buttons: Reset, Save, Close */}
-      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-        {/* Reset Button */}
-        <button
-          style={actionButtonStyle(theme.dracula.orange, isSaving)}
+      <div className="flex items-center gap-2">
+        <ActionButton
+          tone="orange"
           onClick={handleReset}
           disabled={isSaving}
           title="Reset to default settings"
-          onMouseEnter={(e) => {
-            if (!isSaving) {
-              e.currentTarget.style.backgroundColor = `${theme.dracula.orange}40`;
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (!isSaving) {
-              e.currentTarget.style.backgroundColor = `${theme.dracula.orange}25`;
-            }
-          }}
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-            <path d="M3 3v5h5"/>
+            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+            <path d="M3 3v5h5" />
           </svg>
           Reset
-        </button>
-
-        {/* Save Button */}
-        <button
-          style={actionButtonStyle(theme.dracula.green, isSaving)}
+        </ActionButton>
+        <ActionButton
+          tone="green"
           onClick={handleSave}
           disabled={isSaving}
           title="Save settings"
-          onMouseEnter={(e) => {
-            if (!isSaving) {
-              e.currentTarget.style.backgroundColor = `${theme.dracula.green}40`;
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (!isSaving) {
-              e.currentTarget.style.backgroundColor = `${theme.dracula.green}25`;
-            }
-          }}
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-            <polyline points="17 21 17 13 7 13 7 21"/>
-            <polyline points="7 3 7 8 15 8"/>
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+            <polyline points="17 21 17 13 7 13 7 21" />
+            <polyline points="7 3 7 8 15 8" />
           </svg>
           {isSaving ? 'Saving...' : 'Save'}
-        </button>
-
-        {/* Close Button */}
-        <button
-          style={actionButtonStyle(theme.dracula.pink, false)}
-          onClick={onClose}
-          title="Close settings"
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = `${theme.dracula.pink}40`;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = `${theme.dracula.pink}25`;
-          }}
-        >
+        </ActionButton>
+        <ActionButton tone="pink" onClick={onClose} title="Close settings">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18"/>
-            <line x1="6" y1="6" x2="18" y2="18"/>
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
           </svg>
           Close
-        </button>
+        </ActionButton>
       </div>
     </div>
   );

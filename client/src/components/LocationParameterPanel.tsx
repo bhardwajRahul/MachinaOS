@@ -4,6 +4,7 @@ import LocationPanelLayout from './parameterPanel/LocationPanelLayout';
 import { useParameterPanel } from '../hooks/useParameterPanel';
 import { ExecutionService } from '../services/executionService';
 import { useAppTheme } from '../hooks/useAppTheme';
+import { ActionButton } from './ui/action-button';
 
 const LocationParameterPanel: React.FC = () => {
   const theme = useAppTheme();
@@ -60,74 +61,31 @@ const LocationParameterPanel: React.FC = () => {
     return null;
   }
 
-  // Action button style helper - matches main ParameterPanel
-  const actionButtonStyle = (color: string, isDisabled = false): React.CSSProperties => ({
-    height: '32px',
-    padding: '0 14px',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    backgroundColor: isDisabled ? `${theme.colors.primary}15` : `${color}25`,
-    color: isDisabled ? theme.colors.primary : color,
-    border: `1px solid ${isDisabled ? `${theme.colors.primary}40` : `${color}60`}`,
-    borderRadius: theme.borderRadius.sm,
-    fontSize: '13px',
-    fontWeight: 600,
-    cursor: isDisabled ? 'not-allowed' : 'pointer',
-    transition: `all ${theme.transitions.fast}`,
-  });
-
   // Header actions with node name and buttons in middle area
   const headerActions = (
-    <div style={{
-      display: 'flex',
-      gap: '16px',
-      alignItems: 'center'
-    }}>
-      {/* Node Name */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        fontSize: '15px',
-        fontWeight: 600,
-        color: theme.colors.text
-      }}>
+    <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 text-[15px] font-semibold text-foreground">
         <span>{nodeDefinition.icon}</span>
         <span>{nodeDefinition.displayName}</span>
         {hasUnsavedChanges && <span style={{ color: theme.accent.orange }}>*</span>}
       </div>
-
-      {/* Buttons: Run, Save, Cancel */}
-      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-        {/* Run Button */}
+      <div className="flex items-center gap-2">
         {canExecute && (
-          <button
-            style={actionButtonStyle(theme.dracula.green, isExecuting)}
+          <ActionButton
+            tone="green"
             onClick={handleRun}
             disabled={isExecuting}
             title={isExecuting ? 'Execution in progress...' : 'Execute this node'}
           >
             {isExecuting ? 'Running...' : 'Run'}
-          </button>
+          </ActionButton>
         )}
-
-        {/* Save Button */}
-        <button
-          style={actionButtonStyle(theme.dracula.purple, !hasUnsavedChanges)}
-          onClick={handleSave}
-          disabled={!hasUnsavedChanges}
-        >
+        <ActionButton tone="purple" onClick={handleSave} disabled={!hasUnsavedChanges}>
           Save
-        </button>
-
-        {/* Cancel Button */}
-        <button
-          style={actionButtonStyle(theme.dracula.pink, false)}
-          onClick={handleCancel}
-        >
+        </ActionButton>
+        <ActionButton tone="pink" onClick={handleCancel}>
           Cancel
-        </button>
+        </ActionButton>
       </div>
     </div>
   );
