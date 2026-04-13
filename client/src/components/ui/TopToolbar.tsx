@@ -1,5 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Select } from 'antd';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAppTheme } from '../../hooks/useAppTheme';
@@ -88,18 +96,6 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
     saveGlobalModel(provider, model);
     onGlobalModelChange?.(provider, model);
   }, [saveGlobalModel, onGlobalModelChange]);
-
-  // Build antd Select options grouped by provider
-  const globalModelOptions = globalModelState.providers.map(vp => {
-    const meta = AI_PROVIDER_META[vp.provider];
-    return {
-      label: <span style={{ color: meta?.color, fontWeight: theme.fontWeight.semibold, fontSize: theme.fontSize.xs }}>{meta?.label || vp.provider}</span>,
-      options: (vp.popular_models.length > 0 ? vp.popular_models : vp.models.slice(0, 5)).map(m => ({
-        label: <span style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.sm }}>{m}</span>,
-        value: `${vp.provider}::${m}`,
-      })),
-    };
-  });
 
   const globalSelectValue = globalModelState.global_provider && globalModelState.global_model
     ? `${globalModelState.global_provider}::${globalModelState.global_model}` : undefined;
@@ -436,36 +432,41 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
             fontWeight: theme.fontWeight.semibold,
             whiteSpace: 'nowrap',
           }}>Set Global Model</span>
-          <Select
-            value={globalSelectValue}
-            onChange={handleSelectGlobalModel}
-            options={globalModelOptions}
-            placeholder="Select model..."
-            showSearch
-            optionFilterProp="label"
-            virtual={false}
-            popupMatchSelectWidth={false}
-            getPopupContainer={(trigger) => trigger.parentElement || document.body}
-            style={{ width: 'auto' }}
-            labelRender={(props) => {
-              if (!globalModelState.global_model) return <span>{props.label}</span>;
-              return (
-                <span style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.sm }}>
-                  {selectedProviderMeta && (
-                    <span style={{
-                      width: theme.nodeSize.statusIndicator,
-                      height: theme.nodeSize.statusIndicator,
-                      borderRadius: '50%',
-                      backgroundColor: selectedProviderMeta.color,
-                      display: 'inline-block',
-                      flexShrink: 0,
-                    }} />
-                  )}
-                  <span style={{ fontSize: theme.fontSize.sm }}>{globalModelState.global_model}</span>
-                </span>
-              );
-            }}
-          />
+          <Select value={globalSelectValue} onValueChange={handleSelectGlobalModel}>
+            <SelectTrigger className="h-8 w-auto min-w-[180px]">
+              <SelectValue placeholder="Select model...">
+                {globalModelState.global_model && (
+                  <span className="flex items-center gap-2">
+                    {selectedProviderMeta && (
+                      <span
+                        className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: selectedProviderMeta.color }}
+                      />
+                    )}
+                    <span>{globalModelState.global_model}</span>
+                  </span>
+                )}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {globalModelState.providers.map((vp) => {
+                const meta = AI_PROVIDER_META[vp.provider];
+                const models = vp.popular_models.length > 0 ? vp.popular_models : vp.models.slice(0, 5);
+                return (
+                  <SelectGroup key={vp.provider}>
+                    <SelectLabel style={{ color: meta?.color, fontSize: theme.fontSize.xs }}>
+                      {meta?.label || vp.provider}
+                    </SelectLabel>
+                    {models.map((m) => (
+                      <SelectItem key={`${vp.provider}::${m}`} value={`${vp.provider}::${m}`}>
+                        {m}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                );
+              })}
+            </SelectContent>
+          </Select>
           {globalSelectValue && (
             <button
               onClick={() => globalModelState.global_provider && globalModelState.global_model && onOverrideAllAgents?.(globalModelState.global_provider, globalModelState.global_model)}

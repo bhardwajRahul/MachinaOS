@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Progress, Statistic, Row, Col, InputNumber, Button } from 'antd';
-import { Loader2 } from 'lucide-react';
+import { Progress, Statistic, Row, Col, InputNumber } from 'antd';
+import { Loader2, Save } from 'lucide-react';
 import { toast } from 'sonner';
+
+import { Button } from '@/components/ui/button';
 import {
   Accordion,
   AccordionItem,
   AccordionTrigger,
   AccordionContent,
 } from '@/components/ui/accordion';
-import { ThunderboltOutlined, EditOutlined, SaveOutlined } from '@ant-design/icons';
+import { ThunderboltOutlined, EditOutlined } from '@ant-design/icons';
 import ParameterRenderer from '../ParameterRenderer';
 import ToolSchemaEditor from './ToolSchemaEditor';
 import MasterSkillEditor from './MasterSkillEditor';
@@ -841,10 +843,8 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
                                   style={{ width: 100 }}
                                 />
                                 <Button
-                                  size="small"
-                                  type="primary"
-                                  icon={<SaveOutlined />}
-                                  loading={savingThreshold}
+                                  size="icon-sm"
+                                  disabled={savingThreshold}
                                   onClick={async () => {
                                     setSavingThreshold(true);
                                     try {
@@ -863,7 +863,9 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
                                       setSavingThreshold(false);
                                     }
                                   }}
-                                />
+                                >
+                                  {savingThreshold ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                                </Button>
                               </div>
                             </div>
                           ) : (

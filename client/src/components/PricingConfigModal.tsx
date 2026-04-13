@@ -4,10 +4,10 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { InputNumber } from 'antd';
 import { Loader2, RefreshCw, Save } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Accordion,
   AccordionItem,
@@ -34,6 +34,30 @@ interface Props {
 // HELPER COMPONENTS
 // ============================================================================
 
+interface MoneyInputProps {
+  value: number | undefined;
+  onChange: (v: number) => void;
+  widthClass?: string;
+  min?: number;
+  step?: number;
+}
+
+const MoneyInput: React.FC<MoneyInputProps> = ({ value, onChange, widthClass = 'w-20', min = 0, step = 0.01 }) => (
+  <div className={`relative ${widthClass}`}>
+    <span className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-xs text-muted-foreground">
+      $
+    </span>
+    <Input
+      type="number"
+      min={min}
+      step={step}
+      value={value ?? ''}
+      onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
+      className="h-7 pl-5 pr-1 text-xs"
+    />
+  </div>
+);
+
 interface LLMModelRowProps {
   model: string;
   pricing: LLMPricing;
@@ -58,53 +82,21 @@ const LLMModelRow: React.FC<LLMModelRowProps> = ({ model, pricing, onChange, the
     }}>
       {model === '_default' ? 'Default' : model}
     </div>
-    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-      <span style={{ fontSize: 11, color: theme.colors.textSecondary }}>Input:</span>
-      <InputNumber
-        size="small"
-        min={0}
-        step={0.01}
-        value={pricing.input}
-        onChange={(v) => onChange('input', v ?? 0)}
-        style={{ width: 80 }}
-        prefix="$"
-      />
-      <span style={{ fontSize: 11, color: theme.colors.textSecondary }}>Output:</span>
-      <InputNumber
-        size="small"
-        min={0}
-        step={0.01}
-        value={pricing.output}
-        onChange={(v) => onChange('output', v ?? 0)}
-        style={{ width: 80 }}
-        prefix="$"
-      />
+    <div className="flex items-center gap-2">
+      <span className="text-[11px] text-muted-foreground">Input:</span>
+      <MoneyInput value={pricing.input} onChange={(v) => onChange('input', v)} />
+      <span className="text-[11px] text-muted-foreground">Output:</span>
+      <MoneyInput value={pricing.output} onChange={(v) => onChange('output', v)} />
       {pricing.cache_read !== undefined && (
         <>
-          <span style={{ fontSize: 11, color: theme.colors.textSecondary }}>Cache:</span>
-          <InputNumber
-            size="small"
-            min={0}
-            step={0.01}
-            value={pricing.cache_read}
-            onChange={(v) => onChange('cache_read', v ?? 0)}
-            style={{ width: 70 }}
-            prefix="$"
-          />
+          <span className="text-[11px] text-muted-foreground">Cache:</span>
+          <MoneyInput value={pricing.cache_read} onChange={(v) => onChange('cache_read', v)} widthClass="w-[72px]" />
         </>
       )}
       {pricing.reasoning !== undefined && (
         <>
-          <span style={{ fontSize: 11, color: theme.colors.textSecondary }}>Reasoning:</span>
-          <InputNumber
-            size="small"
-            min={0}
-            step={0.01}
-            value={pricing.reasoning}
-            onChange={(v) => onChange('reasoning', v ?? 0)}
-            style={{ width: 80 }}
-            prefix="$"
-          />
+          <span className="text-[11px] text-muted-foreground">Reasoning:</span>
+          <MoneyInput value={pricing.reasoning} onChange={(v) => onChange('reasoning', v)} />
         </>
       )}
     </div>
@@ -137,15 +129,7 @@ const APIPricingRow: React.FC<APIPricingRowProps> = ({ operation, price, onChang
       }}>
         {operation}
       </div>
-      <InputNumber
-        size="small"
-        min={0}
-        step={0.001}
-        value={price}
-        onChange={(v) => onChange(v ?? 0)}
-        style={{ width: 100 }}
-        prefix="$"
-      />
+      <MoneyInput value={price} onChange={onChange} widthClass="w-24" step={0.001} />
     </div>
   );
 };
