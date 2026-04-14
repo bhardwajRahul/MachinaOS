@@ -146,5 +146,23 @@ export function resolveNodeDescription(
     return merged;
   });
 
-  return { ...backend, properties: mergedProperties };
+  // Top-level UX-field fallback: frontend owns visual assets (SVG data
+  // URIs in nodeDefinitions/assets/icons/, provider brand colors) — backend
+  // NODE_METADATA carries empty strings for these to avoid duplicating SVG
+  // payload across the wire. Fall back to local when backend is empty so
+  // slimmed nodes keep their SVG icons and color swatches.
+  const pick = <T,>(bv: T | undefined, lv: T | undefined): T | undefined =>
+    bv !== undefined && bv !== null && bv !== '' ? bv : lv;
+  return {
+    ...backend,
+    icon: pick(backend.icon, localFallback.icon) ?? '',
+    subtitle: pick(backend.subtitle, localFallback.subtitle),
+    description: pick(backend.description, localFallback.description) ?? '',
+    defaults: {
+      ...localFallback.defaults,
+      ...backend.defaults,
+      color: pick(backend.defaults?.color, localFallback.defaults?.color),
+    },
+    properties: mergedProperties,
+  };
 }
