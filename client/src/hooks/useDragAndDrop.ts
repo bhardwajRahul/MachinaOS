@@ -3,9 +3,16 @@ import { Node } from 'reactflow';
 import { snapToGrid, getDefaultNodePosition } from '../utils/workflow';
 import { theme } from '../styles/theme';
 import { nodeDefinitions } from '../nodeDefinitions';
-import { SPECIALIZED_AGENT_TYPES } from '../nodeDefinitions/specializedAgentNodes';
+import { getCachedNodeSpec } from '../lib/nodeSpec';
 
-const AGENT_TYPES = new Set(['aiAgent', 'chatAgent', ...SPECIALIZED_AGENT_TYPES]);
+// Wave 10.E: agent detection reads `componentKind: "agent"` from the
+// backend NodeSpec. Falls back to the node-definition group during the
+// brief window before the spec cache warms.
+const isAgentType = (nodeType: string): boolean => {
+  const spec = getCachedNodeSpec(nodeType);
+  if (spec?.componentKind === 'agent') return true;
+  return nodeType === 'aiAgent' || nodeType === 'chatAgent';
+};
 
 interface UseDragAndDropProps {
   nodes: Node[];
@@ -90,8 +97,8 @@ export const useDragAndDrop = ({ nodes, setNodes, saveNodeParameters, globalMode
         // Save full default parameters to DB only (not to node.data)
         const defaults = nodeData.data || {};
 
-        // Apply global model defaults for agent nodes
-        if (globalModelDefaults && AGENT_TYPES.has(nodeData.type)) {
+        // Apply global model defaults for agent nodes (componentKind="agent")
+        if (globalModelDefaults && isAgentType(nodeData.type)) {
           defaults.provider = globalModelDefaults.provider;
           defaults.model = globalModelDefaults.model;
         }

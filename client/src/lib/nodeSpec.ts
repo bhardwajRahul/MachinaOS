@@ -76,6 +76,40 @@ export function getCachedNodeSpec(nodeType: string): NodeSpec | null {
 }
 
 /**
+ * Wave 10.E: enumerate every NodeSpec the cache currently holds.
+ * Used by component palette / drag-drop / execution routing to derive
+ * filtered lists from spec metadata instead of importing per-family
+ * type arrays from `nodeDefinitions/*`.
+ */
+export function listCachedNodeSpecs(): NodeSpec[] {
+  const all = queryClient.getQueriesData<NodeSpec | null>({ queryKey: ['nodeSpec'] });
+  return all
+    .map(([, spec]) => spec)
+    .filter((s): s is NodeSpec => !!s);
+}
+
+/**
+ * Wave 10.E: types whose backend spec lists ``group`` includes the
+ * given group key. Returns an empty array until prefetch lands; callers
+ * that need a synchronous answer should rely on the spec-driven
+ * dispatcher rather than this enumeration.
+ */
+export function getNodeTypesInGroup(group: string): string[] {
+  return listCachedNodeSpecs()
+    .filter(s => (s.group ?? []).includes(group))
+    .map(s => s.type);
+}
+
+/**
+ * Wave 10.E: types whose backend spec carries the given componentKind.
+ */
+export function getNodeTypesWithKind(kind: NonNullable<NodeSpec['componentKind']>): string[] {
+  return listCachedNodeSpecs()
+    .filter(s => s.componentKind === kind)
+    .map(s => s.type);
+}
+
+/**
  * Wave 6 Phase 5.b: backend-group membership check.
  *
  * Returns `undefined` when the NodeSpec isn't cached yet (caller falls

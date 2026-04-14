@@ -1,19 +1,5 @@
 import { nodeDefinitions } from '../nodeDefinitions';
-import { ANDROID_SERVICE_NODE_TYPES } from '../nodeDefinitions/androidServiceNodes';
-import { SCHEDULER_NODE_TYPES } from '../nodeDefinitions/schedulerNodes';
-import { CODE_NODE_TYPES } from '../nodeDefinitions/codeNodes';
-import { UTILITY_NODE_TYPES } from '../nodeDefinitions/utilityNodes';
-import { DOCUMENT_NODE_TYPES } from '../nodeDefinitions/documentNodes';
-import { SPECIALIZED_AGENT_TYPES } from '../nodeDefinitions/specializedAgentNodes';
-import { TWITTER_NODE_TYPES } from '../nodeDefinitions/twitterNodes';
-import { GOOGLE_WORKSPACE_NODE_TYPES } from '../nodeDefinitions/googleWorkspaceNodes';
-import { APIFY_NODE_TYPES } from '../nodeDefinitions/apifyNodes';
-import { SEARCH_NODE_TYPES } from '../nodeDefinitions/searchNodes';
-import { TELEGRAM_NODE_TYPES } from '../nodeDefinitions/telegramNodes';
-import { CRAWLEE_NODE_TYPES } from '../nodeDefinitions/crawleeNodes';
-import { BROWSER_NODE_TYPES } from '../nodeDefinitions/browserNodes';
-import { EMAIL_NODE_TYPES } from '../nodeDefinitions/emailNodes';
-import { AI_CHAT_MODEL_TYPES } from '../nodeDefinitions/aiModelNodes';
+import { getCachedNodeSpec } from '../lib/nodeSpec';
 import { Node, Edge } from 'reactflow';
 import { INodeExecutionData } from '../types/INodeProperties';
 import { API_CONFIG } from '../config/api';
@@ -192,69 +178,15 @@ export class ExecutionService {
   }
 
   /**
-   * Check if node type is supported by backend execution
+   * Wave 10.E: a node is executable iff the backend has a NodeSpec
+   * for it. The plugin registry is the single source of truth — every
+   * type with an input model + handler appears in the spec endpoint,
+   * so cache lookup answers "supported?" without enumerating families.
+   * Falls back to the legacy frontend `nodeDefinitions` registry while
+   * the spec cache is still warming.
    */
   static isNodeTypeSupported(nodeType: string): boolean {
-    const supportedTypes = [
-      // AI Nodes
-      'aiAgent',
-      'chatAgent',
-      // Specialized Agent Nodes (use chatAgent backend handler)
-      ...SPECIALIZED_AGENT_TYPES,
-      // Note: simpleMemory is passive - accessed by AI Agent automatically, not executed directly
-      ...AI_CHAT_MODEL_TYPES,
-      // Google Maps Nodes
-      'gmaps_create',
-      'gmaps_locations',
-      'gmaps_nearby_places',
-      // WhatsApp Nodes
-      'whatsappSend',
-      'whatsappReceive',
-      'whatsappDb',
-      // Text Processing Nodes
-      'textGenerator',
-      'fileHandler',
-      // Android Services (16 individual nodes)
-      ...ANDROID_SERVICE_NODE_TYPES,
-      // Scheduler Nodes
-      ...SCHEDULER_NODE_TYPES,
-      // Code Execution Nodes
-      ...CODE_NODE_TYPES,
-      // Utility Nodes (HTTP, Webhooks)
-      ...UTILITY_NODE_TYPES,
-      // Document Processing Nodes
-      ...DOCUMENT_NODE_TYPES,
-      // Twitter/X Nodes
-      ...TWITTER_NODE_TYPES,
-      // Google Workspace Nodes (consolidated)
-      ...GOOGLE_WORKSPACE_NODE_TYPES,
-      // Apify web scraping
-      ...APIFY_NODE_TYPES,
-      // Crawlee web scraping
-      ...CRAWLEE_NODE_TYPES,
-      // Browser automation
-      ...BROWSER_NODE_TYPES,
-      // Search API nodes
-      ...SEARCH_NODE_TYPES,
-      // Telegram Nodes
-      ...TELEGRAM_NODE_TYPES,
-      // Proxy Nodes
-      'proxyRequest',
-      'proxyConfig',
-      'proxyStatus',
-      // Filesystem & Shell
-      'fileRead',
-      'fileModify',
-      'shell',
-      'fsSearch',
-      // Todo planning
-      'writeTodos',
-      // Process manager
-      'processManager',
-      // Email (Himalaya CLI)
-      ...EMAIL_NODE_TYPES,
-    ];
-
-    return supportedTypes.includes(nodeType);
+    if (getCachedNodeSpec(nodeType)) return true;
+    return nodeType in nodeDefinitions;
   }
 }

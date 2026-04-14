@@ -5,16 +5,12 @@ import { NodeData } from '../types/NodeTypes';
 import { useAppStore } from '../store/useAppStore';
 import { nodeDefinitions } from '../nodeDefinitions';
 import { useAppTheme } from '../hooks/useAppTheme';
-import { ANDROID_SERVICE_NODE_TYPES } from '../nodeDefinitions/androidServiceNodes';
 import { useWebSocket, useWhatsAppStatus } from '../contexts/WebSocketContext';
 import { useApiKeys } from '../hooks/useApiKeys';
-import { isNodeInBackendGroup, resolveNodeDescription } from '../lib/nodeSpec';
+import { getCachedNodeSpec, isNodeInBackendGroup, resolveNodeDescription } from '../lib/nodeSpec';
 import { getAIProviderIcon } from './icons/AIProviderIcons';
 import { PlayCircle, CalendarClock } from 'lucide-react';
 import { AI_MODEL_PROVIDER_MAP } from '../nodeDefinitions/aiModelNodes';
-
-// Android service nodes that can connect to Android Toolkit as tools
-const ANDROID_TOOL_CAPABLE_NODES = ANDROID_SERVICE_NODE_TYPES;
 
 // Nodes with 'tool' in their group can connect to AI Agent/Zeenie tool handles
 const hasToolGroup = (definition: any): boolean => {
@@ -22,16 +18,10 @@ const hasToolGroup = (definition: any): boolean => {
   return groups.includes('tool');
 };
 
-// Google Maps node types
-const GOOGLE_MAPS_NODE_TYPES = ['gmaps_create', 'gmaps_locations', 'gmaps_nearby_places'];
-
-// WhatsApp node types
-const WHATSAPP_NODE_TYPES = ['whatsappSend', 'whatsappReceive', 'whatsappDb'];
-
-// Nodes that should not have output handles (input-only nodes)
-const NO_OUTPUT_NODE_TYPES = ['console'];
-
-// AI Model node types with their provider IDs (derived from aiModelNodes registry)
+// Wave 10.E: AI model dispatch + provider-id-by-type still need a
+// frontend lookup because the per-provider visual mapping
+// (icon component, credential key) lives in the icon registry below.
+// The map of node types itself comes from the backend NodeSpec registry.
 const AI_MODEL_NODE_TYPES = AI_MODEL_PROVIDER_MAP;
 
 const CREDENTIAL_TO_PROVIDER: Record<string, string> = {
@@ -89,10 +79,14 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
     };
   }, [executionStatus, isGlowing]);
 
-  // Wave 6 Phase 5.b: prefer backend NodeSpec group membership, fall
-  // back to the local *_NODE_TYPES array when the spec hasn't loaded
-  // yet (cold cache + flag off). Behaviour identical when flag off.
-  const isGoogleMapsNode = isNodeInBackendGroup(type, 'location') ?? (type ? GOOGLE_MAPS_NODE_TYPES.includes(type) : false);
+  // Wave 10.E: backend NodeSpec group membership, with a definition.group
+  // fallback for the brief window before the cache warms. No more local
+  // type arrays; isNodeInBackendGroup returns undefined when the cache
+  // is cold, in which case we read the bundled definition's group list.
+  const groupOf = (t: string | undefined): string[] => (t ? (nodeDefinitions[t]?.group ?? []) : []);
+  const inGroup = (t: string | undefined, g: string): boolean =>
+    isNodeInBackendGroup(t, g) ?? groupOf(t).includes(g);
+  const isGoogleMapsNode = inGroup(type, 'location');
   const googleMapsKeyStatus = isGoogleMapsNode ? getApiKeyStatus('google_maps') : undefined;
 
   // Check if this is an AI model node and get reactive API key status
@@ -104,18 +98,18 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
   // cache cold -> returns local nodeDefinitions entry unchanged.
   const definition = resolveNodeDescription(type || '', nodeDefinitions[type as keyof typeof nodeDefinitions]);
 
-  // Wave 6 Phase 5.b: backend group → legacy fallback
-  const isAndroidNode = isNodeInBackendGroup(type, 'android') ?? (type ? ANDROID_SERVICE_NODE_TYPES.includes(type) : false);
+  // Wave 10.E: backend group membership with bundled-definition fallback
+  const isAndroidNode = inGroup(type, 'android');
 
-  // Check if this node can be used as a tool (connects to Android Toolkit or AI Agent/Zeenie tool handle)
-  const isToolCapable = type ? (ANDROID_TOOL_CAPABLE_NODES.includes(type) || hasToolGroup(definition)) : false;
+  // Check if this node can be used as a tool: any Android service node
+  // can connect to Android Toolkit, plus any node carrying the 'tool' group.
+  const isToolCapable = isAndroidNode || hasToolGroup(definition);
 
   // Android connection status from WebSocket (real-time updates)
   // Service nodes need a paired device to execute, not just relay connection
   const isAndroidConnected = isAndroidNode && androidStatus.paired;
 
-  // Wave 6 Phase 5.b: backend group → legacy fallback
-  const isWhatsAppNode = isNodeInBackendGroup(type, 'whatsapp') ?? (type ? WHATSAPP_NODE_TYPES.includes(type) : false);
+  const isWhatsAppNode = inGroup(type, 'whatsapp');
 
   // WhatsApp connection status from WebSocket (real-time updates)
   const whatsappStatus = useWhatsAppStatus();
@@ -653,8 +647,9 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
           title="Service Input"
         />
 
-        {/* Square Output Handle */}
-        {!NO_OUTPUT_NODE_TYPES.includes(type || '') && (
+        {/* Square Output Handle (Wave 10.E: spec.hideOutputHandle replaces the
+            local NO_OUTPUT_NODE_TYPES list) */}
+        {!getCachedNodeSpec(type || '')?.hideOutputHandle && (
           <Handle
             id="output-main"
             type="source"
@@ -676,28 +671,38 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
           />
         )}
 
-        {/* Top Tool Output Handle - for nodes that can connect to AI Agent/Zeenie tool handle */}
-        {isToolCapable && (
-          <Handle
-            id="output-tool"
-            type="source"
-            position={Position.Top}
-            isConnectable={isConnectable}
-            style={{
-              position: 'absolute',
-              top: '-6px',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              width: theme.nodeSize.handle,
-              height: theme.nodeSize.handle,
-              backgroundColor: ANDROID_TOOL_CAPABLE_NODES.includes(type || '') ? '#3DDC84' : nodeColor, // Android green for Android nodes, node color for others
-              border: `2px solid ${theme.isDarkMode ? theme.colors.background : '#ffffff'}`,
-              borderRadius: '50%',
-              zIndex: 20
-            }}
-            title={ANDROID_TOOL_CAPABLE_NODES.includes(type || '') ? 'Connect to Android Toolkit' : 'Connect to AI Agent/Zeenie tool handle'}
-          />
-        )}
+        {/* Top Tool Output Handle.
+            Wave 10.E: color + label come from the node's own spec. The
+            `nodeColor` carries the spec's brand color (Android green for
+            Android services, dracula accents elsewhere). The tooltip
+            reads from the spec's top-position output handle when one is
+            declared there; otherwise falls back to a generic label. */}
+        {isToolCapable && (() => {
+          const spec = getCachedNodeSpec(type || '');
+          const topOut = spec?.handles?.find(h => h.kind === 'output' && h.position === 'top');
+          const tooltip = topOut?.label ?? 'Tool Output';
+          return (
+            <Handle
+              id="output-tool"
+              type="source"
+              position={Position.Top}
+              isConnectable={isConnectable}
+              style={{
+                position: 'absolute',
+                top: '-6px',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                width: theme.nodeSize.handle,
+                height: theme.nodeSize.handle,
+                backgroundColor: nodeColor,
+                border: `2px solid ${theme.isDarkMode ? theme.colors.background : '#ffffff'}`,
+                borderRadius: '50%',
+                zIndex: 20,
+              }}
+              title={tooltip}
+            />
+          );
+        })()}
 
         {/* Output Data Indicator - shows when node has execution output */}
         {executionStatus === 'success' && nodeStatus?.data && (
