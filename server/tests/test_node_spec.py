@@ -738,10 +738,12 @@ class TestNodeSpecContractInvariants:
         from models.node_metadata import NODE_METADATA
         known = {
             "hideInputSection", "hideOutputSection", "hideRunButton",
-            "hasCodeEditor", "isMasterSkillEditor", "isMemoryPanel",
-            "isToolPanel", "isMonitorPanel", "showLocationPanel",
-            "isAndroidToolkit", "isChatTrigger", "isConsoleSink",
-            "hasSkills",
+            "hasCodeEditor", "isMasterSkillEditor", "isMasterSkill",
+            "isMemoryPanel", "isToolPanel", "isMonitorPanel",
+            "showLocationPanel", "isAndroidToolkit", "isChatTrigger",
+            "isConsoleSink", "hasSkills",
+            # Wave 10.A: size hints carried by plugin registrations
+            "width", "height",
         }
         for node_type, meta in NODE_METADATA.items():
             hints = meta.get("uiHints") or {}
@@ -749,4 +751,109 @@ class TestNodeSpecContractInvariants:
             assert not unknown, (
                 f"{node_type}: NODE_METADATA['uiHints'] has unknown flags {unknown}. "
                 "Add to INodeUIHints + to the `known` set here."
+            )
+
+
+class TestPluginContractInvariants:
+    """Wave 10.A invariants: NodeSpec envelope carries the full visual
+    contract for every plugin-registered node. Locks in the guarantee
+    that adding a new node = one register_node call + zero frontend work.
+    """
+
+    VALID_KINDS = {
+        "square", "circle", "trigger", "start",
+        "agent", "chat", "tool", "model", "generic",
+    }
+    VALID_POSITIONS = {"top", "bottom", "left", "right"}
+
+    def _plugin_types(self):
+        # Types registered via services.node_registry.register_node (Wave 10.C).
+        import nodes  # noqa: F401  — import trigger
+        from services.node_registry import registered_node_types
+        # Fall back to any metadata entry that carries componentKind, so the
+        # test still passes for metadata-only registrations (no handler).
+        from models.node_metadata import NODE_METADATA
+        explicit = {t for t, m in NODE_METADATA.items() if "componentKind" in m}
+        return registered_node_types() | explicit
+
+    def test_every_plugin_node_has_component_kind(self):
+        for t in self._plugin_types():
+            spec = get_node_spec(t)
+            assert spec is not None, f"{t}: no NodeSpec emitted"
+            assert spec.get("componentKind") in self.VALID_KINDS, (
+                f"{t}: componentKind={spec.get('componentKind')!r} not in {self.VALID_KINDS}"
+            )
+
+    def test_every_plugin_node_has_color(self):
+        # Color is the brand/accent each node owns. Without it the frontend
+        # can't render borders, glow, or top output handles consistently.
+        for t in self._plugin_types():
+            spec = get_node_spec(t)
+            color = spec.get("color")
+            assert color and isinstance(color, str), f"{t}: missing 'color' string"
+            # Accept hex (#rgb / #rrggbb) or CSS token-style values. Reject empty.
+            assert color.strip() == color and color != "", f"{t}: bad color {color!r}"
+
+    def test_every_plugin_node_has_at_least_one_handle(self):
+        # Even output-only / input-only nodes declare at least one handle
+        # so React Flow knows how to connect them.
+        for t in self._plugin_types():
+            spec = get_node_spec(t)
+            handles = spec.get("handles") or []
+            assert len(handles) >= 1, f"{t}: no handles declared"
+
+    def test_every_handle_is_well_formed(self):
+        for t in self._plugin_types():
+            spec = get_node_spec(t)
+            for h in spec.get("handles") or []:
+                assert "name" in h, f"{t}: handle missing name: {h}"
+                assert h.get("kind") in {"input", "output"}, (
+                    f"{t}.{h.get('name')}: kind={h.get('kind')!r} not input/output"
+                )
+                assert h.get("position") in self.VALID_POSITIONS, (
+                    f"{t}.{h.get('name')}: position={h.get('position')!r} invalid"
+                )
+
+    def test_agent_kind_has_skill_tool_memory_handles(self):
+        # Contract: anything registered as a LangGraph-style agent must
+        # accept skill, tools, memory, and task inputs (the core n8n
+        # AIAgent handle set). Keeps the AIAgentNode renderer honest.
+        for t in self._plugin_types():
+            spec = get_node_spec(t)
+            if spec.get("componentKind") != "agent":
+                continue
+            # Some agents (socialReceive/socialSend) reuse the agent
+            # component for multi-handle rendering but don't take agent
+            # inputs — detect those by group.
+            if "social" in (spec.get("group") or []):
+                continue
+            names = {h.get("name") for h in spec.get("handles") or []}
+            for required in ("input-skill", "input-tools", "input-memory", "input-task"):
+                assert required in names, (
+                    f"{t}: componentKind=agent missing handle {required!r}; got {sorted(names)}"
+                )
+
+    def test_trigger_kind_emits_output(self):
+        # Triggers without an output are useless — they emit events
+        # that downstream nodes subscribe to.
+        for t in self._plugin_types():
+            spec = get_node_spec(t)
+            if spec.get("componentKind") != "trigger":
+                continue
+            outputs = [h for h in spec.get("handles") or [] if h.get("kind") == "output"]
+            assert outputs, f"{t}: trigger declared no output handle"
+            # Triggers don't have input handles (they're the source).
+            inputs = [h for h in spec.get("handles") or [] if h.get("kind") == "input"]
+            assert not inputs, f"{t}: trigger has input handle(s): {inputs}"
+
+    def test_hide_output_handle_nodes_really_have_no_output(self):
+        # If a node advertises hideOutputHandle=True, it shouldn't also
+        # declare an output in its handles list — inconsistent.
+        for t in self._plugin_types():
+            spec = get_node_spec(t)
+            if not spec.get("hideOutputHandle"):
+                continue
+            outs = [h for h in spec.get("handles") or [] if h.get("kind") == "output"]
+            assert not outs, (
+                f"{t}: hideOutputHandle=True but handles declares output(s) {outs}"
             )
