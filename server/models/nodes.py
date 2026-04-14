@@ -419,6 +419,16 @@ class ChatTriggerParams(BaseNodeParams):
     type: Literal["chatTrigger"]
 
 
+class MasterSkillParams(BaseNodeParams):
+    """Parameters for Master Skill aggregator node. The skillsConfig
+    object is opaque to the backend - each enabled skill carries its
+    own instructions string. Shape:
+    ``{skill_name: {enabled: bool, instructions: str, isCustomized: bool}}``."""
+    type: Literal["masterSkill"]
+    skill_folder: str = Field(default="assistant", alias="skillFolder")
+    skills_config: Dict[str, Any] = Field(default_factory=dict, alias="skillsConfig")
+
+
 class TelegramReceiveParams(BaseNodeParams):
     """Parameters for Telegram receive trigger node."""
     type: Literal["telegramReceive"]
@@ -999,6 +1009,8 @@ KnownNodeParams = Annotated[
         StartNodeParams, CronSchedulerParams, WorkflowTriggerParams,
         # Triggers
         TaskTriggerParams, ChatTriggerParams, TelegramReceiveParams, TwitterReceiveParams, GmailReceiveParams,
+        # Skills
+        MasterSkillParams,
         # Messaging actions (Wave 6 Phase 3b)
         TelegramSendParams, TwitterSendParams, TwitterSearchParams, TwitterUserParams,
         SocialReceiveParams, SocialSendParams,

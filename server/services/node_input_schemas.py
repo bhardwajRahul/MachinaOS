@@ -25,7 +25,7 @@ from models.nodes import (
     FileHandlerParams, FileModifyParams, FileReadParams, FsSearchParams,
     GmailParams, GmailReceiveParams, GmapsLocationsParams,
     GmapsNearbyPlacesParams, HttpRequestParams, HttpScraperParams,
-    JavaScriptExecutorParams, PerplexitySearchParams, ProcessManagerParams,
+    JavaScriptExecutorParams, MasterSkillParams, PerplexitySearchParams, ProcessManagerParams,
     ProxyConfigParams, ProxyRequestParams, ProxyStatusParams,
     PythonExecutorParams, SerperSearchParams, ShellParams,
     SheetsParams, SimpleMemoryParams, SocialReceiveParams,
@@ -107,6 +107,8 @@ _DIRECT_MODELS: dict[str, type[BaseModel]] = {
     # Chat
     "chatSend": ChatSendParams,
     "chatHistory": ChatHistoryParams,
+    # Skills
+    "masterSkill": MasterSkillParams,
     # Search (Wave 6 Phase 3d.ii)
     "braveSearch": BraveSearchParams,
     "serperSearch": SerperSearchParams,

@@ -575,11 +575,13 @@ class TestUIHintsInNodeSpec:
         assert hints.get("hideInputSection") is True
         assert hints.get("hideOutputSection") is True
 
-    def test_master_skill_not_seeded_yet(self):
-        # Sanity: masterSkill metadata not yet seeded - fallback path runs.
-        # If/when seeded later, update this guard.
-        from models.node_metadata import get_node_metadata
-        assert get_node_metadata("masterSkill") is None
+    def test_master_skill_seeded(self):
+        spec = get_node_spec("masterSkill")
+        assert spec is not None
+        assert spec["displayName"] == "Master Skill"
+        hints = spec.get("uiHints", {})
+        assert hints.get("isMasterSkillEditor") is True
+        assert hints.get("hideRunButton") is True
 
     def test_simple_memory_carries_memory_panel(self):
         spec = get_node_spec("simpleMemory")

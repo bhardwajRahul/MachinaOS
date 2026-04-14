@@ -232,6 +232,21 @@ NODE_METADATA: dict[str, NodeMetadata] = {
         "version": 1,
         "uiHints": {"isMemoryPanel": True, "hasCodeEditor": True, "hideRunButton": True},
     },
+    "masterSkill": {
+        "displayName": "Master Skill",
+        "icon": "🎯",
+        "group": ["tool"],
+        "subtitle": "Skill Aggregator",
+        "description": "Combine built-in and custom skills with enable/disable toggles",
+        "version": 1,
+        "uiHints": {
+            "hideInputSection": True,
+            "hideOutputSection": True,
+            "hideRunButton": True,
+            "isMasterSkillEditor": True,
+            "hasCodeEditor": True,
+        },
+    },
     # Specialized agents (16) -- shared SpecializedAgentParams Pydantic model
     "android_agent": {
         "displayName": "Android Control Agent",
