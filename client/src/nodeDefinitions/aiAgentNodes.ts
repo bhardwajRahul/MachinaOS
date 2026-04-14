@@ -3,7 +3,6 @@ import {
   INodeTypeDescription,
   NodeConnectionType
 } from '../types/INodeProperties';
-import { AI_PROVIDER_OPTIONS } from './aiModelNodes';
 
 // ============================================================================
 // AI AGENT AND CHAT NODES
@@ -58,105 +57,8 @@ export const aiAgentNodes: Record<string, INodeTypeDescription> = {
       type: 'main' as NodeConnectionType,
       description: 'Agent output'
     }],
-    properties: [
-      {
-        displayName: 'AI Provider',
-        name: 'provider',
-        type: 'options',
-        options: AI_PROVIDER_OPTIONS,
-        default: 'openai',
-        description: 'The AI provider to use (configure API keys in Credentials)'
-      },
-      {
-        displayName: 'Model',
-        name: 'model',
-        type: 'string',
-        default: '',
-        required: true,
-        placeholder: 'Select a model...',
-        description: 'AI model to use for the agent',
-        typeOptions: {
-          dynamicOptions: true,
-          dependsOn: ['provider']
-        }
-      },
-      {
-        displayName: 'Prompt',
-        name: 'prompt',
-        type: 'string',
-        default: '{{ $json.chatInput }}',
-        required: true,
-        typeOptions: {
-          rows: 4
-        },
-        description: 'The prompt template for the AI agent',
-        placeholder: 'Enter your prompt or use template variables...'
-      },
-      {
-        displayName: 'System Message',
-        name: 'systemMessage',
-        type: 'string',
-        default: 'You are a helpful assistant',
-        typeOptions: {
-          rows: 3
-        },
-        description: 'Define the behavior and personality of the AI agent'
-      },
-      {
-        displayName: 'Options',
-        name: 'options',
-        type: 'collection',
-        placeholder: 'Add Option',
-        default: {},
-        options: [
-          {
-            displayName: 'Temperature',
-            name: 'temperature',
-            type: 'number',
-            default: 0.7,
-            typeOptions: { minValue: 0, maxValue: 2, numberStepSize: 0.1 },
-            description: 'Controls randomness in responses'
-          },
-          {
-            displayName: 'Maximum Tokens',
-            name: 'maxTokens',
-            type: 'number',
-            default: 4096,
-            typeOptions: { minValue: 1, maxValue: 200000 },
-            description: 'Maximum number of tokens to generate'
-          },
-          {
-            displayName: 'Thinking/Reasoning',
-            name: 'thinkingEnabled',
-            type: 'boolean',
-            default: false,
-            description: 'Enable extended thinking for supported providers (Anthropic, OpenAI o-series, Gemini, Groq, Cerebras)'
-          },
-          {
-            displayName: 'Thinking Budget',
-            name: 'thinkingBudget',
-            type: 'number',
-            default: 2048,
-            typeOptions: { minValue: 1024, maxValue: 16000 },
-            description: 'Token budget for thinking (Claude, Gemini, Cerebras)',
-            displayOptions: { show: { thinkingEnabled: [true] } }
-          },
-          {
-            displayName: 'Reasoning Effort',
-            name: 'reasoningEffort',
-            type: 'options',
-            options: [
-              { name: 'Low', value: 'low' },
-              { name: 'Medium', value: 'medium' },
-              { name: 'High', value: 'high' }
-            ],
-            default: 'medium',
-            description: 'Reasoning effort level (OpenAI o-series, Groq)',
-            displayOptions: { show: { thinkingEnabled: [true] } }
-          }
-        ] as any
-      }
-    ]
+    // Wave 8: schema lives on backend (see server/models/nodes.py).
+    properties: [],
   },
 
   // Zeenie Agent Node - Conversational AI agent with skill-based tool calling
@@ -207,100 +109,8 @@ export const aiAgentNodes: Record<string, INodeTypeDescription> = {
       type: 'main' as NodeConnectionType,
       description: 'response, model, provider, timestamp'
     }],
-    properties: [
-      {
-        displayName: 'AI Provider',
-        name: 'provider',
-        type: 'options',
-        options: AI_PROVIDER_OPTIONS,
-        default: 'openai',
-        description: 'The AI provider to use (configure API keys in Credentials)'
-      },
-      {
-        displayName: 'Model',
-        name: 'model',
-        type: 'string',
-        default: '',
-        required: true,
-        placeholder: 'Select a model...',
-        description: 'AI model to use for the chat',
-        typeOptions: {
-          dynamicOptions: true,
-          dependsOn: ['provider']
-        }
-      },
-      {
-        displayName: 'Prompt',
-        name: 'prompt',
-        type: 'string',
-        default: '',
-        typeOptions: { rows: 4 },
-        description: 'The message to send to the AI. Use {{chatTrigger.message}} or leave empty to auto-use connected node output.',
-        placeholder: '{{chatTrigger.message}}'
-      },
-      {
-        displayName: 'System Message',
-        name: 'systemMessage',
-        type: 'string',
-        default: 'You are a helpful assistant.',
-        typeOptions: { rows: 3 },
-        description: 'Define the behavior and personality of the AI agent'
-      },
-      {
-        displayName: 'Options',
-        name: 'options',
-        type: 'collection',
-        placeholder: 'Add Option',
-        default: {},
-        options: [
-          {
-            displayName: 'Temperature',
-            name: 'temperature',
-            type: 'number',
-            default: 0.7,
-            typeOptions: { minValue: 0, maxValue: 2, numberStepSize: 0.1 },
-            description: 'Controls randomness in responses'
-          },
-          {
-            displayName: 'Maximum Tokens',
-            name: 'maxTokens',
-            type: 'number',
-            default: 4096,
-            typeOptions: { minValue: 1, maxValue: 200000 },
-            description: 'Maximum number of tokens to generate'
-          },
-          {
-            displayName: 'Thinking/Reasoning',
-            name: 'thinkingEnabled',
-            type: 'boolean',
-            default: false,
-            description: 'Enable extended thinking for supported providers (Anthropic, OpenAI o-series, Gemini, Groq, Cerebras)'
-          },
-          {
-            displayName: 'Thinking Budget',
-            name: 'thinkingBudget',
-            type: 'number',
-            default: 2048,
-            typeOptions: { minValue: 1024, maxValue: 16000 },
-            description: 'Token budget for thinking (Claude, Gemini, Cerebras)',
-            displayOptions: { show: { thinkingEnabled: [true] } }
-          },
-          {
-            displayName: 'Reasoning Effort',
-            name: 'reasoningEffort',
-            type: 'options',
-            options: [
-              { name: 'Low', value: 'low' },
-              { name: 'Medium', value: 'medium' },
-              { name: 'High', value: 'high' }
-            ],
-            default: 'medium',
-            description: 'Reasoning effort level (OpenAI o-series, Groq)',
-            displayOptions: { show: { thinkingEnabled: [true] } }
-          }
-        ] as any
-      }
-    ]
+    // Wave 8: schema lives on backend (see server/models/nodes.py).
+    properties: [],
   },
 
   // Simple Memory Node - conversation history storage for AI agents
@@ -321,57 +131,8 @@ export const aiAgentNodes: Record<string, INodeTypeDescription> = {
       type: 'main' as NodeConnectionType,
       description: 'session_id, messages, message_count'
     }],
-    properties: [
-      {
-        displayName: 'Session ID (Override)',
-        name: 'sessionId',
-        type: 'string',
-        default: '',
-        required: false,
-        description: 'Leave empty to auto-use connected agent ID. Set manually to share memory across agents.',
-        placeholder: 'Auto (uses agent ID)'
-      },
-      {
-        displayName: 'Window Size',
-        name: 'windowSize',
-        type: 'number',
-        default: 100,
-        typeOptions: { minValue: 1, maxValue: 100 },
-        description: 'Number of message pairs to keep in short-term memory (uses global default from Settings)'
-      },
-      {
-        displayName: 'Conversation History',
-        name: 'memoryContent',
-        type: 'string',
-        default: '# Conversation History\n\n*No messages yet.*\n',
-        typeOptions: {
-          rows: 15,
-          editor: 'code',
-          editorLanguage: 'markdown'
-        },
-        description: 'Recent conversation history (editable)'
-      },
-      {
-        displayName: 'Enable Long-Term Memory',
-        name: 'longTermEnabled',
-        type: 'boolean',
-        default: false,
-        description: 'Archive old messages to vector DB for semantic retrieval'
-      },
-      {
-        displayName: 'Retrieval Count',
-        name: 'retrievalCount',
-        type: 'number',
-        default: 3,
-        typeOptions: { minValue: 1, maxValue: 10 },
-        description: 'Number of relevant memories to retrieve from long-term storage',
-        displayOptions: {
-          show: {
-            longTermEnabled: [true]
-          }
-        }
-      }
-    ]
+    // Wave 8: schema lives on backend (see server/models/nodes.py).
+    properties: [],
   }
 };
 

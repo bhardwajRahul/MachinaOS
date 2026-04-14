@@ -35,22 +35,8 @@ export const skillNodes: Record<string, INodeTypeDescription> = {
       type: 'main' as NodeConnectionType,
       description: 'Connect to AI Agent skill handle'
     }],
-    properties: [
-      {
-        displayName: 'Skill Folder',
-        name: 'skillFolder',
-        type: 'string',
-        default: 'assistant',
-        description: 'Subfolder under server/skills/ to scan for skills.'
-      },
-      {
-        displayName: 'Skills Configuration',
-        name: 'skillsConfig',
-        type: 'json',
-        default: {},
-        description: 'Enabled skills and their instructions'
-      }
-    ]
+    // Wave 8: schema lives on backend (see server/models/nodes.py).
+    properties: [],
   }
 };
 

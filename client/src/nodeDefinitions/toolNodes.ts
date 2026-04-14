@@ -27,24 +27,8 @@ export const toolNodes: Record<string, INodeTypeDescription> = {
       type: 'main' as NodeConnectionType,
       description: 'Connect to AI Agent tool handle'
     }],
-    properties: [
-      {
-        displayName: 'Tool Name',
-        name: 'toolName',
-        type: 'string',
-        default: 'calculator',
-        required: true,
-        description: 'Name the AI will use to call this tool'
-      },
-      {
-        displayName: 'Description',
-        name: 'toolDescription',
-        type: 'string',
-        default: 'Perform mathematical calculations. Operations: add, subtract, multiply, divide, power, sqrt, mod, abs',
-        typeOptions: { rows: 2 },
-        description: 'Describe the tool capabilities for the AI'
-      }
-    ]
+    // Wave 8: schema lives on backend (see server/models/nodes.py).
+    properties: [],
   },
 
   // Current Time Tool - allows AI Agent to get current date and time
@@ -64,32 +48,8 @@ export const toolNodes: Record<string, INodeTypeDescription> = {
       type: 'main' as NodeConnectionType,
       description: 'Connect to AI Agent tool handle'
     }],
-    properties: [
-      {
-        displayName: 'Tool Name',
-        name: 'toolName',
-        type: 'string',
-        default: 'get_current_time',
-        required: true,
-        description: 'Name the AI will use to call this tool'
-      },
-      {
-        displayName: 'Description',
-        name: 'toolDescription',
-        type: 'string',
-        default: 'Get the current date and time. Optionally specify timezone.',
-        typeOptions: { rows: 2 },
-        description: 'Describe the tool capabilities for the AI'
-      },
-      {
-        displayName: 'Default Timezone',
-        name: 'timezone',
-        type: 'string',
-        default: 'UTC',
-        placeholder: 'America/New_York',
-        description: 'Default timezone (e.g., UTC, America/New_York, Europe/London)'
-      }
-    ]
+    // Wave 8: schema lives on backend (see server/models/nodes.py).
+    properties: [],
   },
 
   // DuckDuckGo Search Tool - allows AI Agent to search the web (free, no API key)
@@ -109,32 +69,8 @@ export const toolNodes: Record<string, INodeTypeDescription> = {
       type: 'main' as NodeConnectionType,
       description: 'Connect to AI Agent tool handle'
     }],
-    properties: [
-      {
-        displayName: 'Tool Name',
-        name: 'toolName',
-        type: 'string',
-        default: 'web_search',
-        required: true,
-        description: 'Name the AI will use to call this tool'
-      },
-      {
-        displayName: 'Description',
-        name: 'toolDescription',
-        type: 'string',
-        default: 'Search the web for information. Returns relevant search results.',
-        typeOptions: { rows: 2 },
-        description: 'Describe the tool capabilities for the AI'
-      },
-      {
-        displayName: 'Max Results',
-        name: 'maxResults',
-        type: 'number',
-        default: 5,
-        typeOptions: { minValue: 1, maxValue: 10 },
-        description: 'Maximum number of results to return'
-      }
-    ]
+    // Wave 8: schema lives on backend (see server/models/nodes.py).
+    properties: [],
   },
 
   // Task Manager Tool - allows AI Agent to track and manage delegated tasks
@@ -162,65 +98,8 @@ export const toolNodes: Record<string, INodeTypeDescription> = {
         description: 'Task list output for workflow use'
       }
     ],
-    properties: [
-      {
-        displayName: 'Tool Name',
-        name: 'toolName',
-        type: 'string',
-        default: 'task_manager',
-        description: 'Name visible to the AI agent'
-      },
-      {
-        displayName: 'Tool Description',
-        name: 'toolDescription',
-        type: 'string',
-        default: 'Manage delegated tasks - list active/completed tasks, check task status, mark tasks done',
-        typeOptions: { rows: 2 },
-        description: 'Description for the AI agent'
-      },
-      {
-        displayName: 'Operation',
-        name: 'operation',
-        type: 'options',
-        options: [
-          { name: 'List Tasks', value: 'list_tasks' },
-          { name: 'Get Task', value: 'get_task' },
-          { name: 'Mark Done', value: 'mark_done' }
-        ],
-        default: 'list_tasks',
-        description: 'Operation to perform when run as workflow node'
-      },
-      {
-        displayName: 'Task ID',
-        name: 'task_id',
-        type: 'string',
-        default: '',
-        description: 'Task ID for get_task/mark_done operations',
-        displayOptions: {
-          show: {
-            operation: ['get_task', 'mark_done']
-          }
-        }
-      },
-      {
-        displayName: 'Status Filter',
-        name: 'status_filter',
-        type: 'options',
-        options: [
-          { name: 'All', value: '' },
-          { name: 'Running', value: 'running' },
-          { name: 'Completed', value: 'completed' },
-          { name: 'Error', value: 'error' }
-        ],
-        default: '',
-        description: 'Filter tasks by status',
-        displayOptions: {
-          show: {
-            operation: ['list_tasks']
-          }
-        }
-      }
-    ]
+    // Wave 8: schema lives on backend (see server/models/nodes.py).
+    properties: [],
   },
 
   // Write Todos Tool - allows AI Agent to plan and track complex multi-step tasks
@@ -248,23 +127,8 @@ export const toolNodes: Record<string, INodeTypeDescription> = {
         description: 'Todo list output for workflow use'
       }
     ],
-    properties: [
-      {
-        displayName: 'Tool Name',
-        name: 'toolName',
-        type: 'string',
-        default: 'write_todos',
-        description: 'Name visible to the AI agent'
-      },
-      {
-        displayName: 'Tool Description',
-        name: 'toolDescription',
-        type: 'string',
-        default: 'Create and manage a structured task list. Use for complex multi-step tasks (3+ steps). Each todo has content and status (pending, in_progress, completed).',
-        typeOptions: { rows: 3 },
-        description: 'Description for the AI agent'
-      }
-    ]
+    // Wave 8: schema lives on backend (see server/models/nodes.py).
+    properties: [],
   }
 };
 

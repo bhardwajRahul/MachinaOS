@@ -341,21 +341,8 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
       { name: 'teammates', displayName: 'Team', type: 'main' as NodeConnectionType, description: 'Connect teammate agents for team mode' }
     ],
     outputs: AI_AGENT_OUTPUTS,
-    properties: [
-      ...AI_AGENT_PROPERTIES,
-      {
-        displayName: 'Team Mode',
-        name: 'teamMode',
-        type: 'options',
-        options: [
-          { name: 'Disabled', value: '' },
-          { name: 'Parallel', value: 'parallel' },
-          { name: 'Sequential', value: 'sequential' }
-        ],
-        default: '',
-        description: 'Enable team mode to coordinate connected teammate agents'
-      }
-    ]
+    // Wave 8: schema lives on backend (see server/models/nodes.py).
+    properties: [],
   },
 
   // AI Employee - Team lead node for coordinating multiple agents
@@ -373,28 +360,8 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
       { name: 'teammates', displayName: 'Team', type: 'main' as NodeConnectionType, description: 'Connect teammate agents' }
     ],
     outputs: AI_AGENT_OUTPUTS,
-    properties: [
-      ...AI_AGENT_PROPERTIES,
-      {
-        displayName: 'Team Mode',
-        name: 'teamMode',
-        type: 'options',
-        options: [
-          { name: 'Parallel', value: 'parallel' },
-          { name: 'Sequential', value: 'sequential' }
-        ],
-        default: 'parallel',
-        description: 'How teammates process tasks'
-      },
-      {
-        displayName: 'Max Concurrent',
-        name: 'maxConcurrent',
-        type: 'number',
-        default: 5,
-        typeOptions: { minValue: 1, maxValue: 20 },
-        description: 'Maximum concurrent task executions'
-      }
-    ]
+    // Wave 8: schema lives on backend (see server/models/nodes.py).
+    properties: [],
   },
 
   // RLM Agent - Recursive Language Model with REPL-based reasoning
@@ -409,48 +376,8 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
     defaults: { name: 'RLM Agent', color: dracula.orange },
     inputs: AI_AGENT_INPUTS,
     outputs: AI_AGENT_OUTPUTS,
-    properties: [
-      ...AI_AGENT_PROPERTIES,
-      {
-        displayName: 'Max Iterations',
-        name: 'maxIterations',
-        type: 'number',
-        default: 30,
-        typeOptions: { minValue: 1, maxValue: 100 },
-        description: 'Maximum REPL loop iterations before stopping'
-      },
-      {
-        displayName: 'Max Depth',
-        name: 'maxDepth',
-        type: 'number',
-        default: 1,
-        typeOptions: { minValue: 0, maxValue: 5 },
-        description: 'Maximum recursion depth for rlm_query() calls'
-      },
-      {
-        displayName: 'Max Budget ($)',
-        name: 'maxBudget',
-        type: 'number',
-        default: 0,
-        typeOptions: { minValue: 0 },
-        description: 'Maximum USD spend (0 = unlimited)'
-      },
-      {
-        displayName: 'Max Timeout (s)',
-        name: 'maxTimeout',
-        type: 'number',
-        default: 0,
-        typeOptions: { minValue: 0 },
-        description: 'Maximum execution time in seconds (0 = unlimited)'
-      },
-      {
-        displayName: 'Verbose',
-        name: 'verbose',
-        type: 'boolean',
-        default: false,
-        description: 'Enable detailed REPL output logging'
-      }
-    ]
+    // Wave 8: schema lives on backend (see server/models/nodes.py).
+    properties: [],
   },
 
   claude_code_agent: {
@@ -464,67 +391,8 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
     defaults: { name: 'Claude Code Agent', color: dracula.cyan },
     inputs: AI_AGENT_INPUTS,
     outputs: AI_AGENT_OUTPUTS,
-    properties: [
-      {
-        displayName: 'Prompt',
-        name: 'prompt',
-        type: 'string' as any,
-        default: '',
-        required: true,
-        description: 'Task or instruction for Claude Code',
-        typeOptions: { rows: 4 },
-      },
-      {
-        displayName: 'Model',
-        name: 'model',
-        type: 'options' as any,
-        default: 'claude-sonnet-4-6',
-        options: [
-          { name: 'Claude Opus 4.6', value: 'claude-opus-4-6' },
-          { name: 'Claude Sonnet 4.6', value: 'claude-sonnet-4-6' },
-          { name: 'Claude Haiku 4.5', value: 'claude-haiku-4-5' },
-        ],
-        description: 'Claude model to use',
-      },
-      {
-        displayName: 'System Prompt',
-        name: 'systemPrompt',
-        type: 'string' as any,
-        default: '',
-        description: 'Additional system instructions appended to Claude Code',
-        typeOptions: { rows: 3 },
-      },
-      {
-        displayName: 'Allowed Tools',
-        name: 'allowedTools',
-        type: 'string' as any,
-        default: 'Read,Edit,Bash,Glob,Grep,Write',
-        description: 'Comma-separated Claude Code tools (Read,Edit,Bash,Glob,Grep,Write,WebSearch,WebFetch)',
-      },
-      {
-        displayName: 'Max Turns',
-        name: 'maxTurns',
-        type: 'number' as any,
-        default: 10,
-        typeOptions: { minValue: 1, maxValue: 50 },
-        description: 'Maximum agentic iterations',
-      },
-      {
-        displayName: 'Max Budget (USD)',
-        name: 'maxBudgetUsd',
-        type: 'number' as any,
-        default: 5.0,
-        typeOptions: { minValue: 0, maxValue: 100, numberStepSize: 0.5 },
-        description: 'Maximum USD spend per execution (0 = unlimited)',
-      },
-      {
-        displayName: 'Working Directory',
-        name: 'workingDirectory',
-        type: 'string' as any,
-        default: '',
-        description: 'Working directory for Claude Code (empty = server default)',
-      },
-    ],
+    // Wave 8: schema lives on backend (see server/models/nodes.py).
+    properties: [],
   },
 
   // Deep Agent - LangChain DeepAgents powered agent with filesystem, sub-agents, and planning
@@ -542,17 +410,8 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
       { name: 'teammates', displayName: 'Team', type: 'main' as NodeConnectionType, description: 'Connect agents for sub-agent delegation via task tool' }
     ],
     outputs: AI_AGENT_OUTPUTS,
-    properties: [
-      ...AI_AGENT_PROPERTIES,
-      {
-        displayName: 'Max Turns',
-        name: 'maxTurns',
-        type: 'number' as any,
-        default: 200,
-        typeOptions: { minValue: 1, maxValue: 500 },
-        description: 'Maximum agentic loop iterations',
-      },
-    ],
+    // Wave 8: schema lives on backend (see server/models/nodes.py).
+    properties: [],
   }
 };
 

@@ -62,59 +62,8 @@ function createAndroidServiceNode(config: {
         description: 'Connect to Android Toolkit (top handle)'
       }
     ],
-    properties: [
-      // Hidden service_id - automatically set based on node type
-      {
-        displayName: 'Service ID',
-        name: 'service_id',
-        type: 'hidden',
-        default: config.serviceId,
-        required: true
-      },
-
-      // Hidden Android device connection settings - use defaults
-      {
-        displayName: 'Android Host',
-        name: 'android_host',
-        type: 'hidden',
-        default: 'localhost',
-        required: true
-      },
-
-      {
-        displayName: 'Android Port',
-        name: 'android_port',
-        type: 'hidden',
-        default: 8888,
-        required: true
-      },
-
-      // Display label for this service node
-      {
-        displayName: 'Label',
-        name: 'label',
-        type: 'string',
-        default: config.displayName,
-        required: false,
-        description: 'Custom label for this node instance'
-      },
-
-      // Dynamic Action field - loads options based on node type
-      {
-        displayName: 'Action',
-        name: 'action',
-        type: 'options',
-        typeOptions: {
-          loadOptionsMethod: 'getAndroidServiceActions'
-        },
-        options: [],
-        default: config.defaultAction,
-        required: true,
-        description: `Action to perform on ${config.displayName}`
-      },
-      // Add any additional properties for this specific node
-      ...(config.additionalProperties || [])
-    ],
+    // Wave 8: schema lives on backend (see server/models/nodes.py).
+    properties: [],
     methods: {
       loadOptions: {
         async getAndroidServiceActions(this: any): Promise<Array<{name: string, value: string, description?: string}>> {
