@@ -69,6 +69,26 @@ export function getCachedNodeSpec(nodeType: string): NodeSpec | null {
 }
 
 /**
+ * Wave 6 Phase 5.b: backend-group membership check.
+ *
+ * Returns `undefined` when the NodeSpec isn't cached yet (caller falls
+ * back to its legacy `*_NODE_TYPES` array), `true`/`false` when the
+ * cached spec's `group` array decides. Lets components retire local
+ * helper arrays without introducing a hard dependency on prefetch
+ * ordering — when the flag is off and prefetch hasn't run, the legacy
+ * path runs unchanged.
+ */
+export function isNodeInBackendGroup(
+  nodeType: string | null | undefined,
+  group: string,
+): boolean | undefined {
+  if (!nodeType) return false;
+  const spec = getCachedNodeSpec(nodeType);
+  if (!spec) return undefined;
+  return (spec.group ?? []).includes(group);
+}
+
+/**
  * Flag-gated resolver. When `VITE_NODESPEC_BACKEND` is off (default),
  * returns `localFallback` unchanged — legacy `nodeDefinitions/*` wins.
  * When on, returns the adapter output from the cached NodeSpec, or

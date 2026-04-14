@@ -552,3 +552,51 @@ class TestDisplayOptionsEnrichment:
         spec = get_node_spec("openaiChatModel")
         api_key = spec["inputs"]["properties"]["apiKey"]
         assert api_key["password"] is True
+
+
+class TestUIHintsInNodeSpec:
+    """Wave 6 Phase 5.b: NODE_METADATA carries panel-level uiHints
+    (isChatTrigger/isConsoleSink/hasCodeEditor/etc) so frontend
+    dispatch can read them off the cached NodeSpec instead of
+    importing legacy *_NODE_TYPES arrays or per-node definition flags."""
+
+    def test_chat_trigger_carries_is_chat_trigger(self):
+        spec = get_node_spec("chatTrigger")
+        assert spec.get("uiHints", {}).get("isChatTrigger") is True
+
+    def test_console_carries_is_console_sink(self):
+        spec = get_node_spec("console")
+        assert spec.get("uiHints", {}).get("isConsoleSink") is True
+
+    def test_team_monitor_carries_is_monitor_panel(self):
+        spec = get_node_spec("teamMonitor")
+        hints = spec.get("uiHints", {})
+        assert hints.get("isMonitorPanel") is True
+        assert hints.get("hideInputSection") is True
+        assert hints.get("hideOutputSection") is True
+
+    def test_master_skill_not_seeded_yet(self):
+        # Sanity: masterSkill metadata not yet seeded - fallback path runs.
+        # If/when seeded later, update this guard.
+        from models.node_metadata import get_node_metadata
+        assert get_node_metadata("masterSkill") is None
+
+    def test_simple_memory_carries_memory_panel(self):
+        spec = get_node_spec("simpleMemory")
+        hints = spec.get("uiHints", {})
+        assert hints.get("isMemoryPanel") is True
+        assert hints.get("hasCodeEditor") is True
+
+    def test_python_executor_carries_code_editor(self):
+        spec = get_node_spec("pythonExecutor")
+        assert spec.get("uiHints", {}).get("hasCodeEditor") is True
+
+    def test_gmaps_create_carries_location_panel(self):
+        spec = get_node_spec("gmaps_create")
+        assert spec.get("uiHints", {}).get("showLocationPanel") is True
+
+    def test_start_carries_hidden_panels(self):
+        spec = get_node_spec("start")
+        hints = spec.get("uiHints", {})
+        assert hints.get("hideInputSection") is True
+        assert hints.get("hideOutputSection") is True

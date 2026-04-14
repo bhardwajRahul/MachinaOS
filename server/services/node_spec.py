@@ -68,6 +68,8 @@ def get_node_spec(node_type: str) -> Optional[dict[str, Any]]:
         spec["outputs"] = outputs
     if "subtitle" in meta:
         spec["subtitle"] = meta["subtitle"]
+    if meta.get("uiHints"):
+        spec["uiHints"] = meta["uiHints"]
 
     _spec_cache[node_type] = spec
     return spec

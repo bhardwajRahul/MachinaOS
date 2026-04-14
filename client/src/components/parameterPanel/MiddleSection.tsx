@@ -29,6 +29,7 @@ import { Badge } from '@/components/ui/badge';
 import ParameterRenderer from '../ParameterRenderer';
 import ToolSchemaEditor from './ToolSchemaEditor';
 import MasterSkillEditor from './MasterSkillEditor';
+import { isNodeInBackendGroup } from '../../lib/nodeSpec';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { useAppStore } from '../../store/useAppStore';
 import { useWebSocket, CompactionStats } from '../../contexts/WebSocketContext';
@@ -213,8 +214,11 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
   // Kept as separate flags for downstream JSX that still references them.
   const isCodeExecutorNode = needsCodeEditorLayout && (hints.hasCodeEditor ?? isLegacyCodeExecutor);
   const isSkillNode = needsCodeEditorLayout && isLegacySkillWithEditor;
-  const isToolNode = hints.isToolPanel ?? TOOL_NODE_TYPES.includes(nodeDefinition.name);
-  const isAgentWithSkills = hints.hasSkills ?? AGENT_WITH_SKILLS_TYPES.includes(nodeDefinition.name);
+  // Wave 6 Phase 5.b: dispatch chain is uiHints (declarative) -> backend
+  // group membership (live NodeSpec) -> legacy *_NODE_TYPES array.
+  // Behaviour identical when flag off + cache cold.
+  const isToolNode = hints.isToolPanel ?? isNodeInBackendGroup(nodeDefinition.name, 'tool') ?? TOOL_NODE_TYPES.includes(nodeDefinition.name);
+  const isAgentWithSkills = hints.hasSkills ?? isNodeInBackendGroup(nodeDefinition.name, 'agent') ?? AGENT_WITH_SKILLS_TYPES.includes(nodeDefinition.name);
 
   const { data: userSettings } = useUserSettingsQuery();
 

@@ -8,6 +8,7 @@ import { useAppTheme } from '../hooks/useAppTheme';
 import { ANDROID_SERVICE_NODE_TYPES } from '../nodeDefinitions/androidServiceNodes';
 import { useWebSocket, useWhatsAppStatus } from '../contexts/WebSocketContext';
 import { useApiKeys } from '../hooks/useApiKeys';
+import { isNodeInBackendGroup } from '../lib/nodeSpec';
 import { getAIProviderIcon } from './icons/AIProviderIcons';
 import { PlayCircle, CalendarClock } from 'lucide-react';
 import { AI_MODEL_PROVIDER_MAP } from '../nodeDefinitions/aiModelNodes';
@@ -88,8 +89,10 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
     };
   }, [executionStatus, isGlowing]);
 
-  // Check if this is a Google Maps node
-  const isGoogleMapsNode = type ? GOOGLE_MAPS_NODE_TYPES.includes(type) : false;
+  // Wave 6 Phase 5.b: prefer backend NodeSpec group membership, fall
+  // back to the local *_NODE_TYPES array when the spec hasn't loaded
+  // yet (cold cache + flag off). Behaviour identical when flag off.
+  const isGoogleMapsNode = isNodeInBackendGroup(type, 'location') ?? (type ? GOOGLE_MAPS_NODE_TYPES.includes(type) : false);
   const googleMapsKeyStatus = isGoogleMapsNode ? getApiKeyStatus('google_maps') : undefined;
 
   // Check if this is an AI model node and get reactive API key status
@@ -99,8 +102,8 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
 
   const definition = nodeDefinitions[type as keyof typeof nodeDefinitions];
 
-  // Check if this is an Android node
-  const isAndroidNode = type ? ANDROID_SERVICE_NODE_TYPES.includes(type) : false;
+  // Wave 6 Phase 5.b: backend group → legacy fallback
+  const isAndroidNode = isNodeInBackendGroup(type, 'android') ?? (type ? ANDROID_SERVICE_NODE_TYPES.includes(type) : false);
 
   // Check if this node can be used as a tool (connects to Android Toolkit or AI Agent/Zeenie tool handle)
   const isToolCapable = type ? (ANDROID_TOOL_CAPABLE_NODES.includes(type) || hasToolGroup(definition)) : false;
@@ -109,8 +112,8 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
   // Service nodes need a paired device to execute, not just relay connection
   const isAndroidConnected = isAndroidNode && androidStatus.paired;
 
-  // Check if this is a WhatsApp node
-  const isWhatsAppNode = type ? WHATSAPP_NODE_TYPES.includes(type) : false;
+  // Wave 6 Phase 5.b: backend group → legacy fallback
+  const isWhatsAppNode = isNodeInBackendGroup(type, 'whatsapp') ?? (type ? WHATSAPP_NODE_TYPES.includes(type) : false);
 
   // WhatsApp connection status from WebSocket (real-time updates)
   const whatsappStatus = useWhatsAppStatus();

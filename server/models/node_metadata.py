@@ -22,6 +22,11 @@ class NodeMetadata(TypedDict, total=False):
     subtitle: str
     description: str
     version: int
+    # Wave 6: per-node UI panel hints lifted from the legacy frontend
+    # INodeUIHints. Carries flags like isChatTrigger / isConsoleSink /
+    # hasCodeEditor / isMemoryPanel / isToolPanel / etc. Empty dict when
+    # the node doesn't need any panel-level toggles.
+    uiHints: dict[str, object]
 
 
 # Seeded incrementally per Wave 6 Phase 3 sub-commit. Sub-commit 3a
@@ -36,6 +41,7 @@ NODE_METADATA: dict[str, NodeMetadata] = {
         "group": ["workflow"],
         "description": "Starting point for workflow execution. Provides initial data to connected nodes.",
         "version": 1,
+        "uiHints": {"hideInputSection": True, "hideOutputSection": True},
     },
     "taskTrigger": {
         "displayName": "Task Completed",
@@ -72,6 +78,7 @@ NODE_METADATA: dict[str, NodeMetadata] = {
         "group": ["utility", "trigger"],
         "description": "Trigger workflow when user sends a chat message from the console input",
         "version": 1,
+        "uiHints": {"isChatTrigger": True},
     },
     "console": {
         "displayName": "Console",
@@ -79,6 +86,7 @@ NODE_METADATA: dict[str, NodeMetadata] = {
         "group": ["utility"],
         "description": "Log data to console panel for debugging during execution",
         "version": 1,
+        "uiHints": {"isConsoleSink": True},
     },
     "teamMonitor": {
         "displayName": "Team Monitor",
@@ -86,6 +94,7 @@ NODE_METADATA: dict[str, NodeMetadata] = {
         "group": ["utility", "agent"],
         "description": "Monitor agent team operations, tasks, and messages in real-time",
         "version": 1,
+        "uiHints": {"hideInputSection": True, "hideOutputSection": True, "isMonitorPanel": True},
     },
     # Code group -------------------------------------------------------------
     "pythonExecutor": {
@@ -94,6 +103,7 @@ NODE_METADATA: dict[str, NodeMetadata] = {
         "group": ["code", "tool"],
         "description": "Execute Python code with input data access",
         "version": 1,
+        "uiHints": {"hasCodeEditor": True},
     },
     "javascriptExecutor": {
         "displayName": "JavaScript Executor",
@@ -101,6 +111,7 @@ NODE_METADATA: dict[str, NodeMetadata] = {
         "group": ["code", "tool"],
         "description": "Execute JavaScript code with input data access",
         "version": 1,
+        "uiHints": {"hasCodeEditor": True},
     },
     "typescriptExecutor": {
         "displayName": "TypeScript Executor",
@@ -108,6 +119,7 @@ NODE_METADATA: dict[str, NodeMetadata] = {
         "group": ["code", "tool"],
         "description": "Execute TypeScript code with input data access and type safety",
         "version": 1,
+        "uiHints": {"hasCodeEditor": True},
     },
     # Process management -----------------------------------------------------
     "processManager": {
@@ -218,6 +230,7 @@ NODE_METADATA: dict[str, NodeMetadata] = {
         "group": ["tool", "memory"],
         "description": "Markdown-based conversation memory with optional vector long-term storage",
         "version": 1,
+        "uiHints": {"isMemoryPanel": True, "hasCodeEditor": True, "hideRunButton": True},
     },
     # Specialized agents (16) -- shared SpecializedAgentParams Pydantic model
     "android_agent": {
@@ -406,6 +419,7 @@ NODE_METADATA: dict[str, NodeMetadata] = {
         "group": ["location", "service"],
         "description": "Google Maps creation with customizable center, zoom, and map type",
         "version": 1,
+        "uiHints": {"showLocationPanel": True},
     },
     "gmaps_locations": {
         "displayName": "GMaps Locations",
