@@ -70,12 +70,12 @@ class TestNodeSpec:
         assert spec["version"] == 1
 
     def test_spec_fallback_metadata_when_unseeded(self):
-        # gmaps_create has an input model but no metadata yet
-        # (Phase 3d target).
-        spec = get_node_spec("gmaps_create")
+        # apify has an output schema but no input model and no metadata yet
+        # (Phase 3d.ii target). Spec still emits with id-fallback metadata.
+        spec = get_node_spec("apify")
         assert spec is not None
-        assert spec["type"] == "gmaps_create"
-        assert spec["displayName"] == "gmaps_create"  # falls back to id
+        assert spec["type"] == "apify"
+        assert spec["displayName"] == "apify"  # falls back to id
         assert spec["group"] == []
 
     def test_spec_missing_entirely(self):
@@ -227,3 +227,49 @@ class TestPhase3cCoverage:
         temp = spec["inputs"]["properties"]["temperature"]
         assert temp["minimum"] == 0.0
         assert temp["maximum"] == 2.0
+
+
+class TestPhase3dCoverage:
+    """Phase 3d.i backend parity: location + scheduler + chat + text + 16
+    Android service nodes + gmail trigger. All Pydantic models existed
+    before this sub-commit - it adds NODE_METADATA entries only."""
+
+    PHASE_3D_TYPES = [
+        # Location
+        "gmaps_create", "gmaps_locations", "gmaps_nearby_places",
+        # Scheduler / triggers
+        "cronScheduler", "timer", "gmailReceive",
+        # Chat / text
+        "chatSend", "chatHistory", "textGenerator", "fileHandler",
+        # Android (16)
+        "batteryMonitor", "networkMonitor", "systemInfo", "location",
+        "appLauncher", "appList", "wifiAutomation", "bluetoothAutomation",
+        "audioAutomation", "deviceStateAutomation", "screenControlAutomation",
+        "airplaneModeControl", "motionDetection", "environmentalSensors",
+        "cameraControl", "mediaControl",
+    ]
+
+    def test_all_have_metadata(self):
+        from models.node_metadata import get_node_metadata
+        missing = [t for t in self.PHASE_3D_TYPES if get_node_metadata(t) is None]
+        assert not missing, f"Phase 3d.i types missing metadata: {missing}"
+
+    def test_all_have_full_spec(self):
+        for t in self.PHASE_3D_TYPES:
+            spec = get_node_spec(t)
+            assert spec is not None, f"No spec for {t}"
+            assert spec["displayName"] != t, f"{t} fell back to id displayName"
+            assert spec["group"], f"{t} missing group"
+
+    def test_android_services_grouped(self):
+        # Dashboard routes group containing 'android' OR 'service' to SquareNode.
+        for t in ["batteryMonitor", "wifiAutomation", "cameraControl"]:
+            assert "android" in get_node_spec(t)["group"]
+
+    def test_input_model_coverage_complete(self):
+        """Every node type with a Pydantic input model now also has
+        display metadata. Phase 3d.i closes the input-model gap."""
+        from services.node_input_schemas import NODE_INPUT_MODELS
+        from models.node_metadata import NODE_METADATA
+        unseeded = [t for t in NODE_INPUT_MODELS if t not in NODE_METADATA]
+        assert not unseeded, f"Input-modeled types still missing metadata: {unseeded}"
