@@ -17,6 +17,7 @@ import { nodeSpecToDescription, type NodeSpec } from '../adapters/nodeSpecToDesc
 import type { INodeTypeDescription } from '../types/INodeProperties';
 import { featureFlags } from './featureFlags';
 import { queryClient } from './queryClient';
+import { useWebSocket } from '../contexts/WebSocketContext';
 
 type SendRequest = (type: string, data?: any) => Promise<any>;
 
@@ -71,19 +72,55 @@ export function getCachedNodeSpec(nodeType: string): NodeSpec | null {
 }
 
 /**
- * Reactive spec subscription. Uses TanStack Query so the component
- * re-renders when the prefetch warms the cache. No extra network
- * traffic — `prefetchAllNodeSpecs` populates the cache at WS connect;
- * this hook just subscribes.
+ * Reactive spec subscription — tRPC `wsLink` / TanStack-Query+WS pattern.
+ *
+ * The `queryFn` sends a WS request whose Promise resolves via the
+ * correlated response. TanStack auto-fires on mount, so cold-cache
+ * renders are self-healing — no dependency on `prefetchAllNodeSpecs`
+ * running first. When the prefetch does run (same queryKey), it warms
+ * the cache and this hook reads from it instantly.
+ *
+ * References:
+ *   - TkDodo: https://tkdodo.eu/blog/using-web-sockets-with-react-query
+ *   - tRPC wsLink: https://trpc.io/docs/client/links/wsLink
  */
 export function useNodeSpec(nodeType: string | undefined | null): NodeSpec | null {
+  const { sendRequest, isConnected } = useWebSocket();
   const { data } = useQuery<NodeSpec | null>({
     queryKey: nodeSpecQueryKey(nodeType ?? '__none__'),
-    queryFn: () => null,
-    enabled: false,
-    staleTime: Infinity,
+    queryFn: async () => {
+      if (!nodeType) return null;
+      try {
+        const response = await sendRequest('get_node_spec', { node_type: nodeType });
+        return (response?.spec ?? null) as NodeSpec | null;
+      } catch {
+        return null;
+      }
+    },
+    enabled: !!nodeType && isConnected,
+    staleTime: 60_000, // 60s — short enough to pick up backend restarts in dev
+    refetchOnMount: 'always',
   });
   return data ?? null;
+}
+
+/**
+ * Reactive node-groups subscription. Same WS-in-queryFn pattern as
+ * `useNodeSpec`. Replaces the old double-wrapped `fetchNodeGroups`
+ * call inside `useQuery` (which deadlocked on the shared query key).
+ */
+export function useNodeGroups(): Record<string, NodeGroupEntry> | undefined {
+  const { sendRequest, isConnected } = useWebSocket();
+  const { data } = useQuery<Record<string, NodeGroupEntry>>({
+    queryKey: nodeGroupsQueryKey,
+    queryFn: async () => {
+      const response = await sendRequest('get_node_groups', {});
+      return (response?.groups ?? {}) as Record<string, NodeGroupEntry>;
+    },
+    enabled: isConnected,
+    staleTime: Infinity,
+  });
+  return data;
 }
 
 /** Wire shape for one entry in the GET /api/schemas/nodes/groups

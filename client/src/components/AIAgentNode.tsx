@@ -134,7 +134,7 @@ const AIAgentNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
       style={{
         position: 'relative',
         padding: theme.spacing.lg,
-        paddingRight: hasRightOutputs ? '60px' : theme.spacing.lg,
+        paddingRight: hasRightOutputs ? '72px' : theme.spacing.lg,
         minWidth: `${width}px`,
         minHeight: `${height}px`,
         borderRadius: theme.borderRadius.lg,
@@ -287,14 +287,18 @@ const AIAgentNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
         />
       )}
 
-      {/* Right outputs (multi-output nodes like socialReceive) */}
-      {!topOutput && hasRightOutputs && rightOutputs.map(h => (
+      {/* Right outputs — rendered whenever the spec ships any, independent
+          of whether the top output also exists. Agents that expose both
+          a top-position Output (team/delegate) and a right-position
+          Output (workflow) need both handles visible. */}
+      {hasRightOutputs && rightOutputs.map(h => (
         <React.Fragment key={h.name}>
           <div style={{
-            position: 'absolute', right: '10px', top: h.offset || '50%',
+            position: 'absolute', right: '14px', top: h.offset || '50%',
             transform: 'translateY(-50%)', fontSize: theme.fontSize.sm,
             color: theme.colors.text, fontWeight: theme.fontWeight.medium,
             pointerEvents: 'none', whiteSpace: 'nowrap', textAlign: 'right',
+            lineHeight: 1,
           }}>{h.label || h.name}</div>
           <Handle
             id={h.name}
@@ -305,16 +309,19 @@ const AIAgentNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
               position: 'absolute', right: '-6px', top: h.offset || '50%',
               transform: 'translateY(-50%)',
               width: theme.nodeSize.handle, height: theme.nodeSize.handle,
-              backgroundColor: theme.colors.background,
-              border: `2px solid ${theme.colors.textSecondary}`, borderRadius: '50%',
+              backgroundColor: accentColor,
+              border: `2px solid ${theme.isDarkMode ? theme.colors.background : '#ffffff'}`,
+              borderRadius: '50%', zIndex: 20,
             }}
             title={h.label || h.name}
           />
         </React.Fragment>
       ))}
 
-      {/* Single default right output when the spec declares none explicitly */}
-      {!topOutput && !hasRightOutputs && (
+      {/* Single default right output when the spec declares neither a
+          right-position nor a top-position output. Keeps the node
+          connectable even if the backend omits an explicit output. */}
+      {!hasRightOutputs && !topOutput && (
         <Handle
           id="output-main"
           type="source"

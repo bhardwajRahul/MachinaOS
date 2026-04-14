@@ -1,5 +1,4 @@
 import React from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { ComponentPaletteProps } from '../../types/ComponentTypes';
 import { INodeTypeDescription } from '../../types/INodeProperties';
@@ -9,8 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Search } from 'lucide-react';
 import { resolveIcon, resolveLibraryIcon, isImageIcon } from '../../assets/icons';
-import { nodeGroupsQueryKey, NodeGroupEntry } from '../../lib/nodeSpec';
-import { useWebSocket } from '../../contexts/WebSocketContext';
+import { useNodeGroups, NodeGroupEntry } from '../../lib/nodeSpec';
 
 // Wave 10.B: palette section metadata (icon / label / color / visibility)
 // is fetched from the backend GET /api/schemas/nodes/groups endpoint.
@@ -26,21 +24,11 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
   proMode = false,  // Default to simple mode
 }) => {
   const theme = useAppTheme();
-  const { sendRequest, isConnected } = useWebSocket();
 
-  // Backend-driven group metadata (label / icon / color / visibility).
-  // Direct WS call — do NOT route through `fetchNodeGroups`, which
-  // would re-enter `queryClient.fetchQuery` on the same key and leave
-  // this subscription stuck with `undefined`.
-  const { data: groupIndex } = useQuery<Record<string, NodeGroupEntry>>({
-    queryKey: nodeGroupsQueryKey,
-    queryFn: async () => {
-      const response = await sendRequest('get_node_groups', {});
-      return (response?.groups ?? {}) as Record<string, NodeGroupEntry>;
-    },
-    staleTime: Infinity,
-    enabled: isConnected,
-  });
+  // Backend-driven group metadata via the shared WS-in-queryFn hook.
+  // `useNodeGroups` auto-fires on WS connect and re-renders the palette
+  // with proper icons once the response lands.
+  const groupIndex = useNodeGroups();
 
   const getCategoryConfig = React.useCallback((category: string) => {
     const entry = groupIndex?.[category.toLowerCase()] as NodeGroupEntry | undefined;

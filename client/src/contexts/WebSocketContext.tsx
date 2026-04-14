@@ -14,6 +14,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 import { API_CONFIG } from '../config/api';
 import { useAppStore } from '../store/useAppStore';
 import { useAuth } from './AuthContext';
+import { queryClient } from '../lib/queryClient';
 
 // Generate unique request ID
 const generateRequestId = (): string => {
@@ -1060,6 +1061,14 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       ws.onopen = async () => {
         setIsConnected(true);
         setReconnecting(false);
+
+        // Reconnect invalidation (TkDodo / tRPC wsLink pattern):
+        // any WS-backed TanStack query should refetch after a drop so
+        // state can't silently diverge from the server. Node specs and
+        // group metadata are keyed explicitly; other WS-backed queries
+        // can opt in by sharing these key prefixes.
+        queryClient.invalidateQueries({ queryKey: ['nodeSpec'] });
+        queryClient.invalidateQueries({ queryKey: ['nodeGroups'] });
 
         // Start ping interval
         pingIntervalRef.current = setInterval(() => {

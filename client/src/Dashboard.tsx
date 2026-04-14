@@ -95,8 +95,11 @@ const createNodeTypes = (): Record<string, React.ComponentType<any>> => {
       types[type] = TeamMonitorNode;
     } else if (SKILL_NODE_TYPES.includes(type)) {
       types[type] = ToolkitNode;
-    } else if (SPECIALIZED_AGENT_TYPES.includes(type)) {
+    } else if (type === 'aiAgent' || type === 'chatAgent' || SPECIALIZED_AGENT_TYPES.includes(type)) {
       // Pre-prefetch fallback so agents render before specs arrive.
+      // aiAgent/chatAgent aren't in SPECIALIZED_AGENT_TYPES but still
+      // need AIAgentNode rendering; otherwise cold-cache paints them as
+      // generic SquareNode with no agent handles.
       types[type] = AIAgentNode;
     } else {
       types[type] = SquareNode;
@@ -540,19 +543,17 @@ const DashboardContent: React.FC = () => {
 
   // Wave 10.D step 2: nodeTypes is rebuilt once after the NodeSpec
   // prefetch lands so spec.componentKind dispatch becomes effective.
-  // The initial value (moduleNodeTypes) is computed at module load
-  // before any spec is cached, so it falls through to the small legacy
-  // fallback for every type — fine because most types still render via
-  // SquareNode and the upgrade to spec-driven dispatch only causes one
-  // remount when prefetch completes. React Flow's identity check is the
-  // reason we use a ref + manual setter rather than a useMemo on every
-  // render.
-  const nodeTypesRef = React.useRef(moduleNodeTypes);
-  React.useEffect(() => {
-    if (!specsReady) return;
-    nodeTypesRef.current = createNodeTypes();
-  }, [specsReady]);
-  const edgeTypesRef = React.useRef(moduleEdgeTypes);
+  // Using `useMemo` (not a ref) so React Flow actually sees the new
+  // reference and re-mounts nodes with the correct components (e.g.
+  // `aiAgent` → AIAgentNode instead of the SquareNode fallback chosen
+  // when the spec cache was cold). Before `specsReady`, returns the
+  // module-scope map (stable identity). After prefetch: returns the
+  // spec-aware map (stable identity for the rest of the session).
+  const nodeTypes = React.useMemo(
+    () => (specsReady ? createNodeTypes() : moduleNodeTypes),
+    [specsReady],
+  );
+  const edgeTypes = moduleEdgeTypes;
 
   // Execute entire workflow from start node to end
   const handleRun = async () => {
@@ -1202,8 +1203,8 @@ const DashboardContent: React.FC = () => {
                   onDragOver={onDragOver}
                   onDrop={onDrop}
                   onNodeContextMenu={onNodeContextMenu}
-                  nodeTypes={nodeTypesRef.current}
-                  edgeTypes={edgeTypesRef.current}
+                  nodeTypes={nodeTypes}
+                  edgeTypes={edgeTypes}
                   connectionMode={ConnectionMode.Loose}
                   deleteKeyCode={isCurrentWorkflowLocked ? [] : ['Delete', 'Backspace']}
                   edgesFocusable={!isCurrentWorkflowLocked}

@@ -32,9 +32,9 @@ _STD_AGENT_HINTS = {**_STD_SIZE, "hasSkills": True}
 
 
 def _std_handles(extra_bottom: list[dict] | None = None) -> list[dict]:
-    """Skill + Tool + Memory + Task + top Output — the handle set shared
-    by 16 of the 20 agent variants. Factored out as a local helper in
-    this module only; not a global lookup. Each register_node call
+    """Input + Skill + Tool + Memory + Task + Output — the handle set
+    shared by 18 of the 20 agent variants. Factored out as a local helper
+    in this module only; not a global lookup. Each register_node call
     below still opts in by name.
     """
     bottom = list(extra_bottom) if extra_bottom else [
@@ -43,9 +43,11 @@ def _std_handles(extra_bottom: list[dict] | None = None) -> list[dict]:
     ]
     return [
         *bottom,
-        {"name": "input-memory", "kind": "input",  "position": "left",  "offset": "65%", "label": "Memory", "role": "memory"},
-        {"name": "input-task",   "kind": "input",  "position": "left",  "offset": "85%", "label": "Task",   "role": "task"},
-        {"name": "output-top",   "kind": "output", "position": "top",                    "label": "Output", "role": "main"},
+        {"name": "input-main",   "kind": "input",  "position": "left",   "offset": "25%", "label": "Input",  "role": "main"},
+        {"name": "input-memory", "kind": "input",  "position": "left",   "offset": "50%", "label": "Memory", "role": "memory"},
+        {"name": "input-task",   "kind": "input",  "position": "left",   "offset": "75%", "label": "Task",   "role": "task"},
+        {"name": "output-main",  "kind": "output", "position": "right",  "offset": "50%", "label": "Output", "role": "main"},
+        {"name": "output-top",   "kind": "output", "position": "top",                     "label": "Output", "role": "main"},
     ]
 
 
