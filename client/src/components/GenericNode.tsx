@@ -265,36 +265,8 @@ const GenericNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
       {/* Parameters Button */}
       <button
         onClick={handleParametersClick}
-        style={{
-          position: 'absolute',
-          top: '8px',
-          right: '8px',
-          width: '20px',
-          height: '20px',
-          borderRadius: '50%',
-          backgroundColor: 'rgba(255, 255, 255, 0.95)',
-          border: 'none',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: '10px',
-          color: getNodeColor(),
-          fontWeight: '600',
-          transition: 'all 0.2s ease',
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.2)',
-          zIndex: 20
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.backgroundColor = 'white';
-          e.currentTarget.style.transform = 'scale(1.15)';
-          e.currentTarget.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.3)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.95)';
-          e.currentTarget.style.transform = 'scale(1)';
-          e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.2)';
-        }}
+        className="absolute top-2 right-2 z-20 flex h-5 w-5 cursor-pointer items-center justify-center rounded-full border-0 bg-white/95 text-[10px] font-semibold shadow-sm transition-all duration-200 hover:scale-115 hover:bg-white hover:shadow-md"
+        style={{ color: getNodeColor() }}
         title="Edit Parameters"
       >
         ⚙️
@@ -309,7 +281,7 @@ const GenericNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
         zIndex: 10,
         paddingRight: '4px'
       }}>
-        <span style={{ fontSize: type === 'aiAgent' ? '18px' : '24px', display: 'flex', alignItems: 'center' }}>
+        <span className="flex items-center text-2xl">
           {renderIcon(definition.icon)}
         </span>
         {isRenaming ? (

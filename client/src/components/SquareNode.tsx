@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { NodeData } from '../types/NodeTypes';
 import { useAppStore } from '../store/useAppStore';
@@ -32,11 +33,16 @@ const NO_OUTPUT_NODE_TYPES = ['console'];
 // AI Model node types with their provider IDs (derived from aiModelNodes registry)
 const AI_MODEL_NODE_TYPES = AI_MODEL_PROVIDER_MAP;
 
+const CREDENTIAL_TO_PROVIDER: Record<string, string> = {
+  googleMapsApi: 'google_maps',
+  openaiApi: 'openai',
+  anthropicApi: 'anthropic',
+  googleAiApi: 'gemini',
+};
+
 const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectable, selected }) => {
   const theme = useAppTheme();
   const { setSelectedNode, renamingNodeId, setRenamingNodeId, updateNodeData } = useAppStore();
-  const [hasApiKey, setHasApiKey] = useState(false);
-  const [isConfigured, setIsConfigured] = useState(false);
   const isDisabled = data?.disabled === true;
 
   // Inline rename state
@@ -157,50 +163,21 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
     setRenamingNodeId(id);
   }, [id, setRenamingNodeId]);
 
-  // Check API key and configuration status
-  useEffect(() => {
-    // Only run when WebSocket is connected
-    if (!wsConnected) return;
+  const providerId = useMemo<string>(() => {
+    const credName = definition?.credentials?.[0]?.name;
+    if (credName && CREDENTIAL_TO_PROVIDER[credName]) return CREDENTIAL_TO_PROVIDER[credName];
+    if (type?.includes('map') || type?.includes('location')) return 'google_maps';
+    return '';
+  }, [definition?.credentials, type]);
 
-    const checkConfiguration = async () => {
-      try {
-        // Determine provider from node definition credentials
-        let provider = '';
-        const credentials = definition?.credentials?.[0];
-        if (credentials?.name) {
-          // Map credential names to provider keys
-          const credentialToProvider: Record<string, string> = {
-            'googleMapsApi': 'google_maps',
-            'openaiApi': 'openai',
-            'anthropicApi': 'anthropic',
-            'googleAiApi': 'gemini'
-          };
-          provider = credentialToProvider[credentials.name] || '';
-        }
-
-        // Fallback: extract provider from node type if not found in credentials
-        if (!provider) {
-          if (type?.includes('map') || type?.includes('location')) provider = 'google_maps';
-        }
-
-        // Check if API key exists via WebSocket
-        const apiKey = provider ? await getStoredApiKey(provider) : null;
-        setHasApiKey(!!apiKey);
-
-        // Check if service is configured (has required parameters)
-        const hasRequiredParams = data && Object.keys(data).length > 0;
-        setIsConfigured(hasRequiredParams && !!apiKey);
-
-        // Missing API key is expected before user configures credentials - no need to log
-      } catch (error) {
-        console.error('Configuration check error:', error);
-        setHasApiKey(false);
-        setIsConfigured(false);
-      }
-    };
-
-    checkConfiguration();
-  }, [data, id, type, definition?.displayName, definition?.credentials, isGoogleMapsNode, getStoredApiKey, wsConnected]);
+  const apiKeyQuery = useQuery<string | null, Error>({
+    queryKey: ['storedApiKey', providerId],
+    queryFn: () => getStoredApiKey(providerId),
+    enabled: !!providerId && wsConnected,
+    staleTime: 30_000,
+  });
+  const hasApiKey = !!apiKeyQuery.data;
+  const isConfigured = hasApiKey && !!data && Object.keys(data).length > 0;
 
   const handleParametersClick = (e: React.MouseEvent) => {
     e.stopPropagation();
