@@ -70,13 +70,12 @@ class TestNodeSpec:
         assert spec["version"] == 1
 
     def test_spec_fallback_metadata_when_unseeded(self):
-        # AI chat models have input + output schemas but no metadata seeded
-        # yet (Phase 3c will migrate them).
-        spec = get_node_spec("openaiChatModel")
+        # gmaps_create has an input model but no metadata yet
+        # (Phase 3d target).
+        spec = get_node_spec("gmaps_create")
         assert spec is not None
-        assert spec["type"] == "openaiChatModel"
-        # Falls back to type id until Phase 3c migration
-        assert spec["displayName"] == "openaiChatModel"
+        assert spec["type"] == "gmaps_create"
+        assert spec["displayName"] == "gmaps_create"  # falls back to id
         assert spec["group"] == []
 
     def test_spec_missing_entirely(self):
@@ -182,3 +181,49 @@ class TestPhase3bCoverage:
         assert "whatsapp" in platform["enum"]
         assert "telegram" in platform["enum"]
         assert "discord" in platform["enum"]
+
+
+class TestPhase3cCoverage:
+    """Phase 3c backend parity: agents (3 base + 16 specialized) +
+    chat models (9). All Pydantic models existed before Phase 3c -
+    this sub-commit only adds NODE_METADATA entries."""
+
+    PHASE_3C_TYPES = [
+        # Base agents
+        "aiAgent", "chatAgent", "simpleMemory",
+        # Specialized agents (16)
+        "android_agent", "coding_agent", "web_agent", "task_agent",
+        "social_agent", "travel_agent", "tool_agent", "productivity_agent",
+        "payments_agent", "consumer_agent", "autonomous_agent",
+        "orchestrator_agent", "ai_employee", "rlm_agent",
+        "claude_code_agent", "deep_agent",
+        # Chat models (9)
+        "openaiChatModel", "anthropicChatModel", "geminiChatModel",
+        "openrouterChatModel", "groqChatModel", "cerebrasChatModel",
+        "deepseekChatModel", "kimiChatModel", "mistralChatModel",
+    ]
+
+    def test_all_have_metadata(self):
+        from models.node_metadata import get_node_metadata
+        missing = [t for t in self.PHASE_3C_TYPES if get_node_metadata(t) is None]
+        assert not missing, f"Phase 3c types missing metadata: {missing}"
+
+    def test_all_have_full_spec(self):
+        for t in self.PHASE_3C_TYPES:
+            spec = get_node_spec(t)
+            assert spec is not None, f"No spec for {t}"
+            assert spec["displayName"] != t, f"{t} fell back to id displayName"
+            assert spec["group"], f"{t} missing group"
+
+    def test_chat_models_are_grouped_as_model(self):
+        # Dashboard routes group=['model'] -> ModelNode (or SquareNode for AI types).
+        for t in ["openaiChatModel", "anthropicChatModel", "geminiChatModel"]:
+            assert "model" in get_node_spec(t)["group"]
+
+    def test_specialized_agents_share_pydantic_constraints(self):
+        # All 16 specialized agents share SpecializedAgentParams - constraints
+        # like temperature 0-2 should appear identically.
+        spec = get_node_spec("coding_agent")
+        temp = spec["inputs"]["properties"]["temperature"]
+        assert temp["minimum"] == 0.0
+        assert temp["maximum"] == 2.0

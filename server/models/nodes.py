@@ -74,7 +74,10 @@ class ChatAgentParams(BaseNodeParams):
 
 
 class SpecializedAgentParams(BaseNodeParams):
-    """Parameters for all specialized agent nodes (same structure as AIAgentParams)."""
+    """Parameters for all specialized agent nodes. Mirrors the full
+    AI_AGENT_PROPERTIES surface from the frontend so the NodeSpec
+    parameter panel renders identically across all 16 specialized
+    agent types."""
     type: Literal[
         "android_agent", "coding_agent", "web_agent", "task_agent",
         "social_agent", "travel_agent", "tool_agent", "productivity_agent",
@@ -83,10 +86,15 @@ class SpecializedAgentParams(BaseNodeParams):
         "deep_agent",
     ]
     prompt: str = ""
-    provider: str = "openai"
+    provider: Literal["openai", "anthropic", "gemini", "openrouter", "groq", "cerebras", "deepseek", "kimi", "mistral"] = "openai"
     model: str = ""
+    temperature: float = Field(default=0.7, ge=0.0, le=2.0)
+    max_tokens: Optional[int] = Field(default=1000, alias="maxTokens")
     system_message: Optional[str] = Field(default="", alias="systemMessage")
     api_key: Optional[str] = Field(default=None, alias="apiKey")
+    thinking_enabled: bool = Field(default=False, alias="thinkingEnabled")
+    thinking_budget: int = Field(default=2048, alias="thinkingBudget", ge=1024, le=16000)
+    reasoning_effort: Literal["minimal", "low", "medium", "high"] = Field(default="medium", alias="reasoningEffort")
 
 
 class SimpleMemoryParams(BaseNodeParams):
