@@ -609,12 +609,80 @@ class MasterSkillParams(BaseNodeParams):
 class TelegramReceiveParams(BaseNodeParams):
     """Parameters for Telegram receive trigger node."""
     type: Literal["telegramReceive"]
-    sender_filter: str = Field(default="all", alias="senderFilter")
+    content_type_filter: Literal["all", "text", "photo", "video", "audio", "voice", "document", "sticker", "location", "contact", "poll"] = Field(
+        default="all",
+        alias="contentTypeFilter",
+        json_schema_extra={"options": [
+            {"name": "All Types", "value": "all"},
+            {"name": "Text Only", "value": "text"},
+            {"name": "Photo Only", "value": "photo"},
+            {"name": "Video Only", "value": "video"},
+            {"name": "Audio Only", "value": "audio"},
+            {"name": "Voice Only", "value": "voice"},
+            {"name": "Document Only", "value": "document"},
+            {"name": "Sticker Only", "value": "sticker"},
+            {"name": "Location Only", "value": "location"},
+            {"name": "Contact Only", "value": "contact"},
+            {"name": "Poll Only", "value": "poll"},
+        ]},
+    )
+    sender_filter: Literal["all", "self", "private", "group", "supergroup", "channel", "specific_chat", "specific_user", "keywords"] = Field(
+        default="all",
+        alias="senderFilter",
+        json_schema_extra={"options": [
+            {"name": "All Messages", "value": "all"},
+            {"name": "From Self (Bot Owner)", "value": "self"},
+            {"name": "Private Chats Only", "value": "private"},
+            {"name": "Groups Only", "value": "group"},
+            {"name": "Supergroups Only", "value": "supergroup"},
+            {"name": "Channels Only", "value": "channel"},
+            {"name": "From Specific Chat", "value": "specific_chat"},
+            {"name": "From Specific User", "value": "specific_user"},
+            {"name": "Contains Keywords", "value": "keywords"},
+        ]},
+    )
+    chat_id: str = Field(
+        default="",
+        alias="chatId",
+        json_schema_extra={"displayOptions": {"show": {"sender_filter": ["specific_chat"]}}},
+    )
+    from_user: str = Field(
+        default="",
+        alias="fromUser",
+        json_schema_extra={"displayOptions": {"show": {"sender_filter": ["specific_user"]}}},
+    )
+    keywords: str = Field(
+        default="",
+        json_schema_extra={"displayOptions": {"show": {"sender_filter": ["keywords"]}}},
+    )
+    ignore_bots: bool = Field(default=True, alias="ignoreBots")
 
 
 class TwitterReceiveParams(BaseNodeParams):
-    """Parameters for Twitter receive trigger node."""
+    """Parameters for Twitter receive trigger node (polling-based)."""
     type: Literal["twitterReceive"]
+    trigger_type: Literal["mentions", "search", "timeline"] = Field(
+        default="mentions",
+        alias="triggerType",
+        json_schema_extra={"options": [
+            {"name": "Mentions", "value": "mentions"},
+            {"name": "Search Results", "value": "search"},
+            {"name": "User Timeline", "value": "timeline"},
+        ]},
+    )
+    search_query: str = Field(
+        default="",
+        alias="searchQuery",
+        json_schema_extra={"displayOptions": {"show": {"trigger_type": ["search"]}}},
+    )
+    user_id: str = Field(
+        default="",
+        alias="userId",
+        json_schema_extra={"displayOptions": {"show": {"trigger_type": ["timeline"]}}},
+    )
+    filter_retweets: bool = Field(default=True, alias="filterRetweets")
+    filter_replies: bool = Field(default=False, alias="filterReplies")
+    poll_interval: int = Field(default=60, alias="pollInterval", ge=15, le=3600)
 
 
 class TelegramSendParams(BaseNodeParams):

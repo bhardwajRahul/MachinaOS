@@ -52,182 +52,15 @@ export const telegramNodes: Record<string, INodeTypeDescription> = {
         description: 'Connect to AI Agent tool handle'
       }
     ],
+    // Wave 8: schema lives on backend (TelegramSendParams).
     properties: [
-      // ===== RECIPIENT =====
-      {
-        displayName: 'Send To',
-        name: 'recipient_type',
-        type: 'options',
-        options: [
-          { name: 'Self (Bot Owner)', value: 'self' },
-          { name: 'User / Chat ID', value: 'user' },
-          { name: 'Group', value: 'group' }
-        ],
-        default: 'self',
-        description: 'Send to bot owner, specific user, or group'
-      },
-      {
-        displayName: 'Chat ID',
-        name: 'chat_id',
-        type: 'string',
-        default: '',
-        placeholder: '123456789 or @username',
-        description: 'Telegram chat ID (numeric) or @username',
-        displayOptions: {
-          show: { recipient_type: ['user', 'group'] }
-        }
-      },
-
-      // ===== MESSAGE TYPE =====
-      {
-        displayName: 'Message Type',
-        name: 'message_type',
-        type: 'options',
-        options: [
-          { name: 'Text', value: 'text' },
-          { name: 'Photo', value: 'photo' },
-          { name: 'Document', value: 'document' },
-          { name: 'Location', value: 'location' },
-          { name: 'Contact', value: 'contact' }
-        ],
-        default: 'text',
-        description: 'Type of message to send'
-      },
-
-      // ===== TEXT MESSAGE =====
-      {
-        displayName: 'Message Text',
-        name: 'text',
-        type: 'string',
-        default: '',
-        required: true,
-        typeOptions: { rows: 4 },
-        description: 'Text message content',
-        placeholder: 'Enter your message...',
-        displayOptions: {
-          show: { message_type: ['text'] }
-        }
-      },
-
-      // ===== MEDIA MESSAGES (photo, document) =====
-      {
-        displayName: 'Media URL',
-        name: 'media_url',
-        type: 'string',
-        default: '',
-        required: true,
-        placeholder: 'https://example.com/image.jpg',
-        description: 'URL of the media file or file_id from previous message',
-        displayOptions: {
-          show: { message_type: ['photo', 'document'] }
-        }
-      },
-      {
-        displayName: 'Caption',
-        name: 'caption',
-        type: 'string',
-        default: '',
-        typeOptions: { rows: 2 },
-        description: 'Optional caption for media',
-        displayOptions: {
-          show: { message_type: ['photo', 'document'] }
-        }
-      },
-
-      // ===== LOCATION MESSAGE =====
-      {
-        displayName: 'Latitude',
-        name: 'latitude',
-        type: 'number',
-        default: 0,
-        required: true,
-        description: 'Location latitude (-90 to 90)',
-        displayOptions: {
-          show: { message_type: ['location'] }
-        }
-      },
-      {
-        displayName: 'Longitude',
-        name: 'longitude',
-        type: 'number',
-        default: 0,
-        required: true,
-        description: 'Location longitude (-180 to 180)',
-        displayOptions: {
-          show: { message_type: ['location'] }
-        }
-      },
-
-      // ===== CONTACT MESSAGE =====
-      {
-        displayName: 'Phone Number',
-        name: 'phone_number',
-        type: 'string',
-        default: '',
-        required: true,
-        placeholder: '+1234567890',
-        description: 'Contact phone number (with country code)',
-        displayOptions: {
-          show: { message_type: ['contact'] }
-        }
-      },
-      {
-        displayName: 'First Name',
-        name: 'first_name',
-        type: 'string',
-        default: '',
-        required: true,
-        placeholder: 'John',
-        description: 'Contact first name',
-        displayOptions: {
-          show: { message_type: ['contact'] }
-        }
-      },
-      {
-        displayName: 'Last Name',
-        name: 'last_name',
-        type: 'string',
-        default: '',
-        placeholder: 'Doe',
-        description: 'Contact last name (optional)',
-        displayOptions: {
-          show: { message_type: ['contact'] }
-        }
-      },
-
-      // ===== OPTIONS =====
-      {
-        displayName: 'Parse Mode',
-        name: 'parse_mode',
-        type: 'options',
-        options: [
-          { name: 'Auto (Recommended)', value: 'Auto' },
-          { name: 'None', value: '' },
-          { name: 'HTML', value: 'HTML' },
-          { name: 'Markdown', value: 'Markdown' },
-          { name: 'MarkdownV2', value: 'MarkdownV2' }
-        ],
-        default: 'Auto',
-        description: 'Auto converts LLM markdown to Telegram HTML. Use None for raw text.',
-        displayOptions: {
-          show: { message_type: ['text', 'photo', 'document'] }
-        }
-      },
-      {
-        displayName: 'Silent',
-        name: 'silent',
-        type: 'boolean',
-        default: false,
-        description: 'Send message without notification sound'
-      },
-      {
-        displayName: 'Reply To Message ID',
-        name: 'reply_to_message_id',
-        type: 'number',
-        default: 0,
-        description: 'If set, sends the message as a reply to this message ID'
-      }
-    ]
+      { displayName: 'Chat ID', name: 'chatId', type: 'string' as any, default: '', placeholder: '123456789 or @username' },
+      { displayName: 'Message Text', name: 'text', type: 'string' as any, default: '', placeholder: 'Enter your message...' },
+      { displayName: 'Media URL', name: 'mediaUrl', type: 'string' as any, default: '', placeholder: 'https://example.com/image.jpg' },
+      { displayName: 'Phone Number', name: 'phone', type: 'string' as any, default: '', placeholder: '+1234567890' },
+      { displayName: 'First Name', name: 'firstName', type: 'string' as any, default: '', placeholder: 'John' },
+      { displayName: 'Last Name', name: 'lastName', type: 'string' as any, default: '', placeholder: 'Doe' },
+    ],
   },
 
   // Telegram Receive Message - triggers workflow on incoming messages
@@ -247,100 +80,13 @@ export const telegramNodes: Record<string, INodeTypeDescription> = {
       type: 'main' as NodeConnectionType,
       description: 'Received message data (message_id, chat_id, chat_type, from_id, from_username, text, content_type, date)'
     }],
+    // Wave 8: schema lives on backend (TelegramReceiveParams).
     properties: [
-      // ===== CONTENT TYPE FILTER =====
-      {
-        displayName: 'Content Type',
-        name: 'contentTypeFilter',
-        type: 'options',
-        options: [
-          { name: 'All Types', value: 'all' },
-          { name: 'Text Only', value: 'text' },
-          { name: 'Photo Only', value: 'photo' },
-          { name: 'Video Only', value: 'video' },
-          { name: 'Audio Only', value: 'audio' },
-          { name: 'Voice Only', value: 'voice' },
-          { name: 'Document Only', value: 'document' },
-          { name: 'Sticker Only', value: 'sticker' },
-          { name: 'Location Only', value: 'location' },
-          { name: 'Contact Only', value: 'contact' },
-          { name: 'Poll Only', value: 'poll' }
-        ],
-        default: 'all',
-        description: 'Filter by message content type'
-      },
-
-      // ===== SENDER FILTER (WhatsApp-style dropdown) =====
-      {
-        displayName: 'Sender Filter',
-        name: 'senderFilter',
-        type: 'options',
-        options: [
-          { name: 'All Messages', value: 'all' },
-          { name: 'From Self (Bot Owner)', value: 'self' },
-          { name: 'Private Chats Only', value: 'private' },
-          { name: 'Groups Only', value: 'group' },
-          { name: 'Supergroups Only', value: 'supergroup' },
-          { name: 'Channels Only', value: 'channel' },
-          { name: 'From Specific Chat', value: 'specific_chat' },
-          { name: 'From Specific User', value: 'specific_user' },
-          { name: 'Contains Keywords', value: 'keywords' }
-        ],
-        default: 'all',
-        description: 'Filter which messages trigger the workflow'
-      },
-
-      // ===== CONDITIONAL FIELDS =====
-      {
-        displayName: 'Chat ID',
-        name: 'chat_id',
-        type: 'string',
-        default: '',
-        required: true,
-        placeholder: '123456789',
-        description: 'Only trigger for messages from this specific chat ID',
-        displayOptions: {
-          show: { senderFilter: ['specific_chat'] }
-        }
-      },
-      {
-        displayName: 'User ID',
-        name: 'from_user',
-        type: 'string',
-        default: '',
-        required: true,
-        placeholder: '987654321',
-        description: 'Only trigger for messages from this specific user ID',
-        displayOptions: {
-          show: { senderFilter: ['specific_user'] }
-        }
-      },
-      {
-        displayName: 'Keywords',
-        name: 'keywords',
-        type: 'string',
-        default: '',
-        required: true,
-        placeholder: 'help, support, info',
-        description: 'Comma-separated keywords to trigger on (case-insensitive)',
-        displayOptions: {
-          show: { senderFilter: ['keywords'] }
-        }
-      },
-
-      // ===== OPTIONS =====
-      {
-        displayName: 'Ignore Bot Messages',
-        name: 'ignoreBots',
-        type: 'boolean',
-        default: true,
-        description: 'Do not trigger on messages from other bots',
-        displayOptions: {
-          show: { senderFilter: ['all', 'private', 'group', 'supergroup', 'channel', 'specific_chat', 'specific_user', 'keywords'] }
-        }
-      }
-    ]
-  }
+      { displayName: 'Chat ID', name: 'chatId', type: 'string' as any, default: '', placeholder: '123456789' },
+      { displayName: 'User ID', name: 'fromUser', type: 'string' as any, default: '', placeholder: '987654321' },
+      { displayName: 'Keywords', name: 'keywords', type: 'string' as any, default: '', placeholder: 'help, support, info' },
+    ],
+  },
 };
 
 // ============================================================================
