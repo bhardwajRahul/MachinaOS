@@ -16,7 +16,6 @@ import { useAppTheme } from '../../hooks/useAppTheme';
 import { useToolSchema, ToolSchemaConfig } from '../../hooks/useToolSchema';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { useAppStore } from '../../store/useAppStore';
-import { ANDROID_SERVICE_NODE_TYPES } from '../../nodeDefinitions/androidServiceNodes';
 import { isNodeInBackendGroup } from '../../lib/nodeSpec';
 import { nodeDefinitions } from '../../nodeDefinitions';
 import {
@@ -133,10 +132,11 @@ const ToolSchemaEditor: React.FC<ToolSchemaEditorProps> = ({ nodeId }) => {
     return currentWorkflow.nodes.find((n) => n.id === nodeId);
   }, [currentWorkflow?.nodes, nodeId]);
 
-  // Schema-driven gate: render only for nodes flagged as Android toolkits.
+  // Wave 10.G.5: render only for nodes whose spec declares
+  // `uiHints.isAndroidToolkit`. The androidTool node registers that
+  // hint; no frontend type-string fallback.
   const currentNodeDef = currentNode?.type ? nodeDefinitions[currentNode.type] : undefined;
-  const isAndroidTool =
-    currentNodeDef?.uiHints?.isAndroidToolkit ?? (currentNode?.type === 'androidTool');
+  const isAndroidTool = (currentNodeDef?.uiHints as any)?.isAndroidToolkit === true;
   if (!isAndroidTool) return null;
 
   const connectedServices = useMemo(() => {
@@ -145,9 +145,11 @@ const ToolSchemaEditor: React.FC<ToolSchemaEditorProps> = ({ nodeId }) => {
     const services: Node[] = [];
     for (const edge of incomingEdges) {
       const sourceNode = currentWorkflow.nodes.find((n) => n.id === edge.source);
-      // Wave 6 Phase 5.b: backend group → legacy fallback
+      // Wave 10.G.5: backend `group` membership only. NodeSpec prefetch
+      // runs on WS connect, so the cache is always warm by the time the
+      // parameter panel mounts.
       const isAndroid = sourceNode
-        ? (isNodeInBackendGroup(sourceNode.type, 'android') ?? ANDROID_SERVICE_NODE_TYPES.includes(sourceNode.type || ''))
+        ? (isNodeInBackendGroup(sourceNode.type, 'android') === true)
         : false;
       if (sourceNode && isAndroid) {
         services.push(sourceNode);

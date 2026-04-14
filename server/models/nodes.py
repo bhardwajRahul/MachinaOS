@@ -231,7 +231,10 @@ class CreateMapParams(BaseNodeParams):
     center_lng: float = Field(default=0.0, alias="centerLng")
     zoom: int = Field(default=10, ge=1, le=20)
     map_type: Literal["roadmap", "satellite", "terrain", "hybrid"] = Field(default="roadmap", alias="mapType")
-    api_key: Optional[str] = Field(default=None, alias="apiKey")
+    api_key: Optional[str] = Field(
+        default=None, alias="apiKey",
+        json_schema_extra={"password": True},
+    )
 
 
 class GmapsLocationsParams(BaseNodeParams):

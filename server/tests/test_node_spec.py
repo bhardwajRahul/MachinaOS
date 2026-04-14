@@ -744,6 +744,8 @@ class TestNodeSpecContractInvariants:
             "isConsoleSink", "hasSkills",
             # Wave 10.A: size hints carried by plugin registrations
             "width", "height",
+            # Wave 10.G.5: start-node's user-authored JSON blob marker
+            "hasInitialDataBlob",
         }
         for node_type, meta in NODE_METADATA.items():
             hints = meta.get("uiHints") or {}
@@ -857,3 +859,102 @@ class TestPluginContractInvariants:
             assert not outs, (
                 f"{t}: hideOutputHandle=True but handles declares output(s) {outs}"
             )
+
+
+class TestWave10GContractInvariants:
+    """Wave 10.G.4 invariants: every widget-dispatch uiHint MiddleSection
+    reads is declared at the plugin level, so the frontend doesn't need
+    per-family string fallbacks.
+    """
+
+    AGENT_EXEMPT = {"socialReceive", "socialSend"}  # reuse component but aren't agents
+
+    def _plugin_types(self):
+        import nodes  # noqa: F401
+        from services.node_registry import registered_node_types
+        from models.node_metadata import NODE_METADATA
+        explicit = {t for t, m in NODE_METADATA.items() if "componentKind" in m}
+        return registered_node_types() | explicit
+
+    def test_every_componentKind_agent_declares_hasSkills(self):
+        """MiddleSection's `isAgentWithSkills` reads `uiHints.hasSkills`;
+        the Connected Skills accordion + memory-edge follow-through both
+        depend on it. An agent-kind node without this hint silently loses
+        skill-panel rendering."""
+        for t in self._plugin_types():
+            spec = get_node_spec(t)
+            if spec.get("componentKind") != "agent":
+                continue
+            if t in self.AGENT_EXEMPT:
+                continue
+            hints = spec.get("uiHints") or {}
+            assert hints.get("hasSkills") is True, (
+                f"{t}: componentKind=agent must declare uiHints.hasSkills=True"
+            )
+
+    def test_every_tool_kind_declares_isToolPanel(self):
+        """Every dedicated tool node (componentKind='tool') must emit
+        `uiHints.isToolPanel=True` so MiddleSection renders the
+        ToolSchemaEditor. Dual-purpose nodes (group includes 'tool' but
+        componentKind='square') don't show the editor — they render as
+        normal squares and become tools only when wired to an agent's
+        input-tools handle."""
+        for t in self._plugin_types():
+            spec = get_node_spec(t)
+            if spec.get("componentKind") != "tool":
+                continue
+            hints = spec.get("uiHints") or {}
+            assert hints.get("isToolPanel") is True, (
+                f"{t}: componentKind=tool must declare uiHints.isToolPanel=True"
+            )
+
+    def test_google_workspace_nodes_have_operation_gating(self):
+        """Drive / Sheets / Tasks / Contacts / Gmail all have an
+        `operation` discriminator; at least one sub-field must hide
+        behind `displayOptions.show.operation` so the panel isn't a
+        flat dump of every op's fields."""
+        from services.node_input_schemas import get_node_input_schema
+        for t in ("gmail", "drive", "sheets", "tasks", "contacts"):
+            schema = get_node_input_schema(t)
+            assert schema, f"{t}: no input schema"
+            props = schema.get("properties") or {}
+            gated = [
+                name for name, p in props.items()
+                if (p.get("displayOptions") or {}).get("show", {}).get("operation")
+            ]
+            assert gated, (
+                f"{t}: no field declares displayOptions.show.operation; "
+                "every per-op field would render at once"
+            )
+
+    def test_code_executors_declare_code_editor(self):
+        """The ParameterRenderer `case 'code'` widget only fires when
+        the Pydantic field emits `editor: 'code'`. Without this the
+        code executor falls back to a plain string input."""
+        from services.node_input_schemas import get_node_input_schema
+        for t in ("pythonExecutor", "javascriptExecutor", "typescriptExecutor"):
+            schema = get_node_input_schema(t)
+            code_field = (schema.get("properties") or {}).get("code")
+            assert code_field, f"{t}: `code` field missing from input schema"
+            assert code_field.get("editor") == "code", (
+                f"{t}.code: expected `editor: 'code'`, got {code_field.get('editor')!r}"
+            )
+
+    def test_api_key_fields_are_password_masked(self):
+        """Every field named `apiKey` / `api_key` across every node's
+        input schema must emit `password: True` so the UI masks it.
+        Tribal risk: a new node author forgets the hint and the key
+        renders in plaintext."""
+        from services.node_input_schemas import NODE_INPUT_MODELS, get_node_input_schema
+        offenders = []
+        for t in NODE_INPUT_MODELS:
+            schema = get_node_input_schema(t)
+            if not schema:
+                continue
+            for name, prop in (schema.get("properties") or {}).items():
+                if name in ("apiKey", "api_key") and prop.get("password") is not True:
+                    offenders.append(f"{t}.{name}")
+        assert not offenders, (
+            "API-key fields missing password:True — they would render in "
+            f"plaintext: {offenders}"
+        )

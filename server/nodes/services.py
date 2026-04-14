@@ -80,7 +80,7 @@ register_node(
         "handles": [{"name": "output-memory", "kind": "output", "position": "top", "label": "Memory", "role": "memory"}],
         "description": "Markdown-based conversation memory with optional vector DB",
         "version": 1,
-        "uiHints": {"isMemoryPanel": True, "hasCodeEditor": True},
+        "uiHints": {"isMemoryPanel": True, "hasCodeEditor": True, "hideRunButton": True},
     },
 )
 

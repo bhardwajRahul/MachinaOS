@@ -34,7 +34,7 @@ register_node(
         "handles": _TOOL_HANDLES,
         "description": "Add, subtract, multiply, divide, power, sqrt, mod, abs",
         "version": 1,
-        "uiHints": {"isToolPanel": True},
+        "uiHints": {"isToolPanel": True, "hideRunButton": True},
     },
 )
 
@@ -50,7 +50,7 @@ register_node(
         "handles": _TOOL_HANDLES,
         "description": "Get current date/time with timezone support",
         "version": 1,
-        "uiHints": {"isToolPanel": True},
+        "uiHints": {"isToolPanel": True, "hideRunButton": True},
     },
 )
 
@@ -66,7 +66,7 @@ register_node(
         "handles": _TOOL_HANDLES,
         "description": "DuckDuckGo web search (free, no API key required)",
         "version": 1,
-        "uiHints": {"isToolPanel": True},
+        "uiHints": {"isToolPanel": True, "hideRunButton": True},
     },
 )
 
@@ -82,7 +82,7 @@ register_node(
         "handles": _TOOL_HANDLES,
         "description": "Task management tool for AI agents to create, track, and manage tasks",
         "version": 1,
-        "uiHints": {"isToolPanel": True},
+        "uiHints": {"isToolPanel": True, "hideRunButton": True},
     },
 )
 
@@ -98,6 +98,6 @@ register_node(
         "handles": _TOOL_HANDLES,
         "description": "Structured task list planning for complex multi-step operations",
         "version": 1,
-        "uiHints": {"isToolPanel": True},
+        "uiHints": {"isToolPanel": True, "hideRunButton": True},
     },
 )

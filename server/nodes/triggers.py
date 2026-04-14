@@ -41,7 +41,11 @@ register_node(
         "handles": _TRIGGER_OUTPUT_HANDLES,
         "description": "Starting point for workflow execution. Provides initial data to connected nodes.",
         "version": 1,
-        "uiHints": {"hideInputSection": True, "hideOutputSection": True},
+        # `hasInitialDataBlob` tells the InputSection the output shape comes
+        # from a user-authored JSON blob on the node itself (the `initialData`
+        # field), not a backend Pydantic schema. Used to be an inline
+        # `nodeType === 'start'` check on the frontend.
+        "uiHints": {"hideInputSection": True, "hideOutputSection": True, "hasInitialDataBlob": True},
     },
 )
 

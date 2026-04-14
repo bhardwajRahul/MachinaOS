@@ -7,7 +7,6 @@ import { useWebSocket } from './contexts/WebSocketContext';
 import { ExecutionService, ExecutionResult } from './services/executionService';
 import { useAppTheme } from './hooks/useAppTheme';
 import { CalendarClock, PlayCircle } from 'lucide-react';
-import { SKILL_NODE_TYPES } from './nodeDefinitions/skillNodes';
 import { ActionButton } from './components/ui/action-button';
 
 const ParameterPanel: React.FC = () => {
@@ -117,17 +116,16 @@ const ParameterPanel: React.FC = () => {
   const canExecute = selectedNode && nodeDefinition &&
     ExecutionService.isNodeTypeSupported(nodeDefinition.name);
 
-  // Panel-level visibility hints come from nodeDefinition.uiHints.
-  // Legacy name fallbacks stay for one release for any node not yet annotated.
-  const hints = nodeDefinition?.uiHints;
-  const isStartNode = hints?.hideInputSection && hints?.hideOutputSection
-    ? false  // generic "no input/output" handled by hints below
-    : nodeDefinition?.name === 'start';
-  const isSkillNode = !!nodeDefinition?.name && SKILL_NODE_TYPES.includes(nodeDefinition.name);
-  const isMonitorNode = hints?.isMonitorPanel ?? (nodeDefinition?.name === 'teamMonitor');
-  const hideInputSection = hints?.hideInputSection ?? (isStartNode || isSkillNode || isMonitorNode);
-  const hideOutputSection = hints?.hideOutputSection ?? (isStartNode || isSkillNode || isMonitorNode);
-  const hideRunButton = hints?.hideRunButton ?? (isSkillNode || isMonitorNode);
+  // Wave 10.G.5: panel visibility is now pure schema-driven.
+  // `hideInputSection` / `hideOutputSection` / `hideRunButton` are
+  // declared directly in each plugin module's `uiHints`. Tool-kind
+  // nodes (Master Skill, Write Todos, Simple Memory …) don't emit the
+  // run button because they're passive — they inherit from the node's
+  // own `uiHints`, not from a frontend type-array.
+  const hints = (nodeDefinition?.uiHints as Record<string, any>) ?? {};
+  const hideInputSection = hints.hideInputSection === true;
+  const hideOutputSection = hints.hideOutputSection === true;
+  const hideRunButton = hints.hideRunButton === true;
 
   if (!selectedNode || !nodeDefinition) {
     return null;
@@ -135,23 +133,19 @@ const ParameterPanel: React.FC = () => {
 
 
 
-  // Helper to render icon (handles image URLs, Ant Design icons, and emoji/text)
+  // Wave 10.G.5: icon dispatch reads spec.componentKind ("start" is the
+  // backend-declared componentKind of the workflow start node) and a
+  // small set of icon-key prefixes. No hardcoded node-name checks.
   const renderIcon = (icon: string) => {
-    // Handle Ant Design icon names
     if (icon === 'schedule') {
       return <CalendarClock className="h-5 w-5" style={{ color: theme.colors.actionDeploy }} />;
     }
-    if (icon === 'play' || nodeDefinition?.name === 'start') {
+    if (icon === 'play' || (nodeDefinition as any)?.componentKind === 'start') {
       return <PlayCircle className="h-5 w-5" style={{ color: theme.dracula.cyan }} />;
     }
-    // Handle image URLs
     if (icon.startsWith('data:') || icon.startsWith('http') || icon.startsWith('/')) {
       return (
-        <img
-          src={icon}
-          alt="icon"
-          style={{ width: 20, height: 20, objectFit: 'contain' }}
-        />
+        <img src={icon} alt="icon" style={{ width: 20, height: 20, objectFit: 'contain' }} />
       );
     }
     return <span>{icon}</span>;
@@ -166,7 +160,7 @@ const ParameterPanel: React.FC = () => {
         {hasUnsavedChanges && <span style={{ color: theme.accent.orange }}>*</span>}
       </div>
       <div className="flex items-center gap-2">
-        {canExecute && !hideRunButton && !isMonitorNode && (
+        {canExecute && !hideRunButton && (
           <ActionButton
             tone="green"
             onClick={handleRun}

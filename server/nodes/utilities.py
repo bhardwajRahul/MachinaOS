@@ -84,7 +84,7 @@ register_node(
         ],
         "description": "Monitor agent team operations, tasks, and messages in real-time",
         "version": 1,
-        "uiHints": {"hideInputSection": True, "hideOutputSection": True, "isMonitorPanel": True},
+        "uiHints": {"hideInputSection": True, "hideOutputSection": True, "isMonitorPanel": True, "hideRunButton": True},
         "hideOutputHandle": True,
     },
 )

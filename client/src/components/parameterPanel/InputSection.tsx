@@ -244,45 +244,47 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
           // Schema precedence (mirrors n8n VirtualSchema.vue — see
           // docs-internal/schema_source_of_truth_rfc.md):
           //   1. real run data (handled above in the `if` branch)
-          //   2. backend-declared schema via get_node_output_schema
-          //   3. `{ data: 'any' }` empty fallback
+          //   2. user-authored blob (plugin declares `hasInitialDataBlob`)
+          //   3. backend-declared schema via get_node_output_schema
+          //   4. `{ data: 'any' }` empty fallback
           //
-          // `start` is special-cased: its shape is authored inline by the
-          // user as initialData JSON, so there's no backend schema to
-          // defer to.
-          const backendSchema = nodeType !== 'start'
-            ? jsonSchemaToShape(await fetchNodeOutputSchema(nodeType, sendRequest))
-            : null;
+          // Wave 10.G.5: every dispatch decision reads from the node's
+          // own NodeSpec — no `nodeType === 'start'` / 'socialReceive'
+          // string checks.
+          const sourceSpec = nodeType ? getCachedNodeSpec(nodeType) : null;
+          const sourceHints = (sourceSpec?.uiHints as Record<string, any>) ?? {};
 
-          if (nodeType === 'start') {
+          if (sourceHints.hasInitialDataBlob === true) {
             try {
               const initialData = sourceNode?.data?.initialData || '{}';
               outputSchema = typeof initialData === 'string' ? JSON.parse(initialData) : initialData;
             } catch (e) {
               outputSchema = {};
             }
-          } else if (backendSchema) {
-            outputSchema = backendSchema;
-
-            // socialReceive multi-output dispatch: when the downstream edge
-            // connects via a specific output-* handle, show only that
-            // handle's nested schema. The backend schema surfaces all four
-            // nested objects (message / media / contact / metadata) plus
-            // top-level flat fields; we slice the right nested object
-            // here. Colocated with the multi-output consumer.
-            if (nodeType === 'socialReceive' && edge.sourceHandle?.startsWith('output-')) {
-              const handleName = edge.sourceHandle.replace('output-', '');
-              const nested = handleName && (backendSchema as Record<string, any>)[handleName];
-              if (nested !== undefined) {
-                outputSchema = typeof nested === 'object' && nested !== null
-                  ? nested
-                  : { [handleName]: nested };
-              }
-            }
           } else {
-            // No backend schema declared and no run data -> empty fallback.
-            // Frontend never guesses shapes.
-            outputSchema = { data: 'any' };
+            const backendSchema = jsonSchemaToShape(await fetchNodeOutputSchema(nodeType, sendRequest));
+            if (backendSchema) {
+              outputSchema = backendSchema;
+
+              // Multi-output dispatch: when the source node declares
+              // multiple output handles and the downstream edge picked
+              // a specific one, slice the matching nested sub-shape.
+              // Generalises socialReceive's 4-way fan-out to any node
+              // whose spec declares >1 output handle — all driven by
+              // handle topology, not node-type string.
+              const outputHandleCount = (sourceSpec?.handles ?? []).filter(h => h.kind === 'output').length;
+              if (outputHandleCount > 1 && edge.sourceHandle?.startsWith('output-')) {
+                const handleName = edge.sourceHandle.replace('output-', '');
+                const nested = handleName && (backendSchema as Record<string, any>)[handleName];
+                if (nested !== undefined) {
+                  outputSchema = typeof nested === 'object' && nested !== null
+                    ? nested
+                    : { [handleName]: nested };
+                }
+              }
+            } else {
+              outputSchema = { data: 'any' };
+            }
           }
         }
 
