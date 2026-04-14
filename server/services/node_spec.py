@@ -71,6 +71,13 @@ def get_node_spec(node_type: str) -> Optional[dict[str, Any]]:
     if meta.get("uiHints"):
         spec["uiHints"] = meta["uiHints"]
 
+    # Wave 10.A — full visual contract. Only emit fields when seeded so the
+    # wire format stays compact and unseeded types keep the pre-10 shape.
+    for key in ("color", "componentKind", "handles", "credentials",
+                "hideOutputHandle", "visibility"):
+        if key in meta:
+            spec[key] = meta[key]
+
     _spec_cache[node_type] = spec
     return spec
 

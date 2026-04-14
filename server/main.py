@@ -64,6 +64,11 @@ async def lifespan(app: FastAPI):
     # Startup
     _startup_log("Lifespan startup begin")
 
+    # Wave 10.C: discover node plugins so their register_node() calls
+    # populate the four registries before any router serves NodeSpec.
+    # Side-effect import; the package __init__ walks its submodules.
+    import nodes  # noqa: F401
+
     # Wire dependency injection
     container.wire(modules=[
         "routers.workflow",

@@ -12,21 +12,44 @@ fast iteration during the migration — switch to a TypedDict / Pydantic
 model once the schema stabilises.
 """
 
-from typing import Any, Optional, TypedDict
+from typing import Any, Literal, Optional, TypedDict
+
+
+class NodeHandle(TypedDict, total=False):
+    """One React Flow handle on a node. Wave 10.A replaces the
+    frontend-hardcoded `AGENT_CONFIGS` handle topology.
+    """
+
+    name: str                                            # "input-skill", "output-top", ...
+    kind: Literal["input", "output"]
+    position: Literal["top", "bottom", "left", "right"]
+    offset: str                                          # CSS % e.g. "25%"; optional
+    label: str                                           # tooltip
+    role: str                                            # "main" / "skill" / "tools" / "memory" / "task" / "teammates" / "model"
 
 
 class NodeMetadata(TypedDict, total=False):
+    # Existing (Wave 6):
     displayName: str
-    icon: str
+    icon: str                                            # emoji | "asset:<key>" | SVG data URI
     group: list[str]
     subtitle: str
     description: str
     version: int
-    # Wave 6: per-node UI panel hints lifted from the legacy frontend
-    # INodeUIHints. Carries flags like isChatTrigger / isConsoleSink /
-    # hasCodeEditor / isMemoryPanel / isToolPanel / etc. Empty dict when
-    # the node doesn't need any panel-level toggles.
+    # Per-node UI panel hints lifted from the legacy frontend INodeUIHints.
+    # Flags like isChatTrigger / isConsoleSink / hasCodeEditor / isMemoryPanel.
     uiHints: dict[str, object]
+
+    # Wave 10.A — full visual contract:
+    color: str                                           # hex or dracula token e.g. "#bd93f9"
+    componentKind: Literal[                              # frontend component dispatch key
+        "square", "circle", "trigger", "start",
+        "agent", "chat", "tool", "model", "generic",
+    ]
+    handles: list[NodeHandle]                            # replaces AGENT_CONFIGS topology
+    credentials: list[str]                               # provider keys
+    hideOutputHandle: bool                               # replaces NO_OUTPUT_NODE_TYPES
+    visibility: Literal["all", "normal", "dev"]          # replaces SIMPLE_MODE_CATEGORIES
 
 
 # Seeded incrementally per Wave 6 Phase 3 sub-commit. Sub-commit 3a

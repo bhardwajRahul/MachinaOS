@@ -121,7 +121,16 @@ class NodeExecutor:
         self._handlers = self._build_handler_registry()
 
     def _build_handler_registry(self) -> Dict[str, Callable]:
-        """Build handler registry with service dependencies bound via partial."""
+        """Build handler registry with service dependencies bound via partial.
+
+        Plugin handlers registered via ``services.node_registry.register_node``
+        win over the legacy hardcoded entries below; this lets per-node
+        plugin modules in ``server/nodes/*.py`` override the dispatcher
+        without touching this file. Plugin handlers are closed over their
+        own dependencies at module import time, so no ``partial`` wiring
+        is needed here.
+        """
+        from services.node_registry import _HANDLER_REGISTRY as _PLUGIN_HANDLERS
         registry = {
             # Workflow control
             'start': handle_start,
@@ -228,6 +237,10 @@ class NodeExecutor:
         # Register Android services
         for node_type in ANDROID_SERVICE_NODE_TYPES:
             registry[node_type] = partial(handle_android_service, android_service=self.android_service)
+
+        # Plugin handlers last: they win over the legacy entries above,
+        # enabling incremental migration (Wave 10.C strangler fig).
+        registry.update(_PLUGIN_HANDLERS)
 
         return registry
 
