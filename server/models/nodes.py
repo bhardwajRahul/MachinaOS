@@ -43,9 +43,15 @@ class BaseNodeParams(BaseModel):
 # =============================================================================
 
 class AIChatModelParams(BaseNodeParams):
-    """Parameters for AI chat model nodes."""
+    """Parameters for AI chat model nodes.
+
+    Wave 10.G.2 restored the per-provider tuning fields Wave 9.2 dropped
+    (topP/topK/penalties/thinking/reasoning/responseFormat/safetySettings).
+    Each is gated via ``displayOptions.show.type`` so users only see the
+    knobs their selected provider actually honours.
+    """
     type: Literal["openaiChatModel", "anthropicChatModel", "geminiChatModel", "openrouterChatModel", "groqChatModel", "cerebrasChatModel", "deepseekChatModel", "kimiChatModel", "mistralChatModel"]
-    prompt: str = Field(default="", json_schema_extra={"rows": 4})
+    prompt: str = Field(default="", json_schema_extra={"rows": 4, "placeholder": "{{ $json.message }}"})
     model: str = Field(default="", json_schema_extra={"placeholder": "Select a model..."})
     temperature: float = Field(
         default=0.7, ge=0.0, le=2.0,
@@ -54,11 +60,69 @@ class AIChatModelParams(BaseNodeParams):
     max_tokens: Optional[int] = Field(default=1000, alias="maxTokens", ge=1, le=128000)
     system_prompt: Optional[str] = Field(
         default="", alias="systemMessage",
-        json_schema_extra={"rows": 3},
+        json_schema_extra={"rows": 3, "placeholder": "You are a helpful assistant."},
     )
     api_key: Optional[str] = Field(
         default=None, alias="apiKey",
         json_schema_extra={"password": True},
+    )
+
+    # ---- provider-specific tuning (gated on `type` discriminator) ----
+    top_p: Optional[float] = Field(
+        default=1.0, alias="topP", ge=0.0, le=1.0,
+        json_schema_extra={"numberStepSize": 0.1},
+    )
+    top_k: Optional[int] = Field(
+        default=40, alias="topK", ge=1, le=100,
+        json_schema_extra={
+            "displayOptions": {"show": {"type": ["anthropicChatModel", "geminiChatModel"]}},
+        },
+    )
+    frequency_penalty: Optional[float] = Field(
+        default=0.0, alias="frequencyPenalty", ge=-2.0, le=2.0,
+        json_schema_extra={
+            "numberStepSize": 0.1,
+            "displayOptions": {"show": {"type": ["openaiChatModel", "openrouterChatModel", "deepseekChatModel"]}},
+        },
+    )
+    presence_penalty: Optional[float] = Field(
+        default=0.0, alias="presencePenalty", ge=-2.0, le=2.0,
+        json_schema_extra={
+            "numberStepSize": 0.1,
+            "displayOptions": {"show": {"type": ["openaiChatModel", "openrouterChatModel", "deepseekChatModel"]}},
+        },
+    )
+    response_format: Optional[Literal["text", "json_object"]] = Field(
+        default="text", alias="responseFormat",
+        json_schema_extra={"displayOptions": {"show": {"type": ["openaiChatModel"]}}},
+    )
+    safety_settings: Optional[Literal["default", "strict", "permissive"]] = Field(
+        default="default", alias="safetySettings",
+        json_schema_extra={"displayOptions": {"show": {"type": ["geminiChatModel"]}}},
+    )
+    thinking_enabled: bool = Field(
+        default=False, alias="thinkingEnabled",
+        json_schema_extra={
+            "displayOptions": {"show": {"type": ["anthropicChatModel", "geminiChatModel", "openaiChatModel", "groqChatModel", "cerebrasChatModel"]}},
+        },
+    )
+    thinking_budget: Optional[int] = Field(
+        default=2048, alias="thinkingBudget", ge=1024, le=16000,
+        json_schema_extra={
+            "displayOptions": {"show": {"thinking_enabled": [True], "type": ["anthropicChatModel", "geminiChatModel", "cerebrasChatModel"]}},
+        },
+    )
+    reasoning_effort: Optional[Literal["minimal", "low", "medium", "high"]] = Field(
+        default="medium", alias="reasoningEffort",
+        json_schema_extra={
+            "displayOptions": {"show": {"thinking_enabled": [True], "type": ["openaiChatModel"]}},
+        },
+    )
+    reasoning_format: Optional[Literal["parsed", "hidden"]] = Field(
+        default="parsed", alias="reasoningFormat",
+        json_schema_extra={
+            "displayOptions": {"show": {"thinking_enabled": [True], "type": ["groqChatModel"]}},
+        },
     )
 
 
@@ -173,8 +237,11 @@ class CreateMapParams(BaseNodeParams):
 class GmapsLocationsParams(BaseNodeParams):
     """Parameters for GMaps Locations (geocoding) node."""
     type: Literal["gmaps_locations"]
-    address: str = ""
-    api_key: Optional[str] = Field(default=None, alias="apiKey")
+    address: str = Field(default="", json_schema_extra={"placeholder": "1600 Amphitheatre Pkwy, Mountain View, CA"})
+    api_key: Optional[str] = Field(
+        default=None, alias="apiKey",
+        json_schema_extra={"password": True},
+    )
 
 
 class GmapsNearbyPlacesParams(BaseNodeParams):
@@ -184,7 +251,10 @@ class GmapsNearbyPlacesParams(BaseNodeParams):
     longitude: float = 0.0
     radius: int = Field(default=1000, ge=1, le=50000)
     place_type: str = Field(default="restaurant", alias="placeType")
-    api_key: Optional[str] = Field(default=None, alias="apiKey")
+    api_key: Optional[str] = Field(
+        default=None, alias="apiKey",
+        json_schema_extra={"password": True},
+    )
 
 
 # =============================================================================
@@ -247,10 +317,34 @@ class WhatsAppReceiveParams(BaseNodeParams):
     type: Literal["whatsappReceive"]
     message_type_filter: str = Field(default="all", alias="messageTypeFilter")
     sender_filter: str = Field(default="all", alias="filter")
-    contact_phone: str = Field(default="", alias="contactPhone")
-    group_id: str = Field(default="", alias="group_id")
-    sender_number: str = Field(default="", alias="senderNumber")
-    keywords: str = Field(default="")
+    contact_phone: str = Field(
+        default="", alias="contactPhone",
+        json_schema_extra={
+            "placeholder": "+1234567890",
+            "displayOptions": {"show": {"filter": ["contact"]}},
+        },
+    )
+    group_id: str = Field(
+        default="", alias="group_id",
+        json_schema_extra={
+            "loadOptionsMethod": "whatsappGroups",
+            "displayOptions": {"show": {"filter": ["group"]}},
+        },
+    )
+    sender_number: str = Field(
+        default="", alias="senderNumber",
+        json_schema_extra={
+            "loadOptionsMethod": "whatsappGroupMembers",
+            "displayOptions": {"show": {"filter": ["group"]}},
+        },
+    )
+    keywords: str = Field(
+        default="",
+        json_schema_extra={
+            "placeholder": "hello, urgent, help",
+            "displayOptions": {"show": {"filter": ["keywords"]}},
+        },
+    )
     ignore_own: bool = Field(default=True, alias="ignoreOwnMessages")
     include_media: bool = Field(default=False, alias="includeMediaData")
     forwarded_filter: str = Field(default="all", alias="forwardedFilter")
@@ -279,14 +373,20 @@ class WhatsAppDbParams(BaseNodeParams):
 class PythonExecutorParams(BaseNodeParams):
     """Parameters for Python code executor node."""
     type: Literal["pythonExecutor"]
-    code: str = ""
+    code: str = Field(
+        default="",
+        json_schema_extra={"editor": "code", "editorLanguage": "python", "rows": 8},
+    )
     timeout: int = Field(default=30, ge=1, le=300)
 
 
 class JavaScriptExecutorParams(BaseNodeParams):
     """Parameters for JavaScript code executor node."""
     type: Literal["javascriptExecutor"]
-    code: str = ""
+    code: str = Field(
+        default="",
+        json_schema_extra={"editor": "code", "editorLanguage": "javascript", "rows": 8},
+    )
     timeout: int = Field(default=30, ge=1, le=300)
 
 
@@ -294,7 +394,10 @@ class TypeScriptExecutorParams(BaseNodeParams):
     """Parameters for TypeScript code executor node (compiles to JS
     via the Node.js server with tsx)."""
     type: Literal["typescriptExecutor"]
-    code: str = ""
+    code: str = Field(
+        default="",
+        json_schema_extra={"editor": "code", "editorLanguage": "typescript", "rows": 8},
+    )
     timeout: int = Field(default=30, ge=1, le=300)
 
 
@@ -302,7 +405,10 @@ class ProcessManagerParams(BaseNodeParams):
     """Parameters for long-running process manager node."""
     type: Literal["processManager"]
     tool_name: str = Field(default="process_manager", alias="toolName")
-    tool_description: str = Field(default="", alias="toolDescription")
+    tool_description: str = Field(
+        default="", alias="toolDescription",
+        json_schema_extra={"rows": 4, "placeholder": "Describe what this process does..."},
+    )
     operation: Literal["start", "stop", "restart", "send_input", "list", "get_output"] = "start"
     name: str = Field(
         default="",
@@ -906,7 +1012,7 @@ class SocialSendParams(BaseNodeParams):
 
 class BraveSearchParams(BaseNodeParams):
     type: Literal["braveSearch"]
-    query: str = ""
+    query: str = Field(default="", json_schema_extra={"placeholder": "machine learning OR AI"})
     max_results: int = Field(default=10, alias="maxResults", ge=1, le=20)
     country: str = ""
     search_lang: str = Field(default="en", alias="searchLang")
@@ -915,7 +1021,7 @@ class BraveSearchParams(BaseNodeParams):
 
 class SerperSearchParams(BaseNodeParams):
     type: Literal["serperSearch"]
-    query: str = ""
+    query: str = Field(default="", json_schema_extra={"placeholder": "site:example.com python"})
     search_type: Literal["search", "news", "images", "places"] = Field(default="search", alias="searchType")
     max_results: int = Field(default=10, alias="maxResults", ge=1, le=100)
     country: str = ""
@@ -924,7 +1030,7 @@ class SerperSearchParams(BaseNodeParams):
 
 class PerplexitySearchParams(BaseNodeParams):
     type: Literal["perplexitySearch"]
-    query: str = ""
+    query: str = Field(default="", json_schema_extra={"placeholder": "latest advances in vector databases"})
     model: Literal["sonar", "sonar-pro", "sonar-reasoning", "sonar-reasoning-pro"] = "sonar"
     search_recency_filter: Literal["all", "month", "week", "day", "hour"] = Field(default="all", alias="searchRecencyFilter")
     return_images: bool = Field(default=False, alias="returnImages")
@@ -975,9 +1081,9 @@ class ApifyActorParams(BaseNodeParams):
 class EmailSendParams(BaseNodeParams):
     type: Literal["emailSend"]
     provider: str = ""
-    to: str = ""
-    subject: str = ""
-    body: str = ""
+    to: str = Field(default="", json_schema_extra={"placeholder": "recipient@example.com"})
+    subject: str = Field(default="", json_schema_extra={"placeholder": "Meeting reminder"})
+    body: str = Field(default="", json_schema_extra={"rows": 6, "placeholder": "Write your message..."})
     cc: str = ""
     bcc: str = ""
     body_type: Literal["text", "html"] = Field(default="text", alias="bodyType")
@@ -1025,11 +1131,18 @@ class GmailParams(BaseNodeParams):
     )
     body: str = Field(
         default="",
-        json_schema_extra={"displayOptions": {"show": {"operation": ["send"]}}},
+        json_schema_extra={
+            "rows": 4,
+            "placeholder": "Write your message...",
+            "displayOptions": {"show": {"operation": ["send"]}},
+        },
     )
     query: str = Field(
         default="",
-        json_schema_extra={"displayOptions": {"show": {"operation": ["search"]}}},
+        json_schema_extra={
+            "placeholder": "from:jane subject:meeting",
+            "displayOptions": {"show": {"operation": ["search"]}},
+        },
     )
     message_id: str = Field(
         default="",
@@ -1070,42 +1183,82 @@ class CalendarParams(BaseNodeParams):
 class DriveParams(BaseNodeParams):
     type: Literal["drive"]
     operation: Literal["upload", "download", "list", "share"] = "list"
-    file_id: str = Field(default="", alias="fileId")
-    file_name: str = Field(default="", alias="fileName")
-    file_path: str = Field(default="", alias="filePath")
+    file_id: str = Field(
+        default="", alias="fileId",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["download", "share"]}}},
+    )
+    file_name: str = Field(
+        default="", alias="fileName",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["upload"]}}},
+    )
+    file_path: str = Field(
+        default="", alias="filePath",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["upload"]}}},
+    )
     folder_id: str = Field(
-        default="",
-        alias="folderId",
-        json_schema_extra={"loadOptionsMethod": "googleDriveFolders"},
+        default="", alias="folderId",
+        json_schema_extra={
+            "loadOptionsMethod": "googleDriveFolders",
+            "displayOptions": {"show": {"operation": ["upload", "list"]}},
+        },
     )
 
 
 class SheetsParams(BaseNodeParams):
     type: Literal["sheets"]
     operation: Literal["read", "write", "append"] = "read"
-    spreadsheet_id: str = Field(default="", alias="spreadsheetId")
-    range_: str = Field(default="", alias="range")
-    values: str = "[]"
+    spreadsheet_id: str = Field(default="", alias="spreadsheetId",
+        json_schema_extra={"placeholder": "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"})
+    range_: str = Field(default="", alias="range",
+        json_schema_extra={"placeholder": "Sheet1!A1:D10"})
+    values: str = Field(
+        default="[]",
+        json_schema_extra={
+            "rows": 6,
+            "placeholder": '[["Name","Age"],["Alice",30]]',
+            "displayOptions": {"show": {"operation": ["write", "append"]}},
+        },
+    )
 
 
 class TasksParams(BaseNodeParams):
     type: Literal["tasks"]
     operation: Literal["create", "list", "complete", "update", "delete"] = "list"
     tasklist_id: str = Field(
-        default="@default",
-        alias="tasklistId",
+        default="@default", alias="tasklistId",
         json_schema_extra={"loadOptionsMethod": "googleTasklists"},
     )
-    task_id: str = Field(default="", alias="taskId")
-    title: str = ""
-    notes: str = ""
+    task_id: str = Field(
+        default="", alias="taskId",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["complete", "update", "delete"]}}},
+    )
+    title: str = Field(
+        default="",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["create", "update"]}}},
+    )
+    notes: str = Field(
+        default="",
+        json_schema_extra={
+            "rows": 3,
+            "displayOptions": {"show": {"operation": ["create", "update"]}},
+        },
+    )
 
 
 class ContactsParams(BaseNodeParams):
     type: Literal["contacts"]
     operation: Literal["create", "list", "search", "get", "update", "delete"] = "list"
-    resource_name: str = Field(default="", alias="resourceName")
-    query: str = ""
+    resource_name: str = Field(
+        default="", alias="resourceName",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["get", "update", "delete"]}}},
+    )
+    query: str = Field(
+        default="",
+        json_schema_extra={
+            "placeholder": "name or email",
+            "displayOptions": {"show": {"operation": ["search"]}},
+        },
+    )
 
 
 # Document / RAG --------------------------------------------------------------
@@ -1127,7 +1280,10 @@ class EmbeddingGeneratorParams(BaseNodeParams):
     type: Literal["embeddingGenerator"]
     provider: Literal["huggingface", "openai", "ollama"] = "huggingface"
     model: str = "BAAI/bge-small-en-v1.5"
-    api_key: Optional[str] = Field(default=None, alias="apiKey")
+    api_key: Optional[str] = Field(
+        default=None, alias="apiKey",
+        json_schema_extra={"password": True},
+    )
 
 
 class VectorStoreParams(BaseNodeParams):
@@ -1279,15 +1435,24 @@ class GmailReceiveParams(BaseNodeParams):
 class TextGeneratorParams(BaseNodeParams):
     """Parameters for text generator node."""
     type: Literal["textGenerator"]
-    template: str = ""
+    template: str = Field(
+        default="",
+        json_schema_extra={"rows": 6, "placeholder": "Hello {{name}}, your order {{orderId}} is ready."},
+    )
 
 
 class FileHandlerParams(BaseNodeParams):
     """Parameters for file handler node."""
     type: Literal["fileHandler"]
     action: Literal["read", "write", "append", "delete"] = "read"
-    file_path: str = Field(default="", alias="filePath")
-    content: str = ""
+    file_path: str = Field(default="", alias="filePath", json_schema_extra={"placeholder": "/path/to/file.txt"})
+    content: str = Field(
+        default="",
+        json_schema_extra={
+            "rows": 6,
+            "displayOptions": {"show": {"action": ["write", "append"]}},
+        },
+    )
 
 
 # =============================================================================
