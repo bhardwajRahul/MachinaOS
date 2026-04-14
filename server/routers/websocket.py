@@ -278,6 +278,37 @@ async def handle_list_node_specs(
     return {"node_types": list_node_types_with_spec()}
 
 
+@ws_handler("method")
+async def handle_load_options(
+    data: Dict[str, Any], websocket: WebSocket
+) -> Dict[str, Any]:
+    """Wave 6 Phase 4: unified loadOptionsMethod dispatcher.
+
+    Replaces the per-method WS handlers (whatsapp_groups, whatsapp_newsletters,
+    etc.) with a single registry-driven endpoint. ``loadOptionsMethod`` strings
+    declared via Pydantic ``Field(json_schema_extra={"loadOptionsMethod": "..."})``
+    on the backend NodeSpec are resolved here.
+
+    Body: ``{"method": "...", "params": {...}}``
+    Response: ``{"options": [{"value": ..., "label": ...}]}``
+    """
+    from services.node_option_loaders import dispatch_load_options
+
+    options = await dispatch_load_options(data["method"], data.get("params", {}))
+    return {"method": data["method"], "options": options}
+
+
+@ws_handler()
+async def handle_list_load_options_methods(
+    data: Dict[str, Any], websocket: WebSocket
+) -> Dict[str, Any]:
+    """Return registered loadOptionsMethod names. Editor uses this to
+    know which dynamic-option loaders are wired."""
+    from services.node_option_loaders import list_load_options_methods
+
+    return {"methods": list_load_options_methods()}
+
+
 # ============================================================================
 # Credential Registry Handler (Nango-style bulk fetch for 20 -> 5000 providers)
 # ============================================================================
@@ -3188,6 +3219,9 @@ MESSAGE_HANDLERS: Dict[str, MessageHandler] = {
     # Wave 6 Phase 2: unified NodeSpec (input + output + metadata).
     "get_node_spec": handle_get_node_spec,
     "list_node_specs": handle_list_node_specs,
+    # Wave 6 Phase 4: generic loadOptionsMethod dispatcher.
+    "load_options": handle_load_options,
+    "list_load_options_methods": handle_list_load_options_methods,
 
     # Credential registry (Nango-style bulk catalogue for credentials panel)
     "get_credential_catalogue": handle_get_credential_catalogue,

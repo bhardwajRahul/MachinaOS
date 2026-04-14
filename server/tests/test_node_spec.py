@@ -1,11 +1,12 @@
-"""Wave 6 Phase 1 — NodeSpec contract tests.
+"""Wave 6 NodeSpec contract tests.
 
 Locks in the public shape emitted by services/node_input_schemas.py,
-services/node_spec.py, and the /api/schemas/nodes/*/spec.json endpoint.
+services/node_spec.py, services/node_option_loaders, and the
+/api/schemas/nodes/*/spec.json + /api/schemas/nodes/options/* endpoints.
 Mirrors the Wave 3 test posture for node_output_schemas.
 """
 
-import pytest
+import pytest  # noqa: F401  (used by @pytest.mark.asyncio on Phase 4 tests)
 
 from services.node_input_schemas import (
     NODE_INPUT_MODELS,
@@ -353,3 +354,31 @@ class TestWave6FullCoverage:
     def test_input_model_count_at_least_100(self):
         from services.node_input_schemas import NODE_INPUT_MODELS
         assert len(NODE_INPUT_MODELS) >= 100
+
+
+class TestPhase4LoadOptions:
+    """Wave 6 Phase 4: unified loadOptionsMethod dispatch registry."""
+
+    def test_registry_has_whatsapp_methods(self):
+        from services.node_option_loaders import LOAD_OPTIONS_REGISTRY
+        for method in ["whatsappGroups", "whatsappChannels", "whatsappGroupMembers"]:
+            assert method in LOAD_OPTIONS_REGISTRY
+
+    def test_list_methods_sorted(self):
+        from services.node_option_loaders import list_load_options_methods
+        methods = list_load_options_methods()
+        assert methods == sorted(methods)
+        assert len(methods) >= 3
+
+    @pytest.mark.asyncio
+    async def test_unknown_method_returns_empty(self):
+        from services.node_option_loaders import dispatch_load_options
+        result = await dispatch_load_options("nonExistentMethodXyz", {})
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_dispatch_passes_params(self):
+        # Smoke test: unknown method tolerates arbitrary params, doesn't crash
+        from services.node_option_loaders import dispatch_load_options
+        result = await dispatch_load_options("unknown", {"group_id": "abc"})
+        assert result == []

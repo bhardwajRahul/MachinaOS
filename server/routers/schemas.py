@@ -89,3 +89,28 @@ async def list_specs():
     schema. Editor uses this on boot to prefetch the full set."""
 
     return {"node_types": list_node_types_with_spec()}
+
+
+@router.post("/nodes/options/{method}")
+async def load_options(method: str, body: dict | None = None):
+    """Wave 6 Phase 4: REST mirror of the load_options WS handler.
+
+    Resolves a ``loadOptionsMethod`` string against the registry and
+    returns the dynamic dropdown contents. Body is the per-method
+    parameter map (e.g. ``{"group_id": "..."}`` for
+    whatsappGroupMembers).
+    """
+    from services.node_option_loaders import dispatch_load_options
+
+    params = (body or {}).get("params", body or {}) if isinstance(body, dict) else {}
+    options = await dispatch_load_options(method, params)
+    return {"method": method, "options": options}
+
+
+@router.get("/nodes/options")
+async def list_load_options():
+    """Registered loadOptionsMethod names. Editor probes this on boot
+    to know which dynamic-option loaders are wired backend-side."""
+    from services.node_option_loaders import list_load_options_methods
+
+    return {"methods": list_load_options_methods()}
