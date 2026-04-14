@@ -27,47 +27,8 @@ export const chatNodes: Record<string, INodeTypeDescription> = {
       type: 'main' as NodeConnectionType,
       description: 'message_id, status, timestamp'
     }],
-    properties: [
-      // Connection settings
-      {
-        displayName: 'Host',
-        name: 'host',
-        type: 'string',
-        default: 'localhost',
-        description: 'Chat server host'
-      },
-      {
-        displayName: 'Port',
-        name: 'port',
-        type: 'number',
-        default: 8080,
-        description: 'Chat server port'
-      },
-      {
-        displayName: 'Session ID',
-        name: 'session_id',
-        type: 'string',
-        default: 'default',
-        description: 'Chat session identifier'
-      },
-      {
-        displayName: 'API Key',
-        name: 'api_key',
-        type: 'string',
-        default: '',
-        description: 'API key for authentication'
-      },
-      // Message
-      {
-        displayName: 'Message',
-        name: 'content',
-        type: 'string',
-        default: '',
-        required: true,
-        typeOptions: { rows: 3 },
-        description: 'Message content to send'
-      }
-    ]
+    // Wave 8: schema lives on backend (ChatSendParams).
+    properties: [],
   },
 
   // Chat Get History Node
@@ -92,44 +53,9 @@ export const chatNodes: Record<string, INodeTypeDescription> = {
       type: 'main' as NodeConnectionType,
       description: 'messages array'
     }],
-    properties: [
-      {
-        displayName: 'Host',
-        name: 'host',
-        type: 'string',
-        default: 'localhost',
-        description: 'Chat server host'
-      },
-      {
-        displayName: 'Port',
-        name: 'port',
-        type: 'number',
-        default: 8080,
-        description: 'Chat server port'
-      },
-      {
-        displayName: 'Session ID',
-        name: 'session_id',
-        type: 'string',
-        default: 'default',
-        description: 'Chat session identifier'
-      },
-      {
-        displayName: 'API Key',
-        name: 'api_key',
-        type: 'string',
-        default: '',
-        description: 'API key for authentication'
-      },
-      {
-        displayName: 'Limit',
-        name: 'limit',
-        type: 'number',
-        default: 50,
-        description: 'Maximum number of messages to retrieve'
-      }
-    ]
-  }
+    // Wave 8: schema lives on backend (ChatHistoryParams).
+    properties: [],
+  },
 };
 
 export const CHAT_NODE_TYPES = ['chatSend', 'chatHistory'];

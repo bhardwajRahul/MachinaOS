@@ -905,19 +905,36 @@ class FileReadParams(BaseNodeParams):
 
 class FileModifyParams(BaseNodeParams):
     type: Literal["fileModify"]
-    operation: Literal["write", "edit"] = "write"
+    operation: Literal["write", "edit"] = Field(
+        default="write",
+        json_schema_extra={
+            "options": [
+                {"name": "Write", "value": "write"},
+                {"name": "Edit", "value": "edit"},
+            ]
+        },
+    )
     file_path: str = Field(default="", alias="filePath")
     content: str = Field(
         default="",
-        json_schema_extra={"displayOptions": {"show": {"operation": ["write"]}}},
+        json_schema_extra={
+            "displayOptions": {"show": {"operation": ["write"]}},
+            "rows": 5,
+        },
     )
     old_string: str = Field(
         default="", alias="oldString",
-        json_schema_extra={"displayOptions": {"show": {"operation": ["edit"]}}},
+        json_schema_extra={
+            "displayOptions": {"show": {"operation": ["edit"]}},
+            "rows": 3,
+        },
     )
     new_string: str = Field(
         default="", alias="newString",
-        json_schema_extra={"displayOptions": {"show": {"operation": ["edit"]}}},
+        json_schema_extra={
+            "displayOptions": {"show": {"operation": ["edit"]}},
+            "rows": 3,
+        },
     )
     replace_all: bool = Field(
         default=False, alias="replaceAll",
@@ -927,14 +944,31 @@ class FileModifyParams(BaseNodeParams):
 
 class FsSearchParams(BaseNodeParams):
     type: Literal["fsSearch"]
-    mode: Literal["ls", "glob", "grep"] = "ls"
+    mode: Literal["ls", "glob", "grep"] = Field(
+        default="ls",
+        json_schema_extra={
+            "options": [
+                {"name": "List Directory", "value": "ls"},
+                {"name": "Glob Pattern", "value": "glob"},
+                {"name": "Grep Contents", "value": "grep"},
+            ]
+        },
+    )
     path: str = "."
-    pattern: str = ""
+    pattern: str = Field(
+        default="",
+        json_schema_extra={"displayOptions": {"show": {"mode": ["glob", "grep"]}}},
+    )
+    file_filter: str = Field(
+        default="",
+        alias="fileFilter",
+        json_schema_extra={"displayOptions": {"show": {"mode": ["grep"]}}},
+    )
 
 
 class ShellParams(BaseNodeParams):
     type: Literal["shell"]
-    command: str = ""
+    command: str = Field(default="", json_schema_extra={"rows": 3})
     timeout: int = Field(default=30, ge=1, le=600)
     cwd: Optional[str] = None
 
@@ -1002,14 +1036,29 @@ class FileHandlerParams(BaseNodeParams):
 # =============================================================================
 
 class ChatSendParams(BaseNodeParams):
-    """Parameters for chat send node."""
+    """Parameters for chat send node (JSON-RPC 2.0 WebSocket chat backend)."""
     type: Literal["chatSend"]
-    message: str = ""
+    host: str = "localhost"
+    port: int = Field(default=8080, ge=1, le=65535)
+    session_id: str = Field(default="default", alias="sessionId")
+    api_key: str = Field(
+        default="", alias="apiKey",
+        json_schema_extra={"password": True},
+    )
+    content: str = Field(default="", json_schema_extra={"rows": 3})
+    message: str = ""  # legacy alias
 
 
 class ChatHistoryParams(BaseNodeParams):
-    """Parameters for chat history node."""
+    """Parameters for chat history retrieval node."""
     type: Literal["chatHistory"]
+    host: str = "localhost"
+    port: int = Field(default=8080, ge=1, le=65535)
+    session_id: str = Field(default="default", alias="sessionId")
+    api_key: str = Field(
+        default="", alias="apiKey",
+        json_schema_extra={"password": True},
+    )
     limit: int = Field(default=50, ge=1, le=1000)
 
 

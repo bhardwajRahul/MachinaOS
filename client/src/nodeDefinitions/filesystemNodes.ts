@@ -16,32 +16,8 @@ export const filesystemNodes: Record<string, INodeTypeDescription> = {
       { name: 'main', displayName: 'Output', type: 'main' as NodeConnectionType, description: 'File contents' },
       { name: 'tool', displayName: 'Tool', type: 'main' as NodeConnectionType, description: 'Connect to AI Agent tool handle' },
     ],
-    properties: [
-      {
-        displayName: 'File Path',
-        name: 'file_path',
-        type: 'string' as any,
-        default: '',
-        required: true,
-        description: 'Path to the file to read',
-      },
-      {
-        displayName: 'Offset',
-        name: 'offset',
-        type: 'number' as any,
-        default: 0,
-        typeOptions: { minValue: 0 },
-        description: 'Line number to start reading from (0-indexed)',
-      },
-      {
-        displayName: 'Limit',
-        name: 'limit',
-        type: 'number' as any,
-        default: 100,
-        typeOptions: { minValue: 1, maxValue: 10000 },
-        description: 'Maximum number of lines to read',
-      },
-    ],
+    // Wave 8: schema lives on backend (FileReadParams).
+    properties: [],
   },
 
   fileModify: {
@@ -58,62 +34,8 @@ export const filesystemNodes: Record<string, INodeTypeDescription> = {
       { name: 'main', displayName: 'Output', type: 'main' as NodeConnectionType, description: 'Operation result' },
       { name: 'tool', displayName: 'Tool', type: 'main' as NodeConnectionType, description: 'Connect to AI Agent tool handle' },
     ],
-    properties: [
-      {
-        displayName: 'Operation',
-        name: 'operation',
-        type: 'options' as any,
-        default: 'write',
-        options: [
-          { name: 'Write', value: 'write' },
-          { name: 'Edit', value: 'edit' },
-        ],
-        description: 'Write creates/overwrites a file. Edit performs string replacement.',
-      },
-      {
-        displayName: 'File Path',
-        name: 'file_path',
-        type: 'string' as any,
-        default: '',
-        required: true,
-        description: 'Path to the file',
-      },
-      {
-        displayName: 'Content',
-        name: 'content',
-        type: 'string' as any,
-        default: '',
-        typeOptions: { rows: 5 },
-        description: 'File content to write',
-        displayOptions: { show: { operation: ['write'] } },
-      },
-      {
-        displayName: 'Old String',
-        name: 'old_string',
-        type: 'string' as any,
-        default: '',
-        typeOptions: { rows: 3 },
-        description: 'Exact text to find and replace',
-        displayOptions: { show: { operation: ['edit'] } },
-      },
-      {
-        displayName: 'New String',
-        name: 'new_string',
-        type: 'string' as any,
-        default: '',
-        typeOptions: { rows: 3 },
-        description: 'Text to replace old_string with',
-        displayOptions: { show: { operation: ['edit'] } },
-      },
-      {
-        displayName: 'Replace All',
-        name: 'replace_all',
-        type: 'boolean' as any,
-        default: false,
-        description: 'Replace all occurrences (default: first only, old_string must be unique)',
-        displayOptions: { show: { operation: ['edit'] } },
-      },
-    ],
+    // Wave 8: schema lives on backend (FileModifyParams).
+    properties: [],
   },
 
   shell: {
@@ -130,25 +52,8 @@ export const filesystemNodes: Record<string, INodeTypeDescription> = {
       { name: 'main', displayName: 'Output', type: 'main' as NodeConnectionType, description: 'Command output' },
       { name: 'tool', displayName: 'Tool', type: 'main' as NodeConnectionType, description: 'Connect to AI Agent tool handle' },
     ],
-    properties: [
-      {
-        displayName: 'Command',
-        name: 'command',
-        type: 'string' as any,
-        default: '',
-        required: true,
-        typeOptions: { rows: 3 },
-        description: 'Shell command to execute',
-      },
-      {
-        displayName: 'Timeout (seconds)',
-        name: 'timeout',
-        type: 'number' as any,
-        default: 30,
-        typeOptions: { minValue: 1, maxValue: 300 },
-        description: 'Maximum execution time in seconds',
-      },
-    ],
+    // Wave 8: schema lives on backend (ShellParams).
+    properties: [],
   },
 
   fsSearch: {
@@ -165,43 +70,8 @@ export const filesystemNodes: Record<string, INodeTypeDescription> = {
       { name: 'main', displayName: 'Output', type: 'main' as NodeConnectionType, description: 'Search results' },
       { name: 'tool', displayName: 'Tool', type: 'main' as NodeConnectionType, description: 'Connect to AI Agent tool handle' },
     ],
-    properties: [
-      {
-        displayName: 'Mode',
-        name: 'mode',
-        type: 'options' as any,
-        default: 'ls',
-        options: [
-          { name: 'List Directory', value: 'ls' },
-          { name: 'Glob Pattern', value: 'glob' },
-          { name: 'Grep Contents', value: 'grep' },
-        ],
-        description: 'Search mode: list directory, glob file patterns, or grep file contents',
-      },
-      {
-        displayName: 'Path',
-        name: 'path',
-        type: 'string' as any,
-        default: '.',
-        description: 'Directory path to search in',
-      },
-      {
-        displayName: 'Pattern',
-        name: 'pattern',
-        type: 'string' as any,
-        default: '',
-        description: 'Glob pattern (e.g., **/*.py) or grep search text',
-        displayOptions: { show: { mode: ['glob', 'grep'] } },
-      },
-      {
-        displayName: 'File Filter',
-        name: 'file_filter',
-        type: 'string' as any,
-        default: '',
-        description: 'Glob pattern to filter which files to grep (e.g., *.py)',
-        displayOptions: { show: { mode: ['grep'] } },
-      },
-    ],
+    // Wave 8: schema lives on backend (FsSearchParams).
+    properties: [],
   },
 };
 
