@@ -7,6 +7,7 @@ import { useAppTheme } from '../hooks/useAppTheme';
 import { useNodeStatus } from '../contexts/WebSocketContext';
 import { dracula } from '../styles/theme';
 import { ClaudeIcon } from './icons/AIProviderIcons';
+import { getCachedNodeSpec } from '../lib/nodeSpec';
 
 // LangGraph phase icons and labels. Colors reference the dracula token
 // constants so a future palette change in tokens.css propagates without
@@ -23,382 +24,34 @@ const PHASE_CONFIG: Record<string, { icon: string; label: string; color: string 
   saving_memory: { icon: '💾', label: 'Saving Memory', color: dracula.purple },
 };
 
-// Theme color keys for accent colors
-type ThemeColorKey = 'purple' | 'cyan' | 'green' | 'pink' | 'orange' | 'yellow' | 'red';
-
-// Configuration for different agent types
-interface AgentConfig {
-  icon: React.ReactNode;
-  title: string;
-  subtitle: string;
-  themeColorKey: ThemeColorKey;  // Use theme color key instead of hardcoded color
-  bottomHandles: Array<{ id: string; label: string; position: string }>;
-  leftHandles?: Array<{ id: string; label: string; position: string }>;  // For input handles on left side (below main input)
-  rightHandles?: Array<{ id: string; label: string; position: string }>;  // For nodes with multiple outputs
-  topOutputHandle?: { id: string; label: string };  // For nodes with top output (like Android Toolkit)
-  skipInputHandle?: boolean;  // For passive nodes like tool nodes that don't have left input
-  skipRightOutput?: boolean;  // Skip right output handle (use top output instead)
-  wider?: boolean;  // Make node wider (e.g., for Android Control) - 220px
-  width?: number;  // Custom width in pixels (overrides wider)
-  height?: number;  // Custom height in pixels (default 120px)
+// Spec-driven handle record. Mirrors server/models/node_metadata.NodeHandle.
+interface SpecHandle {
+  name: string;
+  kind: 'input' | 'output';
+  position: 'top' | 'bottom' | 'left' | 'right';
+  offset?: string;
+  label?: string;
+  role?: string;
 }
 
-// Social Receive icon as React component (SVG funnel/filter)
-const SocialReceiveIcon = ({ size = 32, color = '#6366F1' }: { size?: number; color?: string }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
-    <path d="M4.25 5.61C6.27 8.2 10 13 10 13v6c0 .55.45 1 1 1h2c.55 0 1-.45 1-1v-6s3.73-4.8 5.75-7.39C20.26 4.95 19.79 4 18.95 4H5.04c-.83 0-1.31.95-.79 1.61z"/>
-  </svg>
-);
+// Minimal icon resolver. Wave 10.B will replace this with a shared
+// IconResolver + ICON_REGISTRY. For now the only React-component icon
+// is Claude Code; everything else is a plain emoji/string.
+const renderIcon = (icon?: string): React.ReactNode => {
+  if (!icon) return <span style={{ fontSize: '28px' }}>🤖</span>;
+  if (icon === 'asset:claude') return <ClaudeIcon size={28} />;
+  if (icon.startsWith('asset:') || icon.startsWith('data:')) {
+    // Asset keys other than 'claude' not yet registered; fall back.
+    return <span style={{ fontSize: '28px' }}>🔧</span>;
+  }
+  return <span style={{ fontSize: '28px' }}>{icon}</span>;
+};
 
-// Social Send icon as React component (paper plane with globe)
-const SocialSendIcon = ({ size = 32, color = '#6366F1' }: { size?: number; color?: string }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
-    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-    <circle cx="18" cy="18" r="4" fill={color} stroke="#fff" strokeWidth="1"/>
-  </svg>
-);
-
-const AGENT_CONFIGS: Record<string, AgentConfig> = {
-  aiAgent: {
-    icon: <span style={{ fontSize: '28px' }}>🤖</span>,
-    title: 'AI Agent',
-    subtitle: 'LangGraph Agent',
-    themeColorKey: 'purple',
-    bottomHandles: [
-      { id: 'input-skill', label: 'Skill', position: '25%' },
-      { id: 'input-tools', label: 'Tool', position: '75%' },
-    ],
-    leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '65%' },
-      { id: 'input-task', label: 'Task', position: '85%' },
-    ],
-    topOutputHandle: { id: 'output-top', label: 'Output' },
-    width: 300,
-    height: 200,
-  },
-  chatAgent: {
-    icon: <span style={{ fontSize: '28px' }}>🧞</span>,
-    title: 'Zeenie',
-    subtitle: 'Personal Assistant',
-    themeColorKey: 'cyan',
-    bottomHandles: [
-      { id: 'input-skill', label: 'Skill', position: '25%' },
-      { id: 'input-tools', label: 'Tool', position: '75%' },
-    ],
-    leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '65%' },
-      { id: 'input-task', label: 'Task', position: '85%' },
-    ],
-    topOutputHandle: { id: 'output-top', label: 'Output' },
-    width: 300,
-    height: 200,
-  },
-  socialReceive: {
-    icon: <SocialReceiveIcon />,
-    title: 'Social Receive',
-    subtitle: 'Normalize Message',
-    themeColorKey: 'purple',
-    bottomHandles: [],
-    rightHandles: [
-      { id: 'output-message', label: 'Message', position: '20%' },
-      { id: 'output-media', label: 'Media', position: '40%' },
-      { id: 'output-contact', label: 'Contact', position: '60%' },
-      { id: 'output-metadata', label: 'Metadata', position: '80%' },
-    ],
-    width: 260,
-    height: 160,
-  },
-  socialSend: {
-    icon: <SocialSendIcon />,
-    title: 'Social Send',
-    subtitle: 'Send Message',
-    themeColorKey: 'purple',
-    bottomHandles: [],
-    skipInputHandle: true,  // No main input - use specific handles instead
-    leftHandles: [
-      { id: 'input-message', label: 'Message', position: '15%' },
-      { id: 'input-media', label: 'Media', position: '35%' },
-      { id: 'input-contact', label: 'Contact', position: '55%' },
-      { id: 'input-metadata', label: 'Metadata', position: '75%' },
-    ],
-    width: 260,
-    height: 160,
-  },
-  android_agent: {
-    icon: <span style={{ fontSize: '28px' }}>📱</span>,
-    title: 'Android Agent',
-    subtitle: 'Device Control',
-    themeColorKey: 'green',
-    bottomHandles: [
-      { id: 'input-skill', label: 'Skill', position: '25%' },
-      { id: 'input-tools', label: 'Tool', position: '75%' },
-    ],
-    leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '65%' },
-      { id: 'input-task', label: 'Task', position: '85%' },
-    ],
-    topOutputHandle: { id: 'output-top', label: 'Output' },
-    width: 300,
-    height: 200,
-  },
-  coding_agent: {
-    icon: <span style={{ fontSize: '28px' }}>💻</span>,
-    title: 'Coding Agent',
-    subtitle: 'Code Execution',
-    themeColorKey: 'cyan',
-    bottomHandles: [
-      { id: 'input-skill', label: 'Skill', position: '25%' },
-      { id: 'input-tools', label: 'Tool', position: '75%' },
-    ],
-    leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '65%' },
-      { id: 'input-task', label: 'Task', position: '85%' },
-    ],
-    topOutputHandle: { id: 'output-top', label: 'Output' },
-    width: 300,
-    height: 200,
-  },
-  web_agent: {
-    icon: <span style={{ fontSize: '28px' }}>🌐</span>,
-    title: 'Web Agent',
-    subtitle: 'Browser Automation',
-    themeColorKey: 'pink',
-    bottomHandles: [
-      { id: 'input-skill', label: 'Skill', position: '25%' },
-      { id: 'input-tools', label: 'Tool', position: '75%' },
-    ],
-    leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '65%' },
-      { id: 'input-task', label: 'Task', position: '85%' },
-    ],
-    topOutputHandle: { id: 'output-top', label: 'Output' },
-    width: 300,
-    height: 200,
-  },
-  task_agent: {
-    icon: <span style={{ fontSize: '28px' }}>📋</span>,
-    title: 'Task Agent',
-    subtitle: 'Task Automation',
-    themeColorKey: 'purple',
-    bottomHandles: [
-      { id: 'input-skill', label: 'Skill', position: '25%' },
-      { id: 'input-tools', label: 'Tool', position: '75%' },
-    ],
-    leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '65%' },
-      { id: 'input-task', label: 'Task', position: '85%' },
-    ],
-    topOutputHandle: { id: 'output-top', label: 'Output' },
-    width: 300,
-    height: 200,
-  },
-  social_agent: {
-    icon: <span style={{ fontSize: '28px' }}>📱</span>,
-    title: 'Social Agent',
-    subtitle: 'Social Messaging',
-    themeColorKey: 'green',
-    bottomHandles: [
-      { id: 'input-skill', label: 'Skill', position: '25%' },
-      { id: 'input-tools', label: 'Tool', position: '75%' },
-    ],
-    leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '65%' },
-      { id: 'input-task', label: 'Task', position: '85%' },
-    ],
-    topOutputHandle: { id: 'output-top', label: 'Output' },
-    width: 300,
-    height: 200,
-  },
-  travel_agent: {
-    icon: <span style={{ fontSize: '28px' }}>✈️</span>,
-    title: 'Travel Agent',
-    subtitle: 'Travel Planning',
-    themeColorKey: 'orange',
-    bottomHandles: [
-      { id: 'input-skill', label: 'Skill', position: '25%' },
-      { id: 'input-tools', label: 'Tool', position: '75%' },
-    ],
-    leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '65%' },
-      { id: 'input-task', label: 'Task', position: '85%' },
-    ],
-    topOutputHandle: { id: 'output-top', label: 'Output' },
-    width: 300,
-    height: 200,
-  },
-  tool_agent: {
-    icon: <span style={{ fontSize: '28px' }}>🔧</span>,
-    title: 'Tool Agent',
-    subtitle: 'Tool Orchestration',
-    themeColorKey: 'yellow',
-    bottomHandles: [
-      { id: 'input-skill', label: 'Skill', position: '25%' },
-      { id: 'input-tools', label: 'Tool', position: '75%' },
-    ],
-    leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '65%' },
-      { id: 'input-task', label: 'Task', position: '85%' },
-    ],
-    topOutputHandle: { id: 'output-top', label: 'Output' },
-    width: 300,
-    height: 200,
-  },
-  productivity_agent: {
-    icon: <span style={{ fontSize: '28px' }}>⏰</span>,
-    title: 'Productivity Agent',
-    subtitle: 'Workflows',
-    themeColorKey: 'cyan',
-    bottomHandles: [
-      { id: 'input-skill', label: 'Skill', position: '25%' },
-      { id: 'input-tools', label: 'Tool', position: '75%' },
-    ],
-    leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '65%' },
-      { id: 'input-task', label: 'Task', position: '85%' },
-    ],
-    topOutputHandle: { id: 'output-top', label: 'Output' },
-    width: 300,
-    height: 200,
-  },
-  payments_agent: {
-    icon: <span style={{ fontSize: '28px' }}>💳</span>,
-    title: 'Payments Agent',
-    subtitle: 'Payment Processing',
-    themeColorKey: 'green',
-    bottomHandles: [
-      { id: 'input-skill', label: 'Skill', position: '25%' },
-      { id: 'input-tools', label: 'Tool', position: '75%' },
-    ],
-    leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '65%' },
-      { id: 'input-task', label: 'Task', position: '85%' },
-    ],
-    topOutputHandle: { id: 'output-top', label: 'Output' },
-    width: 300,
-    height: 200,
-  },
-  consumer_agent: {
-    icon: <span style={{ fontSize: '28px' }}>🛒</span>,
-    title: 'Consumer Agent',
-    subtitle: 'Consumer Support',
-    themeColorKey: 'purple',
-    bottomHandles: [
-      { id: 'input-skill', label: 'Skill', position: '25%' },
-      { id: 'input-tools', label: 'Tool', position: '75%' },
-    ],
-    leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '65%' },
-      { id: 'input-task', label: 'Task', position: '85%' },
-    ],
-    topOutputHandle: { id: 'output-top', label: 'Output' },
-    width: 300,
-    height: 200,
-  },
-  autonomous_agent: {
-    icon: <span style={{ fontSize: '28px' }}>🎯</span>,
-    title: 'Autonomous Agent',
-    subtitle: 'Autonomous Ops',
-    themeColorKey: 'purple',
-    bottomHandles: [
-      { id: 'input-skill', label: 'Skill', position: '25%' },
-      { id: 'input-tools', label: 'Tool', position: '75%' },
-    ],
-    leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '65%' },
-      { id: 'input-task', label: 'Task', position: '85%' },
-    ],
-    topOutputHandle: { id: 'output-top', label: 'Output' },
-    width: 300,
-    height: 200,
-  },
-  orchestrator_agent: {
-    icon: <span style={{ fontSize: '28px' }}>🎼</span>,
-    title: 'Orchestrator Agent',
-    subtitle: 'Agent Coordination',
-    themeColorKey: 'cyan',
-    bottomHandles: [
-      { id: 'input-skill', label: 'Skill', position: '20%' },
-      { id: 'input-tools', label: 'Tool', position: '50%' },
-      { id: 'input-teammates', label: 'Team', position: '80%' },
-    ],
-    leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '65%' },
-      { id: 'input-task', label: 'Task', position: '85%' },
-    ],
-    topOutputHandle: { id: 'output-top', label: 'Output' },
-    width: 300,
-    height: 200,
-  },
-  ai_employee: {
-    icon: <span style={{ fontSize: '28px' }}>👥</span>,
-    title: 'AI Employee',
-    subtitle: 'Team Orchestration',
-    themeColorKey: 'purple',
-    bottomHandles: [
-      { id: 'input-skill', label: 'Skill', position: '20%' },
-      { id: 'input-tools', label: 'Tool', position: '50%' },
-      { id: 'input-teammates', label: 'Team', position: '80%' },
-    ],
-    leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '65%' },
-      { id: 'input-task', label: 'Task', position: '85%' },
-    ],
-    topOutputHandle: { id: 'output-top', label: 'Output' },
-    width: 300,
-    height: 200,
-  },
-  rlm_agent: {
-    icon: <span style={{ fontSize: '28px' }}>🧠</span>,
-    title: 'RLM Agent',
-    subtitle: 'Recursive Reasoning',
-    themeColorKey: 'orange',
-    bottomHandles: [
-      { id: 'input-skill', label: 'Skill', position: '25%' },
-      { id: 'input-tools', label: 'Tool', position: '75%' },
-    ],
-    leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '65%' },
-      { id: 'input-task', label: 'Task', position: '85%' },
-    ],
-    topOutputHandle: { id: 'output-top', label: 'Output' },
-    width: 300,
-    height: 200,
-  },
-  claude_code_agent: {
-    icon: <ClaudeIcon size={28} />,
-    title: 'Claude Code',
-    subtitle: 'Agentic Coding',
-    themeColorKey: 'cyan',
-    bottomHandles: [
-      { id: 'input-skill', label: 'Skill', position: '25%' },
-      { id: 'input-tools', label: 'Tool', position: '75%' },
-    ],
-    leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '65%' },
-      { id: 'input-task', label: 'Task', position: '85%' },
-    ],
-    topOutputHandle: { id: 'output-top', label: 'Output' },
-    width: 300,
-    height: 200,
-  },
-  deep_agent: {
-    icon: <span style={{ fontSize: '28px' }}>{'\u{1F9E0}'}</span>,
-    title: 'Deep Agent',
-    subtitle: 'LangChain DeepAgents',
-    themeColorKey: 'green',
-    bottomHandles: [
-      { id: 'input-skill', label: 'Skill', position: '30%' },
-      { id: 'input-teammates', label: 'Team', position: '55%' },
-      { id: 'input-tools', label: 'Tool', position: '80%' },
-    ],
-    leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '65%' },
-      { id: 'input-task', label: 'Task', position: '85%' },
-    ],
-    topOutputHandle: { id: 'output-top', label: 'Output' },
-    width: 300,
-    height: 200,
-  },
+const REACT_POSITION: Record<SpecHandle['position'], Position> = {
+  top: Position.Top,
+  bottom: Position.Bottom,
+  left: Position.Left,
+  right: Position.Right,
 };
 
 const AIAgentNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectable, selected }) => {
@@ -407,14 +60,24 @@ const AIAgentNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
   const [_configValid, setConfigValid] = useState(true);
   const [_configErrors, setConfigErrors] = useState<string[]>([]);
 
-  // Get config based on node type
-  const config = AGENT_CONFIGS[type || 'aiAgent'] || AGENT_CONFIGS.aiAgent;
+  // Wave 10.D: every piece of per-type config comes from the backend
+  // NodeSpec envelope (server/nodes/agents.py → register_node()). The
+  // component only knows how to render whatever topology the spec
+  // declares.
+  const spec = getCachedNodeSpec(type || 'aiAgent');
+  const handles: SpecHandle[] = (spec?.handles as SpecHandle[] | undefined) ?? [];
+  const accentColor = spec?.color || dracula.purple;
+  const width = (spec?.uiHints as any)?.width ?? 300;
+  const height = (spec?.uiHints as any)?.height ?? 200;
+  const title = data?.label || spec?.displayName || type || 'Agent';
+  const subtitle = spec?.subtitle ?? '';
 
-  // Resolve accent color from theme based on config key
-  const accentColor = useMemo(() => {
-    // Use dracula colors for vibrant accents (works well in both light and dark modes)
-    return dracula[config.themeColorKey] || dracula.purple;
-  }, [config.themeColorKey]);
+  // Partition once; React Flow layout per-position.
+  const leftInputs   = useMemo(() => handles.filter(h => h.kind === 'input'  && h.position === 'left'  && h.name !== 'input-main'), [handles]);
+  const bottomInputs = useMemo(() => handles.filter(h => h.kind === 'input'  && h.position === 'bottom'), [handles]);
+  const rightOutputs = useMemo(() => handles.filter(h => h.kind === 'output' && h.position === 'right'), [handles]);
+  const topOutput    = useMemo(() => handles.find(h => h.kind === 'output' && h.position === 'top'), [handles]);
+  const hasMainInput = useMemo(() => handles.some(h => h.name === 'input-main' || (h.kind === 'input' && h.position === 'left' && h.role === 'main')), [handles]);
 
   // Get real-time node status from WebSocket
   const nodeStatus = useNodeStatus(id);
@@ -428,14 +91,12 @@ const AIAgentNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
       const validation = AIAgentExecutionService.validateConfiguration(data || {});
       setConfigValid(validation.valid);
       setConfigErrors(validation.errors);
-
-      // Configuration issues are expected before user fills in parameters - no need to log
     } catch (error) {
       console.error('Configuration validation error:', error);
       setConfigValid(false);
       setConfigErrors(['Configuration validation failed']);
     }
-  }, [data, id, config.title]);
+  }, [data, id, title]);
 
   const handleParametersClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -464,17 +125,16 @@ const AIAgentNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
     return `0 2px 4px ${theme.colors.shadow}`;
   };
 
-  const hasRightHandles = config.rightHandles && config.rightHandles.length > 0;
+  const hasRightOutputs = rightOutputs.length > 0;
 
   return (
     <div
       style={{
         position: 'relative',
         padding: theme.spacing.lg,
-        paddingRight: hasRightHandles ? '60px' : theme.spacing.lg,  // Extra space for right labels
-        paddingLeft: theme.spacing.lg,  // Standard padding (labels positioned absolutely)
-        minWidth: config.width ? `${config.width}px` : config.wider ? '220px' : hasRightHandles ? '200px' : '180px',
-        minHeight: config.height ? `${config.height}px` : '120px',
+        paddingRight: hasRightOutputs ? '60px' : theme.spacing.lg,
+        minWidth: `${width}px`,
+        minHeight: `${height}px`,
         borderRadius: theme.borderRadius.lg,
         background: theme.isDarkMode
           ? `linear-gradient(135deg, ${accentColor}20 0%, ${theme.colors.backgroundAlt} 100%)`
@@ -493,263 +153,180 @@ const AIAgentNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
         alignItems: 'center',
         justifyContent: 'center',
         gap: theme.spacing.sm,
-        animation: isExecuting ? 'pulse 1.5s ease-in-out infinite' : 'none'
+        animation: isExecuting ? 'pulse 1.5s ease-in-out infinite' : 'none',
       }}
     >
-      {/* Input Handle - skip for passive tool nodes */}
-      {!config.skipInputHandle && (
+      {/* Main input (left, top area) — shown when the spec declares a main input */}
+      {hasMainInput && (
         <>
-          {/* Input label */}
           <div style={{
-            position: 'absolute',
-            left: '10px',
-            top: '30%',
-            transform: 'translateY(-50%)',
-            fontSize: theme.fontSize.sm,
-            color: theme.colors.text,
-            fontWeight: theme.fontWeight.medium,
-            pointerEvents: 'none',
-            whiteSpace: 'nowrap'
-          }}>
-            Input
-          </div>
+            position: 'absolute', left: '10px', top: '30%', transform: 'translateY(-50%)',
+            fontSize: theme.fontSize.sm, color: theme.colors.text,
+            fontWeight: theme.fontWeight.medium, pointerEvents: 'none', whiteSpace: 'nowrap',
+          }}>Input</div>
           <Handle
             id="input-main"
             type="target"
             position={Position.Left}
             isConnectable={isConnectable}
             style={{
-              position: 'absolute',
-              left: '-6px',
-              top: '30%',
-              transform: 'translateY(-50%)',
-              width: theme.nodeSize.handle,
-              height: theme.nodeSize.handle,
+              position: 'absolute', left: '-6px', top: '30%', transform: 'translateY(-50%)',
+              width: theme.nodeSize.handle, height: theme.nodeSize.handle,
               backgroundColor: theme.colors.background,
-              border: `2px solid ${theme.colors.textSecondary}`,
-              borderRadius: '50%'
+              border: `2px solid ${theme.colors.textSecondary}`, borderRadius: '50%',
             }}
             title="Input"
           />
         </>
       )}
 
-      {/* Parameters Button */}
+      {/* Parameters gear */}
       <button
         onClick={handleParametersClick}
         style={{
-          position: 'absolute',
-          top: theme.spacing.xs,
-          right: theme.spacing.xs,
-          width: theme.nodeSize.paramButton,
-          height: theme.nodeSize.paramButton,
-          borderRadius: theme.borderRadius.sm,
-          backgroundColor: theme.colors.backgroundAlt,
-          border: `1px solid ${theme.colors.border}`,
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: theme.fontSize.xs,
-          color: theme.colors.textSecondary,
-          fontWeight: theme.fontWeight.normal,
-          transition: theme.transitions.fast,
-          zIndex: 20
+          position: 'absolute', top: theme.spacing.xs, right: theme.spacing.xs,
+          width: theme.nodeSize.paramButton, height: theme.nodeSize.paramButton,
+          borderRadius: theme.borderRadius.sm, backgroundColor: theme.colors.backgroundAlt,
+          border: `1px solid ${theme.colors.border}`, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: theme.fontSize.xs, color: theme.colors.textSecondary,
+          fontWeight: theme.fontWeight.normal, transition: theme.transitions.fast, zIndex: 20,
         }}
         title="Edit Parameters"
-      >
-        ⚙️
-      </button>
-
+      >⚙️</button>
 
       {/* Icon */}
       <div style={{ lineHeight: '1', marginBottom: theme.spacing.xs, color: accentColor }}>
-        {config.icon}
+        {renderIcon(spec?.icon)}
       </div>
 
       {/* Title */}
       <div style={{
-        fontSize: theme.fontSize.base,
-        fontWeight: theme.fontWeight.semibold,
-        color: theme.colors.text,
-        lineHeight: '1.2',
-        marginBottom: theme.spacing.xs
-      }}>
-        {data?.label || config.title}
-      </div>
+        fontSize: theme.fontSize.base, fontWeight: theme.fontWeight.semibold,
+        color: theme.colors.text, lineHeight: '1.2', marginBottom: theme.spacing.xs,
+      }}>{title}</div>
 
       {/* Subtitle */}
       <div style={{
-        fontSize: theme.fontSize.xs,
-        fontWeight: theme.fontWeight.normal,
+        fontSize: theme.fontSize.xs, fontWeight: theme.fontWeight.normal,
         color: isExecuting && phaseConfig ? phaseConfig.color : theme.colors.focus,
-        lineHeight: '1.2',
-        marginBottom: theme.spacing.lg,
-        transition: 'color 0.3s ease'
-      }}>
-        {isExecuting && phaseConfig ? phaseConfig.label : config.subtitle}
-      </div>
+        lineHeight: '1.2', marginBottom: theme.spacing.lg, transition: 'color 0.3s ease',
+      }}>{isExecuting && phaseConfig ? phaseConfig.label : subtitle}</div>
 
-      {/* Left Input Handles (below main input) */}
-      {config.leftHandles && config.leftHandles.map(h => (
-        <React.Fragment key={h.id}>
-          {/* Handle label positioned inside the node, to the right of the handle */}
+      {/* Left inputs below the main one (Memory / Task / etc.) */}
+      {leftInputs.map(h => (
+        <React.Fragment key={h.name}>
           <div style={{
-            position: 'absolute',
-            left: '12px',  // Inside the node border, to the right of the handle
-            top: h.position,
-            transform: 'translateY(-50%)',
-            fontSize: theme.fontSize.sm,
-            color: theme.colors.text,
-            fontWeight: theme.fontWeight.medium,
-            pointerEvents: 'none',
-            whiteSpace: 'nowrap'
-          }}>
-            {h.label}
-          </div>
+            position: 'absolute', left: '12px', top: h.offset || '50%',
+            transform: 'translateY(-50%)', fontSize: theme.fontSize.sm,
+            color: theme.colors.text, fontWeight: theme.fontWeight.medium,
+            pointerEvents: 'none', whiteSpace: 'nowrap',
+          }}>{h.label || h.name}</div>
           <Handle
-            id={h.id}
+            id={h.name}
             type="target"
-            position={Position.Left}
+            position={REACT_POSITION[h.position]}
             isConnectable={isConnectable}
             style={{
-              position: 'absolute',
-              left: '-6px',
-              top: h.position,
-              width: theme.nodeSize.handle,
-              height: theme.nodeSize.handle,
+              position: 'absolute', left: '-6px', top: h.offset || '50%',
+              width: theme.nodeSize.handle, height: theme.nodeSize.handle,
               backgroundColor: theme.colors.background,
-              border: `2px solid ${theme.colors.textSecondary}`,
-              borderRadius: '0',
-              transform: 'translateY(-50%) rotate(45deg)'
+              border: `2px solid ${theme.colors.textSecondary}`, borderRadius: '0',
+              transform: 'translateY(-50%) rotate(45deg)',
             }}
-            title={h.label}
+            title={h.label || h.name}
           />
         </React.Fragment>
       ))}
 
-      {/* Bottom Handle Labels */}
-      {config.bottomHandles.map(h => (
-        <span key={`label-${h.id}`} style={{
-          position: 'absolute',
-          bottom: theme.spacing.lg,
-          left: h.position,
-          transform: 'translateX(-50%)',
-          fontSize: theme.fontSize.sm,
-          color: theme.colors.text,
-          fontWeight: theme.fontWeight.medium,
-          whiteSpace: 'nowrap',
-        }}>{h.label}</span>
+      {/* Bottom input labels */}
+      {bottomInputs.map(h => (
+        <span key={`label-${h.name}`} style={{
+          position: 'absolute', bottom: theme.spacing.lg, left: h.offset || '50%',
+          transform: 'translateX(-50%)', fontSize: theme.fontSize.sm,
+          color: theme.colors.text, fontWeight: theme.fontWeight.medium, whiteSpace: 'nowrap',
+        }}>{h.label || h.name}</span>
       ))}
 
-      {/* Bottom Handles */}
-      {config.bottomHandles.map(h => (
+      {/* Bottom input handles */}
+      {bottomInputs.map(h => (
         <Handle
-          key={h.id}
-          id={h.id}
+          key={h.name}
+          id={h.name}
           type="target"
           position={Position.Bottom}
           isConnectable={isConnectable}
           style={{
-            position: 'absolute',
-            bottom: '-6px',
-            left: h.position,
-            width: theme.nodeSize.handle,
-            height: theme.nodeSize.handle,
+            position: 'absolute', bottom: '-6px', left: h.offset || '50%',
+            width: theme.nodeSize.handle, height: theme.nodeSize.handle,
             backgroundColor: theme.colors.background,
-            border: `2px solid ${theme.colors.textSecondary}`,
-            borderRadius: '0',
-            transform: 'translateX(-50%) rotate(45deg)'
+            border: `2px solid ${theme.colors.textSecondary}`, borderRadius: '0',
+            transform: 'translateX(-50%) rotate(45deg)',
           }}
-          title={h.label}
+          title={h.label || h.name}
         />
       ))}
 
-      {/* Top Output Handle - for nodes like Android Toolkit that connect upward to AI Agent */}
-      {config.topOutputHandle && (
+      {/* Top output */}
+      {topOutput && (
         <Handle
-          id={config.topOutputHandle.id}
+          id={topOutput.name}
           type="source"
           position={Position.Top}
           isConnectable={isConnectable}
           style={{
-            position: 'absolute',
-            top: '-6px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            width: theme.nodeSize.handle,
-            height: theme.nodeSize.handle,
+            position: 'absolute', top: '-6px', left: '50%', transform: 'translateX(-50%)',
+            width: theme.nodeSize.handle, height: theme.nodeSize.handle,
             backgroundColor: accentColor,
             border: `2px solid ${theme.isDarkMode ? theme.colors.background : '#ffffff'}`,
-            borderRadius: '50%',
-            zIndex: 20
+            borderRadius: '50%', zIndex: 20,
           }}
-          title={config.topOutputHandle.label}
+          title={topOutput.label || topOutput.name}
         />
       )}
 
-      {/* Output Handle(s) - Multiple if rightHandles defined, single otherwise (skip if using top output) */}
-      {!config.skipRightOutput && config.rightHandles && config.rightHandles.length > 0 ? (
-        <>
-          {/* Multiple Output Handles with inline labels */}
-          {config.rightHandles.map(h => (
-            <React.Fragment key={h.id}>
-              {/* Handle label positioned next to handle */}
-              <div style={{
-                position: 'absolute',
-                right: '10px',
-                top: h.position,
-                transform: 'translateY(-50%)',
-                fontSize: theme.fontSize.sm,
-                color: theme.colors.text,
-                fontWeight: theme.fontWeight.medium,
-                pointerEvents: 'none',
-                whiteSpace: 'nowrap',
-                textAlign: 'right'
-              }}>
-                {h.label}
-              </div>
-              <Handle
-                id={h.id}
-                type="source"
-                position={Position.Right}
-                isConnectable={isConnectable}
-                style={{
-                  position: 'absolute',
-                  right: '-6px',
-                  top: h.position,
-                  transform: 'translateY(-50%)',
-                  width: theme.nodeSize.handle,
-                  height: theme.nodeSize.handle,
-                  backgroundColor: theme.colors.background,
-                  border: `2px solid ${theme.colors.textSecondary}`,
-                  borderRadius: '50%'
-                }}
-                title={h.label}
-              />
-            </React.Fragment>
-          ))}
-        </>
-      ) : !config.skipRightOutput ? (
+      {/* Right outputs (multi-output nodes like socialReceive) */}
+      {!topOutput && hasRightOutputs && rightOutputs.map(h => (
+        <React.Fragment key={h.name}>
+          <div style={{
+            position: 'absolute', right: '10px', top: h.offset || '50%',
+            transform: 'translateY(-50%)', fontSize: theme.fontSize.sm,
+            color: theme.colors.text, fontWeight: theme.fontWeight.medium,
+            pointerEvents: 'none', whiteSpace: 'nowrap', textAlign: 'right',
+          }}>{h.label || h.name}</div>
+          <Handle
+            id={h.name}
+            type="source"
+            position={Position.Right}
+            isConnectable={isConnectable}
+            style={{
+              position: 'absolute', right: '-6px', top: h.offset || '50%',
+              transform: 'translateY(-50%)',
+              width: theme.nodeSize.handle, height: theme.nodeSize.handle,
+              backgroundColor: theme.colors.background,
+              border: `2px solid ${theme.colors.textSecondary}`, borderRadius: '50%',
+            }}
+            title={h.label || h.name}
+          />
+        </React.Fragment>
+      ))}
+
+      {/* Single default right output when the spec declares none explicitly */}
+      {!topOutput && !hasRightOutputs && (
         <Handle
           id="output-main"
           type="source"
           position={Position.Right}
           isConnectable={isConnectable}
           style={{
-            position: 'absolute',
-            right: '-6px',
-            top: '50%',
-            transform: 'translateY(-50%)',
-            width: theme.nodeSize.handle,
-            height: theme.nodeSize.handle,
+            position: 'absolute', right: '-6px', top: '50%', transform: 'translateY(-50%)',
+            width: theme.nodeSize.handle, height: theme.nodeSize.handle,
             backgroundColor: theme.colors.background,
-            border: `2px solid ${theme.colors.textSecondary}`,
-            borderRadius: '50%'
+            border: `2px solid ${theme.colors.textSecondary}`, borderRadius: '50%',
           }}
           title="Main Output"
         />
-      ) : null}
+      )}
     </div>
   );
 };

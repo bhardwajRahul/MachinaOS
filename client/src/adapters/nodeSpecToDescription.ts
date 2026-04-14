@@ -19,6 +19,17 @@ import type {
   NodeConnectionType,
 } from '../types/INodeProperties';
 
+/** One React Flow handle on a node. Wire mirror of
+ *  server/models/node_metadata.NodeHandle (Wave 10.A). */
+export interface NodeSpecHandle {
+  name: string;
+  kind: 'input' | 'output';
+  position: 'top' | 'bottom' | 'left' | 'right';
+  offset?: string;
+  label?: string;
+  role?: string;
+}
+
 /** Wire shape emitted by GET /api/schemas/nodes/{type}/spec.json. */
 export interface NodeSpec {
   type: string;
@@ -34,6 +45,13 @@ export interface NodeSpec {
   outputs?: JsonSchema;
   credentials?: string[];
   uiHints?: Record<string, unknown>;
+  // Wave 10.A — full visual contract (every field is optional on the wire;
+  // the backend emits each one only when seeded on that node).
+  color?: string;
+  componentKind?: 'square' | 'circle' | 'trigger' | 'start' | 'agent' | 'chat' | 'tool' | 'model' | 'generic';
+  handles?: NodeSpecHandle[];
+  hideOutputHandle?: boolean;
+  visibility?: 'all' | 'normal' | 'dev';
 }
 
 interface JsonSchema {
