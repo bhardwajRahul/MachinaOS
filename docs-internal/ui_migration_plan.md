@@ -133,11 +133,56 @@ Plan: [C:\\Users\\Tgroh\\.claude\\plans\\typed-splashing-crown.md].
 | 3d.ii — Backend parity: long-tail integrations (28 output-only types) | ✅ done | `2b65a7f` | 28 new Pydantic models across search, browser/scraping, email, Google Workspace, document/RAG, filesystem, proxy. `TestWave6FullCoverage` invariants. |
 | 4 — Generalized loadOptionsMethod dispatch | ✅ done | `a3c1ac2` | `server/services/node_option_loaders/` package with registry + `dispatch_load_options()` + 3 WhatsApp loaders (groups/channels/members). `POST /api/schemas/nodes/options/{method}` + WS `load_options`. One-line registration for future Gmail/Calendar/Telegram loaders. |
 | 5.a — Backend node-groups index | ✅ done | `6ef271d` | `GET /api/schemas/nodes/groups` returns `{group: [node_type, ...]}` derived from every NodeSpec's group array. 25 groups with 110 entries (tool=34, agent=19, android=16, trigger=10, …). Replaces 34 frontend `*_NODE_TYPES` arrays once consumers migrate. |
-| 5.b — Frontend consumer migrations | ⏸ deferred | — | Per-component migration from `*_NODE_TYPES` helpers to backend groups. Visual-regression-prone; needs browser verification. |
+| 5.b wave 1 — SquareNode + MiddleSection group membership | ✅ done | `15df605` | 5 call sites migrated to `isNodeInBackendGroup()` helper with legacy array fallback chain. Also seeded 9 uiHints entries on NODE_METADATA (chatTrigger / console / teamMonitor / simpleMemory / 3 code executors / gmaps_create / start). |
+| 5.b wave 2 — OutputPanel / ParameterRenderer / InputSection / ToolSchemaEditor | ✅ done | `0a6a259` | 4 more Android/agent call sites migrated. |
 | Adapter coverage hardening | ✅ done | `b7b83b3` | `required` field, JSON Schema `format` (dateTime/file/binary), richer enum `options`, typeOptions lift for placeholder/validation/password/rows/editor/editorLanguage/accept/multipleValues/noDataExpression, displayOptions dual-location read (top-level + uiHints wrapper). |
-| Pydantic displayOptions enrichment | ✅ done | `08126b6`, `aca8d1a` | `Field(json_schema_extra={"displayOptions": {...}})` encoded for TwitterSend (6 rules), TwitterUser (3), TelegramSend (9), HttpRequest (4), WhatsAppSend (4 + 2 loadOptionsMethod wirings), SocialSend (2), Gmail (3), Calendar (5). |
-| 3e — Flag flip + delete frontend nodeDefinitions/* properties | ⏸ deferred | — | The biggest LOC win (~−3000 LOC). Adapter now handles most edge cases; remaining need: snapshot Playwright tests per node-type group. |
-| 6 — Sunset `INodeTypeDescription.properties` shape | ⏸ deferred | — | Requires 3e + 5.b complete. |
+| Pydantic displayOptions enrichment | ✅ done | `08126b6`, `aca8d1a`, `a82a81c` | `Field(json_schema_extra={"displayOptions": {...}})` encoded for TwitterSend (6) / TwitterUser (3) / TelegramSend (9) / HttpRequest (4) / WhatsAppSend (4 + 2 loadOptionsMethod) / SocialSend (2) / Gmail (3) / Calendar (5) / Webhook (header auth) / Console (logMode) / ProcessManager / ProxyRequest / VectorStore / EmailRead / FileModify — ~51 rules + 7 loadOptionsMethod routings. |
+| Contract invariants | ✅ done | `a82a81c` | 6 pytest guards running over all 108 input-modeled types — malformed JSON Schema shape, unregistered loadOptionsMethod, non-serialisable enums, unknown uiHints flags all fail CI. |
+| 3e-setup — Hot-path `resolveNodeDescription` in useParameterPanel | ✅ done | `8d3b54c` | Single wire at useParameterPanel.ts:154. Parameter panel fan-out now routes through the adapter when flag is ON. |
+
+## Wave 7 — Backend-as-default + full canvas wiring (April 2026)
+
+Closes the gap on Wave 6: flips `VITE_NODESPEC_BACKEND` default from OFF to ON and wires every node visual component to `resolveNodeDescription()`. When a user opens the editor today the backend NodeSpec drives everything — parameter panels, canvas nodes, palette, group membership checks, dynamic-option dropdowns — with the legacy `nodeDefinitions/*.ts` as graceful fallback for any edge case the adapter misses.
+
+| Phase | Status | Commit | Outcome |
+|---|---|---|---|
+| 7.1 — `masterSkill` Pydantic + metadata (100% coverage) | ✅ done | `0b2aef3` | Final node type seeded. 106 Pydantic input models + 106 metadata entries = 100% of input-modeled types. |
+| 7.2 — Flip `VITE_NODESPEC_BACKEND` default ON | ✅ done | `bfcccbe` | `featureFlags.ts` reads env as falsy-only; set `VITE_NODESPEC_BACKEND=false` in `.env.local` for kill-switch. |
+| 7.3 — `resolveNodeDescription` in every node visual component | ✅ done | `bfcccbe` | SquareNode + ModelNode + TriggerNode + ToolkitNode + TeamMonitorNode + GenericNode all route through the adapter. |
+
+**Wave 7 numbers:**
+- Backend coverage: 111 total NodeSpecs, 106 Pydantic input models, 106 metadata entries, 10 uiHints seeded, ~51 displayOptions rules, 7 loadOptionsMethod routings, 25 derived node groups.
+- Frontend wiring: 6 node visual components + useParameterPanel hot-path = full editor surface backend-driven on flag ON.
+- Tests: 94/94 pytest cases pass; tsc green; `pnpm build` 1.82 MB / 517 kB gzip.
+
+## Wave 8 — Frontend nodeDefinitions/* slimmed; backend is sole SSOT
+
+Per the user directive: **"frontend is just UI and backend has all the business logic."** Wave 8 deletes every parameter schema declaration from `client/src/nodeDefinitions/*.ts` and moves the missing surface (enum option labels, displayOptions gating, validation, typeOptions hints) onto the matching Pydantic models. Local definitions retain only display-routing fields (`displayName` / `icon` / `group` / `inputs` / `outputs` / `defaults.color`) and a handful of UX-only placeholder stubs the merge layer in `lib/nodeSpec.ts` preserves.
+
+| Item | Status | Commits | Outcome |
+|---|---|---|---|
+| 8.0 — `resolveNodeDescription` per-property merge | ✅ done | `1d86a54` | Backend wins for schema (type/options/displayOptions/typeOptions/validation/required), local wins for UX (placeholder + non-empty default + description). Makes per-file deletion safe. |
+| 8.1 — utility + scheduler (8 nodes, -277 LOC) | ✅ done | `ae33804` | WebhookTrigger / WebhookResponse / Console / TeamMonitor / Cron all enriched with rich option labels. |
+| 8.2 — twitter + telegram (6 nodes, -449 LOC) | ✅ done | `e18f501` | TwitterReceive trigger_type enum + TelegramReceive content_type/sender_filter enums encoded in Pydantic. |
+| 8.3 — social (2 nodes, -624 LOC) | ✅ done | `23c3f35` | Renamed SocialSendParams.platform → channel to match frontend; full recipient_type + message_type gating. |
+| 8.4 — bulk slim 16 files (-4459 LOC) | ✅ done | `97be256` | Python sweep across whatsapp/google/proxy/search/browser/crawlee/apify/document/location/tool/skill/aiAgent/specializedAgent/androidService/email + cleanup of orphan imports. |
+
+**Wave 8 numbers (5 commits, with prior Wave 7 setup commits):**
+- Frontend: **−5471 LOC** across 25 `nodeDefinitions/*.ts` files (every file except `aiModelNodes.ts` which uses a factory pattern needing separate refactor).
+- Backend: ~50 Pydantic models enriched with `Field(json_schema_extra={...})` covering ~51 displayOptions rules + 7 loadOptionsMethod routings + 14 typeOptions hints + 10 uiHints seeded.
+- Tests: 94/94 pytest cases pass; tsc green; `pnpm build` 1.82 MB / 517 kB gzip.
+- `VITE_NODESPEC_BACKEND` defaults ON (since Wave 7); `false` in `.env.local` is the kill-switch.
+
+## Wave 9 — what's left
+
+| Item | Status | Notes |
+|---|---|---|
+| Backend NODE_METADATA icon/displayName backfill | 🟡 in progress | 35 entries currently have empty `icon` for SVG-only frontend icons; nodes render with same blank icon when flag is ON. Fix is to populate emoji fallbacks + revisit SVG asset hosting strategy. |
+| `aiModelNodes.ts` factory refactor | ⏸ deferred | Uses `createBaseChatModel(config)` factory; `properties` array built inside the factory. Slimming requires moving the factory to the backend or converting to direct definitions. |
+| `ParameterRenderer.tsx` → DIY widget registry | ⏸ deferred | 2158-line file with 19 switch cases + closure-captured state. Needs a focused multi-session surgical refactor with per-widget unit tests. |
+| Narrow `INodeTypeDescription.properties` to optional | ⏸ deferred | Depends on widget registry. |
+| Delete `adapters/nodeSpecToDescription.ts` | ⏸ deferred | Depends on `INodeTypeDescription` narrowed to NodeSpec shape. |
+| Telegram/Twitter loadOptions loaders | ⏸ deferred | Limited value (Telegram bots have no chat-list API; Twitter lists need significant setup). |
 
 **Wave 6 numbers (14 commits across this wave):**
 - Backend: 105 Pydantic input models (started 67, +57%), 105 NODE_METADATA entries (started 0), 110 total NodeSpecs (every registered node type), 3 dynamic-option loaders wired, 25 node groups derived. 63/63 pytest cases pass.
