@@ -4,6 +4,7 @@ import { useAppStore } from '../store/useAppStore';
 import { nodeDefinitions } from '../nodeDefinitions';
 import { INodeOutputDefinition, NodeConnectionType } from '../types/INodeProperties';
 import { useDragVariable } from '../hooks/useDragVariable';
+import { isNodeInBackendGroup } from '../lib/nodeSpec';
 
 interface OutputPanelProps {
   nodeId: string;
@@ -131,8 +132,9 @@ const OutputPanel: React.FC<OutputPanelProps> = ({ nodeId }) => {
 
   // Helper to get outputs from a node definition
   const getNodeOutputs = (nodeType: string): INodeOutputDefinition[] => {
-    // For Android nodes, use the detailed schema to show individual draggable properties
-    if (ANDROID_NODE_TYPES.includes(nodeType)) {
+    // Wave 6 Phase 5.b: backend group → legacy fallback
+    const isAndroid = isNodeInBackendGroup(nodeType, 'android') ?? ANDROID_NODE_TYPES.includes(nodeType);
+    if (isAndroid) {
       const schema = ANDROID_OUTPUT_SCHEMAS[nodeType];
       if (schema) {
         return Object.entries(schema).map(([name, type]) => ({

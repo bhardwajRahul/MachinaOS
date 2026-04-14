@@ -6,6 +6,7 @@ import CodeEditor from './ui/CodeEditor';
 import DynamicParameterService from '../services/dynamicParameterService';
 import { useAppStore } from '../store/useAppStore';
 import { ANDROID_SERVICE_NODE_TYPES } from '../nodeDefinitions/androidServiceNodes';
+import { isNodeInBackendGroup } from '../lib/nodeSpec';
 import { nodeDefinitions } from '../nodeDefinitions';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { API_CONFIG } from '../config/api';
@@ -1161,7 +1162,9 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
       if (!selectedNode || parameter.name !== 'parameters') return;
 
       const nodeType = selectedNode.data?.nodeType || selectedNode.type;
-      if (!ANDROID_SERVICE_NODE_TYPES.includes(nodeType)) return;
+      // Wave 6 Phase 5.b: backend group → legacy fallback
+      const isAndroid = isNodeInBackendGroup(nodeType, 'android') ?? ANDROID_SERVICE_NODE_TYPES.includes(nodeType);
+      if (!isAndroid) return;
 
       // Merge database params with current form params (current takes precedence)
       const allParamsResolved = { ...nodeParameters, ...allParameters };

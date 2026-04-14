@@ -17,6 +17,7 @@ import { useToolSchema, ToolSchemaConfig } from '../../hooks/useToolSchema';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { useAppStore } from '../../store/useAppStore';
 import { ANDROID_SERVICE_NODE_TYPES } from '../../nodeDefinitions/androidServiceNodes';
+import { isNodeInBackendGroup } from '../../lib/nodeSpec';
 import { nodeDefinitions } from '../../nodeDefinitions';
 import {
   Form,
@@ -144,7 +145,11 @@ const ToolSchemaEditor: React.FC<ToolSchemaEditorProps> = ({ nodeId }) => {
     const services: Node[] = [];
     for (const edge of incomingEdges) {
       const sourceNode = currentWorkflow.nodes.find((n) => n.id === edge.source);
-      if (sourceNode && ANDROID_SERVICE_NODE_TYPES.includes(sourceNode.type || '')) {
+      // Wave 6 Phase 5.b: backend group → legacy fallback
+      const isAndroid = sourceNode
+        ? (isNodeInBackendGroup(sourceNode.type, 'android') ?? ANDROID_SERVICE_NODE_TYPES.includes(sourceNode.type || ''))
+        : false;
+      if (sourceNode && isAndroid) {
         services.push(sourceNode);
       }
     }

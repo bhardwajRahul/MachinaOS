@@ -6,6 +6,7 @@ import { Node, Edge } from 'reactflow';
 import { useDragVariable } from '../../hooks/useDragVariable';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { queryClient } from '../../lib/queryClient';
+import { isNodeInBackendGroup } from '../../lib/nodeSpec';
 
 // ---------------------------------------------------------------------------
 // Backend-driven node output schema lookup.
@@ -153,15 +154,15 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
       const currentNode = nodes.find((node: Node) => node.id === nodeId);
       const currentNodeType = currentNode?.type;
 
-      // Agent node types that support skills (have input-skill handle)
+      // Agent node types that support skills (have input-skill handle).
+      // Wave 6 Phase 5.b: backend 'agent' group -> legacy fallback array.
       const AGENT_WITH_SKILLS_TYPES = [
         'aiAgent', 'chatAgent', 'android_agent', 'coding_agent',
         'web_agent', 'task_agent', 'social_agent', 'travel_agent',
         'tool_agent', 'productivity_agent', 'payments_agent', 'consumer_agent',
         'autonomous_agent', 'orchestrator_agent', 'ai_employee', 'rlm_agent', 'claude_code_agent', 'deep_agent'
       ];
-      // Check if current node is an agent that shows skills in Middle Section
-      const isAgentWithSkills = AGENT_WITH_SKILLS_TYPES.includes(currentNodeType || '');
+      const isAgentWithSkills = isNodeInBackendGroup(currentNodeType, 'agent') ?? AGENT_WITH_SKILLS_TYPES.includes(currentNodeType || '');
 
       // Collect all edges to process (direct + inherited from parent for config nodes)
       interface EdgeWithLabel { edge: Edge; label?: string; targetHandleLabel?: string }
