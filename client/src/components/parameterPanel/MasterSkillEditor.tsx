@@ -146,19 +146,9 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
   const { sendRequest } = useWebSocket();
   const [selectedSkillName, setSelectedSkillName] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [defaultInstructions, setDefaultInstructions] = useState<Record<string, string>>({});
   const [searchQuery, setSearchQuery] = useState('');
-  const [folderSkills, setFolderSkills] = useState<AvailableSkill[]>([]);
-  const [folderLoading, setFolderLoading] = useState(false);
-  const [availableFolders, setAvailableFolders] = useState<Array<{ name: string; skill_count: number }>>([]);
-  const [foldersLoaded, setFoldersLoaded] = useState(false);
-  const hasFetchedFolders = useRef(false);
   const editorWrapperRef = useRef<HTMLDivElement>(null);
 
-  // User skills from database — TanStack Query owns the cache + refetch
-  // orchestration; save/delete mutations invalidate this key so the list
-  // re-syncs without manual fetchUserSkills() calls scattered through the
-  // handlers. Inline hook because there's exactly one consumer (here).
   const queryClient = useQueryClient();
   const userSkillsQuery = useQuery<UserSkill[], Error>({
     queryKey: ['userSkills'],
@@ -177,14 +167,54 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
     [queryClient],
   );
 
+  const foldersQuery = useQuery<Array<{ name: string; skill_count: number }>, Error>({
+    queryKey: ['skillFolders'],
+    queryFn: async () => {
+      const response = await sendRequest<{
+        success: boolean;
+        folders: Array<{ name: string; skill_count: number }>;
+      }>('list_skill_folders', {});
+      return response?.success ? (response.folders ?? []) : [];
+    },
+    staleTime: Infinity,
+  });
+  const availableFolders = foldersQuery.data ?? [];
+  const foldersLoaded = !foldersQuery.isLoading;
+
+  const folderSkillsQuery = useQuery<AvailableSkill[], Error>({
+    queryKey: ['folderSkills', skillFolder],
+    queryFn: async () => {
+      const response = await sendRequest<{
+        success: boolean;
+        skills: Array<{ name: string; description: string; metadata?: Record<string, any> }>;
+        error?: string;
+      }>('scan_skill_folder', { folder: skillFolder });
+      if (!response?.success || !response.skills) return [];
+      return response.skills.map(s => {
+        const defaults = getNodeDefaults(s.name);
+        return {
+          type: s.name,
+          skillName: s.name,
+          displayName: s.name.split('-').map(w => w[0].toUpperCase() + w.slice(1)).join(' '),
+          icon: defaults.icon || SKILL_ICON_OVERRIDES[s.name] || s.metadata?.icon || '',
+          color: defaults.color || s.metadata?.color || '#6366F1',
+          description: s.description || '',
+        };
+      });
+    },
+    enabled: !!skillFolder,
+    staleTime: 60_000,
+  });
+  const folderSkills = folderSkillsQuery.data ?? [];
+  const folderLoading = folderSkillsQuery.isLoading;
+
   // Inline editing state (no modal)
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [pendingSkillData, setPendingSkillData] = useState<PendingSkillData | null>(null);
   const [savingSkill, setSavingSkill] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
-  // Native DOM keydown handler to stop React Flow's document-level listeners
-  // from intercepting standard text editing shortcuts (Ctrl+A, Ctrl+C, etc.)
+  // Native DOM keydown stops React Flow's document listener from eating Ctrl+A/C/etc.
   useEffect(() => {
     const el = editorWrapperRef.current;
     if (!el) return;
@@ -197,73 +227,6 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
     el.addEventListener('keydown', handler);
     return () => el.removeEventListener('keydown', handler);
   });
-
-  // Fetch available skill folders on mount
-  useEffect(() => {
-    if (hasFetchedFolders.current) return;
-    hasFetchedFolders.current = true;
-
-    const fetchFolders = async () => {
-      try {
-        const response = await sendRequest<{
-          success: boolean;
-          folders: Array<{ name: string; skill_count: number }>;
-        }>('list_skill_folders', {});
-
-        if (response?.success && response.folders) {
-          setAvailableFolders(response.folders);
-        }
-      } catch (error) {
-        console.error('[MasterSkillEditor] Failed to list skill folders:', error);
-      } finally {
-        setFoldersLoaded(true);
-      }
-    };
-
-    fetchFolders();
-  }, [sendRequest]);
-
-  // (User skills now come from userSkillsQuery above. Save / delete flows
-  // below call invalidateUserSkills() to trigger a refetch.)
-
-  // Fetch skills from folder when skillFolder is set
-  useEffect(() => {
-    if (!skillFolder) {
-      setFolderSkills([]);
-      return;
-    }
-
-    const fetchFolderSkills = async () => {
-      setFolderLoading(true);
-      try {
-        const response = await sendRequest<{
-          success: boolean;
-          skills: Array<{ name: string; description: string; metadata?: Record<string, any> }>;
-          error?: string;
-        }>('scan_skill_folder', { folder: skillFolder });
-
-        if (response?.success && response.skills) {
-          setFolderSkills(response.skills.map(s => {
-            const defaults = getNodeDefaults(s.name);
-            return {
-              type: s.name,
-              skillName: s.name,
-              displayName: s.name.split('-').map(w => w[0].toUpperCase() + w.slice(1)).join(' '),
-              icon: defaults.icon || SKILL_ICON_OVERRIDES[s.name] || s.metadata?.icon || '',
-              color: defaults.color || s.metadata?.color || '#6366F1',
-              description: s.description || ''
-            };
-          }));
-        }
-      } catch (error) {
-        console.error('[MasterSkillEditor] Failed to scan skill folder:', error);
-      } finally {
-        setFolderLoading(false);
-      }
-    };
-
-    fetchFolderSkills();
-  }, [skillFolder, sendRequest]);
 
   // Build list of available skills - from folder scan, node definitions, and user skills
   const availableSkills = useMemo<AvailableSkill[]>(() => {
@@ -328,47 +291,43 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
     }
   }, [selectedSkillName, isCreatingNew, availableSkills]);
 
-  // Load skill content from skill folder
   const fetchSkillContent = useCallback(async (skillName: string): Promise<string> => {
-    // Already cached
-    if (defaultInstructions[skillName]) {
-      return defaultInstructions[skillName];
-    }
-
     try {
       setIsLoading(true);
-      const response = await sendRequest<{ instructions: string; success: boolean; error?: string }>('get_skill_content', {
-        skill_name: skillName
+      const content = await queryClient.fetchQuery<string>({
+        queryKey: ['skillContent', skillName],
+        queryFn: async () => {
+          const response = await sendRequest<{ instructions: string; success: boolean; error?: string }>(
+            'get_skill_content',
+            { skill_name: skillName },
+          );
+          if (response?.success && response.instructions) return response.instructions;
+          console.warn('[MasterSkillEditor] No content returned for skill:', skillName, response?.error);
+          return '';
+        },
+        staleTime: Infinity,
       });
-
-      if (response?.success && response.instructions) {
-        setDefaultInstructions(prev => ({ ...prev, [skillName]: response.instructions }));
-        return response.instructions;
-      } else {
-        console.warn('[MasterSkillEditor] No content returned for skill:', skillName, response?.error);
-      }
+      return content;
     } catch (error) {
       console.error('[MasterSkillEditor] Failed to load skill content:', error);
+      return '';
     } finally {
       setIsLoading(false);
     }
-    return '';
-  }, [sendRequest, defaultInstructions]);
+  }, [queryClient, sendRequest]);
 
-  // Load instructions when skill is selected (for preview)
+  const getCachedSkillContent = useCallback(
+    (skillName: string): string | undefined => queryClient.getQueryData<string>(['skillContent', skillName]),
+    [queryClient],
+  );
+
   useEffect(() => {
     if (!selectedSkillName || isCreatingNew) return;
-
-    // Skip if skill doesn't exist in availableSkills (may have been deleted)
     const skillExists = availableSkills.some(s => s.skillName === selectedSkillName);
     if (!skillExists) return;
-
-    // Skip if already cached
-    if (defaultInstructions[selectedSkillName]) return;
-
-    // Load skill content for preview
+    if (getCachedSkillContent(selectedSkillName) !== undefined) return;
     fetchSkillContent(selectedSkillName);
-  }, [selectedSkillName, isCreatingNew, defaultInstructions, fetchSkillContent, availableSkills]);
+  }, [selectedSkillName, isCreatingNew, fetchSkillContent, getCachedSkillContent, availableSkills]);
 
   // When selecting a user skill, load its data into pendingSkillData for editing
   useEffect(() => {
@@ -419,10 +378,9 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
     }
   }, [skillsConfig, onConfigChange, fetchSkillContent]);
 
-  // Update instructions (for built-in skills)
   const handleUpdateInstructions = useCallback((skillName: string, instructions: string) => {
     const currentConfig = skillsConfig[skillName];
-    const defaultContent = defaultInstructions[skillName] || '';
+    const defaultContent = getCachedSkillContent(skillName) ?? '';
     const isCustomized = instructions !== defaultContent;
 
     onConfigChange({
@@ -433,17 +391,10 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
         isCustomized
       }
     });
-  }, [skillsConfig, onConfigChange, defaultInstructions]);
+  }, [skillsConfig, onConfigChange, getCachedSkillContent]);
 
-  // Reset to default from skill folder
   const handleResetToDefault = useCallback(async (skillName: string) => {
-    // Clear cache to force reload from skill folder
-    setDefaultInstructions(prev => {
-      const next = { ...prev };
-      delete next[skillName];
-      return next;
-    });
-
+    queryClient.removeQueries({ queryKey: ['skillContent', skillName] });
     const defaultContent = await fetchSkillContent(skillName);
     const currentConfig = skillsConfig[skillName];
 
@@ -451,7 +402,7 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
       ...skillsConfig,
       [skillName]: { enabled: currentConfig?.enabled || false, instructions: defaultContent, isCustomized: false }
     });
-  }, [skillsConfig, onConfigChange, fetchSkillContent]);
+  }, [skillsConfig, onConfigChange, fetchSkillContent, queryClient]);
 
   // Create new skill - show inline editor
   const handleCreateSkill = useCallback(() => {
@@ -1094,7 +1045,7 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
                   value={
                     isEditingUserSkill
                       ? pendingSkillData?.instructions || ''
-                      : (selectedSkillConfig?.instructions || defaultInstructions[selectedSkillName!] || '')
+                      : (selectedSkillConfig?.instructions || getCachedSkillContent(selectedSkillName!) || '')
                   }
                   onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
                     if (isEditingUserSkill) {
