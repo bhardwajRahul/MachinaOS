@@ -359,9 +359,22 @@ class WebhookTriggerParams(BaseNodeParams):
     """Parameters for webhook trigger node."""
     type: Literal["webhookTrigger"]
     path: str = ""
-    method_filter: str = Field(default="all", alias="methodFilter")
-    response_mode: Literal["immediate", "response_node"] = Field(default="immediate", alias="responseMode")
-    authentication: Literal["none", "header"] = "none"
+    method: Literal["GET", "POST", "PUT", "DELETE", "ALL"] = Field(default="POST")
+    response_mode: Literal["immediate", "responseNode"] = Field(
+        default="immediate",
+        alias="responseMode",
+        json_schema_extra={"options": [
+            {"name": "Immediate (200 OK)", "value": "immediate"},
+            {"name": "Wait for Response Node", "value": "responseNode"},
+        ]},
+    )
+    authentication: Literal["none", "header"] = Field(
+        default="none",
+        json_schema_extra={"options": [
+            {"name": "None", "value": "none"},
+            {"name": "Header Auth", "value": "header"},
+        ]},
+    )
     header_name: str = Field(
         default="X-API-Key",
         alias="headerName",
@@ -381,15 +394,36 @@ class WebhookResponseParams(BaseNodeParams):
     """Parameters for webhook response node."""
     type: Literal["webhookResponse"]
     status_code: int = Field(default=200, alias="statusCode", ge=100, le=599)
-    content_type: str = Field(default="application/json", alias="contentType")
-    body: str = ""
+    content_type: Literal["application/json", "text/plain", "text/html"] = Field(
+        default="application/json",
+        alias="contentType",
+        json_schema_extra={"options": [
+            {"name": "JSON", "value": "application/json"},
+            {"name": "Text", "value": "text/plain"},
+            {"name": "HTML", "value": "text/html"},
+        ]},
+    )
+    response_body: str = Field(
+        default="",
+        alias="responseBody",
+        json_schema_extra={"rows": 4},
+    )
+    body: str = ""  # legacy alias
 
 
 class ConsoleParams(BaseNodeParams):
     """Parameters for console log node (passes input through)."""
     type: Literal["console"]
     label: str = ""
-    log_mode: Literal["full", "field", "expression"] = Field(default="full", alias="logMode")
+    log_mode: Literal["all", "field", "expression"] = Field(
+        default="all",
+        alias="logMode",
+        json_schema_extra={"options": [
+            {"name": "Log All Input", "value": "all"},
+            {"name": "Log Specific Field", "value": "field"},
+            {"name": "Log Expression", "value": "expression"},
+        ]},
+    )
     field_path: str = Field(
         default="",
         alias="fieldPath",
@@ -399,13 +433,24 @@ class ConsoleParams(BaseNodeParams):
         default="",
         json_schema_extra={"displayOptions": {"show": {"log_mode": ["expression"]}}},
     )
-    format: Literal["json", "text", "table"] = "json"
+    format: Literal["json", "json_compact", "text", "table"] = Field(
+        default="json",
+        json_schema_extra={"options": [
+            {"name": "JSON (Pretty)", "value": "json"},
+            {"name": "JSON (Compact)", "value": "json_compact"},
+            {"name": "Text", "value": "text"},
+            {"name": "Table", "value": "table"},
+        ]},
+    )
 
 
 class TeamMonitorParams(BaseNodeParams):
     """Parameters for agent-team monitor node."""
     type: Literal["teamMonitor"]
-    refresh_interval: int = Field(default=0, alias="refreshInterval", ge=0, le=60_000)
+    refresh_interval: int = Field(default=1000, alias="refreshInterval", ge=0, le=60_000)
+    show_task_history: bool = Field(default=True, alias="showTaskHistory")
+    show_messages: bool = Field(default=True, alias="showMessages")
+    max_history_items: int = Field(default=50, alias="maxHistoryItems", ge=10, le=200)
 
 
 # =============================================================================
@@ -425,21 +470,103 @@ class StartNodeParams(BaseNodeParams):
 class CronSchedulerParams(BaseNodeParams):
     """Parameters for cron scheduler node. Also used as AI tool schema."""
     type: Literal["cronScheduler"]
-    frequency: Literal["seconds", "minutes", "hours", "days", "weeks", "months", "once"] = Field(default="minutes", description="Schedule frequency")
-    interval: int = Field(default=5, ge=1, description="Interval for seconds frequency (5-59)")
-    interval_minutes: int = Field(default=5, ge=1, description="Interval for minutes frequency (1-59)")
-    interval_hours: int = Field(default=1, ge=1, description="Interval for hours frequency (1-23)")
-    daily_time: str = Field(default="09:00", description="Time for daily frequency (HH:MM format)")
-    weekly_time: str = Field(default="09:00", description="Time for weekly frequency (HH:MM format)")
-    weekday: str = Field(default="1", description="Day of week for weekly: '0'=Sunday .. '6'=Saturday")
-    monthly_time: str = Field(default="09:00", description="Time for monthly frequency (HH:MM format)")
-    month_day: str = Field(default="1", description="Day of month: '1'-'28' or 'L' for last day")
-    timezone: str = Field(default="UTC", description="Timezone e.g. UTC, America/New_York, Asia/Tokyo")
+    frequency: Literal["seconds", "minutes", "hours", "days", "weeks", "months", "once"] = Field(
+        default="minutes",
+        description="Schedule frequency",
+        json_schema_extra={"options": [
+            {"name": "Seconds", "value": "seconds"},
+            {"name": "Minutes", "value": "minutes"},
+            {"name": "Hours", "value": "hours"},
+            {"name": "Days", "value": "days"},
+            {"name": "Weeks", "value": "weeks"},
+            {"name": "Months", "value": "months"},
+            {"name": "Once (No Repeat)", "value": "once"},
+        ]},
+    )
+    interval: int = Field(
+        default=30, ge=5, le=59,
+        json_schema_extra={"displayOptions": {"show": {"frequency": ["seconds"]}}},
+    )
+    interval_minutes: int = Field(
+        default=5, ge=1, le=59,
+        json_schema_extra={"displayOptions": {"show": {"frequency": ["minutes"]}}},
+    )
+    interval_hours: int = Field(
+        default=1, ge=1, le=23,
+        json_schema_extra={"displayOptions": {"show": {"frequency": ["hours"]}}},
+    )
+    daily_time: str = Field(
+        default="09:00",
+        json_schema_extra={
+            "displayOptions": {"show": {"frequency": ["days"]}},
+            "options": [
+                {"name": "00:00 (Midnight)", "value": "00:00"},
+                {"name": "06:00", "value": "06:00"},
+                {"name": "08:00", "value": "08:00"},
+                {"name": "09:00", "value": "09:00"},
+                {"name": "10:00", "value": "10:00"},
+                {"name": "12:00 (Noon)", "value": "12:00"},
+                {"name": "14:00", "value": "14:00"},
+                {"name": "16:00", "value": "16:00"},
+                {"name": "18:00", "value": "18:00"},
+                {"name": "20:00", "value": "20:00"},
+                {"name": "22:00", "value": "22:00"},
+            ],
+        },
+    )
+    weekday: str = Field(
+        default="1",
+        json_schema_extra={
+            "displayOptions": {"show": {"frequency": ["weeks"]}},
+            "options": [
+                {"name": "Sunday", "value": "0"},
+                {"name": "Monday", "value": "1"},
+                {"name": "Tuesday", "value": "2"},
+                {"name": "Wednesday", "value": "3"},
+                {"name": "Thursday", "value": "4"},
+                {"name": "Friday", "value": "5"},
+                {"name": "Saturday", "value": "6"},
+            ],
+        },
+    )
+    weekly_time: str = Field(
+        default="09:00",
+        json_schema_extra={"displayOptions": {"show": {"frequency": ["weeks"]}}},
+    )
+    month_day: str = Field(
+        default="1",
+        json_schema_extra={"displayOptions": {"show": {"frequency": ["months"]}}},
+    )
+    monthly_time: str = Field(
+        default="09:00",
+        json_schema_extra={"displayOptions": {"show": {"frequency": ["months"]}}},
+    )
+    timezone: str = Field(
+        default="UTC",
+        json_schema_extra={"options": [
+            {"name": "UTC", "value": "UTC"},
+            {"name": "US Eastern", "value": "America/New_York"},
+            {"name": "US Pacific", "value": "America/Los_Angeles"},
+            {"name": "UK", "value": "Europe/London"},
+            {"name": "Europe Central", "value": "Europe/Paris"},
+            {"name": "Japan", "value": "Asia/Tokyo"},
+            {"name": "India", "value": "Asia/Kolkata"},
+        ]},
+    )
 
 
 class WorkflowTriggerParams(BaseNodeParams):
-    """Parameters for workflow trigger node."""
-    type: Literal["workflowTrigger"]
+    """Parameters for workflow trigger / timer node."""
+    type: Literal["workflowTrigger", "timer"]
+    duration: int = Field(default=5, ge=1, le=3600)
+    unit: Literal["seconds", "minutes", "hours"] = Field(
+        default="seconds",
+        json_schema_extra={"options": [
+            {"name": "Seconds", "value": "seconds"},
+            {"name": "Minutes", "value": "minutes"},
+            {"name": "Hours", "value": "hours"},
+        ]},
+    )
 
 
 class TaskTriggerParams(BaseNodeParams):
@@ -465,6 +592,8 @@ class TaskTriggerParams(BaseNodeParams):
 class ChatTriggerParams(BaseNodeParams):
     """Parameters for chat trigger node."""
     type: Literal["chatTrigger"]
+    session_id: str = Field(default="default", alias="sessionId")
+    placeholder: str = "Type a message..."
 
 
 class MasterSkillParams(BaseNodeParams):

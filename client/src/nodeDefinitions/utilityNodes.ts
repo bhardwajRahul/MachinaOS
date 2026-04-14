@@ -20,88 +20,15 @@ export const utilityNodes: Record<string, INodeTypeDescription> = {
       type: 'main' as NodeConnectionType,
       description: 'status, data, headers'
     }],
+    // Wave 8: schema lives on backend (HttpRequestParams). Only UX
+    // placeholders and JSON starter blobs remain here.
     properties: [
-      {
-        displayName: 'Method',
-        name: 'method',
-        type: 'options',
-        default: 'GET',
-        options: [
-          { name: 'GET', value: 'GET' },
-          { name: 'POST', value: 'POST' },
-          { name: 'PUT', value: 'PUT' },
-          { name: 'DELETE', value: 'DELETE' },
-          { name: 'PATCH', value: 'PATCH' }
-        ]
-      },
-      {
-        displayName: 'URL',
-        name: 'url',
-        type: 'string',
-        default: '',
-        required: true,
-        placeholder: 'https://api.example.com/endpoint'
-      },
-      {
-        displayName: 'Headers',
-        name: 'headers',
-        type: 'string',
-        default: '{}',
-        typeOptions: { rows: 3 },
-        placeholder: '{"Authorization": "Bearer token"}'
-      },
-      {
-        displayName: 'Body',
-        name: 'body',
-        type: 'string',
-        default: '',
-        typeOptions: { rows: 4 },
-        placeholder: '{"key": "value"}',
-        displayOptions: { show: { method: ['POST', 'PUT', 'PATCH'] } }
-      },
-      {
-        displayName: 'Timeout (seconds)',
-        name: 'timeout',
-        type: 'number',
-        default: 30
-      },
-      {
-        displayName: 'Use Proxy',
-        name: 'useProxy',
-        type: 'boolean',
-        default: false,
-        description: 'Route request through a configured proxy provider'
-      },
-      {
-        displayName: 'Proxy Country',
-        name: 'proxyCountry',
-        type: 'string',
-        default: '',
-        placeholder: 'US',
-        description: 'ISO country code for geo-targeting (e.g. US, GB, DE)',
-        displayOptions: { show: { useProxy: [true] } }
-      },
-      {
-        displayName: 'Proxy Provider',
-        name: 'proxyProvider',
-        type: 'string',
-        default: '',
-        placeholder: 'Auto-select',
-        description: 'Specific provider name, or leave empty for auto-selection',
-        displayOptions: { show: { useProxy: [true] } }
-      },
-      {
-        displayName: 'Session Type',
-        name: 'sessionType',
-        type: 'options',
-        default: 'rotating',
-        options: [
-          { name: 'Rotating (new IP per request)', value: 'rotating' },
-          { name: 'Sticky (same IP)', value: 'sticky' }
-        ],
-        displayOptions: { show: { useProxy: [true] } }
-      }
-    ]
+      { displayName: 'URL', name: 'url', type: 'string' as any, default: '', placeholder: 'https://api.example.com/endpoint' },
+      { displayName: 'Headers', name: 'headers', type: 'string' as any, default: '{}', placeholder: '{"Authorization": "Bearer token"}' },
+      { displayName: 'Body', name: 'body', type: 'string' as any, default: '', placeholder: '{"key": "value"}' },
+      { displayName: 'Proxy Country', name: 'proxyCountry', type: 'string' as any, default: '', placeholder: 'US' },
+      { displayName: 'Proxy Provider', name: 'proxyProvider', type: 'string' as any, default: '', placeholder: 'Auto-select' },
+    ],
   },
 
   webhookTrigger: {
@@ -119,64 +46,10 @@ export const utilityNodes: Record<string, INodeTypeDescription> = {
       type: 'main' as NodeConnectionType,
       description: 'method, path, headers, query, body, json'
     }],
+    // Wave 8: schema lives on backend (WebhookTriggerParams).
     properties: [
-      {
-        displayName: 'Path',
-        name: 'path',
-        type: 'string',
-        default: '',
-        required: true,
-        placeholder: 'my-webhook',
-        description: 'URL: http://localhost:3010/webhook/{path}'
-      },
-      {
-        displayName: 'HTTP Method',
-        name: 'method',
-        type: 'options',
-        default: 'POST',
-        options: [
-          { name: 'GET', value: 'GET' },
-          { name: 'POST', value: 'POST' },
-          { name: 'PUT', value: 'PUT' },
-          { name: 'DELETE', value: 'DELETE' },
-          { name: 'Any', value: 'ALL' }
-        ]
-      },
-      {
-        displayName: 'Response Mode',
-        name: 'responseMode',
-        type: 'options',
-        default: 'immediate',
-        options: [
-          { name: 'Immediate (200 OK)', value: 'immediate' },
-          { name: 'Wait for Response Node', value: 'responseNode' }
-        ]
-      },
-      {
-        displayName: 'Authentication',
-        name: 'authentication',
-        type: 'options',
-        default: 'none',
-        options: [
-          { name: 'None', value: 'none' },
-          { name: 'Header Auth', value: 'header' }
-        ]
-      },
-      {
-        displayName: 'Header Name',
-        name: 'headerName',
-        type: 'string',
-        default: 'X-API-Key',
-        displayOptions: { show: { authentication: ['header'] } }
-      },
-      {
-        displayName: 'Header Value',
-        name: 'headerValue',
-        type: 'string',
-        default: '',
-        displayOptions: { show: { authentication: ['header'] } }
-      }
-    ]
+      { displayName: 'Path', name: 'path', type: 'string' as any, default: '', placeholder: 'my-webhook' },
+    ],
   },
 
   webhookResponse: {
@@ -189,33 +62,10 @@ export const utilityNodes: Record<string, INodeTypeDescription> = {
     defaults: { name: 'Response', color: '#10b981' },
     inputs: [{ name: 'main', displayName: 'Input', type: 'main' as NodeConnectionType, description: 'Trigger input' }],
     outputs: [],
+    // Wave 8: schema lives on backend (WebhookResponseParams).
     properties: [
-      {
-        displayName: 'Status Code',
-        name: 'statusCode',
-        type: 'number',
-        default: 200
-      },
-      {
-        displayName: 'Response Body',
-        name: 'responseBody',
-        type: 'string',
-        default: '',
-        typeOptions: { rows: 4 },
-        placeholder: '{"success": true, "data": ...}'
-      },
-      {
-        displayName: 'Content Type',
-        name: 'contentType',
-        type: 'options',
-        default: 'application/json',
-        options: [
-          { name: 'JSON', value: 'application/json' },
-          { name: 'Text', value: 'text/plain' },
-          { name: 'HTML', value: 'text/html' }
-        ]
-      }
-    ]
+      { displayName: 'Response Body', name: 'responseBody', type: 'string' as any, default: '', placeholder: '{"success": true, "data": ...}' },
+    ],
   },
 
   chatTrigger: {
@@ -234,22 +84,8 @@ export const utilityNodes: Record<string, INodeTypeDescription> = {
       type: 'main' as NodeConnectionType,
       description: 'message, timestamp, session_id'
     }],
-    properties: [
-      {
-        displayName: 'Session ID',
-        name: 'sessionId',
-        type: 'string',
-        default: 'default',
-        description: 'Session identifier for grouping messages'
-      },
-      {
-        displayName: 'Placeholder',
-        name: 'placeholder',
-        type: 'string',
-        default: 'Type a message...',
-        description: 'Placeholder text for the chat input'
-      }
-    ]
+    // Wave 8: schema lives on backend (ChatTriggerParams).
+    properties: [],
   },
 
   console: {
@@ -263,59 +99,12 @@ export const utilityNodes: Record<string, INodeTypeDescription> = {
     uiHints: { isConsoleSink: true },
     inputs: [{ name: 'main', displayName: 'Input', type: 'main' as NodeConnectionType, description: 'Data to log' }],
     outputs: [{ name: 'main', displayName: 'Output', type: 'main' as NodeConnectionType, description: 'Passes input through unchanged' }],
+    // Wave 8: schema lives on backend (ConsoleParams).
     properties: [
-      {
-        displayName: 'Label',
-        name: 'label',
-        type: 'string',
-        default: '',
-        placeholder: 'Debug Point 1',
-        description: 'Optional label to identify this log entry'
-      },
-      {
-        displayName: 'Log Mode',
-        name: 'logMode',
-        type: 'options',
-        default: 'all',
-        options: [
-          { name: 'Log All Input', value: 'all' },
-          { name: 'Log Specific Field', value: 'field' },
-          { name: 'Log Expression', value: 'expression' }
-        ],
-        description: 'What to log from the input data'
-      },
-      {
-        displayName: 'Field Path',
-        name: 'fieldPath',
-        type: 'string',
-        default: '',
-        placeholder: 'data.items[0].name',
-        displayOptions: { show: { logMode: ['field'] } },
-        description: 'Path to specific field to log (e.g., data.items[0].name)'
-      },
-      {
-        displayName: 'Expression',
-        name: 'expression',
-        type: 'string',
-        default: '',
-        placeholder: '{{input.field}}',
-        displayOptions: { show: { logMode: ['expression'] } },
-        description: 'Template expression to evaluate and log'
-      },
-      {
-        displayName: 'Format',
-        name: 'format',
-        type: 'options',
-        default: 'json',
-        options: [
-          { name: 'JSON (Pretty)', value: 'json' },
-          { name: 'JSON (Compact)', value: 'json_compact' },
-          { name: 'Text', value: 'text' },
-          { name: 'Table', value: 'table' }
-        ],
-        description: 'Output format for the log'
-      }
-    ]
+      { displayName: 'Label', name: 'label', type: 'string' as any, default: '', placeholder: 'Debug Point 1' },
+      { displayName: 'Field Path', name: 'fieldPath', type: 'string' as any, default: '', placeholder: 'data.items[0].name' },
+      { displayName: 'Expression', name: 'expression', type: 'string' as any, default: '', placeholder: '{{input.field}}' },
+    ],
   },
 
   teamMonitor: {
@@ -329,39 +118,9 @@ export const utilityNodes: Record<string, INodeTypeDescription> = {
     uiHints: { hideInputSection: true, hideOutputSection: true, isMonitorPanel: true },
     inputs: [{ name: 'team', displayName: 'Team', type: 'main' as NodeConnectionType, description: 'Connect to AI Employee or Orchestrator Agent node' }],
     outputs: [{ name: 'main', displayName: 'Events', type: 'main' as NodeConnectionType, description: 'task_completed, task_failed, message_received, team_status' }],
-    properties: [
-      {
-        displayName: 'Auto-Refresh Interval',
-        name: 'refreshInterval',
-        type: 'number',
-        default: 1000,
-        typeOptions: { minValue: 100, maxValue: 10000 },
-        description: 'Refresh interval in milliseconds (0 = WebSocket only)'
-      },
-      {
-        displayName: 'Show Task History',
-        name: 'showTaskHistory',
-        type: 'boolean',
-        default: true,
-        description: 'Display completed/failed tasks in history'
-      },
-      {
-        displayName: 'Show Messages',
-        name: 'showMessages',
-        type: 'boolean',
-        default: true,
-        description: 'Display inter-agent messages'
-      },
-      {
-        displayName: 'Max History Items',
-        name: 'maxHistoryItems',
-        type: 'number',
-        default: 50,
-        typeOptions: { minValue: 10, maxValue: 200 },
-        description: 'Maximum items to show in history'
-      }
-    ]
-  }
+    // Wave 8: schema lives on backend (TeamMonitorParams).
+    properties: [],
+  },
 };
 
 export const UTILITY_NODE_TYPES = ['httpRequest', 'webhookTrigger', 'webhookResponse', 'chatTrigger', 'console', 'teamMonitor'];

@@ -135,7 +135,7 @@ class TestPhase3aCoverage:
     def test_console_log_mode_enum(self):
         spec = get_node_spec("console")
         log_mode = spec["inputs"]["properties"]["logMode"]
-        assert log_mode["enum"] == ["full", "field", "expression"]
+        assert log_mode["enum"] == ["all", "field", "expression"]
 
 
 class TestPhase3bCoverage:
