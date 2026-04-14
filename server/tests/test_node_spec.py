@@ -364,11 +364,16 @@ class TestPhase4LoadOptions:
         for method in ["whatsappGroups", "whatsappChannels", "whatsappGroupMembers"]:
             assert method in LOAD_OPTIONS_REGISTRY
 
+    def test_registry_has_google_methods(self):
+        from services.node_option_loaders import LOAD_OPTIONS_REGISTRY
+        for method in ["gmailLabels", "googleCalendarList", "googleDriveFolders", "googleTasklists"]:
+            assert method in LOAD_OPTIONS_REGISTRY
+
     def test_list_methods_sorted(self):
         from services.node_option_loaders import list_load_options_methods
         methods = list_load_options_methods()
         assert methods == sorted(methods)
-        assert len(methods) >= 3
+        assert len(methods) >= 7
 
     @pytest.mark.asyncio
     async def test_unknown_method_returns_empty(self):
@@ -499,3 +504,23 @@ class TestDisplayOptionsEnrichment:
         media = spec["inputs"]["properties"]["mediaUrl"]
         assert "image" in media["displayOptions"]["show"]["message_type"]
         assert "text" not in media["displayOptions"]["show"]["message_type"]
+
+    def test_gmail_receive_label_carries_load_options(self):
+        spec = get_node_spec("gmailReceive")
+        label = spec["inputs"]["properties"]["labelFilter"]
+        assert label["loadOptionsMethod"] == "gmailLabels"
+
+    def test_calendar_calendar_id_carries_load_options(self):
+        spec = get_node_spec("calendar")
+        cal = spec["inputs"]["properties"]["calendarId"]
+        assert cal["loadOptionsMethod"] == "googleCalendarList"
+
+    def test_drive_folder_id_carries_load_options(self):
+        spec = get_node_spec("drive")
+        folder = spec["inputs"]["properties"]["folderId"]
+        assert folder["loadOptionsMethod"] == "googleDriveFolders"
+
+    def test_tasks_tasklist_id_carries_load_options(self):
+        spec = get_node_spec("tasks")
+        tl = spec["inputs"]["properties"]["tasklistId"]
+        assert tl["loadOptionsMethod"] == "googleTasklists"

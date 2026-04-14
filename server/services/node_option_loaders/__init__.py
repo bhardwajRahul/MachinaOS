@@ -21,6 +21,12 @@ is what wires it through.
 
 from typing import Any, Awaitable, Callable, Optional
 
+from .google_loaders import (
+    load_gmail_labels,
+    load_google_calendar_list,
+    load_google_drive_folders,
+    load_google_tasklists,
+)
 from .whatsapp_loaders import (
     load_whatsapp_channels,
     load_whatsapp_group_members,
@@ -33,14 +39,15 @@ LoadOptionsFn = Callable[[dict[str, Any]], Awaitable[list[dict[str, Any]]]]
 
 
 LOAD_OPTIONS_REGISTRY: dict[str, LoadOptionsFn] = {
-    # WhatsApp - already implemented; this just exposes them under the
-    # unified dispatcher name.
+    # WhatsApp - groups, channels, group members.
     "whatsappGroups": load_whatsapp_groups,
     "whatsappChannels": load_whatsapp_channels,
     "whatsappGroupMembers": load_whatsapp_group_members,
-    # Gmail / Calendar / Telegram / Twitter loaders land in follow-up
-    # commits. The registry is the seam - adding them is a one-line
-    # registration once the loader function exists.
+    # Google Workspace - Gmail labels, Calendar list, Drive folders, Tasks lists.
+    "gmailLabels": load_gmail_labels,
+    "googleCalendarList": load_google_calendar_list,
+    "googleDriveFolders": load_google_drive_folders,
+    "googleTasklists": load_google_tasklists,
 }
 
 

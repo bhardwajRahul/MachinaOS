@@ -665,7 +665,11 @@ class GmailParams(BaseNodeParams):
 class CalendarParams(BaseNodeParams):
     type: Literal["calendar"]
     operation: Literal["create", "list", "update", "delete"] = "list"
-    calendar_id: str = Field(default="primary", alias="calendarId")
+    calendar_id: str = Field(
+        default="primary",
+        alias="calendarId",
+        json_schema_extra={"loadOptionsMethod": "googleCalendarList"},
+    )
     event_id: str = Field(
         default="",
         alias="eventId",
@@ -693,7 +697,11 @@ class DriveParams(BaseNodeParams):
     file_id: str = Field(default="", alias="fileId")
     file_name: str = Field(default="", alias="fileName")
     file_path: str = Field(default="", alias="filePath")
-    folder_id: str = Field(default="", alias="folderId")
+    folder_id: str = Field(
+        default="",
+        alias="folderId",
+        json_schema_extra={"loadOptionsMethod": "googleDriveFolders"},
+    )
 
 
 class SheetsParams(BaseNodeParams):
@@ -707,7 +715,11 @@ class SheetsParams(BaseNodeParams):
 class TasksParams(BaseNodeParams):
     type: Literal["tasks"]
     operation: Literal["create", "list", "complete", "update", "delete"] = "list"
-    tasklist_id: str = Field(default="@default", alias="tasklistId")
+    tasklist_id: str = Field(
+        default="@default",
+        alias="tasklistId",
+        json_schema_extra={"loadOptionsMethod": "googleTasklists"},
+    )
     task_id: str = Field(default="", alias="taskId")
     title: str = ""
     notes: str = ""
@@ -821,7 +833,11 @@ class GmailReceiveParams(BaseNodeParams):
     """Parameters for Gmail receive polling trigger node."""
     type: Literal["gmailReceive"]
     filter_query: str = Field(default="is:unread", alias="filterQuery")
-    label_filter: str = Field(default="INBOX", alias="labelFilter")
+    label_filter: str = Field(
+        default="INBOX",
+        alias="labelFilter",
+        json_schema_extra={"loadOptionsMethod": "gmailLabels"},
+    )
     poll_interval: int = Field(default=60, alias="pollInterval", ge=10, le=3600)
 
 
