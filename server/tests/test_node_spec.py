@@ -738,7 +738,7 @@ class TestNodeSpecContractInvariants:
         from models.node_metadata import NODE_METADATA
         known = {
             "hideInputSection", "hideOutputSection", "hideRunButton",
-            "hasCodeEditor", "isMasterSkillEditor", "isMasterSkill",
+            "hasCodeEditor", "isMasterSkillEditor",
             "isMemoryPanel", "isToolPanel", "isMonitorPanel",
             "showLocationPanel", "isAndroidToolkit", "isChatTrigger",
             "isConsoleSink", "hasSkills",

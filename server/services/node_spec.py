@@ -42,18 +42,26 @@ _spec_cache: dict[str, dict[str, Any]] = {}
 
 def get_node_spec(node_type: str) -> Optional[dict[str, Any]]:
     """Return the full NodeSpec for a node type, or None if neither an
-    input model nor an output schema is registered (i.e. unknown type).
-    Cached per-process; bust by restarting the server."""
+    input model, an output schema, nor plugin metadata is registered
+    (i.e. unknown type). Cached per-process; bust by restarting the
+    server.
+
+    Wave 10.G.3: metadata-only plugin nodes (e.g. calculatorTool and
+    the other schema-less tool nodes) emit a spec even without input
+    schema — their NodeSpec carries componentKind + handles + color,
+    which is everything the editor needs to render and connect them.
+    """
 
     if node_type in _spec_cache:
         return _spec_cache[node_type]
 
     inputs = get_node_input_schema(node_type)
     outputs = get_node_output_schema(node_type)
-    if inputs is None and outputs is None:
+    meta = get_node_metadata(node_type)
+    if inputs is None and outputs is None and meta is None:
         return None
-
-    meta = get_node_metadata(node_type) or fallback_metadata(node_type)
+    if meta is None:
+        meta = fallback_metadata(node_type)
     spec: dict[str, Any] = {
         "type": node_type,
         "displayName": meta.get("displayName") or node_type,

@@ -93,7 +93,7 @@ register_node(
         "handles": [{"name": "output-skill", "kind": "output", "position": "top", "label": "Skill", "role": "skill"}],
         "description": "Aggregate multiple skills with enable/disable toggles",
         "version": 1,
-        "uiHints": {"isToolPanel": True, "isMasterSkill": True, "isMasterSkillEditor": True, "hideRunButton": True},
+        "uiHints": {"isToolPanel": True, "isMasterSkillEditor": True, "hideRunButton": True},
     },
 )
 

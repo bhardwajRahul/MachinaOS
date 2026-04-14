@@ -29,7 +29,6 @@ import { Badge } from '@/components/ui/badge';
 import ParameterRenderer from '../ParameterRenderer';
 import ToolSchemaEditor from './ToolSchemaEditor';
 import MasterSkillEditor from './MasterSkillEditor';
-import { isNodeInBackendGroup } from '../../lib/nodeSpec';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { useAppStore } from '../../store/useAppStore';
 import { useWebSocket, CompactionStats } from '../../contexts/WebSocketContext';
@@ -38,11 +37,13 @@ import { nodeDefinitions } from '../../nodeDefinitions';
 import { INodeTypeDescription, INodeProperties } from '../../types/INodeProperties';
 import { ExecutionResult } from '../../services/executionService';
 import { Edge } from 'reactflow';
-import { SKILL_NODE_TYPES, skillNodes } from '../../nodeDefinitions/skillNodes';
 import { shouldShowParameter } from '../../utils/parameterVisibility';
 
-// Tool node types that support schema editing
-const TOOL_NODE_TYPES = ['androidTool', 'calculatorTool', 'currentTimeTool', 'duckduckgoSearch'];
+// Wave 10.G.3: retired the three tribal arrays `SKILL_NODE_TYPES`,
+// `TOOL_NODE_TYPES`, and `AGENT_WITH_SKILLS_TYPES`. The parameter panel
+// now reads `uiHints.hasSkills` / `uiHints.isToolPanel` /
+// `uiHints.isMasterSkillEditor` / `uiHints.isMemoryPanel` directly from
+// the NodeSpec each plugin module declares.
 
 const Stat: React.FC<{ title: React.ReactNode; value: React.ReactNode }> = ({ title, value }) => (
   <div className="flex flex-col">
@@ -50,28 +51,6 @@ const Stat: React.FC<{ title: React.ReactNode; value: React.ReactNode }> = ({ ti
     <span className="text-lg font-semibold tabular-nums">{value}</span>
   </div>
 );
-
-// Agent node types that support skills (have input-skill handle)
-const AGENT_WITH_SKILLS_TYPES = [
-  'aiAgent',
-  'chatAgent',
-  'android_agent',
-  'coding_agent',
-  'web_agent',
-  'task_agent',
-  'social_agent',
-  'travel_agent',
-  'tool_agent',
-  'productivity_agent',
-  'payments_agent',
-  'consumer_agent',
-  'autonomous_agent',
-  'orchestrator_agent',
-  'ai_employee',
-  'rlm_agent',
-  'claude_code_agent',
-  'deep_agent'
-];
 
 interface ConnectedSkill {
   id: string;
@@ -177,28 +156,22 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
   const visibleParams = (nodeDefinition.properties || [])
     .filter((param: INodeProperties) => shouldShowParameter(param, parameters));
 
-  // Schema-driven layout flags. Read from nodeDefinition.uiHints first;
-  // fall back to legacy name checks for nodes not yet annotated. The two
-  // legacy arrays (TOOL_NODE_TYPES, AGENT_WITH_SKILLS_TYPES) are also
-  // legacy fallbacks until every agent / tool node sets uiHints.hasSkills
-  // / uiHints.isToolPanel respectively.
+  // Wave 10.G.3: pure schema-driven dispatch. Each flag is a declared
+  // uiHint on the backend plugin registration — no `??` fallback
+  // chains, no tribal arrays. Every widget decision reads the hint the
+  // node's own module emits.
   const hints = nodeDefinition.uiHints ?? {};
-  const isMasterSkillNode = hints.isMasterSkillEditor ?? (nodeDefinition.name === 'masterSkill');
-  const isMemoryNode = hints.isMemoryPanel ?? (nodeDefinition.name === 'simpleMemory');
-  // hasCodeEditor covers code executors, seedable skill nodes, and memory.
-  const isLegacyCodeExecutor = nodeDefinition.name === 'pythonExecutor' || nodeDefinition.name === 'javascriptExecutor';
-  const isLegacySkillWithEditor = SKILL_NODE_TYPES.includes(nodeDefinition.name)
-    && nodeDefinition.name !== 'customSkill'
-    && nodeDefinition.name !== 'masterSkill';
-  const needsCodeEditorLayout = hints.hasCodeEditor ?? (isLegacyCodeExecutor || isLegacySkillWithEditor || isMemoryNode);
-  // Kept as separate flags for downstream JSX that still references them.
-  const isCodeExecutorNode = needsCodeEditorLayout && (hints.hasCodeEditor ?? isLegacyCodeExecutor);
-  const isSkillNode = needsCodeEditorLayout && isLegacySkillWithEditor;
-  // Wave 6 Phase 5.b: dispatch chain is uiHints (declarative) -> backend
-  // group membership (live NodeSpec) -> legacy *_NODE_TYPES array.
-  // Behaviour identical when flag off + cache cold.
-  const isToolNode = hints.isToolPanel ?? isNodeInBackendGroup(nodeDefinition.name, 'tool') ?? TOOL_NODE_TYPES.includes(nodeDefinition.name);
-  const isAgentWithSkills = hints.hasSkills ?? isNodeInBackendGroup(nodeDefinition.name, 'agent') ?? AGENT_WITH_SKILLS_TYPES.includes(nodeDefinition.name);
+  const isMasterSkillNode = hints.isMasterSkillEditor === true;
+  const isMemoryNode = hints.isMemoryPanel === true;
+  const needsCodeEditorLayout = hints.hasCodeEditor === true;
+  const isCodeExecutorNode = needsCodeEditorLayout && !isMemoryNode && !isMasterSkillNode;
+  // No seedable skills today besides masterSkill (handled via its own
+  // editor). The reset-skill branch used to fire for SKILL_NODE_TYPES
+  // members other than masterSkill; that set was empty after Wave 10, so
+  // it's now permanently dead.
+  const isSkillNode = false;
+  const isToolNode = hints.isToolPanel === true;
+  const isAgentWithSkills = hints.hasSkills === true;
 
   const { data: userSettings } = useUserSettingsQuery();
 
@@ -375,26 +348,21 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
         const params = masterSkillParams[edge.source];
         const skillsConfig = params?.skillsConfig || {};
 
-        // Add each enabled skill from Master Skill
+        // Wave 10.G.3: the previous `SKILL_NODE_TYPES.find(...)` loop
+        // was dead code. After Wave 10 `skillNodes.ts` exports only
+        // `masterSkill` itself, so the per-skill lookup always missed.
+        // Master Skill children are instruction blobs seeded from
+        // skill folders on the backend, not separate frontend node
+        // defs — render them with the masterSkill fallback inline.
         for (const [skillName, config] of Object.entries(skillsConfig as Record<string, any>)) {
           if (!config?.enabled) continue;
-
-          // Find the skill node definition by skillName
-          const skillNodeType = SKILL_NODE_TYPES.find(type => {
-            const def = skillNodes[type];
-            const skillNameProp = def?.properties?.find((p: any) => p.name === 'skillName');
-            return skillNameProp?.default === skillName;
-          });
-
-          const nodeDef = skillNodeType ? skillNodes[skillNodeType] : null;
-
           skills.push({
             id: `${edge.source}_${skillName}`,
-            name: nodeDef?.displayName || skillName,
-            type: skillNodeType || 'masterSkill',
-            icon: nodeDef?.icon || '🎯',
-            description: nodeDef?.description || `Skill from Master Skill node`,
-            color: (nodeDef?.defaults?.color as string) || '#9333EA',
+            name: skillName,
+            type: 'masterSkill',
+            icon: '🎯',
+            description: 'Skill from Master Skill node',
+            color: '#9333EA',
           });
         }
       }

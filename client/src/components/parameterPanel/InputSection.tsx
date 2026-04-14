@@ -6,7 +6,7 @@ import { Node, Edge } from 'reactflow';
 import { useDragVariable } from '../../hooks/useDragVariable';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { queryClient } from '../../lib/queryClient';
-import { isNodeInBackendGroup } from '../../lib/nodeSpec';
+import { getCachedNodeSpec } from '../../lib/nodeSpec';
 
 // ---------------------------------------------------------------------------
 // Backend-driven node output schema lookup.
@@ -154,15 +154,11 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
       const currentNode = nodes.find((node: Node) => node.id === nodeId);
       const currentNodeType = currentNode?.type;
 
-      // Agent node types that support skills (have input-skill handle).
-      // Wave 6 Phase 5.b: backend 'agent' group -> legacy fallback array.
-      const AGENT_WITH_SKILLS_TYPES = [
-        'aiAgent', 'chatAgent', 'android_agent', 'coding_agent',
-        'web_agent', 'task_agent', 'social_agent', 'travel_agent',
-        'tool_agent', 'productivity_agent', 'payments_agent', 'consumer_agent',
-        'autonomous_agent', 'orchestrator_agent', 'ai_employee', 'rlm_agent', 'claude_code_agent', 'deep_agent'
-      ];
-      const isAgentWithSkills = isNodeInBackendGroup(currentNodeType, 'agent') ?? AGENT_WITH_SKILLS_TYPES.includes(currentNodeType || '');
+      // Wave 10.G.3: read `uiHints.hasSkills` declared by the node's
+      // own plugin module (server/nodes/agents.py via _STD_AGENT_HINTS).
+      // Retired the hardcoded AGENT_WITH_SKILLS_TYPES list.
+      const agentSpec = currentNodeType ? getCachedNodeSpec(currentNodeType) : null;
+      const isAgentWithSkills = (agentSpec?.uiHints as any)?.hasSkills === true;
 
       // Collect all edges to process (direct + inherited from parent for config nodes)
       interface EdgeWithLabel { edge: Edge; label?: string; targetHandleLabel?: string }
