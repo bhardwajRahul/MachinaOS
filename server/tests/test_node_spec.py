@@ -273,3 +273,83 @@ class TestPhase3dCoverage:
         from models.node_metadata import NODE_METADATA
         unseeded = [t for t in NODE_INPUT_MODELS if t not in NODE_METADATA]
         assert not unseeded, f"Input-modeled types still missing metadata: {unseeded}"
+
+
+class TestPhase3dIICoverage:
+    """Phase 3d.ii backend parity: 28 previously output-only types now
+    have full Pydantic input models + metadata. Closes the long tail
+    of integrations: search, browser/scraping, email, Google Workspace,
+    document/RAG, filesystem, proxy."""
+
+    PHASE_3D_II_TYPES = [
+        # Search
+        "braveSearch", "serperSearch", "perplexitySearch",
+        # Browser / scraping
+        "browser", "crawleeScraper", "httpScraper", "apifyActor",
+        # Email
+        "emailSend", "emailRead", "emailReceive",
+        # Google Workspace
+        "gmail", "calendar", "drive", "sheets", "tasks", "contacts",
+        # Document / RAG
+        "documentParser", "textChunker", "embeddingGenerator",
+        "vectorStore", "fileDownloader",
+        # Filesystem
+        "fileRead", "fileModify", "fsSearch", "shell",
+        # Proxy
+        "proxyRequest", "proxyConfig", "proxyStatus",
+    ]
+
+    def test_all_have_input_schema(self):
+        from services.node_input_schemas import get_node_input_schema
+        missing = [t for t in self.PHASE_3D_II_TYPES if get_node_input_schema(t) is None]
+        assert not missing, f"Phase 3d.ii types missing input schema: {missing}"
+
+    def test_all_have_metadata(self):
+        from models.node_metadata import get_node_metadata
+        missing = [t for t in self.PHASE_3D_II_TYPES if get_node_metadata(t) is None]
+        assert not missing, f"Phase 3d.ii types missing metadata: {missing}"
+
+    def test_all_have_full_spec(self):
+        for t in self.PHASE_3D_II_TYPES:
+            spec = get_node_spec(t)
+            assert spec is not None, f"No spec for {t}"
+            assert spec["displayName"] != t, f"{t} fell back to id displayName"
+            assert spec["group"], f"{t} missing group"
+
+    def test_search_nodes_grouped_search_and_tool(self):
+        for t in ["braveSearch", "serperSearch", "perplexitySearch"]:
+            groups = get_node_spec(t)["group"]
+            assert "search" in groups and "tool" in groups
+
+    def test_google_workspace_grouped_google(self):
+        for t in ["gmail", "calendar", "drive", "sheets", "tasks", "contacts"]:
+            assert "google" in get_node_spec(t)["group"]
+
+    def test_apify_actor_actor_id_field(self):
+        spec = get_node_spec("apifyActor")
+        assert "actorId" in spec["inputs"]["properties"]
+
+    def test_proxy_request_method_enum(self):
+        spec = get_node_spec("proxyRequest")
+        method = spec["inputs"]["properties"]["method"]
+        assert method["enum"] == ["GET", "POST", "PUT", "DELETE", "PATCH"]
+
+
+class TestWave6FullCoverage:
+    """End-of-Wave-6 invariants: every Pydantic input model has
+    metadata; every metadata entry has either an input model or an
+    output schema; all 110+ types emit a complete NodeSpec."""
+
+    def test_input_models_have_metadata(self):
+        from services.node_input_schemas import NODE_INPUT_MODELS
+        from models.node_metadata import NODE_METADATA
+        gap = sorted(set(NODE_INPUT_MODELS.keys()) - set(NODE_METADATA.keys()))
+        assert not gap, f"Input models without metadata: {gap}"
+
+    def test_total_nodespec_count_at_least_110(self):
+        from services.node_spec import list_node_types_with_spec
+        assert len(list_node_types_with_spec()) >= 110
+
+    def test_input_model_count_at_least_100(self):
+        from services.node_input_schemas import NODE_INPUT_MODELS
+        assert len(NODE_INPUT_MODELS) >= 100

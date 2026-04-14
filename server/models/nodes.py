@@ -402,6 +402,263 @@ class SocialSendParams(BaseNodeParams):
     media_url: str = Field(default="", alias="mediaUrl")
 
 
+# =============================================================================
+# Phase 3d.ii: 28 input models for output-only node types.
+# Minimal field surface - BaseNodeParams.model_config["extra"] = "allow"
+# carries any handler-specific extras the editor doesn't constrain.
+# =============================================================================
+
+# Search ----------------------------------------------------------------------
+
+class BraveSearchParams(BaseNodeParams):
+    type: Literal["braveSearch"]
+    query: str = ""
+    max_results: int = Field(default=10, alias="maxResults", ge=1, le=20)
+    country: str = ""
+    search_lang: str = Field(default="en", alias="searchLang")
+    safe_search: Literal["off", "moderate", "strict"] = Field(default="moderate", alias="safeSearch")
+
+
+class SerperSearchParams(BaseNodeParams):
+    type: Literal["serperSearch"]
+    query: str = ""
+    search_type: Literal["search", "news", "images", "places"] = Field(default="search", alias="searchType")
+    max_results: int = Field(default=10, alias="maxResults", ge=1, le=100)
+    country: str = ""
+    language: str = "en"
+
+
+class PerplexitySearchParams(BaseNodeParams):
+    type: Literal["perplexitySearch"]
+    query: str = ""
+    model: Literal["sonar", "sonar-pro", "sonar-reasoning", "sonar-reasoning-pro"] = "sonar"
+    search_recency_filter: Literal["all", "month", "week", "day", "hour"] = Field(default="all", alias="searchRecencyFilter")
+    return_images: bool = Field(default=False, alias="returnImages")
+    return_related_questions: bool = Field(default=False, alias="returnRelatedQuestions")
+
+
+# Browser / scraping ----------------------------------------------------------
+
+class BrowserParams(BaseNodeParams):
+    type: Literal["browser"]
+    operation: Literal["navigate", "click", "type", "fill", "screenshot", "snapshot", "get_text", "get_html", "eval", "wait", "scroll", "select", "batch"] = "navigate"
+    url: str = ""
+    selector: str = ""
+    text: str = ""
+    session: str = ""
+
+
+class CrawleeScraperParams(BaseNodeParams):
+    type: Literal["crawleeScraper"]
+    crawler_type: Literal["beautifulsoup", "playwright", "adaptive"] = Field(default="beautifulsoup", alias="crawlerType")
+    mode: Literal["single", "crawl"] = "single"
+    url: str = ""
+    css_selector: str = Field(default="", alias="cssSelector")
+    extract_links: bool = Field(default=False, alias="extractLinks")
+    max_pages: int = Field(default=10, alias="maxPages", ge=1, le=1000)
+    max_depth: int = Field(default=2, alias="maxDepth", ge=1, le=10)
+
+
+class HttpScraperParams(BaseNodeParams):
+    type: Literal["httpScraper"]
+    url: str = ""
+    mode: Literal["single", "date_range", "page_pagination"] = "single"
+    css_selector: str = Field(default="", alias="cssSelector")
+    max_pages: int = Field(default=1, alias="maxPages", ge=1, le=1000)
+
+
+class ApifyActorParams(BaseNodeParams):
+    type: Literal["apifyActor"]
+    actor_id: str = Field(default="", alias="actorId")
+    actor_input: str = Field(default="{}", alias="actorInput")
+    max_results: int = Field(default=100, alias="maxResults", ge=1, le=10000)
+    timeout: int = Field(default=300, ge=10, le=3600)
+    memory: int = Field(default=2048, ge=128, le=32768)
+
+
+# Email -----------------------------------------------------------------------
+
+class EmailSendParams(BaseNodeParams):
+    type: Literal["emailSend"]
+    provider: str = ""
+    to: str = ""
+    subject: str = ""
+    body: str = ""
+    cc: str = ""
+    bcc: str = ""
+    body_type: Literal["text", "html"] = Field(default="text", alias="bodyType")
+
+
+class EmailReadParams(BaseNodeParams):
+    type: Literal["emailRead"]
+    provider: str = ""
+    operation: Literal["list", "search", "read", "folders", "move", "delete", "flag"] = "list"
+    folder: str = "INBOX"
+    query: str = ""
+    message_id: str = Field(default="", alias="messageId")
+
+
+class EmailReceiveParams(BaseNodeParams):
+    type: Literal["emailReceive"]
+    provider: str = ""
+    folder: str = "INBOX"
+    poll_interval: int = Field(default=60, alias="pollInterval", ge=30, le=3600)
+    filter_query: str = Field(default="", alias="filterQuery")
+    mark_as_read: bool = Field(default=False, alias="markAsRead")
+
+
+# Google Workspace ------------------------------------------------------------
+
+class GmailParams(BaseNodeParams):
+    type: Literal["gmail"]
+    operation: Literal["send", "search", "read"] = "send"
+    to: str = ""
+    subject: str = ""
+    body: str = ""
+    query: str = ""
+    message_id: str = Field(default="", alias="messageId")
+
+
+class CalendarParams(BaseNodeParams):
+    type: Literal["calendar"]
+    operation: Literal["create", "list", "update", "delete"] = "list"
+    calendar_id: str = Field(default="primary", alias="calendarId")
+    event_id: str = Field(default="", alias="eventId")
+    summary: str = ""
+    start_time: str = Field(default="", alias="startTime")
+    end_time: str = Field(default="", alias="endTime")
+
+
+class DriveParams(BaseNodeParams):
+    type: Literal["drive"]
+    operation: Literal["upload", "download", "list", "share"] = "list"
+    file_id: str = Field(default="", alias="fileId")
+    file_name: str = Field(default="", alias="fileName")
+    file_path: str = Field(default="", alias="filePath")
+    folder_id: str = Field(default="", alias="folderId")
+
+
+class SheetsParams(BaseNodeParams):
+    type: Literal["sheets"]
+    operation: Literal["read", "write", "append"] = "read"
+    spreadsheet_id: str = Field(default="", alias="spreadsheetId")
+    range_: str = Field(default="", alias="range")
+    values: str = "[]"
+
+
+class TasksParams(BaseNodeParams):
+    type: Literal["tasks"]
+    operation: Literal["create", "list", "complete", "update", "delete"] = "list"
+    tasklist_id: str = Field(default="@default", alias="tasklistId")
+    task_id: str = Field(default="", alias="taskId")
+    title: str = ""
+    notes: str = ""
+
+
+class ContactsParams(BaseNodeParams):
+    type: Literal["contacts"]
+    operation: Literal["create", "list", "search", "get", "update", "delete"] = "list"
+    resource_name: str = Field(default="", alias="resourceName")
+    query: str = ""
+
+
+# Document / RAG --------------------------------------------------------------
+
+class DocumentParserParams(BaseNodeParams):
+    type: Literal["documentParser"]
+    parser: Literal["pypdf", "marker", "unstructured", "beautifulsoup"] = "pypdf"
+    file_path: str = Field(default="", alias="filePath")
+
+
+class TextChunkerParams(BaseNodeParams):
+    type: Literal["textChunker"]
+    strategy: Literal["recursive", "markdown", "token"] = "recursive"
+    chunk_size: int = Field(default=1000, alias="chunkSize", ge=100, le=8000)
+    chunk_overlap: int = Field(default=200, alias="chunkOverlap", ge=0, le=1000)
+
+
+class EmbeddingGeneratorParams(BaseNodeParams):
+    type: Literal["embeddingGenerator"]
+    provider: Literal["huggingface", "openai", "ollama"] = "huggingface"
+    model: str = "BAAI/bge-small-en-v1.5"
+    api_key: Optional[str] = Field(default=None, alias="apiKey")
+
+
+class VectorStoreParams(BaseNodeParams):
+    type: Literal["vectorStore"]
+    operation: Literal["store", "query", "delete"] = "store"
+    backend: Literal["chromadb", "qdrant", "pinecone"] = "chromadb"
+    collection_name: str = Field(default="default", alias="collectionName")
+    query: str = ""
+    top_k: int = Field(default=5, alias="topK", ge=1, le=100)
+
+
+class FileDownloaderParams(BaseNodeParams):
+    type: Literal["fileDownloader"]
+    output_dir: str = Field(default="downloads", alias="outputDir")
+    max_workers: int = Field(default=4, alias="maxWorkers", ge=1, le=32)
+    skip_existing: bool = Field(default=True, alias="skipExisting")
+    timeout: int = Field(default=60, ge=1, le=3600)
+
+
+# Filesystem ------------------------------------------------------------------
+
+class FileReadParams(BaseNodeParams):
+    type: Literal["fileRead"]
+    file_path: str = Field(default="", alias="filePath")
+    offset: int = Field(default=0, ge=0)
+    limit: Optional[int] = Field(default=None, ge=1)
+
+
+class FileModifyParams(BaseNodeParams):
+    type: Literal["fileModify"]
+    operation: Literal["write", "edit"] = "write"
+    file_path: str = Field(default="", alias="filePath")
+    content: str = ""
+    old_string: str = Field(default="", alias="oldString")
+    new_string: str = Field(default="", alias="newString")
+    replace_all: bool = Field(default=False, alias="replaceAll")
+
+
+class FsSearchParams(BaseNodeParams):
+    type: Literal["fsSearch"]
+    mode: Literal["ls", "glob", "grep"] = "ls"
+    path: str = "."
+    pattern: str = ""
+
+
+class ShellParams(BaseNodeParams):
+    type: Literal["shell"]
+    command: str = ""
+    timeout: int = Field(default=30, ge=1, le=600)
+    cwd: Optional[str] = None
+
+
+# Proxy -----------------------------------------------------------------------
+
+class ProxyRequestParams(BaseNodeParams):
+    type: Literal["proxyRequest"]
+    method: Literal["GET", "POST", "PUT", "DELETE", "PATCH"] = "GET"
+    url: str = ""
+    headers: str = "{}"
+    body: str = ""
+    timeout: int = Field(default=30, ge=1, le=300)
+    proxy_provider: str = Field(default="auto", alias="proxyProvider")
+    proxy_country: str = Field(default="", alias="proxyCountry")
+    session_type: Literal["rotating", "sticky"] = Field(default="rotating", alias="sessionType")
+
+
+class ProxyConfigParams(BaseNodeParams):
+    type: Literal["proxyConfig"]
+    operation: Literal["list_providers", "add_provider", "update_provider", "remove_provider", "set_credentials", "test_provider", "get_stats", "add_routing_rule", "list_routing_rules", "remove_routing_rule"] = "list_providers"
+    provider_name: str = Field(default="", alias="providerName")
+
+
+class ProxyStatusParams(BaseNodeParams):
+    type: Literal["proxyStatus"]
+    provider_name: str = Field(default="", alias="providerName")
+
+
 class GmailReceiveParams(BaseNodeParams):
     """Parameters for Gmail receive polling trigger node."""
     type: Literal["gmailReceive"]
@@ -521,6 +778,21 @@ KnownNodeParams = Annotated[
         # Messaging actions (Wave 6 Phase 3b)
         TelegramSendParams, TwitterSendParams, TwitterSearchParams, TwitterUserParams,
         SocialReceiveParams, SocialSendParams,
+        # Search (Wave 6 Phase 3d.ii)
+        BraveSearchParams, SerperSearchParams, PerplexitySearchParams,
+        # Browser / scraping
+        BrowserParams, CrawleeScraperParams, HttpScraperParams, ApifyActorParams,
+        # Email
+        EmailSendParams, EmailReadParams, EmailReceiveParams,
+        # Google Workspace
+        GmailParams, CalendarParams, DriveParams, SheetsParams, TasksParams, ContactsParams,
+        # Document / RAG
+        DocumentParserParams, TextChunkerParams, EmbeddingGeneratorParams,
+        VectorStoreParams, FileDownloaderParams,
+        # Filesystem
+        FileReadParams, FileModifyParams, FsSearchParams, ShellParams,
+        # Proxy
+        ProxyRequestParams, ProxyConfigParams, ProxyStatusParams,
         # Text
         TextGeneratorParams, FileHandlerParams,
         # Chat

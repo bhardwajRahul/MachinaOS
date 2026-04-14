@@ -16,19 +16,26 @@ from pydantic import BaseModel
 
 from constants import ANDROID_SERVICE_NODE_TYPES
 from models.nodes import (
-    AIAgentParams, AIChatModelParams, AndroidServiceParams,
-    ChatAgentParams, ChatHistoryParams, ChatSendParams, ChatTriggerParams,
-    ConsoleParams, CreateMapParams, CronSchedulerParams, FileHandlerParams,
-    GmailReceiveParams, GmapsLocationsParams, GmapsNearbyPlacesParams,
-    HttpRequestParams, JavaScriptExecutorParams, ProcessManagerParams,
-    PythonExecutorParams, SimpleMemoryParams, SocialReceiveParams,
+    AIAgentParams, AIChatModelParams, AndroidServiceParams, ApifyActorParams,
+    BraveSearchParams, BrowserParams, CalendarParams, ChatAgentParams,
+    ChatHistoryParams, ChatSendParams, ChatTriggerParams, ConsoleParams,
+    ContactsParams, CrawleeScraperParams, CreateMapParams, CronSchedulerParams,
+    DocumentParserParams, DriveParams, EmailReadParams, EmailReceiveParams,
+    EmailSendParams, EmbeddingGeneratorParams, FileDownloaderParams,
+    FileHandlerParams, FileModifyParams, FileReadParams, FsSearchParams,
+    GmailParams, GmailReceiveParams, GmapsLocationsParams,
+    GmapsNearbyPlacesParams, HttpRequestParams, HttpScraperParams,
+    JavaScriptExecutorParams, PerplexitySearchParams, ProcessManagerParams,
+    ProxyConfigParams, ProxyRequestParams, ProxyStatusParams,
+    PythonExecutorParams, SerperSearchParams, ShellParams,
+    SheetsParams, SimpleMemoryParams, SocialReceiveParams,
     SocialSendParams, SpecializedAgentParams, StartNodeParams,
-    TaskTriggerParams, TeamMonitorParams, TelegramReceiveParams,
-    TelegramSendParams, TextGeneratorParams, TwitterReceiveParams,
-    TwitterSearchParams, TwitterSendParams, TwitterUserParams,
-    TypeScriptExecutorParams, WebhookResponseParams, WebhookTriggerParams,
-    WhatsAppDbParams, WhatsAppReceiveParams, WhatsAppSendParams,
-    WorkflowTriggerParams,
+    TasksParams, TaskTriggerParams, TeamMonitorParams, TelegramReceiveParams,
+    TelegramSendParams, TextChunkerParams, TextGeneratorParams,
+    TwitterReceiveParams, TwitterSearchParams, TwitterSendParams,
+    TwitterUserParams, TypeScriptExecutorParams, VectorStoreParams,
+    WebhookResponseParams, WebhookTriggerParams, WhatsAppDbParams,
+    WhatsAppReceiveParams, WhatsAppSendParams, WorkflowTriggerParams,
 )
 
 
@@ -100,6 +107,41 @@ _DIRECT_MODELS: dict[str, type[BaseModel]] = {
     # Chat
     "chatSend": ChatSendParams,
     "chatHistory": ChatHistoryParams,
+    # Search (Wave 6 Phase 3d.ii)
+    "braveSearch": BraveSearchParams,
+    "serperSearch": SerperSearchParams,
+    "perplexitySearch": PerplexitySearchParams,
+    # Browser / scraping
+    "browser": BrowserParams,
+    "crawleeScraper": CrawleeScraperParams,
+    "httpScraper": HttpScraperParams,
+    "apifyActor": ApifyActorParams,
+    # Email
+    "emailSend": EmailSendParams,
+    "emailRead": EmailReadParams,
+    "emailReceive": EmailReceiveParams,
+    # Google Workspace
+    "gmail": GmailParams,
+    "calendar": CalendarParams,
+    "drive": DriveParams,
+    "sheets": SheetsParams,
+    "tasks": TasksParams,
+    "contacts": ContactsParams,
+    # Document / RAG
+    "documentParser": DocumentParserParams,
+    "textChunker": TextChunkerParams,
+    "embeddingGenerator": EmbeddingGeneratorParams,
+    "vectorStore": VectorStoreParams,
+    "fileDownloader": FileDownloaderParams,
+    # Filesystem
+    "fileRead": FileReadParams,
+    "fileModify": FileModifyParams,
+    "fsSearch": FsSearchParams,
+    "shell": ShellParams,
+    # Proxy
+    "proxyRequest": ProxyRequestParams,
+    "proxyConfig": ProxyConfigParams,
+    "proxyStatus": ProxyStatusParams,
 }
 
 
