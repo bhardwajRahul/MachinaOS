@@ -415,7 +415,11 @@ class TeamMonitorParams(BaseNodeParams):
 class StartNodeParams(BaseNodeParams):
     """Parameters for start node."""
     type: Literal["start"]
-    initial_data: str = Field(default="{}", alias="initialData")
+    initial_data: str = Field(
+        default="{}",
+        alias="initialData",
+        json_schema_extra={"rows": 6},
+    )
 
 
 class CronSchedulerParams(BaseNodeParams):
@@ -443,7 +447,18 @@ class TaskTriggerParams(BaseNodeParams):
     type: Literal["taskTrigger"]
     task_id: str = Field(default="", alias="taskId")
     agent_name: str = Field(default="", alias="agentName")
-    status_filter: Literal["all", "completed", "error"] = Field(default="all", alias="statusFilter")
+    status_filter: Literal["all", "completed", "error"] = Field(
+        default="all",
+        alias="statusFilter",
+        json_schema_extra={
+            "options": [
+                {"name": "All", "value": "all"},
+                {"name": "Completed Only", "value": "completed"},
+                {"name": "Errors Only", "value": "error"},
+            ]
+        },
+    )
+    parent_node_id: str = Field(default="", alias="parentNodeId")
     parent_node_id: str = Field(default="", alias="parentNodeId")
 
 
