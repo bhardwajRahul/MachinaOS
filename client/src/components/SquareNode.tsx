@@ -7,9 +7,8 @@ import { nodeDefinitions } from '../nodeDefinitions';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { useWebSocket, useWhatsAppStatus } from '../contexts/WebSocketContext';
 import { useApiKeys } from '../hooks/useApiKeys';
-import { getCachedNodeSpec, isNodeInBackendGroup, resolveNodeDescription } from '../lib/nodeSpec';
-import { getAIProviderIcon } from './icons/AIProviderIcons';
-import { PlayCircle, CalendarClock } from 'lucide-react';
+import { getCachedNodeSpec, isNodeInBackendGroup, resolveNodeDescription, useNodeSpec } from '../lib/nodeSpec';
+import { resolveIcon, resolveLibraryIcon } from '../assets/icons';
 import { AI_MODEL_PROVIDER_MAP } from '../nodeDefinitions/aiModelNodes';
 
 // Nodes with 'tool' in their group can connect to AI Agent/Zeenie tool handles
@@ -268,234 +267,27 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
     }
   };
 
-  // Common icon name to emoji mapping for fallback
-  const iconNameToEmoji: Record<string, string> = {
-    brain: '🧠',
-    memory: '🧠',
-    robot: '🤖',
-    ai: '🤖',
-    agent: '🤖',
-    chat: '💬',
-    message: '💬',
-    whatsapp: '📱',
-    phone: '📱',
-    email: '📧',
-    mail: '📧',
-    webhook: '🔗',
-    http: '🌐',
-    api: '🔌',
-    database: '🗄️',
-    file: '📄',
-    folder: '📁',
-    code: '💻',
-    python: '🐍',
-    javascript: '📜',
-    settings: '⚙️',
-    config: '⚙️',
-    clock: '⏰',
-    schedule: '📅',
-    location: '📍',
-    map: '🗺️',
-    search: '🔍',
-    filter: '🔍',
-    play: '▶️',
-    start: '▶️',
-    stop: '⏹️',
-    pause: '⏸️',
-    send: '📤',
-    receive: '📥',
-    upload: '⬆️',
-    download: '⬇️',
-    sync: '🔄',
-    refresh: '🔄',
-    warning: '⚠️',
-    error: '❌',
-    success: '✅',
-    info: '💡',
-    help: '❓',
-    user: '👤',
-    users: '👥',
-    key: '🔑',
-    lock: '🔒',
-    unlock: '🔓',
-    star: '⭐',
-    heart: '❤️',
-    thunder: '⚡',
-    lightning: '⚡',
-    fire: '🔥',
-    water: '💧',
-    cloud: '☁️',
-    sun: '☀️',
-    moon: '🌙',
-    camera: '📷',
-    image: '🖼️',
-    video: '🎬',
-    audio: '🔊',
-    music: '🎵',
-    bell: '🔔',
-    notification: '🔔',
-    link: '🔗',
-    chain: '🔗',
-    tool: '🔧',
-    wrench: '🔧',
-    hammer: '🔨',
-    gear: '⚙️',
-    cog: '⚙️',
-    bug: '🐛',
-    debug: '🐛',
-    test: '🧪',
-    experiment: '🧪',
-    lab: '🧪',
-    book: '📖',
-    docs: '📚',
-    note: '📝',
-    edit: '✏️',
-    pencil: '✏️',
-    trash: '🗑️',
-    delete: '🗑️',
-    copy: '📋',
-    paste: '📋',
-    cut: '✂️',
-    scissors: '✂️',
-    tag: '🏷️',
-    label: '🏷️',
-    flag: '🚩',
-    bookmark: '🔖',
-    pin: '📌',
-    target: '🎯',
-    goal: '🎯',
-    trophy: '🏆',
-    medal: '🏅',
-    gift: '🎁',
-    package: '📦',
-    box: '📦',
-    truck: '🚚',
-    shipping: '🚚',
-    cart: '🛒',
-    shop: '🛍️',
-    store: '🏪',
-    money: '💰',
-    dollar: '💵',
-    credit: '💳',
-    payment: '💳',
-    chart: '📊',
-    graph: '📈',
-    analytics: '📊',
-    stats: '📊',
-    dashboard: '📊',
-    terminal: '💻',
-    console: '💻',
-    server: '🖥️',
-    computer: '💻',
-    mobile: '📱',
-    tablet: '📱',
-    battery: '🔋',
-    wifi: '📶',
-    bluetooth: '📶',
-    antenna: '📡',
-    satellite: '🛰️',
-    rocket: '🚀',
-    plane: '✈️',
-    car: '🚗',
-    bike: '🚲',
-    train: '🚂',
-    ship: '🚢',
-    home: '🏠',
-    house: '🏠',
-    building: '🏢',
-    office: '🏢',
-    factory: '🏭',
-    hospital: '🏥',
-    school: '🏫',
-    university: '🎓',
-    graduation: '🎓',
-    world: '🌍',
-    globe: '🌐',
-    earth: '🌍',
-    android: '🤖',
-    apple: '🍎',
-    windows: '🪟',
-    linux: '🐧',
-  };
 
-  // Check if string is likely an emoji (contains emoji characters)
-  const isEmoji = (str: string): boolean => {
-    // Emoji regex pattern - matches most common emojis
-    const emojiRegex = /[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2300}-\u{23FF}]|[\u{2B50}]|[\u{231A}-\u{231B}]|[\u{25AA}-\u{25AB}]|[\u{25B6}]|[\u{25C0}]|[\u{25FB}-\u{25FE}]|[\u{2614}-\u{2615}]|[\u{2648}-\u{2653}]|[\u{267F}]|[\u{2693}]|[\u{26A1}]|[\u{26AA}-\u{26AB}]|[\u{26BD}-\u{26BE}]|[\u{26C4}-\u{26C5}]|[\u{26CE}]|[\u{26D4}]|[\u{26EA}]|[\u{26F2}-\u{26F3}]|[\u{26F5}]|[\u{26FA}]|[\u{26FD}]|[\u{2702}]|[\u{2705}]|[\u{2708}-\u{270D}]|[\u{270F}]|[\u{2712}]|[\u{2714}]|[\u{2716}]|[\u{271D}]|[\u{2721}]|[\u{2728}]|[\u{2733}-\u{2734}]|[\u{2744}]|[\u{2747}]|[\u{274C}]|[\u{274E}]|[\u{2753}-\u{2755}]|[\u{2757}]|[\u{2763}-\u{2764}]|[\u{2795}-\u{2797}]|[\u{27A1}]|[\u{27B0}]|[\u{27BF}]|[\u{E000}-\u{F8FF}]/u;
-    return emojiRegex.test(str);
-  };
-
-  // Helper to render icon (handles URLs, emojis, and icon names)
-  const renderIcon = (icon: string) => {
-    // Handle image URLs and data URIs (including SVG data URIs for Google icons)
+  // Wave 10.B: schema-driven icon dispatch. `useNodeSpec` subscribes
+  // to the NodeSpec cache so the icon populates when prefetch lands
+  // without waiting for a parent re-render.
+  const iconSpec = useNodeSpec(type);
+  const getServiceIcon = () => {
+    const raw = (iconSpec?.icon as string | undefined) ?? (definition?.icon as string | undefined) ?? '';
+    const LibIcon = resolveLibraryIcon(raw);
+    if (LibIcon) return <LibIcon size={28} />;
+    const icon = resolveIcon(raw);
+    if (!icon) return null;
     if (icon.startsWith('http') || icon.startsWith('data:') || icon.startsWith('/')) {
       return (
         <img
           src={icon}
           alt="icon"
-          style={{
-            width: '28px',
-            height: '28px',
-            objectFit: 'contain',
-            borderRadius: '4px'
-          }}
+          style={{ width: '28px', height: '28px', objectFit: 'contain', borderRadius: '4px' }}
         />
       );
     }
-
-    // If it's already an emoji, return it directly
-    if (isEmoji(icon)) {
-      return icon;
-    }
-
-    // Check if it's a known icon name and convert to emoji
-    const lowerIcon = icon.toLowerCase().trim();
-    if (iconNameToEmoji[lowerIcon]) {
-      return iconNameToEmoji[lowerIcon];
-    }
-
-    // Fallback: return a generic icon instead of plain text
-    console.warn(`[SquareNode] Unknown icon name "${icon}" - using fallback. Add emoji directly or update iconNameToEmoji mapping.`);
-    return '📦';
-  };
-
-  // Get service icon for display
-  const getServiceIcon = () => {
-    // Priority 0: Start node - use PlayCircle icon with cyan color (neutral "begin" color)
-    if (type === 'start') {
-      return <PlayCircle className="h-7 w-7" style={{ color: theme.dracula.cyan }} />;
-    }
-
-    // Cron Scheduler node - use CalendarClock with node definition color
-    if (type === 'cronScheduler') {
-      return <CalendarClock className="h-7 w-7" style={{ color: definition?.defaults?.color || nodeColor }} />;
-    }
-
-    // Priority 1: Check if this is an AI model node - use official provider icons
-    if (type && AI_MODEL_NODE_TYPES[type]) {
-      const providerId = AI_MODEL_NODE_TYPES[type];
-      const IconComponent = getAIProviderIcon(providerId);
-      if (IconComponent) {
-        return <IconComponent size={28} />;
-      }
-    }
-
-    // Priority 2: Custom icon set on the node instance (via data.customIcon)
-    if (data?.customIcon && typeof data.customIcon === 'string') {
-      return renderIcon(data.customIcon);
-    }
-
-    // Priority 3: Use the icon from the node definition if available
-    if (definition?.icon && typeof definition.icon === 'string') {
-      return renderIcon(definition.icon);
-    }
-
-    // Fallback logic based on node type
-    if (type?.includes('gmaps_create')) return '🗺️';
-    if (type?.includes('gmaps_locations')) return '🌍';
-    if (type?.includes('gmaps_nearby_places')) return '🔍';
-
-    return '📍';
+    return icon;
   };
 
   // Get the node color from definition or use default

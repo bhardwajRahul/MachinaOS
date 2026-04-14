@@ -1,14 +1,10 @@
 // Document Processing Nodes - HTTP Scraper, File Downloader, Document Parser, Text Chunker, Embedding Generator, Vector Store
-import {
-  INodeTypeDescription,
-  NodeConnectionType
-} from '../types/INodeProperties';
+import { INodeTypeDescription, NodeConnectionType } from '../types/INodeProperties';
 
 export const documentNodes: Record<string, INodeTypeDescription> = {
   httpScraper: {
     displayName: 'HTTP Scraper',
     name: 'httpScraper',
-    icon: '🔍',
     group: ['document'],
     version: 1,
     description: 'Scrape links from web pages with date/page pagination support',
@@ -27,7 +23,6 @@ export const documentNodes: Record<string, INodeTypeDescription> = {
   fileDownloader: {
     displayName: 'File Downloader',
     name: 'fileDownloader',
-    icon: '⬇️',
     group: ['document'],
     version: 1,
     description: 'Download files from URLs in parallel',
@@ -46,7 +41,6 @@ export const documentNodes: Record<string, INodeTypeDescription> = {
   documentParser: {
     displayName: 'Document Parser',
     name: 'documentParser',
-    icon: '📄',
     group: ['document'],
     version: 1,
     description: 'Parse documents to text using various parsers',
@@ -65,7 +59,6 @@ export const documentNodes: Record<string, INodeTypeDescription> = {
   textChunker: {
     displayName: 'Text Chunker',
     name: 'textChunker',
-    icon: '✂️',
     group: ['document'],
     version: 1,
     description: 'Split text into overlapping chunks for embedding',
@@ -84,7 +77,6 @@ export const documentNodes: Record<string, INodeTypeDescription> = {
   embeddingGenerator: {
     displayName: 'Embedding Generator',
     name: 'embeddingGenerator',
-    icon: '🧠',
     group: ['document'],
     version: 1,
     description: 'Generate vector embeddings from text chunks',
@@ -103,7 +95,6 @@ export const documentNodes: Record<string, INodeTypeDescription> = {
   vectorStore: {
     displayName: 'Vector Store',
     name: 'vectorStore',
-    icon: '🗄️',
     group: ['document'],
     version: 1,
     description: 'Store and query vector embeddings',

@@ -1,12 +1,5 @@
 // Apify Node Definitions - Web scraping and social media data extraction
-import {
-  INodeTypeDescription,
-  NodeConnectionType
-} from '../types/INodeProperties';
-import { APIFY_ICON } from '../assets/icons/apify';
-
-// Re-export icon for external use
-export { APIFY_ICON };
+import { INodeTypeDescription, NodeConnectionType } from '../types/INodeProperties';
 
 // ============================================================================
 // APIFY NODES
@@ -17,7 +10,6 @@ export const apifyNodes: Record<string, INodeTypeDescription> = {
   apifyActor: {
     displayName: 'Apify Actor',
     name: 'apifyActor',
-    icon: APIFY_ICON,
     group: ['api', 'scraper', 'tool'],
     version: 1,
     subtitle: 'Run Web Scraper',

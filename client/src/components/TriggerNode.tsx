@@ -11,11 +11,10 @@ import { Handle, Position, NodeProps } from 'reactflow';
 import { NodeData } from '../types/NodeTypes';
 import { useAppStore } from '../store/useAppStore';
 import { nodeDefinitions } from '../nodeDefinitions';
-import { resolveNodeDescription } from '../lib/nodeSpec';
+import { resolveNodeDescription, useNodeSpec } from '../lib/nodeSpec';
+import { resolveIcon, resolveLibraryIcon } from '../assets/icons';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { useWebSocket, useWhatsAppStatus } from '../contexts/WebSocketContext';
-import { PlayCircle, CalendarClock } from 'lucide-react';
-import { Google } from '@lobehub/icons';
 
 const TriggerNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectable, selected }) => {
   const theme = useAppTheme();
@@ -145,66 +144,25 @@ const TriggerNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
     }
   };
 
-  // Check if string is likely an emoji
-  const isEmoji = (str: string): boolean => {
-    const emojiRegex = /[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2300}-\u{23FF}]|[\u{2B50}]|[\u{231A}-\u{231B}]|[\u{25AA}-\u{25AB}]|[\u{25B6}]|[\u{25C0}]|[\u{25FB}-\u{25FE}]|[\u{2614}-\u{2615}]|[\u{2648}-\u{2653}]|[\u{267F}]|[\u{2693}]|[\u{26A1}]|[\u{26AA}-\u{26AB}]|[\u{26BD}-\u{26BE}]|[\u{26C4}-\u{26C5}]|[\u{26CE}]|[\u{26D4}]|[\u{26EA}]|[\u{26F2}-\u{26F3}]|[\u{26F5}]|[\u{26FA}]|[\u{26FD}]|[\u{2702}]|[\u{2705}]|[\u{2708}-\u{270D}]|[\u{270F}]|[\u{2712}]|[\u{2714}]|[\u{2716}]|[\u{271D}]|[\u{2721}]|[\u{2728}]|[\u{2733}-\u{2734}]|[\u{2744}]|[\u{2747}]|[\u{274C}]|[\u{274E}]|[\u{2753}-\u{2755}]|[\u{2757}]|[\u{2763}-\u{2764}]|[\u{2795}-\u{2797}]|[\u{27A1}]|[\u{27B0}]|[\u{27BF}]|[\u{E000}-\u{F8FF}]/u;
-    return emojiRegex.test(str);
-  };
-
-  // Helper to render icon
-  const renderIcon = (icon: string) => {
-    // Handle component markers (e.g., 'component:Gmail')
-    if (icon.startsWith('component:')) {
-      const componentName = icon.replace('component:', '');
-      if (componentName === 'Gmail') {
-        return <Google.Color size={28} />;
-      }
-      // Fallback for unknown component markers
-      return '⚡';
-    }
-
+  // Wave 10.B: schema-driven icon dispatch. `useNodeSpec` subscribes
+  // to the NodeSpec cache so the icon populates when prefetch lands.
+  const iconSpec = useNodeSpec(type);
+  const getTriggerIcon = () => {
+    const raw = (iconSpec?.icon as string | undefined) ?? (definition?.icon as string | undefined) ?? '';
+    const LibIcon = resolveLibraryIcon(raw);
+    if (LibIcon) return <LibIcon size={28} />;
+    const icon = resolveIcon(raw);
+    if (!icon) return null;
     if (icon.startsWith('http') || icon.startsWith('data:') || icon.startsWith('/')) {
       return (
         <img
           src={icon}
           alt="icon"
-          style={{
-            width: '28px',
-            height: '28px',
-            objectFit: 'contain',
-            borderRadius: '4px'
-          }}
+          style={{ width: '28px', height: '28px', objectFit: 'contain', borderRadius: '4px' }}
         />
       );
     }
-
-    if (isEmoji(icon)) {
-      return icon;
-    }
-
-    // Fallback
-    return '⚡';
-  };
-
-  // Get trigger icon for display
-  const getTriggerIcon = () => {
-    // Start node - use PlayCircle icon
-    if (type === 'start') {
-      return <PlayCircle className="h-7 w-7" style={{ color: theme.dracula.cyan }} />;
-    }
-
-    // Cron Scheduler - use CalendarClock
-    if (type === 'cronScheduler') {
-      return <CalendarClock className="h-7 w-7" style={{ color: definition?.defaults?.color || nodeColor }} />;
-    }
-
-    // Use the icon from the node definition if available
-    if (definition?.icon && typeof definition.icon === 'string') {
-      return renderIcon(definition.icon);
-    }
-
-    // Fallback to lightning bolt for triggers
-    return '⚡';
+    return icon;
   };
 
   // Get the node color from definition or use default trigger color

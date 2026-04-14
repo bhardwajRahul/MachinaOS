@@ -408,20 +408,34 @@ class TestPhase5NodeGroups:
 
     def test_tool_group_includes_known_tools(self):
         from services.node_spec import list_node_groups
-        tools = set(list_node_groups().get("tool", []))
+        tools = set(list_node_groups()["tool"]["types"])
         for expected in ["pythonExecutor", "javascriptExecutor", "httpRequest"]:
             assert expected in tools
 
     def test_trigger_group_includes_known_triggers(self):
         from services.node_spec import list_node_groups
-        triggers = set(list_node_groups().get("trigger", []))
+        triggers = set(list_node_groups()["trigger"]["types"])
         for expected in ["webhookTrigger", "chatTrigger", "telegramReceive", "twitterReceive"]:
             assert expected in triggers
 
     def test_each_group_alphabetised(self):
         from services.node_spec import list_node_groups
-        for group, types in list_node_groups().items():
+        for group, entry in list_node_groups().items():
+            types = entry["types"]
             assert types == sorted(types), f"Group {group!r} not sorted: {types}"
+
+    def test_every_group_carries_palette_metadata(self):
+        """Wave 10.B: every group the node registry emits must have a
+        palette metadata entry (label/icon/color/visibility) registered
+        via ``register_group`` in ``server/nodes/groups.py``. Prevents
+        a new group key silently rendering unlabelled in the palette."""
+        from services.node_spec import list_node_groups
+        for group, entry in list_node_groups().items():
+            assert entry["label"], f"{group}: missing label"
+            assert entry["icon"], f"{group}: missing icon"
+            assert entry["visibility"] in ("normal", "dev", "all"), (
+                f"{group}: visibility={entry['visibility']!r}"
+            )
 
 
 class TestDisplayOptionsEnrichment:
@@ -939,6 +953,35 @@ class TestWave10GContractInvariants:
             assert code_field.get("editor") == "code", (
                 f"{t}.code: expected `editor: 'code'`, got {code_field.get('editor')!r}"
             )
+
+    def test_every_asset_icon_has_matching_svg(self):
+        """Wave 10.B: every ``asset:<key>`` string emitted by a plugin
+        must resolve to a real SVG file under
+        ``client/src/assets/icons/<folder>/<key>.svg``. Without this
+        invariant, a typo in a ``register_node(... icon="asset:foo")``
+        call silently renders no icon on the canvas — user sees an
+        empty slot instead of the intended logo."""
+        from pathlib import Path
+        import re
+        from models.node_metadata import NODE_METADATA
+
+        # Walk client/src/assets/icons/**/*.svg once; derive keys.
+        repo_root = Path(__file__).resolve().parents[2]
+        assets_dir = repo_root / "client" / "src" / "assets" / "icons"
+        assert assets_dir.is_dir(), f"icon assets dir not found at {assets_dir}"
+        svg_keys = {p.stem for p in assets_dir.rglob("*.svg")}
+
+        ASSET_RE = re.compile(r"^asset:([A-Za-z0-9_\-]+)$")
+        missing: list[str] = []
+        for node_type, meta in NODE_METADATA.items():
+            icon = meta.get("icon", "") or ""
+            m = ASSET_RE.match(icon)
+            if m and m.group(1) not in svg_keys:
+                missing.append(f"{node_type}.icon={icon!r}")
+        assert not missing, (
+            f"asset:<key> references with no matching SVG: {missing}. "
+            f"Drop the file at client/src/assets/icons/<folder>/<key>.svg."
+        )
 
     def test_api_key_fields_are_password_masked(self):
         """Every field named `apiKey` / `api_key` across every node's

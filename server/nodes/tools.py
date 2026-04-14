@@ -59,7 +59,7 @@ register_node(
     metadata={
         "displayName": "DuckDuckGo Search",
         "subtitle": "Free Web Search",
-        "icon": "🦆",
+        "icon": "asset:duckduckgo",
         "color": "#f1fa8c",
         "group": ["tool", "ai", "search"],
         "componentKind": "tool",

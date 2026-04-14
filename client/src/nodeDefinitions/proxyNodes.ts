@@ -1,8 +1,5 @@
 // Proxy Nodes - Proxy-aware HTTP requests and provider status
-import {
-  INodeTypeDescription,
-  NodeConnectionType
-} from '../types/INodeProperties';
+import { INodeTypeDescription, NodeConnectionType } from '../types/INodeProperties';
 
 // ============================================================================
 // PROXY NODES
@@ -12,7 +9,6 @@ export const proxyNodes: Record<string, INodeTypeDescription> = {
   proxyRequest: {
     displayName: 'Proxy Request',
     name: 'proxyRequest',
-    icon: '🛡',
     group: ['proxy', 'tool'],
     version: 1,
     description: 'Make HTTP requests through residential proxy providers with geo-targeting and failover',
@@ -31,7 +27,6 @@ export const proxyNodes: Record<string, INodeTypeDescription> = {
   proxyConfig: {
     displayName: 'Proxy Config',
     name: 'proxyConfig',
-    icon: '🔧',
     group: ['proxy', 'tool'],
     version: 1,
     description: 'Configure proxy providers and routing rules. Works as workflow node or AI Agent tool.',
@@ -50,7 +45,6 @@ export const proxyNodes: Record<string, INodeTypeDescription> = {
   proxyStatus: {
     displayName: 'Proxy Status',
     name: 'proxyStatus',
-    icon: '📊',
     group: ['proxy', 'tool'],
     version: 1,
     description: 'View proxy provider health, scores, and usage statistics',

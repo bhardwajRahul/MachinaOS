@@ -1,8 +1,5 @@
 // AI Agent Node Definitions - AI agents and AI processing components
-import {
-  INodeTypeDescription,
-  NodeConnectionType
-} from '../types/INodeProperties';
+import { INodeTypeDescription, NodeConnectionType } from '../types/INodeProperties';
 
 // ============================================================================
 // AI AGENT AND CHAT NODES
@@ -13,7 +10,6 @@ export const aiAgentNodes: Record<string, INodeTypeDescription> = {
   aiAgent: {
     displayName: 'AI Agent',
     name: 'aiAgent',
-    icon: '🤖',
     group: ['agent'],
     version: 1,
     subtitle: 'Tools Agent',
@@ -65,7 +61,6 @@ export const aiAgentNodes: Record<string, INodeTypeDescription> = {
   chatAgent: {
     displayName: 'Zeenie',
     name: 'chatAgent',
-    icon: '🧞',
     group: ['agent'],
     version: 1,
     subtitle: 'Your Personal Assistant',
@@ -118,7 +113,6 @@ export const aiAgentNodes: Record<string, INodeTypeDescription> = {
   simpleMemory: {
     displayName: 'Simple Memory',
     name: 'simpleMemory',
-    icon: '🧠',
     group: ['tool', 'memory'],  // 'tool' = appears in AI Tools category
     version: 1,
     description: 'Markdown-based conversation memory with optional vector DB for long-term retrieval',

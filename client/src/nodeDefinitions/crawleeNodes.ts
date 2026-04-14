@@ -1,16 +1,12 @@
 // Crawlee Web Scraping Node - Static & Browser-based scraping via Crawlee
 // Dual-purpose node: works as standalone workflow node AND AI Agent tool
 
-import {
-  INodeTypeDescription,
-  NodeConnectionType,
-} from '../types/INodeProperties';
+import { INodeTypeDescription, NodeConnectionType } from '../types/INodeProperties';
 
 export const crawleeNodes: Record<string, INodeTypeDescription> = {
   crawleeScraper: {
     displayName: 'Web Scraper',
     name: 'crawleeScraper',
-    icon: '🕷',
     group: ['api', 'tool'],
     version: 1,
     subtitle: 'Crawlee Scraper',

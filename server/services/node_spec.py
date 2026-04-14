@@ -91,28 +91,63 @@ def get_node_spec(node_type: str) -> Optional[dict[str, Any]]:
 
 
 def list_node_types_with_spec() -> list[str]:
-    """Stable sorted list of every node type that has at least an input
-    model or an output schema. Editor uses this on boot to know which
-    types it can probe without 404s."""
+    """Stable sorted list of every node type the backend knows about —
+    either via an input model, an output schema, or a `register_node()`
+    metadata entry. The editor uses this on boot to prefetch every spec
+    (including visual-only nodes like `simpleMemory` that have metadata
+    but no Pydantic schemas)."""
 
-    return sorted(set(NODE_INPUT_MODELS.keys()) | set(NODE_OUTPUT_SCHEMAS.keys()))
+    from models.node_metadata import NODE_METADATA
+    return sorted(
+        set(NODE_INPUT_MODELS.keys())
+        | set(NODE_OUTPUT_SCHEMAS.keys())
+        | set(NODE_METADATA.keys())
+    )
 
 
-def list_node_groups() -> dict[str, list[str]]:
-    """Wave 6 Phase 5: invert the per-spec ``group`` arrays into a
-    {group_name: [node_type, ...]} index. Replaces the 34 hand-rolled
-    ``*_NODE_TYPES`` arrays scattered across the frontend.
+def list_node_groups() -> dict[str, dict[str, Any]]:
+    """Per-group index for the component palette.
 
-    Editor consumers (`useNodeGroup('tool')`, palette filters, console
-    sink detection, etc.) read from a single TanStack Query backed by
-    this endpoint instead of importing per-category constants.
+    Wave 10.B shape::
+
+        {
+          "agent":   {"types": [...], "label": "AI Agents",
+                      "icon": "🤖", "color": "#bd93f9",
+                      "visibility": "normal"},
+          "model":   {"types": [...], ...},
+          ...
+        }
+
+    `types` is the sorted list of node types belonging to the group
+    (replaces the 34 hand-rolled `*_NODE_TYPES` arrays scattered across
+    the frontend). Remaining keys come from
+    ``models.node_metadata.GROUP_METADATA`` and make the palette's
+    section headers fully backend-driven — icon, label, color, and
+    "normal"-vs-"dev" visibility are all declared in
+    ``server/nodes/groups.py``.
+
+    When a group has nodes but no metadata seeded, the entry falls back
+    to the raw key as label with no icon/color; the frontend can still
+    render it safely.
     """
+    from models.node_metadata import get_group_metadata
 
-    index: dict[str, set[str]] = {}
+    types_by_group: dict[str, set[str]] = {}
     for node_type in list_node_types_with_spec():
         spec = get_node_spec(node_type)
         if not spec:
             continue
         for group in spec.get("group", []):
-            index.setdefault(group, set()).add(node_type)
-    return {group: sorted(types) for group, types in sorted(index.items())}
+            types_by_group.setdefault(group, set()).add(node_type)
+
+    result: dict[str, dict[str, Any]] = {}
+    for group, type_set in sorted(types_by_group.items()):
+        meta = get_group_metadata(group) or {}
+        result[group] = {
+            "types": sorted(type_set),
+            "label": meta.get("label") or group,
+            "icon": meta.get("icon", ""),
+            "color": meta.get("color", ""),
+            "visibility": meta.get("visibility", "dev"),
+        }
+    return result

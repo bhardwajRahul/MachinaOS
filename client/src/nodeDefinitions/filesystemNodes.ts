@@ -5,7 +5,6 @@ export const filesystemNodes: Record<string, INodeTypeDescription> = {
   fileRead: {
     displayName: 'File Read',
     name: 'fileRead',
-    icon: '\u{1F4C4}',
     group: ['utility', 'tool'],
     version: 1,
     subtitle: 'Read File',
@@ -23,7 +22,6 @@ export const filesystemNodes: Record<string, INodeTypeDescription> = {
   fileModify: {
     displayName: 'File Modify',
     name: 'fileModify',
-    icon: '\u{270F}\u{FE0F}',
     group: ['utility', 'tool'],
     version: 1,
     subtitle: 'Write / Edit File',
@@ -41,7 +39,6 @@ export const filesystemNodes: Record<string, INodeTypeDescription> = {
   shell: {
     displayName: 'Shell',
     name: 'shell',
-    icon: '\u{1F4BB}',
     group: ['utility', 'tool'],
     version: 1,
     subtitle: 'Execute Command',
@@ -59,7 +56,6 @@ export const filesystemNodes: Record<string, INodeTypeDescription> = {
   fsSearch: {
     displayName: 'FS Search',
     name: 'fsSearch',
-    icon: '\u{1F50D}',
     group: ['utility', 'tool'],
     version: 1,
     subtitle: 'List / Glob / Grep',

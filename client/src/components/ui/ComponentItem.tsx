@@ -1,155 +1,70 @@
 import React, { useState } from 'react';
-import { useAppTheme } from '../../hooks/useAppTheme';
+import { GripVertical } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { Card } from '@/components/ui/card';
 import { INodeTypeDescription } from '../../types/INodeProperties';
+import { resolveIcon, resolveLibraryIcon, isImageIcon as isImage } from '../../assets/icons';
+import { useNodeSpec } from '../../lib/nodeSpec';
 
 interface ComponentItemProps {
   definition: INodeTypeDescription;
   onDragStart: (event: React.DragEvent, definition: INodeTypeDescription) => void;
 }
 
-const ComponentItem: React.FC<ComponentItemProps> = ({ definition, onDragStart }) => {
-  const theme = useAppTheme();
+const ComponentItem: React.FC<ComponentItemProps> = ({ definition: localDefinition, onDragStart }) => {
   const [isDragging, setIsDragging] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
 
-  // Helper to get colors from new interface format
-  const getNodeColor = () => definition.defaults.color || '#9E9E9E';
+  // Wave 10.B: subscribe to the backend NodeSpec cache so the palette
+  // icon populates the moment prefetch lands. Icon + color come from
+  // the spec; display fields fall back to the bundled definition.
+  const spec = useNodeSpec(localDefinition.name);
+  const definition = localDefinition;
+  const iconRaw = spec?.icon ?? definition.icon;
 
-  // Check if icon is an image URL or data URI (including SVG data URIs for Google icons)
-  const isImageIcon = () => {
-    const icon = definition.icon;
-    return icon && (icon.startsWith('data:') || icon.startsWith('http') || icon.startsWith('/'));
-  };
-  const getIconBackground = () => isImageIcon() ? theme.colors.backgroundAlt : getNodeColor();
-  const getBorderColor = () => {
-    // Create a darker shade for border
-    const color = getNodeColor();
-    // Simple color darkening - could be enhanced
-    if (color.startsWith('#')) {
-      const hex = color.substring(1);
-      const r = Math.max(0, parseInt(hex.substring(0, 2), 16) - 40);
-      const g = Math.max(0, parseInt(hex.substring(2, 4), 16) - 40);
-      const b = Math.max(0, parseInt(hex.substring(4, 6), 16) - 40);
-      return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
-    }
-    return color;
-  };
+  const LibIcon = resolveLibraryIcon(iconRaw);
+  const resolvedIcon = LibIcon ? null : resolveIcon(iconRaw);
+  const iconIsImage = !!resolvedIcon && isImage(resolvedIcon);
 
   return (
-    <div
+    <Card
+      size="sm"
       draggable
       onDragStart={(e) => {
         setIsDragging(true);
-        onDragStart(e, definition);
+        onDragStart(e, localDefinition);
       }}
       onDragEnd={() => setIsDragging(false)}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      style={{
-        padding: '12px',
-        backgroundColor: theme.colors.background,
-        border: `2px solid ${isHovered ? getBorderColor() : theme.colors.border}`,
-        borderRadius: theme.borderRadius.lg,
-        cursor: 'grab',
-        transition: `all ${theme.transitions.fast}`,
-        display: 'flex',
-        alignItems: 'center',
-        gap: '12px',
-        boxShadow: isHovered
-          ? theme.isDarkMode
-            ? `0 4px 12px ${getNodeColor()}25, 0 0 0 1px ${getNodeColor()}15`
-            : `0 4px 12px ${getNodeColor()}30, 0 0 0 1px ${getNodeColor()}20`
-          : theme.isDarkMode
-            ? `0 1px 3px ${theme.colors.shadowLight}`
-            : `0 1px 4px rgba(0,0,0,0.08)`,
-        transform: isHovered ? 'translateY(-2px) scale(1.02)' : 'translateY(0)',
-        opacity: isDragging ? 0.5 : 1,
-        fontFamily: 'system-ui, sans-serif',
-        position: 'relative',
-        overflow: 'hidden',
-      }}
+      className={cn(
+        'group relative flex-row items-center gap-3 px-3 py-2 cursor-grab select-none',
+        'transition-all duration-150 ease-out',
+        'hover:-translate-y-0.5 hover:ring-2 hover:ring-foreground/15 hover:shadow-md',
+        isDragging && 'opacity-50',
+      )}
     >
-      {/* Gradient Background on Hover */}
-      <div style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: theme.isDarkMode
-          ? `linear-gradient(135deg, ${getNodeColor()}08 0%, ${getNodeColor()}12 100%)`
-          : `linear-gradient(135deg, ${getNodeColor()}06 0%, ${getNodeColor()}12 100%)`,
-        opacity: isHovered ? 1 : 0,
-        transition: `opacity ${theme.transitions.fast}`,
-        pointerEvents: 'none',
-      }} />
-
-      {/* Icon */}
-      <div
-        style={{
-          fontSize: '18px',
-          width: '36px',
-          height: '36px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          borderRadius: theme.borderRadius.md,
-          backgroundColor: getIconBackground(),
-          boxShadow: `0 2px 4px ${getNodeColor()}30`,
-          flexShrink: 0,
-          position: 'relative',
-          zIndex: 1,
-        }}
-      >
-        {isImageIcon() ? (
-          <img src={definition.icon} alt="" style={{ width: '20px', height: '20px', objectFit: 'contain' }} />
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted text-lg ring-1 ring-foreground/10">
+        {LibIcon ? (
+          <LibIcon size={20} />
+        ) : iconIsImage ? (
+          <img src={resolvedIcon!} alt="" className="h-5 w-5 object-contain" />
         ) : (
-          definition.icon || '📦'
+          <span>{resolvedIcon || '📦'}</span>
         )}
       </div>
 
-      {/* Content */}
-      <div style={{
-        flex: 1,
-        overflow: 'hidden',
-        position: 'relative',
-        zIndex: 1,
-      }}>
-        <div style={{
-          fontWeight: theme.fontWeight.medium,
-          fontSize: theme.fontSize.base,
-          color: theme.colors.text,
-          marginBottom: '2px',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-        }}>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-medium text-foreground">
           {definition.displayName}
         </div>
-        <div style={{
-          fontSize: theme.fontSize.xs,
-          color: theme.colors.textSecondary,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          lineHeight: '1.3',
-        }}>
+        <div className="truncate text-xs leading-tight text-muted-foreground">
           {definition.description}
         </div>
       </div>
 
-      {/* Drag Indicator */}
-      <div style={{
-        fontSize: '14px',
-        color: theme.colors.textSecondary,
-        opacity: isHovered ? 0.6 : 0.3,
-        transition: `opacity ${theme.transitions.fast}`,
-        position: 'relative',
-        zIndex: 1,
-      }}>
-        ⋮⋮
-      </div>
-    </div>
+      <GripVertical
+        className="h-4 w-4 shrink-0 text-muted-foreground opacity-30 transition-opacity group-hover:opacity-60"
+        aria-hidden
+      />
+    </Card>
   );
 };
 

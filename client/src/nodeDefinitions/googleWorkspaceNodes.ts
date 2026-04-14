@@ -1,17 +1,8 @@
 // Google Workspace Node Definitions - Consolidated nodes for Gmail, Calendar, Drive, Sheets, Tasks, Contacts
 // Each node uses an operation selector pattern with displayOptions.show for conditional parameters
-import {
-  INodeTypeDescription,
-  NodeConnectionType
-} from '../types/INodeProperties';
-import {
-  GMAIL_ICON,
-  CALENDAR_ICON,
-  DRIVE_ICON,
-  SHEETS_ICON,
-  TASKS_ICON,
-  CONTACTS_ICON
-} from '../assets/icons/google';
+import { INodeTypeDescription, NodeConnectionType } from '../types/INodeProperties';
+
+// Wave 10.B: icons resolved from asset:<key> via assets/icons/google/*.svg.
 
 // Wave 8: ACCOUNT_MODE_PROPERTY + CUSTOMER_ID_PROPERTY moved to backend
 // (each Google* Pydantic model carries account_mode + customer_id with
@@ -24,7 +15,6 @@ import {
 export const gmailNode: INodeTypeDescription = {
   displayName: 'Gmail',
   name: 'gmail',
-  icon: GMAIL_ICON,
   group: ['google', 'tool'],
   version: 1,
   subtitle: 'Email Operations',
@@ -61,7 +51,6 @@ export const gmailNode: INodeTypeDescription = {
 export const gmailReceiveNode: INodeTypeDescription = {
   displayName: 'Gmail Receive',
   name: 'gmailReceive',
-  icon: GMAIL_ICON,
   group: ['google', 'trigger'],
   version: 1,
   subtitle: 'On New Email',
@@ -85,7 +74,6 @@ export const gmailReceiveNode: INodeTypeDescription = {
 export const calendarNode: INodeTypeDescription = {
   displayName: 'Calendar',
   name: 'calendar',
-  icon: CALENDAR_ICON,
   group: ['google', 'tool'],
   version: 1,
   subtitle: 'Calendar Events',
@@ -122,7 +110,6 @@ export const calendarNode: INodeTypeDescription = {
 export const driveNode: INodeTypeDescription = {
   displayName: 'Drive',
   name: 'drive',
-  icon: DRIVE_ICON,
   group: ['google', 'tool'],
   version: 1,
   subtitle: 'File Operations',
@@ -159,7 +146,6 @@ export const driveNode: INodeTypeDescription = {
 export const sheetsNode: INodeTypeDescription = {
   displayName: 'Sheets',
   name: 'sheets',
-  icon: SHEETS_ICON,
   group: ['google', 'tool'],
   version: 1,
   subtitle: 'Spreadsheet Operations',
@@ -196,7 +182,6 @@ export const sheetsNode: INodeTypeDescription = {
 export const tasksNode: INodeTypeDescription = {
   displayName: 'Tasks',
   name: 'tasks',
-  icon: TASKS_ICON,
   group: ['google', 'tool'],
   version: 1,
   subtitle: 'Task Management',
@@ -233,7 +218,6 @@ export const tasksNode: INodeTypeDescription = {
 export const contactsNode: INodeTypeDescription = {
   displayName: 'Contacts',
   name: 'contacts',
-  icon: CONTACTS_ICON,
   group: ['google', 'tool'],
   version: 1,
   subtitle: 'Contact Management',

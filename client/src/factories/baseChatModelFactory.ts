@@ -10,7 +10,6 @@ import {
 export interface ChatModelConfig {
   providerId: string;
   displayName: string;
-  icon: string;
   color: string;
   description: string;
   nodeName?: string;
@@ -20,7 +19,7 @@ export function createBaseChatModel(config: ChatModelConfig): INodeTypeDescripti
   return {
     displayName: `${config.displayName} Chat Model`,
     name: config.nodeName || `${config.providerId}ChatModel`,
-    icon: config.icon,
+    // Wave 10.B: icon comes from the backend NodeSpec.
     group: ['model'],
     version: 1,
     subtitle: '={{$parameter["model"]}}',

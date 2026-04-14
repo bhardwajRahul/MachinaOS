@@ -6,8 +6,8 @@ import AIAgentExecutionService from '../services/execution/aiAgentExecutionServi
 import { useAppTheme } from '../hooks/useAppTheme';
 import { useNodeStatus } from '../contexts/WebSocketContext';
 import { dracula } from '../styles/theme';
-import { ClaudeIcon } from './icons/AIProviderIcons';
-import { getCachedNodeSpec } from '../lib/nodeSpec';
+import { useNodeSpec } from '../lib/nodeSpec';
+import { resolveIcon, resolveLibraryIcon } from '../assets/icons';
 
 // LangGraph phase icons and labels. Colors reference the dracula token
 // constants so a future palette change in tokens.css propagates without
@@ -34,17 +34,19 @@ interface SpecHandle {
   role?: string;
 }
 
-// Minimal icon resolver. Wave 10.B will replace this with a shared
-// IconResolver + ICON_REGISTRY. For now the only React-component icon
-// is Claude Code; everything else is a plain emoji/string.
+// Wave 10.B: schema-driven icon dispatch via the shared resolver.
+// No frontend fallback — if resolution returns null the node's plugin
+// metadata is missing an icon, which surfaces as a visible gap rather
+// than a masking emoji.
 const renderIcon = (icon?: string): React.ReactNode => {
-  if (!icon) return <span style={{ fontSize: '28px' }}>🤖</span>;
-  if (icon === 'asset:claude') return <ClaudeIcon size={28} />;
-  if (icon.startsWith('asset:') || icon.startsWith('data:')) {
-    // Asset keys other than 'claude' not yet registered; fall back.
-    return <span style={{ fontSize: '28px' }}>🔧</span>;
+  const LibIcon = resolveLibraryIcon(icon);
+  if (LibIcon) return <LibIcon size={28} />;
+  const resolved = resolveIcon(icon);
+  if (!resolved) return null;
+  if (resolved.startsWith('http') || resolved.startsWith('data:') || resolved.startsWith('/')) {
+    return <img src={resolved} alt="icon" style={{ width: 28, height: 28, objectFit: 'contain' }} />;
   }
-  return <span style={{ fontSize: '28px' }}>{icon}</span>;
+  return <span style={{ fontSize: '28px' }}>{resolved}</span>;
 };
 
 const REACT_POSITION: Record<SpecHandle['position'], Position> = {
@@ -64,7 +66,7 @@ const AIAgentNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
   // NodeSpec envelope (server/nodes/agents.py → register_node()). The
   // component only knows how to render whatever topology the spec
   // declares.
-  const spec = getCachedNodeSpec(type || 'aiAgent');
+  const spec = useNodeSpec(type || 'aiAgent');
   const handles: SpecHandle[] = (spec?.handles as SpecHandle[] | undefined) ?? [];
   const accentColor = spec?.color || dracula.purple;
   const width = (spec?.uiHints as any)?.width ?? 300;

@@ -1,6 +1,6 @@
 # Schema source of truth — RFC
 
-**Status:** ✅ **implemented + extended to NodeSpec** · **Owner:** frontend + backend platform · **Original landing:** 2026-04-14 (output schemas) · **Wave 6 extension:** 2026-04-15+ (full NodeSpec contract)
+**Status:** ✅ **implemented + extended to full plugin registry** · **Owner:** frontend + backend platform · **Landing:** 2026-04-14 (output schemas) → **Wave 6** (NodeSpec contract) → **Wave 10** (plugin pattern + visual contract + icons, 2026-04-15)
 
 ## Landed outcome (Wave 3 — output schemas)
 
@@ -156,11 +156,132 @@ Phase 6 (`ParameterRenderer` → DIY widget registry) was blocked on the backend
 - Build-time codegen of TypeScript types from the backend schemas (Nango's pattern) — deferred. The frontend reads schemas as plain JSON; typed inference on top would be nice-to-have but isn't load-bearing.
 - Versioning of schemas per node-type version — deferred. All current node types are v1; add `{version}` to the URL path the first time we bump.
 
+## Wave 10 — plugin pattern + visual contract
+
+Wave 6 made the backend authoritative for node schemas. Wave 10 closed the
+remaining tribal-code paths so **adding a new node = one Python file, zero
+frontend edits**.
+
+### 10.A — Visual contract extended
+
+`NodeMetadata` TypedDict in [server/models/node_metadata.py](../server/models/node_metadata.py)
+gains the fields the frontend previously hardcoded:
+
+- `color` (hex / dracula token)
+- `componentKind` (`square` / `circle` / `trigger` / `start` / `agent` / `chat` / `tool` / `model` / `generic`)
+- `handles: NodeHandle[]` — full React Flow topology (replaces the 400-line
+  `AGENT_CONFIGS` map in `AIAgentNode.tsx`)
+- `credentials`, `hideOutputHandle`, `visibility`
+
+Each field flows through `get_node_spec()` into the `/api/schemas/nodes/{type}/spec.json`
+envelope, so every consumer (React Flow dispatch, parameter panel, palette)
+reads from one source.
+
+### 10.C — `@register_node` decorator
+
+[server/services/node_registry.register_node(...)](../server/services/node_registry.py)
+writes to four registries atomically: `NODE_METADATA`, `_DIRECT_MODELS`,
+`NODE_OUTPUT_SCHEMAS`, `_HANDLER_REGISTRY`. `server/nodes/__init__.py` walks
+`server/nodes/*.py` submodules at import time via `pkgutil.iter_modules`,
+so plugin registration is side-effect at startup. 106/111 node types migrated
+to this path (the remaining 5 are output-only legacy aliases).
+
+**New node checklist (post-Wave-10):**
+
+```python
+# server/nodes/my_node.py
+from typing import Literal
+from pydantic import Field
+from models.nodes import BaseNodeParams
+from services.node_registry import register_node
+
+class MyParams(BaseNodeParams):
+    type: Literal["myNode"]
+    query: str = Field(default="", json_schema_extra={"placeholder": "Search..."})
+
+async def handle_my_node(node_id, node_type, params, context):
+    return {"success": True, "result": {...}}
+
+register_node(
+    type="myNode",
+    metadata={
+        "displayName": "My Node",
+        "icon": "asset:my_icon",          # or "lobehub:<brand>" or emoji
+        "group": ["tool"],
+        "color": "#8be9fd",
+        "componentKind": "square",
+        "handles": [...],                 # full topology
+        "description": "...",
+        "version": 1,
+    },
+    input_model=MyParams,
+    handler=handle_my_node,
+)
+```
+
+Zero edits elsewhere.
+
+### 10.B — Icon wire format + resolver
+
+Backend icons follow n8n's prefix-dispatch convention. The resolver at
+[client/src/assets/icons/index.ts](../client/src/assets/icons/index.ts)
+handles every source:
+
+| Prefix | Source | Example |
+|---|---|---|
+| `asset:<key>` | Filesystem SVG; Vite `import.meta.glob` over `client/src/assets/icons/**/*.svg`. Key is filename minus `.svg`. | `asset:gmail` |
+| `<lib>:<brand>` | NPM icon package. `ICON_LIBRARIES` dispatch table with `lobehub` registered. Case-insensitive brand lookup — names come from the package's own exports. | `lobehub:claude` |
+| `data:` / `http(s)://` / `/…` | URL passthrough | — |
+| plain text | emoji / short label | `🤖` |
+
+Frontend consumers call `resolveLibraryIcon(icon)` first (returns a React
+component) then `resolveIcon(icon)` (returns string / data URI). Consumers
+use the `useNodeSpec(type)` reactive hook so icons populate the moment the
+prefetch lands. **No frontend fallbacks**: a missing icon is a backend bug,
+not something to mask.
+
+Group-palette metadata follows the same pattern via
+[server/nodes/groups.py](../server/nodes/groups.py): 25 palette groups each
+declaring `{label, icon, color, visibility}`. Retires the frontend's
+`CATEGORY_ICONS` / `labelMap` / `colorMap` / `SIMPLE_MODE_CATEGORIES` tables.
+
+### 10.G — Parameter panel fully spec-driven
+
+- `ParameterRenderer.tsx` gains `case 'code'` + `case 'dateTime'` + generic
+  `loadOptionsMethod` dispatch via the backend `load_options` WS handler
+  (unlocking the 4 Google Workspace dynamic-option loaders that were
+  previously unreachable). `displayOptions.show` now propagates into nested
+  `fixedCollection` renders. Password masking wins over multi-row textarea.
+- `MiddleSection` / `InputSection` / `SquareNode` / `ParameterPanel` retire
+  the last 14 hardcoded type-array fallbacks (`TRIGGER_NODE_TYPES`,
+  `AGENT_WITH_SKILLS_TYPES`, `SKILL_NODE_TYPES`, etc.). Every widget
+  decision reads a uiHint or handle-topology fact declared by the node's
+  own plugin module.
+- `nodeDefinitions/*.ts` files strip every `icon:` field (−272 LOC) — 
+  backend is sole declaration site. `INodeTypeDescription.icon` narrowed
+  to `icon?: string`.
+
+### Contract invariants (108 pytest in `tests/test_node_spec.py`)
+
+`TestWave10GContractInvariants` enforces:
+
+- every agent-kind node has `uiHints.hasSkills`
+- every tool-kind node has `uiHints.isToolPanel`
+- every Google Workspace node has a field gated by
+  `displayOptions.show.operation`
+- every code executor emits `editor: "code"` on its `code` field
+- every `api_key` / `apiKey` field emits `password: True`
+- every `asset:<key>` icon resolves to a real SVG under
+  `client/src/assets/icons/`
+- every palette group carries non-empty label + icon
+
 ## References
 
 - [n8n `schemaPreview.api.ts`](https://github.com/n8n-io/n8n/blob/master/packages/frontend/editor-ui/src/features/ndv/runData/schemaPreview.api.ts)
 - [n8n `VirtualSchema.vue`](https://github.com/n8n-io/n8n/blob/master/packages/frontend/editor-ui/src/features/ndv/runData/components/VirtualSchema.vue)
 - [n8n `nodeTypes.store.ts`](https://github.com/n8n-io/n8n/blob/master/packages/frontend/editor-ui/src/app/stores/nodeTypes.store.ts)
+- [n8n node-icon conventions](https://docs.n8n.io/integrations/creating-nodes/build/reference/node-base-files/icons/) — `file:` + `fa:` prefix-dispatch which Wave 10.B generalises
 - [Activepieces `piece-metadata.ts`](https://github.com/activepieces/activepieces/blob/main/packages/pieces/framework/src/lib/piece-metadata.ts)
 - [Activepieces `action.ts`](https://github.com/activepieces/activepieces/blob/main/packages/pieces/framework/src/lib/action/action.ts)
 - [Nango `nangoYaml/index.ts`](https://github.com/NangoHQ/nango/blob/master/packages/types/lib/nangoYaml/index.ts)
+- [@lobehub/icons](https://github.com/lobehub/lobe-icons) — the default `<lib>:<brand>` target for AI provider brand logos

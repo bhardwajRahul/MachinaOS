@@ -1,14 +1,10 @@
 // Utility Nodes - HTTP Request, Webhooks
-import {
-  INodeTypeDescription,
-  NodeConnectionType
-} from '../types/INodeProperties';
+import { INodeTypeDescription, NodeConnectionType } from '../types/INodeProperties';
 
 export const utilityNodes: Record<string, INodeTypeDescription> = {
   httpRequest: {
     displayName: 'HTTP Request',
     name: 'httpRequest',
-    icon: '🌐',
     group: ['utility', 'tool'],
     version: 1,
     description: 'Make HTTP requests to external APIs',
@@ -34,7 +30,6 @@ export const utilityNodes: Record<string, INodeTypeDescription> = {
   webhookTrigger: {
     displayName: 'Webhook Trigger',
     name: 'webhookTrigger',
-    icon: '🪝',
     group: ['trigger'],
     version: 1,
     description: 'Start workflow when HTTP request is received',
@@ -55,7 +50,6 @@ export const utilityNodes: Record<string, INodeTypeDescription> = {
   webhookResponse: {
     displayName: 'Webhook Response',
     name: 'webhookResponse',
-    icon: '↩️',
     group: ['utility'],
     version: 1,
     description: 'Send response back to webhook caller',
@@ -71,7 +65,6 @@ export const utilityNodes: Record<string, INodeTypeDescription> = {
   chatTrigger: {
     displayName: 'Chat Trigger',
     name: 'chatTrigger',
-    icon: '💬',
     group: ['utility', 'trigger'],
     version: 1,
     description: 'Trigger workflow when user sends a chat message from the console input',
@@ -91,7 +84,6 @@ export const utilityNodes: Record<string, INodeTypeDescription> = {
   console: {
     displayName: 'Console',
     name: 'console',
-    icon: '🖥️',
     group: ['utility'],
     version: 1,
     description: 'Log data to console panel for debugging during execution',
@@ -110,7 +102,6 @@ export const utilityNodes: Record<string, INodeTypeDescription> = {
   teamMonitor: {
     displayName: 'Team Monitor',
     name: 'teamMonitor',
-    icon: '📊',
     group: ['utility', 'agent'],
     version: 1,
     description: 'Monitor agent team operations, tasks, and messages in real-time',

@@ -12,6 +12,7 @@
  * See C:\\Users\\Tgroh\\.claude\\plans\\typed-splashing-crown.md.
  */
 
+import { useQuery } from '@tanstack/react-query';
 import { nodeSpecToDescription, type NodeSpec } from '../adapters/nodeSpecToDescription';
 import type { INodeTypeDescription } from '../types/INodeProperties';
 import { featureFlags } from './featureFlags';
@@ -60,19 +61,60 @@ export async function prefetchAllNodeSpecs(sendRequest: SendRequest): Promise<vo
 }
 
 /**
- * Synchronous read of a previously-cached NodeSpec. Used by flag-gated
- * render paths that need a description on-demand without suspending.
- * Returns `null` if not yet fetched.
- *
- * Reactivity: Dashboard's `prefetchAllNodeSpecs` warms every spec on
- * WebSocket connect, before any node mounts. Consumer components call
- * this on every render; React Flow re-renders nodes on viewport /
- * selection / parameter changes, which gives the spec a chance to
- * arrive. If you need eager reactivity, wrap with `useQuery` using
- * the shared `nodeSpecQueryKey(type)`.
+ * Synchronous read of a previously-cached NodeSpec. Used by the
+ * non-reactive merge helpers (`resolveNodeDescription`,
+ * `isNodeInBackendGroup`). Prefer `useNodeSpec` in React components
+ * so the render updates when prefetch lands.
  */
 export function getCachedNodeSpec(nodeType: string): NodeSpec | null {
   return queryClient.getQueryData<NodeSpec | null>(nodeSpecQueryKey(nodeType)) ?? null;
+}
+
+/**
+ * Reactive spec subscription. Uses TanStack Query so the component
+ * re-renders when the prefetch warms the cache. No extra network
+ * traffic — `prefetchAllNodeSpecs` populates the cache at WS connect;
+ * this hook just subscribes.
+ */
+export function useNodeSpec(nodeType: string | undefined | null): NodeSpec | null {
+  const { data } = useQuery<NodeSpec | null>({
+    queryKey: nodeSpecQueryKey(nodeType ?? '__none__'),
+    queryFn: () => null,
+    enabled: false,
+    staleTime: Infinity,
+  });
+  return data ?? null;
+}
+
+/** Wire shape for one entry in the GET /api/schemas/nodes/groups
+ *  response (Wave 10.B): per-group palette metadata + member types. */
+export interface NodeGroupEntry {
+  types: string[];
+  label: string;
+  icon: string;
+  color: string;
+  visibility: 'all' | 'normal' | 'dev';
+}
+
+export const nodeGroupsQueryKey = ['nodeGroups'] as const;
+
+/**
+ * Wave 10.B: fetch the full per-group palette index from the backend.
+ * Cached forever (group metadata only changes with a redeploy). The
+ * frontend ComponentPalette consumes this directly — no hand-rolled
+ * `CATEGORY_ICONS` / `labelMap` / `SIMPLE_MODE_CATEGORIES` tables.
+ */
+export async function fetchNodeGroups(
+  sendRequest: SendRequest,
+): Promise<Record<string, NodeGroupEntry>> {
+  return queryClient.fetchQuery({
+    queryKey: nodeGroupsQueryKey,
+    queryFn: async () => {
+      const response = await sendRequest('get_node_groups', {});
+      return (response?.groups ?? {}) as Record<string, NodeGroupEntry>;
+    },
+    staleTime: Infinity,
+  });
 }
 
 /**
@@ -187,22 +229,19 @@ export function resolveNodeDescription(
     return merged;
   });
 
-  // Top-level UX-field fallback: frontend owns visual assets (SVG data
-  // URIs in nodeDefinitions/assets/icons/, provider brand colors) — backend
-  // NODE_METADATA carries empty strings for these to avoid duplicating SVG
-  // payload across the wire. Fall back to local when backend is empty so
-  // slimmed nodes keep their SVG icons and color swatches.
-  const pick = <T,>(bv: T | undefined, lv: T | undefined): T | undefined =>
-    bv !== undefined && bv !== null && bv !== '' ? bv : lv;
+  // Wave 10.B: backend NodeSpec is the sole source for top-level
+  // visual metadata (icon, subtitle, description, color). Local
+  // nodeDefinitions/*.ts entries carry no icons anymore, so we just
+  // pass the backend values through and only preserve local
+  // `defaults.color` when the backend doesn't declare one — color is
+  // the last remaining UX field that a few specialised agent configs
+  // still set locally.
   return {
     ...backend,
-    icon: pick(backend.icon, localFallback.icon) ?? '',
-    subtitle: pick(backend.subtitle, localFallback.subtitle),
-    description: pick(backend.description, localFallback.description) ?? '',
     defaults: {
       ...localFallback.defaults,
       ...backend.defaults,
-      color: pick(backend.defaults?.color, localFallback.defaults?.color),
+      color: backend.defaults?.color || localFallback.defaults?.color,
     },
     properties: mergedProperties,
   };

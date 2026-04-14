@@ -111,7 +111,7 @@ register_node(type="payments_agent",     metadata={"displayName": "Payments Agen
 register_node(type="consumer_agent",     metadata={"displayName": "Consumer Agent",     "subtitle": "Consumer Support",      "icon": "🛒", "color": "#bd93f9", "group": ["agent"], "componentKind": "agent", "handles": _std_handles(), "description": "AI agent for consumer interactions", "version": 1, "uiHints": _STD_AGENT_HINTS})
 register_node(type="autonomous_agent",   metadata={"displayName": "Autonomous Agent",   "subtitle": "Autonomous Ops",        "icon": "🎯", "color": "#bd93f9", "group": ["agent"], "componentKind": "agent", "handles": _std_handles(), "description": "Autonomous agent using Code Mode patterns", "version": 1, "uiHints": _STD_AGENT_HINTS})
 register_node(type="rlm_agent",          metadata={"displayName": "RLM Agent",          "subtitle": "Recursive Reasoning",   "icon": "🧠", "color": "#ffb86c", "group": ["agent"], "componentKind": "agent", "handles": _std_handles(), "description": "Recursive Language Model agent (REPL-based)", "version": 1, "uiHints": _STD_AGENT_HINTS})
-register_node(type="claude_code_agent",  metadata={"displayName": "Claude Code",        "subtitle": "Agentic Coding",        "icon": "asset:claude", "color": "#8be9fd", "group": ["agent"], "componentKind": "agent", "handles": _std_handles(), "description": "Claude Code CLI as a specialized agent", "version": 1, "uiHints": _STD_AGENT_HINTS})
+register_node(type="claude_code_agent",  metadata={"displayName": "Claude Code",        "subtitle": "Agentic Coding",        "icon": "lobehub:Claude", "color": "#8be9fd", "group": ["agent"], "componentKind": "agent", "handles": _std_handles(), "description": "Claude Code CLI as a specialized agent", "version": 1, "uiHints": _STD_AGENT_HINTS})
 
 
 # -- Team leads (Skill / Tool / Teammates bottom handles) --------------------
@@ -172,7 +172,7 @@ register_node(
     metadata={
         "displayName": "Social Receive",
         "subtitle": "Normalize Message",
-        "icon": "📡",
+        "icon": "asset:social",
         "color": "#bd93f9",
         "group": ["social"],
         "componentKind": "agent",  # Uses AIAgentNode component for multi-handle rendering
@@ -193,7 +193,7 @@ register_node(
     metadata={
         "displayName": "Social Send",
         "subtitle": "Send Message",
-        "icon": "📤",
+        "icon": "asset:social",
         "color": "#bd93f9",
         "group": ["social", "tool"],
         "componentKind": "agent",

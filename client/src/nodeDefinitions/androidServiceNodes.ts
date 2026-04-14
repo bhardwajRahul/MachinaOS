@@ -1,8 +1,5 @@
 // Android Service Nodes - Individual nodes for each Android system service
-import {
-  INodeTypeDescription,
-  NodeConnectionType
-} from '../types/INodeProperties';
+import { INodeTypeDescription, NodeConnectionType } from '../types/INodeProperties';
 import { API_CONFIG } from '../config/api';
 
 // ============================================================================
@@ -14,7 +11,6 @@ function createAndroidServiceNode(config: {
   name: string;
   displayName: string;
   serviceId: string;
-  icon: string;
   color: string;
   group: string[];
   description: string;
@@ -35,7 +31,6 @@ function createAndroidServiceNode(config: {
   return {
     displayName: config.displayName,
     name: config.name,
-    icon: config.icon,
     group: config.group,
     version: 1,
     subtitle: `Android ${config.group[1]} Service`,
@@ -101,7 +96,6 @@ export const androidServiceNodes: Record<string, INodeTypeDescription> = {
     name: 'batteryMonitor',
     displayName: 'Battery Monitor',
     serviceId: 'battery',
-    icon: '🔋',
     color: '#4CAF50',
     group: ['android', 'monitoring'],
     description: 'Monitor battery status, level, charging state, temperature, and health',
@@ -112,7 +106,6 @@ export const androidServiceNodes: Record<string, INodeTypeDescription> = {
     name: 'networkMonitor',
     displayName: 'Network Monitor',
     serviceId: 'network',
-    icon: '📡',
     color: '#2196F3',
     group: ['android', 'monitoring'],
     description: 'Monitor network connectivity status, type, and internet availability',
@@ -123,7 +116,6 @@ export const androidServiceNodes: Record<string, INodeTypeDescription> = {
     name: 'systemInfo',
     displayName: 'System Info',
     serviceId: 'system_info',
-    icon: '📱',
     color: '#9C27B0',
     group: ['android', 'monitoring'],
     description: 'Get device and OS information including Android version, API level, memory, and hardware details',
@@ -134,7 +126,6 @@ export const androidServiceNodes: Record<string, INodeTypeDescription> = {
     name: 'location',
     displayName: 'Location',
     serviceId: 'location',
-    icon: '📍',
     color: '#F44336',
     group: ['android', 'monitoring'],
     description: 'GPS location tracking with latitude, longitude, accuracy, and provider information',
@@ -149,7 +140,6 @@ export const androidServiceNodes: Record<string, INodeTypeDescription> = {
     name: 'appLauncher',
     displayName: 'App Launcher',
     serviceId: 'app_launcher',
-    icon: '🚀',
     color: '#FF9800',
     group: ['android', 'apps'],
     description: 'Launch applications by package name',
@@ -176,7 +166,6 @@ export const androidServiceNodes: Record<string, INodeTypeDescription> = {
     name: 'appList',
     displayName: 'App List',
     serviceId: 'app_list',
-    icon: '📋',
     color: '#00BCD4',
     group: ['android', 'apps'],
     description: 'Get list of installed applications with package names, versions, and metadata',
@@ -191,7 +180,6 @@ export const androidServiceNodes: Record<string, INodeTypeDescription> = {
     name: 'wifiAutomation',
     displayName: 'WiFi Automation',
     serviceId: 'wifi_automation',
-    icon: '📶',
     color: '#3F51B5',
     group: ['android', 'automation'],
     description: 'WiFi control and scanning - enable, disable, get status, scan for networks',
@@ -202,7 +190,6 @@ export const androidServiceNodes: Record<string, INodeTypeDescription> = {
     name: 'bluetoothAutomation',
     displayName: 'Bluetooth Automation',
     serviceId: 'bluetooth_automation',
-    icon: '🔵',
     color: '#2196F3',
     group: ['android', 'automation'],
     description: 'Bluetooth control - enable, disable, get status, and paired devices',
@@ -213,7 +200,6 @@ export const androidServiceNodes: Record<string, INodeTypeDescription> = {
     name: 'audioAutomation',
     displayName: 'Audio Automation',
     serviceId: 'audio_automation',
-    icon: '🔊',
     color: '#E91E63',
     group: ['android', 'automation'],
     description: 'Volume and audio control - get/set volume, mute, unmute',
@@ -224,7 +210,6 @@ export const androidServiceNodes: Record<string, INodeTypeDescription> = {
     name: 'deviceStateAutomation',
     displayName: 'Device State',
     serviceId: 'device_state_automation',
-    icon: '⚙️',
     color: '#607D8B',
     group: ['android', 'automation'],
     description: 'Device state control - airplane mode, screen on/off, power save mode, brightness',
@@ -235,7 +220,6 @@ export const androidServiceNodes: Record<string, INodeTypeDescription> = {
     name: 'screenControlAutomation',
     displayName: 'Screen Control',
     serviceId: 'screen_control_automation',
-    icon: '💡',
     color: '#FFC107',
     group: ['android', 'automation'],
     description: 'Screen control - brightness adjustment, wake screen, auto-brightness, screen timeout',
@@ -246,7 +230,6 @@ export const androidServiceNodes: Record<string, INodeTypeDescription> = {
     name: 'airplaneModeControl',
     displayName: 'Airplane Mode',
     serviceId: 'airplane_mode_control',
-    icon: '✈️',
     color: '#795548',
     group: ['android', 'automation'],
     description: 'Airplane mode status monitoring and control',
@@ -261,7 +244,6 @@ export const androidServiceNodes: Record<string, INodeTypeDescription> = {
     name: 'motionDetection',
     displayName: 'Motion Detection',
     serviceId: 'motion_detection',
-    icon: '📳',
     color: '#FF5722',
     group: ['android', 'sensors'],
     description: 'Accelerometer and gyroscope data - detect motion, shake gestures, device orientation',
@@ -272,7 +254,6 @@ export const androidServiceNodes: Record<string, INodeTypeDescription> = {
     name: 'environmentalSensors',
     displayName: 'Environmental Sensors',
     serviceId: 'environmental_sensors',
-    icon: '🌡️',
     color: '#009688',
     group: ['android', 'sensors'],
     description: 'Environmental sensors - temperature, humidity, pressure, light level',
@@ -287,7 +268,6 @@ export const androidServiceNodes: Record<string, INodeTypeDescription> = {
     name: 'cameraControl',
     displayName: 'Camera Control',
     serviceId: 'camera_control',
-    icon: '📷',
     color: '#673AB7',
     group: ['android', 'media'],
     description: 'Camera control - get camera info, take photos, camera capabilities',
@@ -298,7 +278,6 @@ export const androidServiceNodes: Record<string, INodeTypeDescription> = {
     name: 'mediaControl',
     displayName: 'Media Control',
     serviceId: 'media_control',
-    icon: '🎵',
     color: '#E91E63',
     group: ['android', 'media'],
     description: 'Media playback control - volume control, playback control, play media files',

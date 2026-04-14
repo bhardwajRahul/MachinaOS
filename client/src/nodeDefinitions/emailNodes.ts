@@ -1,10 +1,6 @@
 // Email Node Definitions - IMAP/SMTP integration via Himalaya CLI
-import {
-  INodeTypeDescription,
-  NodeConnectionType
-} from '../types/INodeProperties';
+import { INodeTypeDescription, NodeConnectionType } from '../types/INodeProperties';
 import { solarized } from '../styles/theme';
-import { EMAIL_SEND_ICON, EMAIL_READ_ICON, EMAIL_RECEIVE_ICON } from '../assets/icons/email';
 
 // Wave 8: provider presets + property metadata now live on backend
 // (Email{Send,Read,Receive}Params + EMAIL_PROVIDERS in server config).
@@ -18,7 +14,6 @@ export const emailNodes: Record<string, INodeTypeDescription> = {
   emailSend: {
     displayName: 'Email Send',
     name: 'emailSend',
-    icon: EMAIL_SEND_ICON,
     group: ['email', 'tool'],
     version: 1,
     subtitle: 'Send Email via SMTP',
@@ -36,7 +31,6 @@ export const emailNodes: Record<string, INodeTypeDescription> = {
   emailRead: {
     displayName: 'Email Read',
     name: 'emailRead',
-    icon: EMAIL_READ_ICON,
     group: ['email', 'tool'],
     version: 1,
     subtitle: 'Read & Manage via IMAP',
@@ -54,7 +48,6 @@ export const emailNodes: Record<string, INodeTypeDescription> = {
   emailReceive: {
     displayName: 'Email Receive',
     name: 'emailReceive',
-    icon: EMAIL_RECEIVE_ICON,
     group: ['email', 'trigger'],
     version: 1,
     subtitle: 'On Email Received',

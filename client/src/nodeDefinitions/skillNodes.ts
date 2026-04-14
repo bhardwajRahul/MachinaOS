@@ -1,8 +1,5 @@
 // Skill Node Definitions - Skill nodes for Zeenie capabilities
-import {
-  INodeTypeDescription,
-  NodeConnectionType
-} from '../types/INodeProperties';
+import { INodeTypeDescription, NodeConnectionType } from '../types/INodeProperties';
 
 // ============================================================================
 // SKILL NODES - Connect to Zeenie's input-skill handle
@@ -15,7 +12,6 @@ export const skillNodes: Record<string, INodeTypeDescription> = {
   masterSkill: {
     displayName: 'Master Skill',
     name: 'masterSkill',
-    icon: '🎯',
     group: ['tool'],  // Appears in AI Tools category
     version: 1,
     subtitle: 'Skill Aggregator',

@@ -15,7 +15,6 @@ import {
 import { featureFlags } from './lib/featureFlags';
 import { prefetchAllNodeSpecs, getCachedNodeSpec } from './lib/nodeSpec';
 import AIAgentNode from './components/AIAgentNode';
-import ModelNode from './components/ModelNode';
 import SquareNode from './components/SquareNode';
 import TriggerNode from './components/TriggerNode';
 import ToolkitNode from './components/ToolkitNode';
@@ -74,7 +73,7 @@ const COMPONENT_BY_KIND: Record<string, React.ComponentType<any>> = {
   trigger: TriggerNode,
   agent: AIAgentNode,
   chat: AIAgentNode,
-  model: ModelNode,
+  model: SquareNode,
   square: SquareNode,
   tool: SquareNode,
   generic: SquareNode,

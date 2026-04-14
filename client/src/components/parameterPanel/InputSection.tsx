@@ -7,6 +7,7 @@ import { useDragVariable } from '../../hooks/useDragVariable';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { queryClient } from '../../lib/queryClient';
 import { getCachedNodeSpec } from '../../lib/nodeSpec';
+import { resolveIcon, resolveLibraryIcon, isImageIcon } from '../../assets/icons';
 
 // ---------------------------------------------------------------------------
 // Backend-driven node output schema lookup.
@@ -92,18 +93,22 @@ interface NodeData {
   hasExecutionData: boolean;
 }
 
-// Helper to render icon (handles both image URLs and emoji/text)
+// Wave 10.B: shared icon dispatch — library components (`lobehub:*`),
+// filesystem SVGs (`asset:*`), data/http URIs, then emoji/text.
 const renderNodeIcon = (icon: string, size: number = 16) => {
-  if (icon.startsWith('data:') || icon.startsWith('http') || icon.startsWith('/')) {
+  const LibIcon = resolveLibraryIcon(icon);
+  if (LibIcon) return <LibIcon size={size} />;
+  const resolved = resolveIcon(icon);
+  if (resolved && isImageIcon(resolved)) {
     return (
       <img
-        src={icon}
+        src={resolved}
         alt="icon"
         style={{ width: size, height: size, objectFit: 'contain' }}
       />
     );
   }
-  return <span style={{ fontSize: size - 2 }}>{icon}</span>;
+  return <span style={{ fontSize: size - 2 }}>{resolved ?? ''}</span>;
 };
 
 const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) => {

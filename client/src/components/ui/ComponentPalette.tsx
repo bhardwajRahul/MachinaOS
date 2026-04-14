@@ -1,39 +1,20 @@
 import React from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { ComponentPaletteProps } from '../../types/ComponentTypes';
 import { INodeTypeDescription } from '../../types/INodeProperties';
 import ComponentItem from './ComponentItem';
 import CollapsibleSection from './CollapsibleSection';
-import googleSvg from '../../assets/icons/search/google.svg?raw';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Search } from 'lucide-react';
+import { resolveIcon, resolveLibraryIcon, isImageIcon } from '../../assets/icons';
+import { nodeGroupsQueryKey, NodeGroupEntry } from '../../lib/nodeSpec';
+import { useWebSocket } from '../../contexts/WebSocketContext';
 
-// Category icons - emoji strings or { svg: string } for inline SVG icons
-const CATEGORY_ICONS: Record<string, string | { svg: string }> = {
-  workflow: '⚡',
-  trigger: '🕐',
-  ai: '🤖',
-  agent: '🤖',
-  model: '🧬',
-  skill: '🎯',
-  tool: '🛠️',
-  location: '📍',
-  social: '📱',
-  android: '📱',
-  chat: '💭',
-  code: '💻',
-  document: '🗄️',
-  utility: '🔧',
-  api: '🕷️',
-  search: '🔍',
-  google: { svg: googleSvg },
-  scheduler: '📅',
-  proxy: '🛡',
-};
-
-// Categories that should be merged into 'social' (Social Media)
-const SOCIAL_CATEGORIES = ['whatsapp', 'social'];
-
-// Categories shown in simple (noob) mode - only AI related
-const SIMPLE_MODE_CATEGORIES = ['agent', 'model', 'skill', 'tool'];
+// Wave 10.B: palette section metadata (icon / label / color / visibility)
+// is fetched from the backend GET /api/schemas/nodes/groups endpoint.
+// Frontend retains zero per-category tables.
 
 const ComponentPalette: React.FC<ComponentPaletteProps> = ({
   nodeDefinitions,
@@ -45,59 +26,32 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
   proMode = false,  // Default to simple mode
 }) => {
   const theme = useAppTheme();
+  const { sendRequest, isConnected } = useWebSocket();
 
-  const getCategoryConfig = (category: string) => {
-    const key = category.toLowerCase();
-    // Use theme-specific category colors (darker for light mode, vibrant for dark mode)
-    const colors = theme.colors as Record<string, string>;
-    const colorMap: Record<string, string> = {
-      workflow: colors.categoryWorkflow || theme.dracula.orange,
-      trigger: colors.categoryTrigger || theme.dracula.pink,
-      ai: colors.categoryAI || theme.dracula.purple,
-      agent: colors.categoryAgent || theme.dracula.purple,
-      model: colors.categoryModel || theme.dracula.cyan,
-      skill: colors.categorySkill || theme.dracula.green,
-      tool: colors.categoryTool || theme.dracula.green,
-      location: colors.categoryLocation || theme.dracula.red,
-      social: colors.categorySocial || theme.dracula.green,
-      android: colors.categoryAndroid || theme.dracula.cyan,
-      chat: colors.categoryChat || theme.dracula.yellow,
-      code: colors.categoryCode || theme.dracula.orange,
-      document: colors.categoryTrigger || theme.dracula.pink,
-      utility: colors.categoryUtil || theme.dracula.purple,
-      api: colors.categoryCode || theme.dracula.orange,
-      search: colors.categoryModel || theme.dracula.cyan,
-      google: theme.accent.blue,
-      scheduler: colors.categoryTrigger || theme.dracula.pink,
-      proxy: colors.categoryUtil || theme.dracula.purple,
-    };
-    const labelMap: Record<string, string> = {
-      workflow: 'Workflows',
-      trigger: 'Triggers',
-      ai: 'AI',
-      agent: 'AI Agents',
-      model: 'AI Models',
-      skill: 'AI Skills',
-      tool: 'AI Tools',
-      location: 'Location',
-      social: 'Social',
-      android: 'Android',
-      chat: 'Chat',
-      code: 'Code',
-      document: 'Documents',
-      utility: 'Utilities',
-      api: 'API & Scraping',
-      search: 'Search',
-      google: 'Google Workspace',
-      scheduler: 'Schedulers',
-      proxy: 'Proxy',
-    };
+  // Backend-driven group metadata (label / icon / color / visibility).
+  // Direct WS call — do NOT route through `fetchNodeGroups`, which
+  // would re-enter `queryClient.fetchQuery` on the same key and leave
+  // this subscription stuck with `undefined`.
+  const { data: groupIndex } = useQuery<Record<string, NodeGroupEntry>>({
+    queryKey: nodeGroupsQueryKey,
+    queryFn: async () => {
+      const response = await sendRequest('get_node_groups', {});
+      return (response?.groups ?? {}) as Record<string, NodeGroupEntry>;
+    },
+    staleTime: Infinity,
+    enabled: isConnected,
+  });
+
+  const getCategoryConfig = React.useCallback((category: string) => {
+    const entry = groupIndex?.[category.toLowerCase()] as NodeGroupEntry | undefined;
+    // No icon/color fallback: if the backend doesn't declare the
+    // group via register_group(), the empty string surfaces the gap.
     return {
-      icon: CATEGORY_ICONS[key] || '📦',
-      color: colorMap[key] || theme.colors.textSecondary,
-      label: labelMap[key] || category
+      icon: entry?.icon ?? '',
+      color: entry?.color || theme.colors.textSecondary,
+      label: entry?.label || category,
     };
-  };
+  }, [groupIndex, theme.colors.textSecondary]);
 
   const categorizedComponents = React.useMemo(() => {
     const categories: Record<string, INodeTypeDescription[]> = {};
@@ -118,10 +72,13 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
         }
       }
 
-      // Filter by proMode - in simple mode, only show AI-related categories
+      // Wave 10.B: simple-mode visibility comes from backend
+      // GroupMetadata.visibility ('normal' shown, 'dev' hidden in simple
+      // mode). No frontend SIMPLE_MODE_CATEGORIES table.
       if (!proMode) {
-        const categoryKey = (definition.group?.[0] || '').toLowerCase();
-        if (!SIMPLE_MODE_CATEGORIES.includes(categoryKey)) {
+        const firstGroup = (definition.group?.[0] || '').toLowerCase();
+        const groupVisibility = groupIndex?.[firstGroup]?.visibility;
+        if (groupVisibility !== 'normal' && groupVisibility !== 'all') {
           return false;
         }
       }
@@ -131,16 +88,8 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
 
     filteredDefinitions.forEach((definition) => {
       try {
-        let categoryKey = definition.group?.[0] || 'Uncategorized';
-
-        // Merge whatsapp and social categories into 'social'
-        if (SOCIAL_CATEGORIES.includes(categoryKey.toLowerCase())) {
-          categoryKey = 'social';
-        }
-
-        if (!categories[categoryKey]) {
-          categories[categoryKey] = [];
-        }
+        const categoryKey = (definition.group?.[0] || 'Uncategorized').toLowerCase();
+        if (!categories[categoryKey]) categories[categoryKey] = [];
         categories[categoryKey].push(definition);
       } catch (error) {
         // Skip invalid definitions
@@ -148,7 +97,7 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
     });
 
     return categories;
-  }, [nodeDefinitions, searchQuery, proMode]);
+  }, [nodeDefinitions, searchQuery, proMode, groupIndex]);
 
   const totalComponents = Object.values(categorizedComponents).reduce(
     (acc, components) => acc + components.length, 
@@ -156,112 +105,35 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
   );
 
   return (
-    <div style={{
-      width: '100%',
-      height: '100%',
-      overflowY: 'auto',
-      backgroundColor: theme.colors.backgroundPanel,
-      display: 'flex',
-      flexDirection: 'column',
-    }}>
+    <div className="flex h-full w-full flex-col overflow-hidden bg-muted/30">
       {/* Header Section */}
-      <div style={{
-        padding: theme.spacing.lg,
-        borderBottom: `1px solid ${theme.colors.border}`,
-        background: theme.colors.background,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: theme.spacing.md }}>
-          <h2 style={{
-            margin: 0,
-            fontSize: theme.fontSize.lg,
-            fontWeight: theme.fontWeight.semibold,
-            color: theme.colors.text,
-            fontFamily: 'system-ui, sans-serif',
-          }}>
-            Components
-          </h2>
-          <span style={{
-            fontSize: theme.fontSize.xs,
-            padding: '4px 10px',
-            backgroundColor: theme.colors.backgroundAlt,
-            borderRadius: '12px',
-            color: theme.colors.textSecondary,
-            fontWeight: theme.fontWeight.medium,
-          }}>
+      <div className="border-b border-border bg-card p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-base font-semibold text-foreground">Components</h2>
+          <Badge variant="secondary" className="text-xs font-medium">
             {totalComponents}
-          </span>
+          </Badge>
         </div>
 
         {/* Search Input */}
-        <div style={{ position: 'relative' }}>
-          <input
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
             type="text"
             placeholder="Search..."
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '10px 12px',
-              paddingLeft: '36px',
-              fontSize: theme.fontSize.sm,
-              border: `1px solid ${theme.colors.border}`,
-              borderRadius: theme.borderRadius.md,
-              backgroundColor: theme.colors.backgroundAlt,
-              color: theme.colors.text,
-              fontFamily: 'system-ui, sans-serif',
-              outline: 'none',
-              transition: `all ${theme.transitions.fast}`,
-            }}
-            onFocus={(e) => {
-              e.currentTarget.style.borderColor = theme.colors.focus;
-              e.currentTarget.style.backgroundColor = theme.colors.background;
-            }}
-            onBlur={(e) => {
-              e.currentTarget.style.borderColor = theme.colors.border;
-              e.currentTarget.style.backgroundColor = theme.colors.backgroundAlt;
-            }}
+            className="pl-9"
           />
-          <svg
-            style={{
-              position: 'absolute',
-              left: '12px',
-              top: '50%',
-              transform: 'translateY(-50%)',
-              width: '16px',
-              height: '16px',
-              color: theme.colors.textSecondary,
-              pointerEvents: 'none',
-            }}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
         </div>
       </div>
 
       {/* Categories */}
-      <div style={{ 
-        padding: theme.spacing.md,
-        flex: 1,
-        overflowY: 'auto',
-      }}>
+      <div className="flex-1 overflow-y-auto p-3">
         {Object.keys(categorizedComponents).length === 0 ? (
-          <div style={{
-            textAlign: 'center',
-            padding: theme.spacing.xxl,
-            color: theme.colors.textSecondary,
-          }}>
-            <svg
-              style={{ width: '48px', height: '48px', marginBottom: theme.spacing.md, opacity: 0.5 }}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <p style={{ margin: 0, fontSize: theme.fontSize.sm }}>
+          <div className="flex flex-col items-center px-6 py-12 text-center text-muted-foreground">
+            <Search className="mb-3 h-12 w-12 opacity-50" />
+            <p className="text-sm">
               No components found matching "{searchQuery}"
             </p>
           </div>
@@ -272,59 +144,42 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
               const config = getCategoryConfig(category);
 
               return (
-                <div key={category || 'unknown'} style={{ marginBottom: theme.spacing.md }}>
+                <div key={category || 'unknown'} className="mb-3">
                   <CollapsibleSection
                     title={
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <span style={{
-                            width: '28px',
-                            height: '28px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            backgroundColor: `${config.color}20`,
-                            borderRadius: '6px',
-                            fontSize: '16px',
-                          }}>
-                            {typeof config.icon === 'object' && 'svg' in config.icon ? (
-                              <span
-                                dangerouslySetInnerHTML={{ __html: config.icon.svg }}
-                                style={{ width: '16px', height: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                              />
-                            ) : typeof config.icon === 'string' && (config.icon.startsWith('data:') || config.icon.startsWith('http')) ? (
-                              <img src={config.icon} alt="" style={{ width: '16px', height: '16px', objectFit: 'contain' }} />
-                            ) : (
-                              config.icon
-                            )}
+                      <div className="flex w-full items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <span
+                            className="flex h-7 w-7 items-center justify-center rounded-md text-base"
+                            style={{ backgroundColor: `${config.color}20` }}
+                          >
+                            {(() => {
+                              const LibIcon = resolveLibraryIcon(config.icon);
+                              if (LibIcon) return <LibIcon size={16} />;
+                              const resolved = resolveIcon(config.icon);
+                              if (resolved && isImageIcon(resolved)) {
+                                return <img src={resolved} alt="" className="h-4 w-4 object-contain" />;
+                              }
+                              return resolved || '📦';
+                            })()}
                           </span>
-                          <span style={{
-                            fontWeight: theme.fontWeight.semibold,
-                            color: theme.colors.text,
-                          }}>
+                          <span className="text-sm font-semibold text-foreground">
                             {config.label}
                           </span>
                         </div>
-                        <span style={{
-                          fontSize: theme.fontSize.xs,
-                          padding: '3px 10px',
-                          backgroundColor: `${config.color}15`,
-                          borderRadius: '12px',
-                          color: theme.colors.textSecondary,
-                          fontWeight: theme.fontWeight.medium,
-                        }}>
+                        <Badge
+                          variant="secondary"
+                          className="text-xs font-medium"
+                          style={{ backgroundColor: `${config.color}15`, color: 'hsl(var(--muted-foreground))' }}
+                        >
                           {components?.length || 0}
-                        </span>
+                        </Badge>
                       </div>
                     }
                     isCollapsed={isCollapsed}
                     onToggle={() => onToggleSection(category)}
                   >
-                    <div style={{
-                      display: 'grid',
-                      gap: theme.spacing.sm,
-                      paddingTop: theme.spacing.sm,
-                    }}>
+                    <div className="grid gap-2 pt-2">
                       {(components || []).map((definition, idx) => {
                         try {
                           return (

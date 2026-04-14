@@ -35,6 +35,7 @@ import { useWebSocket, CompactionStats } from '../../contexts/WebSocketContext';
 import { useUserSettingsQuery } from '../../hooks/useUserSettingsQuery';
 import { nodeDefinitions } from '../../nodeDefinitions';
 import { INodeTypeDescription, INodeProperties } from '../../types/INodeProperties';
+import { resolveIcon, resolveLibraryIcon, isImageIcon } from '../../assets/icons';
 import { ExecutionResult } from '../../services/executionService';
 import { Edge } from 'reactflow';
 import { shouldShowParameter } from '../../utils/parameterVisibility';
@@ -757,11 +758,15 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
                             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md"
                             style={{ backgroundColor: skill.color + '20' }}
                           >
-                            {skill.icon.startsWith('data:') ? (
-                              <img src={skill.icon} alt={skill.name} className="h-5 w-5" />
-                            ) : (
-                              <span className="text-lg">{skill.icon}</span>
-                            )}
+                            {(() => {
+                              const LibIcon = resolveLibraryIcon(skill.icon);
+                              if (LibIcon) return <LibIcon size={20} />;
+                              const resolved = resolveIcon(skill.icon);
+                              if (resolved && isImageIcon(resolved)) {
+                                return <img src={resolved} alt={skill.name} className="h-5 w-5" />;
+                              }
+                              return <span className="text-lg">{resolved ?? ''}</span>;
+                            })()}
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="mb-0.5 text-sm font-semibold text-foreground">

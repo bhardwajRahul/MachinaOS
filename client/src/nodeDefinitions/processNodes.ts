@@ -1,17 +1,13 @@
 // Process Manager Node -- start, stop, and manage long-running processes
 // Dual-purpose: workflow node AND AI Agent tool
 
-import {
-  INodeTypeDescription,
-  NodeConnectionType,
-} from '../types/INodeProperties';
+import { INodeTypeDescription, NodeConnectionType } from '../types/INodeProperties';
 import { dracula } from '../styles/theme';
 
 export const processNodes: Record<string, INodeTypeDescription> = {
   processManager: {
     displayName: 'Process Manager',
     name: 'processManager',
-    icon: '\u{2699}\u{FE0F}',
     group: ['utility', 'tool'],
     version: 1,
     subtitle: 'Manage Processes',

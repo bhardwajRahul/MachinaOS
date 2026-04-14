@@ -1,8 +1,5 @@
 // Location Node Definitions - GPS, Maps, and Geolocation Services
-import {
-  INodeTypeDescription,
-  NodeConnectionType
-} from '../types/INodeProperties';
+import { INodeTypeDescription, NodeConnectionType } from '../types/INodeProperties';
 
 // ============================================================================
 // LOCATION NODES - GPS, Maps, and Geolocation Services
@@ -17,7 +14,6 @@ export const locationNodes: Record<string, INodeTypeDescription> = {
   gmaps_create: {
     displayName: 'GMaps Create',
     name: 'gmaps_create',
-    icon: '🗺️',
     group: ['location', 'service'],
     version: 1,
     subtitle: 'Initialize Google Map',
@@ -50,7 +46,6 @@ export const locationNodes: Record<string, INodeTypeDescription> = {
   gmaps_locations: {
     displayName: 'GMaps Locations',
     name: 'gmaps_locations',
-    icon: '🌍',
     group: ['location', 'service', 'tool'],  // 'tool' enables AI Agent tool calling
     version: 1,
     subtitle: 'Geocoding Service',
@@ -82,7 +77,6 @@ export const locationNodes: Record<string, INodeTypeDescription> = {
   gmaps_nearby_places: {
     displayName: 'GMaps Nearby Places',
     name: 'gmaps_nearby_places',
-    icon: '🔍',
     group: ['location', 'service', 'tool'],  // 'tool' enables AI Agent tool calling
     version: 1,
     subtitle: 'Places API nearbySearch',

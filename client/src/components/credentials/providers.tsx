@@ -8,71 +8,28 @@
  * Status rows: pure data (ok/trueText/falseText), theme colors resolved in StatusCard.
  */
 
-import React from 'react';
 import { AI_PROVIDER_META } from '../icons/AIProviderIcons';
-import { ApifyIcons } from '../../assets/icons/apify';
-import { SearchIcons } from '../../assets/icons/search';
-import { TelegramIcons } from '../../assets/icons/telegram';
-import { GoogleIcons } from '../../assets/icons/google';
-import { EmailIcons } from '../../assets/icons/email';
-import { WHATSAPP_CONNECT_ICON } from '../../nodeDefinitions/whatsappNodes';
-import { TWITTER_ICON } from '../../nodeDefinitions/twitterNodes';
+import { resolveIconRef } from './catalogueAdapter';
 import type { ProviderConfig, CategoryGroup } from './types';
 
 // ============================================================================
-// ICON FACTORIES — thin wrappers around existing asset strings.
-// All icons accept a `size` prop from the caller (no hardcoded dimensions).
+// Wave 10.B: icon resolution unified with the backend-driven catalogue —
+// every provider icon goes through `resolveIconRef`, which dispatches
+// `lobehub:<brand>` → React component, `asset:<key>` → SVG via the
+// filesystem registry, and emoji/text as a styled <span>.
 // ============================================================================
 
-interface IconProps { size: number }
-
-/** Wraps a raw SVG string (from assets/icons/) into a sized component. */
-const fromRawSvg = (rawSvg: string): React.FC<IconProps> => {
-  const Comp: React.FC<IconProps> = ({ size }) => {
-    const ref = React.useRef<HTMLDivElement>(null);
-    React.useEffect(() => { if (ref.current) ref.current.innerHTML = rawSvg; }, []);
-    return <div ref={ref} style={{ width: size, height: size }} />;
-  };
-  return Comp;
-};
-
-/** Wraps a data:image/svg+xml URI (from node definitions) into a sized component. */
-const fromDataUri = (dataUri: string): React.FC<IconProps> => {
-  const Comp: React.FC<IconProps> = ({ size }) => (
-    <img src={dataUri} width={size} height={size} alt="" style={{ display: 'block' }} />
-  );
-  return Comp;
-};
-
-/** Wraps an emoji string into a sized inline element — matches node-definition convention. */
-const fromEmoji = (emoji: string): React.FC<IconProps> => {
-  const Comp: React.FC<IconProps> = ({ size }) => (
-    <span style={{ fontSize: size, lineHeight: 1, display: 'inline-block' }}>{emoji}</span>
-  );
-  return Comp;
-};
-
-// Reuse raw SVG strings from assets/icons/
-const BraveIcon = fromRawSvg(SearchIcons.brave);
-const SerperIcon = fromRawSvg(SearchIcons.serper);
-const PerplexityIcon = fromRawSvg(SearchIcons.perplexity);
-const TelegramBotIcon = fromRawSvg(TelegramIcons.telegram);
-const GWorkspaceIcon = fromRawSvg(GoogleIcons.gmail);
-const EmailCredIcon = fromRawSvg(EmailIcons.read);
-
-// Apify needs explicit scaling attribute on its root <svg>
-const ApifyIconC: React.FC<IconProps> = ({ size }) => {
-  const scaled = ApifyIcons.apify.replace('<svg', '<svg width="100%" height="100%"');
-  return <div dangerouslySetInnerHTML={{ __html: scaled }} style={{ width: size, height: size }} />;
-};
-
-// Reuse data URIs exported from node definitions
-const WhatsAppIcon = fromDataUri(WHATSAPP_CONNECT_ICON);
-const XIcon = fromDataUri(TWITTER_ICON);
-
-// Google Maps + Android: emoji (matches locationNodes '🗺️' and androidServiceNodes '📱')
-const GoogleMapsIcon = fromEmoji('🗺️');
-const AndroidIcon = fromEmoji('📱');
+const BraveIcon = resolveIconRef('asset:brave', 'brave');
+const SerperIcon = resolveIconRef('asset:google', 'serper');
+const PerplexityIcon = resolveIconRef('asset:perplexity', 'perplexity');
+const TelegramBotIcon = resolveIconRef('asset:telegram', 'telegram');
+const GWorkspaceIcon = resolveIconRef('asset:gmail', 'google');
+const EmailCredIcon = resolveIconRef('asset:read', 'email');
+const ApifyIconC = resolveIconRef('asset:apify', 'apify');
+const WhatsAppIcon = resolveIconRef('asset:whatsapp', 'whatsapp');
+const XIcon = resolveIconRef('asset:x', 'twitter');
+const GoogleMapsIcon = resolveIconRef('🗺️', 'maps');
+const AndroidIcon = resolveIconRef('📱', 'android');
 
 // ============================================================================
 // AI PROVIDERS — derived from centralized AI_PROVIDER_META

@@ -53,19 +53,23 @@ interface Props {
 interface SectionProps {
   label: React.ReactNode;
   defaultOpen?: boolean;
+  action?: React.ReactNode;
   children: React.ReactNode;
 }
 
-function Section({ label, defaultOpen = false, children }: SectionProps) {
+function Section({ label, defaultOpen = false, action, children }: SectionProps) {
   const [open, setOpen] = useState(defaultOpen);
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="border-b border-border last:border-0">
-      <CollapsibleTrigger className="flex w-full items-center gap-2 py-2 text-sm font-medium text-foreground hover:text-primary">
-        <ChevronDown
-          className={cn('h-4 w-4 transition-transform', open && 'rotate-0', !open && '-rotate-90')}
-        />
-        <span className="flex-1 text-left">{label}</span>
-      </CollapsibleTrigger>
+      <div className="flex items-center gap-2">
+        <CollapsibleTrigger className="flex flex-1 items-center gap-2 py-2 text-sm font-medium text-foreground hover:text-primary">
+          <ChevronDown
+            className={cn('h-4 w-4 transition-transform', open && 'rotate-0', !open && '-rotate-90')}
+          />
+          <span className="flex-1 text-left">{label}</span>
+        </CollapsibleTrigger>
+        {action && <div className="shrink-0">{action}</div>}
+      </div>
       <CollapsibleContent className="pb-3 pl-6">{children}</CollapsibleContent>
     </Collapsible>
   );
@@ -151,21 +155,16 @@ export default function OutputPanel({ results, onClear, selectedNode }: Props) {
           )}
 
           <Section
-            label={
-              <div className="flex items-center gap-2">
-                <span>Raw JSON</span>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    copyToClipboard(raw, 'Copied!');
-                  }}
-                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                >
-                  <Copy className="h-3 w-3" />
-                  Copy
-                </button>
-              </div>
+            label="Raw JSON"
+            action={
+              <button
+                type="button"
+                onClick={() => copyToClipboard(raw, 'Copied!')}
+                className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+              >
+                <Copy className="h-3 w-3" />
+                Copy
+              </button>
             }
           >
             <JsonView

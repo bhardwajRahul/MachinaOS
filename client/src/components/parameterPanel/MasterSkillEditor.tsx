@@ -50,6 +50,7 @@ import { useAppTheme } from '../../hooks/useAppTheme';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { skillNodes, SKILL_NODE_TYPES } from '../../nodeDefinitions/skillNodes';
 import { DUCKDUCKGO_ICON, BRAVE_SEARCH_ICON, SERPER_ICON, PERPLEXITY_ICON } from '../../assets/icons/search';
+import { resolveIcon, resolveLibraryIcon, isImageIcon } from '../../assets/icons';
 
 // Override icons for skills that have branded SVGs
 const SKILL_ICON_OVERRIDES: Record<string, string> = {
@@ -127,12 +128,16 @@ const getNodeDefaults = (skillName: string): { icon: string; color: string } => 
   return { icon: '', color: '' };
 };
 
-// Helper to render icon (handles emojis and SVG data URIs)
+// Wave 10.B: shared icon dispatch — library components (`lobehub:*`),
+// filesystem SVGs (`asset:*`), data/http URIs, then emoji/text.
 const renderSkillIcon = (icon: string, size: number = 16) => {
-  if (icon.startsWith('data:') || icon.startsWith('http')) {
-    return <img src={icon} alt="icon" style={{ width: size, height: size, objectFit: 'contain' }} />;
+  const LibIcon = resolveLibraryIcon(icon);
+  if (LibIcon) return <LibIcon size={size} />;
+  const resolved = resolveIcon(icon);
+  if (resolved && isImageIcon(resolved)) {
+    return <img src={resolved} alt="icon" style={{ width: size, height: size, objectFit: 'contain' }} />;
   }
-  return <span style={{ fontSize: size }}>{icon}</span>;
+  return <span style={{ fontSize: size }}>{resolved ?? ''}</span>;
 };
 
 const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({

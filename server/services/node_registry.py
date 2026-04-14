@@ -28,7 +28,7 @@ from typing import Callable, Optional, Type
 
 from pydantic import BaseModel
 
-from models.node_metadata import NODE_METADATA, NodeMetadata
+from models.node_metadata import GROUP_METADATA, NODE_METADATA, GroupMetadata, NodeMetadata
 from services.node_input_schemas import _DIRECT_MODELS
 from services.node_output_schemas import NODE_OUTPUT_SCHEMAS
 
@@ -83,3 +83,14 @@ def registered_node_types() -> frozenset[str]:
     """Types that came in via the plugin path. Useful for tests and for
     telling the legacy dispatcher which types it must NOT also claim."""
     return frozenset(_HANDLER_REGISTRY.keys())
+
+
+def register_group(*, key: str, metadata: GroupMetadata) -> None:
+    """Register a component-palette group's metadata.
+
+    Wave 10.B: retires the frontend `CATEGORY_ICONS` / `labelMap` /
+    `colorMap` / `SIMPLE_MODE_CATEGORIES` tables. Every group a plugin
+    module uses in its `group:` field can declare its visual
+    representation here. Idempotent — re-registration replaces.
+    """
+    GROUP_METADATA[key] = metadata

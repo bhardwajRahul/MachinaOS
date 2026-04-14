@@ -64,6 +64,32 @@ class NodeMetadata(TypedDict, total=False):
 NODE_METADATA: dict[str, NodeMetadata] = {}
 
 
+class GroupMetadata(TypedDict, total=False):
+    """Wave 10.B: per-group metadata for the component palette.
+
+    Retires the frontend `CATEGORY_ICONS`, `colorMap`, `labelMap`,
+    `SIMPLE_MODE_CATEGORIES` tables in `client/src/components/ui/
+    ComponentPalette.tsx`. Each group's icon/label/color/visibility is
+    declared once in `server/nodes/groups.py` and served via
+    `/api/schemas/nodes/groups`.
+    """
+
+    label: str                                           # e.g. "AI Agents"
+    icon: str                                            # emoji | "asset:<key>"
+    color: str                                           # hex / dracula token
+    visibility: Literal["all", "normal", "dev"]
+
+
+# Plugin-populated registry — same pattern as NODE_METADATA. Filled by
+# register_group(...) calls in server/nodes/groups.py at import time.
+GROUP_METADATA: dict[str, GroupMetadata] = {}
+
+
+def get_group_metadata(group: str) -> Optional[GroupMetadata]:
+    """Return metadata for a group key, or None if not seeded."""
+    return GROUP_METADATA.get(group)
+
+
 def get_node_metadata(node_type: str) -> Optional[NodeMetadata]:
     """Return display metadata for a node type, or None if not seeded."""
 

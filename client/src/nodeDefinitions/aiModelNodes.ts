@@ -4,12 +4,10 @@
 import { INodeTypeDescription } from '../types/INodeProperties';
 import { createBaseChatModel, ChatModelConfig } from '../factories/baseChatModelFactory';
 import { dracula } from '../styles/theme';
-import { DEEPSEEK_ICON, KIMI_ICON, MISTRAL_ICON } from '../assets/icons/llm';
 
 const openaiConfig: ChatModelConfig = {
   providerId: 'openai',
   displayName: 'OpenAI',
-  icon: '🤖',
   color: '#00A67E',
   description: 'OpenAI GPT models for chat completion and generation',
 };
@@ -17,7 +15,6 @@ const openaiConfig: ChatModelConfig = {
 const claudeConfig: ChatModelConfig = {
   providerId: 'anthropic',
   displayName: 'Claude',
-  icon: '🧠',
   color: '#FF6B35',
   description: 'Anthropic Claude models for conversation and analysis',
 };
@@ -25,7 +22,6 @@ const claudeConfig: ChatModelConfig = {
 const geminiConfig: ChatModelConfig = {
   providerId: 'gemini',
   displayName: 'Gemini',
-  icon: '⭐',
   color: '#4285F4',
   description: 'Google Gemini models for multimodal AI capabilities',
 };
@@ -33,7 +29,6 @@ const geminiConfig: ChatModelConfig = {
 const openrouterConfig: ChatModelConfig = {
   providerId: 'openrouter',
   displayName: 'OpenRouter',
-  icon: '🔀',
   color: '#6366F1',
   description: 'OpenRouter unified API - access OpenAI, Claude, Gemini, Llama, and more through one API',
 };
@@ -41,7 +36,6 @@ const openrouterConfig: ChatModelConfig = {
 const groqConfig: ChatModelConfig = {
   providerId: 'groq',
   displayName: 'Groq',
-  icon: '⚡',
   color: '#F55036',
   description: 'Groq - Ultra-fast LLM inference with Llama, Mixtral, and Gemma models',
 };
@@ -49,7 +43,6 @@ const groqConfig: ChatModelConfig = {
 const cerebrasConfig: ChatModelConfig = {
   providerId: 'cerebras',
   displayName: 'Cerebras',
-  icon: '🧬',
   color: dracula.orange,
   description: 'Cerebras - Ultra-fast inference with Llama and Qwen models on custom AI hardware',
 };
@@ -57,7 +50,6 @@ const cerebrasConfig: ChatModelConfig = {
 const deepseekConfig: ChatModelConfig = {
   providerId: 'deepseek',
   displayName: 'DeepSeek',
-  icon: DEEPSEEK_ICON,
   color: dracula.cyan,
   description: 'DeepSeek V3 models (deepseek-chat, deepseek-reasoner with always-on CoT)',
 };
@@ -65,7 +57,6 @@ const deepseekConfig: ChatModelConfig = {
 const kimiConfig: ChatModelConfig = {
   providerId: 'kimi',
   displayName: 'Kimi',
-  icon: KIMI_ICON,
   color: dracula.purple,
   description: 'Kimi K2 models by Moonshot AI with 256K context (thinking on by default)',
 };
@@ -73,7 +64,6 @@ const kimiConfig: ChatModelConfig = {
 const mistralConfig: ChatModelConfig = {
   providerId: 'mistral',
   displayName: 'Mistral',
-  icon: MISTRAL_ICON,
   color: dracula.orange,
   description: 'Mistral AI models for reasoning, coding, and multilingual tasks',
 };

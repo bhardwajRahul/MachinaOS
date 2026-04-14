@@ -1,18 +1,13 @@
 // Browser Automation Node - Interactive browser control via agent-browser CLI
 // Dual-purpose node: works as standalone workflow node AND AI Agent tool
 
-import {
-  INodeTypeDescription,
-  NodeConnectionType,
-} from '../types/INodeProperties';
+import { INodeTypeDescription, NodeConnectionType } from '../types/INodeProperties';
 import { dracula } from '../styles/theme';
-import { BROWSER_ICON } from '../assets/icons/browser';
 
 export const browserNodes: Record<string, INodeTypeDescription> = {
   browser: {
     displayName: 'Browser',
     name: 'browser',
-    icon: BROWSER_ICON,
     group: ['browser', 'tool'],
     version: 1,
     subtitle: 'Agent Browser',

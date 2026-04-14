@@ -1,9 +1,5 @@
 // Specialized Agent Node Definitions - AI Agents with specialized capabilities
-import {
-  INodeTypeDescription,
-  NodeConnectionType,
-  INodeProperties
-} from '../types/INodeProperties';
+import { INodeTypeDescription, NodeConnectionType, INodeProperties } from '../types/INodeProperties';
 import { dracula } from '../styles/theme';
 import { AI_PROVIDER_OPTIONS } from './aiModelNodes';
 
@@ -165,7 +161,6 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
   android_agent: {
     displayName: 'Android Control Agent',
     name: 'android_agent',
-    icon: '📱',
     group: ['agent', 'ai'],
     version: 1,
     subtitle: 'Device Control',
@@ -180,7 +175,6 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
   coding_agent: {
     displayName: 'Coding Agent',
     name: 'coding_agent',
-    icon: '💻',
     group: ['agent', 'ai'],
     version: 1,
     subtitle: 'Code Execution',
@@ -195,7 +189,6 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
   web_agent: {
     displayName: 'Web Control Agent',
     name: 'web_agent',
-    icon: '🌐',
     group: ['agent', 'ai'],
     version: 1,
     subtitle: 'Browser Automation',
@@ -210,7 +203,6 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
   task_agent: {
     displayName: 'Task Management Agent',
     name: 'task_agent',
-    icon: '📋',
     group: ['agent', 'ai'],
     version: 1,
     subtitle: 'Task Automation',
@@ -225,7 +217,6 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
   social_agent: {
     displayName: 'Social Media Agent',
     name: 'social_agent',
-    icon: '📱',
     group: ['agent', 'ai'],
     version: 1,
     subtitle: 'Social Messaging',
@@ -240,7 +231,6 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
   travel_agent: {
     displayName: 'Travel Agent',
     name: 'travel_agent',
-    icon: '✈️',
     group: ['agent', 'ai'],
     version: 1,
     subtitle: 'Travel Planning',
@@ -255,7 +245,6 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
   tool_agent: {
     displayName: 'Tool Agent',
     name: 'tool_agent',
-    icon: '🔧',
     group: ['agent', 'ai'],
     version: 1,
     subtitle: 'Tool Orchestration',
@@ -270,7 +259,6 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
   productivity_agent: {
     displayName: 'Productivity Agent',
     name: 'productivity_agent',
-    icon: '⏰',
     group: ['agent', 'ai'],
     version: 1,
     subtitle: 'Productivity',
@@ -285,7 +273,6 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
   payments_agent: {
     displayName: 'Payments Agent',
     name: 'payments_agent',
-    icon: '💳',
     group: ['agent', 'ai'],
     version: 1,
     subtitle: 'Payment Processing',
@@ -300,7 +287,6 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
   consumer_agent: {
     displayName: 'Consumer Agent',
     name: 'consumer_agent',
-    icon: '🛒',
     group: ['agent', 'ai'],
     version: 1,
     subtitle: 'Consumer Support',
@@ -315,7 +301,6 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
   autonomous_agent: {
     displayName: 'Autonomous Agent',
     name: 'autonomous_agent',
-    icon: '🎯',
     group: ['agent', 'ai'],
     version: 1,
     subtitle: 'Autonomous Operations',
@@ -330,7 +315,6 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
   orchestrator_agent: {
     displayName: 'Orchestrator Agent',
     name: 'orchestrator_agent',
-    icon: '🎼',
     group: ['agent', 'ai'],
     version: 1,
     subtitle: 'Agent Coordination',
@@ -349,7 +333,6 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
   ai_employee: {
     displayName: 'AI Employee',
     name: 'ai_employee',
-    icon: '👥',
     group: ['agent', 'ai'],
     version: 1,
     subtitle: 'Team Orchestration',
@@ -368,7 +351,6 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
   rlm_agent: {
     displayName: 'RLM Agent',
     name: 'rlm_agent',
-    icon: '🧠',
     group: ['agent', 'ai'],
     version: 1,
     subtitle: 'Recursive Reasoning',
@@ -383,7 +365,6 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
   claude_code_agent: {
     displayName: 'Claude Code Agent',
     name: 'claude_code_agent',
-    icon: '>/_',
     group: ['agent', 'ai'],
     version: 1,
     subtitle: 'Agentic Coding',
@@ -399,7 +380,6 @@ export const specializedAgentNodes: Record<string, INodeTypeDescription> = {
   deep_agent: {
     displayName: 'Deep Agent',
     name: 'deep_agent',
-    icon: '\u{1F9E0}',
     group: ['agent', 'ai'],
     version: 1,
     subtitle: 'LangChain DeepAgents',

@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { nodeDefinitions } from '../nodeDefinitions';
 import { resolveNodeDescription } from '../lib/nodeSpec';
+import { resolveIcon, resolveLibraryIcon } from '../assets/icons';
+import { useNodeSpec } from '../lib/nodeSpec';
 import { NodeData } from '../types/NodeTypes';
 import { INodeInputDefinition, INodeOutputDefinition, NodeConnectionType } from '../types/INodeProperties';
 import { useAppStore } from '../store/useAppStore';
@@ -21,6 +23,9 @@ const GenericNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
 
   // Wave 6 Phase 3e: backend NodeSpec -> legacy fallback
   const definition = type ? resolveNodeDescription(type, nodeDefinitions[type] ?? null) : null;
+  // Wave 10.B: reactive spec subscription keeps the icon fresh the
+  // moment the prefetch lands (no waiting for parent re-render).
+  const iconSpec = useNodeSpec(type);
 
   // Inline rename state
   const [isRenaming, setIsRenaming] = useState(false);
@@ -130,39 +135,22 @@ const GenericNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
   const nodeInputs = getNodeInputs();
   const nodeOutputs = getNodeOutputs();
 
-  // Check if string is likely an emoji (contains emoji characters)
-  const isEmoji = (str: string): boolean => {
-    const emojiRegex = /[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2300}-\u{23FF}]|[\u{2B50}]|[\u{231A}-\u{231B}]|[\u{25AA}-\u{25AB}]|[\u{25B6}]|[\u{25C0}]|[\u{25FB}-\u{25FE}]|[\u{2614}-\u{2615}]|[\u{2648}-\u{2653}]|[\u{267F}]|[\u{2693}]|[\u{26A1}]|[\u{26AA}-\u{26AB}]|[\u{26BD}-\u{26BE}]|[\u{26C4}-\u{26C5}]|[\u{26CE}]|[\u{26D4}]|[\u{26EA}]|[\u{26F2}-\u{26F3}]|[\u{26F5}]|[\u{26FA}]|[\u{26FD}]|[\u{2702}]|[\u{2705}]|[\u{2708}-\u{270D}]|[\u{270F}]|[\u{2712}]|[\u{2714}]|[\u{2716}]|[\u{271D}]|[\u{2721}]|[\u{2728}]|[\u{2733}-\u{2734}]|[\u{2744}]|[\u{2747}]|[\u{274C}]|[\u{274E}]|[\u{2753}-\u{2755}]|[\u{2757}]|[\u{2763}-\u{2764}]|[\u{2795}-\u{2797}]|[\u{27A1}]|[\u{27B0}]|[\u{27BF}]|[\u{E000}-\u{F8FF}]/u;
-    return emojiRegex.test(str);
-  };
-
-  // Helper to render icon (handles URLs, SVG data URIs, emojis)
-  const renderIcon = (icon: string | undefined) => {
-    if (!icon) return '📦';
-
-    // Handle image URLs and data URIs (including SVG)
+  // Wave 10.B: schema-driven icon dispatch. No fallback.
+  const renderIcon = (rawIcon: string | undefined) => {
+    const LibIcon = resolveLibraryIcon(rawIcon);
+    if (LibIcon) return <LibIcon size={24} />;
+    const icon = resolveIcon(rawIcon);
+    if (!icon) return null;
     if (icon.startsWith('http') || icon.startsWith('data:') || icon.startsWith('/')) {
       return (
         <img
           src={icon}
           alt="icon"
-          style={{
-            width: '24px',
-            height: '24px',
-            objectFit: 'contain',
-            borderRadius: '4px'
-          }}
+          style={{ width: '24px', height: '24px', objectFit: 'contain', borderRadius: '4px' }}
         />
       );
     }
-
-    // If it's already an emoji, return it directly
-    if (isEmoji(icon)) {
-      return icon;
-    }
-
-    // Fallback for unknown formats
-    return icon || '📦';
+    return icon;
   };
 
   // Helper functions for color management
@@ -283,7 +271,7 @@ const GenericNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
         paddingRight: '4px'
       }}>
         <span className="flex items-center text-2xl">
-          {renderIcon(definition.icon)}
+          {renderIcon(iconSpec?.icon ?? definition.icon)}
         </span>
         {isRenaming ? (
           <input

@@ -1,10 +1,8 @@
 // Search API Node Definitions - Brave Search, Serper, Perplexity Sonar
 // Dual-purpose nodes: work as standalone workflow nodes AND AI Agent tools
-import {
-  INodeTypeDescription,
-  NodeConnectionType
-} from '../types/INodeProperties';
-import { BRAVE_SEARCH_ICON, SERPER_ICON, PERPLEXITY_ICON } from '../assets/icons/search';
+import { INodeTypeDescription, NodeConnectionType } from '../types/INodeProperties';
+
+// Wave 10.B: icons resolved from asset:<key> via assets/icons/search/*.svg.
 
 // ============================================================================
 // SEARCH NODES
@@ -15,7 +13,6 @@ export const searchNodes: Record<string, INodeTypeDescription> = {
   braveSearch: {
     displayName: 'Brave Search',
     name: 'braveSearch',
-    icon: BRAVE_SEARCH_ICON,
     group: ['search', 'tool'],
     version: 1,
     subtitle: 'Web Search',
@@ -49,7 +46,6 @@ export const searchNodes: Record<string, INodeTypeDescription> = {
   serperSearch: {
     displayName: 'Serper Search',
     name: 'serperSearch',
-    icon: SERPER_ICON,
     group: ['search', 'tool'],
     version: 1,
     subtitle: 'Google Search',
@@ -83,7 +79,6 @@ export const searchNodes: Record<string, INodeTypeDescription> = {
   perplexitySearch: {
     displayName: 'Perplexity Search',
     name: 'perplexitySearch',
-    icon: PERPLEXITY_ICON,
     group: ['search', 'tool'],
     version: 1,
     subtitle: 'AI Search',

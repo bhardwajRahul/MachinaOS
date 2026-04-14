@@ -212,7 +212,9 @@ export interface INodeUIHints {
 export interface INodeTypeDescription {
   displayName: string;
   name: string;
-  icon: string;
+  // Wave 10.B: icon comes from the backend NodeSpec; local
+  // nodeDefinitions/*.ts no longer declare icons.
+  icon?: string;
   group: string[];
   version: number;
   subtitle?: string;

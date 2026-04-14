@@ -16,6 +16,8 @@ import { NodeData } from '../types/NodeTypes';
 import { useAppStore } from '../store/useAppStore';
 import { nodeDefinitions } from '../nodeDefinitions';
 import { resolveNodeDescription } from '../lib/nodeSpec';
+import { resolveIcon, resolveLibraryIcon } from '../assets/icons';
+import { useNodeSpec } from '../lib/nodeSpec';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { useWebSocket } from '../contexts/WebSocketContext';
 
@@ -96,45 +98,24 @@ const ToolkitNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
   // Get the node color from definition or use Android green
   const nodeColor = definition?.defaults?.color || '#3DDC84';
 
-  // Helper to check if string is emoji
-  const isEmoji = (str: string): boolean => {
-    const emojiRegex = /^(?:\p{Emoji_Presentation}|\p{Emoji}\uFE0F)(?:\u200D(?:\p{Emoji_Presentation}|\p{Emoji}\uFE0F))*$/u;
-    return emojiRegex.test(str);
-  };
-
-  // Helper to render icon (handles URLs, emojis, and icon names)
-  const renderIcon = (icon: string) => {
-    // Handle image URLs and data URIs
+  // Wave 10.B: schema-driven icon dispatch with reactive subscription.
+  const iconSpec = useNodeSpec(type);
+  const getIcon = () => {
+    const raw = (iconSpec?.icon as string | undefined) ?? (definition?.icon as string | undefined);
+    const LibIcon = resolveLibraryIcon(raw);
+    if (LibIcon) return <LibIcon size={28} />;
+    const icon = resolveIcon(raw);
+    if (!icon) return null;
     if (icon.startsWith('http') || icon.startsWith('data:') || icon.startsWith('/')) {
       return (
         <img
           src={icon}
           alt="icon"
-          style={{
-            width: '28px',
-            height: '28px',
-            objectFit: 'contain',
-            borderRadius: '4px'
-          }}
+          style={{ width: '28px', height: '28px', objectFit: 'contain', borderRadius: '4px' }}
         />
       );
     }
-
-    // If it's already an emoji, return it directly
-    if (isEmoji(icon)) {
-      return icon;
-    }
-
-    // Fallback
     return icon;
-  };
-
-  // Get icon from definition
-  const getIcon = () => {
-    if (definition?.icon) {
-      return renderIcon(definition.icon);
-    }
-    return '📱'; // Default Android icon
   };
 
   // Get status indicator color

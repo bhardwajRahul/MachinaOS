@@ -6,7 +6,6 @@ export const schedulerNodes: Record<string, INodeTypeDescription> = {
   timer: {
     displayName: 'Timer',
     name: 'timer',
-    icon: '⏱️',
     group: ['utility', 'workflow', 'tool'],
     version: 1,
     subtitle: '={{$parameter["duration"]}} {{$parameter["unit"]}}',
@@ -40,7 +39,6 @@ export const schedulerNodes: Record<string, INodeTypeDescription> = {
   cronScheduler: {
     displayName: 'Cron Scheduler',
     name: 'cronScheduler',
-    icon: '⏰',
     group: ['trigger', 'workflow', 'tool'],
     version: 1,
     subtitle: '={{$parameter["frequency"]}}',

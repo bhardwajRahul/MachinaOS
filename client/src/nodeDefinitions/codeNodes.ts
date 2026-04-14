@@ -5,7 +5,6 @@ export const codeNodes: Record<string, INodeTypeDescription> = {
   pythonExecutor: {
     displayName: 'Python Executor',
     name: 'pythonExecutor',
-    icon: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/python/python-original.svg',
     group: ['code', 'tool'],
     version: 1,
     subtitle: 'Run Python Code',
@@ -31,7 +30,6 @@ export const codeNodes: Record<string, INodeTypeDescription> = {
   javascriptExecutor: {
     displayName: 'JavaScript Executor',
     name: 'javascriptExecutor',
-    icon: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/javascript/javascript-original.svg',
     group: ['code', 'tool'],
     version: 1,
     subtitle: 'Run JavaScript Code',
@@ -56,7 +54,6 @@ export const codeNodes: Record<string, INodeTypeDescription> = {
   typescriptExecutor: {
     displayName: 'TypeScript Executor',
     name: 'typescriptExecutor',
-    icon: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/typescript/typescript-original.svg',
     group: ['code', 'tool'],
     version: 1,
     subtitle: 'Run TypeScript Code',

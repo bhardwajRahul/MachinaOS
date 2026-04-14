@@ -19,14 +19,7 @@
 
 import React from 'react';
 
-import { AI_PROVIDER_META } from '../icons/AIProviderIcons';
-import { APIFY_ICON } from '../../assets/icons/apify';
-import { BRAVE_SEARCH_ICON, SERPER_ICON, PERPLEXITY_ICON } from '../../assets/icons/search';
-import { TELEGRAM_ICON } from '../../assets/icons/telegram';
-import { GMAIL_ICON } from '../../assets/icons/google';
-import { EMAIL_READ_ICON } from '../../assets/icons/email';
-import { WHATSAPP_CONNECT_ICON } from '../../nodeDefinitions/whatsappNodes';
-import { TWITTER_ICON } from '../../nodeDefinitions/twitterNodes';
+import { resolveIcon, resolveLibraryIcon, isImageIcon } from '../../assets/icons';
 
 import type {
   ProviderConfig,
@@ -48,62 +41,17 @@ import type {
 } from '../../hooks/useCatalogueQuery';
 
 // ============================================================================
-// Icon factories — uses <img> with data URIs (the project standard from
-// assets/icons/*/index.ts). No innerHTML, no dangerouslySetInnerHTML,
-// no ref+useEffect. Every icon module already exports svgToDataUri'd
-// constants; we import those directly and render as <img>.
+// Wave 10.B: icon resolution now routes through the shared resolvers in
+// `assets/icons/`. Backend `icon_ref` uses the same three-format contract
+// as node icons:
+//   "lobehub:<brand>" → React component (provider brand icon)
+//   "asset:<key>"     → <img> with filesystem-registered SVG data URI
+//   emoji / plain text → <span>
 // ============================================================================
 
 interface IconProps {
   size: number;
 }
-
-/** Render a data:image/svg+xml URI as a sized <img>. Project standard. */
-const fromDataUri = (dataUri: string): React.FC<IconProps> => {
-  const Comp: React.FC<IconProps> = ({ size }) =>
-    React.createElement('img', {
-      src: dataUri,
-      width: size,
-      height: size,
-      alt: '',
-      style: { display: 'block' },
-    });
-  return Comp;
-};
-
-const fromEmoji = (emoji: string): React.FC<IconProps> => {
-  const Comp: React.FC<IconProps> = ({ size }) =>
-    React.createElement(
-      'span',
-      { style: { fontSize: size, lineHeight: 1, display: 'inline-block' } },
-      emoji,
-    );
-  return Comp;
-};
-
-// ============================================================================
-// Icon ref resolver
-//
-// JSON `icon_ref` values use a small DSL:
-//   "ai:openai"                       → AI_PROVIDER_META[openai].Icon (@lobehub/icons)
-//   "raw_svg:SearchIcons.brave"       → <img> with pre-exported data URI (BRAVE_SEARCH_ICON)
-//   "data_uri:WHATSAPP_CONNECT_ICON"  → <img> with data URI
-//   "emoji:📱"                         → <span> with emoji text
-// ============================================================================
-
-/** Map "Module.key" strings to already-converted data URIs from assets/icons/. */
-const RAW_SVG_DATA_URIS: Record<string, Record<string, string>> = {
-  SearchIcons: { brave: BRAVE_SEARCH_ICON, serper: SERPER_ICON, perplexity: PERPLEXITY_ICON },
-  TelegramIcons: { telegram: TELEGRAM_ICON },
-  GoogleIcons: { gmail: GMAIL_ICON },
-  EmailIcons: { read: EMAIL_READ_ICON },
-  ApifyIcons: { apify: APIFY_ICON },
-};
-
-const DATA_URI_REGISTRY: Record<string, string> = {
-  WHATSAPP_CONNECT_ICON,
-  TWITTER_ICON,
-};
 
 // Fallback for providers whose icon_ref cannot be resolved — renders a
 // circle with the provider initial, so the palette never shows nothing.
@@ -130,36 +78,40 @@ const fallbackIcon = (initial: string): React.FC<IconProps> => {
   return Comp;
 };
 
-function resolveIcon(iconRef: string | undefined, providerId: string): React.FC<IconProps> {
+export function resolveIconRef(iconRef: string | undefined, providerId: string): React.FC<IconProps> {
   const initial = (providerId[0] ?? '?').toUpperCase();
   if (!iconRef) return fallbackIcon(initial);
 
-  const colon = iconRef.indexOf(':');
-  if (colon < 0) return fallbackIcon(initial);
-
-  const kind = iconRef.slice(0, colon);
-  const rest = iconRef.slice(colon + 1);
-
-  switch (kind) {
-    case 'ai': {
-      const meta = AI_PROVIDER_META[rest];
-      return meta?.Icon ?? fallbackIcon(initial);
-    }
-    case 'raw_svg': {
-      // e.g. "SearchIcons.brave" → look up pre-exported data URI
-      const [module, key] = rest.split('.');
-      const uri = RAW_SVG_DATA_URIS[module]?.[key];
-      return uri ? fromDataUri(uri) : fallbackIcon(initial);
-    }
-    case 'data_uri': {
-      const uri = DATA_URI_REGISTRY[rest];
-      return uri ? fromDataUri(uri) : fallbackIcon(initial);
-    }
-    case 'emoji':
-      return fromEmoji(rest);
-    default:
-      return fallbackIcon(initial);
+  const LibIcon = resolveLibraryIcon(iconRef);
+  if (LibIcon) {
+    const Comp: React.FC<IconProps> = ({ size }) => React.createElement(LibIcon, { size });
+    return Comp;
   }
+
+  const resolved = resolveIcon(iconRef);
+  if (resolved && isImageIcon(resolved)) {
+    const Comp: React.FC<IconProps> = ({ size }) =>
+      React.createElement('img', {
+        src: resolved,
+        width: size,
+        height: size,
+        alt: '',
+        style: { display: 'block' },
+      });
+    return Comp;
+  }
+
+  if (resolved) {
+    const Comp: React.FC<IconProps> = ({ size }) =>
+      React.createElement(
+        'span',
+        { style: { fontSize: size, lineHeight: 1, display: 'inline-block' } },
+        resolved,
+      );
+    return Comp;
+  }
+
+  return fallbackIcon(initial);
 }
 
 // ============================================================================
@@ -271,7 +223,7 @@ export function rehydrateProvider(entry: ServerProviderConfig): ProviderConfig {
     categoryLabel: entry.category_label,
     color: entry.color,
     kind: entry.kind as PanelKind,
-    icon: resolveIcon(entry.icon_ref, entry.id),
+    icon: resolveIconRef(entry.icon_ref, entry.id),
     fields: buildFields(entry.fields),
     ws: entry.ws,
     statusHook: entry.status_hook,

@@ -102,7 +102,7 @@ register_node(
     metadata={
         "displayName": "Chat Trigger",
         "subtitle": "Console Chat",
-        "icon": "💬",
+        "icon": "asset:chat",
         "color": "#ffb86c",
         "group": ["utility", "trigger"],
         "componentKind": "trigger",
@@ -133,7 +133,7 @@ register_node(
     metadata={
         "displayName": "WhatsApp Receive",
         "subtitle": "Inbound Message",
-        "icon": "📱",
+        "icon": "asset:whatsapp-receive",
         "color": "#25D366",
         "group": ["whatsapp", "trigger"],
         "componentKind": "trigger",
@@ -148,7 +148,7 @@ register_node(
     metadata={
         "displayName": "Telegram Receive",
         "subtitle": "Inbound Message",
-        "icon": "✈️",
+        "icon": "asset:telegram",
         "color": "#0088CC",
         "group": ["social", "trigger"],
         "componentKind": "trigger",
@@ -163,7 +163,7 @@ register_node(
     metadata={
         "displayName": "Twitter Receive",
         "subtitle": "Mentions / DMs",
-        "icon": "🐦",
+        "icon": "asset:x",
         "color": "#1DA1F2",
         "group": ["social", "trigger"],
         "componentKind": "trigger",
@@ -178,7 +178,7 @@ register_node(
     metadata={
         "displayName": "Gmail Receive",
         "subtitle": "Inbound Email",
-        "icon": "📧",
+        "icon": "asset:gmail",
         "color": "#EA4335",
         "group": ["google", "trigger"],
         "componentKind": "trigger",
@@ -193,7 +193,7 @@ register_node(
     metadata={
         "displayName": "Email Receive",
         "subtitle": "IMAP Polling",
-        "icon": "📬",
+        "icon": "asset:receive",
         "color": "#8be9fd",
         "group": ["email", "trigger"],
         "componentKind": "trigger",

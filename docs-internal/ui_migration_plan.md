@@ -177,12 +177,51 @@ Per the user directive: **"frontend is just UI and backend has all the business 
 
 | Item | Status | Notes |
 |---|---|---|
-| Backend NODE_METADATA icon/displayName backfill | 🟡 in progress | 35 entries currently have empty `icon` for SVG-only frontend icons; nodes render with same blank icon when flag is ON. Fix is to populate emoji fallbacks + revisit SVG asset hosting strategy. |
-| `aiModelNodes.ts` factory refactor | ⏸ deferred | Uses `createBaseChatModel(config)` factory; `properties` array built inside the factory. Slimming requires moving the factory to the backend or converting to direct definitions. |
-| `ParameterRenderer.tsx` → DIY widget registry | ⏸ deferred | 2158-line file with 19 switch cases + closure-captured state. Needs a focused multi-session surgical refactor with per-widget unit tests. |
-| Narrow `INodeTypeDescription.properties` to optional | ⏸ deferred | Depends on widget registry. |
-| Delete `adapters/nodeSpecToDescription.ts` | ⏸ deferred | Depends on `INodeTypeDescription` narrowed to NodeSpec shape. |
+| Backend NODE_METADATA icon/displayName backfill | ✅ done in Wave 10.B | Migrated to prefix-dispatched icon wire format (`asset:` / `lobehub:` / URL / emoji) so no empty slots remain. |
+| `aiModelNodes.ts` factory refactor | ✅ done in Wave 9.2 | `createBaseChatModel` slimmed to visual metadata; schema lives on backend in `AIChatModelParams`. |
+| `ParameterRenderer.tsx` → widget registry | 🟡 partial (Wave 10.G.1) | `case 'code'` / `'dateTime'` added, generic `loadOptionsMethod` dispatch wired, `displayOptions.show` propagates into `fixedCollection` nesting, password masking beats textarea. Full DIY widget registry still deferred. |
+| Narrow `INodeTypeDescription.properties` | ✅ done in Wave 10.B | `icon` also narrowed to optional; backend is sole declaration site. |
+| Delete `adapters/nodeSpecToDescription.ts` | ⏸ deferred | Adapter is thin (~230 LOC), justified as JSON-Schema→INodeProperties bridge. Sunset still optional. |
 | Telegram/Twitter loadOptions loaders | ⏸ deferred | Limited value (Telegram bots have no chat-list API; Twitter lists need significant setup). |
+
+## Wave 10 — plugin pattern + full visual SSOT (April 2026)
+
+Wave 10 closes the tribal-code paths that survived Wave 6-9. **Adding a new
+node is now one Python file** with a single `register_node(...)` call —
+zero frontend edits, zero cross-cutting backend edits.
+
+Full detail: [schema_source_of_truth_rfc.md § Wave 10](./schema_source_of_truth_rfc.md#wave-10--plugin-pattern--visual-contract).
+
+| Sub-wave | What it delivers | Impact |
+|---|---|---|
+| 10.A — `NodeMetadata` extended | + `color`, `componentKind`, `handles`, `credentials`, `hideOutputHandle`, `visibility` fields | Retires the 400-line `AGENT_CONFIGS` map in `AIAgentNode.tsx` + frontend `NO_OUTPUT_NODE_TYPES` / `SIMPLE_MODE_CATEGORIES` tables |
+| 10.B — Icon wire format | n8n-style prefix dispatch: `asset:<key>` (Vite glob) / `<lib>:<brand>` (NPM icon packages via `ICON_LIBRARIES` table) / `data:` / `http://` / emoji. `useNodeSpec(type)` reactive hook so icons populate the moment prefetch lands. | Drops 272 LOC of `icon:` declarations from 26 `nodeDefinitions/*.ts` files; retires frontend `CATEGORY_ICONS` / `labelMap` / `colorMap` tables |
+| 10.C — `@register_node` decorator + plugin auto-discovery | `server/nodes/__init__.py` walks submodules; `register_node` writes to `NODE_METADATA` + `_DIRECT_MODELS` + `NODE_OUTPUT_SCHEMAS` + `_HANDLER_REGISTRY` atomically. 106/111 node types migrated. | New node checklist: 1 file |
+| 10.D — Dashboard `createNodeTypes` collapsed to `componentKind` dispatch | Retires 17 `*_NODE_TYPES` imports; `AIAgentNode` reads handle topology from spec; `nodeTypesRef` rebuilds once on prefetch completion | −400 LOC in `AIAgentNode.tsx`, −120 in `Dashboard.tsx` |
+| 10.E — 14 frontend type arrays retired | `SquareNode` / `ParameterRenderer` / `executionService` / `useDragAndDrop` / `MiddleSection` / `InputSection` all read from `getCachedNodeSpec()` instead of hardcoded arrays | isNodeTypeSupported collapses to spec lookup + fallback |
+| 10.G — Parameter panel fully spec-driven | `case 'code'` + `case 'dateTime'` handlers, generic backend `load_options` WS dispatch for the 4 Google Workspace loaders, `displayOptions.show` into nested collections, password-masking over textarea, `hasSkills`/`isToolPanel`/`isMasterSkillEditor`/`isMemoryPanel` uiHints on plugin registrations. **Zero frontend emoji fallbacks** — a missing icon surfaces as empty so the backend authoring gap is visible. | Retires 3 tribal arrays (`AGENT_WITH_SKILLS_TYPES`, `TOOL_NODE_TYPES`, `SKILL_NODE_TYPES`) from `MiddleSection.tsx` |
+
+**Wave 10 numbers:**
+- Backend: 108/108 pytest (was 94 pre-Wave-10; +14 invariants lock the plugin contract). `+server/nodes/` directory (agents.py + triggers.py + tools.py + utilities.py + services.py + groups.py). 785-LOC legacy `NODE_METADATA` dict literal in `models/node_metadata.py` deleted — populated at import time by plugins.
+- Frontend: `−272 LOC` across 26 `nodeDefinitions/*.ts` files (all `icon:` declarations + SVG imports stripped). `INodeTypeDescription.icon` narrowed to `icon?: string`.
+- Total commits: 17 on `feature/credentials-scaling-v2` past the Wave 9 marker.
+
+**New contract invariants (pytest):**
+- Every plugin node has `componentKind`, non-empty `color`, ≥1 handle
+- Every agent node has `uiHints.hasSkills`
+- Every tool-kind node has `uiHints.isToolPanel`
+- Every Google Workspace node has a field gated by `displayOptions.show.operation`
+- Every code executor emits `editor: "code"` on its `code` field
+- Every `api_key` field emits `password: True`
+- Every `asset:<key>` icon resolves to a real SVG under `client/src/assets/icons/`
+- Every palette group carries non-empty label + icon
+
+**Architectural delta (permanent):** the backend plugin registry is the
+single source of truth for node declaration — Pydantic params, output
+schema, handler, visual metadata (icon / color / handles / componentKind),
+palette-section metadata, and dynamic-option loaders. The frontend is a
+thin renderer that dispatches on `componentKind` and resolves icons via
+a shared `resolveIcon` + `resolveLibraryIcon` pair.
 
 **Wave 6 numbers (14 commits across this wave):**
 - Backend: 105 Pydantic input models (started 67, +57%), 105 NODE_METADATA entries (started 0), 110 total NodeSpecs (every registered node type), 3 dynamic-option loaders wired, 25 node groups derived. 63/63 pytest cases pass.

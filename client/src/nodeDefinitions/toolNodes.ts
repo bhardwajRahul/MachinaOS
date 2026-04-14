@@ -1,9 +1,5 @@
 // Tool Node Definitions - Tool nodes for AI Agent tool calling
-import {
-  INodeTypeDescription,
-  NodeConnectionType,
-} from '../types/INodeProperties';
-import { DUCKDUCKGO_ICON } from '../assets/icons/search';
+import { INodeTypeDescription, NodeConnectionType } from '../types/INodeProperties';
 
 // ============================================================================
 // TOOL NODES - Connect to AI Agent's input-tools handle
@@ -14,7 +10,6 @@ export const toolNodes: Record<string, INodeTypeDescription> = {
   calculatorTool: {
     displayName: 'Calculator Tool',
     name: 'calculatorTool',
-    icon: '🔢',
     group: ['tool', 'ai'],
     version: 1,
     subtitle: 'Math Operations',
@@ -35,7 +30,6 @@ export const toolNodes: Record<string, INodeTypeDescription> = {
   currentTimeTool: {
     displayName: 'Current Time Tool',
     name: 'currentTimeTool',
-    icon: '🕐',
     group: ['tool', 'ai'],
     version: 1,
     subtitle: 'Date & Time',
@@ -56,7 +50,6 @@ export const toolNodes: Record<string, INodeTypeDescription> = {
   duckduckgoSearch: {
     displayName: 'DuckDuckGo Search',
     name: 'duckduckgoSearch',
-    icon: DUCKDUCKGO_ICON,
     group: ['tool', 'ai'],
     version: 1,
     subtitle: 'Free Web Search',
@@ -77,7 +70,6 @@ export const toolNodes: Record<string, INodeTypeDescription> = {
   taskManager: {
     displayName: 'Task Manager',
     name: 'taskManager',
-    icon: '📋',
     group: ['tool', 'ai'],
     version: 1,
     subtitle: 'Track Delegated Tasks',
@@ -106,7 +98,6 @@ export const toolNodes: Record<string, INodeTypeDescription> = {
   writeTodos: {
     displayName: 'Write Todos',
     name: 'writeTodos',
-    icon: '\u{1F4DD}',
     group: ['tool', 'ai'],
     version: 1,
     subtitle: 'Task Planning',

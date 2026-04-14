@@ -1,21 +1,14 @@
 // Twitter/X Node Definitions - X API v2 integration via OAuth 2.0
-import {
-  INodeTypeDescription,
-  NodeConnectionType
-} from '../types/INodeProperties';
+import { INodeTypeDescription, NodeConnectionType } from '../types/INodeProperties';
 
 // ============================================================================
 // TWITTER ICONS (SVG Data URIs) - X Brand black color
 // ============================================================================
 
-// Twitter/X Logo - Official X logo (white fill for dark backgrounds)
+// Wave 10.B: node icons resolved from asset:x via assets/icons/twitter/x.svg.
+// TWITTER_ICON export retained because credentials modal still imports the
+// raw data URI directly (providers.tsx).
 export const TWITTER_ICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23FFFFFF'%3E%3Cpath d='M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z'/%3E%3C/svg%3E";
-
-// All Twitter nodes use the X logo
-const TWITTER_SEND_ICON = TWITTER_ICON;
-const TWITTER_RECEIVE_ICON = TWITTER_ICON;
-const TWITTER_SEARCH_ICON = TWITTER_ICON;
-const TWITTER_USER_ICON = TWITTER_ICON;
 
 // ============================================================================
 // TWITTER NODES
@@ -26,7 +19,6 @@ export const twitterNodes: Record<string, INodeTypeDescription> = {
   twitterSend: {
     displayName: 'Twitter Send',
     name: 'twitterSend',
-    icon: TWITTER_SEND_ICON,
     group: ['social', 'tool'],
     version: 1,
     subtitle: 'Post to Twitter/X',
@@ -65,7 +57,6 @@ export const twitterNodes: Record<string, INodeTypeDescription> = {
   twitterReceive: {
     displayName: 'Twitter Receive',
     name: 'twitterReceive',
-    icon: TWITTER_RECEIVE_ICON,
     group: ['social', 'trigger'],
     version: 1,
     subtitle: 'On Twitter Event',
@@ -89,7 +80,6 @@ export const twitterNodes: Record<string, INodeTypeDescription> = {
   twitterSearch: {
     displayName: 'Twitter Search',
     name: 'twitterSearch',
-    icon: TWITTER_SEARCH_ICON,
     group: ['social', 'tool'],
     version: 1,
     subtitle: 'Search Tweets',
@@ -127,7 +117,6 @@ export const twitterNodes: Record<string, INodeTypeDescription> = {
   twitterUser: {
     displayName: 'Twitter User',
     name: 'twitterUser',
-    icon: TWITTER_USER_ICON,
     group: ['social', 'tool'],
     version: 1,
     subtitle: 'User Operations',

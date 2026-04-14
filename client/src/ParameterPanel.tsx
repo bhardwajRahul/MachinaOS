@@ -6,8 +6,8 @@ import { useAppStore } from './store/useAppStore';
 import { useWebSocket } from './contexts/WebSocketContext';
 import { ExecutionService, ExecutionResult } from './services/executionService';
 import { useAppTheme } from './hooks/useAppTheme';
-import { CalendarClock, PlayCircle } from 'lucide-react';
 import { ActionButton } from './components/ui/action-button';
+import { resolveIcon, resolveLibraryIcon, isImageIcon } from './assets/icons';
 
 const ParameterPanel: React.FC = () => {
   const theme = useAppTheme();
@@ -133,22 +133,19 @@ const ParameterPanel: React.FC = () => {
 
 
 
-  // Wave 10.G.5: icon dispatch reads spec.componentKind ("start" is the
-  // backend-declared componentKind of the workflow start node) and a
-  // small set of icon-key prefixes. No hardcoded node-name checks.
-  const renderIcon = (icon: string) => {
-    if (icon === 'schedule') {
-      return <CalendarClock className="h-5 w-5" style={{ color: theme.colors.actionDeploy }} />;
+  // Wave 10.B: schema-driven icon dispatch. Library-backed React
+  // components (`lobehub:<brand>`) resolve first, then the string
+  // resolver handles `asset:<key>`, URLs, data URIs, and plain
+  // emoji/text.
+  const renderIcon = (icon: string | undefined) => {
+    const LibIcon = resolveLibraryIcon(icon);
+    if (LibIcon) return <LibIcon size={20} />;
+    const resolved = resolveIcon(icon);
+    if (!resolved) return null;
+    if (isImageIcon(resolved)) {
+      return <img src={resolved} alt="icon" style={{ width: 20, height: 20, objectFit: 'contain' }} />;
     }
-    if (icon === 'play' || (nodeDefinition as any)?.componentKind === 'start') {
-      return <PlayCircle className="h-5 w-5" style={{ color: theme.dracula.cyan }} />;
-    }
-    if (icon.startsWith('data:') || icon.startsWith('http') || icon.startsWith('/')) {
-      return (
-        <img src={icon} alt="icon" style={{ width: 20, height: 20, objectFit: 'contain' }} />
-      );
-    }
-    return <span>{icon}</span>;
+    return <span>{resolved}</span>;
   };
 
   // Header actions with node name and buttons in middle area

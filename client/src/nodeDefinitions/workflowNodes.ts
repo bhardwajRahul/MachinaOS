@@ -1,15 +1,11 @@
 // Workflow Control Nodes - Start, triggers, and flow control
-import {
-  INodeTypeDescription,
-  NodeConnectionType
-} from '../types/INodeProperties';
+import { INodeTypeDescription, NodeConnectionType } from '../types/INodeProperties';
 
 export const workflowNodes: Record<string, INodeTypeDescription> = {
   // Start Node - Entry point for workflows
   start: {
     displayName: 'Start',
     name: 'start',
-    icon: '▶',
     group: ['workflow'],
     version: 1,
     subtitle: 'Workflow Entry',
@@ -42,7 +38,6 @@ export const workflowNodes: Record<string, INodeTypeDescription> = {
   taskTrigger: {
     displayName: 'Task Completed',
     name: 'taskTrigger',
-    icon: '📨',
     group: ['trigger', 'workflow'],
     version: 1,
     subtitle: 'Child Agent Completed',

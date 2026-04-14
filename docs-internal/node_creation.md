@@ -9,54 +9,148 @@ This guide explains how to create new nodes for MachinaOs, covering frontend def
 
 ---
 
-## Wave 6 recommended recipe (backend-first)
+## Wave 10 — plugin recipe (canonical)
 
-> **Status:** Wave 6 backend infrastructure shipped on `feature/credentials-scaling-v2`. The frontend feature flag `VITE_NODESPEC_BACKEND` defaults OFF, so the legacy frontend-`nodeDefinitions/*.ts` recipe (sections below) still works. Once Phase 3e flips the flag, **the only authoring location for parameter schemas is the backend**.
+Since Wave 10 the canonical path is **one Python file per node** via the
+`@register_node` plugin pattern. Drop a file in `server/nodes/`; the
+auto-discovery walker in `server/nodes/__init__.py` picks it up at import
+time and writes to the four registries
+(`NODE_METADATA`, `_DIRECT_MODELS`, `NODE_OUTPUT_SCHEMAS`,
+`_HANDLER_REGISTRY`) atomically.
 
-For new nodes added today, follow the backend-first recipe — the legacy frontend definition becomes a thin manifest (or vanishes entirely) once the flag flips. You author once on the backend; the frontend renders via the NodeSpec adapter.
+**Zero frontend edits.** The backend is SSOT for parameter schemas,
+output schemas, visual metadata (icon / color / handles / componentKind),
+and handlers. See [schema_source_of_truth_rfc.md § Wave 10](./schema_source_of_truth_rfc.md#wave-10--plugin-pattern--visual-contract)
+for the full wire-format reference.
 
-### 4-step recipe
+### One-file recipe
 
-1. **Pydantic input model** — declare in [server/models/nodes.py](../server/models/nodes.py):
-   ```python
-   class MyNodeParams(BaseNodeParams):
-       """Parameters for my new node."""
-       type: Literal["myNode"]
-       operation: Literal["create", "update", "delete"] = "create"
-       name: str = Field(default="", json_schema_extra={
-           "displayOptions": {"show": {"operation": ["create", "update"]}},
-       })
-       resource_id: str = Field(
-           default="",
-           alias="resourceId",
-           json_schema_extra={"displayOptions": {"show": {"operation": ["update", "delete"]}}},
-       )
-   ```
-   Use `Field(ge=, le=, alias=, default=)` for constraints and camelCase aliasing. Use `json_schema_extra` for `displayOptions`, `loadOptionsMethod`, `placeholder`, `validation`, `typeOptions` (`password`, `rows`, `editor`, `editorLanguage`, `accept`, `multipleValues`, …).
+```python
+# server/nodes/my_node.py
+from typing import Literal
+from pydantic import Field
+from models.nodes import BaseNodeParams
+from services.node_registry import register_node
 
-2. **Register in the discriminated union** in the same file's `KnownNodeParams = Annotated[Union[...]]`.
 
-3. **Pydantic input registry** — add to `_DIRECT_MODELS` in [server/services/node_input_schemas.py](../server/services/node_input_schemas.py):
-   ```python
-   "myNode": MyNodeParams,
-   ```
+class MyNodeParams(BaseNodeParams):
+    """Parameters for my new node."""
+    type: Literal["myNode"]
+    operation: Literal["create", "update", "delete"] = "create"
+    name: str = Field(
+        default="",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["create", "update"]}}},
+    )
+    resource_id: str = Field(
+        default="", alias="resourceId",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["update", "delete"]}}},
+    )
+    api_key: str | None = Field(
+        default=None, alias="apiKey",
+        json_schema_extra={"password": True},   # masks in UI
+    )
 
-4. **Display metadata** — add to `NODE_METADATA` in [server/models/node_metadata.py](../server/models/node_metadata.py):
-   ```python
-   "myNode": {
-       "displayName": "My Node",
-       "icon": "🔧",
-       "group": ["category", "tool"],
-       "description": "What this node does",
-       "version": 1,
-   },
-   ```
 
-That's it. The NodeSpec auto-emits at `GET /api/schemas/nodes/myNode/spec.json` with the full parameter contract, validation rules, conditional visibility, and dynamic option routing. The output schema (Wave 3) is a separate Pydantic model in [server/services/node_output_schemas.py](../server/services/node_output_schemas.py) registered in `NODE_OUTPUT_SCHEMAS`.
+async def handle_my_node(node_id, node_type, params, context):
+    # business logic here
+    return {"success": True, "result": {...}}
 
-### Backend handler
 
-The handler in `server/services/handlers/` and registry entry in [server/services/node_executor.py](../server/services/node_executor.py) `_build_handler_registry()` are unchanged from the legacy recipe — still required, see [Backend: Workflow Handler](#backend-workflow-handler) below.
+register_node(
+    type="myNode",
+    metadata={
+        "displayName": "My Node",
+        "subtitle": "Short action hint",
+        "icon": "asset:my_icon",         # see "Icon wire format" below
+        "color": "#8be9fd",              # dracula token or hex
+        "group": ["tool"],               # palette-section grouping
+        "componentKind": "square",       # React Flow component dispatch
+        "handles": [
+            {"name": "input-main",  "kind": "input",  "position": "left",  "role": "main", "label": "Input"},
+            {"name": "output-main", "kind": "output", "position": "right", "role": "main", "label": "Output"},
+        ],
+        "description": "What this node does",
+        "version": 1,
+        "uiHints": {},                   # optional: isToolPanel, hideRunButton, hasCodeEditor, …
+    },
+    input_model=MyNodeParams,
+    handler=handle_my_node,
+)
+```
+
+That's the whole file. Restart the backend — the node appears in the
+editor palette and can be dropped on the canvas. No frontend edit anywhere.
+
+### Icon wire format
+
+Backend `icon:` string uses n8n-style prefix dispatch:
+
+| Format | Source | Example |
+|---|---|---|
+| `asset:<key>` | Filesystem SVG under `client/src/assets/icons/**/*.svg`. `<key>` = filename minus `.svg`. Drop a new SVG into any subfolder — Vite's `import.meta.glob` picks it up automatically. | `asset:gmail` |
+| `<lib>:<brand>` | NPM icon package. `lobehub` is registered today (covers 1400+ AI/SaaS brands). Adding a second library = 3-line addition to `ICON_LIBRARIES` in `client/src/assets/icons/index.ts`. | `lobehub:claude` |
+| `data:` / `http(s)://` / `/…` | URL passthrough | `data:image/svg+xml,…` |
+| plain text | emoji / short label | `🔧` |
+
+Pytest invariant `test_every_asset_icon_has_matching_svg` fails CI if you
+reference an `asset:<key>` that doesn't exist.
+
+### componentKind dispatch
+
+Tells the Dashboard which React component renders the node:
+
+| componentKind | Component | When to use |
+|---|---|---|
+| `square` | `SquareNode` | Default for most data / tool / service nodes |
+| `trigger` | `TriggerNode` | Nodes with only an output handle that emit events |
+| `start` | `StartNode` | The workflow Start node (special visual treatment) |
+| `agent` | `AIAgentNode` | LangGraph-style agents (accepts skill/tool/memory/task inputs) |
+| `chat` | `AIAgentNode` | Conversational chat agents |
+| `tool` | `SquareNode` | Passive tool nodes with `uiHints.isToolPanel` for ToolSchemaEditor |
+| `model` | `ModelNode` | AI chat model configuration nodes |
+
+### uiHints catalogue
+
+Every panel-visibility decision reads from `uiHints`:
+
+- `hideInputSection` / `hideOutputSection` / `hideRunButton` — panel chrome toggles
+- `hasCodeEditor` — renders the code-editor layout (Python / JS / TS)
+- `hasSkills` — shows Connected Skills accordion (required for all `componentKind:"agent"`)
+- `isToolPanel` — shows Tool Schema Editor (required for all `componentKind:"tool"`)
+- `isMasterSkillEditor` — shows Master Skill split-panel editor
+- `isMemoryPanel` — shows Memory window-size + token-usage panel
+- `isMonitorPanel` — shows Team Monitor live display
+- `isChatTrigger` / `isConsoleSink` — wires to ConsolePanel tabs
+- `showLocationPanel` — shows Google Maps picker
+- `isAndroidToolkit` — shows ToolSchemaEditor gated on Android service sub-nodes
+- `width` / `height` — explicit canvas node size (overrides defaults)
+
+### Dynamic option loaders
+
+For fields needing fetched-at-edit-time options (Gmail labels, WhatsApp groups, …):
+
+1. Write an async loader in `server/services/node_option_loaders/`.
+2. Register in `LOAD_OPTIONS_REGISTRY` (one line).
+3. On the Pydantic field: `json_schema_extra={"loadOptionsMethod": "myMethodName"}`.
+
+The frontend's generic `load_options` WS dispatcher populates the dropdown.
+
+### Output schemas
+
+For nodes whose runtime output the frontend should show in the Input panel:
+pass `output_model=MyOutput` to `register_node(...)`. Matches the Wave 3
+pattern — see [schema_source_of_truth_rfc.md](./schema_source_of_truth_rfc.md).
+
+---
+
+## Legacy backend-only recipe (pre-Wave-10)
+
+Before Wave 10 the recipe spread across 5+ files
+(`models/nodes.py` + `KnownNodeParams` union + `_DIRECT_MODELS` dict +
+`NODE_METADATA` dict + `node_executor` handler registry). The plugin
+pattern above replaces all of that with one file — but the individual
+registries are still live and accept direct entries if you prefer
+the explicit pattern.
 
 ### Dynamic option loaders
 
