@@ -309,6 +309,18 @@ async def handle_list_load_options_methods(
     return {"methods": list_load_options_methods()}
 
 
+@ws_handler()
+async def handle_get_node_groups(
+    data: Dict[str, Any], websocket: WebSocket
+) -> Dict[str, Any]:
+    """Wave 6 Phase 5: {group_name: [node_type, ...]} index derived from
+    every NodeSpec's ``group`` array. Replaces the 34 hand-rolled
+    ``*_NODE_TYPES`` arrays scattered across the frontend."""
+    from services.node_spec import list_node_groups
+
+    return {"groups": list_node_groups()}
+
+
 # ============================================================================
 # Credential Registry Handler (Nango-style bulk fetch for 20 -> 5000 providers)
 # ============================================================================
@@ -3222,6 +3234,8 @@ MESSAGE_HANDLERS: Dict[str, MessageHandler] = {
     # Wave 6 Phase 4: generic loadOptionsMethod dispatcher.
     "load_options": handle_load_options,
     "list_load_options_methods": handle_list_load_options_methods,
+    # Wave 6 Phase 5: node-groups index (replaces *_NODE_TYPES helpers).
+    "get_node_groups": handle_get_node_groups,
 
     # Credential registry (Nango-style bulk catalogue for credentials panel)
     "get_credential_catalogue": handle_get_credential_catalogue,

@@ -382,3 +382,37 @@ class TestPhase4LoadOptions:
         from services.node_option_loaders import dispatch_load_options
         result = await dispatch_load_options("unknown", {"group_id": "abc"})
         assert result == []
+
+
+class TestPhase5NodeGroups:
+    """Wave 6 Phase 5: backend-derived node-groups index that replaces
+    the 34 frontend ``*_NODE_TYPES`` arrays."""
+
+    def test_returns_dict(self):
+        from services.node_spec import list_node_groups
+        groups = list_node_groups()
+        assert isinstance(groups, dict)
+        assert len(groups) > 0
+
+    def test_known_groups_present(self):
+        from services.node_spec import list_node_groups
+        groups = list_node_groups()
+        for expected in ["agent", "trigger", "tool", "model", "android", "social"]:
+            assert expected in groups, f"Missing group {expected!r}"
+
+    def test_tool_group_includes_known_tools(self):
+        from services.node_spec import list_node_groups
+        tools = set(list_node_groups().get("tool", []))
+        for expected in ["pythonExecutor", "javascriptExecutor", "httpRequest"]:
+            assert expected in tools
+
+    def test_trigger_group_includes_known_triggers(self):
+        from services.node_spec import list_node_groups
+        triggers = set(list_node_groups().get("trigger", []))
+        for expected in ["webhookTrigger", "chatTrigger", "telegramReceive", "twitterReceive"]:
+            assert expected in triggers
+
+    def test_each_group_alphabetised(self):
+        from services.node_spec import list_node_groups
+        for group, types in list_node_groups().items():
+            assert types == sorted(types), f"Group {group!r} not sorted: {types}"

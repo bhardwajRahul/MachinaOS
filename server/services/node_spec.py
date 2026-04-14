@@ -79,3 +79,23 @@ def list_node_types_with_spec() -> list[str]:
     types it can probe without 404s."""
 
     return sorted(set(NODE_INPUT_MODELS.keys()) | set(NODE_OUTPUT_SCHEMAS.keys()))
+
+
+def list_node_groups() -> dict[str, list[str]]:
+    """Wave 6 Phase 5: invert the per-spec ``group`` arrays into a
+    {group_name: [node_type, ...]} index. Replaces the 34 hand-rolled
+    ``*_NODE_TYPES`` arrays scattered across the frontend.
+
+    Editor consumers (`useNodeGroup('tool')`, palette filters, console
+    sink detection, etc.) read from a single TanStack Query backed by
+    this endpoint instead of importing per-category constants.
+    """
+
+    index: dict[str, set[str]] = {}
+    for node_type in list_node_types_with_spec():
+        spec = get_node_spec(node_type)
+        if not spec:
+            continue
+        for group in spec.get("group", []):
+            index.setdefault(group, set()).add(node_type)
+    return {group: sorted(types) for group, types in sorted(index.items())}

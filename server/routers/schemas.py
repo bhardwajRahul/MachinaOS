@@ -17,7 +17,7 @@ from services.node_output_schemas import (
     get_node_output_schema,
     list_node_types_with_schema,
 )
-from services.node_spec import get_node_spec, list_node_types_with_spec
+from services.node_spec import get_node_spec, list_node_groups, list_node_types_with_spec
 
 router = APIRouter(prefix="/api/schemas", tags=["schemas"])
 
@@ -114,3 +114,15 @@ async def list_load_options():
     from services.node_option_loaders import list_load_options_methods
 
     return {"methods": list_load_options_methods()}
+
+
+@router.get("/nodes/groups")
+async def get_node_groups(response: Response):
+    """Wave 6 Phase 5: {group_name: [node_type, ...]} index derived from
+    every NodeSpec's ``group`` array. Replaces the 34 hand-rolled
+    ``*_NODE_TYPES`` arrays scattered across the frontend - palette
+    filters, console sink detection, tool-capability checks, etc all
+    read from one TanStack Query against this endpoint."""
+
+    response.headers["Cache-Control"] = _LONG_CACHE
+    return {"groups": list_node_groups()}
