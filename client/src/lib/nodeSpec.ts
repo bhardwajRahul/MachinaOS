@@ -63,6 +63,13 @@ export async function prefetchAllNodeSpecs(sendRequest: SendRequest): Promise<vo
  * Synchronous read of a previously-cached NodeSpec. Used by flag-gated
  * render paths that need a description on-demand without suspending.
  * Returns `null` if not yet fetched.
+ *
+ * Reactivity: Dashboard's `prefetchAllNodeSpecs` warms every spec on
+ * WebSocket connect, before any node mounts. Consumer components call
+ * this on every render; React Flow re-renders nodes on viewport /
+ * selection / parameter changes, which gives the spec a chance to
+ * arrive. If you need eager reactivity, wrap with `useQuery` using
+ * the shared `nodeSpecQueryKey(type)`.
  */
 export function getCachedNodeSpec(nodeType: string): NodeSpec | null {
   return queryClient.getQueryData<NodeSpec | null>(nodeSpecQueryKey(nodeType)) ?? null;
