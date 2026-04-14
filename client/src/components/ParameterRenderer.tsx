@@ -11,6 +11,8 @@ import { useAppTheme } from '../hooks/useAppTheme';
 import { API_CONFIG } from '../config/api';
 import { useWebSocket } from '../contexts/WebSocketContext';
 import { useApiKeys } from '../hooks/useApiKeys';
+import { Input as ShadcnInput } from './ui/input';
+import { shouldShowParameter } from '../utils/parameterVisibility';
 
 // Map node types to provider keys for AI model nodes
 import { AI_MODEL_PROVIDER_MAP } from '../nodeDefinitions/aiModelNodes';
@@ -910,23 +912,35 @@ const FixedCollectionRenderer: React.FC<{
               backgroundColor: theme.colors.background,
               padding: '12px'
             }}>
-              {option.values?.map((valueParam: any) => (
-                <ParameterRenderer
-                  key={valueParam.name}
-                  parameter={valueParam}
-                  value={optionValue[valueParam.name]}
-                  onChange={(newValue) => {
-                    onChange({
-                      ...currentValue,
-                      [option.name]: {
-                        ...optionValue,
-                        [valueParam.name]: newValue
-                      }
-                    });
-                  }}
-                  allParameters={allParameters}
-                />
-              ))}
+              {option.values?.map((valueParam: any) => {
+                // Wave 10.G.1: propagate `displayOptions.show` into nested
+                // fixedCollection renders. Without this, sub-parameters with
+                // conditional visibility render unconditionally inside the
+                // collection, showing fields whose gate isn't satisfied.
+                // The visibility context is the merged {allParameters, option
+                // sub-values}, so a `show: {<siblingInCollection>: [...]}`
+                // can gate on sibling values too.
+                if (!shouldShowParameter(valueParam, { ...allParameters, ...optionValue })) {
+                  return null;
+                }
+                return (
+                  <ParameterRenderer
+                    key={valueParam.name}
+                    parameter={valueParam}
+                    value={optionValue[valueParam.name]}
+                    onChange={(newValue) => {
+                      onChange({
+                        ...currentValue,
+                        [option.name]: {
+                          ...optionValue,
+                          [valueParam.name]: newValue,
+                        },
+                      });
+                    }}
+                    allParameters={allParameters}
+                  />
+                );
+              })}
             </div>
           </div>
         );
@@ -970,7 +984,7 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
   const [nodeParameters, setNodeParameters] = useState<Record<string, any>>({});
 
   const { selectedNode } = useAppStore();
-  const { getNodeParameters } = useWebSocket();
+  const { getNodeParameters, sendRequest } = useWebSocket();
   const { getStoredApiKey, hasStoredKey, getStoredModels, getProviderDefaults } = useApiKeys();
 
   // Don't render hidden parameters
@@ -1126,26 +1140,44 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
         const nodeType = selectedNode.data?.nodeType || selectedNode.type;
         const nodeDef = nodeType ? nodeDefinitions[nodeType] : null;
 
-        if (nodeDef?.methods?.loadOptions?.[parameter.typeOptions.loadOptionsMethod]) {
-          const loadMethod = nodeDef.methods.loadOptions[parameter.typeOptions.loadOptionsMethod];
+        let rawOptions: Array<{ value: any; name?: string; label?: string }> = [];
+        const method = parameter.typeOptions.loadOptionsMethod;
 
-          // Create context for the load method
+        if (nodeDef?.methods?.loadOptions?.[method]) {
+          // Legacy frontend-defined loader (rare — most nodes are slimmed).
+          const loadMethod = nodeDef.methods.loadOptions[method];
           const context = {
-            getCurrentNodeParameter: (paramName: string) => allParamsResolved[paramName]
+            getCurrentNodeParameter: (paramName: string) => allParamsResolved[paramName],
           };
-
-          // Call the load method with context
-          const options = await loadMethod.call(context);
-          setDynamicOptions(options);
-
-          // Also update the DynamicParameterService for consistency
-          DynamicParameterService.updateParameterOptions(selectedNode.id, parameter.name, options);
-
-          // Auto-select first option if current value is empty and options are available
-          if (options.length > 0 && (!currentValue || currentValue === '')) {
-            console.log(`[ParameterRenderer] Auto-selecting first option for ${parameter.name}:`, options[0].value);
-            onChange(options[0].value);
+          rawOptions = await loadMethod.call(context);
+        } else {
+          // Wave 10.G.1: dispatch to backend loader via the unified
+          // `load_options` WS handler (server/routers/websocket.py:281).
+          // Every non-WhatsApp loadOptionsMethod goes through here now —
+          // Google Workspace (gmailLabels / googleCalendarList / etc.),
+          // Android services, and any future backend-registered loader.
+          try {
+            const res = await sendRequest<{ options: Array<{ value: any; label?: string }> }>(
+              'load_options',
+              { method, params: { node_id: selectedNode.id, ...allParamsResolved } },
+            );
+            rawOptions = res?.options ?? [];
+          } catch (err) {
+            console.error(`[ParameterRenderer] backend load_options(${method}) failed:`, err);
           }
+        }
+
+        // Backend returns `{value, label}`; INodePropertyOption wants
+        // `{name, value}`. Normalise while preserving the original label.
+        const options = rawOptions.map(o => ({
+          name: o.name ?? o.label ?? String(o.value),
+          value: o.value,
+        }));
+
+        setDynamicOptions(options);
+        DynamicParameterService.updateParameterOptions(selectedNode.id, parameter.name, options);
+        if (options.length > 0 && (!currentValue || currentValue === '')) {
+          onChange(options[0].value);
         }
       } catch (error) {
         console.error('Error loading dynamic options:', error);
@@ -1331,7 +1363,13 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
         // Check if this is a code editor
         const isCodeEditor = (parameter as any).typeOptions?.editor === 'code';
 
-        if (shouldUseTextarea) {
+        // Wave 10.G.1: `password: true` must win over multi-row textarea —
+        // a multi-line field (e.g. rows:1 + password:true) used to render as
+        // plain textarea because the textarea branch below never checked
+        // `isPassword`. Downgrade to `<input type="password">` in that case.
+        if (shouldUseTextarea && isPassword) {
+          // fall through to the non-textarea branch so masking is honoured.
+        } else if (shouldUseTextarea) {
           // Use CodeEditor for code editing
           if (isCodeEditor) {
             // Show loading state while parameters are being fetched
@@ -2101,6 +2139,40 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
             }}
             onFocus={(e) => e.target.style.borderColor = theme.colors.focus}
             onBlur={(e) => e.target.style.borderColor = theme.colors.border}
+          />
+        );
+
+      case 'code': {
+        // Wave 10.G.1: dedicated widget for Pydantic fields tagged
+        // `json_schema_extra={"editor": "code"}`. Before this case the
+        // adapter mapped them to INodeProperties.type='code' but the
+        // switch had no handler — they rendered as
+        // "Unsupported parameter type: code".
+        const codeLanguage = (parameter as any).typeOptions?.editorLanguage || 'python';
+        if (isLoadingParameters) {
+          return (
+            <div className="flex items-center justify-center rounded-md border border-border bg-muted text-muted-foreground text-sm min-h-[200px]">
+              Loading code...
+            </div>
+          );
+        }
+        return (
+          <CodeEditor
+            value={currentValue || parameter.default || ''}
+            onChange={onChange}
+            language={codeLanguage}
+            placeholder={parameter.placeholder}
+          />
+        );
+      }
+
+      case 'dateTime':
+        // shadcn Input — see client/src/components/ui/input.tsx
+        return (
+          <ShadcnInput
+            type="datetime-local"
+            value={currentValue || parameter.default || ''}
+            onChange={(e) => onChange(e.target.value)}
           />
         );
 

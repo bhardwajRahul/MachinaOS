@@ -96,9 +96,14 @@ type InodeType = INodeProperties['type'];
  */
 function mapPropertyType(prop: JsonSchemaProperty): InodeType {
   if (prop.enum && prop.enum.length > 0) return 'options';
-  if (prop.uiHints?.editor === 'code') return 'code';
-  if (prop.uiHints?.editor === 'json') return 'json';
-  if (prop.uiHints?.widget === 'file' || prop.format === 'binary') return 'file';
+  // Pydantic Field(json_schema_extra={"editor": "code"}) lands at the
+  // property top-level; nested ``uiHints: {...}`` is the alternate
+  // location. Check both so authors can use either.
+  const editor = (prop as any).editor ?? prop.uiHints?.editor;
+  if (editor === 'code') return 'code';
+  if (editor === 'json') return 'json';
+  const widget = (prop as any).widget ?? prop.uiHints?.widget;
+  if (widget === 'file' || prop.format === 'binary') return 'file';
   if (prop.format === 'date-time' || prop.format === 'date') return 'dateTime';
   // anyOf([T, null]) is the Pydantic Optional[T] pattern — take the non-null branch.
   if (prop.anyOf) {

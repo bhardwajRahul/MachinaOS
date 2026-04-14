@@ -39,6 +39,7 @@ import { INodeTypeDescription, INodeProperties } from '../../types/INodeProperti
 import { ExecutionResult } from '../../services/executionService';
 import { Edge } from 'reactflow';
 import { SKILL_NODE_TYPES, skillNodes } from '../../nodeDefinitions/skillNodes';
+import { shouldShowParameter } from '../../utils/parameterVisibility';
 
 // Tool node types that support schema editing
 const TOOL_NODE_TYPES = ['androidTool', 'calculatorTool', 'currentTimeTool', 'duckduckgoSearch'];
@@ -90,29 +91,8 @@ interface MiddleSectionProps {
   executionResults?: ExecutionResult[];
 }
 
-const shouldShowParameter = (param: INodeProperties, allParameters: Record<string, any>): boolean => {
-  if (!param.displayOptions?.show) {
-    return true;
-  }
-
-  const showConditions = param.displayOptions.show;
-
-  for (const [paramName, allowedValues] of Object.entries(showConditions)) {
-    const currentValue = allParameters[paramName];
-
-    if (Array.isArray(allowedValues)) {
-      if (!allowedValues.includes(currentValue)) {
-        return false;
-      }
-    } else {
-      if (currentValue !== allowedValues) {
-        return false;
-      }
-    }
-  }
-
-  return true;
-};
+// shouldShowParameter moved to utils/parameterVisibility for sharing
+// with ParameterRenderer's nested fixedCollection/collection recursion.
 
 const MiddleSection: React.FC<MiddleSectionProps> = ({
   nodeId,
