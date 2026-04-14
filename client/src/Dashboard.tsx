@@ -13,35 +13,19 @@ import {
   Edge,
 } from 'reactflow';
 import { featureFlags } from './lib/featureFlags';
-import { prefetchAllNodeSpecs } from './lib/nodeSpec';
+import { prefetchAllNodeSpecs, getCachedNodeSpec } from './lib/nodeSpec';
 import AIAgentNode from './components/AIAgentNode';
 import ModelNode from './components/ModelNode';
 import SquareNode from './components/SquareNode';
 import TriggerNode from './components/TriggerNode';
 import ToolkitNode from './components/ToolkitNode';
 import TeamMonitorNode from './components/TeamMonitorNode';
+import StartNode from './components/StartNode';
 import ConditionalEdge from './components/ConditionalEdge';
 import NodeContextMenu from './components/ui/NodeContextMenu';
 import { nodeDefinitions } from './nodeDefinitions';
-import { ANDROID_SERVICE_NODE_TYPES } from './nodeDefinitions/androidServiceNodes';
-import { SCHEDULER_NODE_TYPES } from './nodeDefinitions/schedulerNodes';
-import { CHAT_NODE_TYPES } from './nodeDefinitions/chatNodes';
-import { CODE_NODE_TYPES } from './nodeDefinitions/codeNodes';
-import { UTILITY_NODE_TYPES } from './nodeDefinitions/utilityNodes';
-import { TOOL_NODE_TYPES } from './nodeDefinitions/toolNodes';
 import { SPECIALIZED_AGENT_TYPES } from './nodeDefinitions/specializedAgentNodes';
 import { SKILL_NODE_TYPES } from './nodeDefinitions/skillNodes';
-import { DOCUMENT_NODE_TYPES } from './nodeDefinitions/documentNodes';
-import { SEARCH_NODE_TYPES } from './nodeDefinitions/searchNodes';
-import { SOCIAL_NODE_TYPES } from './nodeDefinitions/socialNodes';
-import { APIFY_NODE_TYPES } from './nodeDefinitions/apifyNodes';
-import { GOOGLE_WORKSPACE_NODE_TYPES } from './nodeDefinitions/googleWorkspaceNodes';
-import { PROXY_NODE_TYPES } from './nodeDefinitions/proxyNodes';
-import { CRAWLEE_NODE_TYPES } from './nodeDefinitions/crawleeNodes';
-import { BROWSER_NODE_TYPES } from './nodeDefinitions/browserNodes';
-import { FILESYSTEM_NODE_TYPES } from './nodeDefinitions/filesystemNodes';
-import { PROCESS_NODE_TYPES } from './nodeDefinitions/processNodes';
-import { AI_CHAT_MODEL_TYPES } from './nodeDefinitions/aiModelNodes';
 import ParameterPanel from './ParameterPanel';
 import LocationParameterPanel from './components/LocationParameterPanel';
 import { useAppStore } from './store/useAppStore';
@@ -74,114 +58,51 @@ import { importWorkflowFromFile } from './utils/workflowExport';
 
 import 'reactflow/dist/style.css';
 
-// Node types configuration - defined outside component to prevent recreation on re-renders
-// This is required by React Flow to avoid performance issues
+// Wave 10.D step 2: React-component dispatch table.
+//
+// The frontend's only per-node-type knowledge: which React Flow
+// component renders which `componentKind`. Everything else (icon,
+// color, handles, subtitle, size, uiHints) comes from the backend
+// NodeSpec served by server/nodes/*.py plugin modules.
+//
+// `tool` and `square` both render via SquareNode today; `chat` reuses
+// AIAgentNode (the chat agent has the same handle topology). Adding a
+// new componentKind takes one entry here + the corresponding Pydantic
+// `Literal` value in server/models/node_metadata.NodeMetadata.
+const COMPONENT_BY_KIND: Record<string, React.ComponentType<any>> = {
+  start: StartNode,
+  trigger: TriggerNode,
+  agent: AIAgentNode,
+  chat: AIAgentNode,
+  model: ModelNode,
+  square: SquareNode,
+  tool: SquareNode,
+  generic: SquareNode,
+};
+
+// Build the React Flow `nodeTypes` map: spec.componentKind → component.
+// Falls back to a small set of legacy hints for the few cases the spec
+// doesn't yet cover (skill nodes use ToolkitNode; teamMonitor has its
+// own live-display component). Once those are spec-driven too, the
+// fallback collapses to a single `SquareNode` default.
 const createNodeTypes = (): Record<string, React.ComponentType<any>> => {
   const types: Record<string, React.ComponentType<any>> = {};
-
-  // Trigger nodes (no input handles) - check by group or specific types
-  const TRIGGER_NODE_TYPES = ['start', 'cronScheduler', 'webhookTrigger', 'whatsappReceive', 'telegramReceive', 'twitterReceive', 'gmailReceive', 'emailReceive', 'chatTrigger', 'taskTrigger'];
-
-  // Pre-register specialized agent nodes explicitly to ensure they're always available
-  // This handles cases where nodeDefinitions iteration order might miss them
-  SPECIALIZED_AGENT_TYPES.forEach(type => {
-    types[type] = AIAgentNode;
-  });
-
   Object.keys(nodeDefinitions).forEach(type => {
-    const definition = nodeDefinitions[type];
-
-    // Trigger nodes - no input connections (start workflows)
-    if (TRIGGER_NODE_TYPES.includes(type)) {
-      types[type] = TriggerNode;
-    } else if (AI_CHAT_MODEL_TYPES.includes(type)) {
-      // AI chat model nodes use square design
-      types[type] = SquareNode;
-    } else if (type === 'aiAgent' || type === 'chatAgent') {
-      types[type] = AIAgentNode;
-    } else if (type === 'simpleMemory') {
-      // Simple Memory node for AI conversation history - uses circular ModelNode design
-      types[type] = ModelNode;
-    } else if (type === 'whatsappSend' || type === 'whatsappDb') {
-      // WhatsApp action nodes use SquareNode (whatsappReceive is a trigger)
-      types[type] = SquareNode;
-    } else if (type === 'telegramSend') {
-      // Telegram action node uses SquareNode (telegramReceive is a trigger)
-      types[type] = SquareNode;
-    } else if (type === 'emailSend' || type === 'emailRead') {
-      // Email action nodes use SquareNode (emailReceive is a trigger)
-      types[type] = SquareNode;
-    } else if (type === 'twitterSend' || type === 'twitterSearch' || type === 'twitterUser') {
-      // Twitter action nodes use SquareNode (twitterReceive is a trigger)
-      types[type] = SquareNode;
-    } else if (GOOGLE_WORKSPACE_NODE_TYPES.includes(type)) {
-      // Google Workspace nodes (gmail, gmailReceive, calendar, drive, sheets, tasks, contacts)
-      types[type] = SquareNode;
-    } else if (ANDROID_SERVICE_NODE_TYPES.includes(type)) {
-      // Android service nodes use SquareNode component
-      types[type] = SquareNode;
-    } else if (SCHEDULER_NODE_TYPES.includes(type)) {
-      // Timer uses SquareNode (has input), cronScheduler already handled as trigger above
-      types[type] = SquareNode;
-    } else if (CHAT_NODE_TYPES.includes(type)) {
-      // Chat nodes use SquareNode component
-      types[type] = SquareNode;
-    } else if (CODE_NODE_TYPES.includes(type)) {
-      // Code execution nodes use SquareNode component
-      types[type] = SquareNode;
-    } else if (UTILITY_NODE_TYPES.includes(type)) {
-      // Utility nodes (HTTP, Webhooks, Team Monitor) use SquareNode component
-      // Note: webhookTrigger and chatTrigger are already handled as triggers above
-      types[type] = SquareNode;
+    const spec = getCachedNodeSpec(type);
+    const kind = spec?.componentKind;
+    if (kind && COMPONENT_BY_KIND[kind]) {
+      types[type] = COMPONENT_BY_KIND[kind];
     } else if (type === 'teamMonitor') {
-      // Team Monitor node uses custom component with live display
       types[type] = TeamMonitorNode;
-    } else if (SPECIALIZED_AGENT_TYPES.includes(type)) {
-      // Specialized agent nodes use AIAgentNode (rectangular card with bottom handles)
-      types[type] = AIAgentNode;
-    } else if (TOOL_NODE_TYPES.includes(type)) {
-      types[type] = SquareNode;
     } else if (SKILL_NODE_TYPES.includes(type)) {
-      // Skill nodes use ToolkitNode (vertical handle layout like Android Toolkit)
       types[type] = ToolkitNode;
-    } else if (DOCUMENT_NODE_TYPES.includes(type)) {
-      // Document processing nodes use SquareNode component
-      types[type] = SquareNode;
-    } else if (APIFY_NODE_TYPES.includes(type)) {
-      // Apify web scraping nodes use SquareNode component
-      types[type] = SquareNode;
-    } else if (SEARCH_NODE_TYPES.includes(type)) {
-      // Search API nodes use SquareNode component
-      types[type] = SquareNode;
-    } else if (PROXY_NODE_TYPES.includes(type)) {
-      // Proxy nodes use SquareNode component
-      types[type] = SquareNode;
-    } else if (CRAWLEE_NODE_TYPES.includes(type)) {
-      // Crawlee web scraping nodes use SquareNode component
-      types[type] = SquareNode;
-    } else if (BROWSER_NODE_TYPES.includes(type)) {
-      // Browser automation nodes use SquareNode component
-      types[type] = SquareNode;
-    } else if (FILESYSTEM_NODE_TYPES.includes(type)) {
-      // Filesystem & shell nodes use SquareNode component
-      types[type] = SquareNode;
-    } else if (PROCESS_NODE_TYPES.includes(type)) {
-      // Process manager nodes use SquareNode component
-      types[type] = SquareNode;
-    } else if (SOCIAL_NODE_TYPES.includes(type)) {
-      // Social nodes use AIAgentNode for multiple output handles support
+    } else if (SPECIALIZED_AGENT_TYPES.includes(type)) {
+      // Pre-prefetch fallback so agents render before specs arrive.
       types[type] = AIAgentNode;
-    } else if (definition?.group?.includes('model')) {
-      // Fallback for other model nodes
-      types[type] = ModelNode;
-    } else if (definition?.group?.includes('service')) {
-      // Any node with 'service' group uses SquareNode component
-      types[type] = SquareNode;
     } else {
       types[type] = SquareNode;
     }
   });
-
   return types;
 };
 
@@ -464,13 +385,21 @@ const DashboardContent: React.FC = () => {
   }, [isConnected, sendRequest, applyUIDefaults]);
 
   // Wave 6 Phase 2: warm the NodeSpec cache in the background once the
-  // WS is up. No-op when VITE_NODESPEC_BACKEND is off.
+  // WS is up. No-op when VITE_NODESPEC_BACKEND is off. After prefetch
+  // completes, bumping `specsReady` flips the React Flow nodeTypes ref
+  // so spec.componentKind dispatch becomes effective (Wave 10.D step 2).
   const hasPrefetchedSpecs = React.useRef(false);
+  const [specsReady, setSpecsReady] = React.useState(false);
   React.useEffect(() => {
     if (!isConnected || hasPrefetchedSpecs.current) return;
-    if (!featureFlags.nodeSpecBackend) return;
+    if (!featureFlags.nodeSpecBackend) {
+      // When the backend is disabled, mark ready so the legacy fallback
+      // dispatch runs without waiting on a never-completing prefetch.
+      setSpecsReady(true);
+      return;
+    }
     hasPrefetchedSpecs.current = true;
-    void prefetchAllNodeSpecs(sendRequest);
+    void prefetchAllNodeSpecs(sendRequest).finally(() => setSpecsReady(true));
   }, [isConnected, sendRequest]);
 
   // Update nodes with execution status classes
@@ -610,10 +539,20 @@ const DashboardContent: React.FC = () => {
 
   const proOptions = React.useMemo(() => ({ hideAttribution: true }), []);
 
-  // Use useRef for nodeTypes to guarantee the same object reference across all renders
-  // including React.StrictMode's double-render cycle. useMemo can't guarantee this
-  // because it may run during both render cycles.
+  // Wave 10.D step 2: nodeTypes is rebuilt once after the NodeSpec
+  // prefetch lands so spec.componentKind dispatch becomes effective.
+  // The initial value (moduleNodeTypes) is computed at module load
+  // before any spec is cached, so it falls through to the small legacy
+  // fallback for every type — fine because most types still render via
+  // SquareNode and the upgrade to spec-driven dispatch only causes one
+  // remount when prefetch completes. React Flow's identity check is the
+  // reason we use a ref + manual setter rather than a useMemo on every
+  // render.
   const nodeTypesRef = React.useRef(moduleNodeTypes);
+  React.useEffect(() => {
+    if (!specsReady) return;
+    nodeTypesRef.current = createNodeTypes();
+  }, [specsReady]);
   const edgeTypesRef = React.useRef(moduleEdgeTypes);
 
   // Execute entire workflow from start node to end
