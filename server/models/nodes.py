@@ -304,10 +304,22 @@ class ProcessManagerParams(BaseNodeParams):
     tool_name: str = Field(default="process_manager", alias="toolName")
     tool_description: str = Field(default="", alias="toolDescription")
     operation: Literal["start", "stop", "restart", "send_input", "list", "get_output"] = "start"
-    name: str = ""
-    command: str = ""
-    cwd: Optional[str] = None
-    input: Optional[str] = None
+    name: str = Field(
+        default="",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["start", "stop", "restart", "send_input", "get_output"]}}},
+    )
+    command: str = Field(
+        default="",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["start"]}}},
+    )
+    cwd: Optional[str] = Field(
+        default=None,
+        json_schema_extra={"displayOptions": {"show": {"operation": ["start"]}}},
+    )
+    input: Optional[str] = Field(
+        default=None,
+        json_schema_extra={"displayOptions": {"show": {"operation": ["send_input"]}}},
+    )
 
 
 # =============================================================================
@@ -348,7 +360,21 @@ class WebhookTriggerParams(BaseNodeParams):
     type: Literal["webhookTrigger"]
     path: str = ""
     method_filter: str = Field(default="all", alias="methodFilter")
-    require_auth: bool = Field(default=False, alias="requireAuth")
+    response_mode: Literal["immediate", "response_node"] = Field(default="immediate", alias="responseMode")
+    authentication: Literal["none", "header"] = "none"
+    header_name: str = Field(
+        default="X-API-Key",
+        alias="headerName",
+        json_schema_extra={"displayOptions": {"show": {"authentication": ["header"]}}},
+    )
+    header_value: str = Field(
+        default="",
+        alias="headerValue",
+        json_schema_extra={
+            "displayOptions": {"show": {"authentication": ["header"]}},
+            "password": True,
+        },
+    )
 
 
 class WebhookResponseParams(BaseNodeParams):
@@ -364,8 +390,15 @@ class ConsoleParams(BaseNodeParams):
     type: Literal["console"]
     label: str = ""
     log_mode: Literal["full", "field", "expression"] = Field(default="full", alias="logMode")
-    field_path: str = Field(default="", alias="fieldPath")
-    expression: str = ""
+    field_path: str = Field(
+        default="",
+        alias="fieldPath",
+        json_schema_extra={"displayOptions": {"show": {"log_mode": ["field"]}}},
+    )
+    expression: str = Field(
+        default="",
+        json_schema_extra={"displayOptions": {"show": {"log_mode": ["expression"]}}},
+    )
     format: Literal["json", "text", "table"] = "json"
 
 
@@ -680,9 +713,18 @@ class EmailReadParams(BaseNodeParams):
     type: Literal["emailRead"]
     provider: str = ""
     operation: Literal["list", "search", "read", "folders", "move", "delete", "flag"] = "list"
-    folder: str = "INBOX"
-    query: str = ""
-    message_id: str = Field(default="", alias="messageId")
+    folder: str = Field(
+        default="INBOX",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["list", "search"]}}},
+    )
+    query: str = Field(
+        default="",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["search"]}}},
+    )
+    message_id: str = Field(
+        default="", alias="messageId",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["read", "move", "delete", "flag"]}}},
+    )
 
 
 class EmailReceiveParams(BaseNodeParams):
@@ -819,8 +861,14 @@ class VectorStoreParams(BaseNodeParams):
     operation: Literal["store", "query", "delete"] = "store"
     backend: Literal["chromadb", "qdrant", "pinecone"] = "chromadb"
     collection_name: str = Field(default="default", alias="collectionName")
-    query: str = ""
-    top_k: int = Field(default=5, alias="topK", ge=1, le=100)
+    query: str = Field(
+        default="",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["query"]}}},
+    )
+    top_k: int = Field(
+        default=5, alias="topK", ge=1, le=100,
+        json_schema_extra={"displayOptions": {"show": {"operation": ["query"]}}},
+    )
 
 
 class FileDownloaderParams(BaseNodeParams):
@@ -844,10 +892,22 @@ class FileModifyParams(BaseNodeParams):
     type: Literal["fileModify"]
     operation: Literal["write", "edit"] = "write"
     file_path: str = Field(default="", alias="filePath")
-    content: str = ""
-    old_string: str = Field(default="", alias="oldString")
-    new_string: str = Field(default="", alias="newString")
-    replace_all: bool = Field(default=False, alias="replaceAll")
+    content: str = Field(
+        default="",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["write"]}}},
+    )
+    old_string: str = Field(
+        default="", alias="oldString",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["edit"]}}},
+    )
+    new_string: str = Field(
+        default="", alias="newString",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["edit"]}}},
+    )
+    replace_all: bool = Field(
+        default=False, alias="replaceAll",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["edit"]}}},
+    )
 
 
 class FsSearchParams(BaseNodeParams):
@@ -871,7 +931,10 @@ class ProxyRequestParams(BaseNodeParams):
     method: Literal["GET", "POST", "PUT", "DELETE", "PATCH"] = "GET"
     url: str = ""
     headers: str = "{}"
-    body: str = ""
+    body: str = Field(
+        default="",
+        json_schema_extra={"displayOptions": {"show": {"method": ["POST", "PUT", "PATCH"]}}},
+    )
     timeout: int = Field(default=30, ge=1, le=300)
     proxy_provider: str = Field(default="auto", alias="proxyProvider")
     proxy_country: str = Field(default="", alias="proxyCountry")

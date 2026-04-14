@@ -553,6 +553,44 @@ class TestDisplayOptionsEnrichment:
         api_key = spec["inputs"]["properties"]["apiKey"]
         assert api_key["password"] is True
 
+    def test_webhook_trigger_header_auth_gated(self):
+        spec = get_node_spec("webhookTrigger")
+        for field in ["headerName", "headerValue"]:
+            prop = spec["inputs"]["properties"][field]
+            assert prop["displayOptions"]["show"]["authentication"] == ["header"]
+        assert spec["inputs"]["properties"]["headerValue"]["password"] is True
+
+    def test_console_field_mode_gating(self):
+        spec = get_node_spec("console")
+        assert spec["inputs"]["properties"]["fieldPath"]["displayOptions"]["show"]["log_mode"] == ["field"]
+        assert spec["inputs"]["properties"]["expression"]["displayOptions"]["show"]["log_mode"] == ["expression"]
+
+    def test_process_manager_operation_gating(self):
+        spec = get_node_spec("processManager")
+        assert spec["inputs"]["properties"]["command"]["displayOptions"]["show"]["operation"] == ["start"]
+        assert spec["inputs"]["properties"]["input"]["displayOptions"]["show"]["operation"] == ["send_input"]
+
+    def test_proxy_request_body_gating(self):
+        spec = get_node_spec("proxyRequest")
+        body = spec["inputs"]["properties"]["body"]
+        assert body["displayOptions"]["show"]["method"] == ["POST", "PUT", "PATCH"]
+
+    def test_vector_store_query_fields_gated(self):
+        spec = get_node_spec("vectorStore")
+        for field in ["query", "topK"]:
+            assert spec["inputs"]["properties"][field]["displayOptions"]["show"]["operation"] == ["query"]
+
+    def test_email_read_operation_gating(self):
+        spec = get_node_spec("emailRead")
+        assert "search" in spec["inputs"]["properties"]["query"]["displayOptions"]["show"]["operation"]
+        assert "read" in spec["inputs"]["properties"]["messageId"]["displayOptions"]["show"]["operation"]
+
+    def test_file_modify_edit_gated(self):
+        spec = get_node_spec("fileModify")
+        for field in ["oldString", "newString", "replaceAll"]:
+            assert spec["inputs"]["properties"][field]["displayOptions"]["show"]["operation"] == ["edit"]
+        assert spec["inputs"]["properties"]["content"]["displayOptions"]["show"]["operation"] == ["write"]
+
 
 class TestUIHintsInNodeSpec:
     """Wave 6 Phase 5.b: NODE_METADATA carries panel-level uiHints
@@ -602,3 +640,111 @@ class TestUIHintsInNodeSpec:
         hints = spec.get("uiHints", {})
         assert hints.get("hideInputSection") is True
         assert hints.get("hideOutputSection") is True
+
+
+class TestNodeSpecContractInvariants:
+    """Wave 6 Phase 3e safety net: runs over every registered NodeSpec
+    and asserts the wire contract stays intact. Catches Pydantic drift
+    / metadata typos before they reach the frontend adapter. Extend
+    these guards when the adapter gets new required fields."""
+
+    def _all_spec_types(self):
+        from services.node_spec import list_node_types_with_spec
+        return list_node_types_with_spec()
+
+    def test_every_spec_has_required_wire_fields(self):
+        """Every spec must have: type, displayName, group, version.
+        Missing any of these would break the adapter's defaults()."""
+        from services.node_spec import get_node_spec
+        for t in self._all_spec_types():
+            spec = get_node_spec(t)
+            assert spec is not None, f"No spec for {t}"
+            for field in ("type", "displayName", "group", "version"):
+                assert field in spec, f"{t}: missing required field {field!r}"
+            assert isinstance(spec["group"], list), f"{t}: group must be list"
+            assert isinstance(spec["version"], int), f"{t}: version must be int"
+
+    def test_input_schemas_have_json_schema_shape(self):
+        """Every emitted input schema must be a valid JSON Schema 7
+        object with properties dict. The adapter crashes if properties
+        is missing."""
+        from services.node_input_schemas import get_node_input_schema, NODE_INPUT_MODELS
+        for t in NODE_INPUT_MODELS:
+            schema = get_node_input_schema(t)
+            assert schema is not None, f"Input schema None for {t}"
+            assert isinstance(schema.get("properties"), dict), f"{t}: no properties dict"
+            # Discriminator stripped from surface
+            assert "type" not in schema["properties"], f"{t}: type discriminator leaked"
+
+    def test_display_options_on_every_rule_is_well_formed(self):
+        """Every displayOptions.show / .hide rule must be a dict whose
+        values are lists (the INodeProperties.displayOptions shape the
+        frontend evaluator expects)."""
+        from services.node_input_schemas import get_node_input_schema, NODE_INPUT_MODELS
+        for t in NODE_INPUT_MODELS:
+            schema = get_node_input_schema(t)
+            for prop_name, prop in schema.get("properties", {}).items():
+                rules = prop.get("displayOptions", {})
+                for key in ("show", "hide"):
+                    rule = rules.get(key)
+                    if rule is None:
+                        continue
+                    assert isinstance(rule, dict), f"{t}.{prop_name}.displayOptions.{key} not dict"
+                    for ref_field, allowed in rule.items():
+                        assert isinstance(allowed, list), (
+                            f"{t}.{prop_name}.displayOptions.{key}[{ref_field!r}] must be list"
+                        )
+
+    def test_load_options_methods_are_registered(self):
+        """Every Pydantic Field(loadOptionsMethod=X) must point at a
+        method registered in LOAD_OPTIONS_REGISTRY. Catches typos and
+        forgotten loader registrations."""
+        from services.node_input_schemas import get_node_input_schema, NODE_INPUT_MODELS
+        from services.node_option_loaders import LOAD_OPTIONS_REGISTRY
+        for t in NODE_INPUT_MODELS:
+            schema = get_node_input_schema(t)
+            for prop_name, prop in schema.get("properties", {}).items():
+                method = prop.get("loadOptionsMethod")
+                if method is None:
+                    continue
+                assert method in LOAD_OPTIONS_REGISTRY, (
+                    f"{t}.{prop_name} references unknown loadOptionsMethod {method!r}"
+                )
+
+    def test_every_enum_option_is_serialisable(self):
+        """Frontend options are {name, value} where value is scalar.
+        Catches Pydantic Literal unions that accidentally include
+        non-serialisable types."""
+        from services.node_input_schemas import get_node_input_schema, NODE_INPUT_MODELS
+        import json
+        for t in NODE_INPUT_MODELS:
+            schema = get_node_input_schema(t)
+            for prop_name, prop in schema.get("properties", {}).items():
+                enum_vals = prop.get("enum", [])
+                for val in enum_vals:
+                    try:
+                        json.dumps(val)
+                    except (TypeError, ValueError) as e:
+                        raise AssertionError(
+                            f"{t}.{prop_name} enum value {val!r} not JSON-serialisable: {e}"
+                        )
+
+    def test_ui_hints_only_carry_known_flags(self):
+        """NODE_METADATA uiHints should only carry flags the frontend
+        INodeUIHints knows about. New flag names without a frontend
+        consumer are dead weight."""
+        from models.node_metadata import NODE_METADATA
+        known = {
+            "hideInputSection", "hideOutputSection", "hideRunButton",
+            "hasCodeEditor", "isMasterSkillEditor", "isMemoryPanel",
+            "isToolPanel", "isMonitorPanel", "showLocationPanel",
+            "isAndroidToolkit", "isChatTrigger", "isConsoleSink",
+            "hasSkills",
+        }
+        for node_type, meta in NODE_METADATA.items():
+            hints = meta.get("uiHints") or {}
+            unknown = set(hints.keys()) - known
+            assert not unknown, (
+                f"{node_type}: NODE_METADATA['uiHints'] has unknown flags {unknown}. "
+                "Add to INodeUIHints + to the `known` set here."
+            )
