@@ -104,6 +104,59 @@ Under that finding, the in-flight Wave 3 Phase 1 was reversed: the backend owns 
 - `InputSection` is a pure consumer of backend-declared shapes. Schema precedence there is the n8n pattern: real execution data wins, declared schema fills in, empty state otherwise.
 - Phase 6 (ParameterRenderer → widget registry) remains blocked on backend `get_node_spec`, but the `jsonSchema` slice of that future contract is the handler shipped in Wave 3 Phase 1b — Phase 6 extends it with `uiSchema` + `_uiHints`, doesn't replace it.
 
+## Wave 4 — finish deferred Wave 3 cleanup (April 2026)
+
+Landed as 3 independent commits: MasterSkillEditor Query migration (`0be3cb8`, −49), MiddleSection shadcn primitives (`ada8bd1`, −320), ConsolePanel Tailwind + CSS var tokens (`9802a48`, −89). All tsc green. Zero new owned components — every UI rewrite used existing shadcn primitives (Accordion, Badge, AlertDialog, Input, Button). Full details in commit messages.
+
+## Wave 5 — architectural cleanup of node components (April 2026)
+
+Two-commit push focused on real architectural debt, not cosmetic inline-style churn:
+- `f55b2c0`: GenericNode.tsx dead `type === 'aiAgent'` ternary removed (unreachable — Dashboard routes aiAgent exclusively to AIAgentNode); imperative `onMouseEnter/Leave` DOM mutations → Tailwind `hover:` classes; Dashboard.tsx `else → GenericNode` fallback swapped to `else → SquareNode` (fallback was never reached at runtime). −28 LOC.
+- SquareNode.tsx `getStoredApiKey` useEffect + 2 useState → `useQuery(['storedApiKey', providerId])` with shared cache across all instances. −25 LOC.
+
+Audit findings deferred with explicit reasons: BaseChatModelNode / SettingsPanel inline-style churn (prop/state-driven, no architectural debt, visual verification required), ParameterRenderer `apiKey`/`model` specials (audit recommended waiting for Phase 6 backend), ConsolePanel remaining CSSProperties (visual regression risk without screenshot diff).
+
+## Wave 6 — backend as NodeSpec source of truth (April 2026)
+
+Extends Wave 3's pattern from runtime output schemas to the full parameter contract. Backend becomes single source of truth for: parameter schemas, validation, defaults, dynamic option loaders, credential requirements, conditional display rules, and UI hints. Frontend `nodeDefinitions/*.ts` retained today for back-compat; flag-gated migration path ready.
+
+Plan: [C:\\Users\\Tgroh\\.claude\\plans\\typed-splashing-crown.md].
+
+| Phase | Status | Commits | Outcome |
+|---|---|---|---|
+| 1 — NodeSpec contract + Pydantic → JSON Schema | ✅ done | `1d8670b` | `server/services/node_input_schemas.py` mirrors Wave 3's output-schema module. `server/services/node_spec.py` assembles `{type, displayName, icon, group, inputs, outputs, credentials, uiHints}`. `server/models/node_metadata.py` carries display strings. `GET /api/schemas/nodes/{type}/spec.json` + `/input.json` + `/specs` list endpoints with 24h Cache-Control. |
+| 2 — Frontend NodeSpec consumer + feature flag | ✅ done | `1d8670b` | `client/src/lib/featureFlags.ts` (`VITE_NODESPEC_BACKEND`, default off). `client/src/lib/nodeSpec.ts` (inline-colocated per design system, matches InputSection Wave 3 pattern). `client/src/adapters/nodeSpecToDescription.ts` (the bridge converting JSON Schema 7 → `INodeProperties[]`). Dashboard idle-time prefetch useEffect. Flag off ⇒ no frontend behavior change. |
+| 3a — Backend parity: utility + code + process + workflow (12 types) | ✅ done | `1d8670b` | 4 new Pydantic models (TypeScriptExecutor, ProcessManager, Console, TeamMonitor). 12 metadata entries. |
+| 3b — Backend parity: messaging (11 types) | ✅ done | `4b699cb` | 7 new Pydantic models (TelegramSend, TwitterSend/Search/User, SocialReceive/Send). 11 metadata entries. |
+| 3c — Backend parity: agents + chat models (28 types) | ✅ done | `8a8a413` | SpecializedAgentParams promoted to mirror AIAgentParams full surface (temperature/max_tokens/thinking/reasoning). 28 metadata entries. |
+| 3d.i — Backend parity: location + scheduler + chat + Android (26 types) | ✅ done | `f3664e7` | 26 metadata entries. `test_input_model_coverage_complete` invariant locks "every input model has metadata". |
+| 3d.ii — Backend parity: long-tail integrations (28 output-only types) | ✅ done | `2b65a7f` | 28 new Pydantic models across search, browser/scraping, email, Google Workspace, document/RAG, filesystem, proxy. `TestWave6FullCoverage` invariants. |
+| 4 — Generalized loadOptionsMethod dispatch | ✅ done | `a3c1ac2` | `server/services/node_option_loaders/` package with registry + `dispatch_load_options()` + 3 WhatsApp loaders (groups/channels/members). `POST /api/schemas/nodes/options/{method}` + WS `load_options`. One-line registration for future Gmail/Calendar/Telegram loaders. |
+| 5.a — Backend node-groups index | ✅ done | `6ef271d` | `GET /api/schemas/nodes/groups` returns `{group: [node_type, ...]}` derived from every NodeSpec's group array. 25 groups with 110 entries (tool=34, agent=19, android=16, trigger=10, …). Replaces 34 frontend `*_NODE_TYPES` arrays once consumers migrate. |
+| 5.b — Frontend consumer migrations | ⏸ deferred | — | Per-component migration from `*_NODE_TYPES` helpers to backend groups. Visual-regression-prone; needs browser verification. |
+| Adapter coverage hardening | ✅ done | `b7b83b3` | `required` field, JSON Schema `format` (dateTime/file/binary), richer enum `options`, typeOptions lift for placeholder/validation/password/rows/editor/editorLanguage/accept/multipleValues/noDataExpression, displayOptions dual-location read (top-level + uiHints wrapper). |
+| Pydantic displayOptions enrichment | ✅ done | `08126b6`, `aca8d1a` | `Field(json_schema_extra={"displayOptions": {...}})` encoded for TwitterSend (6 rules), TwitterUser (3), TelegramSend (9), HttpRequest (4), WhatsAppSend (4 + 2 loadOptionsMethod wirings), SocialSend (2), Gmail (3), Calendar (5). |
+| 3e — Flag flip + delete frontend nodeDefinitions/* properties | ⏸ deferred | — | The biggest LOC win (~−3000 LOC). Adapter now handles most edge cases; remaining need: snapshot Playwright tests per node-type group. |
+| 6 — Sunset `INodeTypeDescription.properties` shape | ⏸ deferred | — | Requires 3e + 5.b complete. |
+
+**Wave 6 numbers (14 commits across this wave):**
+- Backend: 105 Pydantic input models (started 67, +57%), 105 NODE_METADATA entries (started 0), 110 total NodeSpecs (every registered node type), 3 dynamic-option loaders wired, 25 node groups derived. 63/63 pytest cases pass.
+- Frontend: 3 new files (featureFlags.ts, nodeSpec.ts, adapters/nodeSpecToDescription.ts) — all inline-colocated per the design-system "no speculative scaffolding" principle. Zero new hook files.
+- Flag `VITE_NODESPEC_BACKEND` defaults OFF — production behavior unchanged. Flipping ON routes parameter rendering through backend NodeSpec via the adapter.
+- `pnpm exec tsc --noEmit` green throughout all 14 commits.
+
+**Architectural delta (permanent):**
+- Every parameter schema lives on the backend via Pydantic. Adding a new node = one Pydantic class + one handler registry entry + one NODE_METADATA entry. Zero frontend change for parameter rendering.
+- Business logic (validation rules, conditional visibility, dynamic options, credential mappings) is backend-owned. Frontend is a pure renderer of the emitted NodeSpec.
+- `loadOptionsMethod` pattern is registry-driven; adding new dynamic-option loaders (Gmail labels, Calendar list, Telegram chats) is a one-line registration.
+- NodeSpec emission follows the Wave 3 RFC template: Pydantic → JSON Schema → REST endpoint with `Cache-Control: public, max-age=86400` + WS mirror + TanStack Query consumer.
+
+**What's still deferred for Wave 7:**
+- Phase 3e (flag flip + frontend nodeDefinitions/* deletion). Adapter is ready; snapshot tests are the remaining prerequisite.
+- Phase 5.b (per-component migration from `*_NODE_TYPES` arrays to `getCachedNodeGroups()`).
+- Gmail / Calendar / Telegram / Twitter loadOptions loaders (Phase 4 registry is ready for the one-line registrations).
+- ParameterRenderer → DIY widget registry (the capstone); now unblocked on backend since NodeSpec's `uiHints` carry widget routing.
+
 ## Context
 
 The MachinaOs frontend was coupled to Ant Design (40 files, 187-line theme file, `ConfigProvider` at root). Pre-migration audit + research docs (now deleted; see git history under commit `4cb3dd9` if needed) prescribed shadcn/ui (canonical components copied via CLI registry) + Radix primitives + Tailwind 4 + JSON Forms for a schema-driven inspector. Phase 0/1 commits (`2209dba`, `7ac69fe`) included hand-written primitives and a toast facade — those got deleted as part of corrected Phase 0 (`cdeebb4`).

@@ -1,8 +1,8 @@
 # Schema source of truth — RFC
 
-**Status:** ✅ **implemented** · **Owner:** frontend + backend platform · **Date:** 2026-04-14 · **Landed across:** commits `cd252c1` → `4a4a439` (8 commits on `feature/credentials-scaling-v2`)
+**Status:** ✅ **implemented + extended to NodeSpec** · **Owner:** frontend + backend platform · **Original landing:** 2026-04-14 (output schemas) · **Wave 6 extension:** 2026-04-15+ (full NodeSpec contract)
 
-## Landed outcome
+## Landed outcome (Wave 3 — output schemas)
 
 - Backend registry seeded with **98 Pydantic models** in [server/services/node_output_schemas.py](../server/services/node_output_schemas.py) covering every node type the deleted `sampleSchemas` map covered, plus all 18 specialized agents and 9 chat models.
 - `GET /api/schemas/nodes/{node_type}.json` serves static JSON Schema (Cache-Control `public, max-age=86400`). 404 for unknown types.
@@ -10,6 +10,43 @@
 - [InputSection.tsx](../client/src/components/parameterPanel/InputSection.tsx) consumes schemas lazy via `queryClient.fetchQuery(['nodeOutputSchema', nodeType])`, in-memory cache only. **1,673 → 972 LOC** (−701). sampleSchemas map, 20 `isXxxNode` detection constants, and 60-line pattern-match chain all gone.
 - `outputSchema` field removed from `INodeTypeDescription` — the frontend type no longer has any shape-describing surface for runtime output.
 - Adding a new node type's output shape: one Pydantic model in `node_output_schemas.py`. Zero frontend change.
+
+## Wave 6 extension (input schemas + full NodeSpec)
+
+Wave 3 proved the pattern for output schemas. Wave 6 generalises it to the **full parameter contract** — the business-logic surface the frontend still owned via `nodeDefinitions/*.ts` `properties` arrays, `displayOptions`, validation rules, dynamic-option loaders, and credential mappings.
+
+**Shipped contract:**
+
+- **Input schemas** — [server/services/node_input_schemas.py](../server/services/node_input_schemas.py) registers **105 Pydantic input models** across every node type, auto-expanding `SpecializedAgentParams` (16 variants) and `AndroidServiceParams` (16 variants) via Literal union introspection.
+- **NodeSpec envelope** — [server/services/node_spec.py](../server/services/node_spec.py) assembles `{type, displayName, icon, group, description, version, inputs (JSON Schema), outputs (JSON Schema, reuses Wave 3), credentials, uiHints}` fusing three sources of truth.
+- **Display metadata** — [server/models/node_metadata.py](../server/models/node_metadata.py) carries **105 entries** (one per input-modeled type). The only new server-side data file.
+- **Endpoints** — alongside the Wave 3 `/nodes/{type}.json` output endpoint: `GET /api/schemas/nodes/{type}/spec.json`, `/nodes/{type}/input.json`, `/nodes/specs` (list), all with 24h `Cache-Control`. WS mirrors: `get_node_spec`, `list_node_specs`.
+- **loadOptionsMethod dispatch** — [server/services/node_option_loaders/](../server/services/node_option_loaders/) generalises the WhatsApp-only pattern to a registry. Adding a new dynamic-option loader = one-line registration. `POST /api/schemas/nodes/options/{method}` + WS `load_options`.
+- **Node-groups index** — `GET /api/schemas/nodes/groups` returns `{group: [node_type, ...]}` derived from every NodeSpec's `group` array. **25 groups with 110 entries** replacing the **34 hand-rolled `*_NODE_TYPES` arrays** scattered across 6 frontend files.
+- **Pydantic Field hints** — authors encode `displayOptions.show`/`.hide`, `loadOptionsMethod`, `placeholder`, `validation`, `typeOptions` via `Field(json_schema_extra={...})`. Currently ~36 rules encoded across TwitterSend/User, TelegramSend, HttpRequest, WhatsAppSend, SocialSend, Gmail, Calendar.
+
+**Frontend consumer (feature-flagged):**
+
+- `VITE_NODESPEC_BACKEND` flag at [client/src/lib/featureFlags.ts](../client/src/lib/featureFlags.ts). Defaults OFF — legacy `nodeDefinitions/*.ts` wins; ON routes rendering through backend NodeSpec via the adapter.
+- [client/src/lib/nodeSpec.ts](../client/src/lib/nodeSpec.ts) — shared `fetchNodeSpec`/`prefetchAllNodeSpecs`/`resolveNodeDescription` helpers following the Wave 3 colocation pattern (no new hook file).
+- [client/src/adapters/nodeSpecToDescription.ts](../client/src/adapters/nodeSpecToDescription.ts) — NodeSpec wire shape → legacy `INodeTypeDescription` bridge. Handles `required`, JSON Schema `format` (dateTime/file/binary), `displayOptions`, `validation`, typeOptions lift (`loadOptionsMethod`, `password`, `rows`, `editor`, `editorLanguage`, `accept`, …), and reads hints from both top-level and nested `uiHints` wrapper.
+- Dashboard idle-time prefetch warms all 110 NodeSpecs after WebSocket connect (no-op when flag off).
+
+**Adding a new node type's parameter surface:**
+
+1. Define `XyzParams(BaseNodeParams)` in [server/models/nodes.py](../server/models/nodes.py) with `type: Literal["xyz"]` discriminator and Field constraints.
+2. Register in `KnownNodeParams` discriminated union.
+3. Register in `NODE_INPUT_MODELS` dict in `node_input_schemas.py`.
+4. Add `NODE_METADATA["xyz"] = {displayName, icon, group, description, version}` in `node_metadata.py`.
+
+Zero frontend change for parameter rendering. Icons that are SVG assets still need frontend import until SVG payload migration is its own follow-up.
+
+**What's deferred (Wave 7):**
+
+- Phase 3e flag flip + frontend `nodeDefinitions/*.ts` reductions (~3000 LOC deletion). Adapter is ready; snapshot Playwright tests are the remaining prerequisite.
+- Phase 5.b per-component migration from `*_NODE_TYPES` arrays to backend groups.
+- Gmail/Calendar/Telegram/Twitter loadOptions loaders (Phase 4 registry is ready for one-line registrations).
+- ParameterRenderer → DIY widget registry (the capstone). Now unblocked on backend since NodeSpec's `uiHints` already carry widget routing.
 
 ## Problem
 
