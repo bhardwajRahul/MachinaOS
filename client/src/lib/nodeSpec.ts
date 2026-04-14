@@ -89,14 +89,22 @@ export function isNodeInBackendGroup(
 }
 
 /**
- * Flag-gated resolver. When `VITE_NODESPEC_BACKEND` is off (default),
- * returns `localFallback` unchanged — legacy `nodeDefinitions/*` wins.
- * When on, returns the adapter output from the cached NodeSpec, or
- * falls through to `localFallback` if the spec hasn't arrived yet.
+ * Wave 7 flag-gated resolver.
  *
- * Phase 3 sub-commits use this seam to delete legacy definitions one
- * file group at a time: once a group's NodeSpec is seeded on the
- * backend, the local fallback can drop to a minimal stub (or vanish).
+ * Flag OFF: returns `localFallback` unchanged.
+ * Flag ON + spec cold: falls back to `localFallback` so the editor
+ *   never renders an empty panel during prefetch warmup.
+ * Flag ON + spec warm: returns the backend NodeSpec adapted to the
+ *   INodeTypeDescription shape. Local UX-only hints that are absent
+ *   from the NodeSpec (starter code defaults, placeholder JSON) are
+ *   merged in per-property so the adapter never regresses UX.
+ *
+ * Merge rules (backend wins on schema, local wins on UX):
+ *   - Schema fields (type, options, displayOptions, typeOptions,
+ *     validation, required, description): always backend when present
+ *   - UX fields (placeholder): backend when non-empty, else local
+ *   - default: backend when non-empty, else local (preserves starter
+ *     code + example JSON blobs that live only in the frontend)
  */
 export function resolveNodeDescription(
   nodeType: string,
@@ -106,6 +114,37 @@ export function resolveNodeDescription(
     return localFallback ?? null;
   }
   const spec = getCachedNodeSpec(nodeType);
-  if (spec) return nodeSpecToDescription(spec);
-  return localFallback ?? null;
+  if (!spec) return localFallback ?? null;
+
+  const backend = nodeSpecToDescription(spec);
+  if (!localFallback) return backend;
+
+  // Per-property merge: keep backend as authoritative but pull UX
+  // niceties (placeholder + non-empty default) from local when the
+  // backend version is empty. Unknown local properties (no matching
+  // backend entry) are dropped - backend is the schema SSOT.
+  const localByName = new Map(
+    (localFallback.properties ?? []).map((p) => [p.name, p]),
+  );
+  const mergedProperties = (backend.properties ?? []).map((bp) => {
+    const lp = localByName.get(bp.name);
+    if (!lp) return bp;
+    const merged = { ...bp };
+    const bpDefault = (bp as any).default;
+    const bpDefaultEmpty =
+      bpDefault === undefined ||
+      bpDefault === null ||
+      bpDefault === '' ||
+      (typeof bpDefault === 'object' &&
+        !Array.isArray(bpDefault) &&
+        Object.keys(bpDefault).length === 0);
+    if (bpDefaultEmpty && (lp as any).default !== undefined) {
+      (merged as any).default = (lp as any).default;
+    }
+    if (!bp.placeholder && lp.placeholder) merged.placeholder = lp.placeholder;
+    if (!bp.description && lp.description) merged.description = lp.description;
+    return merged;
+  });
+
+  return { ...backend, properties: mergedProperties };
 }
