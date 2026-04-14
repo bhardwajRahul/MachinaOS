@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Loader2, Save } from 'lucide-react';
 import { toast } from 'sonner';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery } from '@tanstack/react-query';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,7 +24,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Zap, Pencil } from 'lucide-react';
+import { Zap, Pencil, Sparkles, TerminalSquare } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import ParameterRenderer from '../ParameterRenderer';
 import ToolSchemaEditor from './ToolSchemaEditor';
 import MasterSkillEditor from './MasterSkillEditor';
@@ -123,19 +124,12 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
   const theme = useAppTheme();
   const { currentWorkflow } = useAppStore();
   const { clearMemory, resetSkill, sendRequest, compactionStats: contextCompactionStats, updateCompactionStats } = useWebSocket();
-  const [isConsoleExpanded, setIsConsoleExpanded] = useState(true);
-  const [connectedSkills, setConnectedSkills] = useState<ConnectedSkill[]>([]);
-  const [isSkillsExpanded, setIsSkillsExpanded] = useState(true);
 
-  // Clear/Reset dialog state
   const [showClearMemoryDialog, setShowClearMemoryDialog] = useState(false);
   const [showResetSkillDialog, setShowResetSkillDialog] = useState(false);
   const [clearLongTermMemory, setClearLongTermMemory] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Compaction state - reads from WebSocket context (real-time updates via broadcasts)
-  const [connectedMemorySessionId, setConnectedMemorySessionId] = useState<string | null>(null);
-  const [compactionLoading, setCompactionLoading] = useState(false);
   const [isEditingThreshold, setIsEditingThreshold] = useState(false);
   const [editThresholdValue, setEditThresholdValue] = useState<number>(0);
 
@@ -163,11 +157,6 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
     },
   });
   const savingThreshold = configureCompactionMutation.isPending;
-
-  // Derive compaction stats from WebSocket context for the connected memory session
-  const compactionStats: CompactionStats | null = connectedMemorySessionId
-    ? contextCompactionStats[connectedMemorySessionId] || null
-    : null;
 
   // For Memory nodes: track the connected agent's ID for auto-session display
   const [connectedAgentId, setConnectedAgentId] = useState<string | null>(null);
@@ -227,11 +216,6 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
   const isToolNode = hints.isToolPanel ?? TOOL_NODE_TYPES.includes(nodeDefinition.name);
   const isAgentWithSkills = hints.hasSkills ?? AGENT_WITH_SKILLS_TYPES.includes(nodeDefinition.name);
 
-  // State for Master Skill parameters
-  const [masterSkillParams, setMasterSkillParams] = useState<Record<string, any>>({});
-
-  // Global user settings read via TanStack Query (shared cache with
-  // Onboarding / SettingsPanel — one WS call across the whole app).
   const { data: userSettings } = useUserSettingsQuery();
 
   // Apply the global memory_window_size default to new Memory nodes. Only
@@ -248,75 +232,68 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodeId, isMemoryNode, userSettings?.memory_window_size]);
 
-  // Get connected memory session ID and compaction stats for agent nodes
-  useEffect(() => {
-    if (!isAgentWithSkills || !currentWorkflow) {
-      setConnectedMemorySessionId(null);
-      return;
-    }
-
-    const edges = currentWorkflow.edges || [];
-
-    // Find memory node connected to input-memory handle
-    const memoryEdge = edges.find((edge: Edge) =>
-      edge.target === nodeId && edge.targetHandle === 'input-memory'
+  const memoryEdgeSourceId = useMemo<string | null>(() => {
+    if (!isAgentWithSkills || !currentWorkflow) return null;
+    const edges: Edge[] = currentWorkflow.edges || [];
+    const memoryEdge = edges.find(
+      (edge) => edge.target === nodeId && edge.targetHandle === 'input-memory',
     );
+    return memoryEdge?.source ?? null;
+  }, [isAgentWithSkills, currentWorkflow, nodeId]);
 
-    if (!memoryEdge) {
-      setConnectedMemorySessionId(null);
-      return;
-    }
+  const memoryParamsQuery = useQuery<Record<string, any>, Error>({
+    queryKey: ['nodeParameters', memoryEdgeSourceId],
+    queryFn: async () => {
+      const response = await sendRequest<{ parameters: Record<string, any> }>(
+        'get_node_parameters',
+        { node_id: memoryEdgeSourceId },
+      );
+      return response?.parameters ?? {};
+    },
+    enabled: !!memoryEdgeSourceId,
+    staleTime: 30_000,
+  });
 
-    // Get memory node's sessionId from its parameters
-    // If empty or 'default', the actual session will be the agent's node_id (auto-derived)
-    const fetchMemorySessionId = async () => {
-      try {
-        const response = await sendRequest<{ parameters: Record<string, any> }>('get_node_parameters', {
-          node_id: memoryEdge.source
-        });
-        const configuredSession = response?.parameters?.sessionId || '';
-        // Auto-derive: use agent's nodeId if sessionId is empty or 'default'
-        const actualSessionId = configuredSession && configuredSession !== 'default'
-          ? configuredSession
-          : nodeId;  // nodeId is the agent's ID
-        setConnectedMemorySessionId(actualSessionId);
+  const connectedMemorySessionId = useMemo<string | null>(() => {
+    if (!memoryEdgeSourceId) return null;
+    const configured: string = memoryParamsQuery.data?.sessionId || '';
+    return configured && configured !== 'default' ? configured : nodeId;
+  }, [memoryEdgeSourceId, memoryParamsQuery.data?.sessionId, nodeId]);
 
-        // Get agent's model/provider for model-aware threshold computation
-        const agentModel = parameters.model || '';
-        const agentProvider = parameters.provider || '';
+  const compactionStatsQuery = useQuery<{
+    session_id: string;
+    total: number;
+    threshold: number;
+    context_length?: number;
+    count: number;
+  }, Error>({
+    queryKey: ['compactionStats', connectedMemorySessionId, parameters.model, parameters.provider],
+    queryFn: () =>
+      sendRequest('get_compaction_stats', {
+        session_id: connectedMemorySessionId,
+        model: parameters.model || '',
+        provider: parameters.provider || '',
+      }),
+    enabled: !!connectedMemorySessionId,
+    staleTime: 15_000,
+  });
+  const compactionLoading = compactionStatsQuery.isFetching;
 
-        // Fetch compaction stats for this session (with model-aware threshold)
-        setCompactionLoading(true);
-        const statsResponse = await sendRequest<{
-          session_id: string;
-          total: number;
-          threshold: number;
-          context_length?: number;
-          count: number;
-        }>('get_compaction_stats', {
-          session_id: actualSessionId,
-          model: agentModel,
-          provider: agentProvider,
-        });
+  useEffect(() => {
+    const stats = compactionStatsQuery.data;
+    if (!stats || !connectedMemorySessionId || !currentWorkflow?.id) return;
+    updateCompactionStats(currentWorkflow.id, connectedMemorySessionId, {
+      session_id: stats.session_id || connectedMemorySessionId,
+      total: stats.total || 0,
+      threshold: stats.threshold,
+      context_length: stats.context_length || 0,
+      count: stats.count || 0,
+    });
+  }, [compactionStatsQuery.data, connectedMemorySessionId, currentWorkflow?.id, updateCompactionStats]);
 
-        if (statsResponse && currentWorkflow?.id) {
-          updateCompactionStats(currentWorkflow.id, actualSessionId, {
-            session_id: statsResponse.session_id || actualSessionId,
-            total: statsResponse.total || 0,
-            threshold: statsResponse.threshold,
-            context_length: statsResponse.context_length || 0,
-            count: statsResponse.count || 0
-          });
-        }
-      } catch (err) {
-        console.error('[MiddleSection] Failed to fetch memory session/compaction stats:', err);
-      } finally {
-        setCompactionLoading(false);
-      }
-    };
-
-    fetchMemorySessionId();
-  }, [nodeId, isAgentWithSkills, currentWorkflow, sendRequest, updateCompactionStats, parameters.model, parameters.provider]);
+  const compactionStats: CompactionStats | null = connectedMemorySessionId
+    ? contextCompactionStats[connectedMemorySessionId] || null
+    : null;
 
   // For Memory nodes: find which AI Agent this memory is connected TO
   // Used to display the auto-derived session ID
@@ -340,60 +317,62 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
     }
   }, [nodeId, isMemoryNode, currentWorkflow]);
 
-  // Get connected skills for agent nodes
-  useEffect(() => {
-    if (!isAgentWithSkills || !currentWorkflow) {
-      setConnectedSkills([]);
-      return;
-    }
-
-    const nodes = currentWorkflow.nodes || [];
-    const edges = currentWorkflow.edges || [];
-
-    // Find edges connecting to this node's input-skill handle
-    const skillEdges = edges.filter((edge: Edge) =>
-      edge.target === nodeId && edge.targetHandle === 'input-skill'
+  const skillEdges = useMemo<Edge[]>(() => {
+    if (!isAgentWithSkills || !currentWorkflow) return [];
+    return (currentWorkflow.edges || []).filter(
+      (edge: Edge) => edge.target === nodeId && edge.targetHandle === 'input-skill',
     );
+  }, [isAgentWithSkills, currentWorkflow, nodeId]);
 
-    // Get skill node data - expand Master Skill nodes
+  const masterSkillEdgeSources = useMemo<string[]>(() => {
+    const nodes = currentWorkflow?.nodes || [];
+    return skillEdges
+      .filter((edge) => nodes.find((n: any) => n.id === edge.source)?.type === 'masterSkill')
+      .map((edge) => edge.source);
+  }, [skillEdges, currentWorkflow?.nodes]);
+
+  const masterSkillParamsQueries = useQueries({
+    queries: masterSkillEdgeSources.map((id) => ({
+      queryKey: ['nodeParameters', id],
+      queryFn: async () => {
+        const response = await sendRequest<{ parameters: Record<string, any> }>(
+          'get_node_parameters',
+          { node_id: id },
+        );
+        return response?.parameters ?? {};
+      },
+      staleTime: 30_000,
+    })),
+  });
+
+  const masterSkillParams = useMemo<Record<string, any>>(() => {
+    const out: Record<string, any> = {};
+    masterSkillEdgeSources.forEach((id, i) => {
+      const data = masterSkillParamsQueries[i]?.data;
+      if (data) out[id] = data;
+    });
+    return out;
+  }, [masterSkillEdgeSources, masterSkillParamsQueries]);
+
+  const connectedSkills = useMemo<ConnectedSkill[]>(() => {
+    const nodes = currentWorkflow?.nodes || [];
     const skills: ConnectedSkill[] = [];
-
     for (const edge of skillEdges) {
       const sourceNode = nodes.find((n: any) => n.id === edge.source);
       const nodeType = sourceNode?.type || '';
-      const nodeDef = nodeDefinitions[nodeType];
-
-      // Check if this is a Master Skill node
-      if (nodeType === 'masterSkill') {
-        // Load Master Skill parameters to get enabled skills
-        const loadMasterSkillParams = async () => {
-          try {
-            const response = await sendRequest<{ parameters: Record<string, any> }>('get_node_parameters', {
-              node_id: edge.source
-            });
-            if (response?.parameters) {
-              setMasterSkillParams(prev => ({ ...prev, [edge.source]: response.parameters }));
-            }
-          } catch (err) {
-            console.error('[MiddleSection] Failed to load Master Skill params:', err);
-          }
-        };
-        loadMasterSkillParams();
-      } else {
-        // Regular skill node
-        skills.push({
-          id: edge.source,
-          name: sourceNode?.data?.label || nodeDef?.displayName || nodeType,
-          type: nodeType,
-          icon: nodeDef?.icon || '',
-          description: nodeDef?.description || '',
-          color: nodeDef?.defaults?.color as string || '#6366F1',
-        });
-      }
+      if (nodeType === 'masterSkill') continue;
+      const def = nodeDefinitions[nodeType];
+      skills.push({
+        id: edge.source,
+        name: sourceNode?.data?.label || def?.displayName || nodeType,
+        type: nodeType,
+        icon: def?.icon || '',
+        description: def?.description || '',
+        color: (def?.defaults?.color as string) || '#6366F1',
+      });
     }
-
-    setConnectedSkills(skills);
-  }, [nodeId, isAgentWithSkills, currentWorkflow, sendRequest]);
+    return skills;
+  }, [skillEdges, currentWorkflow?.nodes]);
 
   // Expand Master Skill enabled skills into connected skills list
   const expandedConnectedSkills = React.useMemo(() => {
@@ -785,329 +764,104 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
             </Accordion>
           )}
 
-          {/* Connected Skills Section - Only for Zeenie nodes */}
           {isAgentWithSkills && (
-            <div style={{
-              marginTop: theme.spacing.lg,
-              backgroundColor: theme.colors.background,
-              border: `1px solid ${theme.colors.border}`,
-              borderRadius: theme.borderRadius.md,
-              boxShadow: `0 1px 3px ${theme.colors.shadowLight}`,
-              overflow: 'hidden'
-            }}>
-              {/* Skills Header */}
-              <div
-                onClick={() => setIsSkillsExpanded(!isSkillsExpanded)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: `${theme.spacing.sm} ${theme.spacing.md}`,
-                  backgroundColor: theme.colors.backgroundAlt,
-                  borderBottom: isSkillsExpanded ? `1px solid ${theme.colors.border}` : 'none',
-                  cursor: 'pointer',
-                  userSelect: 'none'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.sm }}>
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke={theme.colors.textSecondary}
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    style={{
-                      transform: isSkillsExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
-                      transition: 'transform 0.2s ease'
-                    }}
-                  >
-                    <polyline points="9 18 15 12 9 6" />
-                  </svg>
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke={theme.dracula.purple}
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                  </svg>
-                  <span style={{
-                    fontSize: theme.fontSize.sm,
-                    fontWeight: theme.fontWeight.medium,
-                    color: theme.colors.text
-                  }}>
+            <Accordion
+              type="single"
+              collapsible
+              defaultValue="skills"
+              className="mt-4"
+            >
+              <AccordionItem value="skills">
+                <AccordionTrigger>
+                  <span className="flex flex-1 items-center gap-2">
+                    <Sparkles className="h-4 w-4" />
                     Connected Skills
+                    <Badge
+                      variant={expandedConnectedSkills.length > 0 ? 'default' : 'outline'}
+                      className="ml-auto"
+                    >
+                      {expandedConnectedSkills.length}
+                    </Badge>
                   </span>
-                </div>
-                <span style={{
-                  fontSize: theme.fontSize.xs,
-                  color: expandedConnectedSkills.length > 0 ? theme.dracula.purple : theme.colors.textMuted,
-                  padding: `2px ${theme.spacing.sm}`,
-                  backgroundColor: expandedConnectedSkills.length > 0 ? theme.dracula.purple + '20' : theme.colors.backgroundAlt,
-                  borderRadius: theme.borderRadius.sm,
-                  fontWeight: theme.fontWeight.medium
-                }}>
-                  {expandedConnectedSkills.length}
-                </span>
-              </div>
-
-              {/* Skills Content */}
-              {isSkillsExpanded && (
-                <div style={{ padding: theme.spacing.md }}>
+                </AccordionTrigger>
+                <AccordionContent>
                   {expandedConnectedSkills.length === 0 ? (
-                    <div style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      padding: theme.spacing.lg,
-                      color: theme.colors.textMuted,
-                      textAlign: 'center'
-                    }}>
-                      <svg
-                        width="32"
-                        height="32"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke={theme.colors.textMuted}
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        style={{ marginBottom: theme.spacing.sm, opacity: 0.5 }}
-                      >
-                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                      </svg>
-                      <span style={{ fontSize: theme.fontSize.sm, marginBottom: theme.spacing.xs }}>
-                        No skills connected
-                      </span>
-                      <span style={{ fontSize: theme.fontSize.xs }}>
+                    <div className="flex flex-col items-center justify-center gap-1 py-6 text-center text-muted-foreground">
+                      <Sparkles className="mb-1 h-8 w-8 opacity-50" />
+                      <span className="text-sm">No skills connected</span>
+                      <span className="text-xs">
                         Connect skill nodes to the Skill handle to add capabilities
                       </span>
                     </div>
                   ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.sm }}>
+                    <div className="flex flex-col gap-2">
                       {expandedConnectedSkills.map((skill) => (
                         <div
                           key={skill.id}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'flex-start',
-                            gap: theme.spacing.md,
-                            padding: theme.spacing.md,
-                            backgroundColor: theme.colors.backgroundAlt,
-                            borderRadius: theme.borderRadius.md,
-                            border: `1px solid ${theme.colors.border}`,
-                            borderLeft: `3px solid ${skill.color}`
-                          }}
+                          className="flex items-start gap-3 rounded-md border border-border bg-muted/40 p-3"
+                          style={{ borderLeft: `3px solid ${skill.color}` }}
                         >
-                          {/* Skill Icon */}
-                          <div style={{
-                            width: 36,
-                            height: 36,
-                            borderRadius: theme.borderRadius.md,
-                            backgroundColor: skill.color + '20',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            flexShrink: 0
-                          }}>
+                          <div
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md"
+                            style={{ backgroundColor: skill.color + '20' }}
+                          >
                             {skill.icon.startsWith('data:') ? (
-                              <img src={skill.icon} alt={skill.name} style={{ width: 20, height: 20 }} />
+                              <img src={skill.icon} alt={skill.name} className="h-5 w-5" />
                             ) : (
-                              <span style={{ fontSize: 18 }}>{skill.icon}</span>
+                              <span className="text-lg">{skill.icon}</span>
                             )}
                           </div>
-
-                          {/* Skill Info */}
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{
-                              fontSize: theme.fontSize.sm,
-                              fontWeight: theme.fontWeight.semibold,
-                              color: theme.colors.text,
-                              marginBottom: 2
-                            }}>
+                          <div className="min-w-0 flex-1">
+                            <div className="mb-0.5 text-sm font-semibold text-foreground">
                               {skill.name}
                             </div>
-                            <div style={{
-                              fontSize: theme.fontSize.xs,
-                              color: theme.colors.textMuted,
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              display: '-webkit-box',
-                              WebkitLineClamp: 2,
-                              WebkitBoxOrient: 'vertical'
-                            }}>
+                            <div className="line-clamp-2 text-xs text-muted-foreground">
                               {skill.description}
                             </div>
                           </div>
-
-                          {/* Active Badge */}
-                          <div style={{
-                            fontSize: '10px',
-                            fontWeight: theme.fontWeight.medium,
-                            color: theme.dracula.green,
-                            padding: `2px ${theme.spacing.xs}`,
-                            backgroundColor: theme.dracula.green + '20',
-                            borderRadius: theme.borderRadius.sm,
-                            flexShrink: 0
-                          }}>
-                            Active
-                          </div>
+                          <Badge variant="success" className="shrink-0">Active</Badge>
                         </div>
                       ))}
                     </div>
                   )}
-                </div>
-              )}
-            </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
           )}
         </div>
 
-        {/* Console Output Section - Only for Python nodes */}
         {isCodeExecutorNode && (
-          <div style={{
-            padding: `0 ${theme.spacing.xl} ${theme.spacing.xl}`,
-            flex: '1',
-            minHeight: 0,
-            display: 'flex',
-            flexDirection: 'column'
-          }}>
-            <div style={{
-              backgroundColor: theme.colors.background,
-              border: `1px solid ${theme.colors.border}`,
-              borderRadius: theme.borderRadius.md,
-              boxShadow: `0 1px 3px ${theme.colors.shadowLight}`,
-              overflow: 'hidden',
-              flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              minHeight: 0
-            }}>
-              {/* Console Header */}
-              <div
-                onClick={() => setIsConsoleExpanded(!isConsoleExpanded)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: `${theme.spacing.sm} ${theme.spacing.md}`,
-                  backgroundColor: theme.colors.backgroundAlt,
-                  borderBottom: isConsoleExpanded ? `1px solid ${theme.colors.border}` : 'none',
-                  cursor: 'pointer',
-                  userSelect: 'none'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.sm }}>
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke={theme.colors.textSecondary}
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    style={{
-                      transform: isConsoleExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
-                      transition: 'transform 0.2s ease'
-                    }}
-                  >
-                    <polyline points="9 18 15 12 9 6" />
-                  </svg>
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke={theme.dracula.cyan}
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <polyline points="4 17 10 11 4 5" />
-                    <line x1="12" y1="19" x2="20" y2="19" />
-                  </svg>
-                  <span style={{
-                    fontSize: theme.fontSize.sm,
-                    fontWeight: theme.fontWeight.medium,
-                    color: theme.colors.text
-                  }}>
+          <div className="flex min-h-0 flex-1 flex-col px-6 pb-6">
+            <Accordion type="single" collapsible defaultValue="console" className="flex min-h-0 flex-1 flex-col">
+              <AccordionItem value="console" className="flex min-h-0 flex-1 flex-col">
+                <AccordionTrigger>
+                  <span className="flex flex-1 items-center gap-2">
+                    <TerminalSquare className="h-4 w-4" />
                     Console
+                    {consoleOutput && (
+                      <Badge variant="success" className="ml-auto">Output</Badge>
+                    )}
                   </span>
-                </div>
-                {consoleOutput && (
-                  <span style={{
-                    fontSize: theme.fontSize.xs,
-                    color: theme.dracula.green,
-                    padding: `2px ${theme.spacing.sm}`,
-                    backgroundColor: theme.dracula.green + '20',
-                    borderRadius: theme.borderRadius.sm
-                  }}>
-                    Output
-                  </span>
-                )}
-              </div>
-
-              {/* Console Content */}
-              {isConsoleExpanded && (
-                <div style={{
-                  padding: theme.spacing.sm,
-                  backgroundColor: '#1a1a2e',
-                  flex: 1,
-                  minHeight: 0,
-                  overflowY: 'auto',
-                  fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
-                  fontSize: theme.fontSize.sm,
-                  lineHeight: '1.4'
-                }}>
-                  {consoleOutput ? (
-                    <pre style={{
-                      margin: 0,
-                      whiteSpace: 'pre-wrap',
-                      wordBreak: 'break-word',
-                      color: consoleOutput.startsWith('Error') ? theme.dracula.red : theme.dracula.green
-                    }}>
-                      {consoleOutput}
-                    </pre>
-                  ) : (
-                    <div style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      height: '100%',
-                      minHeight: '40px',
-                      color: theme.colors.textMuted
-                    }}>
-                      <svg
-                        width="24"
-                        height="24"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke={theme.colors.textMuted}
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        style={{ marginBottom: theme.spacing.sm, opacity: 0.5 }}
+                </AccordionTrigger>
+                <AccordionContent className="flex min-h-0 flex-1 flex-col">
+                  <div className="min-h-0 flex-1 overflow-y-auto rounded-md bg-[#1a1a2e] p-2 font-mono text-sm leading-relaxed">
+                    {consoleOutput ? (
+                      <pre
+                        className="m-0 whitespace-pre-wrap break-words"
+                        style={{ color: consoleOutput.startsWith('Error') ? theme.dracula.red : theme.dracula.green }}
                       >
-                        <polyline points="4 17 10 11 4 5" />
-                        <line x1="12" y1="19" x2="20" y2="19" />
-                      </svg>
-                      <span style={{ fontSize: theme.fontSize.xs }}>
-                        Run the code to see console output
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+                        {consoleOutput}
+                      </pre>
+                    ) : (
+                      <div className="flex h-full min-h-10 flex-col items-center justify-center text-muted-foreground">
+                        <TerminalSquare className="mb-1 h-6 w-6 opacity-50" />
+                        <span className="text-xs">Run the code to see console output</span>
+                      </div>
+                    )}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
           </div>
         )}
         </>
