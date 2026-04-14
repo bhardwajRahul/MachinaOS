@@ -2,6 +2,8 @@
 
 This guide provides a comprehensive walkthrough for integrating new external services (like Google Workspace, Slack, Notion, etc.) into MachinaOs. It covers OAuth authentication, database models, API handlers, frontend nodes, and AI Agent tool integration.
 
+> **Wave 6 update (April 2026):** the **Frontend Node Definitions** step (#4 below) has shrunk dramatically. Parameter schemas, validation, conditional visibility, and dynamic-option dispatch now live on the backend via Pydantic + the NodeSpec contract. The legacy frontend `nodeDefinitions/*.ts` `properties` arrays are still active until Phase 3e flips `VITE_NODESPEC_BACKEND` ON, but new integrations should follow the [Wave 6 recommended recipe](./node_creation.md#wave-6-recommended-recipe-backend-first) in the node creation guide so they ship through the new path automatically.
+
 ## Overview
 
 A complete service integration includes:
@@ -9,10 +11,14 @@ A complete service integration includes:
 1. **OAuth Service** - Handle authentication with the external provider
 2. **Database Models** - Store OAuth tokens and connection state
 3. **API Handlers** - Execute service operations (CRUD)
-4. **Frontend Node Definitions** - Visual workflow nodes
-5. **AI Tool Schemas** - Enable LLM tool calling
-6. **Credentials Modal** - UI for managing connections
-7. **Pricing Configuration** - Cost tracking for API usage
+4. **Pydantic input model + NODE_METADATA entry** - The Wave 6 recipe replaces the bulk of the legacy frontend node definition work. See [node_creation.md Wave 6 section](./node_creation.md#wave-6-recommended-recipe-backend-first).
+5. **Dynamic-option loaders** - If your service has dropdown fields needing live data (label list, channel list, calendar list), add a loader to [server/services/node_option_loaders/](../server/services/node_option_loaders/) and register in `LOAD_OPTIONS_REGISTRY`. One-line registration; see Google Workspace loaders as the reference (`gmailLabels`, `googleCalendarList`, `googleDriveFolders`, `googleTasklists`).
+6. **Frontend visual-component routing** - Add to the appropriate `*_NODE_TYPES` list or routing branch in [client/src/Dashboard.tsx](../client/src/Dashboard.tsx) so React Flow knows which component to render.
+7. **AI Tool Schemas** - Enable LLM tool calling
+8. **Credentials Modal** - UI for managing connections
+9. **Pricing Configuration** - Cost tracking for API usage
+
+The sections below detail each step using Google Workspace as the reference integration. Sections 1-3 + 7-9 are unchanged in Wave 6; section 4-6 are where the backend-first recipe materially cuts the work.
 
 ## Architecture Pattern
 

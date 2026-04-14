@@ -4,12 +4,86 @@ This guide explains how to create new nodes for MachinaOs, covering frontend def
 
 > **Related Documentation:**
 > - [Workflow Schema](./workflow-schema.md) - JSON schema, edge handle conventions, config node architecture
+> - [Schema Source of Truth RFC](./schema_source_of_truth_rfc.md) - Wave 3 + Wave 6 backend-as-SSOT design
 > - [CLAUDE.md](../CLAUDE.md) - Project overview, key files, architecture patterns
+
+---
+
+## Wave 6 recommended recipe (backend-first)
+
+> **Status:** Wave 6 backend infrastructure shipped on `feature/credentials-scaling-v2`. The frontend feature flag `VITE_NODESPEC_BACKEND` defaults OFF, so the legacy frontend-`nodeDefinitions/*.ts` recipe (sections below) still works. Once Phase 3e flips the flag, **the only authoring location for parameter schemas is the backend**.
+
+For new nodes added today, follow the backend-first recipe — the legacy frontend definition becomes a thin manifest (or vanishes entirely) once the flag flips. You author once on the backend; the frontend renders via the NodeSpec adapter.
+
+### 4-step recipe
+
+1. **Pydantic input model** — declare in [server/models/nodes.py](../server/models/nodes.py):
+   ```python
+   class MyNodeParams(BaseNodeParams):
+       """Parameters for my new node."""
+       type: Literal["myNode"]
+       operation: Literal["create", "update", "delete"] = "create"
+       name: str = Field(default="", json_schema_extra={
+           "displayOptions": {"show": {"operation": ["create", "update"]}},
+       })
+       resource_id: str = Field(
+           default="",
+           alias="resourceId",
+           json_schema_extra={"displayOptions": {"show": {"operation": ["update", "delete"]}}},
+       )
+   ```
+   Use `Field(ge=, le=, alias=, default=)` for constraints and camelCase aliasing. Use `json_schema_extra` for `displayOptions`, `loadOptionsMethod`, `placeholder`, `validation`, `typeOptions` (`password`, `rows`, `editor`, `editorLanguage`, `accept`, `multipleValues`, …).
+
+2. **Register in the discriminated union** in the same file's `KnownNodeParams = Annotated[Union[...]]`.
+
+3. **Pydantic input registry** — add to `_DIRECT_MODELS` in [server/services/node_input_schemas.py](../server/services/node_input_schemas.py):
+   ```python
+   "myNode": MyNodeParams,
+   ```
+
+4. **Display metadata** — add to `NODE_METADATA` in [server/models/node_metadata.py](../server/models/node_metadata.py):
+   ```python
+   "myNode": {
+       "displayName": "My Node",
+       "icon": "🔧",
+       "group": ["category", "tool"],
+       "description": "What this node does",
+       "version": 1,
+   },
+   ```
+
+That's it. The NodeSpec auto-emits at `GET /api/schemas/nodes/myNode/spec.json` with the full parameter contract, validation rules, conditional visibility, and dynamic option routing. The output schema (Wave 3) is a separate Pydantic model in [server/services/node_output_schemas.py](../server/services/node_output_schemas.py) registered in `NODE_OUTPUT_SCHEMAS`.
+
+### Backend handler
+
+The handler in `server/services/handlers/` and registry entry in [server/services/node_executor.py](../server/services/node_executor.py) `_build_handler_registry()` are unchanged from the legacy recipe — still required, see [Backend: Workflow Handler](#backend-workflow-handler) below.
+
+### Dynamic option loaders
+
+If your node has a dropdown field that needs to fetch options at edit-time (e.g. Gmail labels, WhatsApp groups, Calendar list):
+
+1. Write an async loader in [server/services/node_option_loaders/](../server/services/node_option_loaders/) following the established `whatsapp_loaders.py` / `google_loaders.py` pattern.
+2. Register it in `LOAD_OPTIONS_REGISTRY` (one line) in `node_option_loaders/__init__.py`.
+3. Add `json_schema_extra={"loadOptionsMethod": "myMethodName"}` to the relevant Pydantic Field.
+
+The dropdown auto-populates via the unified `POST /api/schemas/nodes/options/{method}` dispatcher.
+
+### Frontend (Wave 6 path)
+
+Today: still need a thin entry in `client/src/nodeDefinitions/*.ts` so the editor knows the node type exists (palette + Dashboard routing). Once Phase 3e flips the flag, the entry can drop to just a `*_NODE_TYPES` array membership (or vanish entirely if backend `group` membership is enough).
+
+Visual component routing in [client/src/Dashboard.tsx](../client/src/Dashboard.tsx) is type-id based and still required. Pick a component (`SquareNode`, `AIAgentNode`, `TriggerNode`, `ToolkitNode`, `ModelNode`) by adding to the relevant `NODE_TYPES` list or routing branch.
+
+### What the legacy sections below describe
+
+The remaining content is the pre-Wave-6 frontend-first recipe: authoring `properties: [...]`, `displayOptions`, `defaults` arrays inside `client/src/nodeDefinitions/*.ts`. **All still works** until Phase 3e — but new authoring should use the Wave 6 recipe above so your node ships through the new path automatically when the flag flips.
+
+---
 
 ## Table of Contents
 
 1. [Node Types Overview](#node-types-overview)
-2. [Frontend: Node Definition](#frontend-node-definition)
+2. [Frontend: Node Definition](#frontend-node-definition) (legacy)
 3. [Frontend: Visual Component](#frontend-visual-component)
 4. [Backend: Workflow Handler](#backend-workflow-handler)
 5. [Template Resolution](#template-resolution)
