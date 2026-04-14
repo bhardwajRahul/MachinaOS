@@ -35,6 +35,11 @@ from services.node_output_schemas import NODE_OUTPUT_SCHEMAS
 
 _HANDLER_REGISTRY: dict[str, Callable] = {}
 
+# Plugin-class registry populated by :class:`BaseNode.__init_subclass__`.
+# Separate from _HANDLER_REGISTRY so the Temporal worker (11.F) can walk
+# plugin classes directly without re-discovering them.
+_NODE_CLASS_REGISTRY: dict[str, type] = {}
+
 
 def register_node(
     *,
@@ -83,6 +88,31 @@ def registered_node_types() -> frozenset[str]:
     """Types that came in via the plugin path. Useful for tests and for
     telling the legacy dispatcher which types it must NOT also claim."""
     return frozenset(_HANDLER_REGISTRY.keys())
+
+
+def register_node_class(node_cls: type) -> None:
+    """Store a :class:`services.plugin.BaseNode` subclass reference.
+
+    Called from ``BaseNode.__init_subclass__`` after the eager
+    ``register_node(...)`` write. Lets Wave 11.F's Temporal worker walk
+    ``_NODE_CLASS_REGISTRY.values()`` to collect ``cls.as_activity()``
+    for registration, without re-discovering via the filesystem.
+    """
+    if not getattr(node_cls, "type", ""):
+        return
+    _NODE_CLASS_REGISTRY[node_cls.type] = node_cls
+
+
+def get_node_class(node_type: str) -> Optional[type]:
+    """Return the :class:`BaseNode` subclass for ``node_type``, or None
+    if this type was registered via the legacy metadata-only form."""
+    return _NODE_CLASS_REGISTRY.get(node_type)
+
+
+def registered_node_classes() -> dict[str, type]:
+    """Snapshot of the plugin-class registry. Used by the Temporal
+    worker to register one activity per plugin."""
+    return dict(_NODE_CLASS_REGISTRY)
 
 
 def register_group(*, key: str, metadata: GroupMetadata) -> None:

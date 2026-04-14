@@ -1,0 +1,363 @@
+"""BaseNode — foundation for Wave 11 plugin-first nodes.
+
+Every ActionNode / TriggerNode / ToolNode inherits from here. Invariants:
+
+- ``__init_subclass__`` collects ``@Operation`` methods into ``_operations``
+  and registers the class into the four legacy registries via
+  ``services.node_registry.register_node``.
+- :meth:`execute` enforces the universal handler signature
+  ``(node_id, parameters, context) -> Dict[str, Any]`` and orchestrates:
+  parameter validation → credential resolve → operation dispatch
+  (with optional declarative routing) → result wrap → usage track.
+- :meth:`as_activity` produces a Temporal-compatible callable for 11.F.
+
+Subclasses set class attributes rather than pass constructor args —
+the class itself *is* the declaration. This keeps node modules flat
+and lets the class object function as the plugin manifest.
+"""
+
+from __future__ import annotations
+
+import time
+from datetime import datetime, timezone
+from typing import Any, Awaitable, Callable, ClassVar, Dict, List, Optional, Sequence, Type
+
+from pydantic import BaseModel, ValidationError
+
+from core.logging import get_logger
+from services.plugin.connection import Connection
+from services.plugin.context import NodeContext
+from services.plugin.credential import Credential
+from services.plugin.operation import OperationSpec, collect_operations
+from services.plugin.routing import execute_routing
+from services.plugin.scaling import (
+    ACTION_START_TO_CLOSE,
+    DEFAULT_HEARTBEAT,
+    DEFAULT_RETRY,
+    RetryPolicy,
+    TaskQueue,
+)
+
+logger = get_logger(__name__)
+
+
+# Sentinel used by Params-less nodes so .model_validate({}) works.
+class _EmptyParams(BaseModel):
+    pass
+
+
+class _EmptyOutput(BaseModel):
+    pass
+
+
+class BaseNode:
+    """Abstract plugin node. Do not instantiate directly — subclass
+    :class:`ActionNode`, :class:`TriggerNode`, or :class:`ToolNode`.
+
+    ===== Declaration (class attributes) =====
+
+    ``type``              node type string, matches workflow JSON / registry key
+    ``version``           integer, bumped for breaking changes
+    ``display_name``      shown in palette + parameter panel header
+    ``subtitle``          shown under display_name in the node header
+    ``icon``              Wave 10.B wire format: "asset:k" / "lobehub:b" / emoji
+    ``color``             hex or dracula token, e.g. "#bd93f9"
+    ``group``             palette groupings, e.g. ["search", "tool"]
+    ``description``       one-line help
+    ``handles``           NodeHandle[] — React Flow topology
+    ``visibility``        "all" / "normal" / "dev"
+    ``hide_output_handle`` bool — replaces NO_OUTPUT_NODE_TYPES
+    ``ui_hints``          dict of flags consumed by parameter panel
+    ``annotations``       Pipedream-style: destructive / readonly / open_world
+
+    ``Params``            Pydantic model — user-facing parameters
+    ``Output``            Pydantic model — runtime output schema
+    ``credentials``       tuple of :class:`Credential` subclasses this node uses
+
+    ``task_queue``        Temporal worker pool (see :class:`TaskQueue`)
+    ``retry_policy``      per-node retry knobs
+    ``start_to_close_timeout`` / ``heartbeat_timeout``
+
+    ``component_kind``    frontend dispatch key — set by subclass
+    ``usable_as_tool``    ActionNode-only — mints a ToolNode adapter
+
+    Operations: methods decorated with ``@Operation("name")``. The
+    multi-op dispatcher reads ``parameters.operation``. Single-op nodes
+    call the sole operation regardless of the ``operation`` field.
+    """
+
+    # ---- declaration (override in subclass) -------------------------------
+    type: ClassVar[str] = ""
+    version: ClassVar[int] = 1
+    display_name: ClassVar[str] = ""
+    subtitle: ClassVar[str] = ""
+    icon: ClassVar[str] = ""
+    color: ClassVar[str] = ""
+    group: ClassVar[Sequence[str]] = ()
+    description: ClassVar[str] = ""
+    handles: ClassVar[Sequence[Dict[str, Any]]] = ()
+    visibility: ClassVar[str] = "all"
+    hide_output_handle: ClassVar[bool] = False
+    ui_hints: ClassVar[Dict[str, Any]] = {}
+    annotations: ClassVar[Dict[str, Any]] = {}
+
+    Params: ClassVar[Type[BaseModel]] = _EmptyParams
+    Output: ClassVar[Type[BaseModel]] = _EmptyOutput
+    credentials: ClassVar[Sequence[Type[Credential]]] = ()
+
+    task_queue: ClassVar[str] = TaskQueue.DEFAULT
+    retry_policy: ClassVar[RetryPolicy] = DEFAULT_RETRY
+    start_to_close_timeout = ACTION_START_TO_CLOSE
+    heartbeat_timeout = DEFAULT_HEARTBEAT
+    max_concurrent: ClassVar[Optional[int]] = None
+
+    component_kind: ClassVar[str] = "generic"
+    usable_as_tool: ClassVar[bool] = False
+
+    # Set by __init_subclass__: {op_name: OperationSpec}
+    _operations: ClassVar[Dict[str, OperationSpec]] = {}
+    # Flag so concrete subclasses auto-register; abstract kinds don't.
+    _abstract: ClassVar[bool] = True
+
+    # ---- subclass hook ----------------------------------------------------
+
+    def __init_subclass__(cls, abstract: bool = False, **kwargs):
+        super().__init_subclass__(**kwargs)
+        cls._abstract = abstract
+        cls._operations = collect_operations(cls)
+        if abstract or not cls.type:
+            return
+        # Eager registry write — same four registries as @register_node.
+        from services.node_registry import register_node, register_node_class
+        register_node(
+            type=cls.type,
+            metadata=cls._metadata_dict(),
+            input_model=cls.Params if cls.Params is not _EmptyParams else None,
+            output_model=cls.Output if cls.Output is not _EmptyOutput else None,
+            handler=cls._make_legacy_handler(),
+        )
+        register_node_class(cls)
+
+    # ---- metadata projection ---------------------------------------------
+
+    @classmethod
+    def _metadata_dict(cls) -> Dict[str, Any]:
+        """Project class attributes onto the :data:`NodeMetadata` TypedDict
+        expected by the existing node_spec emitter."""
+        meta: Dict[str, Any] = {
+            "displayName": cls.display_name or cls.type,
+            "icon": cls.icon,
+            "group": list(cls.group),
+            "description": cls.description,
+            "version": cls.version,
+            "componentKind": cls.component_kind,
+        }
+        if cls.subtitle:
+            meta["subtitle"] = cls.subtitle
+        if cls.color:
+            meta["color"] = cls.color
+        if cls.handles:
+            meta["handles"] = list(cls.handles)
+        if cls.credentials:
+            meta["credentials"] = [c.id for c in cls.credentials]
+        if cls.hide_output_handle:
+            meta["hideOutputHandle"] = True
+        if cls.visibility != "all":
+            meta["visibility"] = cls.visibility
+        if cls.ui_hints:
+            meta["uiHints"] = dict(cls.ui_hints)
+        return meta
+
+    # ---- legacy handler adapter ------------------------------------------
+
+    @classmethod
+    def _make_legacy_handler(cls) -> Callable[..., Awaitable[Dict[str, Any]]]:
+        """Produce a ``(node_id, node_type, parameters, context) -> dict``
+        callable for the existing executor registry. Discard node_type
+        (redundant — class is already the dispatch target) and route
+        through :meth:`execute`.
+        """
+        async def _legacy(
+            node_id: str,
+            node_type: str,
+            parameters: Dict[str, Any],
+            context: Dict[str, Any],
+        ) -> Dict[str, Any]:
+            instance = cls()
+            ctx = NodeContext.from_legacy(
+                node_id=node_id,
+                node_type=node_type,
+                context=context,
+                connection_factory=_make_connection_factory(cls, context),
+            )
+            return await instance.execute(node_id, parameters, ctx)
+        _legacy.__node_class__ = cls       # type: ignore[attr-defined]
+        _legacy.__qualname__ = f"{cls.__qualname__}._legacy_handler"
+        return _legacy
+
+    # ---- lifecycle --------------------------------------------------------
+
+    async def execute(
+        self,
+        node_id: str,
+        parameters: Dict[str, Any],
+        context: NodeContext,
+    ) -> Dict[str, Any]:
+        """Universal entry point. Validate params → dispatch op →
+        wrap result. Subclasses (TriggerNode, ToolNode) override to
+        change the return shape or lifetime.
+        """
+        start_time = time.time()
+
+        try:
+            params_obj = self._validate_params(parameters)
+        except ValidationError as e:
+            return self._wrap_error(
+                start_time=start_time,
+                error=f"Invalid parameters: {e.errors()[0].get('msg', str(e))}",
+                error_type="ValidationError",
+            )
+
+        op_name = self._pick_operation(parameters)
+        op_spec = self._operations.get(op_name)
+        if op_spec is None:
+            return self._wrap_error(
+                start_time=start_time,
+                error=f"Unknown operation '{op_name}' for node {self.type}",
+                error_type="InvalidParametersError",
+            )
+
+        try:
+            result = await self._run_operation(op_spec, params_obj, context)
+        except PermissionError as e:
+            return self._wrap_error(
+                start_time=start_time, error=str(e), error_type="PermissionDeniedError"
+            )
+        except Exception as e:
+            logger.exception("[%s] operation %s failed", self.type, op_name)
+            return self._wrap_error(start_time=start_time, error=str(e), error_type=type(e).__name__)
+
+        return self._wrap_success(start_time=start_time, result=result)
+
+    # ---- internals --------------------------------------------------------
+
+    def _validate_params(self, parameters: Dict[str, Any]) -> BaseModel:
+        return self.Params.model_validate(parameters)
+
+    def _pick_operation(self, parameters: Dict[str, Any]) -> str:
+        """Multi-op nodes read ``parameters['operation']``. Single-op
+        nodes return the one registered name regardless."""
+        if not self._operations:
+            return ""
+        if len(self._operations) == 1:
+            return next(iter(self._operations))
+        return str(parameters.get("operation", ""))
+
+    async def _run_operation(
+        self,
+        spec: OperationSpec,
+        params_obj: BaseModel,
+        ctx: NodeContext,
+    ) -> Any:
+        """Execute either declarative routing or the method body."""
+        if spec.routing is not None:
+            # Pure-declarative: routing handles everything, method body
+            # is expected to be empty.
+            if not self.credentials:
+                raise RuntimeError(
+                    f"Node {self.type} op {spec.name} has routing but no "
+                    "credentials declared — routing needs a Connection."
+                )
+            cred = self.credentials[0]
+            conn = ctx.connection(cred.id)
+            try:
+                return await execute_routing(
+                    spec.routing, params=params_obj.model_dump(), connection=conn,
+                )
+            finally:
+                await conn.aclose()
+
+        # Imperative: invoke the method body (bound via descriptor).
+        method = spec.method.__get__(self, type(self))
+        return await method(ctx, params_obj)
+
+    def _wrap_success(self, *, start_time: float, result: Any) -> Dict[str, Any]:
+        """95%-universal return shape. Subclasses (ToolNode) override."""
+        if isinstance(result, BaseModel):
+            result_data: Any = result.model_dump()
+        else:
+            result_data = result
+        return {
+            "success": True,
+            "result": result_data,
+            "execution_time": round(time.time() - start_time, 3),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
+    def _wrap_error(
+        self, *, start_time: float, error: str, error_type: str = "Error"
+    ) -> Dict[str, Any]:
+        return {
+            "success": False,
+            "error": error,
+            "error_type": error_type,
+            "execution_time": round(time.time() - start_time, 3),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
+    # ---- Temporal ---------------------------------------------------------
+
+    @classmethod
+    def as_activity(cls):
+        """Wrap this node as a ``@activity.defn`` callable for Temporal
+        worker registration (11.F). Uses a stable activity name:
+        ``node.{type}.v{version}``.
+
+        Returns the decorated async function; the worker collects these
+        into ``activities=[...]``.
+        """
+        from temporalio import activity
+
+        activity_name = f"node.{cls.type}.v{cls.version}"
+
+        @activity.defn(name=activity_name)
+        async def _node_activity(payload: Dict[str, Any]) -> Dict[str, Any]:
+            # Temporal lives in another process — rebuild NodeContext.
+            context_dict = payload.get("context", {})
+            instance = cls()
+            ctx = NodeContext.from_legacy(
+                node_id=payload["node_id"],
+                node_type=cls.type,
+                context=context_dict,
+                connection_factory=_make_connection_factory(cls, context_dict),
+            )
+            return await instance.execute(payload["node_id"], payload["parameters"], ctx)
+
+        return _node_activity
+
+
+# ---------------------------------------------------------------------------
+# Connection factory — avoids circular import with NodeContext.
+
+def _make_connection_factory(
+    node_cls: Type[BaseNode],
+    context: Dict[str, Any],
+) -> Callable[[str], Connection]:
+    user_id = context.get("user_id", "owner")
+    session_id = context.get("session_id", "default")
+    node_id = context.get("node_id")
+    # Precompute credential lookup once.
+    creds_by_id: Dict[str, Type[Credential]] = {c.id: c for c in node_cls.credentials}
+
+    def factory(credential_id: str) -> Connection:
+        cred_cls = creds_by_id.get(credential_id)
+        if cred_cls is None:
+            raise RuntimeError(
+                f"Node {node_cls.type} did not declare credential '{credential_id}' "
+                f"but tried to use it. Add it to the `credentials` class attribute."
+            )
+        return Connection(
+            cred_cls, user_id=user_id, session_id=session_id, node_id=node_id,
+        )
+
+    return factory
