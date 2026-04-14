@@ -73,6 +73,8 @@ function mapPropertyType(prop: JsonSchemaProperty): InodeType {
   if (prop.enum && prop.enum.length > 0) return 'options';
   if (prop.uiHints?.editor === 'code') return 'code';
   if (prop.uiHints?.editor === 'json') return 'json';
+  if (prop.uiHints?.widget === 'file' || prop.format === 'binary') return 'file';
+  if (prop.format === 'date-time' || prop.format === 'date') return 'dateTime';
   // anyOf([T, null]) is the Pydantic Optional[T] pattern — take the non-null branch.
   if (prop.anyOf) {
     const nonNull = prop.anyOf.find(b => b.type && b.type !== 'null');
@@ -95,33 +97,60 @@ function mapPropertyType(prop: JsonSchemaProperty): InodeType {
   }
 }
 
-function toInodeProperty(name: string, prop: JsonSchemaProperty): INodeProperties {
+function toInodeProperty(
+  name: string,
+  prop: JsonSchemaProperty,
+  required: boolean,
+): INodeProperties {
   const type = mapPropertyType(prop);
-  const options = prop.enum?.map(v => ({ name: String(v), value: v as string | number | boolean }));
+  // For `options`: prefer uiHints.options (richer labels) when supplied,
+  // otherwise derive bare {name, value} pairs from JSON Schema enum.
+  const richOptions = prop.uiHints?.options as INodeProperties['options'] | undefined;
+  const options =
+    richOptions ??
+    prop.enum?.map(v => ({ name: String(v), value: v as string | number | boolean }));
   const out: INodeProperties = {
-    displayName: prop.title || name,
+    displayName: (prop.uiHints?.displayName as string | undefined) || prop.title || name,
     name,
     type,
     default: prop.default,
     description: prop.description,
     options,
   };
+  if (required) out.required = true;
   if (prop.minimum !== undefined || prop.maximum !== undefined) {
     out.typeOptions = {
       ...(prop.minimum !== undefined ? { minValue: prop.minimum } : {}),
       ...(prop.maximum !== undefined ? { maxValue: prop.maximum } : {}),
     };
   }
-  // Lift Pydantic json_schema_extra hints (displayOptions, loadOptionsMethod, etc.)
+  // Lift Pydantic Field(json_schema_extra=...) hints. The shape mirrors
+  // INodeProperties so most fields pass straight through; the few that
+  // diverge (loadOptionsMethod -> typeOptions) are reshaped here.
   const hints = prop.uiHints;
   if (hints) {
-    if (hints.displayOptions) out.displayOptions = hints.displayOptions as INodeProperties['displayOptions'];
-    if (hints.loadOptionsMethod) {
-      out.typeOptions = {
-        ...out.typeOptions,
-        loadOptionsMethod: hints.loadOptionsMethod as string,
-        ...(hints.loadOptionsDependsOn ? { loadOptionsDependsOn: hints.loadOptionsDependsOn as string[] } : {}),
-      };
+    if (hints.displayOptions) {
+      out.displayOptions = hints.displayOptions as INodeProperties['displayOptions'];
+    }
+    if (hints.placeholder) out.placeholder = hints.placeholder as string;
+    if (hints.noDataExpression) out.noDataExpression = hints.noDataExpression as boolean;
+    if (hints.validation) out.validation = hints.validation as INodeProperties['validation'];
+    // typeOptions lifts: loadOptionsMethod, password, rows, editor, accept, etc.
+    const typeOptionsKeys = [
+      'loadOptionsMethod', 'loadOptionsDependsOn',
+      'multipleValues', 'multipleValueButtonText',
+      'numberStepSize',
+      'password', 'rows',
+      'editor', 'editorLanguage',
+      'dynamicOptions', 'dependsOn',
+      'accept',
+    ] as const;
+    const lifted: Record<string, unknown> = {};
+    for (const key of typeOptionsKeys) {
+      if (hints[key] !== undefined) lifted[key] = hints[key];
+    }
+    if (Object.keys(lifted).length > 0) {
+      out.typeOptions = { ...out.typeOptions, ...lifted } as INodeProperties['typeOptions'];
     }
   }
   return out;
@@ -144,8 +173,9 @@ function defaultHandles(): NodeConnectionType[] {
  */
 export function nodeSpecToDescription(spec: NodeSpec): INodeTypeDescription {
   const propsObject = spec.inputs?.properties ?? {};
+  const requiredSet = new Set(spec.inputs?.required ?? []);
   const properties: INodeProperties[] = Object.entries(propsObject).map(
-    ([name, prop]) => toInodeProperty(name, prop),
+    ([name, prop]) => toInodeProperty(name, prop, requiredSet.has(name)),
   );
 
   return {
