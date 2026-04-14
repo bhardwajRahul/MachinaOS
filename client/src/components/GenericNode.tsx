@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { nodeDefinitions } from '../nodeDefinitions';
+import { resolveNodeDescription } from '../lib/nodeSpec';
 import { NodeData } from '../types/NodeTypes';
 import { INodeInputDefinition, INodeOutputDefinition, NodeConnectionType } from '../types/INodeProperties';
 import { useAppStore } from '../store/useAppStore';
@@ -18,8 +19,8 @@ const GenericNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
   const executionStatus = nodeStatus?.status || 'idle';
   const isExecuting = executionStatus === 'executing' || executionStatus === 'waiting';
 
-  // Get definition early for use in hooks
-  const definition = type && nodeDefinitions[type] ? nodeDefinitions[type] : null;
+  // Wave 6 Phase 3e: backend NodeSpec -> legacy fallback
+  const definition = type ? resolveNodeDescription(type, nodeDefinitions[type] ?? null) : null;
 
   // Inline rename state
   const [isRenaming, setIsRenaming] = useState(false);

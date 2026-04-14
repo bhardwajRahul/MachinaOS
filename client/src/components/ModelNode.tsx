@@ -3,6 +3,7 @@ import { Handle, Position, NodeProps } from 'reactflow';
 import { NodeData } from '../types/NodeTypes';
 import { useAppStore } from '../store/useAppStore';
 import { nodeDefinitions } from '../nodeDefinitions';
+import { resolveNodeDescription } from '../lib/nodeSpec';
 import { useWebSocket, useNodeStatus } from '../contexts/WebSocketContext';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { getAIProviderIcon } from './icons/AIProviderIcons';
@@ -31,7 +32,8 @@ const ModelNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectabl
   const executionStatus = nodeStatus?.status || 'idle';
   const isExecuting = executionStatus === 'executing' || executionStatus === 'waiting';
 
-  const definition = nodeDefinitions[type as keyof typeof nodeDefinitions];
+  // Wave 6 Phase 3e: backend NodeSpec -> legacy fallback
+  const definition = resolveNodeDescription(type || '', nodeDefinitions[type as keyof typeof nodeDefinitions]);
 
   // Determine provider from node definition or type
   const provider = useMemo(() => {

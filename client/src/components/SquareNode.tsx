@@ -8,7 +8,7 @@ import { useAppTheme } from '../hooks/useAppTheme';
 import { ANDROID_SERVICE_NODE_TYPES } from '../nodeDefinitions/androidServiceNodes';
 import { useWebSocket, useWhatsAppStatus } from '../contexts/WebSocketContext';
 import { useApiKeys } from '../hooks/useApiKeys';
-import { isNodeInBackendGroup } from '../lib/nodeSpec';
+import { isNodeInBackendGroup, resolveNodeDescription } from '../lib/nodeSpec';
 import { getAIProviderIcon } from './icons/AIProviderIcons';
 import { PlayCircle, CalendarClock } from 'lucide-react';
 import { AI_MODEL_PROVIDER_MAP } from '../nodeDefinitions/aiModelNodes';
@@ -100,7 +100,9 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
   const aiProviderId = type && AI_MODEL_NODE_TYPES[type] ? AI_MODEL_NODE_TYPES[type] : null;
   const aiKeyStatus = aiProviderId ? getApiKeyStatus(aiProviderId) : undefined;
 
-  const definition = nodeDefinitions[type as keyof typeof nodeDefinitions];
+  // Wave 6 Phase 3e: backend NodeSpec -> legacy fallback. Flag off or
+  // cache cold -> returns local nodeDefinitions entry unchanged.
+  const definition = resolveNodeDescription(type || '', nodeDefinitions[type as keyof typeof nodeDefinitions]);
 
   // Wave 6 Phase 5.b: backend group → legacy fallback
   const isAndroidNode = isNodeInBackendGroup(type, 'android') ?? (type ? ANDROID_SERVICE_NODE_TYPES.includes(type) : false);

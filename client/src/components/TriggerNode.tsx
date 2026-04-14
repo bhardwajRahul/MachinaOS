@@ -11,6 +11,7 @@ import { Handle, Position, NodeProps } from 'reactflow';
 import { NodeData } from '../types/NodeTypes';
 import { useAppStore } from '../store/useAppStore';
 import { nodeDefinitions } from '../nodeDefinitions';
+import { resolveNodeDescription } from '../lib/nodeSpec';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { useWebSocket, useWhatsAppStatus } from '../contexts/WebSocketContext';
 import { PlayCircle, CalendarClock } from 'lucide-react';
@@ -42,7 +43,8 @@ const TriggerNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
   // Both states show the glow animation to indicate active state
   const isExecuting = executionStatus === 'executing' || executionStatus === 'waiting';
 
-  const definition = nodeDefinitions[type as keyof typeof nodeDefinitions];
+  // Wave 6 Phase 3e: backend NodeSpec -> legacy fallback
+  const definition = resolveNodeDescription(type || '', nodeDefinitions[type as keyof typeof nodeDefinitions]);
 
   // Check configuration status
   useEffect(() => {

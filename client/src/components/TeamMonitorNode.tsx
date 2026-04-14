@@ -3,6 +3,7 @@ import { Handle, Position, NodeProps, useEdges, useNodes } from 'reactflow';
 import { NodeData } from '../types/NodeTypes';
 import { useAppStore } from '../store/useAppStore';
 import { nodeDefinitions } from '../nodeDefinitions';
+import { resolveNodeDescription } from '../lib/nodeSpec';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { useWebSocket } from '../contexts/WebSocketContext';
 
@@ -45,7 +46,8 @@ const TeamMonitorNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConn
   const [teamStatus, setTeamStatus] = useState<TeamStatus | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const definition = nodeDefinitions[type as keyof typeof nodeDefinitions];
+  // Wave 6 Phase 3e: backend NodeSpec -> legacy fallback
+  const definition = resolveNodeDescription(type || '', nodeDefinitions[type as keyof typeof nodeDefinitions]);
   const nodeColor = definition?.defaults?.color || '#8b5cf6';
 
   // Find connected AI Employee/Orchestrator node to get workflow context

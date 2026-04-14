@@ -18,16 +18,19 @@ const readEnv = (key: string): string | undefined => {
   }
 };
 
-const isTruthy = (value: string | undefined): boolean => {
+const isFalsy = (value: string | undefined): boolean => {
   if (!value) return false;
   const v = value.trim().toLowerCase();
-  return v === 'true' || v === '1' || v === 'yes' || v === 'on';
+  return v === 'false' || v === '0' || v === 'no' || v === 'off';
 };
 
 export const featureFlags = {
-  /** Wave 6 Phase 2: fetch NodeSpec from the backend instead of
-   *  reading from client/src/nodeDefinitions/*.ts. Off by default. */
-  nodeSpecBackend: isTruthy(readEnv('VITE_NODESPEC_BACKEND')),
+  /** Wave 6 Phase 3e: fetch NodeSpec from the backend as the default
+   *  source of truth for parameter schemas. Set
+   *  `VITE_NODESPEC_BACKEND=false` in `.env.local` to opt back into
+   *  the legacy `client/src/nodeDefinitions/*.ts` read path (useful
+   *  as a kill-switch if you hit an adapter regression). */
+  nodeSpecBackend: !isFalsy(readEnv('VITE_NODESPEC_BACKEND')),
 } as const;
 
 export type FeatureFlags = typeof featureFlags;
