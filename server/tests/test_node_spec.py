@@ -178,10 +178,11 @@ class TestPhase3bCoverage:
 
     def test_social_send_platform_enum(self):
         spec = get_node_spec("socialSend")
-        platform = spec["inputs"]["properties"]["platform"]
-        assert "whatsapp" in platform["enum"]
-        assert "telegram" in platform["enum"]
-        assert "discord" in platform["enum"]
+        # Wave 8 renamed: 'platform' -> 'channel' to match the frontend SOCIAL_SEND.
+        channel = spec["inputs"]["properties"]["channel"]
+        assert "whatsapp" in channel["enum"]
+        assert "telegram" in channel["enum"]
+        assert "discord" in channel["enum"]
 
 
 class TestPhase3cCoverage:
@@ -503,6 +504,7 @@ class TestDisplayOptionsEnrichment:
         spec = get_node_spec("socialSend")
         media = spec["inputs"]["properties"]["mediaUrl"]
         assert "image" in media["displayOptions"]["show"]["message_type"]
+        # 'text' is in the message field's gate, mediaUrl is gated on media types.
         assert "text" not in media["displayOptions"]["show"]["message_type"]
 
     def test_gmail_receive_label_carries_load_options(self):

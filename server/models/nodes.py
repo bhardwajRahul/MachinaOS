@@ -812,26 +812,88 @@ class TwitterUserParams(BaseNodeParams):
 class SocialReceiveParams(BaseNodeParams):
     """Parameters for unified social receive trigger node."""
     type: Literal["socialReceive"]
-    platform_filter: str = Field(default="all", alias="platformFilter")
-    channel_filter: str = Field(default="", alias="channelFilter")
+    channel_filter: str = Field(default="all", alias="channelFilter")
     message_type_filter: str = Field(default="all", alias="messageTypeFilter")
+    sender_filter: Literal["all", "any_contact", "contact", "group", "keywords"] = Field(
+        default="all",
+        alias="senderFilter",
+        json_schema_extra={"options": [
+            {"name": "All Messages", "value": "all"},
+            {"name": "From Any Contact (Non-Group)", "value": "any_contact"},
+            {"name": "From Specific Contact", "value": "contact"},
+            {"name": "From Specific Group", "value": "group"},
+            {"name": "Contains Keywords", "value": "keywords"},
+        ]},
+    )
+    contact_phone: str = Field(
+        default="", alias="contactPhone",
+        json_schema_extra={"displayOptions": {"show": {"sender_filter": ["contact"]}}},
+    )
+    group_id: str = Field(
+        default="", alias="groupId",
+        json_schema_extra={"displayOptions": {"show": {"sender_filter": ["group"]}}},
+    )
+    keywords: str = Field(
+        default="",
+        json_schema_extra={"displayOptions": {"show": {"sender_filter": ["keywords"]}}},
+    )
+    ignore_own_messages: bool = Field(default=True, alias="ignoreOwnMessages")
+    ignore_bots: bool = Field(default=False, alias="ignoreBots")
+    include_media_data: bool = Field(default=False, alias="includeMediaData")
 
 
 class SocialSendParams(BaseNodeParams):
     """Parameters for unified social send node."""
     type: Literal["socialSend"]
-    platform: Literal["whatsapp", "telegram", "discord", "slack", "signal", "sms", "webchat", "email", "matrix", "teams"] = "whatsapp"
-    recipient: str = ""
-    message_type: Literal["text", "image", "video", "audio", "document", "sticker", "location", "contact", "poll", "buttons", "list"] = Field(default="text", alias="messageType")
-    text: str = Field(
+    channel: Literal["whatsapp", "telegram", "discord", "slack", "signal", "sms", "webchat", "email", "matrix", "teams"] = "whatsapp"
+    recipient_type: Literal["phone", "group", "channel", "user", "chat"] = Field(
+        default="phone", alias="recipientType",
+        json_schema_extra={"options": [
+            {"name": "Phone Number", "value": "phone"},
+            {"name": "Group", "value": "group"},
+            {"name": "Channel", "value": "channel"},
+            {"name": "User ID", "value": "user"},
+            {"name": "Chat ID", "value": "chat"},
+        ]},
+    )
+    phone: str = Field(
         default="",
-        json_schema_extra={"displayOptions": {"show": {"message_type": ["text", "buttons", "list"]}}},
+        json_schema_extra={"displayOptions": {"show": {"recipient_type": ["phone"]}}},
+    )
+    group_id: str = Field(
+        default="", alias="groupId",
+        json_schema_extra={"displayOptions": {"show": {"recipient_type": ["group"]}}},
+    )
+    channel_id: str = Field(
+        default="", alias="channelId",
+        json_schema_extra={"displayOptions": {"show": {"recipient_type": ["channel"]}}},
+    )
+    user_id: str = Field(
+        default="", alias="userId",
+        json_schema_extra={"displayOptions": {"show": {"recipient_type": ["user"]}}},
+    )
+    chat_id: str = Field(
+        default="", alias="chatId",
+        json_schema_extra={"displayOptions": {"show": {"recipient_type": ["chat"]}}},
+    )
+    thread_id: str = Field(default="", alias="threadId")
+    message_type: Literal["text", "image", "video", "audio", "document", "sticker", "location", "contact", "poll", "buttons", "list"] = Field(default="text", alias="messageType")
+    message: str = Field(
+        default="",
+        json_schema_extra={
+            "displayOptions": {"show": {"message_type": ["text"]}},
+            "rows": 4,
+        },
     )
     media_url: str = Field(
-        default="",
-        alias="mediaUrl",
+        default="", alias="mediaUrl",
         json_schema_extra={"displayOptions": {"show": {"message_type": ["image", "video", "audio", "document", "sticker"]}}},
     )
+    caption: str = Field(
+        default="",
+        json_schema_extra={"displayOptions": {"show": {"message_type": ["image", "video", "document"]}}},
+    )
+    silent: bool = False
 
 
 # =============================================================================
