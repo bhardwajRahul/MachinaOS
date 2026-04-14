@@ -524,3 +524,31 @@ class TestDisplayOptionsEnrichment:
         spec = get_node_spec("tasks")
         tl = spec["inputs"]["properties"]["tasklistId"]
         assert tl["loadOptionsMethod"] == "googleTasklists"
+
+    def test_ai_agent_temperature_step_size(self):
+        spec = get_node_spec("aiAgent")
+        temp = spec["inputs"]["properties"]["temperature"]
+        assert temp["numberStepSize"] == 0.1
+
+    def test_ai_agent_prompt_carries_placeholder_and_rows(self):
+        spec = get_node_spec("aiAgent")
+        prompt = spec["inputs"]["properties"]["prompt"]
+        assert prompt["placeholder"] == "Enter your prompt or use template variables..."
+        assert prompt["rows"] == 4
+
+    def test_ai_agent_api_key_password_masked(self):
+        spec = get_node_spec("aiAgent")
+        api_key = spec["inputs"]["properties"]["apiKey"]
+        assert api_key["password"] is True
+
+    def test_specialized_agent_thinking_budget_gated(self):
+        spec = get_node_spec("coding_agent")
+        budget = spec["inputs"]["properties"]["thinkingBudget"]
+        assert budget["displayOptions"]["show"]["thinking_enabled"] == [True]
+        effort = spec["inputs"]["properties"]["reasoningEffort"]
+        assert effort["displayOptions"]["show"]["thinking_enabled"] == [True]
+
+    def test_chat_model_password_masked(self):
+        spec = get_node_spec("openaiChatModel")
+        api_key = spec["inputs"]["properties"]["apiKey"]
+        assert api_key["password"] is True

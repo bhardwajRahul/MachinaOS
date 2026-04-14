@@ -45,32 +45,60 @@ class BaseNodeParams(BaseModel):
 class AIChatModelParams(BaseNodeParams):
     """Parameters for AI chat model nodes."""
     type: Literal["openaiChatModel", "anthropicChatModel", "geminiChatModel", "openrouterChatModel", "groqChatModel", "cerebrasChatModel", "deepseekChatModel", "kimiChatModel", "mistralChatModel"]
-    prompt: str = ""
-    model: str = ""
-    temperature: float = Field(default=0.7, ge=0.0, le=2.0)
-    max_tokens: Optional[int] = Field(default=1000, alias="maxTokens")
-    system_prompt: Optional[str] = Field(default="", alias="systemMessage")
-    api_key: Optional[str] = Field(default=None, alias="apiKey")
+    prompt: str = Field(default="", json_schema_extra={"rows": 4})
+    model: str = Field(default="", json_schema_extra={"placeholder": "Select a model..."})
+    temperature: float = Field(
+        default=0.7, ge=0.0, le=2.0,
+        json_schema_extra={"numberStepSize": 0.1},
+    )
+    max_tokens: Optional[int] = Field(default=1000, alias="maxTokens", ge=1, le=128000)
+    system_prompt: Optional[str] = Field(
+        default="", alias="systemMessage",
+        json_schema_extra={"rows": 3},
+    )
+    api_key: Optional[str] = Field(
+        default=None, alias="apiKey",
+        json_schema_extra={"password": True},
+    )
 
 
 class AIAgentParams(BaseNodeParams):
     """Parameters for AI agent node."""
     type: Literal["aiAgent"]
-    prompt: str = ""
+    prompt: str = Field(
+        default="",
+        json_schema_extra={
+            "placeholder": "Enter your prompt or use template variables...",
+            "rows": 4,
+        },
+    )
     provider: Literal["openai", "anthropic", "gemini", "openrouter", "groq", "cerebras", "deepseek", "kimi", "mistral"] = "openai"
-    model: str = ""
-    temperature: float = Field(default=0.7, ge=0.0, le=2.0)
-    max_tokens: Optional[int] = Field(default=1000, alias="maxTokens")
-    system_message: Optional[str] = Field(default="You are a helpful assistant", alias="systemMessage")
-    api_key: Optional[str] = Field(default=None, alias="apiKey")
+    model: str = Field(default="", json_schema_extra={"placeholder": "Select a model..."})
+    temperature: float = Field(
+        default=0.7, ge=0.0, le=2.0,
+        json_schema_extra={"numberStepSize": 0.1},
+    )
+    max_tokens: Optional[int] = Field(default=1000, alias="maxTokens", ge=1, le=200000)
+    system_message: Optional[str] = Field(
+        default="You are a helpful assistant",
+        alias="systemMessage",
+        json_schema_extra={"rows": 3},
+    )
+    api_key: Optional[str] = Field(
+        default=None, alias="apiKey",
+        json_schema_extra={"password": True},
+    )
 
 
 class ChatAgentParams(BaseNodeParams):
     """Parameters for chat agent node (skill-based)."""
     type: Literal["chatAgent"]
     provider: Literal["openai", "anthropic", "gemini", "openrouter", "groq", "cerebras", "deepseek", "kimi", "mistral"] = "openai"
-    model: str = ""
-    api_key: Optional[str] = Field(default=None, alias="apiKey")
+    model: str = Field(default="", json_schema_extra={"placeholder": "Select a model..."})
+    api_key: Optional[str] = Field(
+        default=None, alias="apiKey",
+        json_schema_extra={"password": True},
+    )
 
 
 class SpecializedAgentParams(BaseNodeParams):
@@ -85,16 +113,38 @@ class SpecializedAgentParams(BaseNodeParams):
         "orchestrator_agent", "ai_employee", "rlm_agent", "claude_code_agent",
         "deep_agent",
     ]
-    prompt: str = ""
+    prompt: str = Field(
+        default="",
+        json_schema_extra={
+            "placeholder": "Enter your prompt or use template variables...",
+            "rows": 4,
+        },
+    )
     provider: Literal["openai", "anthropic", "gemini", "openrouter", "groq", "cerebras", "deepseek", "kimi", "mistral"] = "openai"
-    model: str = ""
-    temperature: float = Field(default=0.7, ge=0.0, le=2.0)
-    max_tokens: Optional[int] = Field(default=1000, alias="maxTokens")
-    system_message: Optional[str] = Field(default="", alias="systemMessage")
-    api_key: Optional[str] = Field(default=None, alias="apiKey")
+    model: str = Field(default="", json_schema_extra={"placeholder": "Select a model..."})
+    temperature: float = Field(
+        default=0.7, ge=0.0, le=2.0,
+        json_schema_extra={"numberStepSize": 0.1},
+    )
+    max_tokens: Optional[int] = Field(default=1000, alias="maxTokens", ge=1, le=200000)
+    system_message: Optional[str] = Field(
+        default="",
+        alias="systemMessage",
+        json_schema_extra={"rows": 3},
+    )
+    api_key: Optional[str] = Field(
+        default=None, alias="apiKey",
+        json_schema_extra={"password": True},
+    )
     thinking_enabled: bool = Field(default=False, alias="thinkingEnabled")
-    thinking_budget: int = Field(default=2048, alias="thinkingBudget", ge=1024, le=16000)
-    reasoning_effort: Literal["minimal", "low", "medium", "high"] = Field(default="medium", alias="reasoningEffort")
+    thinking_budget: int = Field(
+        default=2048, alias="thinkingBudget", ge=1024, le=16000,
+        json_schema_extra={"displayOptions": {"show": {"thinking_enabled": [True]}}},
+    )
+    reasoning_effort: Literal["minimal", "low", "medium", "high"] = Field(
+        default="medium", alias="reasoningEffort",
+        json_schema_extra={"displayOptions": {"show": {"thinking_enabled": [True]}}},
+    )
 
 
 class SimpleMemoryParams(BaseNodeParams):
