@@ -21,9 +21,11 @@ from models.nodes import (
     ConsoleParams, CreateMapParams, CronSchedulerParams, FileHandlerParams,
     GmailReceiveParams, GmapsLocationsParams, GmapsNearbyPlacesParams,
     HttpRequestParams, JavaScriptExecutorParams, ProcessManagerParams,
-    PythonExecutorParams, SimpleMemoryParams, SpecializedAgentParams,
-    StartNodeParams, TaskTriggerParams, TeamMonitorParams,
-    TelegramReceiveParams, TextGeneratorParams, TwitterReceiveParams,
+    PythonExecutorParams, SimpleMemoryParams, SocialReceiveParams,
+    SocialSendParams, SpecializedAgentParams, StartNodeParams,
+    TaskTriggerParams, TeamMonitorParams, TelegramReceiveParams,
+    TelegramSendParams, TextGeneratorParams, TwitterReceiveParams,
+    TwitterSearchParams, TwitterSendParams, TwitterUserParams,
     TypeScriptExecutorParams, WebhookResponseParams, WebhookTriggerParams,
     WhatsAppDbParams, WhatsAppReceiveParams, WhatsAppSendParams,
     WorkflowTriggerParams,
@@ -60,6 +62,15 @@ _DIRECT_MODELS: dict[str, type[BaseModel]] = {
     "whatsappSend": WhatsAppSendParams,
     "whatsappReceive": WhatsAppReceiveParams,
     "whatsappDb": WhatsAppDbParams,
+    # Telegram
+    "telegramSend": TelegramSendParams,
+    # Twitter / X
+    "twitterSend": TwitterSendParams,
+    "twitterSearch": TwitterSearchParams,
+    "twitterUser": TwitterUserParams,
+    # Unified social
+    "socialReceive": SocialReceiveParams,
+    "socialSend": SocialSendParams,
     # Code
     "pythonExecutor": PythonExecutorParams,
     "javascriptExecutor": JavaScriptExecutorParams,

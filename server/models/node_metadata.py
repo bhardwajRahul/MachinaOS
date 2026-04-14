@@ -117,6 +117,86 @@ NODE_METADATA: dict[str, NodeMetadata] = {
         "description": "Start, stop, and manage long-running processes (dev servers, watchers, build tools). Streams output to Terminal tab.",
         "version": 1,
     },
+    # Phase 3b: Messaging group ---------------------------------------------
+    # Icons left blank for SVG-icon nodes - frontend resolves the SVG asset
+    # via its own icon imports until we move SVG payload to the server too.
+    "whatsappSend": {
+        "displayName": "WhatsApp Send",
+        "icon": "",
+        "group": ["whatsapp", "tool"],
+        "description": "Send WhatsApp messages (text, media, location, contact, sticker)",
+        "version": 1,
+    },
+    "whatsappReceive": {
+        "displayName": "WhatsApp Receive",
+        "icon": "",
+        "group": ["whatsapp", "trigger"],
+        "description": "Trigger workflow when WhatsApp message is received",
+        "version": 1,
+    },
+    "whatsappDb": {
+        "displayName": "WhatsApp DB",
+        "icon": "",
+        "group": ["whatsapp", "tool"],
+        "description": "Query WhatsApp database (chat history, contacts, groups, channels)",
+        "version": 1,
+    },
+    "telegramSend": {
+        "displayName": "Telegram Send",
+        "icon": "",
+        "group": ["social", "tool"],
+        "description": "Send text, photo, document, location, or contact messages via Telegram bot",
+        "version": 1,
+    },
+    "telegramReceive": {
+        "displayName": "Telegram Receive",
+        "icon": "",
+        "group": ["social", "trigger"],
+        "description": "Trigger workflow when Telegram message is received",
+        "version": 1,
+    },
+    "twitterSend": {
+        "displayName": "Twitter Send",
+        "icon": "",
+        "group": ["social", "tool"],
+        "description": "Post tweets, reply, retweet, like, or delete tweets on Twitter/X",
+        "version": 1,
+    },
+    "twitterReceive": {
+        "displayName": "Twitter Receive",
+        "icon": "",
+        "group": ["social", "trigger"],
+        "description": "Trigger workflow on Twitter mentions, search results, or timeline updates (polling-based)",
+        "version": 1,
+    },
+    "twitterSearch": {
+        "displayName": "Twitter Search",
+        "icon": "",
+        "group": ["social", "tool"],
+        "description": "Search recent tweets on Twitter/X using the Search API",
+        "version": 1,
+    },
+    "twitterUser": {
+        "displayName": "Twitter User",
+        "icon": "",
+        "group": ["social", "tool"],
+        "description": "Look up Twitter/X user profiles, followers, and following",
+        "version": 1,
+    },
+    "socialReceive": {
+        "displayName": "Social Receive",
+        "icon": "",
+        "group": ["social"],
+        "description": "Unified receive trigger for any social platform (whatsapp, telegram, twitter, ...)",
+        "version": 1,
+    },
+    "socialSend": {
+        "displayName": "Social Send",
+        "icon": "",
+        "group": ["social", "tool"],
+        "description": "Unified send action for any social platform",
+        "version": 1,
+    },
 }
 
 

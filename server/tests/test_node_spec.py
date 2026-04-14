@@ -70,12 +70,13 @@ class TestNodeSpec:
         assert spec["version"] == 1
 
     def test_spec_fallback_metadata_when_unseeded(self):
-        # whatsappSend has input+output schemas but no seeded metadata yet
-        spec = get_node_spec("whatsappSend")
+        # AI chat models have input + output schemas but no metadata seeded
+        # yet (Phase 3c will migrate them).
+        spec = get_node_spec("openaiChatModel")
         assert spec is not None
-        assert spec["type"] == "whatsappSend"
-        # Falls back to type id until Phase 3b migration
-        assert spec["displayName"] == "whatsappSend"
+        assert spec["type"] == "openaiChatModel"
+        # Falls back to type id until Phase 3c migration
+        assert spec["displayName"] == "openaiChatModel"
         assert spec["group"] == []
 
     def test_spec_missing_entirely(self):
@@ -135,3 +136,49 @@ class TestPhase3aCoverage:
         spec = get_node_spec("console")
         log_mode = spec["inputs"]["properties"]["logMode"]
         assert log_mode["enum"] == ["full", "field", "expression"]
+
+
+class TestPhase3bCoverage:
+    """Phase 3b backend parity: messaging group (whatsapp, telegram,
+    twitter, social) - 11 types."""
+
+    PHASE_3B_TYPES = [
+        "whatsappSend", "whatsappReceive", "whatsappDb",
+        "telegramSend", "telegramReceive",
+        "twitterSend", "twitterReceive", "twitterSearch", "twitterUser",
+        "socialReceive", "socialSend",
+    ]
+
+    def test_all_have_input_schema(self):
+        from services.node_input_schemas import get_node_input_schema
+        missing = [t for t in self.PHASE_3B_TYPES if get_node_input_schema(t) is None]
+        assert not missing, f"Phase 3b types missing input schema: {missing}"
+
+    def test_all_have_metadata(self):
+        from models.node_metadata import get_node_metadata
+        missing = [t for t in self.PHASE_3B_TYPES if get_node_metadata(t) is None]
+        assert not missing, f"Phase 3b types missing display metadata: {missing}"
+
+    def test_all_have_full_spec(self):
+        for t in self.PHASE_3B_TYPES:
+            spec = get_node_spec(t)
+            assert spec is not None, f"No spec for {t}"
+            assert spec["displayName"] != t, f"{t} fell back to id displayName"
+            assert spec["group"], f"{t} missing group"
+
+    def test_twitter_send_action_enum(self):
+        spec = get_node_spec("twitterSend")
+        action = spec["inputs"]["properties"]["action"]
+        assert action["enum"] == ["tweet", "reply", "retweet", "like", "unlike", "delete"]
+
+    def test_telegram_send_parse_mode_enum(self):
+        spec = get_node_spec("telegramSend")
+        parse_mode = spec["inputs"]["properties"]["parseMode"]
+        assert parse_mode["enum"] == ["Auto", "HTML", "Markdown", "MarkdownV2", "None"]
+
+    def test_social_send_platform_enum(self):
+        spec = get_node_spec("socialSend")
+        platform = spec["inputs"]["properties"]["platform"]
+        assert "whatsapp" in platform["enum"]
+        assert "telegram" in platform["enum"]
+        assert "discord" in platform["enum"]

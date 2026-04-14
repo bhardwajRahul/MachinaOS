@@ -324,6 +324,76 @@ class TwitterReceiveParams(BaseNodeParams):
     type: Literal["twitterReceive"]
 
 
+class TelegramSendParams(BaseNodeParams):
+    """Parameters for Telegram send message node."""
+    type: Literal["telegramSend"]
+    recipient_type: Literal["self", "chat_id"] = Field(default="self", alias="recipientType")
+    chat_id: str = Field(default="", alias="chatId")
+    message_type: Literal["text", "photo", "document", "location", "contact"] = Field(default="text", alias="messageType")
+    text: str = ""
+    media_url: str = Field(default="", alias="mediaUrl")
+    caption: str = ""
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    phone: str = ""
+    first_name: str = Field(default="", alias="firstName")
+    last_name: str = Field(default="", alias="lastName")
+    parse_mode: Literal["Auto", "HTML", "Markdown", "MarkdownV2", "None"] = Field(default="Auto", alias="parseMode")
+    silent: bool = False
+    reply_to_message_id: Optional[int] = Field(default=None, alias="replyToMessageId")
+
+
+class TwitterSendParams(BaseNodeParams):
+    """Parameters for Twitter send/action node."""
+    type: Literal["twitterSend"]
+    action: Literal["tweet", "reply", "retweet", "like", "unlike", "delete"] = "tweet"
+    text: str = ""
+    tweet_id: str = Field(default="", alias="tweetId")
+    media_urls: List[str] = Field(default_factory=list, alias="mediaUrls")
+    include_poll: bool = Field(default=False, alias="includePoll")
+    poll_options: List[str] = Field(default_factory=list, alias="pollOptions")
+    poll_duration_minutes: int = Field(default=1440, alias="pollDurationMinutes", ge=5, le=10080)
+
+
+class TwitterSearchParams(BaseNodeParams):
+    """Parameters for Twitter search node."""
+    type: Literal["twitterSearch"]
+    query: str = ""
+    max_results: int = Field(default=10, alias="maxResults", ge=10, le=100)
+    sort_order: Literal["recency", "relevancy"] = Field(default="recency", alias="sortOrder")
+    start_time: Optional[str] = Field(default=None, alias="startTime")
+    end_time: Optional[str] = Field(default=None, alias="endTime")
+    include_metrics: bool = Field(default=True, alias="includeMetrics")
+    include_author: bool = Field(default=True, alias="includeAuthor")
+
+
+class TwitterUserParams(BaseNodeParams):
+    """Parameters for Twitter user lookup node."""
+    type: Literal["twitterUser"]
+    operation: Literal["me", "by_username", "by_id", "followers", "following"] = "me"
+    username: str = ""
+    user_id: str = Field(default="", alias="userId")
+    max_results: int = Field(default=100, alias="maxResults", ge=1, le=1000)
+
+
+class SocialReceiveParams(BaseNodeParams):
+    """Parameters for unified social receive trigger node."""
+    type: Literal["socialReceive"]
+    platform_filter: str = Field(default="all", alias="platformFilter")
+    channel_filter: str = Field(default="", alias="channelFilter")
+    message_type_filter: str = Field(default="all", alias="messageTypeFilter")
+
+
+class SocialSendParams(BaseNodeParams):
+    """Parameters for unified social send node."""
+    type: Literal["socialSend"]
+    platform: Literal["whatsapp", "telegram", "discord", "slack", "signal", "sms", "webchat", "email", "matrix", "teams"] = "whatsapp"
+    recipient: str = ""
+    message_type: Literal["text", "image", "video", "audio", "document", "sticker", "location", "contact", "poll", "buttons", "list"] = Field(default="text", alias="messageType")
+    text: str = ""
+    media_url: str = Field(default="", alias="mediaUrl")
+
+
 class GmailReceiveParams(BaseNodeParams):
     """Parameters for Gmail receive polling trigger node."""
     type: Literal["gmailReceive"]
@@ -440,6 +510,9 @@ KnownNodeParams = Annotated[
         StartNodeParams, CronSchedulerParams, WorkflowTriggerParams,
         # Triggers
         TaskTriggerParams, ChatTriggerParams, TelegramReceiveParams, TwitterReceiveParams, GmailReceiveParams,
+        # Messaging actions (Wave 6 Phase 3b)
+        TelegramSendParams, TwitterSendParams, TwitterSearchParams, TwitterUserParams,
+        SocialReceiveParams, SocialSendParams,
         # Text
         TextGeneratorParams, FileHandlerParams,
         # Chat
