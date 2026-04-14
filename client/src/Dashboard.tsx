@@ -12,7 +12,8 @@ import {
   Node,
   Edge,
 } from 'reactflow';
-import GenericNode from './components/GenericNode';
+import { featureFlags } from './lib/featureFlags';
+import { prefetchAllNodeSpecs } from './lib/nodeSpec';
 import AIAgentNode from './components/AIAgentNode';
 import ModelNode from './components/ModelNode';
 import SquareNode from './components/SquareNode';
@@ -177,7 +178,7 @@ const createNodeTypes = (): Record<string, React.ComponentType<any>> => {
       // Any node with 'service' group uses SquareNode component
       types[type] = SquareNode;
     } else {
-      types[type] = GenericNode;
+      types[type] = SquareNode;
     }
   });
 
@@ -461,6 +462,16 @@ const DashboardContent: React.FC = () => {
 
     loadUIDefaults();
   }, [isConnected, sendRequest, applyUIDefaults]);
+
+  // Wave 6 Phase 2: warm the NodeSpec cache in the background once the
+  // WS is up. No-op when VITE_NODESPEC_BACKEND is off.
+  const hasPrefetchedSpecs = React.useRef(false);
+  React.useEffect(() => {
+    if (!isConnected || hasPrefetchedSpecs.current) return;
+    if (!featureFlags.nodeSpecBackend) return;
+    hasPrefetchedSpecs.current = true;
+    void prefetchAllNodeSpecs(sendRequest);
+  }, [isConnected, sendRequest]);
 
   // Update nodes with execution status classes
   const styledNodes = React.useMemo(() => {

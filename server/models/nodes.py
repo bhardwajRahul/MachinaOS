@@ -203,6 +203,26 @@ class JavaScriptExecutorParams(BaseNodeParams):
     timeout: int = Field(default=30, ge=1, le=300)
 
 
+class TypeScriptExecutorParams(BaseNodeParams):
+    """Parameters for TypeScript code executor node (compiles to JS
+    via the Node.js server with tsx)."""
+    type: Literal["typescriptExecutor"]
+    code: str = ""
+    timeout: int = Field(default=30, ge=1, le=300)
+
+
+class ProcessManagerParams(BaseNodeParams):
+    """Parameters for long-running process manager node."""
+    type: Literal["processManager"]
+    tool_name: str = Field(default="process_manager", alias="toolName")
+    tool_description: str = Field(default="", alias="toolDescription")
+    operation: Literal["start", "stop", "restart", "send_input", "list", "get_output"] = "start"
+    name: str = ""
+    command: str = ""
+    cwd: Optional[str] = None
+    input: Optional[str] = None
+
+
 # =============================================================================
 # HTTP NODE MODELS
 # =============================================================================
@@ -231,6 +251,22 @@ class WebhookResponseParams(BaseNodeParams):
     status_code: int = Field(default=200, alias="statusCode", ge=100, le=599)
     content_type: str = Field(default="application/json", alias="contentType")
     body: str = ""
+
+
+class ConsoleParams(BaseNodeParams):
+    """Parameters for console log node (passes input through)."""
+    type: Literal["console"]
+    label: str = ""
+    log_mode: Literal["full", "field", "expression"] = Field(default="full", alias="logMode")
+    field_path: str = Field(default="", alias="fieldPath")
+    expression: str = ""
+    format: Literal["json", "text", "table"] = "json"
+
+
+class TeamMonitorParams(BaseNodeParams):
+    """Parameters for agent-team monitor node."""
+    type: Literal["teamMonitor"]
+    refresh_interval: int = Field(default=0, alias="refreshInterval", ge=0, le=60_000)
 
 
 # =============================================================================
@@ -393,9 +429,13 @@ KnownNodeParams = Annotated[
         # WhatsApp
         WhatsAppSendParams, WhatsAppReceiveParams, WhatsAppDbParams,
         # Code
-        PythonExecutorParams, JavaScriptExecutorParams,
+        PythonExecutorParams, JavaScriptExecutorParams, TypeScriptExecutorParams,
+        # Process management
+        ProcessManagerParams,
         # HTTP
         HttpRequestParams, WebhookTriggerParams, WebhookResponseParams,
+        # Utility
+        ConsoleParams, TeamMonitorParams,
         # Workflow
         StartNodeParams, CronSchedulerParams, WorkflowTriggerParams,
         # Triggers

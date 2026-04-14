@@ -253,6 +253,31 @@ async def handle_get_node_output_schema(
     return {"node_type": data["node_type"], "schema": schema}
 
 
+@ws_handler("node_type")
+async def handle_get_node_spec(
+    data: Dict[str, Any], websocket: WebSocket
+) -> Dict[str, Any]:
+    """Return the unified NodeSpec (input schema + output schema +
+    display metadata) for a node type, or ``{spec: null}`` when the
+    type is unknown. Wave 6 Phase 2 WS mirror of the REST endpoint
+    GET /api/schemas/nodes/{type}/spec.json."""
+    from services.node_spec import get_node_spec
+
+    spec = get_node_spec(data["node_type"])
+    return {"node_type": data["node_type"], "spec": spec}
+
+
+@ws_handler()
+async def handle_list_node_specs(
+    data: Dict[str, Any], websocket: WebSocket
+) -> Dict[str, Any]:
+    """Return the sorted list of node types that have a NodeSpec.
+    Editor calls this on boot to prefetch the whole set."""
+    from services.node_spec import list_node_types_with_spec
+
+    return {"node_types": list_node_types_with_spec()}
+
+
 # ============================================================================
 # Credential Registry Handler (Nango-style bulk fetch for 20 -> 5000 providers)
 # ============================================================================
@@ -3160,6 +3185,9 @@ MESSAGE_HANDLERS: Dict[str, MessageHandler] = {
     # Node output schemas (Pydantic-backed registry; see
     # docs-internal/schema_source_of_truth_rfc.md).
     "get_node_output_schema": handle_get_node_output_schema,
+    # Wave 6 Phase 2: unified NodeSpec (input + output + metadata).
+    "get_node_spec": handle_get_node_spec,
+    "list_node_specs": handle_list_node_specs,
 
     # Credential registry (Nango-style bulk catalogue for credentials panel)
     "get_credential_catalogue": handle_get_credential_catalogue,

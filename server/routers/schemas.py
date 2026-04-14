@@ -9,12 +9,19 @@ for the frontend consumer (useNodeOutputSchemaQuery).
 
 from fastapi import APIRouter, HTTPException, Response
 
+from services.node_input_schemas import (
+    get_node_input_schema,
+    list_node_types_with_input_schema,
+)
 from services.node_output_schemas import (
     get_node_output_schema,
     list_node_types_with_schema,
 )
+from services.node_spec import get_node_spec, list_node_types_with_spec
 
 router = APIRouter(prefix="/api/schemas", tags=["schemas"])
+
+_LONG_CACHE = "public, max-age=86400"
 
 
 @router.get("/nodes/{node_type}.json")
@@ -32,7 +39,7 @@ async def get_node_schema(node_type: str, response: Response):
     schema = get_node_output_schema(node_type)
     if schema is None:
         raise HTTPException(status_code=404, detail=f"No schema for node type {node_type!r}")
-    response.headers["Cache-Control"] = "public, max-age=86400"
+    response.headers["Cache-Control"] = _LONG_CACHE
     return schema
 
 
@@ -42,3 +49,43 @@ async def list_schemas():
     uses this to know which types it can query without probing 404s."""
 
     return {"node_types": list_node_types_with_schema()}
+
+
+@router.get("/nodes/{node_type}/input.json")
+async def get_node_input(node_type: str, response: Response):
+    """Return the JSON Schema for a node type's input parameters.
+
+    Wave 6 Phase 1: parallels the output endpoint above. 404 when no
+    Pydantic model is registered for the type — frontend falls back to
+    the legacy nodeDefinitions/* properties array until Phase 3 lands.
+    """
+
+    schema = get_node_input_schema(node_type)
+    if schema is None:
+        raise HTTPException(status_code=404, detail=f"No input schema for {node_type!r}")
+    response.headers["Cache-Control"] = _LONG_CACHE
+    return schema
+
+
+@router.get("/nodes/{node_type}/spec.json")
+async def get_node_spec_endpoint(node_type: str, response: Response):
+    """Return the unified NodeSpec envelope (display metadata + input
+    schema + output schema) for a node type.
+
+    Wave 6 Phase 1: this is the single endpoint Phase 2's editor consumer
+    talks to. 404 when neither an input model nor an output schema is
+    registered (unknown type)."""
+
+    spec = get_node_spec(node_type)
+    if spec is None:
+        raise HTTPException(status_code=404, detail=f"No NodeSpec for {node_type!r}")
+    response.headers["Cache-Control"] = _LONG_CACHE
+    return spec
+
+
+@router.get("/nodes/specs")
+async def list_specs():
+    """List every node type with at least an input model or an output
+    schema. Editor uses this on boot to prefetch the full set."""
+
+    return {"node_types": list_node_types_with_spec()}
