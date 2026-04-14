@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { nodeDefinitions } from '../nodeDefinitions';
+import { resolveNodeDescription } from '../lib/nodeSpec';
 import { useWebSocket } from '../contexts/WebSocketContext';
 import { SKILL_NODE_TYPES } from '../nodeDefinitions/skillNodes';
 import {
@@ -151,7 +152,15 @@ export const useParameterPanel = () => {
     setSelectedNode(null);
   }, [originalParameters, setSelectedNode]);
 
-  const nodeDefinition = nodeType ? nodeDefinitions[nodeType] : null;
+  // Wave 6 Phase 3e hot-path wiring. When VITE_NODESPEC_BACKEND is off
+  // (default), resolveNodeDescription returns the local fallback
+  // unchanged. When on, it returns the backend NodeSpec adapted to the
+  // INodeTypeDescription shape so the entire parameter panel (Middle
+  // / Input / Output sections + ParameterRenderer) renders from
+  // server-driven metadata without any per-component change.
+  const nodeDefinition = nodeType
+    ? resolveNodeDescription(nodeType, nodeDefinitions[nodeType])
+    : null;
 
   return {
     selectedNode,
