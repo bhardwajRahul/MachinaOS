@@ -59,6 +59,9 @@ export default {
           red: "hsl(var(--dracula-red))",
           orange: "hsl(var(--dracula-orange))",
           yellow: "hsl(var(--dracula-yellow))",
+          selection: "hsl(var(--dracula-selection))",
+          "current-line": "hsl(var(--dracula-current-line))",
+          comment: "hsl(var(--dracula-comment))",
         },
       },
       borderRadius: {

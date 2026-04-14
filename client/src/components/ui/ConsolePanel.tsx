@@ -377,87 +377,6 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
     return Prism.highlight(code, Prism.languages.json, 'json');
   }, []);
 
-  // Prism token styles following CodeEditor.tsx convention
-  const prismStyles = `
-    .console-json-output .token.string { color: ${theme.dracula.yellow}; }
-    .console-json-output .token.number { color: ${theme.dracula.purple}; }
-    .console-json-output .token.boolean { color: ${theme.dracula.purple}; }
-    .console-json-output .token.null { color: ${theme.dracula.purple}; }
-    .console-json-output .token.property { color: ${theme.dracula.cyan}; }
-    .console-json-output .token.punctuation { color: ${theme.colors.text}; }
-    .console-json-output .token.operator { color: ${theme.dracula.pink}; }
-
-    /* Chat markdown styles */
-    .chat-markdown p { margin: 0 0 8px 0; }
-    .chat-markdown p:last-child { margin-bottom: 0; }
-    .chat-markdown h1, .chat-markdown h2, .chat-markdown h3 {
-      margin: 12px 0 8px 0;
-      font-weight: 600;
-      color: ${theme.colors.text};
-    }
-    .chat-markdown h1:first-child, .chat-markdown h2:first-child, .chat-markdown h3:first-child {
-      margin-top: 0;
-    }
-    .chat-markdown h1 { font-size: 1.25em; }
-    .chat-markdown h2 { font-size: 1.1em; }
-    .chat-markdown h3 { font-size: 1em; }
-    .chat-markdown strong { font-weight: 600; color: ${theme.colors.text}; }
-    .chat-markdown em { font-style: italic; }
-    .chat-markdown ul, .chat-markdown ol {
-      margin: 8px 0;
-      padding-left: 20px;
-    }
-    .chat-markdown li { margin: 4px 0; }
-    .chat-markdown code {
-      background-color: ${isDarkMode ? theme.dracula.currentLine : `${theme.colors.border}50`};
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, monospace;
-      font-size: 0.9em;
-    }
-    .chat-markdown pre {
-      background-color: ${isDarkMode ? theme.dracula.currentLine : theme.colors.backgroundPanel};
-      padding: 12px;
-      border-radius: 6px;
-      overflow-x: auto;
-      margin: 8px 0;
-    }
-    .chat-markdown pre code {
-      background: none;
-      padding: 0;
-    }
-    .chat-markdown table {
-      border-collapse: collapse;
-      margin: 8px 0;
-      width: 100%;
-      font-size: 0.9em;
-    }
-    .chat-markdown th, .chat-markdown td {
-      border: 1px solid ${isDarkMode ? theme.dracula.selection : theme.colors.border};
-      padding: 6px 10px;
-      text-align: left;
-    }
-    .chat-markdown th {
-      background-color: ${isDarkMode ? theme.dracula.currentLine : theme.colors.backgroundPanel};
-      font-weight: 600;
-    }
-    .chat-markdown blockquote {
-      border-left: 3px solid ${isDarkMode ? theme.dracula.purple : theme.colors.primary};
-      margin: 8px 0;
-      padding: 4px 12px;
-      color: ${theme.colors.textSecondary};
-    }
-    .chat-markdown a {
-      color: ${isDarkMode ? theme.dracula.cyan : theme.colors.primary};
-      text-decoration: none;
-    }
-    .chat-markdown a:hover { text-decoration: underline; }
-    .chat-markdown hr {
-      border: none;
-      border-top: 1px solid ${isDarkMode ? theme.dracula.selection : theme.colors.border};
-      margin: 12px 0;
-    }
-  `;
 
   // Resize handle style
   const resizeHandleStyle: React.CSSProperties = {
@@ -734,7 +653,7 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
 
   return (
     <div
-      style={{ position: 'relative' }}
+      className="relative"
       onWheel={e => {
         // Prevent scroll from propagating to the canvas/page when the cursor
         // is over the panel header, resize handle, or non-scrollable areas.
@@ -745,7 +664,6 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
       }}
     >
       {/* Prism syntax highlighting styles for JSON */}
-      <style>{prismStyles}</style>
 
       {/* Resize Handle - Only visible when open */}
       {isOpen && (
@@ -794,7 +712,7 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
         {/* Chat Section - Left */}
         <div style={chatSectionStyle}>
           <div style={sectionHeaderStyle}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div className="flex items-center gap-2">
               <span style={sectionTitleStyle}>
                 Chat
                 {chatMessages && chatMessages.length > 0 && (
@@ -846,7 +764,7 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
                 Send a message to trigger chatTrigger nodes
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <div className="flex flex-col gap-1">
                 {chatMessages.map((msg, index) => (
                   <div key={`${msg.timestamp}-${index}`} style={chatMessageStyle(msg.role === 'user')}>
                     {msg.role === 'user' ? (
@@ -922,7 +840,7 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
         <div style={consoleSectionStyle}>
           <div style={sectionHeaderStyle}>
             {/* Tab Buttons */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <div className="flex items-center gap-1">
               <button
                 onClick={() => setPref('consoleTab', 'console')}
                 style={{
@@ -970,7 +888,7 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
                 )}
               </button>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div className="flex items-center gap-1.5">
               {consoleTab === 'terminal' && (
                 <select
                   value={terminalLogLevel}
@@ -1023,7 +941,7 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
                   type="checkbox"
                   checked={autoScroll}
                   onChange={e => setPref('autoScroll', e.target.checked)}
-                  style={{ cursor: 'pointer', width: '12px', height: '12px' }}
+                  className="h-3 w-3 cursor-pointer"
                 />
                 Auto
               </label>
@@ -1045,7 +963,7 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
                     type="checkbox"
                     checked={prettyPrint}
                     onChange={e => setPref('prettyPrint', e.target.checked)}
-                    style={{ cursor: 'pointer', width: '12px', height: '12px' }}
+                    className="h-3 w-3 cursor-pointer"
                   />
                   Pretty
                 </label>
@@ -1103,14 +1021,7 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
                       if (isJson && prettyPrint) {
                         return (
                           <pre
-                            className="console-json-output"
-                            style={{
-                              margin: 0,
-                              flex: 1,
-                              overflow: 'auto',
-                              whiteSpace: 'pre-wrap',
-                              wordBreak: 'break-word'
-                            }}
+                            className="console-json-output m-0 flex-1 overflow-auto whitespace-pre-wrap break-words"
                             dangerouslySetInnerHTML={{ __html: highlightJson(formatted) }}
                           />
                         );
@@ -1161,7 +1072,7 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
                     : 'No logs match the filter'}
                 </div>
               ) : (
-                <div style={{ minWidth: 'max-content' }}>
+                <div className="min-w-max">
                   {filteredTerminalLogs.slice().reverse().map((log, index) => (
                     <div key={`${log.timestamp}-${index}`} style={{
                       padding: '3px 12px',
