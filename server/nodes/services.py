@@ -80,7 +80,7 @@ register_node(
         "handles": [{"name": "output-memory", "kind": "output", "position": "top", "label": "Memory", "role": "memory"}],
         "description": "Markdown-based conversation memory with optional vector DB",
         "version": 1,
-        "uiHints": {"isMemoryPanel": True},
+        "uiHints": {"isMemoryPanel": True, "hasCodeEditor": True},
     },
 )
 
@@ -93,7 +93,7 @@ register_node(
         "handles": [{"name": "output-skill", "kind": "output", "position": "top", "label": "Skill", "role": "skill"}],
         "description": "Aggregate multiple skills with enable/disable toggles",
         "version": 1,
-        "uiHints": {"isToolPanel": True, "isMasterSkill": True},
+        "uiHints": {"isToolPanel": True, "isMasterSkill": True, "isMasterSkillEditor": True, "hideRunButton": True},
     },
 )
 
