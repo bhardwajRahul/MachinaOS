@@ -158,9 +158,38 @@ class AndroidServiceParams(BaseNodeParams):
 class WhatsAppSendParams(BaseNodeParams):
     """Parameters for WhatsApp send message node."""
     type: Literal["whatsappSend"]
-    phone_number: str = Field(default="", alias="phoneNumber")
-    message: str = ""
-    message_type: Literal["text", "image", "video", "audio", "document"] = Field(default="text", alias="messageType")
+    recipient_type: Literal["self", "phone", "group", "channel"] = Field(default="self", alias="recipientType")
+    phone_number: str = Field(
+        default="",
+        alias="phoneNumber",
+        json_schema_extra={"displayOptions": {"show": {"recipient_type": ["phone"]}}},
+    )
+    group_id: str = Field(
+        default="",
+        alias="groupId",
+        json_schema_extra={
+            "displayOptions": {"show": {"recipient_type": ["group"]}},
+            "loadOptionsMethod": "whatsappGroups",
+        },
+    )
+    channel_jid: str = Field(
+        default="",
+        alias="channelJid",
+        json_schema_extra={
+            "displayOptions": {"show": {"recipient_type": ["channel"]}},
+            "loadOptionsMethod": "whatsappChannels",
+        },
+    )
+    message: str = Field(
+        default="",
+        json_schema_extra={"displayOptions": {"show": {"message_type": ["text"]}}},
+    )
+    message_type: Literal["text", "image", "video", "audio", "document", "sticker", "location", "contact"] = Field(default="text", alias="messageType")
+    media_url: str = Field(
+        default="",
+        alias="mediaUrl",
+        json_schema_extra={"displayOptions": {"show": {"message_type": ["image", "video", "audio", "document", "sticker"]}}},
+    )
 
 
 class WhatsAppReceiveParams(BaseNodeParams):
@@ -489,8 +518,15 @@ class SocialSendParams(BaseNodeParams):
     platform: Literal["whatsapp", "telegram", "discord", "slack", "signal", "sms", "webchat", "email", "matrix", "teams"] = "whatsapp"
     recipient: str = ""
     message_type: Literal["text", "image", "video", "audio", "document", "sticker", "location", "contact", "poll", "buttons", "list"] = Field(default="text", alias="messageType")
-    text: str = ""
-    media_url: str = Field(default="", alias="mediaUrl")
+    text: str = Field(
+        default="",
+        json_schema_extra={"displayOptions": {"show": {"message_type": ["text", "buttons", "list"]}}},
+    )
+    media_url: str = Field(
+        default="",
+        alias="mediaUrl",
+        json_schema_extra={"displayOptions": {"show": {"message_type": ["image", "video", "audio", "document", "sticker"]}}},
+    )
 
 
 # =============================================================================
@@ -603,21 +639,52 @@ class EmailReceiveParams(BaseNodeParams):
 class GmailParams(BaseNodeParams):
     type: Literal["gmail"]
     operation: Literal["send", "search", "read"] = "send"
-    to: str = ""
-    subject: str = ""
-    body: str = ""
-    query: str = ""
-    message_id: str = Field(default="", alias="messageId")
+    to: str = Field(
+        default="",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["send"]}}},
+    )
+    subject: str = Field(
+        default="",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["send"]}}},
+    )
+    body: str = Field(
+        default="",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["send"]}}},
+    )
+    query: str = Field(
+        default="",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["search"]}}},
+    )
+    message_id: str = Field(
+        default="",
+        alias="messageId",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["read"]}}},
+    )
 
 
 class CalendarParams(BaseNodeParams):
     type: Literal["calendar"]
     operation: Literal["create", "list", "update", "delete"] = "list"
     calendar_id: str = Field(default="primary", alias="calendarId")
-    event_id: str = Field(default="", alias="eventId")
-    summary: str = ""
-    start_time: str = Field(default="", alias="startTime")
-    end_time: str = Field(default="", alias="endTime")
+    event_id: str = Field(
+        default="",
+        alias="eventId",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["update", "delete"]}}},
+    )
+    summary: str = Field(
+        default="",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["create", "update"]}}},
+    )
+    start_time: str = Field(
+        default="",
+        alias="startTime",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["create", "update", "list"]}}},
+    )
+    end_time: str = Field(
+        default="",
+        alias="endTime",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["create", "update", "list"]}}},
+    )
 
 
 class DriveParams(BaseNodeParams):

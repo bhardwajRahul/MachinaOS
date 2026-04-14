@@ -464,3 +464,38 @@ class TestDisplayOptionsEnrichment:
         for field in ["proxyCountry", "proxyProvider", "sessionType"]:
             prop = spec["inputs"]["properties"][field]
             assert prop["displayOptions"]["show"]["use_proxy"] == [True]
+
+    def test_whatsapp_send_groupid_carries_load_options(self):
+        # whatsappSend groupId field should route through loadOptionsMethod
+        spec = get_node_spec("whatsappSend")
+        group_id = spec["inputs"]["properties"]["groupId"]
+        assert group_id["loadOptionsMethod"] == "whatsappGroups"
+        assert group_id["displayOptions"]["show"]["recipient_type"] == ["group"]
+
+    def test_whatsapp_send_channel_jid_carries_load_options(self):
+        spec = get_node_spec("whatsappSend")
+        channel = spec["inputs"]["properties"]["channelJid"]
+        assert channel["loadOptionsMethod"] == "whatsappChannels"
+
+    def test_whatsapp_send_media_shown_for_media_types(self):
+        spec = get_node_spec("whatsappSend")
+        media = spec["inputs"]["properties"]["mediaUrl"]
+        assert "image" in media["displayOptions"]["show"]["message_type"]
+        assert "document" in media["displayOptions"]["show"]["message_type"]
+
+    def test_gmail_fields_gated_on_operation(self):
+        spec = get_node_spec("gmail")
+        assert spec["inputs"]["properties"]["to"]["displayOptions"]["show"]["operation"] == ["send"]
+        assert spec["inputs"]["properties"]["query"]["displayOptions"]["show"]["operation"] == ["search"]
+        assert spec["inputs"]["properties"]["messageId"]["displayOptions"]["show"]["operation"] == ["read"]
+
+    def test_calendar_event_id_gated_on_update_delete(self):
+        spec = get_node_spec("calendar")
+        event_id = spec["inputs"]["properties"]["eventId"]
+        assert event_id["displayOptions"]["show"]["operation"] == ["update", "delete"]
+
+    def test_social_send_media_url_gated_on_message_type(self):
+        spec = get_node_spec("socialSend")
+        media = spec["inputs"]["properties"]["mediaUrl"]
+        assert "image" in media["displayOptions"]["show"]["message_type"]
+        assert "text" not in media["displayOptions"]["show"]["message_type"]
