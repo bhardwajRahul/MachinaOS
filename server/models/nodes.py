@@ -241,8 +241,27 @@ class HttpRequestParams(BaseNodeParams):
     url: str = ""
     method: Literal["GET", "POST", "PUT", "DELETE", "PATCH"] = "GET"
     headers: Dict[str, str] = Field(default_factory=dict)
-    body: str = ""
+    body: str = Field(
+        default="",
+        json_schema_extra={"displayOptions": {"show": {"method": ["POST", "PUT", "PATCH"]}}},
+    )
     timeout: int = Field(default=30, ge=1, le=300)
+    use_proxy: bool = Field(default=False, alias="useProxy")
+    proxy_country: str = Field(
+        default="",
+        alias="proxyCountry",
+        json_schema_extra={"displayOptions": {"show": {"use_proxy": [True]}}},
+    )
+    proxy_provider: str = Field(
+        default="",
+        alias="proxyProvider",
+        json_schema_extra={"displayOptions": {"show": {"use_proxy": [True]}}},
+    )
+    session_type: Literal["rotating", "sticky"] = Field(
+        default="rotating",
+        alias="sessionType",
+        json_schema_extra={"displayOptions": {"show": {"use_proxy": [True]}}},
+    )
 
 
 class WebhookTriggerParams(BaseNodeParams):
@@ -336,16 +355,47 @@ class TelegramSendParams(BaseNodeParams):
     """Parameters for Telegram send message node."""
     type: Literal["telegramSend"]
     recipient_type: Literal["self", "chat_id"] = Field(default="self", alias="recipientType")
-    chat_id: str = Field(default="", alias="chatId")
+    chat_id: str = Field(
+        default="",
+        alias="chatId",
+        json_schema_extra={"displayOptions": {"show": {"recipient_type": ["chat_id"]}}},
+    )
     message_type: Literal["text", "photo", "document", "location", "contact"] = Field(default="text", alias="messageType")
-    text: str = ""
-    media_url: str = Field(default="", alias="mediaUrl")
-    caption: str = ""
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
-    phone: str = ""
-    first_name: str = Field(default="", alias="firstName")
-    last_name: str = Field(default="", alias="lastName")
+    text: str = Field(
+        default="",
+        json_schema_extra={"displayOptions": {"show": {"message_type": ["text"]}}},
+    )
+    media_url: str = Field(
+        default="",
+        alias="mediaUrl",
+        json_schema_extra={"displayOptions": {"show": {"message_type": ["photo", "document"]}}},
+    )
+    caption: str = Field(
+        default="",
+        json_schema_extra={"displayOptions": {"show": {"message_type": ["photo", "document"]}}},
+    )
+    latitude: Optional[float] = Field(
+        default=None,
+        json_schema_extra={"displayOptions": {"show": {"message_type": ["location"]}}},
+    )
+    longitude: Optional[float] = Field(
+        default=None,
+        json_schema_extra={"displayOptions": {"show": {"message_type": ["location"]}}},
+    )
+    phone: str = Field(
+        default="",
+        json_schema_extra={"displayOptions": {"show": {"message_type": ["contact"]}}},
+    )
+    first_name: str = Field(
+        default="",
+        alias="firstName",
+        json_schema_extra={"displayOptions": {"show": {"message_type": ["contact"]}}},
+    )
+    last_name: str = Field(
+        default="",
+        alias="lastName",
+        json_schema_extra={"displayOptions": {"show": {"message_type": ["contact"]}}},
+    )
     parse_mode: Literal["Auto", "HTML", "Markdown", "MarkdownV2", "None"] = Field(default="Auto", alias="parseMode")
     silent: bool = False
     reply_to_message_id: Optional[int] = Field(default=None, alias="replyToMessageId")
@@ -355,12 +405,41 @@ class TwitterSendParams(BaseNodeParams):
     """Parameters for Twitter send/action node."""
     type: Literal["twitterSend"]
     action: Literal["tweet", "reply", "retweet", "like", "unlike", "delete"] = "tweet"
-    text: str = ""
-    tweet_id: str = Field(default="", alias="tweetId")
-    media_urls: List[str] = Field(default_factory=list, alias="mediaUrls")
-    include_poll: bool = Field(default=False, alias="includePoll")
-    poll_options: List[str] = Field(default_factory=list, alias="pollOptions")
-    poll_duration_minutes: int = Field(default=1440, alias="pollDurationMinutes", ge=5, le=10080)
+    text: str = Field(
+        default="",
+        json_schema_extra={"displayOptions": {"show": {"action": ["tweet", "reply", "quote"]}}},
+    )
+    tweet_id: str = Field(
+        default="",
+        alias="tweetId",
+        json_schema_extra={"displayOptions": {"show": {"action": ["reply", "retweet", "quote", "like", "unlike", "delete"]}}},
+    )
+    include_media: bool = Field(
+        default=False,
+        alias="includeMedia",
+        json_schema_extra={"displayOptions": {"show": {"action": ["tweet", "reply", "quote"]}}},
+    )
+    media_urls: List[str] = Field(
+        default_factory=list,
+        alias="mediaUrls",
+        json_schema_extra={"displayOptions": {"show": {"action": ["tweet", "reply", "quote"], "include_media": [True]}}},
+    )
+    include_poll: bool = Field(
+        default=False,
+        alias="includePoll",
+        json_schema_extra={"displayOptions": {"show": {"action": ["tweet"]}}},
+    )
+    poll_options: List[str] = Field(
+        default_factory=list,
+        alias="pollOptions",
+        json_schema_extra={"displayOptions": {"show": {"action": ["tweet"], "include_poll": [True]}}},
+    )
+    poll_duration_minutes: int = Field(
+        default=1440,
+        alias="pollDurationMinutes",
+        ge=5, le=10080,
+        json_schema_extra={"displayOptions": {"show": {"action": ["tweet"], "include_poll": [True]}}},
+    )
 
 
 class TwitterSearchParams(BaseNodeParams):
@@ -379,9 +458,21 @@ class TwitterUserParams(BaseNodeParams):
     """Parameters for Twitter user lookup node."""
     type: Literal["twitterUser"]
     operation: Literal["me", "by_username", "by_id", "followers", "following"] = "me"
-    username: str = ""
-    user_id: str = Field(default="", alias="userId")
-    max_results: int = Field(default=100, alias="maxResults", ge=1, le=1000)
+    username: str = Field(
+        default="",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["by_username"]}}},
+    )
+    user_id: str = Field(
+        default="",
+        alias="userId",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["by_id", "followers", "following"]}}},
+    )
+    max_results: int = Field(
+        default=100,
+        alias="maxResults",
+        ge=1, le=1000,
+        json_schema_extra={"displayOptions": {"show": {"operation": ["followers", "following"]}}},
+    )
 
 
 class SocialReceiveParams(BaseNodeParams):

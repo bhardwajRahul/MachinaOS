@@ -57,8 +57,15 @@ interface JsonSchemaProperty {
   anyOf?: JsonSchemaProperty[];
   items?: JsonSchemaProperty;
   additionalProperties?: boolean | JsonSchemaProperty;
-  /** Editor hints lifted from Pydantic Field(json_schema_extra=...). */
+  /** Pydantic Field(json_schema_extra={"displayOptions": {...}}) lands
+   *  at the property top-level, not under a uiHints wrapper. */
+  displayOptions?: Record<string, unknown>;
+  placeholder?: string;
+  validation?: unknown[];
+  /** Editor hints. Either top-level or nested under uiHints - the
+   *  adapter reads both locations so Pydantic authors can use either. */
   uiHints?: Record<string, unknown>;
+  [key: string]: unknown;
 }
 
 type InodeType = INodeProperties['type'];
@@ -124,34 +131,39 @@ function toInodeProperty(
       ...(prop.maximum !== undefined ? { maxValue: prop.maximum } : {}),
     };
   }
-  // Lift Pydantic Field(json_schema_extra=...) hints. The shape mirrors
-  // INodeProperties so most fields pass straight through; the few that
-  // diverge (loadOptionsMethod -> typeOptions) are reshaped here.
-  const hints = prop.uiHints;
-  if (hints) {
-    if (hints.displayOptions) {
-      out.displayOptions = hints.displayOptions as INodeProperties['displayOptions'];
-    }
-    if (hints.placeholder) out.placeholder = hints.placeholder as string;
-    if (hints.noDataExpression) out.noDataExpression = hints.noDataExpression as boolean;
-    if (hints.validation) out.validation = hints.validation as INodeProperties['validation'];
-    // typeOptions lifts: loadOptionsMethod, password, rows, editor, accept, etc.
-    const typeOptionsKeys = [
-      'loadOptionsMethod', 'loadOptionsDependsOn',
-      'multipleValues', 'multipleValueButtonText',
-      'numberStepSize',
-      'password', 'rows',
-      'editor', 'editorLanguage',
-      'dynamicOptions', 'dependsOn',
-      'accept',
-    ] as const;
-    const lifted: Record<string, unknown> = {};
-    for (const key of typeOptionsKeys) {
-      if (hints[key] !== undefined) lifted[key] = hints[key];
-    }
-    if (Object.keys(lifted).length > 0) {
-      out.typeOptions = { ...out.typeOptions, ...lifted } as INodeProperties['typeOptions'];
-    }
+  // Lift Pydantic Field(json_schema_extra=...) hints. Pydantic merges
+  // json_schema_extra into the property top-level, but authors can also
+  // nest under ``uiHints: {...}`` for grouping - we read both locations.
+  const readHint = <T>(key: string): T | undefined =>
+    (prop as any)[key] !== undefined
+      ? ((prop as any)[key] as T)
+      : (prop.uiHints?.[key] as T | undefined);
+
+  const displayOptions = readHint<INodeProperties['displayOptions']>('displayOptions');
+  if (displayOptions) out.displayOptions = displayOptions;
+  const placeholder = readHint<string>('placeholder');
+  if (placeholder) out.placeholder = placeholder;
+  const noDataExpression = readHint<boolean>('noDataExpression');
+  if (noDataExpression) out.noDataExpression = noDataExpression;
+  const validation = readHint<INodeProperties['validation']>('validation');
+  if (validation) out.validation = validation;
+  // typeOptions lifts: loadOptionsMethod, password, rows, editor, accept, etc.
+  const typeOptionsKeys = [
+    'loadOptionsMethod', 'loadOptionsDependsOn',
+    'multipleValues', 'multipleValueButtonText',
+    'numberStepSize',
+    'password', 'rows',
+    'editor', 'editorLanguage',
+    'dynamicOptions', 'dependsOn',
+    'accept',
+  ] as const;
+  const lifted: Record<string, unknown> = {};
+  for (const key of typeOptionsKeys) {
+    const v = readHint<unknown>(key);
+    if (v !== undefined) lifted[key] = v;
+  }
+  if (Object.keys(lifted).length > 0) {
+    out.typeOptions = { ...out.typeOptions, ...lifted } as INodeProperties['typeOptions'];
   }
   return out;
 }

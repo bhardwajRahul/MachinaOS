@@ -416,3 +416,51 @@ class TestPhase5NodeGroups:
         from services.node_spec import list_node_groups
         for group, types in list_node_groups().items():
             assert types == sorted(types), f"Group {group!r} not sorted: {types}"
+
+
+class TestDisplayOptionsEnrichment:
+    """Wave 6 Phase 6 enrichment: Pydantic Field(json_schema_extra=...)
+    hints are lifted into the adapter-visible schema so the frontend
+    panel renders conditional visibility correctly without the legacy
+    nodeDefinitions/* displayOptions declarations."""
+
+    def test_twitter_send_text_shown_for_tweet_actions(self):
+        # text field should carry displayOptions restricting it to
+        # tweet/reply/quote actions.
+        spec = get_node_spec("twitterSend")
+        text = spec["inputs"]["properties"]["text"]
+        rule = text.get("displayOptions", {}).get("show", {})
+        assert rule.get("action") == ["tweet", "reply", "quote"]
+
+    def test_twitter_send_tweet_id_shown_for_edit_actions(self):
+        spec = get_node_spec("twitterSend")
+        prop = spec["inputs"]["properties"]["tweetId"]
+        rule = prop.get("displayOptions", {}).get("show", {})
+        assert "reply" in rule.get("action", [])
+        assert "delete" in rule.get("action", [])
+
+    def test_twitter_user_username_shown_for_by_username(self):
+        spec = get_node_spec("twitterUser")
+        username = spec["inputs"]["properties"]["username"]
+        assert username["displayOptions"]["show"]["operation"] == ["by_username"]
+
+    def test_telegram_send_media_shown_for_photo_document(self):
+        spec = get_node_spec("telegramSend")
+        media_url = spec["inputs"]["properties"]["mediaUrl"]
+        assert media_url["displayOptions"]["show"]["message_type"] == ["photo", "document"]
+
+    def test_telegram_send_text_shown_for_text_type(self):
+        spec = get_node_spec("telegramSend")
+        text = spec["inputs"]["properties"]["text"]
+        assert text["displayOptions"]["show"]["message_type"] == ["text"]
+
+    def test_http_request_body_shown_for_post_put_patch(self):
+        spec = get_node_spec("httpRequest")
+        body = spec["inputs"]["properties"]["body"]
+        assert body["displayOptions"]["show"]["method"] == ["POST", "PUT", "PATCH"]
+
+    def test_http_request_proxy_fields_gated_on_use_proxy(self):
+        spec = get_node_spec("httpRequest")
+        for field in ["proxyCountry", "proxyProvider", "sessionType"]:
+            prop = spec["inputs"]["properties"][field]
+            assert prop["displayOptions"]["show"]["use_proxy"] == [True]
