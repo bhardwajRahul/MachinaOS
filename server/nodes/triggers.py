@@ -82,20 +82,7 @@ register_node(
     },
 )
 
-register_node(
-    type="webhookTrigger",
-    metadata={
-        "displayName": "Webhook Trigger",
-        "subtitle": "HTTP Inbound",
-        "icon": "🪝",
-        "color": "#ffb86c",
-        "group": ["trigger"],
-        "componentKind": "trigger",
-        "handles": _TRIGGER_OUTPUT_HANDLES,
-        "description": "Start workflow when HTTP request is received",
-        "version": 1,
-    },
-)
+# webhookTrigger — migrated to nodes/webhook_trigger.py (Wave 11.B class-based plugin).
 
 register_node(
     type="chatTrigger",
@@ -173,20 +160,7 @@ register_node(
     },
 )
 
-register_node(
-    type="gmailReceive",
-    metadata={
-        "displayName": "Gmail Receive",
-        "subtitle": "Inbound Email",
-        "icon": "asset:gmail",
-        "color": "#EA4335",
-        "group": ["google", "trigger"],
-        "componentKind": "trigger",
-        "handles": _TRIGGER_OUTPUT_HANDLES,
-        "description": "Polling trigger for incoming Gmail emails",
-        "version": 1,
-    },
-)
+# gmailReceive — migrated to nodes/gmail_receive.py (Wave 11.B class-based plugin).
 
 register_node(
     type="emailReceive",

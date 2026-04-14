@@ -37,7 +37,7 @@ from services.handlers import (
     handle_text_chunker, handle_embedding_generator, handle_vector_store,
     handle_task_manager,
     handle_twitter_send, handle_twitter_search, handle_twitter_user,
-    handle_brave_search, handle_serper_search, handle_perplexity_search,
+    handle_serper_search, handle_perplexity_search,  # handle_brave_search: used only by handlers/tools.py (Wave 11.B)
     handle_rlm_agent,
 )
 from services.handlers.claude_code import handle_claude_code_agent
@@ -178,15 +178,14 @@ class NodeExecutor:
             'twitterSearch': handle_twitter_search,
             'twitterUser': handle_twitter_user,
             # Google Workspace (consolidated with operation dispatchers)
-            'gmail': handle_google_gmail,
+            # gmail: migrated to nodes/gmail.py (Wave 11.B). Plugin handler wins via registry.update.
             'gmailReceive': handle_gmail_receive,  # Polling-based trigger (custom handler)
             'calendar': handle_google_calendar,
             'drive': handle_google_drive,
             'sheets': handle_google_sheets,
             'tasks': handle_google_tasks,
             'contacts': handle_google_contacts,
-            # Search
-            'braveSearch': handle_brave_search,
+            # Search — braveSearch migrated to nodes/brave_search.py (Wave 11.B)
             'serperSearch': handle_serper_search,
             'perplexitySearch': handle_perplexity_search,
             # Social (unified messaging)

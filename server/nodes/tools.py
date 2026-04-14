@@ -22,21 +22,7 @@ _TOOL_HANDLES: list[dict] = [
 ]
 
 
-register_node(
-    type="calculatorTool",
-    metadata={
-        "displayName": "Calculator",
-        "subtitle": "Math Operations",
-        "icon": "🔢",
-        "color": "#f1fa8c",
-        "group": ["tool", "ai"],
-        "componentKind": "tool",
-        "handles": _TOOL_HANDLES,
-        "description": "Add, subtract, multiply, divide, power, sqrt, mod, abs",
-        "version": 1,
-        "uiHints": {"isToolPanel": True, "hideRunButton": True},
-    },
-)
+# calculatorTool — migrated to nodes/calculator_tool.py (Wave 11.B class-based plugin).
 
 register_node(
     type="currentTimeTool",

@@ -122,7 +122,7 @@ register_node(type="chatHistory",    metadata={"displayName": "Chat History",   
 # 4. Google Workspace (6) — branded blue
 # ---------------------------------------------------------------------------
 
-register_node(type="gmail",     metadata={"displayName": "Gmail",     "subtitle": "Email Operations",   "icon": "asset:gmail",    "color": "#EA4335", "group": ["google", "tool"], "componentKind": "square", "handles": _IO, "description": "Gmail send / search / read operations", "version": 1})
+# gmail — migrated to nodes/gmail.py (Wave 11.B class-based plugin).
 register_node(type="calendar",  metadata={"displayName": "Calendar",  "subtitle": "Event Management",   "icon": "asset:calendar", "color": "#4285F4", "group": ["google", "tool"], "componentKind": "square", "handles": _IO, "description": "Google Calendar create / list / update / delete events", "version": 1})
 register_node(type="drive",     metadata={"displayName": "Drive",     "subtitle": "File Operations",    "icon": "asset:drive",    "color": "#0F9D58", "group": ["google", "tool"], "componentKind": "square", "handles": _IO, "description": "Google Drive upload / download / list / share files", "version": 1})
 register_node(type="sheets",    metadata={"displayName": "Sheets",    "subtitle": "Spreadsheet Ops",    "icon": "asset:sheets",   "color": "#0F9D58", "group": ["google", "tool"], "componentKind": "square", "handles": _IO, "description": "Google Sheets read / write / append spreadsheet data", "version": 1})
@@ -134,7 +134,7 @@ register_node(type="contacts",  metadata={"displayName": "Contacts",  "subtitle"
 # 5. Web — search, browser, scrapers, proxy, location
 # ---------------------------------------------------------------------------
 
-register_node(type="braveSearch",      metadata={"displayName": "Brave Search",     "subtitle": "Web Search",       "icon": "asset:brave",       "color": "#FB542B", "group": ["search", "tool"], "componentKind": "square", "handles": _IO, "description": "Search the web using Brave Search API", "version": 1})
+# braveSearch — migrated to nodes/brave_search.py (Wave 11.B class-based plugin).
 register_node(type="serperSearch",     metadata={"displayName": "Serper Search",    "subtitle": "Google SERP",      "icon": "asset:google","color": "#ff79c6", "group": ["search", "tool"], "componentKind": "square", "handles": _IO, "description": "Search the web using Google via Serper API (web/news/images/places)", "version": 1})
 register_node(type="perplexitySearch",  metadata={"displayName": "Perplexity Search","subtitle": "AI Search",       "icon": "asset:perplexity",  "color": "#ff79c6", "group": ["search", "tool"], "componentKind": "square", "handles": _IO, "description": "AI-powered search using Perplexity Sonar with citations", "version": 1})
 
