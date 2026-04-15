@@ -137,8 +137,8 @@ class NodeExecutor:
             'cronScheduler': handle_cron_scheduler,
             'timer': handle_timer,
             # AI
-            'aiAgent': partial(handle_ai_agent, ai_service=self.ai_service, database=self.database),
-            'chatAgent': partial(handle_chat_agent, ai_service=self.ai_service, database=self.database),
+            # aiAgent + chatAgent: migrated to nodes/agent/{ai_agent,chat_agent}.py (Wave 11.C).
+            # Plugin handler wins via registry merge.
             # Specialized Agents (use chatAgent handler - same skill/memory/tools architecture)
             'android_agent': partial(handle_chat_agent, ai_service=self.ai_service, database=self.database),
             'coding_agent': partial(handle_chat_agent, ai_service=self.ai_service, database=self.database),
@@ -168,7 +168,7 @@ class NodeExecutor:
             'whatsappSend': handle_whatsapp_send,
             'whatsappDb': handle_whatsapp_db,
             # Telegram (telegramReceive routed via generic handle_trigger_node)
-            'telegramSend': handle_telegram_send,
+            # telegramSend: migrated to nodes/telegram/telegram_send.py (Wave 11.C). Plugin handler wins via merge.
             # Email (Himalaya CLI)
             'emailSend': handle_email_send,
             'emailRead': handle_email_read,
@@ -187,7 +187,7 @@ class NodeExecutor:
             'contacts': handle_google_contacts,
             # Search — braveSearch migrated to nodes/brave_search.py (Wave 11.B)
             'serperSearch': handle_serper_search,
-            'perplexitySearch': handle_perplexity_search,
+            # perplexitySearch: migrated to nodes/search/perplexity_search.py (Wave 11.C). Plugin handler wins.
             # Social (unified messaging)
             # Note: socialReceive handled in _dispatch with connected_outputs
             'socialSend': handle_social_send,
@@ -367,19 +367,34 @@ class NodeExecutor:
 
         return result
 
+    # Node types that need outputs from connected upstream nodes.
+    # Computed once so plugin handlers (registered via @register_node)
+    # can read context['connected_outputs'] / context['source_nodes']
+    # without re-implementing the graph walk.
+    _NEEDS_CONNECTED_OUTPUTS = frozenset({
+        'pythonExecutor', 'javascriptExecutor', 'typescriptExecutor',
+        'webhookResponse', 'console', 'socialReceive',
+    })
+
     async def _dispatch(self, node_id: str, node_type: str, params: Dict, context: Dict) -> Dict:
         """Dispatch to handler from registry or special handlers."""
 
-        # Check registry first
+        # Pre-enrich context for nodes that consume upstream outputs.
+        # Both plugin handlers and legacy handlers can read these keys.
+        if node_type in self._NEEDS_CONNECTED_OUTPUTS:
+            outputs, source_nodes = await self._get_connected_outputs_with_info(context, node_id)
+            context = {**context, 'connected_outputs': outputs, 'source_nodes': source_nodes}
+
+        # Check registry first (plugin handlers win — they were merged in
+        # via _build_handler_registry's registry.update(_PLUGIN_HANDLERS)).
         handler = self._handlers.get(node_type)
         if handler:
             return await handler(node_id, node_type, params, context)
 
-        # Special handlers needing connected outputs
-        if node_type in ('pythonExecutor', 'javascriptExecutor', 'typescriptExecutor', 'webhookResponse', 'console', 'socialReceive'):
-            logger.debug(f"[_dispatch] Getting connected outputs for {node_type} node_id={node_id}")
-            outputs, source_nodes = await self._get_connected_outputs_with_info(context, node_id)
-            logger.debug(f"[_dispatch] Got {len(outputs)} outputs for {node_type}: keys={list(outputs.keys())}")
+        # Legacy special handlers — invoked when no plugin is registered.
+        if node_type in self._NEEDS_CONNECTED_OUTPUTS:
+            outputs = context['connected_outputs']
+            source_nodes = context['source_nodes']
             if node_type == 'console':
                 return await handle_console(node_id, node_type, params, context, outputs, source_nodes)
             if node_type == 'socialReceive':

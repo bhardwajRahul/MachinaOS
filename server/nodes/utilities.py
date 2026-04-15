@@ -51,24 +51,7 @@ register_node(
     },
 )
 
-register_node(
-    type="console",
-    metadata={
-        "displayName": "Console",
-        "subtitle": "Debug Logger",
-        "icon": "🖥️",
-        "color": "#8be9fd",
-        "group": ["utility"],
-        "componentKind": "square",
-        "handles": [
-            {"name": "input-main", "kind": "input", "position": "left", "label": "Input", "role": "main"},
-        ],
-        "description": "Log data to console panel for debugging during execution",
-        "version": 1,
-        "uiHints": {"isConsoleSink": True},
-        "hideOutputHandle": True,
-    },
-)
+# console — migrated to nodes/utility/console.py (Wave 11.C).
 
 register_node(
     type="teamMonitor",

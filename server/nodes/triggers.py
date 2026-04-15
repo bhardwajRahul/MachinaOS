@@ -84,21 +84,7 @@ register_node(
 
 # webhookTrigger — migrated to nodes/webhook_trigger.py (Wave 11.B class-based plugin).
 
-register_node(
-    type="chatTrigger",
-    metadata={
-        "displayName": "Chat Trigger",
-        "subtitle": "Console Chat",
-        "icon": "asset:chat",
-        "color": "#ffb86c",
-        "group": ["utility", "trigger"],
-        "componentKind": "trigger",
-        "handles": _TRIGGER_OUTPUT_HANDLES,
-        "description": "Trigger workflow when user sends a chat message from the console input",
-        "version": 1,
-        "uiHints": {"isChatTrigger": True},
-    },
-)
+# chatTrigger — migrated to nodes/trigger/chat_trigger.py (Wave 11.C).
 
 register_node(
     type="taskTrigger",
@@ -130,20 +116,7 @@ register_node(
     },
 )
 
-register_node(
-    type="telegramReceive",
-    metadata={
-        "displayName": "Telegram Receive",
-        "subtitle": "Inbound Message",
-        "icon": "asset:telegram",
-        "color": "#0088CC",
-        "group": ["social", "trigger"],
-        "componentKind": "trigger",
-        "handles": _TRIGGER_OUTPUT_HANDLES,
-        "description": "Trigger workflow when Telegram message is received",
-        "version": 1,
-    },
-)
+# telegramReceive — migrated to nodes/telegram/telegram_receive.py (Wave 11.C).
 
 register_node(
     type="twitterReceive",

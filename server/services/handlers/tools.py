@@ -116,9 +116,7 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
     if node_type == 'currentTimeTool':
         return await _execute_current_time(tool_args, node_params)
 
-    # DuckDuckGo search tool (free, no API key)
-    if node_type == 'duckduckgoSearch':
-        return await _execute_duckduckgo_search(tool_args, node_params)
+    # duckduckgoSearch: migrated to plugin (Wave 11.C). Handled by fast-path above.
 
     # Filesystem and shell tools (deepagents backends)
     if node_type in ('fileRead', 'fileModify', 'shell', 'fsSearch'):
@@ -211,9 +209,7 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
     if node_type == 'serperSearch':
         return await _execute_serper_search_tool(tool_args, config.get('parameters', {}))
 
-    # Perplexity Search (dual-purpose: workflow node + AI tool)
-    if node_type == 'perplexitySearch':
-        return await _execute_perplexity_search_tool(tool_args, config.get('parameters', {}))
+    # perplexitySearch: migrated to plugin (Wave 11.C). Handled by fast-path above.
 
     # Google Maps Geocoding (gmaps_locations node as tool)
     if node_type == 'gmaps_locations':

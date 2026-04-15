@@ -40,21 +40,7 @@ register_node(
     },
 )
 
-register_node(
-    type="duckduckgoSearch",
-    metadata={
-        "displayName": "DuckDuckGo Search",
-        "subtitle": "Free Web Search",
-        "icon": "asset:duckduckgo",
-        "color": "#f1fa8c",
-        "group": ["tool", "ai", "search"],
-        "componentKind": "tool",
-        "handles": _TOOL_HANDLES,
-        "description": "DuckDuckGo web search (free, no API key required)",
-        "version": 1,
-        "uiHints": {"isToolPanel": True, "hideRunButton": True},
-    },
-)
+# duckduckgoSearch — migrated to nodes/search/duckduckgo_search.py (Wave 11.C).
 
 register_node(
     type="taskManager",

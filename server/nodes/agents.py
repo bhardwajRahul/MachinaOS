@@ -66,37 +66,7 @@ _DEEP_BOTTOM_HANDLES = [
 
 # -- Core agents --------------------------------------------------------------
 
-register_node(
-    type="aiAgent",
-    metadata={
-        "displayName": "AI Agent",
-        "subtitle": "LangGraph Agent",
-        "icon": "🤖",
-        "color": "#bd93f9",
-        "group": ["agent"],
-        "componentKind": "agent",
-        "handles": _std_handles(),
-        "description": "LangGraph agent with tool calling, memory, and iterative reasoning",
-        "version": 1,
-        "uiHints": _STD_AGENT_HINTS,
-    },
-)
-
-register_node(
-    type="chatAgent",
-    metadata={
-        "displayName": "Zeenie",
-        "subtitle": "Personal Assistant",
-        "icon": "🧞",
-        "color": "#8be9fd",
-        "group": ["agent"],
-        "componentKind": "agent",
-        "handles": _std_handles(),
-        "description": "Conversational AI agent with skills and memory",
-        "version": 1,
-        "uiHints": _STD_AGENT_HINTS,
-    },
-)
+# aiAgent + chatAgent — migrated to nodes/agent/{ai_agent,chat_agent}.py (Wave 11.C).
 
 
 # -- Specialized agents (share the LangGraph Skill/Tool/Memory/Task topology) -
