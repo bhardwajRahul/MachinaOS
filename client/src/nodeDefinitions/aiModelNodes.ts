@@ -80,17 +80,4 @@ export const aiModelNodes: Record<string, INodeTypeDescription> = {
   mistralChatModel: createBaseChatModel(mistralConfig),
 };
 
-export const AI_CHAT_MODEL_TYPES = Object.keys(aiModelNodes);
-
-const ALL_CONFIGS = [openaiConfig, claudeConfig, geminiConfig, openrouterConfig, groqConfig, cerebrasConfig, deepseekConfig, kimiConfig, mistralConfig];
-export const AI_MODEL_PROVIDER_MAP: Record<string, string> = Object.fromEntries(
-  ALL_CONFIGS.map(c => [`${c.providerId}ChatModel`, c.providerId])
-);
-
-import { AI_PROVIDER_META } from '../components/icons/AIProviderIcons';
-export const AI_PROVIDER_OPTIONS = Object.entries(AI_PROVIDER_META).map(([id, meta]) => ({
-  name: meta.label,
-  value: id,
-}));
-
-export { openaiConfig, claudeConfig, geminiConfig, openrouterConfig, groqConfig, cerebrasConfig, deepseekConfig, kimiConfig, mistralConfig, createBaseChatModel };
+export { createBaseChatModel };

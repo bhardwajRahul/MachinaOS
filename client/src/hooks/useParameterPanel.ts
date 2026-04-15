@@ -3,7 +3,6 @@ import { useAppStore } from '../store/useAppStore';
 import { nodeDefinitions } from '../nodeDefinitions';
 import { resolveNodeDescription } from '../lib/nodeSpec';
 import { useWebSocket } from '../contexts/WebSocketContext';
-import { SKILL_NODE_TYPES } from '../nodeDefinitions/skillNodes';
 import {
   useNodeParamsQuery,
   useSaveNodeParamsMutation,
@@ -39,7 +38,6 @@ export const useParameterPanel = () => {
   // first successful query, then mutated by user edits until save.
   const [editBuffer, setEditBuffer] = useState<Record<string, any>>({});
   const [originalParameters, setOriginalParameters] = useState<Record<string, any>>({});
-  const [seedingSkill, setSeedingSkill] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Initialize the edit buffer once per node selection. Identity of
@@ -70,49 +68,7 @@ export const useParameterPanel = () => {
 
     const defaults = defaultsForNodeType(nodeType);
     const saved = queryDataRef.current?.parameters ?? {};
-    let initial: Record<string, any> = { ...defaults, ...saved };
-
-    // Seed skill instructions from SKILL.md only the first time a skill
-    // node is opened (DB has no instructions yet). Persist the seeded
-    // value back so subsequent loads come from the DB directly.
-    const isSeedableSkill =
-      SKILL_NODE_TYPES.includes(nodeType) &&
-      nodeType !== 'customSkill' &&
-      nodeType !== 'masterSkill';
-
-    const skillName = initial.skillName as string | undefined;
-    if (isSeedableSkill && skillName && !initial.instructions) {
-      let cancelled = false;
-      setSeedingSkill(true);
-      (async () => {
-        try {
-          const skillResult = await sendRequestRef.current<any>(
-            'get_skill_content',
-            { skill_name: skillName },
-          );
-          if (cancelled) return;
-          if (skillResult?.success && skillResult?.instructions) {
-            initial = { ...initial, instructions: skillResult.instructions };
-            await saveMutationRef.current.mutateAsync({
-              nodeId,
-              parameters: initial,
-              version: queryDataRef.current?.version,
-            });
-          }
-        } catch (err) {
-          console.error('[useParameterPanel] Failed to seed skill content:', err);
-        } finally {
-          if (!cancelled) {
-            setEditBuffer(initial);
-            setOriginalParameters(initial);
-            setSeedingSkill(false);
-          }
-        }
-      })();
-      return () => {
-        cancelled = true;
-      };
-    }
+    const initial: Record<string, any> = { ...defaults, ...saved };
 
     setEditBuffer(initial);
     setOriginalParameters(initial);
@@ -170,7 +126,7 @@ export const useParameterPanel = () => {
     handleParameterChange,
     handleSave,
     handleCancel,
-    isLoading: paramsQuery.isLoading || seedingSkill,
+    isLoading: paramsQuery.isLoading,
     isSaving: saveMutation.isPending,
     error,
     isConnected,

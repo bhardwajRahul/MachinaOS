@@ -1,7 +1,7 @@
 // Specialized Agent Node Definitions - AI Agents with specialized capabilities
 import { INodeTypeDescription, NodeConnectionType, INodeProperties } from '../types/INodeProperties';
 import { dracula } from '../styles/theme';
-import { AI_PROVIDER_OPTIONS } from './aiModelNodes';
+import { AI_PROVIDER_OPTIONS } from '../lib/aiModelProviders';
 
 // ============================================================================
 // SHARED AI AGENT INPUTS - Used by Specialized Agent Nodes

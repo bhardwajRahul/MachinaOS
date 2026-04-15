@@ -15,7 +15,7 @@ import { Input as ShadcnInput } from './ui/input';
 import { shouldShowParameter } from '../utils/parameterVisibility';
 
 // Map node types to provider keys for AI model nodes
-import { AI_MODEL_PROVIDER_MAP } from '../nodeDefinitions/aiModelNodes';
+import { AI_MODEL_PROVIDER_MAP } from '../lib/aiModelProviders';
 
 // Map node types to provider keys for AI model nodes
 // Uses the centralized map from aiModelNodes + legacy aliases

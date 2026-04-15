@@ -23,8 +23,7 @@ import StartNode from './components/StartNode';
 import ConditionalEdge from './components/ConditionalEdge';
 import NodeContextMenu from './components/ui/NodeContextMenu';
 import { nodeDefinitions } from './nodeDefinitions';
-import { SPECIALIZED_AGENT_TYPES } from './nodeDefinitions/specializedAgentNodes';
-import { SKILL_NODE_TYPES } from './nodeDefinitions/skillNodes';
+import { getNodeTypesInGroup } from './lib/nodeSpec';
 import ParameterPanel from './ParameterPanel';
 import LocationParameterPanel from './components/LocationParameterPanel';
 import { useAppStore } from './store/useAppStore';
@@ -87,20 +86,13 @@ const COMPONENT_BY_KIND: Record<string, React.ComponentType<any>> = {
 const createNodeTypes = (): Record<string, React.ComponentType<any>> => {
   const types: Record<string, React.ComponentType<any>> = {};
   Object.keys(nodeDefinitions).forEach(type => {
-    const spec = getCachedNodeSpec(type);
-    const kind = spec?.componentKind;
+    const kind = getCachedNodeSpec(type)?.componentKind;
     if (kind && COMPONENT_BY_KIND[kind]) {
       types[type] = COMPONENT_BY_KIND[kind];
     } else if (type === 'teamMonitor') {
       types[type] = TeamMonitorNode;
-    } else if (SKILL_NODE_TYPES.includes(type)) {
+    } else if (type === 'masterSkill') {
       types[type] = ToolkitNode;
-    } else if (type === 'aiAgent' || type === 'chatAgent' || SPECIALIZED_AGENT_TYPES.includes(type)) {
-      // Pre-prefetch fallback so agents render before specs arrive.
-      // aiAgent/chatAgent aren't in SPECIALIZED_AGENT_TYPES but still
-      // need AIAgentNode rendering; otherwise cold-cache paints them as
-      // generic SquareNode with no agent handles.
-      types[type] = AIAgentNode;
     } else {
       types[type] = SquareNode;
     }
@@ -292,10 +284,12 @@ const DashboardContent: React.FC = () => {
   const { onConnect, onNodesDelete, onEdgesDelete } = useReactFlowNodes({ setNodes, setEdges });
   const { copySelectedNodes, pasteNodes } = useCopyPaste({ nodes, edges, setNodes, setEdges, saveNodeParameters });
 
-  // Override all agent nodes to use the global model
-  const AGENT_TYPES_SET = React.useMemo(() => new Set(['aiAgent', 'chatAgent', ...SPECIALIZED_AGENT_TYPES]), []);
+  // Override all agent nodes to use the global model. Agent membership is
+  // derived at call time from the backend-served `group` field — by the
+  // time the user hits this button, prefetch has always completed.
   const handleOverrideAllAgents = React.useCallback(async (provider: string, model: string) => {
-    const agentNodes = nodes.filter(n => AGENT_TYPES_SET.has(n.type || ''));
+    const agentTypes = new Set(getNodeTypesInGroup('agent'));
+    const agentNodes = nodes.filter(n => agentTypes.has(n.type || ''));
     if (agentNodes.length === 0) return;
     const nodeIds = agentNodes.map(n => n.id);
     const allParams = await getAllNodeParameters(nodeIds);
@@ -303,7 +297,7 @@ const DashboardContent: React.FC = () => {
       const existing = allParams[n.id] || {};
       return saveNodeParameters(n.id, { ...existing, provider, model });
     }));
-  }, [nodes, AGENT_TYPES_SET, getAllNodeParameters, saveNodeParameters]);
+  }, [nodes, getAllNodeParameters, saveNodeParameters]);
 
   // Toggle disabled state on selected nodes
   const toggleDisableSelected = React.useCallback(() => {

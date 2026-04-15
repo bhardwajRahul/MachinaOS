@@ -7,7 +7,7 @@ import { useAppTheme } from '../hooks/useAppTheme';
 import { useWebSocket, useWhatsAppStatus } from '../contexts/WebSocketContext';
 import { getCachedNodeSpec, isNodeInBackendGroup, resolveNodeDescription, useNodeSpec } from '../lib/nodeSpec';
 import { resolveIcon, resolveLibraryIcon } from '../assets/icons';
-import { AI_MODEL_PROVIDER_MAP } from '../nodeDefinitions/aiModelNodes';
+import { AI_MODEL_PROVIDER_MAP } from '../lib/aiModelProviders';
 
 // Nodes with 'tool' in their group can connect to AI Agent/Zeenie tool handles
 const hasToolGroup = (definition: any): boolean => {
