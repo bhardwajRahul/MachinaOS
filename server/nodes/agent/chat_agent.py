@@ -74,20 +74,20 @@ class ChatAgentNode(ActionNode):
 
     @Operation("execute", cost={"service": "chat_agent", "action": "run", "count": 1})
     async def execute_op(self, ctx: NodeContext, params: ChatAgentParams) -> Any:
+        """Inlined from handlers/ai.handle_chat_agent (Wave 11.D.6)."""
         from core.container import container
-        from services.handlers.ai import handle_chat_agent
+
+        from ._inline import prepare_agent_call
 
         ai_service = container.ai_service()
         database = container.database()
-        payload = params.model_dump(by_alias=True)
-        response = await handle_chat_agent(
-            ai_service=ai_service,
-            database=database,
-            node_id=ctx.node_id,
-            node_type=self.type,
-            parameters=payload,
-            context=ctx.raw,
+        kwargs = await prepare_agent_call(
+            node_id=ctx.node_id, node_type=self.type,
+            parameters=params.model_dump(by_alias=True),
+            context=ctx.raw, database=database,
+            log_prefix="[Chat Agent]",
         )
+        response = await ai_service.execute_chat_agent(ctx.node_id, **kwargs)
         if response.get("success"):
             return response.get("result") or response
         raise RuntimeError(response.get("error") or "Chat Agent execution failed")

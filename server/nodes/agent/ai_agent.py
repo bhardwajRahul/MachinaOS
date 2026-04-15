@@ -80,20 +80,27 @@ class AIAgentNode(ActionNode):
 
     @Operation("execute", cost={"service": "ai_agent", "action": "run", "count": 1})
     async def execute_op(self, ctx: NodeContext, params: AIAgentParams) -> Any:
+        """Inlined from handlers/ai.handle_ai_agent (Wave 11.D.6).
+
+        Pre-dispatch flow (edge walk + task inject + prompt fallback)
+        lives in :mod:`nodes.agent._inline`. This method just calls
+        ``AIService.execute_agent`` with the prepared kwargs. The
+        underlying LangGraph orchestration + tool binding + memory
+        I/O + streaming hooks stay in AIService.
+        """
         from core.container import container
-        from services.handlers.ai import handle_ai_agent
+
+        from ._inline import prepare_agent_call
 
         ai_service = container.ai_service()
         database = container.database()
-        payload = params.model_dump(by_alias=True)
-        response = await handle_ai_agent(
-            ai_service=ai_service,
-            database=database,
-            node_id=ctx.node_id,
-            node_type=self.type,
-            parameters=payload,
-            context=ctx.raw,
+        kwargs = await prepare_agent_call(
+            node_id=ctx.node_id, node_type=self.type,
+            parameters=params.model_dump(by_alias=True),
+            context=ctx.raw, database=database,
+            log_prefix="[AI Agent]",
         )
+        response = await ai_service.execute_agent(ctx.node_id, **kwargs)
         if response.get("success"):
             return response.get("result") or response
         raise RuntimeError(response.get("error") or "AI Agent execution failed")

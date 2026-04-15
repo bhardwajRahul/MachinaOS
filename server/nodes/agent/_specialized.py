@@ -76,20 +76,26 @@ class SpecializedAgentBase(ActionNode, abstract=True):
 
     @Operation("execute", cost={"service": "specialized_agent", "action": "run", "count": 1})
     async def execute_op(self, ctx: NodeContext, params: SpecializedAgentParams) -> Any:
+        """Inlined via ``prepare_agent_call`` (Wave 11.D.6).
+
+        All 13 specialized agents + orchestrator + ai_employee route
+        through :func:`AIService.execute_chat_agent` with identical
+        pre-dispatch flow. Team-lead teammate injection happens inside
+        ``prepare_agent_call`` based on ``self.type``.
+        """
         from core.container import container
-        from services.handlers.ai import handle_chat_agent
+
+        from ._inline import prepare_agent_call
 
         ai_service = container.ai_service()
         database = container.database()
-        payload = params.model_dump(by_alias=True)
-        response = await handle_chat_agent(
-            ai_service=ai_service,
-            database=database,
-            node_id=ctx.node_id,
-            node_type=self.type,
-            parameters=payload,
-            context=ctx.raw,
+        kwargs = await prepare_agent_call(
+            node_id=ctx.node_id, node_type=self.type,
+            parameters=params.model_dump(by_alias=True),
+            context=ctx.raw, database=database,
+            log_prefix=f"[{self.type}]",
         )
+        response = await ai_service.execute_chat_agent(ctx.node_id, **kwargs)
         if response.get("success"):
             return response.get("result") or response
         raise RuntimeError(response.get("error") or f"{self.type} execution failed")
