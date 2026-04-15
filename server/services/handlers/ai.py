@@ -50,9 +50,6 @@ def _format_task_context(task_data: Dict[str, Any]) -> str:
     return _ew_format_task_context(task_data)
 
 
-# DELETED (Wave 11.D.0): the original inline bodies of
-# _collect_agent_connections / _collect_teammate_connections /
-
 async def handle_ai_agent(
     node_id: str,
     node_type: str,

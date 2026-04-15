@@ -22,47 +22,12 @@ from constants import (
 from models.nodes import validate_node_params
 from pydantic import ValidationError
 from services import event_waiter
-from services.handlers import (
-    handle_ai_agent, handle_chat_agent, handle_ai_chat_model, handle_simple_memory,
-    handle_android_service,
-    handle_python_executor, handle_javascript_executor, handle_typescript_executor,
-    handle_http_request, handle_webhook_response, handle_trigger_node,
-    handle_create_map, handle_add_locations, handle_nearby_places,
-    handle_text_generator, handle_file_handler,
-    handle_chat_send, handle_chat_history,
-    handle_start, handle_cron_scheduler, handle_timer, handle_team_monitor,
-    # handle_console: migrated to nodes/utility/console.py (Wave 11.C).
-    handle_whatsapp_send, handle_whatsapp_db,
-    handle_social_receive, handle_social_send,
-    handle_http_scraper, handle_file_downloader, handle_document_parser,
-    handle_text_chunker, handle_embedding_generator, handle_vector_store,
-    handle_task_manager,
-    handle_twitter_send, handle_twitter_search, handle_twitter_user,
-    handle_serper_search,
-    # Wave 11 migrated: handle_brave_search, handle_perplexity_search now imported
-    # lazily by their plugin classes in nodes/search/.
-    handle_rlm_agent,
-)
-from services.handlers.claude_code import handle_claude_code_agent
-from services.handlers.deep_agent import handle_deep_agent
-# Wave 11 migrated: handle_telegram_send now imported lazily by
-# nodes/telegram/telegram_send.py.
-from services.handlers.apify import handle_apify_actor
-from services.handlers.crawlee import handle_crawlee_scraper
-from services.handlers.browser import handle_browser
-from services.handlers.proxy import handle_proxy_request, handle_proxy_status, handle_proxy_config
-from services.handlers.filesystem import handle_file_read, handle_file_modify, handle_shell, handle_fs_search
-from services.handlers.todo import handle_write_todos
-from services.handlers.process import handle_process_manager
-from services.handlers.email import handle_email_send, handle_email_read, handle_email_receive
-# Consolidated Google Workspace handlers (6 services with operation dispatchers)
-# Wave 11 migrated: gmail handlers (send/search/read) imported lazily
-# by nodes/google/gmail.py; handle_gmail_receive lazily by gmail_receive.py.
-from services.handlers.calendar import handle_google_calendar
-from services.handlers.drive import handle_google_drive
-from services.handlers.sheets import handle_google_sheets
-from services.handlers.tasks import handle_google_tasks
-from services.handlers.contacts import handle_google_contacts
+# Wave 11.D.13 sunset: every handler that was imported here is now
+# either (a) called lazily from a plugin's execute_op / execute method,
+# or (b) retired entirely. The dispatcher itself only needs the
+# plugin-class registry populated via register_node side effects.
+# Triggering that population is what ``import nodes`` does at server
+# startup (see main.py lifespan).
 
 if TYPE_CHECKING:
     from core.config import Settings
@@ -309,23 +274,11 @@ class NodeExecutor:
         if handler:
             return await handler(node_id, node_type, params, context)
 
-        # Legacy special handlers — invoked when no plugin is registered.
-        # console + socialReceive: migrated to nodes/{utility,social}/ (Wave 11.C); plugins win above.
-        if node_type in self._NEEDS_CONNECTED_OUTPUTS:
-            outputs = context['connected_outputs']
-            handlers = {
-                'pythonExecutor': handle_python_executor,
-                'javascriptExecutor': handle_javascript_executor,
-                'typescriptExecutor': handle_typescript_executor,
-                'webhookResponse': handle_webhook_response,
-            }
-            return await handlers[node_type](node_id, node_type, params, context, outputs)
-
-        # Trigger nodes
-        if event_waiter.is_trigger_node(node_type):
-            return await handle_trigger_node(node_id, node_type, params, context)
-
-        # Fallback
+        # All trigger + special node types are now plugin classes
+        # (Wave 11.C). Trigger nodes live in _handlers via their
+        # plugin's register_node side effect and have already been
+        # handled above. Anything that falls through here is a
+        # workflow node type the backend genuinely doesn't know about.
         return {
             "success": True,
             "node_id": node_id,
