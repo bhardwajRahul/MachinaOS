@@ -17,7 +17,6 @@ This package contains all node execution handlers organized by category:
 - sheets.py: Consolidated Sheets handler (read, write, append)
 - tasks.py: Consolidated Tasks handler (create, list, complete, update, delete)
 - contacts.py: Consolidated Contacts handler (create, list, search, get, update, delete)
-- polyglot.py: Polyglot server integration (standalone, not auto-imported)
 """
 
 # AI handlers

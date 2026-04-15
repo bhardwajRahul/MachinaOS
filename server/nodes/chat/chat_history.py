@@ -46,11 +46,8 @@ class ChatHistoryNode(ActionNode):
 
     @Operation("read")
     async def read(self, ctx: NodeContext, params: ChatHistoryParams) -> Any:
-        from services.handlers.chat import handle_chat_history
-        response = await handle_chat_history(
-            node_id=ctx.node_id, node_type=self.type,
-            parameters=params.model_dump(by_alias=True), context=ctx.raw,
-        )
-        if response.get("success"):
-            return response.get("result") or response
-        raise RuntimeError(response.get("error") or "Chat history failed")
+        from core.container import container
+
+        database = container.database()
+        messages = await database.get_chat_messages(params.session_id, limit=params.limit)
+        return ChatHistoryOutput(messages=messages, count=len(messages))
