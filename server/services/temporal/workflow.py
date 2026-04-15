@@ -22,13 +22,10 @@ from temporalio.common import RetryPolicy
 # Zeenie handles: input-skill, input-tools
 CONFIG_HANDLES = {"input-tools", "input-memory", "input-model", "input-skill", "input-task", "input-teammates"}
 
-# Trigger node types - event listeners that should never be scheduled as blocking activities
-# Must be kept in sync with constants.WORKFLOW_TRIGGER_TYPES
-TRIGGER_NODE_TYPES = frozenset([
-    "start", "cronScheduler", "webhookTrigger", "whatsappReceive",
-    "workflowTrigger", "chatTrigger", "taskTrigger",
-    "twitterReceive", "gmailReceive", "telegramReceive",
-])
+# Trigger node types — event listeners that should never be scheduled
+# as blocking activities. Imported from constants to avoid drift (was
+# previously redefined here with a "keep in sync" comment — Wave 11.E.2).
+from constants import WORKFLOW_TRIGGER_TYPES as TRIGGER_NODE_TYPES
 
 # Android service types (connect to androidTool, not executed directly)
 ANDROID_SERVICE_TYPES = {

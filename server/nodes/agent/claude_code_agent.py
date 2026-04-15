@@ -34,7 +34,7 @@ class ClaudeCodeAgentNode(ActionNode):
     @Operation("execute", cost={"service": "claude_code_agent", "action": "run", "count": 1})
     async def execute_op(self, ctx: NodeContext, params: SpecializedAgentParams) -> Any:
         from core.container import container
-        from services.handlers.ai import handle_claude_code_agent
+        from services.handlers.claude_code import handle_claude_code_agent
 
         ai_service = container.ai_service()
         database = container.database()

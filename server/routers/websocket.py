@@ -1865,10 +1865,10 @@ async def handle_validate_apify_key(data: Dict[str, Any], websocket: WebSocket) 
 
 
 # ============================================================================
-# WhatsApp Handlers - Wrappers for routers.whatsapp functions
+# WhatsApp Handlers - Wrappers for services.whatsapp_service functions
 # ============================================================================
 
-from routers.whatsapp import (
+from services.whatsapp_service import (
     handle_whatsapp_status as _wa_status,
     handle_whatsapp_connected_phone as _wa_connected_phone,
     handle_whatsapp_qr as _wa_qr,

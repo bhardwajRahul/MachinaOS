@@ -98,85 +98,31 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
         )
         return await instance.execute_as_tool(tool_args, node_params, ctx)
 
-    # calculatorTool: migrated to plugin (Wave 11.B). Handled by fast-path above.
+    # Wave 11.E.2: every per-type legacy dispatch branch retired —
+    # the plugin fast-path above intercepts every registered plugin
+    # (httpRequest / pythonExecutor / javascriptExecutor / currentTime
+    # / filesystem / writeTodos / processManager / taskManager /
+    # browser / email{Send,Read} / proxy{Request,Status,Config}).
+    # Branches below are only for built-ins without a plugin
+    # representation or cases needing special argument translation.
 
-    # HTTP Request tool (existing httpRequest node as tool)
-    if node_type in ('httpRequest', 'httpRequestTool'):
-        return await _execute_http_request(tool_args, node_params)
-
-    # Python executor tool (dual-purpose: workflow node + AI tool)
-    if node_type == 'pythonExecutor':
-        return await _execute_python_code(tool_args, node_params, context)
-
-    # JavaScript executor tool (dual-purpose: workflow node + AI tool)
-    if node_type == 'javascriptExecutor':
-        return await _execute_javascript_code(tool_args, node_params, context)
-
-    # Current time tool
-    if node_type == 'currentTimeTool':
-        return await _execute_current_time(tool_args, node_params)
-
-    # duckduckgoSearch: migrated to plugin (Wave 11.C). Handled by fast-path above.
-
-    # Filesystem and shell tools (deepagents backends)
-    if node_type in ('fileRead', 'fileModify', 'shell', 'fsSearch'):
-        from services.handlers.filesystem import handle_file_read, handle_file_modify, handle_shell, handle_fs_search
-        params = {**node_params, **tool_args}
-        handler_map = {
-            'fileRead': handle_file_read,
-            'fileModify': handle_file_modify,
-            'shell': handle_shell,
-            'fsSearch': handle_fs_search,
-        }
-        return await handler_map[node_type](
-            node_id=config.get('node_id', f'tool_{node_type}'),
-            node_type=node_type,
-            parameters=params,
-            context=context,
-        )
-
-    # timer / cronScheduler: handled by the plugin fast-path above.
-
-    # WhatsApp / Twitter / Google Workspace / Search / Maps tool branches
-    # all migrated to plugin classes — routed via the Wave 11.B.1 fast-path
-    # at the top of execute_tool. Branches below kept only for the few
-    # tool types still on the legacy path:
-
-    # androidTool (toolkit aggregator): kept until 11.D.
+    # androidTool (toolkit aggregator): dynamic schema derived from
+    # connected services; no plugin class.
     if node_type == 'androidTool':
         return await _execute_android_toolkit(tool_args, config)
 
-    # Direct Android service node (connected directly to AI Agent tools handle)
+    # Direct Android service node — LLM args use keys (action/parameters)
+    # that don't map 1-to-1 onto the plugin's Params schema, so we keep
+    # the dedicated dispatcher with its camelCase -> snake_case service
+    # id translation.
     if node_type in ANDROID_SERVICE_NODE_TYPES:
         return await _execute_android_service(tool_args, config)
 
-    # Write Todos (dedicated AI tool for task planning)
-    if node_type == 'writeTodos':
-        from services.handlers.todo import execute_write_todos
-        return await execute_write_todos(tool_args, config)
-
-    # Process Manager (dual-purpose: AI tool + workflow node)
-    if node_type == 'processManager':
-        from services.handlers.process import execute_process_manager
-        return await execute_process_manager(tool_args, config)
-
-    # Task Manager (dual-purpose: AI tool + workflow node)
+    # taskManager + proxyConfig: plugin bodies delegate back to the
+    # _execute_* stubs below for their operation-dispatch matrices, so
+    # keep those branches live.
     if node_type == 'taskManager':
         return await _execute_task_manager(tool_args, config)
-
-    # Browser automation (dual-purpose: workflow node + AI tool)
-    if node_type == 'browser':
-        return await _execute_browser(tool_args, config.get('parameters', {}), config)
-
-    # Proxy nodes (dual-purpose: workflow node + AI tool)
-    # Email nodes (dual-purpose: workflow node + AI tool)
-    if node_type in ('emailSend', 'emailRead'):
-        return await _execute_email_tool(node_type, tool_args, config.get('parameters', {}))
-
-    if node_type == 'proxyRequest':
-        return await _execute_proxy_request(tool_args, config.get('parameters', {}), config)
-    if node_type == 'proxyStatus':
-        return await _execute_proxy_status(tool_args, config.get('parameters', {}))
     if node_type == 'proxyConfig':
         return await _execute_proxy_config(tool_args, config.get('parameters', {}))
 
@@ -199,304 +145,12 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
 # nodes/tool/calculator_tool.py CalculatorToolNode.calculate().
 
 
-async def _execute_http_request(args: Dict[str, Any],
-                                 node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute HTTP request tool.
-
-    Args:
-        args: Dict with 'url', 'method', optionally 'body'
-        node_params: Node parameters containing base_url, headers, etc.
-
-    Returns:
-        Dict with status code, data, and url
-    """
-    import httpx
-
-    base_url = node_params.get('url', '')
-    url = args.get('url', '')
-    method = args.get('method', 'GET').upper()
-    body = args.get('body')
-
-    # Build full URL
-    if base_url and url and not url.startswith('http'):
-        full_url = f"{base_url.rstrip('/')}/{url.lstrip('/')}"
-    else:
-        full_url = url or base_url
-
-    if not full_url:
-        return {"error": "No URL provided"}
-
-    # Parse headers from node params
-    try:
-        default_headers = json.loads(node_params.get('headers', '{}'))
-    except Exception:
-        default_headers = {}
-
-    # Transparent proxy injection (useProxy from node params or LLM args)
-    proxy_url = None
-    use_proxy = args.get('useProxy', node_params.get('useProxy', False))
-    if use_proxy:
-        try:
-            from services.proxy.service import get_proxy_service
-            proxy_svc = get_proxy_service()
-            if proxy_svc and proxy_svc.is_enabled():
-                merged = {**node_params, **args}
-                proxy_url = await proxy_svc.get_proxy_url(full_url, merged)
-        except Exception as e:
-            logger.warning(f"[HTTP Tool] Proxy lookup failed, proceeding without proxy: {e}")
-
-    logger.debug(f"[HTTP Tool] {method} {full_url}", proxy=bool(proxy_url))
-
-    try:
-        client_kwargs: dict = {"timeout": 30.0}
-        if proxy_url:
-            client_kwargs["proxy"] = proxy_url
-
-        async with httpx.AsyncClient(**client_kwargs) as client:
-            response = await client.request(
-                method=method,
-                url=full_url,
-                headers=default_headers,
-                json=body if body else None
-            )
-
-            # Try to parse JSON response
-            try:
-                data = response.json()
-            except Exception:
-                data = response.text
-
-            return {
-                "status": response.status_code,
-                "data": data,
-                "url": full_url,
-                "method": method,
-                "proxied": proxy_url is not None,
-            }
-
-    except httpx.TimeoutException:
-        return {"error": "Request timed out"}
-    except httpx.ConnectError as e:
-        return {"error": f"Connection failed: {str(e)}"}
-    except Exception as e:
-        logger.error(f"[HTTP Tool] Error: {e}")
-        return {"error": str(e)}
 
 
-async def _execute_python_code(args: Dict[str, Any],
-                                node_params: Dict[str, Any],
-                                context: Dict[str, Any] = None) -> Dict[str, Any]:
-    """Execute Python code (dual-purpose: workflow node + AI tool).
-
-    Args:
-        args: Dict with 'code' from LLM (when used as AI tool)
-        node_params: Node parameters containing code (when used as workflow node), timeout, etc.
-        context: Execution context with workspace_dir for cwd
-    """
-    import subprocess
-    import tempfile
-    import os
-
-    # Get code from LLM args first (AI tool mode), fall back to node parameters (workflow mode)
-    code = args.get('code', '') or node_params.get('code', '')
-    timeout = int(node_params.get('timeout', 30))
-
-    if not code:
-        return {"error": "No code provided. When using as AI tool, the LLM must provide the 'code' argument with Python code to execute."}
-
-    # Wrap code to capture output and result
-    wrapped_code = f'''
-import json
-import sys
-import math
-from datetime import datetime, timedelta
-from collections import Counter, defaultdict
-
-input_data = {{}}
-output = None
-_stdout_lines = []
-
-class _PrintCapture:
-    def write(self, text):
-        if text.strip():
-            _stdout_lines.append(text.rstrip())
-    def flush(self):
-        pass
-
-_old_stdout = sys.stdout
-sys.stdout = _PrintCapture()
-
-try:
-{chr(10).join("    " + line for line in code.split(chr(10)))}
-
-    sys.stdout = _old_stdout
-    result = {{"success": True}}
-    if output is not None:
-        result["result"] = output
-    if _stdout_lines:
-        result["output"] = chr(10).join(_stdout_lines)
-    print(json.dumps(result, default=str))
-except Exception as e:
-    sys.stdout = _old_stdout
-    print(json.dumps({{"error": str(e)}}))
-'''
-
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
-        f.write(wrapped_code)
-        temp_path = f.name
-
-    try:
-        cwd = (context or {}).get('workspace_dir') or None
-        logger.debug(f"[Python Tool] Executing code (timeout: {timeout}s, cwd: {cwd})")
-        result = subprocess.run(
-            ['python', temp_path],
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            cwd=cwd or None,
-        )
-
-        if result.returncode == 0:
-            try:
-                return json.loads(result.stdout.strip())
-            except Exception:
-                return {"success": True, "output": result.stdout.strip()}
-        else:
-            return {"error": result.stderr or "Python execution failed"}
-
-    except subprocess.TimeoutExpired:
-        return {"error": f"Python execution timed out after {timeout} seconds"}
-    except Exception as e:
-        logger.error(f"[Python Tool] Error: {e}")
-        return {"error": str(e)}
-    finally:
-        try:
-            os.unlink(temp_path)
-        except Exception:
-            pass
 
 
-async def _execute_javascript_code(args: Dict[str, Any],
-                                    node_params: Dict[str, Any],
-                                    context: Dict[str, Any] = None) -> Dict[str, Any]:
-    """Execute JavaScript code (dual-purpose: workflow node + AI tool).
-
-    Args:
-        args: Dict with 'code' from LLM (when used as AI tool)
-        node_params: Node parameters containing code (when used as workflow node), timeout, etc.
-        context: Execution context with workspace_dir for cwd
-
-    Returns:
-        Dict with success, result, output, or error
-    """
-    import subprocess
-    import tempfile
-    import os
-
-    # Get code from LLM args first (AI tool mode), fall back to node parameters (workflow mode)
-    code = args.get('code', '') or node_params.get('code', '')
-    timeout = int(node_params.get('timeout', 30))
-
-    if not code:
-        return {"error": "No code provided. When using as AI tool, the LLM must provide the 'code' argument with JavaScript code to execute."}
-
-    # Wrap code to capture output and result
-    wrapped_code = f'''
-const input_data = {{}};
-let output = undefined;
-const _stdout_lines = [];
-
-const _originalLog = console.log;
-console.log = (...args) => {{
-    _stdout_lines.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
-}};
-
-try {{
-{chr(10).join("    " + line for line in code.split(chr(10)))}
-
-    const result = {{ success: true }};
-    if (output !== undefined) {{
-        result.result = output;
-    }}
-    if (_stdout_lines.length > 0) {{
-        result.output = _stdout_lines.join('\\n');
-    }}
-    _originalLog(JSON.stringify(result));
-}} catch (e) {{
-    _originalLog(JSON.stringify({{ error: e.message }}));
-}}
-'''
-
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.js', delete=False) as f:
-        f.write(wrapped_code)
-        temp_path = f.name
-
-    try:
-        cwd = (context or {}).get('workspace_dir') or None
-        logger.debug(f"[JavaScript Tool] Executing code (timeout: {timeout}s, cwd: {cwd})")
-        result = subprocess.run(
-            ['node', temp_path],
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            cwd=cwd or None,
-        )
-
-        if result.returncode == 0:
-            try:
-                return json.loads(result.stdout.strip())
-            except Exception:
-                return {"success": True, "output": result.stdout.strip()}
-        else:
-            return {"error": result.stderr or "JavaScript execution failed"}
-
-    except subprocess.TimeoutExpired:
-        return {"error": f"JavaScript execution timed out after {timeout} seconds"}
-    except FileNotFoundError:
-        return {"error": "Node.js is not installed. Cannot execute JavaScript code."}
-    except Exception as e:
-        logger.error(f"[JavaScript Tool] Error: {e}")
-        return {"error": str(e)}
-    finally:
-        try:
-            os.unlink(temp_path)
-        except Exception:
-            pass
 
 
-async def _execute_current_time(args: Dict[str, Any],
-                                 node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Get current date and time.
-
-    Args:
-        args: Dict with optional 'timezone'
-        node_params: Node parameters containing default timezone
-
-    Returns:
-        Dict with datetime, date, time, timezone, day_of_week, timestamp
-    """
-    from datetime import datetime
-    import pytz
-
-    timezone_str = args.get('timezone') or node_params.get('timezone', 'UTC')
-
-    try:
-        tz = pytz.timezone(timezone_str)
-        now = datetime.now(tz)
-
-        result = {
-            "datetime": now.isoformat(),
-            "date": now.strftime("%Y-%m-%d"),
-            "time": now.strftime("%H:%M:%S"),
-            "timezone": timezone_str,
-            "day_of_week": now.strftime("%A"),
-            "timestamp": int(now.timestamp())
-        }
-        logger.debug(f"[CurrentTime] {timezone_str}: {result['datetime']}")
-        return result
-    except Exception as e:
-        logger.error(f"[CurrentTime] Error: {e}")
-        return {"error": f"Invalid timezone: {timezone_str}. Error: {str(e)}"}
 
 
 # _execute_duckduckgo_search: deleted in Wave 11.C cleanup. Logic moved
@@ -774,79 +428,10 @@ async def _execute_android_service(args: Dict[str, Any],
 # (nodes/google/*.py). These functions were defined but unreferenced.
 
 
-async def _execute_browser(args: Dict[str, Any],
-                           node_params: Dict[str, Any],
-                           config: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute browser automation as an AI tool."""
-    from services.handlers.browser import handle_browser
-
-    parameters = {
-        **node_params,
-        'operation': args.get('operation', node_params.get('operation', 'navigate')),
-        'url': args.get('url', node_params.get('url', '')),
-        'selector': args.get('selector', node_params.get('selector', '')),
-        'text': args.get('text', node_params.get('text', '')),
-        'value': args.get('value', node_params.get('value', '')),
-        'expression': args.get('expression', node_params.get('expression', '')),
-        'direction': args.get('direction', node_params.get('direction', 'down')),
-        'amount': args.get('amount', node_params.get('amount', 500)),
-        'fullPage': args.get('fullPage', node_params.get('fullPage', False)),
-    }
-
-    return await handle_browser(
-        node_id=config.get('node_id', 'tool_browser'),
-        node_type='browser',
-        parameters=parameters,
-        context={'execution_id': config.get('execution_id', 'default')},
-    )
 
 
-async def _execute_proxy_request(args: Dict[str, Any],
-                                 node_params: Dict[str, Any],
-                                 config: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute proxy HTTP request as an AI tool.
-
-    Delegates to the standalone proxy request handler.
-
-    Args:
-        args: LLM-provided arguments (url, method, headers, body, etc.)
-        node_params: Node parameters
-        config: Full tool config with context
-
-    Returns:
-        Request result dict
-    """
-    from services.handlers.proxy import handle_proxy_request
-
-    # Merge LLM args over node params
-    merged = {**node_params, **{k: v for k, v in args.items() if v is not None}}
-
-    context = config.get('context', {})
-    node_id = config.get('node_id', 'tool_proxy_request')
-
-    result = await handle_proxy_request(node_id, 'proxyRequest', merged, context)
-    return result.get('result', result)
 
 
-async def _execute_proxy_status(args: Dict[str, Any],
-                                node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute proxy status check as an AI tool.
-
-    Delegates to the standalone proxy status handler.
-
-    Args:
-        args: LLM-provided arguments (providerFilter)
-        node_params: Node parameters
-
-    Returns:
-        Status result dict
-    """
-    from services.handlers.proxy import handle_proxy_status
-
-    merged = {**node_params, **{k: v for k, v in args.items() if v is not None}}
-
-    result = await handle_proxy_status('tool_proxy_status', 'proxyStatus', merged, {})
-    return result.get('result', result)
 
 
 async def _execute_proxy_config(args: Dict[str, Any],
@@ -1666,26 +1251,5 @@ async def handle_task_manager(
 # the BaseNode.execute_as_tool method on the plugin class.
 # _execute_serper_search_tool stays until serperSearch is migrated.
 
-async def _execute_serper_search_tool(args: Dict[str, Any],
-                                      node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Serper Search via handler (AI Agent tool wrapper)."""
-    from services.handlers.search import handle_serper_search
-
-    parameters = {**node_params, **args}
-    return await handle_serper_search(
-        node_id="tool_serper_search",
-        node_type="serperSearch",
-        parameters=parameters,
-        context={}
-    )
 
 
-async def _execute_email_tool(node_type: str, args: Dict[str, Any],
-                              node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute email send/read as AI tool via EmailService."""
-    from services.email_service import get_email_service
-    svc = get_email_service()
-    params = {**node_params, **{k: v for k, v in args.items() if v is not None}}
-    if node_type == 'emailSend':
-        return await svc.send(params)
-    return await svc.read(params)

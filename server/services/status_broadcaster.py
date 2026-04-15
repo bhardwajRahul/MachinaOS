@@ -249,7 +249,7 @@ class StatusBroadcaster:
         Silently fails if WhatsApp service is unavailable.
         """
         try:
-            from routers.whatsapp import get_client
+            from services.whatsapp_service import get_client
             import time
 
             client = await get_client()

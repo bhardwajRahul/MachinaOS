@@ -35,7 +35,7 @@ class RLMAgentNode(ActionNode):
     @Operation("execute", cost={"service": "rlm_agent", "action": "run", "count": 1})
     async def execute_op(self, ctx: NodeContext, params: SpecializedAgentParams) -> Any:
         from core.container import container
-        from services.handlers.ai import handle_rlm_agent
+        from services.handlers.rlm import handle_rlm_agent
 
         ai_service = container.ai_service()
         database = container.database()
