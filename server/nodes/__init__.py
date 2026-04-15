@@ -1,45 +1,82 @@
-"""Per-node plugin modules (Wave 10.C).
+"""Per-node plugin modules (Wave 11.C).
 
-Each ``.py`` file in this package registers one node (or a family of
-closely related nodes) via ``services.node_registry.register_node``. We
-walk the package at import time so every module's ``register_node(...)``
-call runs before the FastAPI app starts serving NodeSpec endpoints.
+Each plugin lives in ONE file under the subpackage named after its
+primary palette group. The structure mirrors
+``server/nodes/groups.py`` — every group registered there has a
+matching subdirectory here. Adding a new search node =
+``server/nodes/search/my_search.py`` with a single class.
 
-To add a new node, create ``server/nodes/<name>.py`` with:
+Auto-discovery is **recursive**: ``pkgutil.walk_packages`` imports
+every ``.py`` under this tree at startup, running every
+``register_node(...)`` or ``BaseNode`` subclass registration as a
+side effect before FastAPI serves its first NodeSpec request.
 
-    from typing import Literal
-    from pydantic import Field
-    from models.nodes import BaseNodeParams
-    from services.node_registry import register_node
+Layout::
 
-    class MyParams(BaseNodeParams):
-        type: Literal["myNode"]
-        query: str = Field(default="", json_schema_extra={"placeholder": "Search..."})
+    server/nodes/
+    ├── agent/           # AI Agents (aiAgent, chatAgent, specialized agents)
+    ├── model/           # AI Models (openai, anthropic, gemini, …)
+    ├── skill/           # AI Skills (masterSkill, simpleMemory)
+    ├── tool/            # AI Tools (calculatorTool, currentTimeTool, …)
+    ├── trigger/         # Workflow triggers (webhookTrigger, chatTrigger, …)
+    ├── workflow/        # Workflow control (start, timer, cronScheduler)
+    ├── search/          # Search APIs (braveSearch, serperSearch, perplexitySearch)
+    ├── google/          # Google Workspace (gmail, calendar, drive, …)
+    ├── android/         # Android service nodes
+    ├── whatsapp/        # WhatsApp integration
+    ├── social/          # Unified social messaging (socialSend, socialReceive)
+    ├── code/            # Code executors (python, javascript, typescript)
+    ├── utility/         # HTTP, webhooks, console, proxy, process manager
+    ├── browser/         # Browser automation
+    ├── scraper/         # Web scraping (crawlee, apify, httpScraper)
+    ├── filesystem/      # File I/O + shell + process
+    ├── document/        # Document parsing / chunking / embedding
+    ├── location/        # Google Maps nodes
+    ├── email/           # IMAP/SMTP (emailSend, emailReceive, emailRead)
+    ├── telegram/        # Telegram bot
+    ├── twitter/         # Twitter/X
+    ├── proxy/           # Proxy providers
+    ├── chat/            # Chat send / history
+    ├── scheduler/       # Schedulers
+    ├── text/            # Text generation
+    ├── groups.py        # Palette group metadata (label / icon / color)
+    └── __init__.py      # This file — recursive discovery.
 
-    async def handle_my_node(node_id, node_type, params, context):
-        return {"success": True, "result": {...}}
+Legacy bulk-registration files (``agents.py``, ``services.py``,
+``tools.py``, ``triggers.py``, ``utilities.py``) stay at the root
+during 11.C — they hold metadata-only entries for types not yet
+migrated to their subpackage. Each file shrinks as its nodes move
+into their proper folder; gone entirely by end of 11.D.
 
-    register_node(
-        type="myNode",
-        metadata={
-            "displayName": "My Node",
-            "icon": "asset:my_icon",
-            "group": ["tool"],
-            "color": "#8be9fd",
-            "componentKind": "square",
-            "handles": [
-                {"name": "input-main",  "kind": "input",  "position": "left",  "role": "main"},
-                {"name": "output-main", "kind": "output", "position": "right", "role": "main"},
-            ],
-            "description": "...",
-            "version": 1,
-        },
-        input_model=MyParams,
-        handler=handle_my_node,
-    )
+Canonical plugin file shape::
 
-Zero edits required in any other file. The node appears in the editor
-at the next backend restart.
+    # server/nodes/search/my_search.py
+    from pydantic import BaseModel, Field
+    from services.plugin import ActionNode, ApiKeyCredential, Operation
+
+    class MyCredential(ApiKeyCredential):
+        id = "my_service"
+        ...
+
+    class MyParams(BaseModel):
+        query: str
+
+    class MyOutput(BaseModel):
+        results: list = []
+
+    class MyNode(ActionNode):
+        type = "mySearch"
+        display_name = "My Search"
+        group = ("search", "tool")
+        credentials = (MyCredential,)
+        Params = MyParams
+        Output = MyOutput
+
+        @Operation("search")
+        async def search(self, ctx, params): ...
+
+Zero edits required elsewhere. The node appears in the editor at the
+next backend restart, categorised by the primary ``group`` entry.
 """
 
 from __future__ import annotations
@@ -52,21 +89,25 @@ logger = logging.getLogger(__name__)
 
 
 def _discover() -> list[str]:
-    """Import every submodule so its ``register_node`` side effect runs.
-    Returns the list of module names imported, for logging."""
+    """Recursively import every ``.py`` under this package so all
+    ``register_node(...)`` + ``BaseNode`` subclass side effects run
+    before anyone asks for a NodeSpec. Private modules (``_foo.py``,
+    ``_subpkg/``) are skipped.
+    """
     imported: list[str] = []
-    for module_info in pkgutil.iter_modules(__path__):
-        name = module_info.name
-        if name.startswith("_"):
+    for module_info in pkgutil.walk_packages(__path__, prefix=f"{__name__}."):
+        # Skip private modules and private subpackages anywhere in the path.
+        parts = module_info.name.split(".")
+        if any(part.startswith("_") for part in parts[len(__name__.split(".")):]):
             continue
-        full_name = f"{__name__}.{name}"
         try:
-            importlib.import_module(full_name)
-            imported.append(name)
+            importlib.import_module(module_info.name)
+            # Short name for logging: drop the package prefix.
+            imported.append(module_info.name.removeprefix(f"{__name__}."))
         except Exception:
-            logger.exception("Failed to import node plugin %s", full_name)
+            logger.exception("Failed to import node plugin %s", module_info.name)
     return imported
 
 
 _DISCOVERED = _discover()
-logger.info("node plugins loaded: %s", _DISCOVERED or "(none yet)")
+logger.info("node plugins loaded: %d modules", len(_DISCOVERED))
