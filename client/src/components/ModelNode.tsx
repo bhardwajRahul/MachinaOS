@@ -2,7 +2,6 @@ import React, { useMemo } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { NodeData } from '../types/NodeTypes';
 import { useAppStore } from '../store/useAppStore';
-import { nodeDefinitions } from '../nodeDefinitions';
 import { resolveNodeDescription } from '../lib/nodeSpec';
 import { useWebSocket, useNodeStatus } from '../contexts/WebSocketContext';
 import { useAppTheme } from '../hooks/useAppTheme';
@@ -33,7 +32,7 @@ const ModelNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectabl
   const isExecuting = executionStatus === 'executing' || executionStatus === 'waiting';
 
   // Wave 6 Phase 3e: backend NodeSpec -> legacy fallback
-  const definition = resolveNodeDescription(type || '', nodeDefinitions[type as keyof typeof nodeDefinitions]);
+  const definition = resolveNodeDescription(type || '');
 
   // Determine provider from node definition or type
   const provider = useMemo(() => {

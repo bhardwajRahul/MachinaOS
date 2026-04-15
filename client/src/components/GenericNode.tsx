@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
-import { nodeDefinitions } from '../nodeDefinitions';
 import { resolveNodeDescription } from '../lib/nodeSpec';
 import { resolveIcon, resolveLibraryIcon } from '../assets/icons';
 import { useNodeSpec } from '../lib/nodeSpec';
@@ -22,7 +21,7 @@ const GenericNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
   const isExecuting = executionStatus === 'executing' || executionStatus === 'waiting';
 
   // Wave 6 Phase 3e: backend NodeSpec -> legacy fallback
-  const definition = type ? resolveNodeDescription(type, nodeDefinitions[type] ?? null) : null;
+  const definition = type ? resolveNodeDescription(type) : null;
   // Wave 10.B: reactive spec subscription keeps the icon fresh the
   // moment the prefetch lands (no waiting for parent re-render).
   const iconSpec = useNodeSpec(type);

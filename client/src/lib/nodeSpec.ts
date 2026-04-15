@@ -231,7 +231,7 @@ export function isNodeInBackendGroup(
  */
 export function resolveNodeDescription(
   nodeType: string,
-  localFallback: INodeTypeDescription | null | undefined,
+  localFallback?: INodeTypeDescription | null,
 ): INodeTypeDescription | null {
   if (!featureFlags.nodeSpecBackend) {
     return localFallback ?? null;

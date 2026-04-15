@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { nodeDefinitions } from '../nodeDefinitions';
+import { listCachedNodeSpecs } from '../lib/nodeSpec';
 
 const STORAGE_KEY = 'component_palette_collapsed_sections';
 
@@ -15,9 +15,10 @@ export const useComponentPalette = () => {
       // Ignore parsing errors
     }
 
-    // Default: all sections collapsed
+    // Default: all sections collapsed. Categories are derived from the
+    // cached NodeSpecs; empty pre-prefetch, filled in once specs arrive.
     const initialCollapsed: Record<string, boolean> = {};
-    const categories = new Set(Object.values(nodeDefinitions).flatMap(def => def.group || []));
+    const categories = new Set(listCachedNodeSpecs().flatMap(s => s.group ?? []));
     categories.forEach(category => {
       initialCollapsed[category] = true;
     });

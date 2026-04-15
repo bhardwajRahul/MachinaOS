@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { useAppStore } from '../store/useAppStore';
-import { nodeDefinitions } from '../nodeDefinitions';
 import { INodeOutputDefinition, NodeConnectionType } from '../types/INodeProperties';
 import { useDragVariable } from '../hooks/useDragVariable';
 import { isNodeInBackendGroup } from '../lib/nodeSpec';
 
+import { resolveNodeDescription } from '../lib/nodeSpec';
 interface OutputPanelProps {
   nodeId: string;
 }
@@ -146,7 +146,7 @@ const OutputPanel: React.FC<OutputPanelProps> = ({ nodeId }) => {
       }
     }
 
-    const definition = nodeDefinitions[nodeType];
+    const definition = resolveNodeDescription(nodeType);
     if (!definition) return [];
 
     if (!definition.outputs) {
@@ -191,7 +191,7 @@ const OutputPanel: React.FC<OutputPanelProps> = ({ nodeId }) => {
   // Helper to check if a node is a config/auxiliary node (connects to config handles)
   const isConfigNode = (nodeType: string | undefined): boolean => {
     if (!nodeType) return false;
-    const definition = nodeDefinitions[nodeType];
+    const definition = resolveNodeDescription(nodeType);
     if (!definition) return false;
     // Config nodes typically have 'memory' or 'tool' in their group, or have no main input
     const groups = definition.group || [];
@@ -212,7 +212,7 @@ const OutputPanel: React.FC<OutputPanelProps> = ({ nodeId }) => {
       const sourceNode = currentWorkflow.nodes.find(n => n.id === sourceNodeId);
       if (!sourceNode?.type) return;
 
-      const sourceDefinition = nodeDefinitions[sourceNode.type];
+      const sourceDefinition = resolveNodeDescription(sourceNode.type);
       if (!sourceDefinition) return;
 
       addedNodeIds.add(sourceNodeId);
@@ -249,7 +249,7 @@ const OutputPanel: React.FC<OutputPanelProps> = ({ nodeId }) => {
           const targetNode = currentWorkflow.nodes.find(n => n.id === edge.target);
           if (!targetNode) continue;
 
-          const targetDef = nodeDefinitions[targetNode.type || ''];
+          const targetDef = resolveNodeDescription(targetNode.type || '');
           const targetName = targetDef?.displayName || targetNode.type;
 
           // Find nodes connected to the parent's main input (non-config handles)

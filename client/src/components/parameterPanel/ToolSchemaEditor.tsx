@@ -17,7 +17,6 @@ import { useToolSchema, ToolSchemaConfig } from '../../hooks/useToolSchema';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { useAppStore } from '../../store/useAppStore';
 import { isNodeInBackendGroup } from '../../lib/nodeSpec';
-import { nodeDefinitions } from '../../nodeDefinitions';
 import {
   Form,
   FormControl,
@@ -36,6 +35,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 
+import { resolveNodeDescription } from '../../lib/nodeSpec';
 interface ToolSchemaEditorProps {
   nodeId: string;
   toolName: string;
@@ -135,7 +135,7 @@ const ToolSchemaEditor: React.FC<ToolSchemaEditorProps> = ({ nodeId }) => {
   // Wave 10.G.5: render only for nodes whose spec declares
   // `uiHints.isAndroidToolkit`. The androidTool node registers that
   // hint; no frontend type-string fallback.
-  const currentNodeDef = currentNode?.type ? nodeDefinitions[currentNode.type] : undefined;
+  const currentNodeDef = currentNode?.type ? resolveNodeDescription(currentNode.type) : undefined;
   const isAndroidTool = (currentNodeDef?.uiHints as any)?.isAndroidToolkit === true;
   if (!isAndroidTool) return null;
 

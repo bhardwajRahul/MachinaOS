@@ -35,13 +35,13 @@ import { useWebSocket, CompactionStats } from '../../contexts/WebSocketContext';
 import { useUserSettingsQuery } from '../../hooks/useUserSettingsQuery';
 import { nodeParamsQueryKey, type NodeParametersResponse } from '../../hooks/useNodeParamsQuery';
 import { queryKeys, STALE_TIME } from '../../lib/queryConfig';
-import { nodeDefinitions } from '../../nodeDefinitions';
 import { INodeTypeDescription, INodeProperties } from '../../types/INodeProperties';
 import { resolveIcon, resolveLibraryIcon, isImageIcon } from '../../assets/icons';
 import { ExecutionResult } from '../../services/executionService';
 import { Edge } from 'reactflow';
 import { shouldShowParameter } from '../../utils/parameterVisibility';
 
+import { resolveNodeDescription } from '../../lib/nodeSpec';
 // Wave 10.G.3: retired the three tribal arrays `SKILL_NODE_TYPES`,
 // `TOOL_NODE_TYPES`, and `AGENT_WITH_SKILLS_TYPES`. The parameter panel
 // now reads `uiHints.hasSkills` / `uiHints.isToolPanel` /
@@ -315,7 +315,7 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
       const sourceNode = nodes.find((n: any) => n.id === edge.source);
       const nodeType = sourceNode?.type || '';
       if (nodeType === 'masterSkill') continue;
-      const def = nodeDefinitions[nodeType];
+      const def = resolveNodeDescription(nodeType);
       skills.push({
         id: edge.source,
         name: sourceNode?.data?.label || def?.displayName || nodeType,

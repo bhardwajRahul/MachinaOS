@@ -10,7 +10,6 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { NodeData } from '../types/NodeTypes';
 import { useAppStore } from '../store/useAppStore';
-import { nodeDefinitions } from '../nodeDefinitions';
 import { resolveNodeDescription, useNodeSpec } from '../lib/nodeSpec';
 import { resolveIcon, resolveLibraryIcon } from '../assets/icons';
 import { useAppTheme } from '../hooks/useAppTheme';
@@ -43,7 +42,7 @@ const TriggerNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
   const isExecuting = executionStatus === 'executing' || executionStatus === 'waiting';
 
   // Wave 6 Phase 3e: backend NodeSpec -> legacy fallback
-  const definition = resolveNodeDescription(type || '', nodeDefinitions[type as keyof typeof nodeDefinitions]);
+  const definition = resolveNodeDescription(type || '');
 
   // Check configuration status
   useEffect(() => {

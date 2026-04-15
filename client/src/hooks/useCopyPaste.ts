@@ -1,8 +1,7 @@
 import { useCallback, useRef } from 'react';
 import { Node, Edge } from 'reactflow';
 import { generateUniqueLabel } from './useDragAndDrop';
-import { nodeDefinitions } from '../nodeDefinitions';
-
+import { resolveNodeDescription } from '../lib/nodeSpec';
 interface UseCopyPasteProps {
   nodes: Node[];
   edges: Edge[];
@@ -90,7 +89,7 @@ export const useCopyPaste = ({
 
       // Always use the original display name from node definition as base
       // This ensures "WhatsApp Receive 2" copies become "WhatsApp Receive 3", not "WhatsApp Receive 2 1"
-      const baseDisplayName = nodeDefinitions[node.type!]?.displayName || node.type!;
+      const baseDisplayName = resolveNodeDescription(node.type!)?.displayName || node.type!;
 
       // Generate unique label considering existing nodes AND nodes we're about to add
       const allNodes = [...nodes, ...newNodes];

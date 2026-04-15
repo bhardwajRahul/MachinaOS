@@ -13,7 +13,7 @@ import {
   Edge,
 } from 'reactflow';
 import { featureFlags } from './lib/featureFlags';
-import { prefetchAllNodeSpecs, getCachedNodeSpec } from './lib/nodeSpec';
+import { prefetchAllNodeSpecs, listCachedNodeSpecs } from './lib/nodeSpec';
 import AIAgentNode from './components/AIAgentNode';
 import SquareNode from './components/SquareNode';
 import TriggerNode from './components/TriggerNode';
@@ -22,7 +22,6 @@ import TeamMonitorNode from './components/TeamMonitorNode';
 import StartNode from './components/StartNode';
 import ConditionalEdge from './components/ConditionalEdge';
 import NodeContextMenu from './components/ui/NodeContextMenu';
-import { nodeDefinitions } from './nodeDefinitions';
 import { getNodeTypesInGroup } from './lib/nodeSpec';
 import ParameterPanel from './ParameterPanel';
 import LocationParameterPanel from './components/LocationParameterPanel';
@@ -85,16 +84,18 @@ const COMPONENT_BY_KIND: Record<string, React.ComponentType<any>> = {
 // fallback collapses to a single `SquareNode` default.
 const createNodeTypes = (): Record<string, React.ComponentType<any>> => {
   const types: Record<string, React.ComponentType<any>> = {};
-  Object.keys(nodeDefinitions).forEach(type => {
-    const kind = getCachedNodeSpec(type)?.componentKind;
+  // Cache-driven enumeration: empty on cold boot, filled once
+  // prefetchAllNodeSpecs resolves and `specsReady` triggers a rebuild.
+  listCachedNodeSpecs().forEach(spec => {
+    const kind = spec.componentKind;
     if (kind && COMPONENT_BY_KIND[kind]) {
-      types[type] = COMPONENT_BY_KIND[kind];
-    } else if (type === 'teamMonitor') {
-      types[type] = TeamMonitorNode;
-    } else if (type === 'masterSkill') {
-      types[type] = ToolkitNode;
+      types[spec.type] = COMPONENT_BY_KIND[kind];
+    } else if (spec.type === 'teamMonitor') {
+      types[spec.type] = TeamMonitorNode;
+    } else if (spec.type === 'masterSkill') {
+      types[spec.type] = ToolkitNode;
     } else {
-      types[type] = SquareNode;
+      types[spec.type] = SquareNode;
     }
   });
   return types;
@@ -1240,7 +1241,6 @@ const DashboardContent: React.FC = () => {
             }}>
               {componentPaletteVisible && (
                 <ComponentPalette
-                  nodeDefinitions={nodeDefinitions}
                   searchQuery={searchQuery}
                   onSearchChange={setSearchQuery}
                   collapsedSections={collapsedSections}

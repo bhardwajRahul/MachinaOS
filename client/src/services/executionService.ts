@@ -1,9 +1,9 @@
-import { nodeDefinitions } from '../nodeDefinitions';
 import { getCachedNodeSpec } from '../lib/nodeSpec';
 import { Node, Edge } from 'reactflow';
 import { INodeExecutionData } from '../types/INodeProperties';
 import { API_CONFIG } from '../config/api';
 
+import { resolveNodeDescription } from '../lib/nodeSpec';
 // Execution result with n8n-compatible data
 export interface ExecutionResult {
   success: boolean;
@@ -101,7 +101,7 @@ export class ExecutionService {
           success: true,
           nodeId,
           nodeType,
-          nodeName: nodeDefinitions[nodeType]?.displayName || nodeType,
+          nodeName: resolveNodeDescription(nodeType)?.displayName || nodeType,
           timestamp: result.timestamp || new Date().toISOString(),
           executionTime: result.execution_time || executionTime,
           outputs: outputData,
@@ -124,7 +124,7 @@ export class ExecutionService {
           success: false,
           nodeId,
           nodeType,
-          nodeName: nodeDefinitions[nodeType]?.displayName || nodeType,
+          nodeName: resolveNodeDescription(nodeType)?.displayName || nodeType,
           timestamp: result.timestamp || new Date().toISOString(),
           executionTime: result.execution_time || executionTime,
           error: result.error,
@@ -148,7 +148,7 @@ export class ExecutionService {
         success: false,
         nodeId,
         nodeType,
-        nodeName: nodeDefinitions[nodeType]?.displayName || nodeType,
+        nodeName: resolveNodeDescription(nodeType)?.displayName || nodeType,
         timestamp: new Date().toISOString(),
         executionTime: 0,
         error: error.message || 'WebSocket execution failed',
@@ -186,7 +186,6 @@ export class ExecutionService {
    * the spec cache is still warming.
    */
   static isNodeTypeSupported(nodeType: string): boolean {
-    if (getCachedNodeSpec(nodeType)) return true;
-    return nodeType in nodeDefinitions;
+    return getCachedNodeSpec(nodeType) !== null;
   }
 }

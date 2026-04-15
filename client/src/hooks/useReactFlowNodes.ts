@@ -1,9 +1,9 @@
 import { useCallback } from 'react';
 import { Node, Edge, addEdge, Connection } from 'reactflow';
 import { useAppStore } from '../store/useAppStore';
-import { nodeDefinitions } from '../nodeDefinitions';
 import { INodeInputDefinition, INodeOutputDefinition, NodeConnectionType } from '../types/INodeProperties';
 
+import { resolveNodeDescription } from '../lib/nodeSpec';
 interface UseReactFlowNodesProps {
   setNodes: (nodes: Node[] | ((nodes: Node[]) => Node[])) => void;
   setEdges: (edges: Edge[] | ((edges: Edge[]) => Edge[])) => void;
@@ -14,7 +14,7 @@ export const useReactFlowNodes = ({ setNodes, setEdges }: UseReactFlowNodesProps
 
   // Helper function to get node inputs/outputs for both enhanced and legacy nodes
   const getNodeInputs = (nodeType: string): INodeInputDefinition[] => {
-    const definition = nodeDefinitions[nodeType];
+    const definition = resolveNodeDescription(nodeType);
     if (!definition?.inputs) return [];
     
     // Enhanced nodes: array of input objects
@@ -32,7 +32,7 @@ export const useReactFlowNodes = ({ setNodes, setEdges }: UseReactFlowNodesProps
   };
   
   const getNodeOutputs = (nodeType: string): INodeOutputDefinition[] => {
-    const definition = nodeDefinitions[nodeType];
+    const definition = resolveNodeDescription(nodeType);
     if (!definition?.outputs) return [];
     
     // Enhanced nodes: array of output objects

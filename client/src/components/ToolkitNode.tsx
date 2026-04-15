@@ -14,7 +14,6 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { NodeData } from '../types/NodeTypes';
 import { useAppStore } from '../store/useAppStore';
-import { nodeDefinitions } from '../nodeDefinitions';
 import { resolveNodeDescription } from '../lib/nodeSpec';
 import { resolveIcon, resolveLibraryIcon } from '../assets/icons';
 import { useNodeSpec } from '../lib/nodeSpec';
@@ -39,7 +38,7 @@ const ToolkitNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
   const executionStatus = nodeStatus?.status || 'idle';
 
   // Wave 6 Phase 3e: backend NodeSpec -> legacy fallback
-  const definition = resolveNodeDescription(type || '', nodeDefinitions[type as keyof typeof nodeDefinitions]);
+  const definition = resolveNodeDescription(type || '');
 
   // Check if this is a toolkit node (rectangular) vs skill node (square)
   const isToolkitNode = type ? TOOLKIT_NODE_TYPES.includes(type) : false;

@@ -18,7 +18,7 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'html'],
       include: [
-        'src/nodeDefinitions/**',
+        'src/adapters/**',
         'src/factories/**',
         'src/types/**',
         'src/hooks/useApiKeys.ts',

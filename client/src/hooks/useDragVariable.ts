@@ -1,8 +1,8 @@
 import { useCallback } from 'react';
 import { useAppStore } from '../store/useAppStore';
-import { nodeDefinitions } from '../nodeDefinitions';
 import { Node } from 'reactflow';
 
+import { resolveNodeDescription } from '../lib/nodeSpec';
 interface DragVariableHookReturn {
   handleVariableDragStart: (
     e: React.DragEvent,
@@ -51,7 +51,7 @@ export const useDragVariable = (_targetNodeId: string): DragVariableHookReturn =
     }
 
     // Fallback to displayName from node definition
-    const nodeDef = nodeDefinitions[sourceNode.type || ''];
+    const nodeDef = resolveNodeDescription(sourceNode.type || '');
     if (nodeDef?.displayName) {
       return nodeDef.displayName.toLowerCase().replace(/\s+/g, '');
     }

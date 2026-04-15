@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useAppStore } from '../../store/useAppStore';
-import { nodeDefinitions } from '../../nodeDefinitions';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { Node, Edge } from 'reactflow';
 import { useDragVariable } from '../../hooks/useDragVariable';
@@ -9,6 +8,7 @@ import { queryClient } from '../../lib/queryClient';
 import { getCachedNodeSpec } from '../../lib/nodeSpec';
 import { resolveIcon, resolveLibraryIcon, isImageIcon } from '../../assets/icons';
 
+import { resolveNodeDescription } from '../../lib/nodeSpec';
 // ---------------------------------------------------------------------------
 // Backend-driven node output schema lookup.
 //
@@ -148,7 +148,7 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
       // Helper to check if a node is a config/auxiliary node (connects to config handles)
       const isConfigNode = (nodeType: string | undefined): boolean => {
         if (!nodeType) return false;
-        const definition = nodeDefinitions[nodeType];
+        const definition = resolveNodeDescription(nodeType);
         if (!definition) return false;
         // Config nodes typically have 'memory' or 'tool' in their group
         const groups = definition.group || [];
@@ -195,7 +195,7 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
             const targetNode = nodes.find((node: Node) => node.id === outEdge.target);
             if (!targetNode) continue;
 
-            const targetDef = nodeDefinitions[targetNode.type || ''];
+            const targetDef = resolveNodeDescription(targetNode.type || '');
             const targetName = targetDef?.displayName || targetNode.type;
 
             // Find nodes connected to the parent's main input (non-config handles)
@@ -213,7 +213,7 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
       const nodeDataPromises = edgesToProcess.map(async ({ edge, label, targetHandleLabel }) => {
         const sourceNode = nodes.find((node: Node) => node.id === edge.source);
         const nodeType = sourceNode?.type || '';
-        const nodeDef = nodeDefinitions[nodeType];
+        const nodeDef = resolveNodeDescription(nodeType);
 
         // Determine output key from sourceHandle (edge-aware for multi-output nodes)
         let outputKey = 'output_0';

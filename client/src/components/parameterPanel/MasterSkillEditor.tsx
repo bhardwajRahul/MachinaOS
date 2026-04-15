@@ -48,7 +48,6 @@ import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { useWebSocket } from '../../contexts/WebSocketContext';
-import { skillNodes, SKILL_NODE_TYPES } from '../../nodeDefinitions/skillNodes';
 import { DUCKDUCKGO_ICON, BRAVE_SEARCH_ICON, SERPER_ICON, PERPLEXITY_ICON } from '../../assets/icons/search';
 import { resolveIcon, resolveLibraryIcon, isImageIcon } from '../../assets/icons';
 
@@ -111,22 +110,6 @@ interface MasterSkillEditorProps {
   onSkillFolderChange?: (folder: string) => void;
   nodeId?: string;  // For persisting skillsConfig to database
 }
-
-// Lookup icon/color from skillNodes.ts definitions by skill name
-const getNodeDefaults = (skillName: string): { icon: string; color: string } => {
-  for (const type of SKILL_NODE_TYPES) {
-    const nodeDef = skillNodes[type];
-    if (!nodeDef) continue;
-    const skillNameProp = nodeDef.properties?.find(p => p.name === 'skillName');
-    if (skillNameProp?.default === skillName) {
-      return {
-        icon: nodeDef.icon || '',
-        color: (nodeDef.defaults?.color as string) || '#6366F1'
-      };
-    }
-  }
-  return { icon: '', color: '' };
-};
 
 // Wave 10.B: shared icon dispatch — library components (`lobehub:*`),
 // filesystem SVGs (`asset:*`), data/http URIs, then emoji/text.
@@ -195,17 +178,14 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
         error?: string;
       }>('scan_skill_folder', { folder: skillFolder });
       if (!response?.success || !response.skills) return [];
-      return response.skills.map(s => {
-        const defaults = getNodeDefaults(s.name);
-        return {
-          type: s.name,
-          skillName: s.name,
-          displayName: s.name.split('-').map(w => w[0].toUpperCase() + w.slice(1)).join(' '),
-          icon: defaults.icon || SKILL_ICON_OVERRIDES[s.name] || s.metadata?.icon || '',
-          color: defaults.color || s.metadata?.color || '#6366F1',
-          description: s.description || '',
-        };
-      });
+      return response.skills.map(s => ({
+        type: s.name,
+        skillName: s.name,
+        displayName: s.name.split('-').map(w => w[0].toUpperCase() + w.slice(1)).join(' '),
+        icon: SKILL_ICON_OVERRIDES[s.name] || s.metadata?.icon || '',
+        color: s.metadata?.color || '#6366F1',
+        description: s.description || '',
+      }));
     },
     enabled: !!skillFolder,
     staleTime: 60_000,
@@ -237,29 +217,11 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
   const availableSkills = useMemo<AvailableSkill[]>(() => {
     const skills: AvailableSkill[] = [];
 
-    // Add folder skills if available
+    // Add folder skills (backend-sourced). The legacy fallback to
+    // built-in skill nodeDefinitions has been removed — SKILL_NODE_TYPES
+    // was ['masterSkill'] and the filter always returned an empty list.
     if (skillFolder && folderSkills.length > 0) {
       skills.push(...folderSkills);
-    } else {
-      // Add built-in skills from node definitions
-      SKILL_NODE_TYPES
-        .filter(type => type !== 'customSkill' && type !== 'masterSkill')
-        .forEach(type => {
-          const nodeDef = skillNodes[type];
-          if (!nodeDef) return;
-
-          const skillNameProp = nodeDef.properties?.find(p => p.name === 'skillName');
-          const skillName = skillNameProp?.default as string || type;
-
-          skills.push({
-            type,
-            skillName,
-            displayName: nodeDef.displayName || type,
-            icon: nodeDef.icon || '',
-            color: (nodeDef.defaults?.color as string) || '#6366F1',
-            description: nodeDef.description || ''
-          });
-        });
     }
 
     // Add user-created skills

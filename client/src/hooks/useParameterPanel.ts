@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
-import { nodeDefinitions } from '../nodeDefinitions';
 import { resolveNodeDescription } from '../lib/nodeSpec';
 import { useWebSocket } from '../contexts/WebSocketContext';
 import {
@@ -14,7 +13,7 @@ import {
  * re-allocating per node type.
  */
 function defaultsForNodeType(nodeType: string): Record<string, any> {
-  const def = nodeDefinitions[nodeType];
+  const def = resolveNodeDescription(nodeType);
   if (!def?.properties) return {};
   const defaults: Record<string, any> = {};
   for (const param of def.properties as any[]) {
@@ -115,7 +114,7 @@ export const useParameterPanel = () => {
   // / Input / Output sections + ParameterRenderer) renders from
   // server-driven metadata without any per-component change.
   const nodeDefinition = nodeType
-    ? resolveNodeDescription(nodeType, nodeDefinitions[nodeType])
+    ? resolveNodeDescription(nodeType)
     : null;
 
   return {

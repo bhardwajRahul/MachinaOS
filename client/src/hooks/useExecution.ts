@@ -8,9 +8,9 @@
 import { useCallback, useState } from 'react';
 import { Node, Edge } from 'reactflow';
 import { useWebSocket } from '../contexts/WebSocketContext';
-import { nodeDefinitions } from '../nodeDefinitions';
 import { INodeExecutionData } from '../types/INodeProperties';
 
+import { resolveNodeDescription } from '../lib/nodeSpec';
 // Execution result interface (compatible with ExecutionService)
 export interface ExecutionResult {
   success: boolean;
@@ -129,7 +129,7 @@ export const useExecution = (): UseExecutionResult => {
           success: true,
           nodeId,
           nodeType,
-          nodeName: nodeDefinitions[nodeType]?.displayName || nodeType,
+          nodeName: resolveNodeDescription(nodeType)?.displayName || nodeType,
           timestamp: result.timestamp || new Date().toISOString(),
           executionTime: result.execution_time || executionTime,
           outputs: outputData,
@@ -155,7 +155,7 @@ export const useExecution = (): UseExecutionResult => {
           success: false,
           nodeId,
           nodeType,
-          nodeName: nodeDefinitions[nodeType]?.displayName || nodeType,
+          nodeName: resolveNodeDescription(nodeType)?.displayName || nodeType,
           timestamp: result.timestamp || new Date().toISOString(),
           executionTime: result.execution_time || executionTime,
           error: result.error,
@@ -182,7 +182,7 @@ export const useExecution = (): UseExecutionResult => {
         success: false,
         nodeId,
         nodeType,
-        nodeName: nodeDefinitions[nodeType]?.displayName || nodeType,
+        nodeName: resolveNodeDescription(nodeType)?.displayName || nodeType,
         timestamp: new Date().toISOString(),
         executionTime: Date.now() - startTime,
         error: errorMessage,
@@ -241,7 +241,7 @@ export const useExecution = (): UseExecutionResult => {
           success: true,
           nodeId,
           nodeType,
-          nodeName: nodeDefinitions[nodeType]?.displayName || nodeType,
+          nodeName: resolveNodeDescription(nodeType)?.displayName || nodeType,
           timestamp: result.timestamp || new Date().toISOString(),
           executionTime: result.execution_time || executionTime,
           outputs: outputData,
@@ -266,7 +266,7 @@ export const useExecution = (): UseExecutionResult => {
           success: false,
           nodeId,
           nodeType,
-          nodeName: nodeDefinitions[nodeType]?.displayName || nodeType,
+          nodeName: resolveNodeDescription(nodeType)?.displayName || nodeType,
           timestamp: result.timestamp || new Date().toISOString(),
           executionTime: result.execution_time || executionTime,
           error: result.error,
@@ -293,7 +293,7 @@ export const useExecution = (): UseExecutionResult => {
         success: false,
         nodeId,
         nodeType,
-        nodeName: nodeDefinitions[nodeType]?.displayName || nodeType,
+        nodeName: resolveNodeDescription(nodeType)?.displayName || nodeType,
         timestamp: new Date().toISOString(),
         executionTime: Date.now() - startTime,
         error: errorMessage,

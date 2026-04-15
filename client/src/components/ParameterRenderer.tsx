@@ -6,7 +6,6 @@ import CodeEditor from './ui/CodeEditor';
 import DynamicParameterService from '../services/dynamicParameterService';
 import { useAppStore } from '../store/useAppStore';
 import { isNodeInBackendGroup } from '../lib/nodeSpec';
-import { nodeDefinitions } from '../nodeDefinitions';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { API_CONFIG } from '../config/api';
 import { useWebSocket } from '../contexts/WebSocketContext';
@@ -17,6 +16,7 @@ import { shouldShowParameter } from '../utils/parameterVisibility';
 // Map node types to provider keys for AI model nodes
 import { AI_MODEL_PROVIDER_MAP } from '../lib/aiModelProviders';
 
+import { resolveNodeDescription } from '../lib/nodeSpec';
 // Map node types to provider keys for AI model nodes
 // Uses the centralized map from aiModelNodes + legacy aliases
 const NODE_TYPE_TO_PROVIDER: Record<string, string> = {
@@ -1138,7 +1138,7 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
       try {
         // Get the node definition to access methods
         const nodeType = selectedNode.data?.nodeType || selectedNode.type;
-        const nodeDef = nodeType ? nodeDefinitions[nodeType] : null;
+        const nodeDef = nodeType ? resolveNodeDescription(nodeType) : null;
 
         let rawOptions: Array<{ value: any; name?: string; label?: string }> = [];
         const method = parameter.typeOptions.loadOptionsMethod;
@@ -1195,7 +1195,7 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
       const nodeType = selectedNode.data?.nodeType || selectedNode.type;
       // Wave 10.E: backend group membership with bundled-definition fallback
       const isAndroid = isNodeInBackendGroup(nodeType, 'android')
-        ?? (nodeDefinitions[nodeType]?.group ?? []).includes('android');
+        ?? (resolveNodeDescription(nodeType)?.group ?? []).includes('android');
       if (!isAndroid) return;
 
       // Merge database params with current form params (current takes precedence)

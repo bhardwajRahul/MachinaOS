@@ -2,9 +2,9 @@ import { useCallback } from 'react';
 import { Node } from 'reactflow';
 import { snapToGrid, getDefaultNodePosition } from '../utils/workflow';
 import { theme } from '../styles/theme';
-import { nodeDefinitions } from '../nodeDefinitions';
 import { getCachedNodeSpec } from '../lib/nodeSpec';
 
+import { resolveNodeDescription } from '../lib/nodeSpec';
 // Wave 10.E: agent detection reads `componentKind: "agent"` from the
 // backend NodeSpec. Falls back to the node-definition group during the
 // brief window before the spec cache warms.
@@ -79,7 +79,7 @@ export const useDragAndDrop = ({ nodes, setNodes, saveNodeParameters, globalMode
         }
 
         // Get node definition to access displayName
-        const nodeDef = nodeDefinitions[nodeData.type];
+        const nodeDef = resolveNodeDescription(nodeData.type);
         const displayName = nodeDef?.displayName || nodeData.type;
 
         // Generate unique label for template variable resolution (n8n pattern)

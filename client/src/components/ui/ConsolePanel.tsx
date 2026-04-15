@@ -15,13 +15,13 @@ import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { z } from 'zod';
 import { useWebSocket, ConsoleLogEntry } from '../../contexts/WebSocketContext';
-import { nodeDefinitions } from '../../nodeDefinitions';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Input } from '@/components/ui/input';
 import Prism from 'prismjs';
 import 'prismjs/components/prism-json';
 
+import { resolveNodeDescription } from '../../lib/nodeSpec';
 // ---------------------------------------------------------------------------
 // Inline reusable bits (kept colocated per the colocation principle — none of
 // these have a second consumer in the codebase).
@@ -143,7 +143,7 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
   // Filter nodes via uiHints first, legacy name list as fallback.
   const chatTriggerNodes = useMemo(() =>
     nodes.filter(n => {
-      const def = n.type ? nodeDefinitions[n.type] : undefined;
+      const def = n.type ? resolveNodeDescription(n.type) : undefined;
       return def?.uiHints?.isChatTrigger
         ?? LEGACY_CHAT_TRIGGER_TYPES.includes(n.type || '');
     }),
@@ -151,7 +151,7 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
   );
   const consoleNodes = useMemo(() =>
     nodes.filter(n => {
-      const def = n.type ? nodeDefinitions[n.type] : undefined;
+      const def = n.type ? resolveNodeDescription(n.type) : undefined;
       return def?.uiHints?.isConsoleSink
         ?? LEGACY_CONSOLE_NODE_TYPES.includes(n.type || '');
     }),

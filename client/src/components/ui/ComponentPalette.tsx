@@ -10,14 +10,14 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Search } from 'lucide-react';
 import { resolveIcon, resolveLibraryIcon, isImageIcon } from '../../assets/icons';
-import { useNodeGroups, NodeGroupEntry } from '../../lib/nodeSpec';
+import { useNodeGroups, listCachedNodeSpecs, NodeGroupEntry } from '../../lib/nodeSpec';
+import { nodeSpecToDescription } from '../../adapters/nodeSpecToDescription';
 
 // Wave 10.B: palette section metadata (icon / label / color / visibility)
 // is fetched from the backend GET /api/schemas/nodes/groups endpoint.
 // Frontend retains zero per-category tables.
 
 const ComponentPalette: React.FC<ComponentPaletteProps> = ({
-  nodeDefinitions,
   searchQuery,
   onSearchChange,
   collapsedSections,
@@ -48,7 +48,12 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
   const categorizedComponents = React.useMemo(() => {
     const categories: Record<string, INodeTypeDescription[]> = {};
 
-    const filteredDefinitions = Object.values(nodeDefinitions).filter((definition) => {
+    // Cached NodeSpecs adapted to the INodeTypeDescription shape.
+    // Re-reads every time groupIndex changes, so the palette fills in
+    // once prefetchAllNodeSpecs resolves and the WS response lands.
+    const definitions = listCachedNodeSpecs().map(nodeSpecToDescription);
+
+    const filteredDefinitions = definitions.filter((definition) => {
       // Filter by backend allowlist (server/config/node_allowlist.json)
       if (!isVisible(definition.name)) return false;
 
@@ -92,7 +97,7 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
     });
 
     return categories;
-  }, [nodeDefinitions, searchQuery, proMode, groupIndex, isVisible]);
+  }, [searchQuery, proMode, groupIndex, isVisible]);
 
   const totalComponents = Object.values(categorizedComponents).reduce(
     (acc, components) => acc + components.length, 

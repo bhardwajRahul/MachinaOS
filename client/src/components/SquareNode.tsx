@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Handle, Position, NodeProps } from 'reactflow';
 import { NodeData } from '../types/NodeTypes';
 import { useAppStore } from '../store/useAppStore';
-import { nodeDefinitions } from '../nodeDefinitions';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { useWebSocket, useWhatsAppStatus } from '../contexts/WebSocketContext';
 import { getCachedNodeSpec, isNodeInBackendGroup, resolveNodeDescription, useNodeSpec } from '../lib/nodeSpec';
@@ -79,7 +78,7 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
   // fallback for the brief window before the cache warms. No more local
   // type arrays; isNodeInBackendGroup returns undefined when the cache
   // is cold, in which case we read the bundled definition's group list.
-  const groupOf = (t: string | undefined): string[] => (t ? (nodeDefinitions[t]?.group ?? []) : []);
+  const groupOf = (t: string | undefined): string[] => (t ? (resolveNodeDescription(t)?.group ?? []) : []);
   const inGroup = (t: string | undefined, g: string): boolean =>
     isNodeInBackendGroup(t, g) ?? groupOf(t).includes(g);
   const isGoogleMapsNode = inGroup(type, 'location');
@@ -92,7 +91,7 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
 
   // Wave 6 Phase 3e: backend NodeSpec -> legacy fallback. Flag off or
   // cache cold -> returns local nodeDefinitions entry unchanged.
-  const definition = resolveNodeDescription(type || '', nodeDefinitions[type as keyof typeof nodeDefinitions]);
+  const definition = resolveNodeDescription(type || '');
 
   // Wave 10.E: backend group membership with bundled-definition fallback
   const isAndroidNode = inGroup(type, 'android');
