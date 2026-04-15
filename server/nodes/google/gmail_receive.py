@@ -86,23 +86,118 @@ class GmailReceiveNode(TriggerNode):
         parameters: Dict[str, Any],
         context: NodeContext,
     ) -> Dict[str, Any]:
-        """Delegate to the legacy polling handler. Keeps the 100 LOC
-        poll loop + OAuth refresh intact while this sub-wave proves the
-        plugin shell. 11.C ports the loop into :meth:`poll_once`.
-        """
-        from services.handlers.gmail import handle_gmail_receive
-        return await handle_gmail_receive(
-            node_id=node_id,
-            node_type=self.type,
-            parameters=parameters,
-            context=context.raw,
-        )
+        """Polling-trigger body inlined from handlers/gmail.py (Wave 11.D.5).
 
-    # Declare a no-op operation so the contract invariants are happy.
-    # The :meth:`execute` override above pre-empts dispatch.
+        Baseline → poll → dispatch. Private helpers
+        (``_poll_gmail_ids`` / ``_fetch_email_details`` /
+        ``_mark_email_as_read`` / ``_get_gmail_service`` /
+        ``_track_gmail_usage``) stay in handlers/gmail.py because they
+        are shared with gmail send/search/read operations — delete in
+        11.D.13 along with the whole google handlers module.
+        """
+        import asyncio
+        import time
+        from datetime import datetime
+        from core.logging import get_logger
+        from services import event_waiter
+        from services.handlers.gmail import (
+            _get_gmail_service, _poll_gmail_ids,
+            _fetch_email_details, _mark_email_as_read,
+            _track_gmail_usage,
+        )
+        from services.status_broadcaster import get_status_broadcaster
+
+        log = get_logger(__name__)
+        start_time = time.time()
+        try:
+            service = await _get_gmail_service(parameters, context.raw)
+            poll_interval = max(10, min(3600, parameters.get("poll_interval", 60)))
+            filter_query = parameters.get("filter_query", "is:unread")
+            label_filter = parameters.get("label_filter", "INBOX")
+            mark_as_read = parameters.get("mark_as_read", False)
+
+            query = filter_query
+            if label_filter and label_filter != "all":
+                query = f"label:{label_filter} {query}"
+
+            await get_status_broadcaster().update_node_status(
+                node_id, "waiting",
+                {
+                    "message": f"Waiting for Gmail email (polling every {poll_interval}s)...",
+                    "event_type": "gmail_email_received",
+                },
+                workflow_id=context.workflow_id,
+            )
+
+            seen_ids = set()
+            try:
+                seen_ids.update(await _poll_gmail_ids(service, query))
+                log.info(
+                    f"[GmailReceive] Baseline: {len(seen_ids)} existing emails "
+                    f"for query '{query}'",
+                )
+            except Exception as e:
+                log.warning(
+                    f"[GmailReceive] Baseline fetch failed (will treat all as new): {e}",
+                )
+
+            while True:
+                await asyncio.sleep(poll_interval)
+                try:
+                    current_ids = await _poll_gmail_ids(service, query)
+                    new_ids = current_ids - seen_ids
+                    if not new_ids:
+                        continue
+
+                    newest_id = next(iter(new_ids))
+                    seen_ids.update(new_ids)
+                    email_data = await _fetch_email_details(service, newest_id)
+
+                    if mark_as_read:
+                        try:
+                            await _mark_email_as_read(service, newest_id)
+                        except Exception as e:
+                            log.warning(f"[GmailReceive] Failed to mark as read: {e}")
+
+                    await _track_gmail_usage(
+                        node_id, "receive", 1,
+                        context.workflow_id, context.session_id,
+                    )
+                    event_waiter.dispatch("gmail_email_received", email_data)
+                    log.info(
+                        f"[GmailReceive] New email found: "
+                        f"{email_data.get('subject', 'no subject')}",
+                    )
+                    return {
+                        "success": True, "node_id": node_id, "node_type": self.type,
+                        "result": email_data,
+                        "execution_time": time.time() - start_time,
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                except asyncio.CancelledError:
+                    raise
+                except Exception as e:
+                    log.error(f"[GmailReceive] Poll error (will retry): {e}")
+
+        except asyncio.CancelledError:
+            log.info(f"[GmailReceive] Cancelled by user: node_id={node_id}")
+            return {
+                "success": False, "node_id": node_id, "node_type": self.type,
+                "error": "Cancelled by user",
+                "execution_time": time.time() - start_time,
+                "timestamp": datetime.now().isoformat(),
+            }
+        except Exception as e:
+            log.error(f"[GmailReceive] Error: {e}")
+            return {
+                "success": False, "node_id": node_id, "node_type": self.type,
+                "error": str(e),
+                "execution_time": time.time() - start_time,
+                "timestamp": datetime.now().isoformat(),
+            }
+
     @Operation("wait")
     async def wait(self, ctx: NodeContext, params: GmailReceiveParams) -> GmailReceiveOutput:
         raise NotImplementedError(
-            "gmailReceive uses execute() override (thin delegation). "
-            "Port into poll_once() lands in Wave 11.C."
+            "gmailReceive uses execute() override (Wave 11.D.5 inlined)."
         )
