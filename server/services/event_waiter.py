@@ -135,6 +135,55 @@ TRIGGER_REGISTRY: Dict[str, TriggerConfig] = {
 }
 
 
+def _auto_populate_from_plugins() -> None:
+    """Wave 11.D.11: walk registered TriggerNode subclasses and backfill
+    TRIGGER_REGISTRY + FILTER_BUILDERS for any plugin that declares
+    ``event_type`` + ``build_filter``. Explicit hardcoded entries in
+    this module always win so plugin upgrades never silently replace
+    hand-maintained behaviour.
+
+    Called lazily on first access (``get_trigger_config`` /
+    ``build_filter``) — importing the plugin class registry at
+    module-load time would risk a circular import with services.plugin.
+    """
+    try:
+        from services.node_registry import registered_node_classes
+        from services.plugin import TriggerNode
+    except Exception:
+        return
+
+    for node_type, cls in registered_node_classes().items():
+        if not isinstance(cls, type) or not issubclass(cls, TriggerNode):
+            continue
+        event_type = getattr(cls, "event_type", "") or ""
+        if not event_type:
+            continue
+        # Never override a hardcoded entry — authoritative.
+        if node_type not in TRIGGER_REGISTRY:
+            TRIGGER_REGISTRY[node_type] = TriggerConfig(
+                node_type=node_type,
+                event_type=event_type,
+                display_name=getattr(cls, "display_name", node_type),
+            )
+        if node_type not in FILTER_BUILDERS:
+            # Instance-bound build_filter — instantiate once per node_type.
+            instance = cls()
+            FILTER_BUILDERS[node_type] = lambda params, _inst=instance: _inst.build_filter(
+                _inst.Params.model_validate(params) if params else _inst.Params(),
+            )
+
+
+_populated = False
+
+
+def _ensure_populated() -> None:
+    global _populated
+    if _populated:
+        return
+    _populated = True
+    _auto_populate_from_plugins()
+
+
 def is_trigger_node(node_type: str) -> bool:
     """Check if a node type is a trigger node (workflow starting point).
 
@@ -152,11 +201,13 @@ def is_event_trigger_node(node_type: str) -> bool:
     external events to fire. This excludes 'start' and 'cronScheduler' which
     have their own execution mechanisms.
     """
+    _ensure_populated()
     return node_type in TRIGGER_REGISTRY
 
 
 def get_trigger_config(node_type: str) -> Optional[TriggerConfig]:
     """Get trigger configuration for a node type."""
+    _ensure_populated()
     return TRIGGER_REGISTRY.get(node_type)
 
 
@@ -579,7 +630,13 @@ FILTER_BUILDERS: Dict[str, Callable[[Dict], Callable[[Dict], bool]]] = {
 
 
 def build_filter(node_type: str, params: Dict) -> Callable[[Dict], bool]:
-    """Build a filter function for the given trigger type and parameters."""
+    """Build a filter function for the given trigger type and parameters.
+
+    Plugin-derived builders (Wave 11.D.11) are lazily populated on
+    first access; hardcoded entries in this module always win so
+    plugin upgrades never silently replace hand-maintained behaviour.
+    """
+    _ensure_populated()
     builder = FILTER_BUILDERS.get(node_type)
     if builder:
         return builder(params)
