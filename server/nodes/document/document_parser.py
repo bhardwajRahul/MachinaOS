@@ -1,26 +1,53 @@
-"""Document Parser — Wave 11.C migration."""
+"""Document Parser — Wave 11.D.7 inlined."""
 
 from __future__ import annotations
 
-from typing import Any, Literal, Optional
+import asyncio
+from pathlib import Path
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from core.logging import get_logger
 from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
-from ._helpers import delegate
+logger = get_logger(__name__)
+
+
+def _parse_file_sync(path: Path, parser: str) -> str:
+    """Synchronous file parsing — runs in thread pool."""
+    if parser == 'pypdf':
+        from pypdf import PdfReader
+        return "\n\n".join(p.extract_text() or '' for p in PdfReader(str(path)).pages)
+    if parser == 'marker':
+        from marker.converters.pdf import PdfConverter
+        from marker.models import create_model_dict
+        converter = PdfConverter(artifact_dict=create_model_dict())
+        result = converter(str(path))
+        return result.markdown if hasattr(result, 'markdown') else str(result)
+    if parser == 'unstructured':
+        from unstructured.partition.auto import partition
+        return "\n\n".join(str(el) for el in partition(str(path)))
+    if parser == 'beautifulsoup':
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(path.read_text(errors='ignore'), 'html.parser')
+        for s in soup(["script", "style"]):
+            s.decompose()
+        return soup.get_text(separator='\n')
+    raise ValueError(f"Unknown parser: {parser}")
 
 
 class DocumentParserParams(BaseModel):
-    file_path: str = Field(..., alias="filePath")
+    file_path: str = Field(default="", alias="filePath")
     parser: Literal["pypdf", "marker", "unstructured", "beautifulsoup"] = "pypdf"
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 
 
 class DocumentParserOutput(BaseModel):
-    text: Optional[str] = None
-    pages: Optional[int] = None
+    documents: Optional[list] = None
+    parsed_count: Optional[int] = None
+    failed: Optional[list] = None
 
     model_config = ConfigDict(extra="allow")
 
@@ -45,9 +72,38 @@ class DocumentParserNode(ActionNode):
     Output = DocumentParserOutput
 
     @Operation("parse")
-    async def parse(self, ctx: NodeContext, params: DocumentParserParams) -> Any:
-        from services.handlers.document import handle_document_parser
-        return await delegate(
-            handle_document_parser, node_type=self.type, node_id=ctx.node_id,
-            payload=params.model_dump(by_alias=True), context=ctx.raw,
+    async def parse(self, ctx: NodeContext, params: DocumentParserParams) -> DocumentParserOutput:
+        p = params.model_dump(by_alias=True)
+        files = p.get('files', [])
+        input_dir = p.get('inputDir', '')
+        parser = p.get('parser', 'pypdf')
+        file_pattern = p.get('filePattern', '*.pdf')
+        explicit_path = p.get('filePath') or p.get('file_path')
+
+        paths: list[Path] = []
+        if explicit_path:
+            paths.append(Path(explicit_path))
+        for f in files:
+            path = f.get('path', '') if isinstance(f, dict) else str(f)
+            if path:
+                paths.append(Path(path))
+        if input_dir and Path(input_dir).exists():
+            paths.extend(Path(input_dir).glob(file_pattern))
+
+        if not paths:
+            return DocumentParserOutput(documents=[], parsed_count=0, failed=[])
+
+        documents, failed = [], []
+        for path in paths:
+            try:
+                content = await asyncio.to_thread(_parse_file_sync, path, parser)
+                documents.append({
+                    'source': str(path), 'filename': path.name,
+                    'content': content, 'length': len(content), 'parser': parser,
+                })
+            except Exception as e:
+                failed.append({'file': str(path), 'error': str(e)})
+
+        return DocumentParserOutput(
+            documents=documents, parsed_count=len(documents), failed=failed,
         )

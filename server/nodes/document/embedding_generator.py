@@ -1,27 +1,31 @@
-"""Embedding Generator — Wave 11.C migration."""
+"""Embedding Generator — Wave 11.D.7 inlined."""
 
 from __future__ import annotations
 
-from typing import Any, List, Literal, Optional
+import asyncio
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
-from ._helpers import delegate
-
 
 class EmbeddingGeneratorParams(BaseModel):
-    chunks: List[str] = Field(default_factory=list)
+    chunks: List[Optional[dict]] = Field(default_factory=list)
     provider: Literal["huggingface", "openai", "ollama"] = "huggingface"
     model: str = Field(default="BAAI/bge-small-en-v1.5")
+    api_key: str = Field(default="", alias="apiKey")
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
 
 
 class EmbeddingGeneratorOutput(BaseModel):
     embeddings: Optional[list] = None
-    dimension: Optional[int] = None
+    embedding_count: Optional[int] = None
+    dimensions: Optional[int] = None
+    chunks: Optional[list] = None
+    provider: Optional[str] = None
+    model: Optional[str] = None
 
     model_config = ConfigDict(extra="allow")
 
@@ -46,9 +50,47 @@ class EmbeddingGeneratorNode(ActionNode):
     Output = EmbeddingGeneratorOutput
 
     @Operation("embed")
-    async def embed(self, ctx: NodeContext, params: EmbeddingGeneratorParams) -> Any:
-        from services.handlers.document import handle_embedding_generator
-        return await delegate(
-            handle_embedding_generator, node_type=self.type, node_id=ctx.node_id,
-            payload=params.model_dump(by_alias=True), context=ctx.raw,
+    async def embed(self, ctx: NodeContext, params: EmbeddingGeneratorParams) -> EmbeddingGeneratorOutput:
+        p = params.model_dump(by_alias=True)
+        chunks = p.get('chunks', [])
+        provider = p.get('provider', 'huggingface')
+        model = p.get('model', 'BAAI/bge-small-en-v1.5')
+        api_key = p.get('apiKey', '')
+
+        if not chunks:
+            return EmbeddingGeneratorOutput(
+                embeddings=[], embedding_count=0, dimensions=0, chunks=[],
+                provider=provider, model=model,
+            )
+
+        texts = [c.get('content', '') if isinstance(c, dict) else str(c) for c in chunks]
+
+        if provider == 'huggingface':
+            try:
+                from langchain_huggingface import HuggingFaceEmbeddings
+            except ImportError:
+                raise RuntimeError(
+                    "HuggingFace embeddings unavailable. "
+                    "pip install langchain-huggingface sentence-transformers",
+                )
+            embedder = HuggingFaceEmbeddings(model_name=model)
+        elif provider == 'openai':
+            from langchain_openai import OpenAIEmbeddings
+            embedder = OpenAIEmbeddings(model=model, api_key=api_key)
+        elif provider == 'ollama':
+            from langchain_ollama import OllamaEmbeddings
+            embedder = OllamaEmbeddings(model=model)
+        else:
+            raise RuntimeError(f"Unknown provider: {provider}")
+
+        embeddings = await asyncio.to_thread(embedder.embed_documents, texts)
+        dimensions = len(embeddings[0]) if embeddings else 0
+
+        return EmbeddingGeneratorOutput(
+            embeddings=embeddings,
+            embedding_count=len(embeddings),
+            dimensions=dimensions,
+            chunks=chunks,
+            provider=provider,
+            model=model,
         )

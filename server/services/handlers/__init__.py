@@ -87,15 +87,7 @@ from .social import (
     handle_social_send,
 )
 
-# Document processing handlers
-from .document import (
-    handle_http_scraper,
-    handle_file_downloader,
-    handle_document_parser,
-    handle_text_chunker,
-    handle_embedding_generator,
-    handle_vector_store,
-)
+# Document handlers inlined into nodes/document/*.py (Wave 11.D.7).
 
 # Search handlers
 from .search import (
@@ -179,13 +171,6 @@ __all__ = [
     # Social
     'handle_social_receive',
     'handle_social_send',
-    # Document processing
-    'handle_http_scraper',
-    'handle_file_downloader',
-    'handle_document_parser',
-    'handle_text_chunker',
-    'handle_embedding_generator',
-    'handle_vector_store',
     # Search
     'handle_brave_search',
     'handle_serper_search',
