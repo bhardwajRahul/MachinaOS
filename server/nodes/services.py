@@ -39,22 +39,7 @@ _MODEL_OUT: list[dict] = [
 
 _GREEN = "#50fa7b"
 
-register_node(type="batteryMonitor",         metadata={"displayName": "Battery Monitor",         "icon": "🔋", "color": _GREEN, "group": ["android", "service"], "componentKind": "square", "handles": _IO, "description": "Monitor battery status, level, charging state, temperature, and health", "version": 1})
-register_node(type="networkMonitor",         metadata={"displayName": "Network Monitor",         "icon": "📶", "color": _GREEN, "group": ["android", "service"], "componentKind": "square", "handles": _IO, "description": "Monitor network connectivity, type, and internet availability", "version": 1})
-register_node(type="systemInfo",             metadata={"displayName": "System Info",             "icon": "🖥",  "color": _GREEN, "group": ["android", "service"], "componentKind": "square", "handles": _IO, "description": "Get device and OS information", "version": 1})
-register_node(type="location",               metadata={"displayName": "Location",                "icon": "📍", "color": _GREEN, "group": ["android", "service"], "componentKind": "square", "handles": _IO, "description": "GPS location tracking with latitude, longitude, accuracy, and provider", "version": 1})
-register_node(type="appLauncher",            metadata={"displayName": "App Launcher",            "icon": "🚀", "color": _GREEN, "group": ["android", "service"], "componentKind": "square", "handles": _IO, "description": "Launch applications by package name", "version": 1})
-register_node(type="appList",                metadata={"displayName": "App List",                "icon": "📱", "color": _GREEN, "group": ["android", "service"], "componentKind": "square", "handles": _IO, "description": "Get list of installed applications", "version": 1})
-register_node(type="wifiAutomation",         metadata={"displayName": "WiFi Automation",         "icon": "📡", "color": _GREEN, "group": ["android", "service"], "componentKind": "square", "handles": _IO, "description": "WiFi control and scanning", "version": 1})
-register_node(type="bluetoothAutomation",    metadata={"displayName": "Bluetooth Automation",    "icon": "🔵", "color": _GREEN, "group": ["android", "service"], "componentKind": "square", "handles": _IO, "description": "Bluetooth control - enable, disable, get status, paired devices", "version": 1})
-register_node(type="audioAutomation",        metadata={"displayName": "Audio Automation",        "icon": "🔊", "color": _GREEN, "group": ["android", "service"], "componentKind": "square", "handles": _IO, "description": "Volume and audio control - get/set volume, mute, unmute", "version": 1})
-register_node(type="deviceStateAutomation",  metadata={"displayName": "Device State",            "icon": "⚙️", "color": _GREEN, "group": ["android", "service"], "componentKind": "square", "handles": _IO, "description": "Device state control - airplane mode, screen on/off, brightness", "version": 1})
-register_node(type="screenControlAutomation",metadata={"displayName": "Screen Control",          "icon": "💡", "color": _GREEN, "group": ["android", "service"], "componentKind": "square", "handles": _IO, "description": "Screen control - brightness, wake screen, auto-brightness", "version": 1})
-register_node(type="airplaneModeControl",    metadata={"displayName": "Airplane Mode",           "icon": "✈️", "color": _GREEN, "group": ["android", "service"], "componentKind": "square", "handles": _IO, "description": "Airplane mode status monitoring and control", "version": 1})
-register_node(type="motionDetection",        metadata={"displayName": "Motion Detection",        "icon": "🏃", "color": _GREEN, "group": ["android", "service"], "componentKind": "square", "handles": _IO, "description": "Accelerometer + gyroscope - motion, shake, orientation", "version": 1})
-register_node(type="environmentalSensors",   metadata={"displayName": "Environmental Sensors",   "icon": "🌡", "color": _GREEN, "group": ["android", "service"], "componentKind": "square", "handles": _IO, "description": "Temperature, humidity, pressure, light level", "version": 1})
-register_node(type="cameraControl",          metadata={"displayName": "Camera",                  "icon": "📷", "color": _GREEN, "group": ["android", "service"], "componentKind": "square", "handles": _IO, "description": "Camera control - get info, take photos, capabilities", "version": 1})
-register_node(type="mediaControl",           metadata={"displayName": "Media Control",           "icon": "🎵", "color": _GREEN, "group": ["android", "service"], "componentKind": "square", "handles": _IO, "description": "Media playback - volume, playback, play files", "version": 1})
+# All 16 Android services — migrated to nodes/android/*.py (Wave 11.C).
 
 
 # ---------------------------------------------------------------------------
@@ -63,31 +48,7 @@ register_node(type="mediaControl",           metadata={"displayName": "Media Con
 
 # All 9 chat models — migrated to nodes/model/*.py (Wave 11.C).
 
-register_node(
-    type="simpleMemory",
-    metadata={
-        "displayName": "Simple Memory", "subtitle": "Conversation History",
-        "icon": "💾", "color": "#f1fa8c",
-        "group": ["tool", "memory"], "componentKind": "model",
-        "handles": [{"name": "output-memory", "kind": "output", "position": "top", "label": "Memory", "role": "memory"}],
-        "description": "Markdown-based conversation memory with optional vector DB",
-        "version": 1,
-        "uiHints": {"isMemoryPanel": True, "hasCodeEditor": True, "hideRunButton": True},
-    },
-)
-
-register_node(
-    type="masterSkill",
-    metadata={
-        "displayName": "Master Skill", "subtitle": "Skill Aggregator",
-        "icon": "🎯", "color": "#f1fa8c",
-        "group": ["tool"], "componentKind": "tool",
-        "handles": [{"name": "output-skill", "kind": "output", "position": "top", "label": "Skill", "role": "skill"}],
-        "description": "Aggregate multiple skills with enable/disable toggles",
-        "version": 1,
-        "uiHints": {"isToolPanel": True, "isMasterSkillEditor": True, "hideRunButton": True},
-    },
-)
+# simpleMemory + masterSkill — migrated to nodes/skill/*.py (Wave 11.C).
 
 
 # ---------------------------------------------------------------------------

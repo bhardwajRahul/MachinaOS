@@ -143,7 +143,7 @@ class NodeExecutor:
             'timer': handle_timer,
             # AI agents — all migrated to nodes/agent/*.py (Wave 11.C).
             # Plugin handlers win via registry.update(_PLUGIN_HANDLERS) merge below.
-            'simpleMemory': handle_simple_memory,
+            # simpleMemory + masterSkill: migrated to nodes/skill/*.py (Wave 11.C).
             # Maps
             'gmaps_create': partial(handle_create_map, maps_service=self.maps_service),
             'gmaps_locations': partial(handle_add_locations, maps_service=self.maps_service),
@@ -219,9 +219,8 @@ class NodeExecutor:
         # AI chat models — all 9 migrated to nodes/model/*.py (Wave 11.C).
         # Plugin handlers register themselves via _PLUGIN_HANDLERS merge below.
 
-        # Register Android services
-        for node_type in ANDROID_SERVICE_NODE_TYPES:
-            registry[node_type] = partial(handle_android_service, android_service=self.android_service)
+        # Android services — all 16 migrated to nodes/android/*.py (Wave 11.C).
+        # Plugin handlers register themselves via _PLUGIN_HANDLERS merge.
 
         # Plugin handlers last: they win over the legacy entries above,
         # enabling incremental migration (Wave 10.C strangler fig).
