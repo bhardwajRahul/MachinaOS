@@ -1,4 +1,10 @@
-"""WhatsApp node handlers - Send and DB operations."""
+"""WhatsApp send + DB business logic (Wave 11.D.9 inlined).
+
+Imported by nodes.whatsapp.whatsapp_send and nodes.whatsapp.whatsapp_db.
+RPC dispatch still flows through routers.whatsapp (HTTP to the Go
+bridge) — extracting that is a separate refactor, not required for the
+plugin migration.
+"""
 
 import asyncio
 import time

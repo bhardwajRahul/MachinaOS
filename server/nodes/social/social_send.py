@@ -57,7 +57,7 @@ class SocialSendNode(ActionNode):
 
     @Operation("send", cost={"service": "social", "action": "send", "count": 1})
     async def send(self, ctx: NodeContext, params: SocialSendParams) -> Any:
-        from services.handlers.social import handle_social_send
+        from ._base import handle_social_send
         response = await handle_social_send(
             node_id=ctx.node_id, node_type=self.type,
             parameters=params.model_dump(by_alias=True), context=ctx.raw,

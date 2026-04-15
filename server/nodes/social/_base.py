@@ -1,9 +1,14 @@
-"""Social node handlers - Unified messaging across platforms.
+"""Social unified-messaging business logic (Wave 11.D.9 inlined).
 
-socialReceive: Normalizes messages from platform-specific triggers into unified format
-socialSend: Routes outbound messages to appropriate platform (also works as AI tool)
+socialReceive normalizes messages from platform-specific triggers into
+a unified format. socialSend routes outbound messages to the correct
+platform (WhatsApp, Telegram, Discord, Slack, Signal, SMS, Webchat,
+Email, Matrix, Teams).
 
-Supported platforms: WhatsApp, Telegram, Discord, Slack, Signal, SMS, Webchat, Email, Matrix, Teams
+Imported by :class:`nodes.social.social_receive.SocialReceiveNode` and
+:class:`nodes.social.social_send.SocialSendNode`. Calls into
+``routers.whatsapp`` for the WhatsApp bridge stay unchanged — moving
+them out is a separate refactor.
 """
 
 import time

@@ -66,21 +66,13 @@ from .utility import (
     handle_team_monitor,
 )
 
-# WhatsApp handlers
-from .whatsapp import (
-    handle_whatsapp_send,
-    handle_whatsapp_db,
-)
+# WhatsApp handlers inlined into nodes/whatsapp/*.py (Wave 11.D.9).
 
 # Twitter handlers inlined into nodes/twitter/*.py (Wave 11.D.8).
 
 # Google Workspace handlers inlined into nodes/google/*.py (Wave 11.D.4).
 
-# Social handlers (unified messaging)
-from .social import (
-    handle_social_receive,
-    handle_social_send,
-)
+# Social handlers inlined into nodes/social/*.py (Wave 11.D.9).
 
 # Document handlers inlined into nodes/document/*.py (Wave 11.D.7).
 
@@ -156,12 +148,8 @@ __all__ = [
     'handle_console',
     'handle_team_monitor',
     # WhatsApp
-    'handle_whatsapp_send',
-    'handle_whatsapp_db',
     # Twitter
     # Social
-    'handle_social_receive',
-    'handle_social_send',
     # Search
     'handle_brave_search',
     'handle_serper_search',

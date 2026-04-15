@@ -60,7 +60,7 @@ class SocialReceiveNode(ActionNode):
 
     @Operation("normalize")
     async def normalize(self, ctx: NodeContext, params: SocialReceiveParams) -> Any:
-        from services.handlers.social import handle_social_receive
+        from ._base import handle_social_receive
         outputs = ctx.raw.get("connected_outputs") or {}
         source_nodes = ctx.raw.get("source_nodes") or []
         response = await handle_social_receive(

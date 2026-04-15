@@ -69,7 +69,7 @@ class WhatsAppDbNode(ActionNode):
 
     @Operation("query", cost={"service": "whatsapp", "action": "db_query", "count": 1})
     async def query(self, ctx: NodeContext, params: WhatsAppDbParams) -> Any:
-        from services.handlers.whatsapp import handle_whatsapp_db
+        from ._base import handle_whatsapp_db
         response = await handle_whatsapp_db(
             node_id=ctx.node_id, node_type=self.type,
             parameters=params.model_dump(by_alias=True), context=ctx.raw,
