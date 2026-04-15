@@ -92,13 +92,32 @@ class TemporalWorkerManager:
         # Create activity instance with shared session
         self._activities = NodeExecutionActivities(self._session)
 
+        # Wave 11.F: register per-plugin activities alongside the
+        # legacy generic execute_node_activity. Workers pick up both.
+        # The legacy activity stays so existing workflows that call
+        # "execute_node_activity" keep working; plugin activities are
+        # indexed by ``node.{type}.v{version}`` for future per-node
+        # dispatch.
+        activities: list = [self._activities.execute_node_activity]
+        try:
+            import nodes  # populate plugin-class registry
+            from services.temporal.plugin_activities import collect_plugin_activities
+            plugin_activities = collect_plugin_activities()
+            activities.extend(plugin_activities)
+            logger.info(
+                "Registered %d plugin activities on queue %s",
+                len(plugin_activities), self.task_queue,
+            )
+        except Exception as e:
+            logger.warning(f"Plugin activity registration failed: {e}")
+
         # Create worker with class-based activity
         # For class-based activities, pass the bound method (instance.method)
         self._worker = Worker(
             self.client,
             task_queue=self.task_queue,
             workflows=[MachinaWorkflow],
-            activities=[self._activities.execute_node_activity],  # Pass bound method
+            activities=activities,
             # Allow concurrent activity execution for parallel branches
             max_concurrent_activities=self.pool_size,
             max_concurrent_workflow_tasks=10,
@@ -150,6 +169,106 @@ class TemporalWorkerManager:
         self._session = None
         self._activities = None
         logger.info("Temporal worker stopped")
+
+
+class TemporalWorkerPool:
+    """Wave 11.F: multi-queue worker pool.
+
+    Runs one :class:`Worker` per declared plugin ``task_queue``. Each
+    worker only registers activities whose plugin opts in to that
+    queue, so specialised workloads can be scaled independently.
+    Env overrides for per-pool concurrency: ``TEMPORAL_<QUEUE>_CONCURRENCY``
+    (e.g. ``TEMPORAL_AI_HEAVY_CONCURRENCY=4``).
+
+    Usage::
+
+        pool = TemporalWorkerPool(client, queues=["rest-api", "ai-heavy"])
+        await pool.start()
+        try:
+            ...
+        finally:
+            await pool.stop()
+    """
+
+    # Default concurrency per queue — override via env.
+    DEFAULT_CONCURRENCY: dict[str, int] = {
+        "machina-default": 20,
+        "rest-api": 50,
+        "ai-heavy": 4,
+        "code-exec": 10,
+        "triggers-poll": 100,
+        "triggers-event": 100,
+        "android": 10,
+        "browser": 4,
+        "messaging": 20,
+    }
+
+    def __init__(
+        self,
+        client: Client,
+        *,
+        queues: Optional[list[str]] = None,
+        default_pool_size: int = 20,
+    ):
+        self.client = client
+        self.default_pool_size = default_pool_size
+        # Lazy import to avoid circular at module load time.
+        from services.temporal.plugin_activities import distinct_task_queues
+
+        self.queues = queues or distinct_task_queues()
+        self._workers: list[Worker] = []
+        self._tasks: list[asyncio.Task] = []
+
+    def _concurrency_for(self, queue: str) -> int:
+        import os
+
+        env_key = f"TEMPORAL_{queue.upper().replace('-', '_')}_CONCURRENCY"
+        raw = os.environ.get(env_key)
+        if raw and raw.isdigit():
+            return int(raw)
+        return self.DEFAULT_CONCURRENCY.get(queue, self.default_pool_size)
+
+    @property
+    def is_running(self) -> bool:
+        return any(t is not None and not t.done() for t in self._tasks)
+
+    async def start(self) -> None:
+        from services.temporal.plugin_activities import (
+            collect_plugin_activities,
+        )
+
+        for queue in self.queues:
+            activities = collect_plugin_activities(task_queue=queue)
+            if not activities:
+                logger.info(f"[Pool] Skipping empty queue {queue!r}")
+                continue
+            concurrency = self._concurrency_for(queue)
+            worker = Worker(
+                self.client,
+                task_queue=queue,
+                activities=activities,
+                max_concurrent_activities=concurrency,
+                max_concurrent_workflow_tasks=10,
+            )
+            task = asyncio.create_task(worker.run(), name=f"worker-{queue}")
+            self._workers.append(worker)
+            self._tasks.append(task)
+            logger.info(
+                f"[Pool] Started worker queue={queue!r} "
+                f"activities={len(activities)} concurrency={concurrency}"
+            )
+
+    async def stop(self) -> None:
+        for task in self._tasks:
+            task.cancel()
+        for task in self._tasks:
+            try:
+                await task
+            except (asyncio.CancelledError, Exception):
+                pass
+        self._workers.clear()
+        self._tasks.clear()
+        logger.info("[Pool] All workers stopped")
 
 
 async def run_standalone_worker(
