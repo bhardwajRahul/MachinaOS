@@ -272,50 +272,8 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
     return await _execute_generic(tool_args, config)
 
 
-async def _execute_calculator(args: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute calculator operations.
-
-    Supported operations: add, subtract, multiply, divide, power, sqrt, mod, abs
-
-    Args:
-        args: Dict with 'operation', 'a', and optionally 'b'
-
-    Returns:
-        Dict with operation, inputs, and result
-    """
-    operation = args.get('operation', '').lower()
-    a = float(args.get('a', 0))
-    b = float(args.get('b', 0))
-
-    operations = {
-        'add': lambda: a + b,
-        'subtract': lambda: a - b,
-        'multiply': lambda: a * b,
-        'divide': lambda: a / b if b != 0 else float('inf'),
-        'power': lambda: math.pow(a, b),
-        'sqrt': lambda: math.sqrt(abs(a)),  # Use abs to handle negative
-        'mod': lambda: a % b if b != 0 else 0,
-        'abs': lambda: abs(a),
-    }
-
-    if operation not in operations:
-        return {
-            "error": f"Unknown operation: {operation}",
-            "supported_operations": list(operations.keys())
-        }
-
-    try:
-        result = operations[operation]()
-        logger.debug(f"[Calculator] {operation}({a}, {b}) = {result}")
-        return {
-            "operation": operation,
-            "a": a,
-            "b": b,
-            "result": result
-        }
-    except Exception as e:
-        logger.error(f"[Calculator] Error: {e}")
-        return {"error": str(e)}
+# _execute_calculator: deleted in Wave 11.C cleanup. Logic moved to
+# nodes/tool/calculator_tool.py CalculatorToolNode.calculate().
 
 
 async def _execute_http_request(args: Dict[str, Any],
@@ -618,125 +576,8 @@ async def _execute_current_time(args: Dict[str, Any],
         return {"error": f"Invalid timezone: {timezone_str}. Error: {str(e)}"}
 
 
-async def _execute_duckduckgo_search(args: Dict[str, Any],
-                               node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute web search.
-
-    Args:
-        args: Dict with 'query'
-        node_params: Node parameters containing provider, apiKey, maxResults
-
-    Returns:
-        Dict with query, results list, provider
-    """
-    import httpx
-    import asyncio
-
-    query = args.get('query', '')
-    if not query:
-        return {"error": "No search query provided"}
-
-    provider = node_params.get('provider', 'duckduckgo')
-    max_results = int(node_params.get('maxResults', 5))
-
-    logger.info(f"[WebSearch] Searching '{query}' via {provider}")
-
-    try:
-        if provider == 'duckduckgo':
-            # Use the ddgs library for proper web search results
-            try:
-                from ddgs import DDGS
-
-                # Run synchronous DDGS in a thread pool to not block async
-                def do_search():
-                    ddgs = DDGS()
-                    return list(ddgs.text(query, max_results=max_results))
-
-                search_results = await asyncio.get_event_loop().run_in_executor(
-                    None, do_search
-                )
-
-                results = []
-                for item in search_results:
-                    results.append({
-                        "title": item.get('title', ''),
-                        "snippet": item.get('body', ''),
-                        "url": item.get('href', '')
-                    })
-
-                logger.info(f"[WebSearch] Found {len(results)} results via DuckDuckGo")
-                return {
-                    "query": query,
-                    "results": results,
-                    "provider": "duckduckgo"
-                }
-
-            except ImportError:
-                logger.warning("[WebSearch] ddgs not installed, falling back to Instant Answer API")
-                # Fallback to Instant Answer API (limited results)
-                async with httpx.AsyncClient(timeout=10.0) as client:
-                    response = await client.get(
-                        "https://api.duckduckgo.com/",
-                        params={"q": query, "format": "json", "no_html": 1}
-                    )
-                    data = response.json()
-
-                    results = []
-                    if data.get('AbstractText'):
-                        results.append({
-                            "title": data.get('Heading', 'Result'),
-                            "snippet": data.get('AbstractText'),
-                            "url": data.get('AbstractURL', '')
-                        })
-
-                    for topic in data.get('RelatedTopics', [])[:max_results]:
-                        if isinstance(topic, dict) and 'Text' in topic:
-                            results.append({
-                                "title": topic.get('Text', '')[:50],
-                                "snippet": topic.get('Text', ''),
-                                "url": topic.get('FirstURL', '')
-                            })
-
-                    logger.info(f"[WebSearch] Found {len(results)} results (Instant Answer API fallback)")
-                    return {
-                        "query": query,
-                        "results": results[:max_results],
-                        "provider": "duckduckgo"
-                    }
-
-        elif provider == 'serper':
-            api_key = node_params.get('apiKey', '')
-            if not api_key:
-                return {"error": "Serper API key required"}
-
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.post(
-                    "https://google.serper.dev/search",
-                    headers={"X-API-KEY": api_key, "Content-Type": "application/json"},
-                    json={"q": query, "num": max_results}
-                )
-                data = response.json()
-
-                results = []
-                for item in data.get('organic', [])[:max_results]:
-                    results.append({
-                        "title": item.get('title', ''),
-                        "snippet": item.get('snippet', ''),
-                        "url": item.get('link', '')
-                    })
-
-                logger.info(f"[WebSearch] Found {len(results)} results via Serper")
-                return {
-                    "query": query,
-                    "results": results,
-                    "provider": "serper"
-                }
-
-        return {"error": f"Unknown search provider: {provider}"}
-
-    except Exception as e:
-        logger.error(f"[WebSearch] Error: {e}")
-        return {"error": f"Search failed: {str(e)}"}
+# _execute_duckduckgo_search: deleted in Wave 11.C cleanup. Logic moved
+# to nodes/search/duckduckgo_search.py DuckDuckGoSearchNode.search().
 
 
 async def _execute_whatsapp_send(args: Dict[str, Any],
@@ -1471,18 +1312,8 @@ async def _execute_twitter_user(args: Dict[str, Any],
     )
 
 
-async def _execute_google_gmail(args: Dict[str, Any],
-                                node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Gmail operations via consolidated dispatcher."""
-    from services.handlers.gmail import handle_google_gmail
-
-    parameters = {**node_params, **args}
-    return await handle_google_gmail(
-        node_id="tool_google_gmail",
-        node_type="gmail",
-        parameters=parameters,
-        context={}
-    )
+# _execute_google_gmail: deleted in Wave 11.C cleanup. gmail now routes
+# through the plugin fast-path (nodes/google/gmail.py).
 
 
 # ============================================================================
@@ -2509,19 +2340,10 @@ async def handle_task_manager(
 # SEARCH TOOL WRAPPERS (for AI Agent tool calling)
 # =============================================================================
 
-async def _execute_brave_search_tool(args: Dict[str, Any],
-                                     node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Brave Search via handler (AI Agent tool wrapper)."""
-    from services.handlers.search import handle_brave_search
-
-    parameters = {**node_params, **args}
-    return await handle_brave_search(
-        node_id="tool_brave_search",
-        node_type="braveSearch",
-        parameters=parameters,
-        context={}
-    )
-
+# brave + perplexity tool wrappers: deleted in Wave 11.C cleanup. Both
+# now route through the plugin fast-path in execute_tool which calls
+# the BaseNode.execute_as_tool method on the plugin class.
+# _execute_serper_search_tool stays until serperSearch is migrated.
 
 async def _execute_serper_search_tool(args: Dict[str, Any],
                                       node_params: Dict[str, Any]) -> Dict[str, Any]:
@@ -2532,20 +2354,6 @@ async def _execute_serper_search_tool(args: Dict[str, Any],
     return await handle_serper_search(
         node_id="tool_serper_search",
         node_type="serperSearch",
-        parameters=parameters,
-        context={}
-    )
-
-
-async def _execute_perplexity_search_tool(args: Dict[str, Any],
-                                          node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Perplexity Search via handler (AI Agent tool wrapper)."""
-    from services.handlers.search import handle_perplexity_search
-
-    parameters = {**node_params, **args}
-    return await handle_perplexity_search(
-        node_id="tool_perplexity_search",
-        node_type="perplexitySearch",
         parameters=parameters,
         context={}
     )

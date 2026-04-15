@@ -30,19 +30,23 @@ from services.handlers import (
     handle_create_map, handle_add_locations, handle_nearby_places,
     handle_text_generator, handle_file_handler,
     handle_chat_send, handle_chat_history,
-    handle_start, handle_cron_scheduler, handle_timer, handle_console, handle_team_monitor,
+    handle_start, handle_cron_scheduler, handle_timer, handle_team_monitor,
+    # handle_console: migrated to nodes/utility/console.py (Wave 11.C).
     handle_whatsapp_send, handle_whatsapp_db,
     handle_social_receive, handle_social_send,
     handle_http_scraper, handle_file_downloader, handle_document_parser,
     handle_text_chunker, handle_embedding_generator, handle_vector_store,
     handle_task_manager,
     handle_twitter_send, handle_twitter_search, handle_twitter_user,
-    handle_serper_search, handle_perplexity_search,  # handle_brave_search: used only by handlers/tools.py (Wave 11.B)
+    handle_serper_search,
+    # Wave 11 migrated: handle_brave_search, handle_perplexity_search now imported
+    # lazily by their plugin classes in nodes/search/.
     handle_rlm_agent,
 )
 from services.handlers.claude_code import handle_claude_code_agent
 from services.handlers.deep_agent import handle_deep_agent
-from services.handlers.telegram import handle_telegram_send
+# Wave 11 migrated: handle_telegram_send now imported lazily by
+# nodes/telegram/telegram_send.py.
 from services.handlers.apify import handle_apify_actor
 from services.handlers.crawlee import handle_crawlee_scraper
 from services.handlers.browser import handle_browser
@@ -52,7 +56,8 @@ from services.handlers.todo import handle_write_todos
 from services.handlers.process import handle_process_manager
 from services.handlers.email import handle_email_send, handle_email_read, handle_email_receive
 # Consolidated Google Workspace handlers (6 services with operation dispatchers)
-from services.handlers.gmail import handle_google_gmail, handle_gmail_receive
+# Wave 11 migrated: gmail handlers (send/search/read) imported lazily
+# by nodes/google/gmail.py; handle_gmail_receive lazily by gmail_receive.py.
 from services.handlers.calendar import handle_google_calendar
 from services.handlers.drive import handle_google_drive
 from services.handlers.sheets import handle_google_sheets
@@ -179,7 +184,7 @@ class NodeExecutor:
             'twitterUser': handle_twitter_user,
             # Google Workspace (consolidated with operation dispatchers)
             # gmail: migrated to nodes/gmail.py (Wave 11.B). Plugin handler wins via registry.update.
-            'gmailReceive': handle_gmail_receive,  # Polling-based trigger (custom handler)
+            # gmailReceive: migrated to nodes/google/gmail_receive.py (Wave 11.B). Plugin handler wins.
             'calendar': handle_google_calendar,
             'drive': handle_google_drive,
             'sheets': handle_google_sheets,
@@ -392,11 +397,10 @@ class NodeExecutor:
             return await handler(node_id, node_type, params, context)
 
         # Legacy special handlers — invoked when no plugin is registered.
+        # console: migrated to nodes/utility/console.py (Wave 11.C); plugin wins above.
         if node_type in self._NEEDS_CONNECTED_OUTPUTS:
             outputs = context['connected_outputs']
             source_nodes = context['source_nodes']
-            if node_type == 'console':
-                return await handle_console(node_id, node_type, params, context, outputs, source_nodes)
             if node_type == 'socialReceive':
                 return await handle_social_receive(node_id, node_type, params, context, outputs, source_nodes)
             handlers = {

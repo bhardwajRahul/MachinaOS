@@ -2701,17 +2701,16 @@ class AIService:
         if db_schema_config:
             return self._build_schema_from_config(db_schema_config)
 
-        # Calculator tool schema
-        if node_type == 'calculatorTool':
-            class CalculatorSchema(BaseModel):
-                """Schema for calculator tool arguments."""
-                operation: str = Field(
-                    description="Math operation: add, subtract, multiply, divide, power, sqrt, mod, abs"
-                )
-                a: float = Field(description="First number")
-                b: float = Field(default=0, description="Second number (not needed for sqrt, abs)")
+        # Wave 11.B.1 plugin fast-path: if this node_type is a registered
+        # BaseNode subclass, use its Pydantic Params model directly. The
+        # plugin owns the LLM-visible schema; per-type ad-hoc schemas
+        # below only fire for not-yet-migrated nodes.
+        from services.node_registry import get_node_class
+        plugin_cls = get_node_class(node_type)
+        if plugin_cls is not None and hasattr(plugin_cls, 'Params'):
+            return plugin_cls.Params
 
-            return CalculatorSchema
+        # calculatorTool: schema now provided by nodes/tool/calculator_tool.py via plugin fast-path above.
 
         # HTTP Request tool schema
         if node_type in ('httpRequest', 'httpRequestTool'):
@@ -2761,37 +2760,15 @@ class AIService:
 
             return CurrentTimeSchema
 
-        # DuckDuckGo search tool schema
-        if node_type == 'duckduckgoSearch':
-            class DuckDuckGoSearchSchema(BaseModel):
-                """Search the web using DuckDuckGo (free, no API key)."""
-                query: str = Field(description="Search query to look up on the web")
-
-            return DuckDuckGoSearchSchema
-
-        # Brave Search tool schema (dual-purpose: workflow node + AI tool)
-        if node_type == 'braveSearch':
-            class BraveSearchSchema(BaseModel):
-                """Search the web using Brave Search API."""
-                query: str = Field(description="Search query to look up on the web")
-
-            return BraveSearchSchema
-
-        # Serper Search tool schema (dual-purpose: workflow node + AI tool)
+        # duckduckgoSearch / braveSearch / perplexitySearch: schemas now provided
+        # by nodes/search/*.py via plugin fast-path above. serperSearch keeps its
+        # ad-hoc schema until migration.
         if node_type == 'serperSearch':
             class SerperSearchSchema(BaseModel):
                 """Search the web using Google via Serper API."""
                 query: str = Field(description="Search query to look up on Google")
 
             return SerperSearchSchema
-
-        # Perplexity Search tool schema (dual-purpose: workflow node + AI tool)
-        if node_type == 'perplexitySearch':
-            class PerplexitySearchSchema(BaseModel):
-                """Search the web using Perplexity Sonar AI for an answer with citations."""
-                query: str = Field(description="Search query to get AI-powered answer with citations")
-
-            return PerplexitySearchSchema
 
         # Timer tool schema (dual-purpose: workflow node + AI tool)
         if node_type == 'timer':
@@ -3362,33 +3339,7 @@ class AIService:
         # GOOGLE WORKSPACE CONSOLIDATED TOOL SCHEMAS
         # ============================================================================
 
-        if node_type == 'gmail':
-            class GoogleGmailSchema(BaseModel):
-                """Send, search, and read emails via Gmail.
-
-                - send: Compose and send an email (requires to, subject, body)
-                - search: Find emails by query (requires query)
-                - read: Get email by message ID (requires message_id)
-                """
-                operation: str = Field(
-                    description="Operation: 'send', 'search', or 'read'"
-                )
-                # send fields
-                to: Optional[str] = Field(default=None, description="[send] Recipient email(s), comma-separated")
-                subject: Optional[str] = Field(default=None, description="[send] Email subject line")
-                body: Optional[str] = Field(default=None, description="[send] Email body content")
-                cc: Optional[str] = Field(default=None, description="[send] CC recipients, comma-separated")
-                bcc: Optional[str] = Field(default=None, description="[send] BCC recipients, comma-separated")
-                body_type: str = Field(default="text", description="[send] Body type: 'text' or 'html'")
-                # search fields
-                query: Optional[str] = Field(default=None, description="[search] Gmail search query (e.g., 'from:user@example.com', 'subject:meeting', 'is:unread')")
-                max_results: int = Field(default=10, description="[search] Max messages to return (1-100)")
-                include_body: bool = Field(default=False, description="[search] Fetch full message body")
-                # read fields
-                message_id: Optional[str] = Field(default=None, description="[read] Gmail message ID to read")
-                format: str = Field(default="full", description="[read] Format: 'full', 'minimal', 'raw', 'metadata'")
-
-            return GoogleGmailSchema
+        # gmail: schema now provided by nodes/google/gmail.py via plugin fast-path above.
 
         if node_type == 'calendar':
             class GoogleCalendarSchema(BaseModel):
