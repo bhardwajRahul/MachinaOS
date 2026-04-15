@@ -4,6 +4,8 @@ from pydantic import Field
 
 from ._base import ChatModelBase, ChatModelParams
 
+from credentials.llm import OpenAICredential
+
 
 class OpenAIChatModelParams(ChatModelParams):
     frequency_penalty: Optional[float] = Field(
@@ -33,4 +35,5 @@ class OpenAIChatModelNode(ChatModelBase):
     group = ("model",)
     description = "OpenAI GPT models for chat completion and generation"
 
+    credentials = (OpenAICredential,)
     Params = OpenAIChatModelParams

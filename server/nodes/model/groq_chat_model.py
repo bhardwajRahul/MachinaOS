@@ -4,6 +4,8 @@ from pydantic import Field
 
 from ._base import ChatModelBase, ChatModelParams
 
+from credentials.llm import GroqCredential
+
 
 class GroqChatModelParams(ChatModelParams):
     thinking_enabled: bool = Field(default=False, alias="thinkingEnabled")
@@ -22,4 +24,5 @@ class GroqChatModelNode(ChatModelBase):
     group = ("model",)
     description = "Groq ultra-fast LLM inference (Llama, Qwen3, GPT-OSS)"
 
+    credentials = (GroqCredential,)
     Params = GroqChatModelParams

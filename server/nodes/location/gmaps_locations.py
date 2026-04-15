@@ -8,6 +8,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
+from credentials.google_maps import GoogleMapsCredential
+
 
 class GmapsLocationsParams(BaseModel):
     address: str = Field(..., min_length=1)
@@ -41,6 +43,7 @@ class GmapsLocationsNode(ActionNode):
          "label": "Output", "role": "main"},
     )
     annotations = {"destructive": False, "readonly": True, "open_world": True}
+    credentials = (GoogleMapsCredential,)
     task_queue = TaskQueue.REST_API
     usable_as_tool = True
 

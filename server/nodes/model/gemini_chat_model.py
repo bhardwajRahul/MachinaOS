@@ -4,6 +4,8 @@ from pydantic import Field
 
 from ._base import ChatModelBase, ChatModelParams
 
+from credentials.llm import GeminiCredential
+
 
 class GeminiChatModelParams(ChatModelParams):
     top_k: Optional[int] = Field(default=40, alias="topK", ge=1, le=100)
@@ -26,4 +28,5 @@ class GeminiChatModelNode(ChatModelBase):
     group = ("model",)
     description = "Google Gemini models for multimodal AI capabilities"
 
+    credentials = (GeminiCredential,)
     Params = GeminiChatModelParams

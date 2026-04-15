@@ -4,6 +4,8 @@ from pydantic import Field
 
 from ._base import ChatModelBase, ChatModelParams
 
+from credentials.llm import CerebrasCredential
+
 
 class CerebrasChatModelParams(ChatModelParams):
     thinking_enabled: bool = Field(default=False, alias="thinkingEnabled")
@@ -22,4 +24,5 @@ class CerebrasChatModelNode(ChatModelBase):
     group = ("model",)
     description = "Cerebras ultra-fast inference on custom AI hardware"
 
+    credentials = (CerebrasCredential,)
     Params = CerebrasChatModelParams

@@ -4,6 +4,8 @@ from pydantic import Field
 
 from ._base import ChatModelBase, ChatModelParams
 
+from credentials.llm import OpenRouterCredential
+
 
 class OpenRouterChatModelParams(ChatModelParams):
     frequency_penalty: Optional[float] = Field(
@@ -23,4 +25,5 @@ class OpenRouterChatModelNode(ChatModelBase):
     group = ("model",)
     description = "OpenRouter unified API - access OpenAI, Claude, Gemini, Llama, and more"
 
+    credentials = (OpenRouterCredential,)
     Params = OpenRouterChatModelParams

@@ -14,6 +14,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
+from credentials.telegram import TelegramCredential
+
 
 class TelegramSendParams(BaseModel):
     recipient_type: Literal["self", "chat_id"] = Field(
@@ -91,6 +93,7 @@ class TelegramSendNode(ActionNode):
          "label": "Output", "role": "main"},
     )
     annotations = {"destructive": False, "readonly": False, "open_world": True}
+    credentials = (TelegramCredential,)
     task_queue = TaskQueue.MESSAGING
     usable_as_tool = True
 

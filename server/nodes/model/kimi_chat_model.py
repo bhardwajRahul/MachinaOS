@@ -1,5 +1,7 @@
 from ._base import ChatModelBase
 
+from credentials.llm import KimiCredential
+
 
 class KimiChatModelNode(ChatModelBase):
     type = "kimiChatModel"
@@ -9,3 +11,4 @@ class KimiChatModelNode(ChatModelBase):
     color = "#bd93f9"
     group = ("model",)
     description = "Kimi K2 models by Moonshot AI with 256K context (thinking on by default)"
+    credentials = (KimiCredential,)

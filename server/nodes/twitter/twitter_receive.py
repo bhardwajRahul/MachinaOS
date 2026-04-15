@@ -8,6 +8,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from services.plugin import NodeContext, Operation, TaskQueue, TriggerNode
 
+from credentials.twitter import TwitterCredential
+
 
 class TwitterReceiveParams(BaseModel):
     trigger_type: Literal["mentions", "search", "timeline"] = Field(
@@ -43,6 +45,7 @@ class TwitterReceiveNode(TriggerNode):
         {"name": "output-main", "kind": "output", "position": "right",
          "label": "Output", "role": "main"},
     )
+    credentials = (TwitterCredential,)
     task_queue = TaskQueue.TRIGGERS_POLL
     mode = "polling"
     default_poll_interval = 60

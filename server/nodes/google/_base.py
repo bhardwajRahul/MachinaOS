@@ -17,7 +17,7 @@ from typing import Any, Dict
 from googleapiclient.discovery import build
 
 from core.logging import get_logger
-from services.handlers.google_auth import get_google_credentials
+from credentials.google import GoogleCredential
 from services.pricing import get_pricing_service
 
 logger = get_logger(__name__)
@@ -35,10 +35,10 @@ async def build_google_service(
         api_name: Google API short name (``gmail`` / ``calendar`` / ``drive`` /
             ``sheets`` / ``tasks`` / ``people``).
         api_version: API version (e.g. ``v1``, ``v3``).
-        parameters: Node parameters (forwarded to ``get_google_credentials``).
+        parameters: Node parameters (forwarded to ``GoogleCredential.build_credentials``).
         context: Execution context (forwarded).
     """
-    creds = await get_google_credentials(parameters, context)
+    creds = await GoogleCredential.build_credentials(parameters, context)
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(
         None, lambda: build(api_name, api_version, credentials=creds),

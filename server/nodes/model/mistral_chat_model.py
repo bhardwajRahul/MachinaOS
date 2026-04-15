@@ -1,5 +1,7 @@
 from ._base import ChatModelBase
 
+from credentials.llm import MistralCredential
+
 
 class MistralChatModelNode(ChatModelBase):
     type = "mistralChatModel"
@@ -9,3 +11,4 @@ class MistralChatModelNode(ChatModelBase):
     color = "#ffb86c"
     group = ("model",)
     description = "Mistral AI models for reasoning, coding, and multilingual tasks"
+    credentials = (MistralCredential,)

@@ -4,6 +4,8 @@ from pydantic import Field
 
 from ._base import ChatModelBase, ChatModelParams
 
+from credentials.llm import DeepSeekCredential
+
 
 class DeepseekChatModelParams(ChatModelParams):
     frequency_penalty: Optional[float] = Field(
@@ -23,4 +25,5 @@ class DeepseekChatModelNode(ChatModelBase):
     group = ("model",)
     description = "DeepSeek V3 models (deepseek-chat, deepseek-reasoner with always-on CoT)"
 
+    credentials = (DeepSeekCredential,)
     Params = DeepseekChatModelParams

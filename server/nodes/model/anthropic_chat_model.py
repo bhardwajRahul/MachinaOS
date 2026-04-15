@@ -4,6 +4,8 @@ from pydantic import Field
 
 from ._base import ChatModelBase, ChatModelParams
 
+from credentials.llm import AnthropicCredential
+
 
 class AnthropicChatModelParams(ChatModelParams):
     top_k: Optional[int] = Field(default=40, alias="topK", ge=1, le=100)
@@ -23,4 +25,5 @@ class AnthropicChatModelNode(ChatModelBase):
     group = ("model",)
     description = "Anthropic Claude models for conversation and analysis"
 
+    credentials = (AnthropicCredential,)
     Params = AnthropicChatModelParams

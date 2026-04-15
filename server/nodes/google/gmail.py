@@ -11,6 +11,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
+from credentials.google import GoogleCredential
+
 from ._base import build_google_service, run_sync, track_google_usage
 from ._gmail import fetch_email_details, format_message
 
@@ -94,7 +96,7 @@ class GmailNode(ActionNode):
         {"name": "output-main", "kind": "output", "position": "right",
          "label": "Output", "role": "main"},
     )
-    credentials = ()
+    credentials = (GoogleCredential,)
     annotations = {"destructive": False, "readonly": False, "open_world": True}
     task_queue = TaskQueue.REST_API
     usable_as_tool = True

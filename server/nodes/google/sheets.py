@@ -12,6 +12,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
+from credentials.google import GoogleCredential
+
 from ._base import build_google_service, run_sync, track_google_usage
 
 
@@ -68,6 +70,7 @@ class SheetsNode(ActionNode):
          "label": "Output", "role": "main"},
     )
     annotations = {"destructive": False, "readonly": False, "open_world": True}
+    credentials = (GoogleCredential,)
     task_queue = TaskQueue.REST_API
     usable_as_tool = True
 

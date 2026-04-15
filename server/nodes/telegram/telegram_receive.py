@@ -14,6 +14,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from services.plugin import NodeContext, Operation, TaskQueue, TriggerNode
 
+from credentials.telegram import TelegramCredential
+
 
 class TelegramReceiveParams(BaseModel):
     content_type_filter: Literal[
@@ -76,6 +78,7 @@ class TelegramReceiveNode(TriggerNode):
         {"name": "output-main", "kind": "output", "position": "right",
          "label": "Output", "role": "main"},
     )
+    credentials = (TelegramCredential,)
     task_queue = TaskQueue.TRIGGERS_EVENT
     mode = "event"
     event_type = "telegram_message_received"

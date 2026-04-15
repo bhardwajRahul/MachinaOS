@@ -8,6 +8,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
+from credentials.google_maps import GoogleMapsCredential
+
 
 class GmapsCreateParams(BaseModel):
     center_lat: float = Field(default=0.0, alias="centerLat")
@@ -44,6 +46,7 @@ class GmapsCreateNode(ActionNode):
     )
     ui_hints = {"showLocationPanel": True}
     annotations = {"destructive": False, "readonly": True, "open_world": False}
+    credentials = (GoogleMapsCredential,)
     task_queue = TaskQueue.DEFAULT
 
     Params = GmapsCreateParams

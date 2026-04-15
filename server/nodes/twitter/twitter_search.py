@@ -9,6 +9,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
+from credentials.twitter import TwitterCredential
+
 from ._base import (
     call_with_retry, format_tweet, includes_lookups,
     sync_search_recent, track_twitter_usage,
@@ -55,6 +57,7 @@ class TwitterSearchNode(ActionNode):
          "label": "Output", "role": "main"},
     )
     annotations = {"destructive": False, "readonly": True, "open_world": True}
+    credentials = (TwitterCredential,)
     task_queue = TaskQueue.REST_API
     usable_as_tool = True
 

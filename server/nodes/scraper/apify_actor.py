@@ -15,12 +15,14 @@ from pydantic import BaseModel, ConfigDict, Field
 from core.logging import get_logger
 from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
+from credentials.apify import ApifyCredential
+
 logger = get_logger(__name__)
 
 
 async def _get_apify_client():
-    from apify_client import ApifyClientAsync  # lazy — optional dep
     """Return an authenticated Apify client, or None if no token saved."""
+    from apify_client import ApifyClientAsync  # lazy — optional dep
     from core.container import container
     auth_service = container.auth_service()
     api_token = await auth_service.get_api_key("apify", "default")
@@ -146,6 +148,7 @@ class ApifyActorNode(ActionNode):
         {"name": "output-main", "kind": "output", "position": "right", "label": "Output", "role": "main"},
     )
     annotations = {"destructive": False, "readonly": True, "open_world": True}
+    credentials = (ApifyCredential,)
     task_queue = TaskQueue.REST_API
     usable_as_tool = True
 

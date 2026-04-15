@@ -9,6 +9,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
+from credentials.twitter import TwitterCredential
+
 from ._base import (
     call_with_retry, format_response, get_my_user_id, track_twitter_usage,
 )
@@ -103,6 +105,7 @@ class TwitterSendNode(ActionNode):
          "label": "Output", "role": "main"},
     )
     annotations = {"destructive": False, "readonly": False, "open_world": True}
+    credentials = (TwitterCredential,)
     task_queue = TaskQueue.MESSAGING
     usable_as_tool = True
 
