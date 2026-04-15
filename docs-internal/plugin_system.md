@@ -386,6 +386,19 @@ every CI run. Examples:
 - Wave 11.D.0 — `edge_walker` extracted to services/plugin/.
 - Wave 11.D.1-6 — Handler bodies inlined into plugins (trivial
   wrappers, code executors, HTTP/proxy, polling triggers, agents).
+- Wave 11.D.4 — Google Workspace (gmail / calendar / drive / sheets /
+  tasks / contacts) inlined under `nodes/google/`, shared
+  `_base.py` + `_gmail.py` helpers.
+- Wave 11.D.7 — Document pipeline (httpScraper, fileDownloader,
+  documentParser, textChunker, embeddingGenerator, vectorStore)
+  inlined under `nodes/document/`.
+- Wave 11.D.8 — Twitter / Crawlee / Apify inlined. Twitter shares
+  `nodes/twitter/_base.py` for client + XDK helpers.
+- Wave 11.D.9 — WhatsApp + Social inlined into `nodes/whatsapp/_base.py`
+  and `nodes/social/_base.py` (full bodies, RPC dispatch still via
+  `routers.whatsapp`).
+- Wave 11.D.10 — `utility.py` split across 12 plugin files (maps,
+  text, workflow start, timer, cron, console, team monitor, chat).
 - Wave 11.D.11 — Auto-populate trigger registries.
 - Wave 11.D.12 — Fast-path contract invariants.
 - Wave 11.D.13 — Sunset empty bulk files + dead dispatch.
@@ -393,5 +406,7 @@ every CI run. Examples:
 - Wave 11.E — (next) Declarative credentials consolidation.
 - Wave 11.G — (this file) Docs + packaging.
 
-Deferred handler inlines (11.D.4, 11.D.7–10) are non-blocking polish;
-current delegation is clean.
+Every handler body now lives on its plugin. `services/handlers/` keeps
+only small shared helpers (`google_auth.py`, `triggers.py`) and the
+`tools.py` AI-tool dispatcher — everything else is gone (~8K LOC moved
+or deleted across 11.D.4–10).
