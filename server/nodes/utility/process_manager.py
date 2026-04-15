@@ -54,11 +54,41 @@ class ProcessManagerNode(ActionNode):
 
     @Operation("dispatch")
     async def dispatch(self, ctx: NodeContext, params: ProcessManagerParams) -> Any:
-        from services.handlers.process import handle_process_manager
-        response = await handle_process_manager(
-            node_id=ctx.node_id, node_type=self.type,
-            parameters=params.model_dump(by_alias=True), context=ctx.raw,
-        )
-        if response.get("success"):
-            return response.get("result") or response
-        raise RuntimeError(response.get("error") or "Process manager failed")
+        """Inlined from handlers/process.py (Wave 11.D.1)."""
+        import os
+        from services.process_service import get_process_service
+
+        svc = get_process_service()
+        workflow_id = ctx.workflow_id or "default"
+        workspace_dir = ctx.workspace_dir or ""
+        # Each agent node gets its own subfolder in the workspace.
+        agent_dir = os.path.join(workspace_dir, ctx.node_id) if workspace_dir else ""
+
+        op = params.operation
+        name = _clean(params.name)
+
+        if op == "start":
+            return await svc.start(
+                name=name,
+                command=_clean(params.command),
+                workflow_id=workflow_id,
+                working_directory=_clean(params.cwd) or agent_dir,
+            )
+        if op == "stop":
+            return await svc.stop(name, workflow_id)
+        if op == "restart":
+            return await svc.restart(name, workflow_id)
+        if op == "send_input":
+            return await svc.send_input(name, workflow_id, _clean(params.input_text))
+        if op == "list":
+            return {"processes": svc.list_processes(workflow_id)}
+        if op == "get_output":
+            return svc.get_output(name, workflow_id, params.stream, params.tail, 0)
+        raise RuntimeError(f"Unknown operation: {op}")
+
+
+def _clean(val: str) -> str:
+    """LLMs sometimes pass literal 'None' string instead of omitting the field."""
+    if not val or val == "None":
+        return ""
+    return val

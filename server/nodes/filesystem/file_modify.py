@@ -49,11 +49,33 @@ class FileModifyNode(ActionNode):
 
     @Operation("modify")
     async def modify(self, ctx: NodeContext, params: FileModifyParams) -> Any:
-        from services.handlers.filesystem import handle_file_modify
-        response = await handle_file_modify(
-            node_id=ctx.node_id, node_type=self.type,
-            parameters=params.model_dump(by_alias=True), context=ctx.raw,
-        )
-        if response.get("success"):
-            return response.get("result") or response
-        raise RuntimeError(response.get("error") or "File modify failed")
+        """Inlined from handlers/filesystem.py (Wave 11.D.1)."""
+        import asyncio
+        from ._backend import get_backend
+
+        if not params.file_path:
+            raise RuntimeError("file_path is required")
+        backend = get_backend(params.model_dump(by_alias=True), ctx.raw)
+
+        if params.operation == "write":
+            result = await asyncio.to_thread(backend.write, params.file_path, params.content)
+            if result.error:
+                raise RuntimeError(result.error)
+            return {"operation": "write", "file_path": result.path or params.file_path}
+
+        if params.operation == "edit":
+            if not params.old_string:
+                raise RuntimeError("old_string is required for edit")
+            result = await asyncio.to_thread(
+                backend.edit, params.file_path, params.old_string, params.new_string,
+                replace_all=params.replace_all,
+            )
+            if result.error:
+                raise RuntimeError(result.error)
+            return {
+                "operation": "edit",
+                "file_path": result.path or params.file_path,
+                "occurrences": result.occurrences,
+            }
+
+        raise RuntimeError(f"Unknown operation: {params.operation}")

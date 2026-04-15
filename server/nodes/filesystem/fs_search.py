@@ -46,11 +46,46 @@ class FsSearchNode(ActionNode):
 
     @Operation("search")
     async def search(self, ctx: NodeContext, params: FsSearchParams) -> Any:
-        from services.handlers.filesystem import handle_fs_search
-        response = await handle_fs_search(
-            node_id=ctx.node_id, node_type=self.type,
-            parameters=params.model_dump(by_alias=True), context=ctx.raw,
-        )
-        if response.get("success"):
-            return response.get("result") or response
-        raise RuntimeError(response.get("error") or "FS search failed")
+        """Inlined from handlers/filesystem.py (Wave 11.D.1)."""
+        import asyncio
+        from ._backend import get_backend
+
+        backend = get_backend(params.model_dump(by_alias=True), ctx.raw)
+
+        if params.mode == "ls":
+            entries = await asyncio.to_thread(backend.ls_info, params.path)
+            return {
+                "path": params.path,
+                "entries": [dict(e) for e in entries],
+                "count": len(entries),
+            }
+
+        if params.mode == "glob":
+            if not params.pattern:
+                raise RuntimeError("pattern is required for glob mode")
+            matches = await asyncio.to_thread(
+                backend.glob_info, params.pattern, path=params.path,
+            )
+            return {
+                "path": params.path,
+                "pattern": params.pattern,
+                "matches": [dict(m) for m in matches],
+                "count": len(matches),
+            }
+
+        if params.mode == "grep":
+            if not params.pattern:
+                raise RuntimeError("pattern is required for grep mode")
+            result = await asyncio.to_thread(
+                backend.grep_raw, params.pattern, path=params.path,
+            )
+            if isinstance(result, str):
+                raise RuntimeError(result)
+            return {
+                "path": params.path,
+                "pattern": params.pattern,
+                "matches": [dict(m) for m in result],
+                "count": len(result),
+            }
+
+        raise RuntimeError(f"Unknown mode: {params.mode}")

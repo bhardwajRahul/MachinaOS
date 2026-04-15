@@ -55,11 +55,6 @@ class EmailSendNode(ActionNode):
 
     @Operation("send", cost={"service": "email", "action": "send", "count": 1})
     async def send(self, ctx: NodeContext, params: EmailSendParams) -> Any:
-        from services.handlers.email import handle_email_send
-        response = await handle_email_send(
-            node_id=ctx.node_id, node_type=self.type,
-            parameters=params.model_dump(by_alias=True), context=ctx.raw,
-        )
-        if response.get("success"):
-            return response.get("result") or response
-        raise RuntimeError(response.get("error") or "Email send failed")
+        # Body inlined from handlers/email.py (Wave 11.D.1).
+        from services.email_service import get_email_service
+        return await get_email_service().send(params.model_dump(by_alias=True))

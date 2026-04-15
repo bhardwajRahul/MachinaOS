@@ -99,12 +99,100 @@ class TelegramSendNode(ActionNode):
 
     @Operation("send", cost={"service": "telegram", "action": "send", "count": 1})
     async def send(self, ctx: NodeContext, params: TelegramSendParams) -> Any:
-        from services.handlers.telegram import handle_telegram_send
-        payload = params.model_dump(by_alias=True)
-        response = await handle_telegram_send(
-            node_id=ctx.node_id, node_type=self.type,
-            parameters=payload, context=ctx.raw,
+        """Inlined from handlers/telegram.py:handle_telegram_send (Wave 11.D.1)."""
+        from core.logging import get_logger
+        from services.telegram_service import get_telegram_service
+
+        log = get_logger(__name__)
+        service = get_telegram_service()
+        if not service.connected:
+            raise RuntimeError(
+                "Telegram bot not connected. Add bot token in Credentials.",
+            )
+
+        if params.recipient_type == "self":
+            chat_id = service.owner_chat_id
+            if not chat_id:
+                try:
+                    from core.container import container
+                    saved = await container.auth_service().get_api_key("telegram_owner_chat_id")
+                    if saved:
+                        owner_id = int(saved)
+                        await service.set_owner(owner_id)
+                        chat_id = owner_id
+                        log.info(f"[Telegram] Owner restored from credentials: {owner_id}")
+                except Exception as e:
+                    log.warning(f"[Telegram] Failed to restore owner: {e}")
+            if not chat_id:
+                raise RuntimeError(
+                    "Bot owner not detected. Send any private message to your bot "
+                    "on Telegram to auto-detect, or set TELEGRAM_OWNER_CHAT_ID in .env",
+                )
+        else:
+            chat_id = params.chat_id
+            if not chat_id:
+                raise RuntimeError("chat_id is required")
+
+        parse_mode = params.parse_mode if params.parse_mode != "None" else None
+        reply_to = int(params.reply_to_message_id) if params.reply_to_message_id else None
+
+        common = dict(
+            chat_id=chat_id,
+            disable_notification=params.silent,
+            reply_to_message_id=reply_to,
         )
-        if response.get("success"):
-            return response.get("result") or response
-        raise RuntimeError(response.get("error") or "Telegram send failed")
+        mt = params.message_type
+        if mt == "text":
+            if not params.text:
+                raise RuntimeError("text is required for text message")
+            result = await service.send_message(
+                text=params.text, parse_mode=parse_mode, **common,
+            )
+        elif mt == "photo":
+            if not params.media_url:
+                raise RuntimeError("media_url is required for photo message")
+            result = await service.send_photo(
+                photo=params.media_url, caption=params.caption or None,
+                parse_mode=parse_mode, **common,
+            )
+        elif mt == "document":
+            if not params.media_url:
+                raise RuntimeError("media_url is required for document message")
+            result = await service.send_document(
+                document=params.media_url, caption=params.caption or None,
+                parse_mode=parse_mode, **common,
+            )
+        elif mt == "location":
+            if params.latitude is None or params.longitude is None:
+                raise RuntimeError(
+                    "latitude and longitude are required for location message",
+                )
+            result = await service.send_location(
+                latitude=float(params.latitude),
+                longitude=float(params.longitude),
+                **common,
+            )
+        elif mt == "contact":
+            if not params.phone or not params.first_name:
+                raise RuntimeError(
+                    "phone and first_name are required for contact message",
+                )
+            result = await service.send_contact(
+                phone_number=params.phone,
+                first_name=params.first_name,
+                last_name=params.last_name or None,
+                **common,
+            )
+        else:
+            raise RuntimeError(f"Unsupported message type: {mt}")
+
+        log.info(
+            f"[Telegram] Message sent: type={mt}, chat={chat_id}, "
+            f"msg_id={result.get('message_id')}",
+        )
+        return {
+            "message_id": result.get("message_id"),
+            "chat_id": result.get("chat_id"),
+            "message_type": mt,
+            "date": result.get("date"),
+        }

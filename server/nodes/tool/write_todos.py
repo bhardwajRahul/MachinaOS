@@ -52,11 +52,28 @@ class WriteTodosNode(ToolNode):
 
     @Operation("write")
     async def write(self, ctx: NodeContext, params: WriteTodosParams) -> Any:
-        from services.handlers.todo import execute_write_todos
-        config = {
-            "node_id": ctx.node_id,
-            "workspace_dir": ctx.workspace_dir or "",
-            "workflow_id": ctx.workflow_id,
-            "session_id": ctx.session_id,
+        """Inlined from handlers/todo.py (Wave 11.D.1)."""
+        from core.logging import get_logger
+        from services.todo_service import get_todo_service
+
+        session_key = ctx.workflow_id or ctx.node_id or "default"
+        service = get_todo_service()
+        stored = service.write(session_key, [t.model_dump() for t in params.todos])
+
+        # Real-time UI broadcast (optional; broadcaster lives on ctx.raw).
+        broadcaster = ctx.raw.get("broadcaster")
+        if broadcaster:
+            await broadcaster.update_node_status(
+                ctx.node_id, "executing",
+                {"phase": "todo_update", "todos": stored},
+                workflow_id=ctx.workflow_id,
+            )
+
+        get_logger(__name__).info(
+            "[WriteTodos] Updated %d todos (session=%s)", len(stored), session_key,
+        )
+        return {
+            "message": f"Updated todo list ({len(stored)} items)",
+            "todos": service.format_for_llm(session_key),
+            "count": len(stored),
         }
-        return await execute_write_todos(params.model_dump(), config)

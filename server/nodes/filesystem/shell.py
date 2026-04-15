@@ -47,11 +47,33 @@ class ShellNode(ActionNode):
 
     @Operation("execute")
     async def execute_op(self, ctx: NodeContext, params: ShellParams) -> Any:
-        from services.handlers.filesystem import handle_shell
-        response = await handle_shell(
-            node_id=ctx.node_id, node_type=self.type,
-            parameters=params.model_dump(by_alias=True), context=ctx.raw,
+        """Inlined from handlers/filesystem.py (Wave 11.D.1)."""
+        import asyncio
+        from core.logging import get_logger
+        from ._backend import get_backend
+
+        log = get_logger(__name__)
+        backend = get_backend(params.model_dump(by_alias=True), ctx.raw)
+        log.info(
+            "[Shell] Executing (non-blocking): %s (timeout=%ds)",
+            params.command[:200], params.timeout,
         )
-        if response.get("success"):
-            return response.get("result") or response
-        raise RuntimeError(response.get("error") or "Shell command failed")
+        result = await asyncio.to_thread(
+            backend.execute, params.command, timeout=params.timeout,
+        )
+        if result.exit_code == 124:
+            log.warning("[Shell] Timed out after %ds: %s", params.timeout, params.command[:100])
+        elif result.exit_code != 0:
+            log.warning(
+                "[Shell] Non-zero exit (%d): %s -> %s",
+                result.exit_code, params.command[:100], result.output[:300],
+            )
+        else:
+            log.info("[Shell] Completed: exit=%d len=%d", result.exit_code, len(result.output))
+
+        return {
+            "stdout": result.output,
+            "exit_code": result.exit_code,
+            "truncated": result.truncated,
+            "command": params.command,
+        }

@@ -46,11 +46,15 @@ class FileReadNode(ActionNode):
 
     @Operation("read")
     async def read(self, ctx: NodeContext, params: FileReadParams) -> Any:
-        from services.handlers.filesystem import handle_file_read
-        response = await handle_file_read(
-            node_id=ctx.node_id, node_type=self.type,
-            parameters=params.model_dump(by_alias=True), context=ctx.raw,
+        """Inlined from handlers/filesystem.py (Wave 11.D.1)."""
+        import asyncio
+        from ._backend import get_backend
+
+        if not params.file_path:
+            raise RuntimeError("file_path is required")
+        backend = get_backend(params.model_dump(by_alias=True), ctx.raw)
+        content = await asyncio.to_thread(
+            backend.read, params.file_path,
+            offset=params.offset, limit=params.limit,
         )
-        if response.get("success"):
-            return response.get("result") or response
-        raise RuntimeError(response.get("error") or "File read failed")
+        return {"content": content, "file_path": params.file_path}
