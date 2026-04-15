@@ -138,58 +138,15 @@ class NodeExecutor:
         from services.node_registry import _HANDLER_REGISTRY as _PLUGIN_HANDLERS
         registry = {
             # Workflow control
-            'start': handle_start,
-            'cronScheduler': handle_cron_scheduler,
-            'timer': handle_timer,
+            # start / cronScheduler / timer — migrated to nodes/{workflow,scheduler}/*.py (Wave 11.C).
             # AI agents — all migrated to nodes/agent/*.py (Wave 11.C).
             # Plugin handlers win via registry.update(_PLUGIN_HANDLERS) merge below.
             # simpleMemory + masterSkill: migrated to nodes/skill/*.py (Wave 11.C).
             # Maps — all 3 migrated to nodes/location/*.py (Wave 11.C).
-            # Text
-            'textGenerator': partial(handle_text_generator, text_service=self.text_service),
-            'fileHandler': partial(handle_file_handler, text_service=self.text_service),
-            # WhatsApp / Telegram / Twitter / Email send+read — all migrated to
-            # nodes/{whatsapp,telegram,twitter,email}/*.py (Wave 11.C).
-            'emailReceive': handle_email_receive,    # polling trigger, deferred
-            # Google Workspace — all 7 migrated to nodes/google/*.py (Wave 11.B/C).
-            # Search — all 3 migrated to nodes/search/*.py (Wave 11.B/C).
-            # Social (unified messaging)
-            # Note: socialReceive handled in _dispatch with connected_outputs
-            # socialSend: migrated to nodes/social/social_send.py (Wave 11.C).
-            # Chat — chatSend / chatHistory migrated to nodes/chat/*.py (Wave 11.C).
-            # HTTP
-            'httpRequest': handle_http_request,
-            # Document processing
-            'httpScraper': handle_http_scraper,
-            'fileDownloader': handle_file_downloader,
-            'documentParser': handle_document_parser,
-            'textChunker': handle_text_chunker,
-            'embeddingGenerator': handle_embedding_generator,
-            'vectorStore': handle_vector_store,
-            # Task management
-            'taskManager': handle_task_manager,
-            # Todo planning (dual-purpose: workflow node + AI tool)
-            'writeTodos': handle_write_todos,
-            # Process manager (dual-purpose: workflow node + AI tool)
-            'processManager': handle_process_manager,
-            # Team monitoring
-            'teamMonitor': handle_team_monitor,
-            # Apify web scraping
-            'apifyActor': handle_apify_actor,
-            # Crawlee web scraping
-            'crawleeScraper': handle_crawlee_scraper,
-            # Browser automation (agent-browser CLI)
-            'browser': handle_browser,
-            # Proxy nodes
-            'proxyRequest': handle_proxy_request,
-            'proxyStatus': handle_proxy_status,
-            'proxyConfig': handle_proxy_config,
-            # Filesystem and shell nodes (deepagents backends)
-            'fileRead': handle_file_read,
-            'fileModify': handle_file_modify,
-            'shell': handle_shell,
-            'fsSearch': handle_fs_search,
-            # Note: 'console' handled in _dispatch with connected_outputs
+            # All other node types migrated to plugin classes under nodes/*/.
+            # Plugin handlers register themselves into _PLUGIN_HANDLERS via
+            # BaseNode.__init_subclass__ at import time. The merge below is
+            # now the sole population of the registry.
         }
 
         # AI chat models — all 9 migrated to nodes/model/*.py (Wave 11.C).
