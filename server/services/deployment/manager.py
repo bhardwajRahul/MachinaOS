@@ -700,13 +700,15 @@ class DeploymentManager:
         Establishes a baseline of existing emails to avoid triggering on old messages.
         """
         async def poll(queue: asyncio.Queue, is_running_fn: Callable):
-            from services.handlers.gmail import (
-                _get_gmail_service, _poll_gmail_ids,
-                _fetch_email_details, _mark_email_as_read
+            from nodes.google._base import build_google_service
+            from nodes.google._gmail import (
+                poll_gmail_ids as _poll_gmail_ids,
+                fetch_email_details as _fetch_email_details,
+                mark_email_as_read as _mark_email_as_read,
             )
 
             # Authenticate with Gmail API
-            service = await _get_gmail_service(params, {})
+            service = await build_google_service("gmail", "v1", params, {})
 
             poll_interval = max(10, min(3600, params.get('poll_interval', 60)))
             filter_query = params.get('filter_query', 'is:unread')

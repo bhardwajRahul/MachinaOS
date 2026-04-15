@@ -1,26 +1,38 @@
-"""Google Drive — Wave 11.C migration."""
+"""Google Drive — Wave 11.D.4 inlined."""
 
 from __future__ import annotations
 
-from typing import Any, Literal, Optional
+import base64
+import io
+from typing import List, Literal, Optional
 
+import httpx
+from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 from pydantic import BaseModel, ConfigDict, Field
 
 from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
+from ._base import build_google_service, run_sync, track_google_usage
+
 
 class DriveParams(BaseModel):
     operation: Literal["upload", "download", "list", "share"] = "list"
-    file_id: str = Field(default="", alias="fileId")
-    file_name: str = Field(default="", alias="fileName")
-    file_path: str = Field(default="", alias="filePath")
-    folder_id: str = Field(default="", alias="folderId")
-    mime_type: str = Field(default="", alias="mimeType")
-    share_email: str = Field(default="", alias="shareEmail")
-    share_role: Literal["reader", "writer", "commenter"] = Field(
-        default="reader", alias="shareRole",
-    )
+    file_id: Optional[str] = Field(default=None, alias="fileId")
+    filename: Optional[str] = None
+    file_url: Optional[str] = Field(default=None, alias="fileUrl")
+    file_content: Optional[str] = Field(default=None, alias="fileContent")
+    folder_id: Optional[str] = Field(default=None, alias="folderId")
+    mime_type: str = Field(default="application/octet-stream", alias="mimeType")
+    description: Optional[str] = None
+    output_format: Literal["base64", "url"] = Field(default="base64", alias="outputFormat")
+    query: Optional[str] = None
+    file_types: str = Field(default="all", alias="fileTypes")
+    order_by: str = Field(default="modifiedTime desc", alias="orderBy")
     max_results: int = Field(default=20, alias="maxResults", ge=1, le=1000)
+    email: Optional[str] = None
+    role: str = "reader"
+    send_notification: bool = Field(default=True, alias="sendNotification")
+    message: Optional[str] = None
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 
@@ -28,10 +40,30 @@ class DriveParams(BaseModel):
 class DriveOutput(BaseModel):
     operation: Optional[str] = None
     file_id: Optional[str] = None
-    files: Optional[list] = None
-    download_path: Optional[str] = None
+    name: Optional[str] = None
+    mime_type: Optional[str] = None
+    size: Optional[int] = None
+    web_link: Optional[str] = None
+    download_link: Optional[str] = None
+    download_url: Optional[str] = None
+    created_time: Optional[str] = None
+    content_base64: Optional[str] = None
+    files: Optional[List[dict]] = None
+    count: Optional[int] = None
+    next_page_token: Optional[str] = None
+    permission_id: Optional[str] = None
+    file_name: Optional[str] = None
+    shared_with: Optional[str] = None
 
     model_config = ConfigDict(extra="allow")
+
+
+_FILE_TYPE_QUERY = {
+    'folder': "mimeType = 'application/vnd.google-apps.folder'",
+    'document': "mimeType = 'application/vnd.google-apps.document'",
+    'spreadsheet': "mimeType = 'application/vnd.google-apps.spreadsheet'",
+    'image': "mimeType contains 'image/'",
+}
 
 
 class DriveNode(ActionNode):
@@ -57,12 +89,158 @@ class DriveNode(ActionNode):
     Output = DriveOutput
 
     @Operation("dispatch", cost={"service": "drive", "action": "op", "count": 1})
-    async def dispatch(self, ctx: NodeContext, params: DriveParams) -> Any:
-        from services.handlers.drive import handle_google_drive
-        response = await handle_google_drive(
-            node_id=ctx.node_id, node_type=self.type,
-            parameters=params.model_dump(by_alias=True), context=ctx.raw,
-        )
-        if response.get("success"):
-            return response.get("result") or response
-        raise RuntimeError(response.get("error") or "Drive op failed")
+    async def dispatch(self, ctx: NodeContext, params: DriveParams) -> DriveOutput:
+        svc = await build_google_service("drive", "v3", params.model_dump(by_alias=True), ctx.raw)
+        files_svc = svc.files()
+        op = params.operation
+
+        if op == "upload":
+            if not params.filename:
+                raise RuntimeError("Filename is required")
+            if not params.file_url and not params.file_content:
+                raise RuntimeError("Either file_url or file_content is required")
+
+            metadata = {'name': params.filename}
+            if params.folder_id:
+                metadata['parents'] = [params.folder_id]
+            if params.description:
+                metadata['description'] = params.description
+
+            mime_type = params.mime_type
+            if params.file_url:
+                async with httpx.AsyncClient() as client:
+                    resp = await client.get(params.file_url, timeout=60.0)
+                    resp.raise_for_status()
+                    file_bytes = resp.content
+                    if mime_type == 'application/octet-stream' and 'content-type' in resp.headers:
+                        mime_type = resp.headers['content-type'].split(';')[0]
+            else:
+                file_bytes = base64.b64decode(params.file_content)
+
+            media = MediaIoBaseUpload(io.BytesIO(file_bytes), mimetype=mime_type, resumable=True)
+            result = await run_sync(lambda: files_svc.create(
+                body=metadata, media_body=media,
+                fields='id, name, mimeType, size, webViewLink, webContentLink, createdTime',
+            ).execute())
+            await track_google_usage("google_drive", ctx.node_id, "upload", 1, ctx.raw)
+            return DriveOutput(
+                operation="upload",
+                file_id=result.get('id'),
+                name=result.get('name'),
+                mime_type=result.get('mimeType'),
+                size=int(result.get('size')) if result.get('size') else None,
+                web_link=result.get('webViewLink'),
+                download_link=result.get('webContentLink'),
+                created_time=result.get('createdTime'),
+            )
+
+        if op == "download":
+            if not params.file_id:
+                raise RuntimeError("File ID is required")
+
+            metadata = await run_sync(lambda: files_svc.get(
+                fileId=params.file_id,
+                fields='id, name, mimeType, size, webViewLink, webContentLink',
+            ).execute())
+
+            if params.output_format == "url":
+                await track_google_usage("google_drive", ctx.node_id, "download", 1, ctx.raw)
+                return DriveOutput(
+                    operation="download",
+                    file_id=metadata.get('id'),
+                    name=metadata.get('name'),
+                    mime_type=metadata.get('mimeType'),
+                    size=int(metadata.get('size')) if metadata.get('size') else None,
+                    download_url=metadata.get('webContentLink'),
+                    web_link=metadata.get('webViewLink'),
+                )
+
+            def _download():
+                request = files_svc.get_media(fileId=params.file_id)
+                buf = io.BytesIO()
+                downloader = MediaIoBaseDownload(buf, request)
+                done = False
+                while not done:
+                    _, done = downloader.next_chunk()
+                return buf.getvalue()
+
+            file_bytes = await run_sync(_download)
+            await track_google_usage("google_drive", ctx.node_id, "download", 1, ctx.raw)
+            return DriveOutput(
+                operation="download",
+                file_id=metadata.get('id'),
+                name=metadata.get('name'),
+                mime_type=metadata.get('mimeType'),
+                size=len(file_bytes),
+                content_base64=base64.b64encode(file_bytes).decode('utf-8'),
+            )
+
+        if op == "list":
+            query_parts = []
+            if params.folder_id:
+                query_parts.append(f"'{params.folder_id}' in parents")
+            if params.query:
+                query_parts.append(params.query)
+            if params.file_types in _FILE_TYPE_QUERY:
+                query_parts.append(_FILE_TYPE_QUERY[params.file_types])
+            query_parts.append("trashed = false")
+            full_query = ' and '.join(query_parts)
+
+            list_kwargs = {
+                'pageSize': min(params.max_results, 1000),
+                'fields': 'nextPageToken, files(id, name, mimeType, size, webViewLink, webContentLink, createdTime, modifiedTime, parents, owners)',
+                'orderBy': params.order_by,
+            }
+            if full_query:
+                list_kwargs['q'] = full_query
+
+            result = await run_sync(lambda: files_svc.list(**list_kwargs).execute())
+            raw = result.get('files', [])
+            formatted = [{
+                "file_id": f.get('id'),
+                "name": f.get('name'),
+                "mime_type": f.get('mimeType'),
+                "size": f.get('size'),
+                "web_link": f.get('webViewLink'),
+                "download_link": f.get('webContentLink'),
+                "created_time": f.get('createdTime'),
+                "modified_time": f.get('modifiedTime'),
+                "parent_ids": f.get('parents', []),
+                "owner": f.get('owners', [{}])[0].get('emailAddress') if f.get('owners') else None,
+            } for f in raw]
+            await track_google_usage("google_drive", ctx.node_id, "list", len(formatted), ctx.raw)
+            return DriveOutput(
+                operation="list",
+                files=formatted,
+                count=len(formatted),
+                next_page_token=result.get('nextPageToken'),
+            )
+
+        if op == "share":
+            if not params.file_id:
+                raise RuntimeError("File ID is required")
+            if not params.email:
+                raise RuntimeError("Email address is required")
+
+            perm = await run_sync(lambda: svc.permissions().create(
+                fileId=params.file_id,
+                body={'type': 'user', 'role': params.role, 'emailAddress': params.email},
+                sendNotificationEmail=params.send_notification,
+                emailMessage=params.message or None,
+                fields='id, type, role, emailAddress',
+            ).execute())
+            file_info = await run_sync(lambda: files_svc.get(
+                fileId=params.file_id, fields='id, name, webViewLink',
+            ).execute())
+            await track_google_usage("google_drive", ctx.node_id, "share", 1, ctx.raw)
+            return DriveOutput(
+                operation="share",
+                permission_id=perm.get('id'),
+                file_id=params.file_id,
+                file_name=file_info.get('name'),
+                shared_with=params.email,
+                role=params.role,
+                web_link=file_info.get('webViewLink'),
+            )
+
+        raise RuntimeError(f"Unknown Drive operation: {op}")

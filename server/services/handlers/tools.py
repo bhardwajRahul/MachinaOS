@@ -1269,78 +1269,9 @@ async def _execute_twitter_user(args: Dict[str, Any],
 # through the plugin fast-path (nodes/google/gmail.py).
 
 
-# ============================================================================
-# GOOGLE WORKSPACE CONSOLIDATED TOOL HANDLERS
-# ============================================================================
-
-async def _execute_google_calendar(args: Dict[str, Any],
-                                   node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Google Calendar operations via consolidated dispatcher."""
-    from services.handlers.calendar import handle_google_calendar
-
-    parameters = {**node_params, **args}
-    return await handle_google_calendar(
-        node_id="tool_google_calendar",
-        node_type="calendar",
-        parameters=parameters,
-        context={}
-    )
-
-
-async def _execute_google_drive(args: Dict[str, Any],
-                                node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Google Drive operations via consolidated dispatcher."""
-    from services.handlers.drive import handle_google_drive
-
-    parameters = {**node_params, **args}
-    return await handle_google_drive(
-        node_id="tool_google_drive",
-        node_type="drive",
-        parameters=parameters,
-        context={}
-    )
-
-
-async def _execute_google_sheets(args: Dict[str, Any],
-                                 node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Google Sheets operations via consolidated dispatcher."""
-    from services.handlers.sheets import handle_google_sheets
-
-    parameters = {**node_params, **args}
-    return await handle_google_sheets(
-        node_id="tool_google_sheets",
-        node_type="sheets",
-        parameters=parameters,
-        context={}
-    )
-
-
-async def _execute_google_tasks(args: Dict[str, Any],
-                                node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Google Tasks operations via consolidated dispatcher."""
-    from services.handlers.tasks import handle_google_tasks
-
-    parameters = {**node_params, **args}
-    return await handle_google_tasks(
-        node_id="tool_google_tasks",
-        node_type="tasks",
-        parameters=parameters,
-        context={}
-    )
-
-
-async def _execute_google_contacts(args: Dict[str, Any],
-                                   node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Google Contacts operations via consolidated dispatcher."""
-    from services.handlers.contacts import handle_google_contacts
-
-    parameters = {**node_params, **args}
-    return await handle_google_contacts(
-        node_id="tool_google_contacts",
-        node_type="contacts",
-        parameters=parameters,
-        context={}
-    )
+# Wave 11.D.4: _execute_google_{calendar,drive,sheets,tasks,contacts} deleted.
+# Google Workspace tool execution now routes through the plugin fast-path
+# (nodes/google/*.py). These functions were defined but unreferenced.
 
 
 async def _execute_apify_actor(args: Dict[str, Any],

@@ -79,13 +79,7 @@ from .twitter import (
     handle_twitter_user,
 )
 
-# Google Workspace handlers (consolidated)
-from .gmail import handle_google_gmail, handle_gmail_receive
-from .calendar import handle_google_calendar
-from .drive import handle_google_drive
-from .sheets import handle_google_sheets
-from .tasks import handle_google_tasks
-from .contacts import handle_google_contacts
+# Google Workspace handlers inlined into nodes/google/*.py (Wave 11.D.4).
 
 # Social handlers (unified messaging)
 from .social import (
@@ -182,14 +176,6 @@ __all__ = [
     'handle_twitter_send',
     'handle_twitter_search',
     'handle_twitter_user',
-    # Google Workspace (consolidated)
-    'handle_google_gmail',
-    'handle_gmail_receive',
-    'handle_google_calendar',
-    'handle_google_drive',
-    'handle_google_sheets',
-    'handle_google_tasks',
-    'handle_google_contacts',
     # Social
     'handle_social_receive',
     'handle_social_send',

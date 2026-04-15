@@ -1,45 +1,29 @@
-"""Gmail — Wave 11.B reference migration (multi-op ActionNode).
-
-Demonstrates the ``@Operation`` dispatch pattern: three operations
-(send / search / read) declared as methods, dispatched on
-``parameters.operation`` automatically by :class:`BaseNode._pick_operation`.
-
-Replaces:
-- ``server/nodes/services.py:gmail`` metadata-only registration
-  (removed).
-- Legacy ``node_executor.py`` routes ``gmail`` → plugin handler via
-  the additive plugin registry merge — no code change in the executor.
-
-Per-op bodies delegate to the existing Google-auth + Google-API-client
-code in ``handlers/gmail.py``. 11.E converts to a declarative
-``GoogleCredential`` shared with calendar/drive/sheets.
-
-This migration also keeps the tool-mode path intact —
-``handlers/tools.py`` calls ``handle_google_gmail`` directly for
-AI-agent-invoked gmail operations. 11.D unifies that path.
-"""
+"""Gmail — Wave 11.D.4 inlined (multi-op ActionNode)."""
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, Dict, List, Literal, Optional
+import base64
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
+from ._base import build_google_service, run_sync, track_google_usage
+from ._gmail import fetch_email_details, format_message
+
 
 class GmailParams(BaseModel):
-    """All three ops share one Params model — per-field gating via
-    ``displayOptions.show`` hides irrelevant UI rows in the parameter
-    panel, same pattern the legacy ``GmailParams`` uses."""
-
     operation: Literal["send", "search", "read"] = "send"
 
-    # send
     to: str = Field(
         default="",
         json_schema_extra={"displayOptions": {"show": {"operation": ["send"]}}},
     )
+    cc: str = Field(default="", json_schema_extra={"displayOptions": {"show": {"operation": ["send"]}}})
+    bcc: str = Field(default="", json_schema_extra={"displayOptions": {"show": {"operation": ["send"]}}})
     subject: str = Field(
         default="",
         json_schema_extra={"displayOptions": {"show": {"operation": ["send"]}}},
@@ -52,8 +36,8 @@ class GmailParams(BaseModel):
             "displayOptions": {"show": {"operation": ["send"]}},
         },
     )
+    body_type: Literal["text", "html"] = Field(default="text", alias="bodyType")
 
-    # search
     query: str = Field(
         default="",
         json_schema_extra={
@@ -61,13 +45,15 @@ class GmailParams(BaseModel):
             "displayOptions": {"show": {"operation": ["search"]}},
         },
     )
+    max_results: int = Field(default=10, alias="maxResults", ge=1, le=100)
+    include_body: bool = Field(default=False, alias="includeBody")
 
-    # read
     message_id: str = Field(
         default="",
         alias="messageId",
         json_schema_extra={"displayOptions": {"show": {"operation": ["read"]}}},
     )
+    format: Literal["full", "minimal", "raw", "metadata"] = "full"
 
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
@@ -76,15 +62,19 @@ class GmailOutput(BaseModel):
     operation: Optional[str] = None
     message_id: Optional[str] = None
     thread_id: Optional[str] = None
-    emails: Optional[list] = None
-    count: Optional[int] = None
-    subject: Optional[str] = None
-    from_: Optional[str] = Field(default=None, alias="from")
+    label_ids: Optional[List[str]] = None
     to: Optional[str] = None
+    subject: Optional[str] = None
+    messages: Optional[List[dict]] = None
+    count: Optional[int] = None
+    query: Optional[str] = None
+    result_size_estimate: Optional[int] = None
+    from_: Optional[str] = Field(default=None, alias="from")
     date: Optional[str] = None
     body: Optional[str] = None
     snippet: Optional[str] = None
-    labels: Optional[list] = None
+    labels: Optional[List[str]] = None
+    attachments: Optional[List[dict]] = None
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 
@@ -104,8 +94,6 @@ class GmailNode(ActionNode):
         {"name": "output-main", "kind": "output", "position": "right",
          "label": "Output", "role": "main"},
     )
-    # Google OAuth stays on the legacy ``google_auth`` helper during
-    # thin-delegation phase. 11.E introduces ``GoogleCredential``.
     credentials = ()
     annotations = {"destructive": False, "readonly": False, "open_world": True}
     task_queue = TaskQueue.REST_API
@@ -114,32 +102,84 @@ class GmailNode(ActionNode):
     Params = GmailParams
     Output = GmailOutput
 
+    async def _service(self, ctx: NodeContext, params: GmailParams):
+        return await build_google_service(
+            "gmail", "v1", params.model_dump(by_alias=True), ctx.raw,
+        )
+
     @Operation("send", cost={"service": "gmail", "action": "send", "count": 1})
-    async def send(self, ctx: NodeContext, params: GmailParams) -> Dict[str, Any]:
-        from services.handlers.gmail import handle_gmail_send
-        return await self._delegate(handle_gmail_send, ctx, params)
+    async def send(self, ctx: NodeContext, params: GmailParams) -> GmailOutput:
+        if not params.to:
+            raise RuntimeError("Recipient email address (to) is required")
+        if not params.subject:
+            raise RuntimeError("Email subject is required")
+        if not params.body:
+            raise RuntimeError("Email body is required")
+
+        if params.body_type == "html":
+            message = MIMEMultipart('alternative')
+            message.attach(MIMEText(params.body, 'html'))
+        else:
+            message = MIMEText(params.body, 'plain')
+        message['to'] = params.to
+        message['subject'] = params.subject
+        if params.cc:
+            message['cc'] = params.cc
+        if params.bcc:
+            message['bcc'] = params.bcc
+
+        raw = base64.urlsafe_b64encode(message.as_bytes()).decode('utf-8')
+        svc = await self._service(ctx, params)
+        result = await run_sync(lambda: svc.users().messages().send(
+            userId='me', body={'raw': raw},
+        ).execute())
+        await track_google_usage("gmail", ctx.node_id, "send", 1, ctx.raw)
+        return GmailOutput(
+            operation="send",
+            message_id=result.get('id'),
+            thread_id=result.get('threadId'),
+            label_ids=result.get('labelIds', []),
+            to=params.to,
+            subject=params.subject,
+        )
 
     @Operation("search", cost={"service": "gmail", "action": "search", "count": 1})
-    async def search(self, ctx: NodeContext, params: GmailParams) -> Dict[str, Any]:
-        from services.handlers.gmail import handle_gmail_search
-        return await self._delegate(handle_gmail_search, ctx, params)
+    async def search(self, ctx: NodeContext, params: GmailParams) -> GmailOutput:
+        if not params.query:
+            raise RuntimeError("Search query is required")
+        svc = await self._service(ctx, params)
+        listing = await run_sync(lambda: svc.users().messages().list(
+            userId='me', q=params.query, maxResults=min(params.max_results, 100),
+        ).execute())
+
+        messages = listing.get('messages', [])
+        formatted = []
+        fmt = 'full' if params.include_body else 'metadata'
+        for msg in messages:
+            mid = msg.get('id')
+            detail = await run_sync(lambda m=mid: svc.users().messages().get(
+                userId='me', id=m, format=fmt,
+                metadataHeaders=['From', 'To', 'Subject', 'Date'],
+            ).execute())
+            formatted.append(format_message(detail, include_body=params.include_body))
+
+        await track_google_usage("gmail", ctx.node_id, "search", len(formatted), ctx.raw)
+        return GmailOutput(
+            operation="search",
+            messages=formatted,
+            count=len(formatted),
+            query=params.query,
+            result_size_estimate=listing.get('resultSizeEstimate', 0),
+        )
 
     @Operation("read", cost={"service": "gmail", "action": "read", "count": 1})
-    async def read(self, ctx: NodeContext, params: GmailParams) -> Dict[str, Any]:
-        from services.handlers.gmail import handle_gmail_read
-        return await self._delegate(handle_gmail_read, ctx, params)
-
-    async def _delegate(self, handler, ctx: NodeContext, params: GmailParams) -> Any:
-        """Call a legacy handler with the original ``parameters`` dict,
-        unwrap its ``{success, result, ...}`` envelope, return just the
-        ``result`` — :meth:`BaseNode._wrap_success` re-wraps.
-        """
-        payload = params.model_dump(by_alias=True)
-        response = await handler(
-            node_id=ctx.node_id, node_type=self.type,
-            parameters=payload, context=ctx.raw,
-        )
-        if response.get("success"):
-            return response.get("result") or response
-        # Surface failure via the BaseNode error path.
-        raise RuntimeError(response.get("error") or "gmail operation failed")
+    async def read(self, ctx: NodeContext, params: GmailParams) -> GmailOutput:
+        if not params.message_id:
+            raise RuntimeError("message_id is required")
+        svc = await self._service(ctx, params)
+        result = await run_sync(lambda: svc.users().messages().get(
+            userId='me', id=params.message_id, format=params.format,
+        ).execute())
+        await track_google_usage("gmail", ctx.node_id, "read", 1, ctx.raw)
+        formatted = format_message(result, include_body=(params.format == 'full'))
+        return GmailOutput(operation="read", **{k: v for k, v in formatted.items() if k != 'size_estimate'})
