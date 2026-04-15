@@ -121,3 +121,177 @@ class AndroidServiceBase(ActionNode, abstract=True):
         if isinstance(result, dict):
             return result.get("result") or result
         return result
+
+
+# ============================================================================
+# AI-tool-time dispatchers (Wave 11.E.3)
+# ----------------------------------------------------------------------------
+# When an Android service or the androidTool aggregator is connected to an
+# AI agent's input-tools handle, the LLM emits ``{action, parameters}`` —
+# different shape from the workflow-node Params schema. These two helpers
+# do the LLM-arg-to-service-call translation + status broadcast and are
+# called from ``services/handlers/tools.py:execute_tool`` for the
+# ``androidTool`` and ``ANDROID_SERVICE_NODE_TYPES`` branches.
+# ============================================================================
+
+
+async def _execute_with_broadcast(
+    *, target_node_id: Optional[str], workflow_id: Optional[str],
+    service_id: str, action: str, parameters: Dict[str, Any],
+    host: str, port: int, log_label: str,
+) -> Dict[str, Any]:
+    """Run an Android service call with broadcast status for the UI node."""
+    from services.android_service import AndroidService
+    from services.status_broadcaster import get_status_broadcaster
+
+    broadcaster = get_status_broadcaster()
+    if target_node_id:
+        await broadcaster.update_node_status(
+            target_node_id, "executing",
+            {"message": f"Executing {action} via {log_label}"},
+            workflow_id=workflow_id,
+        )
+
+    try:
+        result = await AndroidService().execute_service(
+            node_id=target_node_id or 'tool',
+            service_id=service_id,
+            action=action,
+            parameters=parameters,
+            android_host=host,
+            android_port=port,
+        )
+
+        if target_node_id:
+            if result.get('success'):
+                await broadcaster.update_node_status(
+                    target_node_id, "success",
+                    {"message": f"{action} completed", "result": result.get('result', {})},
+                    workflow_id=workflow_id,
+                )
+            else:
+                await broadcaster.update_node_status(
+                    target_node_id, "error",
+                    {"message": result.get('error', 'Unknown error')},
+                    workflow_id=workflow_id,
+                )
+
+        if result.get('success'):
+            return {
+                "success": True,
+                "service": service_id,
+                "action": action,
+                "data": result.get('result', {}).get('data', result.get('result', {})),
+            }
+        return {
+            "error": result.get('error', 'Unknown error'),
+            "service": service_id,
+            "action": action,
+        }
+    except Exception as e:
+        logger.error(f"[{log_label}] Unexpected error: {e}")
+        if target_node_id:
+            await broadcaster.update_node_status(
+                target_node_id, "error",
+                {"message": str(e)},
+                workflow_id=workflow_id,
+            )
+        return {"error": str(e)}
+
+
+async def execute_android_toolkit(
+    args: Dict[str, Any], config: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Route an LLM tool call through the Android toolkit aggregator.
+
+    Looks up the connected service in ``config['connected_services']``
+    by ``service_id``, then executes through the broadcast helper.
+    """
+    service_id = args.get('service_id', '')
+    action = args.get('action', '')
+    parameters = args.get('parameters') or {}
+
+    connected_services = config.get('connected_services', [])
+    if not service_id:
+        available = [s.get('service_id') or s.get('node_type') for s in connected_services]
+        return {
+            "error": "No service_id provided",
+            "hint": (
+                f"Available services: {', '.join(available)}"
+                if available else "No services connected"
+            ),
+        }
+
+    target_service = next(
+        (
+            s for s in connected_services
+            if (s.get('service_id') or s.get('node_type')) == service_id
+        ),
+        None,
+    )
+    if not target_service:
+        available = [s.get('service_id') or s.get('node_type') for s in connected_services]
+        return {
+            "error": f"Service '{service_id}' not connected to toolkit",
+            "available_services": available,
+        }
+
+    svc_params = target_service.get('parameters', {})
+    host = svc_params.get('android_host', 'localhost')
+    port = int(svc_params.get('android_port', 8888))
+    if not action:
+        action = svc_params.get('action') or target_service.get('action', 'status')
+
+    target_node_id = target_service.get('node_id')
+    workflow_id = config.get('workflow_id')
+
+    logger.info(
+        "[Android Toolkit] Executing %s.%s via '%s' (node: %s, workflow: %s)",
+        service_id, action, target_service.get('label'),
+        target_node_id, workflow_id,
+    )
+
+    return await _execute_with_broadcast(
+        target_node_id=target_node_id,
+        workflow_id=workflow_id,
+        service_id=service_id,
+        action=action,
+        parameters=parameters,
+        host=host, port=port,
+        log_label="Android Toolkit",
+    )
+
+
+async def execute_android_service_tool(
+    args: Dict[str, Any], config: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Route an LLM tool call to a directly-connected Android service node.
+
+    Uses ``SERVICE_ID_MAP[node_type]`` instead of the synthetic toolkit
+    indirection — the LLM addresses each service node by its own type.
+    """
+    node_type = config.get('node_type', '')
+    node_id = config.get('node_id', '')
+    node_params = config.get('parameters', {})
+    workflow_id = config.get('workflow_id')
+
+    service_id = SERVICE_ID_MAP.get(node_type, node_type)
+    action = args.get('action') or node_params.get('action', 'status')
+    parameters = args.get('parameters') or {}
+    host = node_params.get('android_host', 'localhost')
+    port = int(node_params.get('android_port', 8888))
+
+    logger.info(
+        "[Android Service] Executing %s.%s (node: %s, workflow: %s)",
+        service_id, action, node_id, workflow_id,
+    )
+
+    return await _execute_with_broadcast(
+        target_node_id=node_id,
+        workflow_id=workflow_id,
+        service_id=service_id,
+        action=action,
+        parameters=parameters,
+        host=host, port=port,
+        log_label="Android Service",
+    )
