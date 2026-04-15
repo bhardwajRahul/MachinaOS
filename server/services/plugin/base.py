@@ -239,6 +239,42 @@ class BaseNode:
 
         return self._wrap_success(start_time=start_time, result=result)
 
+    # ---- AI-tool invocation path ------------------------------------------
+
+    async def execute_as_tool(
+        self,
+        tool_args: Dict[str, Any],
+        node_params: Dict[str, Any],
+        context: NodeContext,
+    ) -> Dict[str, Any]:
+        """LLM-invoked tool call. The AI model supplies ``tool_args`` for
+        fields it decides to fill; ``node_params`` carries static config
+        the user set on the node (e.g. an API endpoint base URL). Merge
+        wins for the LLM so it can override.
+
+        Unwraps the :meth:`_wrap_success` envelope to a flat dict —
+        tool-call responses fed back into an LLM shouldn't include
+        execution_time / timestamp chrome. Errors surface as
+        ``{"error": "..."}`` the LLM can reason about.
+
+        ToolNode overrides :meth:`_wrap_success` to return flat, so this
+        method is idempotent there. ActionNode+``usable_as_tool`` classes
+        get their ``{success, result}`` envelope unwrapped.
+        """
+        merged = {**node_params, **tool_args}
+        envelope = await self.execute(context.node_id, merged, context)
+        # ToolNode skips the envelope wrap entirely — its _wrap_success
+        # returns the flat Output dict directly. Detect by the absence
+        # of the {success, ...} envelope keys.
+        if "success" not in envelope:
+            return envelope
+        if envelope.get("success") is False:
+            return {"error": envelope.get("error", "tool execution failed")}
+        result = envelope.get("result")
+        if isinstance(result, dict):
+            return result
+        return {"result": result}
+
     # ---- internals --------------------------------------------------------
 
     def _validate_params(self, parameters: Dict[str, Any]) -> BaseModel:

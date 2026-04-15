@@ -20,6 +20,30 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
+def _plugin_connection_factory(plugin_cls, context):
+    """Build a per-call :class:`Connection` factory bound to a plugin
+    class's declared credentials. Mirrors
+    ``services.plugin.base._make_connection_factory`` but usable from
+    this module without a circular import.
+    """
+    from services.plugin.connection import Connection
+
+    user_id = context.get("user_id", "owner")
+    session_id = context.get("session_id", "default")
+    creds_by_id = {c.id: c for c in plugin_cls.credentials}
+
+    def factory(credential_id: str):
+        cred_cls = creds_by_id.get(credential_id)
+        if cred_cls is None:
+            raise RuntimeError(
+                f"Plugin {plugin_cls.type} did not declare credential "
+                f"'{credential_id}' but tried to use it."
+            )
+        return Connection(cred_cls, user_id=user_id, session_id=session_id)
+
+    return factory
+
+
 # Track running delegated tasks for status checking
 _delegated_tasks: Dict[str, asyncio.Task] = {}
 
@@ -54,9 +78,27 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
 
     logger.info("[Tool] Executing '%s' (node_type=%s, workspace=%s)", tool_name, node_type, context['workspace_dir'])
 
-    # Calculator tool
-    if node_type == 'calculatorTool':
-        return await _execute_calculator(tool_args)
+    # ----------------------------------------------------------------
+    # Plugin fast-path (Wave 11.B.1): if this node_type is a
+    # BaseNode subclass, invoke BaseNode.execute_as_tool() — the
+    # plugin is the single source of truth for both workflow-node
+    # execution and AI-tool invocation. Legacy branches below only
+    # fire for node types not yet migrated to the plugin pattern.
+    # ----------------------------------------------------------------
+    from services.node_registry import get_node_class
+    plugin_cls = get_node_class(node_type)
+    if plugin_cls is not None:
+        from services.plugin import NodeContext
+        instance = plugin_cls()
+        ctx = NodeContext.from_legacy(
+            node_id=config.get('node_id', f'tool_{node_type}'),
+            node_type=node_type,
+            context={**context, 'parameters': node_params},
+            connection_factory=_plugin_connection_factory(plugin_cls, context),
+        )
+        return await instance.execute_as_tool(tool_args, node_params, ctx)
+
+    # calculatorTool: migrated to plugin (Wave 11.B). Handled by fast-path above.
 
     # HTTP Request tool (existing httpRequest node as tool)
     if node_type in ('httpRequest', 'httpRequestTool'):
@@ -143,8 +185,7 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
     # GOOGLE WORKSPACE TOOLS (consolidated: gmail, calendar, drive, sheets, tasks, contacts)
     # ========================================================================
 
-    if node_type == 'gmail':
-        return await _execute_google_gmail(tool_args, config.get('parameters', {}))
+    # gmail: migrated to plugin (Wave 11.B). Handled by fast-path above.
     if node_type == 'calendar':
         return await _execute_google_calendar(tool_args, config.get('parameters', {}))
     if node_type == 'drive':
@@ -164,9 +205,7 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
     if node_type in ANDROID_SERVICE_NODE_TYPES:
         return await _execute_android_service(tool_args, config)
 
-    # Brave Search (dual-purpose: workflow node + AI tool)
-    if node_type == 'braveSearch':
-        return await _execute_brave_search_tool(tool_args, config.get('parameters', {}))
+    # braveSearch: migrated to plugin (Wave 11.B). Handled by fast-path above.
 
     # Serper Search (dual-purpose: workflow node + AI tool)
     if node_type == 'serperSearch':
