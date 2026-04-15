@@ -329,13 +329,38 @@ Adds 16 invariants to the 108 Wave 10 suite → **124 total**:
 
 ### Status
 
-111 plugins live across 9 Temporal task queues. Handlers in
-`services/handlers/*.py` stay as implementations that plugins call
-(Wave 11.D.1–6 inlined the trivial ones into the plugin files; complex
-handlers like WhatsApp RPC + Google Workspace + document pipeline
-stay delegated — those migrations are deferred polish). Sunset of the
-empty `nodes/{agents,services,triggers,tools,utilities}.py` bulk files
-+ dead dispatcher fallbacks is complete (Wave 11.D.13).
+111 plugins live across 9 Temporal task queues (`rest-api`,
+`ai-heavy`, `code-exec`, `triggers-poll`, `triggers-event`, `android`,
+`browser`, `messaging`, `machina-default`). Handler bodies are fully
+inlined into plugin files — `services/handlers/` shrank from
+**12.8K LOC / 16 files → 1.1K LOC / 4 files**. Only cross-cutting
+orchestration remains: `tools.py` (AI-tool dispatch + agent
+delegation through `BaseNode.execute()` via the node registry),
+`google_auth.py`, `triggers.py`. Sunset of the empty
+`nodes/{agents,services,triggers,tools,utilities}.py` bulk files +
+dead dispatcher fallbacks is complete (Wave 11.D.13).
+
+### Sub-waves shipped
+
+- **11.A / B / B.1** — `BaseNode` hierarchy, `ActionNode` /
+  `TriggerNode` / `ToolNode`, `__init_subclass__` registry writes.
+- **11.C** — `@Operation` decorator + multi-op dispatch.
+- **11.D.0–13** — handler inlining, bulk-file sunset, trigger
+  registry auto-population, dispatcher cleanup.
+- **11.E** — declarative `Credential` subclasses
+  (`ApiKeyCredential`, `OAuth2Credential`) with `inject()` methods
+  and auto-registry via `Credential.__init_subclass__`.
+- **11.E.1** — credentials modularised into per-domain
+  `server/nodes/<group>/_credentials.py` files (or inline for
+  single-use). **Central `server/credentials/` directory deleted.**
+  18 `Credential` subclasses total.
+- **11.E.2 / E.3 / E.4** — credential polish + doc sync.
+- **11.F** — per-plugin Temporal activities
+  (`cls.as_activity()` named `node.{type}.v{version}`),
+  `TemporalWorkerPool` per task queue with tuned concurrency
+  (ai-heavy=4, rest-api=50, triggers-poll=100, etc.).
+- **11.G** — nodes cookbook (`server/nodes/README.md`) + CLAUDE.md
+  sync.
 
 ## References
 

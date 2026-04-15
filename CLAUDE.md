@@ -99,6 +99,12 @@ server/services/
 ├── claude_code_service.py   # Claude Code CLI wrapper (--max-budget-usd, session persistence)
 ├── claude_oauth.py          # Isolated Claude CLI auth (~/.claude-machina, no main-session impact)
 ├── tracked_http.py          # HTTPX event hooks for automatic API cost tracking
+├── whatsapp_service.py      # WhatsApp RPC proxy helpers (used by nodes/whatsapp/*, not an APIRouter)
+├── handlers/                # Cross-cutting orchestration only (Wave 11: 16 → 4 files, 12.8K → 1.1K LOC)
+│   ├── tools.py             # AI-tool dispatch + agent delegation (~821 LOC)
+│   ├── triggers.py          # Generic event-trigger handler
+│   ├── google_auth.py       # Shared OAuth credential helper
+│   └── __init__.py          # Docstring only
 ├── llm/                     # Native LLM provider SDKs (replaces LangChain for chat)
 │   ├── __init__.py          # Public API exports
 │   ├── protocol.py          # ThinkingConfig, Message, LLMResponse, LLMProvider Protocol
@@ -329,7 +335,7 @@ class NodeExecutor:
     def _build_handler_registry(self) -> Dict[str, Callable]:
         return {
             'start': handle_start,
-            'aiAgent': partial(handle_ai_agent, ai_service=self.ai_service),
+            'aiAgent': _dispatch_plugin_node,  # Wave 11: routes via BaseNode.execute()
             # ... registry-based dispatch instead of if-else chains
         }
 ```
@@ -837,7 +843,7 @@ Search API nodes that work BOTH as standalone workflow nodes AND as AI Agent too
 - Serper in **Scrapers** category (Google SERP scraping)
 
 ### Specialized AI Agents (15 nodes)
-Specialized agents are AI Agents pre-configured for specific domains. They inherit full AI Agent functionality (provider, model, prompt, system message, thinking/reasoning) while being tailored for specific capabilities. All specialized agents route to `handle_chat_agent` in the backend and support the same input handles. Node colors use centralized dracula theme constants imported from `client/src/styles/theme.ts`.
+Specialized agents are AI Agents pre-configured for specific domains. They inherit full AI Agent functionality (provider, model, prompt, system message, thinking/reasoning) while being tailored for specific capabilities. All specialized agents dispatch through `BaseNode.execute()` via the node registry (Wave 11) and support the same input handles. Node colors use centralized dracula theme constants imported from `client/src/styles/theme.ts`.
 
 **Input Handles:**
 - `input-main` - Main data input (auto-prompting fallback)
@@ -864,16 +870,13 @@ Specialized agents are AI Agents pre-configured for specific domains. They inher
 - **deep_agent**: Deep Agent - AI agent powered by LangChain DeepAgents with built-in filesystem tools (read, write, edit, glob, grep, execute), sub-agent delegation, auto-summarization, and todo planning. Routes to dedicated `handle_deep_agent` handler and `DeepAgentService` (not `handle_chat_agent`). Supports memory, skills, connected tools, and teammate delegation via `input-teammates`. See `docs-internal/deep_agent.md`.
 
 **Backend Routing:**
-Specialized agents are detected by `SPECIALIZED_AGENT_TYPES` and routed to `handle_chat_agent` (except agents with dedicated execution engines):
+Specialized agents are detected by `SPECIALIZED_AGENT_TYPES` and dispatched through `BaseNode.execute()` via the node registry (Wave 11). Dedicated engines: `rlm_agent` -> `RLMService`, `deep_agent` -> `DeepAgentService` (`services/agents/`).
 ```python
-# In node_executor.py - most specialized agents route to handle_chat_agent
 SPECIALIZED_AGENT_TYPES = {
     'android_agent', 'coding_agent', 'web_agent', 'task_agent', 'social_agent',
     'travel_agent', 'tool_agent', 'productivity_agent', 'payments_agent', 'consumer_agent',
     'autonomous_agent', 'orchestrator_agent', 'ai_employee',
 }
-# rlm_agent routes to handle_rlm_agent -> RLMService (dedicated handler + service)
-# deep_agent routes to handle_deep_agent -> DeepAgentService (services/agents/ package)
 ```
 
 **Team Lead Types (Agent Teams Pattern):**
@@ -1368,7 +1371,7 @@ Residential proxy provider management with geo-targeting, session control, and a
 | `server/services/proxy/service.py` | ProxyService singleton with provider selection and URL generation |
 | `server/services/proxy/providers.py` | TemplateProxyProvider for JSON url_template formatting |
 | `server/services/proxy/models.py` | ProxyProvider, RoutingRule, SessionType dataclasses |
-| `server/services/handlers/proxy.py` | Handler functions for proxy_config, proxy_request, proxy_status |
+| `server/nodes/proxy/proxy_config.py`, `proxy_request.py`, `proxy_status.py` | Plugin nodes (Wave 11); ProxyConfig 10-op matrix lives in `proxy_config.py` |
 | `server/skills/web_agent/proxy-config-skill/SKILL.md` | AI agent skill for proxy configuration |
 | `server/skills/web_agent/http-request-skill/SKILL.md` | HTTP request skill with proxy usage docs |
 
@@ -2388,11 +2391,7 @@ The Zeenie will:
 - Use LangGraph for tool execution when tools are connected
 
 ### Backend Handlers
-Both agents have dedicated handlers in `server/services/handlers/ai.py`:
-- `handle_ai_agent()` - Collects memory, skill, and tool data from connected nodes
-- `handle_chat_agent()` - Collects memory, skill, tool, and input data from connected nodes
-
-Both use the shared `_collect_agent_connections()` base function that:
+Wave 11: `handle_ai_agent` / `handle_chat_agent` were deleted. Agent execution now flows through `BaseNode.execute()` + `NodeContext.from_legacy()` via the node registry (`server/nodes/agent/`). Connection collection is handled by the agent node classes, which internally call `_collect_agent_connections()` to:
 - Scans edges for nodes connected to `input-memory`, `input-skill`, `input-tools`, `input-main`/`input-chat` handles
 - Returns a 4-tuple: `(memory_data, skill_data, tool_data, input_data)`
 - Handles MasterSkill expansion into individual skill entries
@@ -4038,7 +4037,7 @@ android_agent: {
 
 **Backend (4 files):**
 6. **constants.py**: Add to `AI_AGENT_TYPES` frozenset
-7. **node_executor.py**: Add handler registry entry mapping to `partial(handle_chat_agent, ...)`
+7. **Plugin file**: Add `server/nodes/agent/<name>.py` subclassing the chat-agent base; registry auto-wires via `BaseNode.__init_subclass__`
 8. **handlers/tools.py**: Add to delegation check tuple in `execute_tool()`
 9. **ai.py**: Add entries to `DEFAULT_TOOL_NAMES`, `DEFAULT_TOOL_DESCRIPTIONS`, and `DelegateToAgentSchema` condition
 
@@ -4472,7 +4471,9 @@ Frontend (WhatsAppNode.tsx) → Python Backend (/api/whatsapp/*) → WhatsApp RP
 - **No Mock Data**: All endpoints return proper errors instead of mock responses
 - **Connection Status**: Real-time status display with device ID, session, and service info
 
-### Backend Endpoints (`server/routers/whatsapp.py`)
+### Backend Helpers (`server/services/whatsapp_service.py`)
+
+Wave 11: renamed from `routers/whatsapp.py` (was misnamed — never an APIRouter). Provides RPC proxy helpers consumed by `nodes/whatsapp/*` plugins and the WhatsApp WebSocket handlers.
 
 #### `/api/whatsapp/status` - Get Connection Status
 - Returns WhatsApp connection status from Flask service

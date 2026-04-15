@@ -7,7 +7,12 @@ activity pattern. One Python file under `server/nodes/<group>/<name>.py`
 = one node. No cross-cutting edits.
 
 **Status: shipped.** 111 plugin classes cover every node type in the
-product; 124 pytest contract invariants lock the architecture.
+product across 9 Temporal worker queues; 124 pytest contract
+invariants lock the architecture. `services/handlers/` shrank from
+12.8K → 1.1K LOC across 16 → 4 files. See
+[`server/nodes/README.md`](../server/nodes/README.md) for the
+authoring cookbook (5-minute recipe + shared helpers + common
+pitfalls).
 
 ## Quick start — adding a new node
 
@@ -341,8 +346,9 @@ server/
 │   ├── text/                    # textGenerator / fileHandler
 │   ├── location/                # gmaps_create / gmaps_locations / gmaps_nearby_places
 │   └── skill/                   # simpleMemory / masterSkill
-├── credentials/                 # Declarative Credential subclasses
-│   └── __init__.py              # Auto-discovery walker
+│                                # Each group folder owns its own
+│                                # _credentials.py (Wave 11.E.1) —
+│                                # no central credentials package.
 └── services/
     ├── plugin/                  # Plugin runtime
     │   ├── base.py              # BaseNode
@@ -424,8 +430,9 @@ every CI run. Examples:
 - Wave 11.D.8 — Twitter / Crawlee / Apify inlined. Twitter shares
   `nodes/twitter/_base.py` for client + XDK helpers.
 - Wave 11.D.9 — WhatsApp + Social inlined into `nodes/whatsapp/_base.py`
-  and `nodes/social/_base.py` (full bodies, RPC dispatch still via
-  `routers.whatsapp`).
+  and `nodes/social/_base.py` (full bodies, RPC dispatch via
+  `services.whatsapp_service`; renamed from `routers/whatsapp.py` in
+  Wave 11.E.2 since it was never an APIRouter).
 - Wave 11.D.10 — `utility.py` split across 12 plugin files (maps,
   text, workflow start, timer, cron, console, team monitor, chat).
 - Wave 11.D.11 — Auto-populate trigger registries.
@@ -451,16 +458,23 @@ every CI run. Examples:
   deep_agent) by inlining into their plugins. Split `handlers/ai.py`
   4 ways: `handle_ai_chat_model` → `ChatModelBase.chat`,
   `handle_simple_memory` → `SimpleMemoryNode.read`,
-  `handle_ai_agent` / `handle_chat_agent` → deleted entirely
-  (`tools.py:_execute_delegated_agent` now uses
-  `BaseNode.execute()` + `NodeContext.from_legacy()` directly via the
-  node registry).
+  `handle_ai_agent` / `handle_chat_agent` → deleted entirely.
+  `tools.py:_execute_delegated_agent` now looks up the child agent's
+  plugin class via `services.node_registry.get_node_class(node_type)`,
+  builds `NodeContext.from_legacy(...)`, and calls
+  `instance.execute(node_id, params, ctx)` directly — no handler shell
+  in the path.
 - Wave 11.E.4 — Relocated `tools.py` movables: proxyConfig 10-op
-  matrix → `nodes/proxy/proxy_config.execute_proxy_config`, Android
-  AI-tool dispatch (toolkit + direct service) →
+  matrix → `nodes/proxy/proxy_config.execute_proxy_config` (shared by
+  the plugin's `dispatch` op and the AI-tool branch in `tools.py`);
+  Android AI-tool dispatch (toolkit + direct service) →
   `nodes/android/_base.{execute_android_toolkit,
-  execute_android_service_tool}`. `tools.py` from 1,255 → 821 LOC.
-- Wave 11.G — (this file) Docs + packaging.
+  execute_android_service_tool}` with a single canonical
+  `SERVICE_ID_MAP` and a shared `_execute_with_broadcast` helper
+  (previously duplicated in `tools.py`). `tools.py` from 1,255 → 821
+  LOC.
+- Wave 11.G — Nodes cookbook (`server/nodes/README.md`) + CLAUDE.md
+  plugin section + this file refreshed to match shipped state.
 
 `services/handlers/` is now **4 files / 1,112 LOC** (down from 16
 files / 12,800 LOC):
