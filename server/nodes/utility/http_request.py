@@ -50,11 +50,80 @@ class HttpRequestNode(ActionNode):
 
     @Operation("request")
     async def request(self, ctx: NodeContext, params: HttpRequestParams) -> Any:
-        from services.handlers.http import handle_http_request
-        response = await handle_http_request(
-            node_id=ctx.node_id, node_type=self.type,
-            parameters=params.model_dump(by_alias=True), context=ctx.raw,
+        """Inlined from handlers/http.py (Wave 11.D.3).
+
+        Supports transparent proxy injection via ``useProxy`` — when
+        enabled, the ProxyService picks a provider and returns a
+        proxy URL; failures fall back to a direct request.
+        """
+        import json as json_module
+        from core.logging import get_logger
+        import httpx
+
+        log = get_logger(__name__)
+        if not params.url:
+            raise RuntimeError("URL is required")
+
+        proxy_url = await _resolve_proxy_url(params.url, params.use_proxy,
+                                              params.model_dump(by_alias=True))
+        log.info("[HTTP Request] Executing", node_id=ctx.node_id,
+                 method=params.method, url=params.url, proxy=bool(proxy_url))
+
+        client_kwargs: dict = {"timeout": float(params.timeout)}
+        if proxy_url:
+            client_kwargs["proxy"] = proxy_url
+
+        async with httpx.AsyncClient(**client_kwargs) as client:
+            kwargs: dict = {
+                "method": params.method,
+                "url": params.url,
+                "headers": params.headers,
+            }
+            body = params.body
+            if params.method in ("POST", "PUT", "PATCH") and body is not None:
+                if isinstance(body, str):
+                    try:
+                        kwargs["json"] = json_module.loads(body)
+                    except json_module.JSONDecodeError:
+                        kwargs["content"] = body
+                else:
+                    kwargs["json"] = body
+
+            response = await client.request(**kwargs)
+            try:
+                response_data = response.json()
+            except Exception:
+                response_data = response.text
+
+        result = {
+            "status": response.status_code,
+            "data": response_data,
+            "headers": dict(response.headers),
+            "url": str(response.url),
+            "method": params.method,
+            "proxied": proxy_url is not None,
+        }
+        if response.status_code >= 400:
+            raise RuntimeError(f"HTTP {response.status_code}: {response_data!r}")
+        return result
+
+
+async def _resolve_proxy_url(url: str, use_proxy: bool, parameters: dict) -> Any:
+    """Return a proxy URL if ``use_proxy`` is True and a provider is
+    configured; otherwise None. Exceptions are swallowed so the
+    request proceeds without a proxy."""
+    from core.logging import get_logger
+
+    if not use_proxy:
+        return None
+    try:
+        from services.proxy.service import get_proxy_service
+        svc = get_proxy_service()
+        if not svc or not svc.is_enabled():
+            return None
+        return await svc.get_proxy_url(url, parameters)
+    except Exception as e:
+        get_logger(__name__).warning(
+            "Proxy URL lookup failed, proceeding without proxy", error=str(e),
         )
-        if response.get("success"):
-            return response.get("result") or response
-        raise RuntimeError(response.get("error") or "HTTP request failed")
+        return None

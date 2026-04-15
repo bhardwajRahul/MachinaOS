@@ -43,11 +43,14 @@ class ProxyStatusNode(ActionNode):
 
     @Operation("status")
     async def status(self, ctx: NodeContext, params: ProxyStatusParams) -> Any:
-        from services.handlers.proxy import handle_proxy_status
-        response = await handle_proxy_status(
-            node_id=ctx.node_id, node_type=self.type,
-            parameters=params.model_dump(by_alias=True), context=ctx.raw,
-        )
-        if response.get("success"):
-            return response.get("result") or response
-        raise RuntimeError(response.get("error") or "Proxy status failed")
+        """Inlined from handlers/proxy.py (Wave 11.D.3)."""
+        from services.proxy.service import get_proxy_service
+
+        svc = get_proxy_service()
+        if not svc or not svc.is_enabled():
+            return {"enabled": False, "providers": [], "stats": {}}
+        return {
+            "enabled": True,
+            "providers": [p.model_dump() for p in svc.get_providers()],
+            "stats": svc.get_stats(),
+        }

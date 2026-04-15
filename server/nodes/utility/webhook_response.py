@@ -45,13 +45,43 @@ class WebhookResponseNode(ActionNode):
 
     @Operation("respond")
     async def respond(self, ctx: NodeContext, params: WebhookResponseParams) -> Any:
-        from services.handlers.http import handle_webhook_response
+        """Inlined from handlers/http.py (Wave 11.D.3).
+
+        Resolves ``{{input.key}}`` and ``{{nodeType.key}}`` templates
+        against upstream outputs, then calls into ``routers.webhook``
+        to release the pending HTTP request.
+        """
+        import json as json_module
+        from core.logging import get_logger
+        from routers.webhook import resolve_webhook_response
+
+        log = get_logger(__name__)
         outputs = ctx.raw.get("connected_outputs") or {}
-        response = await handle_webhook_response(
-            node_id=ctx.node_id, node_type=self.type,
-            parameters=params.model_dump(by_alias=True),
-            context=ctx.raw, connected_outputs=outputs,
+        body = params.body
+        if isinstance(body, str) and outputs:
+            for node_type_key, output_data in outputs.items():
+                if isinstance(output_data, dict):
+                    for key, value in output_data.items():
+                        body = body.replace(f"{{{{input.{key}}}}}", str(value))
+                        body = body.replace(f"{{{{{node_type_key}.{key}}}}}", str(value))
+        if not body and outputs:
+            first_output = next(iter(outputs.values()), {})
+            body = json_module.dumps(first_output, default=str)
+
+        body_text = body if isinstance(body, str) else json_module.dumps(body, default=str)
+        log.info(
+            "[Webhook Response] Sending", node_id=ctx.node_id,
+            status_code=params.status_code, content_type=params.content_type,
+            body_length=len(body_text),
         )
-        if response.get("success") is False:
-            raise RuntimeError(response.get("error") or "Webhook response failed")
-        return response.get("result") or {}
+        resolve_webhook_response(ctx.node_id, {
+            "statusCode": params.status_code,
+            "body": body_text,
+            "contentType": params.content_type,
+        })
+        return {
+            "sent": True,
+            "statusCode": params.status_code,
+            "contentType": params.content_type,
+            "bodyLength": len(body_text),
+        }

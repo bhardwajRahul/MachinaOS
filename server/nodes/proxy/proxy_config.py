@@ -52,11 +52,16 @@ class ProxyConfigNode(ActionNode):
 
     @Operation("dispatch")
     async def dispatch(self, ctx: NodeContext, params: ProxyConfigParams) -> Any:
-        from services.handlers.proxy import handle_proxy_config
-        response = await handle_proxy_config(
-            node_id=ctx.node_id, node_type=self.type,
-            parameters=params.model_dump(by_alias=True), context=ctx.raw,
-        )
-        if response.get("success"):
-            return response.get("result") or response
-        raise RuntimeError(response.get("error") or "Proxy config failed")
+        """Wave 11.D.3: routes directly to tools.py dispatcher which
+        owns the 10-operation matrix (list_providers / add_provider /
+        update_provider / ... / list_routing_rules). Plugin body stays
+        thin — the operation dispatcher is legacy AI-tool dispatch
+        that predates the plugin fast-path and is scheduled for
+        removal in 11.D.13."""
+        from services.handlers.tools import _execute_proxy_config
+
+        raw = params.model_dump(by_alias=True)
+        result = await _execute_proxy_config(raw, raw)
+        if not result.get("success"):
+            raise RuntimeError(result.get("error") or "Proxy config failed")
+        return result
