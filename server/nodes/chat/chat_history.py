@@ -1,8 +1,12 @@
-"""Chat History — Wave 11.C migration. Retrieves chat conversation history."""
+"""Chat History — Wave 11.D.10 fix.
+
+Retrieves chat history via the external chat backend JSON-RPC 2.0
+WebSocket (``services.chat_client``).
+"""
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -10,7 +14,10 @@ from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
 
 class ChatHistoryParams(BaseModel):
+    host: str = Field(default="localhost")
+    port: int = Field(default=8080, ge=1, le=65535)
     session_id: str = Field(default="default", alias="sessionId")
+    api_key: str = Field(default="", alias="apiKey")
     limit: int = Field(default=50, ge=1, le=500)
 
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
@@ -38,16 +45,25 @@ class ChatHistoryNode(ActionNode):
         {"name": "output-main", "kind": "output", "position": "right",
          "label": "Output", "role": "main"},
     )
-    annotations = {"destructive": False, "readonly": True, "open_world": False}
+    annotations = {"destructive": False, "readonly": True, "open_world": True}
     task_queue = TaskQueue.DEFAULT
 
     Params = ChatHistoryParams
     Output = ChatHistoryOutput
 
     @Operation("read")
-    async def read(self, ctx: NodeContext, params: ChatHistoryParams) -> Any:
-        from core.container import container
+    async def read(self, ctx: NodeContext, params: ChatHistoryParams) -> ChatHistoryOutput:
+        from services.chat_client import get_chat_history
 
-        database = container.database()
-        messages = await database.get_chat_messages(params.session_id, limit=params.limit)
+        result = await get_chat_history(
+            host=params.host,
+            port=params.port,
+            session_id=params.session_id,
+            api_key=params.api_key,
+            limit=params.limit,
+        )
+        if not result.get("success"):
+            raise RuntimeError(result.get("error", "chatHistory fetch failed"))
+
+        messages = result.get("messages", []) or []
         return ChatHistoryOutput(messages=messages, count=len(messages))

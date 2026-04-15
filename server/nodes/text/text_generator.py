@@ -47,13 +47,10 @@ class TextGeneratorNode(ActionNode):
     @Operation("generate")
     async def generate(self, ctx: NodeContext, params: TextGeneratorParams) -> Any:
         from core.container import container
-        from services.handlers.utility import handle_text_generator
 
         text_service = container.text_service()
-        response = await handle_text_generator(
-            node_id=ctx.node_id, node_type=self.type,
-            parameters=params.model_dump(by_alias=True),
-            context=ctx.raw, text_service=text_service,
+        response = await text_service.execute_text_generator(
+            ctx.node_id, params.model_dump(by_alias=True),
         )
         if response.get("success"):
             return response.get("result") or response

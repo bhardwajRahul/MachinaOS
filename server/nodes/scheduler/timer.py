@@ -51,11 +51,44 @@ class TimerNode(ActionNode):
 
     @Operation("wait")
     async def wait(self, ctx: NodeContext, params: TimerParams) -> Any:
-        from services.handlers.utility import handle_timer
-        response = await handle_timer(
-            node_id=ctx.node_id, node_type=self.type,
-            parameters=params.model_dump(by_alias=True), context=ctx.raw,
+        import asyncio
+        import time
+        from datetime import datetime, timedelta
+
+        from services.status_broadcaster import get_status_broadcaster
+
+        start_time = time.time()
+        duration = int(params.duration)
+        unit = params.unit
+        match unit:
+            case "minutes":
+                wait_seconds = duration * 60
+            case "hours":
+                wait_seconds = duration * 3600
+            case _:
+                wait_seconds = duration
+
+        complete_time = datetime.now() + timedelta(seconds=wait_seconds)
+        await get_status_broadcaster().update_node_status(
+            ctx.node_id, "waiting",
+            {
+                "message": f"Waiting {duration} {unit}...",
+                "complete_time": complete_time.isoformat(),
+                "wait_seconds": wait_seconds,
+            },
+            workflow_id=ctx.workflow_id,
         )
-        if response.get("success") is False:
-            raise RuntimeError(response.get("error") or "Timer failed")
-        return response.get("result") or {}
+
+        try:
+            await asyncio.sleep(wait_seconds)
+        except asyncio.CancelledError:
+            raise RuntimeError("Timer cancelled")
+
+        elapsed_ms = int((time.time() - start_time) * 1000)
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "elapsed_ms": elapsed_ms,
+            "duration": duration,
+            "unit": unit,
+            "message": f"Timer completed after {duration} {unit}",
+        }

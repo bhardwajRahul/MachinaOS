@@ -53,11 +53,14 @@ class StartNode(ActionNode):
 
     @Operation("emit")
     async def emit(self, ctx: NodeContext, params: StartParams) -> Any:
-        from services.handlers.utility import handle_start
-        response = await handle_start(
-            node_id=ctx.node_id, node_type=self.type,
-            parameters=params.model_dump(by_alias=True), context=ctx.raw,
-        )
-        if response.get("success") is False:
-            raise RuntimeError(response.get("error") or "Start failed")
-        return response.get("result") or {}
+        import json
+
+        raw = params.initial_data
+        if raw is None:
+            return {}
+        if isinstance(raw, str):
+            try:
+                return json.loads(raw)
+            except Exception:
+                return {}
+        return raw

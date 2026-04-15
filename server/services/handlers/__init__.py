@@ -50,21 +50,7 @@ from .triggers import (
     handle_trigger_node,
 )
 
-# Utility handlers
-from .utility import (
-    handle_create_map,
-    handle_add_locations,
-    handle_nearby_places,
-    handle_text_generator,
-    handle_file_handler,
-    handle_chat_send,
-    handle_chat_history,
-    handle_start,
-    handle_cron_scheduler,
-    handle_timer,
-    handle_console,
-    handle_team_monitor,
-)
+# Utility handlers inlined into their plugin files (Wave 11.D.10).
 
 # WhatsApp handlers inlined into nodes/whatsapp/*.py (Wave 11.D.9).
 
@@ -135,18 +121,6 @@ __all__ = [
     # Triggers
     'handle_trigger_node',
     # Utility
-    'handle_create_map',
-    'handle_add_locations',
-    'handle_nearby_places',
-    'handle_text_generator',
-    'handle_file_handler',
-    'handle_chat_send',
-    'handle_chat_history',
-    'handle_start',
-    'handle_cron_scheduler',
-    'handle_timer',
-    'handle_console',
-    'handle_team_monitor',
     # WhatsApp
     # Twitter
     # Social

@@ -48,13 +48,10 @@ class FileHandlerNode(ActionNode):
     @Operation("dispatch")
     async def dispatch(self, ctx: NodeContext, params: FileHandlerParams) -> Any:
         from core.container import container
-        from services.handlers.utility import handle_file_handler
 
         text_service = container.text_service()
-        response = await handle_file_handler(
-            node_id=ctx.node_id, node_type=self.type,
-            parameters=params.model_dump(by_alias=True),
-            context=ctx.raw, text_service=text_service,
+        response = await text_service.execute_file_handler(
+            ctx.node_id, params.model_dump(by_alias=True),
         )
         if response.get("success"):
             return response.get("result") or response

@@ -1,29 +1,110 @@
-"""Cron Scheduler — Wave 11.C migration.
+"""Cron Scheduler — Wave 11.D.10 inlined.
 
 Cron-expression-based scheduling trigger. Deployment-mode lifecycle
 (starting/stopping the cron job) is owned by ``deployment/triggers.py``;
-the run-button path runs handle_cron_scheduler directly for one-shot
-testing.
+the run-button path executes this plugin once for testing.
 """
 
 from __future__ import annotations
 
-from typing import Any, Optional
+import asyncio
+import time
+from datetime import datetime, timedelta
+from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from core.logging import get_logger
 from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
+
+logger = get_logger(__name__)
+
+
+def _calculate_wait_seconds(p: Dict[str, Any]) -> int:
+    frequency = p.get("frequency", "minutes")
+    match frequency:
+        case "seconds":
+            return int(p.get("interval", 30))
+        case "minutes":
+            return int(p.get("interval_minutes", 5)) * 60
+        case "hours":
+            return int(p.get("interval_hours", 1)) * 3600
+        case "days":
+            return 24 * 3600
+        case "weeks":
+            return 7 * 24 * 3600
+        case "months":
+            return 30 * 24 * 3600
+        case "once":
+            return 0
+        case _:
+            return 300
+
+
+def _format_wait_time(seconds: int) -> str:
+    if seconds < 60:
+        return f"{seconds} seconds"
+    if seconds < 3600:
+        m = seconds // 60
+        return f"{m} minute{'s' if m != 1 else ''}"
+    if seconds < 86400:
+        h = seconds // 3600
+        return f"{h} hour{'s' if h != 1 else ''}"
+    d = seconds // 86400
+    return f"{d} day{'s' if d != 1 else ''}"
+
+
+def _get_schedule_description(p: Dict[str, Any]) -> str:
+    frequency = p.get("frequency", "minutes")
+    match frequency:
+        case "seconds":
+            return f"Every {p.get('interval', 30)} seconds"
+        case "minutes":
+            return f"Every {p.get('interval_minutes', 5)} minutes"
+        case "hours":
+            return f"Every {p.get('interval_hours', 1)} hours"
+        case "days":
+            return f"Daily at {p.get('daily_time', '09:00')}"
+        case "weeks":
+            weekday = str(p.get("weekday", "1"))
+            days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+            day_name = days[int(weekday)] if weekday.isdigit() else weekday
+            return f"Weekly on {day_name} at {p.get('weekly_time', '09:00')}"
+        case "months":
+            return f"Monthly on day {p.get('month_day', '1')} at {p.get('monthly_time', '09:00')}"
+        case "once":
+            return "Once (no repeat)"
+        case _:
+            return "Unknown schedule"
 
 
 class CronSchedulerParams(BaseModel):
     cron_expression: str = Field(default="0 * * * *", alias="cronExpression")
     timezone: str = Field(default="UTC")
+    frequency: str = Field(default="minutes")
+    interval: int = Field(default=30)
+    interval_minutes: int = Field(default=5, alias="intervalMinutes")
+    interval_hours: int = Field(default=1, alias="intervalHours")
+    daily_time: str = Field(default="09:00", alias="dailyTime")
+    weekly_time: str = Field(default="09:00", alias="weeklyTime")
+    weekday: str = Field(default="1")
+    monthly_time: str = Field(default="09:00", alias="monthlyTime")
+    month_day: str = Field(default="1", alias="monthDay")
 
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
 
 
 class CronSchedulerOutput(BaseModel):
+    timestamp: Optional[str] = None
+    iteration: Optional[int] = None
+    frequency: Optional[str] = None
+    timezone: Optional[str] = None
+    schedule: Optional[str] = None
+    scheduled_time: Optional[str] = None
     triggered_at: Optional[str] = None
+    waited_seconds: Optional[int] = None
+    next_run: Optional[str] = None
+    message: Optional[str] = None
 
     model_config = ConfigDict(extra="allow")
 
@@ -48,12 +129,57 @@ class CronSchedulerNode(ActionNode):
     Output = CronSchedulerOutput
 
     @Operation("trigger")
-    async def trigger(self, ctx: NodeContext, params: CronSchedulerParams) -> Any:
-        from services.handlers.utility import handle_cron_scheduler
-        response = await handle_cron_scheduler(
-            node_id=ctx.node_id, node_type=self.type,
-            parameters=params.model_dump(by_alias=True), context=ctx.raw,
+    async def trigger(self, ctx: NodeContext, params: CronSchedulerParams) -> CronSchedulerOutput:
+        from services.status_broadcaster import get_status_broadcaster
+
+        start_time = time.time()
+        p = params.model_dump(by_alias=False)
+        frequency = p.get("frequency", "minutes")
+        timezone = p.get("timezone", "UTC")
+
+        schedule_desc = _get_schedule_description(p)
+        wait_seconds = _calculate_wait_seconds(p)
+
+        now = datetime.now()
+        trigger_time = now + timedelta(seconds=wait_seconds)
+
+        await get_status_broadcaster().update_node_status(
+            ctx.node_id, "waiting",
+            {
+                "message": f"Waiting {schedule_desc}...",
+                "trigger_time": trigger_time.isoformat(),
+                "wait_seconds": wait_seconds,
+            },
+            workflow_id=ctx.workflow_id,
         )
-        if response.get("success") is False:
-            raise RuntimeError(response.get("error") or "Cron failed")
-        return response.get("result") or {}
+
+        logger.info(
+            f"[CronScheduler] Waiting {wait_seconds}s for trigger",
+            node_id=ctx.node_id, trigger_time=trigger_time.isoformat(),
+        )
+
+        try:
+            await asyncio.sleep(wait_seconds)
+        except asyncio.CancelledError:
+            raise RuntimeError("Scheduler cancelled")
+
+        triggered_at = datetime.now()
+        output = CronSchedulerOutput(
+            timestamp=triggered_at.isoformat(),
+            iteration=1,
+            frequency=frequency,
+            timezone=timezone,
+            schedule=schedule_desc,
+            scheduled_time=trigger_time.isoformat(),
+            triggered_at=triggered_at.isoformat(),
+            waited_seconds=wait_seconds,
+        )
+        if frequency == "once":
+            output.message = f"Triggered after waiting {_format_wait_time(wait_seconds)}"
+        else:
+            output.next_run = schedule_desc
+            output.message = (
+                f"Triggered after {_format_wait_time(wait_seconds)}, "
+                f"will repeat: {schedule_desc}"
+            )
+        return output

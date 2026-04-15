@@ -50,13 +50,10 @@ class GmapsLocationsNode(ActionNode):
     @Operation("geocode", cost={"service": "google_maps", "action": "geocode", "count": 1})
     async def geocode(self, ctx: NodeContext, params: GmapsLocationsParams) -> Any:
         from core.container import container
-        from services.handlers.utility import handle_add_locations
 
         maps_service = container.maps_service()
-        response = await handle_add_locations(
-            node_id=ctx.node_id, node_type=self.type,
-            parameters=params.model_dump(by_alias=True),
-            context=ctx.raw, maps_service=maps_service,
+        response = await maps_service.geocode_location(
+            ctx.node_id, params.model_dump(by_alias=True), ctx.raw,
         )
         if response.get("success"):
             return response.get("result") or response

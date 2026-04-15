@@ -51,13 +51,10 @@ class GmapsNearbyPlacesNode(ActionNode):
     @Operation("nearby", cost={"service": "google_maps", "action": "places_nearby", "count": 1})
     async def nearby(self, ctx: NodeContext, params: GmapsNearbyPlacesParams) -> Any:
         from core.container import container
-        from services.handlers.utility import handle_nearby_places
 
         maps_service = container.maps_service()
-        response = await handle_nearby_places(
-            node_id=ctx.node_id, node_type=self.type,
-            parameters=params.model_dump(by_alias=True),
-            context=ctx.raw, maps_service=maps_service,
+        response = await maps_service.find_nearby_places(
+            ctx.node_id, params.model_dump(by_alias=True), ctx.raw,
         )
         if response.get("success"):
             return response.get("result") or response

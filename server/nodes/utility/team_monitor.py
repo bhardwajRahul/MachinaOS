@@ -46,11 +46,37 @@ class TeamMonitorNode(ActionNode):
 
     @Operation("monitor")
     async def monitor(self, ctx: NodeContext, params: TeamMonitorParams) -> Any:
-        from services.handlers.utility import handle_team_monitor
-        response = await handle_team_monitor(
-            node_id=ctx.node_id, node_type=self.type,
-            parameters=params.model_dump(by_alias=True), context=ctx.raw,
-        )
-        if response.get("success") is False:
-            raise RuntimeError(response.get("error") or "Team monitor failed")
-        return response.get("result") or {}
+        from services.agent_team import get_agent_team_service
+
+        team_id = ctx.raw.get("team_id")
+        if not team_id:
+            for output in (ctx.raw.get("outputs", {}) or {}).values():
+                if isinstance(output, dict) and output.get("team_id"):
+                    team_id = output["team_id"]
+                    break
+
+        if not team_id:
+            return {
+                "message": "No team connected",
+                "team_id": None,
+                "members": [],
+                "tasks": {"total": 0, "completed": 0, "active": 0, "pending": 0, "failed": 0},
+                "active_tasks": [],
+                "recent_events": [],
+            }
+
+        status = await get_agent_team_service().get_team_status(team_id)
+        max_history = ctx.raw.get("parameters", {}).get("maxHistoryItems", 50)
+        return {
+            "team_id": team_id,
+            "members": status.get("members", []),
+            "tasks": {
+                "total": status.get("task_count", 0),
+                "completed": status.get("completed_count", 0),
+                "active": status.get("active_count", 0),
+                "pending": status.get("pending_count", 0),
+                "failed": status.get("failed_count", 0),
+            },
+            "active_tasks": status.get("active_tasks", []),
+            "recent_events": status.get("recent_events", [])[-max_history:],
+        }

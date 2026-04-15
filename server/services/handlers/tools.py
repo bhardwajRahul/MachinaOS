@@ -135,29 +135,7 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
             context=context,
         )
 
-    # Timer tool (dual-purpose: workflow node + AI tool)
-    # LLM fills duration/unit via Pydantic schema; calls existing handle_timer handler
-    if node_type == 'timer':
-        from services.handlers.utility import handle_timer
-        parameters = {**config.get('parameters', {}), **tool_args}
-        return await handle_timer(
-            node_id=config.get('node_id', 'tool_timer'),
-            node_type='timer',
-            parameters=parameters,
-            context={}
-        )
-
-    # Cron Scheduler tool (dual-purpose: workflow node + AI tool)
-    # LLM fills schedule params via CronSchedulerParams schema; calls existing handler
-    if node_type == 'cronScheduler':
-        from services.handlers.utility import handle_cron_scheduler
-        parameters = {**config.get('parameters', {}), **tool_args}
-        return await handle_cron_scheduler(
-            node_id=config.get('node_id', 'tool_cron_scheduler'),
-            node_type='cronScheduler',
-            parameters=parameters,
-            context={}
-        )
+    # timer / cronScheduler: handled by the plugin fast-path above.
 
     # WhatsApp / Twitter / Google Workspace / Search / Maps tool branches
     # all migrated to plugin classes — routed via the Wave 11.B.1 fast-path
@@ -782,106 +760,9 @@ async def _execute_android_service(args: Dict[str, Any],
         return {"error": str(e)}
 
 
-async def _execute_geocoding(args: Dict[str, Any],
-                              node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Google Maps geocoding (gmaps_locations node as tool).
-
-    Args:
-        args: LLM-provided arguments (snake_case: service_type, address, lat, lng)
-        node_params: Node parameters (may contain api_key)
-
-    Returns:
-        Geocoding result with coordinates or address
-    """
-    from services.handlers.utility import handle_add_locations
-    from core.container import container
-
-    # Fetch API key from database (source of truth)
-    auth_service = container.auth_service()
-    api_key = await auth_service.get_api_key("google_maps", "default") or ''
-
-    # Args use snake_case matching Pydantic schema and node params
-    parameters = {**args, 'api_key': api_key}
-
-    service_type = parameters.get('service_type', 'geocode')
-
-    # Validate required fields
-    if service_type == 'geocode' and not parameters.get('address'):
-        return {"error": "address is required for geocoding"}
-    if service_type == 'reverse_geocode':
-        if parameters.get('lat') is None or parameters.get('lng') is None:
-            return {"error": "lat and lng are required for reverse geocoding"}
-
-    lat, lng = parameters.get('lat'), parameters.get('lng')
-    location_str = parameters.get('address') or f"({lat}, {lng})"
-    logger.info(f"[Geocoding Tool] {service_type}: {location_str}")
-
-    try:
-        maps_service = container.maps_service()
-        result = await handle_add_locations(
-            node_id="tool_geocoding",
-            node_type="gmaps_locations",
-            parameters=parameters,
-            context={},
-            maps_service=maps_service
-        )
-
-        if result.get('success'):
-            return {"success": True, "service_type": service_type, **result.get('result', {})}
-        else:
-            return {"error": result.get('error', 'Geocoding failed')}
-
-    except Exception as e:
-        logger.error(f"[Geocoding Tool] Error: {e}")
-        return {"error": f"Geocoding failed: {str(e)}"}
-
-
-async def _execute_nearby_places(args: Dict[str, Any],
-                                  node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Google Maps nearby places search (gmaps_nearby_places node as tool).
-
-    Args:
-        args: LLM-provided arguments (snake_case: lat, lng, radius, type, keyword)
-        node_params: Node parameters (may contain api_key)
-
-    Returns:
-        Nearby places search results
-    """
-    from services.handlers.utility import handle_nearby_places
-    from core.container import container
-
-    # Fetch API key from database (source of truth)
-    auth_service = container.auth_service()
-    api_key = await auth_service.get_api_key("google_maps", "default") or ''
-
-    # Args use snake_case matching Pydantic schema and node params
-    parameters = {**args, 'api_key': api_key}
-
-    # Validate required fields
-    if parameters.get('lat') is None or parameters.get('lng') is None:
-        return {"error": "lat and lng are required for nearby places search"}
-
-    place_type = parameters.get('type', 'restaurant')
-    logger.info(f"[Nearby Places Tool] Searching {place_type} near ({parameters['lat']}, {parameters['lng']})")
-
-    try:
-        maps_service = container.maps_service()
-        result = await handle_nearby_places(
-            node_id="tool_nearby_places",
-            node_type="gmaps_nearby_places",
-            parameters=parameters,
-            context={},
-            maps_service=maps_service
-        )
-
-        if result.get('success'):
-            return {"success": True, "type": place_type, **result.get('result', {})}
-        else:
-            return {"error": result.get('error', 'Nearby places search failed')}
-
-    except Exception as e:
-        logger.error(f"[Nearby Places Tool] Error: {e}")
-        return {"error": f"Nearby places search failed: {str(e)}"}
+# Wave 11.D.10: _execute_geocoding / _execute_nearby_places deleted.
+# gmaps_locations + gmaps_nearby_places now route through the plugin
+# fast-path (nodes/location/*.py).
 
 
 # _execute_google_gmail: deleted in Wave 11.C cleanup. gmail now routes

@@ -52,13 +52,10 @@ class GmapsCreateNode(ActionNode):
     @Operation("create")
     async def create(self, ctx: NodeContext, params: GmapsCreateParams) -> Any:
         from core.container import container
-        from services.handlers.utility import handle_create_map
 
         maps_service = container.maps_service()
-        response = await handle_create_map(
-            node_id=ctx.node_id, node_type=self.type,
-            parameters=params.model_dump(by_alias=True),
-            context=ctx.raw, maps_service=maps_service,
+        response = await maps_service.create_map(
+            ctx.node_id, params.model_dump(by_alias=True), ctx.raw,
         )
         if response.get("success"):
             return response.get("result") or response
