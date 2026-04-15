@@ -186,17 +186,9 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
     if node_type == 'taskManager':
         return await _execute_task_manager(tool_args, config)
 
-    # Apify Actor (dual-purpose: workflow node + AI tool)
-    if node_type == 'apifyActor':
-        return await _execute_apify_actor(tool_args, config.get('parameters', {}))
-
     # Browser automation (dual-purpose: workflow node + AI tool)
     if node_type == 'browser':
         return await _execute_browser(tool_args, config.get('parameters', {}), config)
-
-    # Crawlee web scraper (dual-purpose: workflow node + AI tool)
-    if node_type == 'crawleeScraper':
-        return await _execute_crawlee_scraper(tool_args, config.get('parameters', {}))
 
     # Proxy nodes (dual-purpose: workflow node + AI tool)
     # Email nodes (dual-purpose: workflow node + AI tool)
@@ -1193,78 +1185,6 @@ async def _execute_nearby_places(args: Dict[str, Any],
         return {"error": f"Nearby places search failed: {str(e)}"}
 
 
-async def _execute_twitter_send(args: Dict[str, Any],
-                                 node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Twitter send action via XDK SDK.
-
-    Args:
-        args: LLM-provided arguments (action, text, tweet_id, reply_to_id)
-        node_params: Node parameters
-
-    Returns:
-        Twitter API result
-    """
-    from services.handlers.twitter import handle_twitter_send
-
-    parameters = {**node_params, **args}
-    # Handle reply_to_id alias
-    if args.get('reply_to_id') and not args.get('tweet_id'):
-        parameters['tweet_id'] = args['reply_to_id']
-
-    return await handle_twitter_send(
-        node_id="tool_twitter_send",
-        node_type="twitterSend",
-        parameters=parameters,
-        context={}
-    )
-
-
-async def _execute_twitter_search(args: Dict[str, Any],
-                                   node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Twitter search via XDK SDK.
-
-    Args:
-        args: LLM-provided arguments (query, max_results)
-        node_params: Node parameters
-
-    Returns:
-        Search results
-    """
-    from services.handlers.twitter import handle_twitter_search
-
-    parameters = {**node_params, **args}
-
-    return await handle_twitter_search(
-        node_id="tool_twitter_search",
-        node_type="twitterSearch",
-        parameters=parameters,
-        context={}
-    )
-
-
-async def _execute_twitter_user(args: Dict[str, Any],
-                                 node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Twitter user lookup via XDK SDK.
-
-    Args:
-        args: LLM-provided arguments (operation, username, user_id, max_results)
-        node_params: Node parameters
-
-    Returns:
-        User data
-    """
-    from services.handlers.twitter import handle_twitter_user
-
-    parameters = {**node_params, **args}
-
-    return await handle_twitter_user(
-        node_id="tool_twitter_user",
-        node_type="twitterUser",
-        parameters=parameters,
-        context={}
-    )
-
-
 # _execute_google_gmail: deleted in Wave 11.C cleanup. gmail now routes
 # through the plugin fast-path (nodes/google/gmail.py).
 
@@ -1272,42 +1192,6 @@ async def _execute_twitter_user(args: Dict[str, Any],
 # Wave 11.D.4: _execute_google_{calendar,drive,sheets,tasks,contacts} deleted.
 # Google Workspace tool execution now routes through the plugin fast-path
 # (nodes/google/*.py). These functions were defined but unreferenced.
-
-
-async def _execute_apify_actor(args: Dict[str, Any],
-                               node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Apify actor via official SDK.
-
-    Args:
-        args: LLM-provided arguments (actor_id, input_json, max_results)
-        node_params: Node parameters
-
-    Returns:
-        Apify actor run results
-    """
-    from services.handlers.apify import handle_apify_actor
-
-    # Parse input_json string to dict if provided
-    input_json = args.get('input_json', '{}')
-    if isinstance(input_json, str):
-        try:
-            input_json = json.loads(input_json) if input_json.strip() else {}
-        except json.JSONDecodeError:
-            input_json = {}
-
-    parameters = {
-        **node_params,
-        'actorId': args.get('actor_id', node_params.get('actorId', '')),
-        'actorInput': input_json,
-        'maxResults': args.get('max_results', node_params.get('maxResults', 100)),
-    }
-
-    return await handle_apify_actor(
-        node_id="tool_apify_actor",
-        node_type="apifyActor",
-        parameters=parameters,
-        context={}
-    )
 
 
 async def _execute_browser(args: Dict[str, Any],
@@ -1334,33 +1218,6 @@ async def _execute_browser(args: Dict[str, Any],
         node_type='browser',
         parameters=parameters,
         context={'execution_id': config.get('execution_id', 'default')},
-    )
-
-
-async def _execute_crawlee_scraper(args: Dict[str, Any],
-                                    node_params: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute Crawlee web scraper as an AI tool.
-
-    Maps LLM-provided arguments to node parameters and delegates to handler.
-    """
-    from services.handlers.crawlee import handle_crawlee_scraper
-
-    parameters = {
-        **node_params,
-        'url': args.get('url', node_params.get('url', '')),
-        'crawlerType': args.get('crawlerType', node_params.get('crawlerType', 'beautifulsoup')),
-        'mode': args.get('mode', node_params.get('mode', 'single')),
-        'cssSelector': args.get('cssSelector', node_params.get('cssSelector', '')),
-        'maxPages': args.get('maxPages', node_params.get('maxPages', 10)),
-        'outputFormat': args.get('outputFormat', node_params.get('outputFormat', 'text')),
-        'useProxy': args.get('useProxy', node_params.get('useProxy', False)),
-    }
-
-    return await handle_crawlee_scraper(
-        node_id="tool_crawlee_scraper",
-        node_type="crawleeScraper",
-        parameters=parameters,
-        context={}
     )
 
 

@@ -72,12 +72,7 @@ from .whatsapp import (
     handle_whatsapp_db,
 )
 
-# Twitter handlers
-from .twitter import (
-    handle_twitter_send,
-    handle_twitter_search,
-    handle_twitter_user,
-)
+# Twitter handlers inlined into nodes/twitter/*.py (Wave 11.D.8).
 
 # Google Workspace handlers inlined into nodes/google/*.py (Wave 11.D.4).
 
@@ -99,8 +94,7 @@ from .search import (
 # Email handlers (Himalaya CLI)
 from .email import handle_email_send, handle_email_read, handle_email_receive
 
-# Crawlee web scraping handler
-from .crawlee import handle_crawlee_scraper
+# Crawlee handler inlined into nodes/scraper/crawlee_scraper.py (Wave 11.D.8).
 
 # Browser automation handler (agent-browser CLI)
 from .browser import handle_browser
@@ -165,9 +159,6 @@ __all__ = [
     'handle_whatsapp_send',
     'handle_whatsapp_db',
     # Twitter
-    'handle_twitter_send',
-    'handle_twitter_search',
-    'handle_twitter_user',
     # Social
     'handle_social_receive',
     'handle_social_send',
@@ -175,8 +166,6 @@ __all__ = [
     'handle_brave_search',
     'handle_serper_search',
     'handle_perplexity_search',
-    # Crawlee
-    'handle_crawlee_scraper',
     # RLM
     'handle_rlm_agent',
     # Deep Agent

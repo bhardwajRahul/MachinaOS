@@ -1810,7 +1810,7 @@ async def handle_validate_maps_key(data: Dict[str, Any], websocket: WebSocket) -
 
 async def handle_validate_apify_key(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
     """Validate Apify API token and save to database if valid."""
-    from services.handlers.apify import validate_apify_token
+    from nodes.scraper.apify_actor import validate_apify_token
 
     broadcaster = get_status_broadcaster()
     auth_service = container.auth_service()

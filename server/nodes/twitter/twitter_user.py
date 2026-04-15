@@ -1,12 +1,15 @@
-"""Twitter User — Wave 11.C migration."""
+"""Twitter User — Wave 11.D.8 inlined (me / by_username / by_id / followers / following)."""
 
 from __future__ import annotations
 
-from typing import Any, Literal, Optional
+import asyncio
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
+
+from ._base import call_with_retry, format_user, get_my_user_id, track_twitter_usage
 
 
 class TwitterUserParams(BaseModel):
@@ -19,10 +22,77 @@ class TwitterUserParams(BaseModel):
 
 
 class TwitterUserOutput(BaseModel):
+    operation: Optional[str] = None
     user: Optional[dict] = None
     users: Optional[list] = None
+    count: Optional[int] = None
 
     model_config = ConfigDict(extra="allow")
+
+
+def _sync_followers(client, user_id, max_results):
+    for page in client.users.get_followers(
+        user_id, max_results=max_results, user_fields=["created_at"],
+    ):
+        return list(getattr(page, 'data', []) or [])
+    return []
+
+
+def _sync_following(client, user_id, max_results):
+    for page in client.users.get_following(
+        user_id, max_results=max_results, user_fields=["created_at"],
+    ):
+        return list(getattr(page, 'data', []) or [])
+    return []
+
+
+async def _do_lookup(client, op: str, p: dict, node_id: str, ctx_raw: dict) -> TwitterUserOutput:
+    if op == "me":
+        result = await asyncio.to_thread(
+            client.users.get_me, user_fields=["created_at", "description"],
+        )
+        await track_twitter_usage(node_id, "me", 1, ctx_raw)
+        return TwitterUserOutput(operation="me", user=format_user(result.data))
+
+    if op == "by_username":
+        username = p.get("username")
+        if not username:
+            raise RuntimeError("Username is required")
+        result = await asyncio.to_thread(
+            client.users.get_by_usernames, usernames=[username],
+            user_fields=["description", "created_at"],
+        )
+        users = getattr(result, 'data', []) or []
+        if not users:
+            raise RuntimeError(f"User @{username} not found")
+        await track_twitter_usage(node_id, "by_username", 1, ctx_raw)
+        return TwitterUserOutput(operation="by_username", user=format_user(users[0]))
+
+    if op == "by_id":
+        user_id = p.get("userId") or p.get("user_id")
+        if not user_id:
+            raise RuntimeError("User ID is required")
+        result = await asyncio.to_thread(
+            client.users.get_by_ids, ids=[user_id],
+            user_fields=["description", "created_at"],
+        )
+        users = getattr(result, 'data', []) or []
+        if not users:
+            raise RuntimeError(f"User ID {user_id} not found")
+        await track_twitter_usage(node_id, "by_id", 1, ctx_raw)
+        return TwitterUserOutput(operation="by_id", user=format_user(users[0]))
+
+    if op in ("followers", "following"):
+        user_id = p.get("userId") or p.get("user_id") or await get_my_user_id(client)
+        max_results = max(1, min(int(p.get("maxResults", 100)), 1000))
+        fetch = _sync_followers if op == "followers" else _sync_following
+        raw = await asyncio.to_thread(fetch, client, user_id, max_results)
+        users = [format_user(u) for u in raw]
+        if users:
+            await track_twitter_usage(node_id, op, len(users), ctx_raw)
+        return TwitterUserOutput(operation=op, users=users, count=len(users))
+
+    raise RuntimeError(f"Unknown operation: {op}")
 
 
 class TwitterUserNode(ActionNode):
@@ -48,12 +118,7 @@ class TwitterUserNode(ActionNode):
     Output = TwitterUserOutput
 
     @Operation("lookup", cost={"service": "twitter", "action": "user_lookup", "count": 1})
-    async def lookup(self, ctx: NodeContext, params: TwitterUserParams) -> Any:
-        from services.handlers.twitter import handle_twitter_user
-        response = await handle_twitter_user(
-            node_id=ctx.node_id, node_type=self.type,
-            parameters=params.model_dump(by_alias=True), context=ctx.raw,
-        )
-        if response.get("success"):
-            return response.get("result") or response
-        raise RuntimeError(response.get("error") or "Twitter user lookup failed")
+    async def lookup(self, ctx: NodeContext, params: TwitterUserParams) -> TwitterUserOutput:
+        p = params.model_dump(by_alias=True)
+        op = p.get("operation", "me")
+        return await call_with_retry(_do_lookup, op, p, ctx.node_id, ctx.raw)

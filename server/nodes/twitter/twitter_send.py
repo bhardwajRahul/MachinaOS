@@ -1,12 +1,17 @@
-"""Twitter Send — Wave 11.C migration. Dual-purpose ActionNode + AI tool."""
+"""Twitter Send — Wave 11.D.8 inlined (tweet/reply/retweet/like/unlike/delete)."""
 
 from __future__ import annotations
 
-from typing import Any, Literal, Optional
+import asyncio
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
+
+from ._base import (
+    call_with_retry, format_response, get_my_user_id, track_twitter_usage,
+)
 
 
 class TwitterSendParams(BaseModel):
@@ -19,10 +24,67 @@ class TwitterSendParams(BaseModel):
 
 
 class TwitterSendOutput(BaseModel):
-    tweet_id: Optional[str] = None
-    success: Optional[bool] = None
+    action: Optional[str] = None
+    data: Optional[dict] = None
 
     model_config = ConfigDict(extra="allow")
+
+
+async def _do_send(client, action: str, p: dict, node_id: str, ctx_raw: dict) -> TwitterSendOutput:
+    if action == "tweet":
+        text = p.get("text", "")
+        if not text:
+            raise RuntimeError("Tweet text is required")
+        result = await asyncio.to_thread(client.posts.create, body={"text": text[:280]})
+        await track_twitter_usage(node_id, "tweet", 1, ctx_raw)
+        return TwitterSendOutput(action="tweet_sent", data=format_response(result))
+
+    if action == "reply":
+        text = p.get("text", "")
+        reply_to = p.get("replyToId") or p.get("reply_to_id")
+        if not text or not reply_to:
+            raise RuntimeError("Text and reply_to_id are required")
+        result = await asyncio.to_thread(
+            client.posts.create,
+            body={"text": text[:280], "reply": {"in_reply_to_tweet_id": reply_to}},
+        )
+        await track_twitter_usage(node_id, "reply", 1, ctx_raw)
+        return TwitterSendOutput(action="reply_sent", data=format_response(result))
+
+    tweet_id = p.get("tweetId") or p.get("tweet_id")
+    if not tweet_id:
+        raise RuntimeError("tweet_id is required")
+
+    if action == "retweet":
+        user_id = await get_my_user_id(client)
+        result = await asyncio.to_thread(
+            client.users.repost_post, user_id, body={"tweet_id": tweet_id},
+        )
+        await track_twitter_usage(node_id, "retweet", 1, ctx_raw)
+        return TwitterSendOutput(action="retweeted", data=format_response(result))
+
+    if action == "like":
+        user_id = await get_my_user_id(client)
+        result = await asyncio.to_thread(
+            client.users.like_post, user_id, body={"tweet_id": tweet_id},
+        )
+        await track_twitter_usage(node_id, "like", 1, ctx_raw)
+        return TwitterSendOutput(action="liked", data=format_response(result))
+
+    if action == "unlike":
+        user_id = await get_my_user_id(client)
+        result = await asyncio.to_thread(
+            client.users.unlike_post, user_id, tweet_id=tweet_id,
+        )
+        await track_twitter_usage(node_id, "unlike", 1, ctx_raw)
+        return TwitterSendOutput(action="unliked", data=format_response(result))
+
+    if action == "delete":
+        result = await asyncio.to_thread(client.posts.delete, tweet_id)
+        await track_twitter_usage(node_id, "delete", 1, ctx_raw)
+        return TwitterSendOutput(action="deleted", data=format_response(result))
+
+    raise RuntimeError(f"Unknown action: {action}")
 
 
 class TwitterSendNode(ActionNode):
@@ -48,12 +110,7 @@ class TwitterSendNode(ActionNode):
     Output = TwitterSendOutput
 
     @Operation("send", cost={"service": "twitter", "action": "send", "count": 1})
-    async def send(self, ctx: NodeContext, params: TwitterSendParams) -> Any:
-        from services.handlers.twitter import handle_twitter_send
-        response = await handle_twitter_send(
-            node_id=ctx.node_id, node_type=self.type,
-            parameters=params.model_dump(by_alias=True), context=ctx.raw,
-        )
-        if response.get("success"):
-            return response.get("result") or response
-        raise RuntimeError(response.get("error") or "Twitter send failed")
+    async def send(self, ctx: NodeContext, params: TwitterSendParams) -> TwitterSendOutput:
+        p = params.model_dump(by_alias=True)
+        action = p.get("action", "tweet")
+        return await call_with_retry(_do_send, action, p, ctx.node_id, ctx.raw)

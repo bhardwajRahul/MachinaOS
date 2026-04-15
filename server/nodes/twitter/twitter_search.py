@@ -1,16 +1,22 @@
-"""Twitter Search — Wave 11.C migration."""
+"""Twitter Search — Wave 11.D.8 inlined."""
 
 from __future__ import annotations
 
-from typing import Any, Optional
+import asyncio
+from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
+from ._base import (
+    call_with_retry, format_tweet, includes_lookups,
+    sync_search_recent, track_twitter_usage,
+)
+
 
 class TwitterSearchParams(BaseModel):
-    query: str = Field(..., min_length=1)
+    query: str = Field(default="", min_length=0)
     max_results: int = Field(default=10, alias="maxResults", ge=10, le=100)
 
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
@@ -19,8 +25,18 @@ class TwitterSearchParams(BaseModel):
 class TwitterSearchOutput(BaseModel):
     tweets: Optional[list] = None
     count: Optional[int] = None
+    query: Optional[str] = None
 
     model_config = ConfigDict(extra="allow")
+
+
+async def _do_search(client, query: str, max_results: int, node_id: str, ctx_raw: dict) -> TwitterSearchOutput:
+    search = await asyncio.to_thread(sync_search_recent, client, query, max_results)
+    users_by_id, media_by_key, tweets_by_id = includes_lookups(search["includes"])
+    tweets = [format_tweet(t, users_by_id, media_by_key, tweets_by_id) for t in search["tweets"]]
+    if tweets:
+        await track_twitter_usage(node_id, "search", len(tweets), ctx_raw)
+    return TwitterSearchOutput(tweets=tweets, count=len(tweets), query=query)
 
 
 class TwitterSearchNode(ActionNode):
@@ -46,12 +62,8 @@ class TwitterSearchNode(ActionNode):
     Output = TwitterSearchOutput
 
     @Operation("search", cost={"service": "twitter", "action": "search", "count": 1})
-    async def search(self, ctx: NodeContext, params: TwitterSearchParams) -> Any:
-        from services.handlers.twitter import handle_twitter_search
-        response = await handle_twitter_search(
-            node_id=ctx.node_id, node_type=self.type,
-            parameters=params.model_dump(by_alias=True), context=ctx.raw,
-        )
-        if response.get("success"):
-            return response.get("result") or response
-        raise RuntimeError(response.get("error") or "Twitter search failed")
+    async def search(self, ctx: NodeContext, params: TwitterSearchParams) -> TwitterSearchOutput:
+        if not params.query:
+            raise RuntimeError("Search query is required")
+        max_results = max(10, min(params.max_results, 100))
+        return await call_with_retry(_do_search, params.query, max_results, ctx.node_id, ctx.raw)
