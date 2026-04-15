@@ -84,16 +84,10 @@ class ChatModelBase(ActionNode, abstract=True):
     @Operation("chat", cost={"service": "chat_model", "action": "chat", "count": 1})
     async def chat(self, ctx: NodeContext, params: ChatModelParams) -> Any:
         from core.container import container
-        from services.handlers.ai import handle_ai_chat_model
 
         ai_service = container.ai_service()
-        payload = params.model_dump(by_alias=True)
-        response = await handle_ai_chat_model(
-            ai_service=ai_service,
-            node_id=ctx.node_id,
-            node_type=self.type,
-            parameters=payload,
-            context=ctx.raw,
+        response = await ai_service.execute_chat(
+            ctx.node_id, self.type, params.model_dump(by_alias=True),
         )
         if response.get("success"):
             return response.get("result") or response

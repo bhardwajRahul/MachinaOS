@@ -772,17 +772,22 @@ async def _execute_delegated_agent(args: Dict[str, Any],
                 workflow_id=workflow_id
             )
 
-            # Execute the child agent
-            if node_type == 'aiAgent':
-                from services.handlers.ai import handle_ai_agent
-                result = await handle_ai_agent(
-                    node_id, node_type, child_params, child_context, ai_service, database
-                )
-            else:
-                from services.handlers.ai import handle_chat_agent
-                result = await handle_chat_agent(
-                    node_id, node_type, child_params, child_context, ai_service, database
-                )
+            # Execute the child agent via its own plugin class.
+            # Wave 11.E.3: replaces the legacy handle_ai_agent /
+            # handle_chat_agent imports — every agent type already owns
+            # an @Operation method that wraps prepare_agent_call +
+            # AIService dispatch, so we just go through BaseNode.execute.
+            from services.node_registry import get_node_class
+            from services.plugin import NodeContext
+
+            plugin_cls = get_node_class(node_type)
+            if plugin_cls is None:
+                raise RuntimeError(f"Unknown delegated agent type: {node_type}")
+            instance = plugin_cls()
+            child_ctx = NodeContext.from_legacy(
+                node_id=node_id, node_type=node_type, context=child_context,
+            )
+            result = await instance.execute(node_id, child_params, child_ctx)
 
             logger.info(f"[Delegated Agent] Task {task_id} completed: success={result.get('success')}")
 

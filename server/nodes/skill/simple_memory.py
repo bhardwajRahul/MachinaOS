@@ -1,8 +1,10 @@
-"""Simple Memory — Wave 11.C migration.
+"""Simple Memory — Wave 11.E.3 inlined.
 
 Markdown-based conversation memory, optionally backed by a vector
 store for semantic recall. Connects upward to an agent's input-memory
-handle. Delegates execution to the legacy ``handle_simple_memory``.
+handle. The plugin queries the in-memory ``MessageStore`` directly;
+agents read the ``memory_content`` parameter (the editable markdown)
+plus the live message log returned here.
 """
 
 from __future__ import annotations
@@ -11,7 +13,10 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from core.logging import get_logger
 from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
+
+logger = get_logger(__name__)
 
 
 class SimpleMemoryParams(BaseModel):
@@ -59,12 +64,34 @@ class SimpleMemoryNode(ActionNode):
     Output = SimpleMemoryOutput
 
     @Operation("read")
-    async def read(self, ctx: NodeContext, params: SimpleMemoryParams) -> Any:
-        from services.handlers.ai import handle_simple_memory
-        response = await handle_simple_memory(
-            node_id=ctx.node_id, node_type=self.type,
-            parameters=params.model_dump(by_alias=True), context=ctx.raw,
+    async def read(self, ctx: NodeContext, params: SimpleMemoryParams) -> SimpleMemoryOutput:
+        """Return the current message log for the session.
+
+        ``memory_type`` (legacy alias-only field, defaults to ``buffer``)
+        and ``clear_on_run`` are read straight off the raw payload
+        because they're optional UI toggles, not part of the canonical
+        Params surface.
+        """
+        from services.memory_store import clear_session, get_messages
+
+        payload = params.model_dump(by_alias=True)
+        session_id = payload.get("sessionId", params.session_id)
+        memory_type = payload.get("memoryType", "buffer")
+        window_size = (
+            int(payload.get("windowSize", params.window_size))
+            if memory_type == "window" else None
         )
-        if response.get("success") is False:
-            raise RuntimeError(response.get("error") or "simpleMemory failed")
-        return response.get("result") or {}
+
+        if payload.get("clearOnRun"):
+            cleared = clear_session(session_id)
+            logger.info("[Memory] Cleared %d messages from session '%s'", cleared, session_id)
+
+        messages = get_messages(session_id, window_size)
+        return SimpleMemoryOutput(
+            memory_content=params.memory_content,
+            message_count=len(messages),
+            session_id=session_id,
+            messages=messages,
+            memory_type=memory_type,
+            window_size=window_size,
+        )
