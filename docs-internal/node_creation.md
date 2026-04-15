@@ -1,22 +1,25 @@
 # Node Creation Guide
 
-This guide explains how to create new nodes for MachinaOs, covering frontend definitions, backend handlers, and the complete integration flow.
+> **The canonical recipe moved to [Plugin System (Wave 11)](./plugin_system.md).** That doc has the current class-based `ActionNode` / `TriggerNode` / `ToolNode` quick-start, `@Operation` + declarative `Routing` + `Connection` facade, folder layout, and Temporal worker-pool knobs. New nodes use that pattern.
 
-> **Related Documentation:**
-> - [Workflow Schema](./workflow-schema.md) - JSON schema, edge handle conventions, config node architecture
-> - [Schema Source of Truth RFC](./schema_source_of_truth_rfc.md) - Wave 3 + Wave 6 backend-as-SSOT design
-> - [CLAUDE.md](../CLAUDE.md) - Project overview, key files, architecture patterns
+The Wave 10 `@register_node` dict form documented below is still
+supported (it's what `BaseNode.__init_subclass__` calls internally)
+but is kept here for historical context only.
+
+> **Related documentation:**
+> - **[Plugin System (Wave 11)](./plugin_system.md)** — current canonical recipe, 111 live plugins.
+> - [Workflow Schema](./workflow-schema.md) — JSON schema, edge handle conventions.
+> - [Schema Source of Truth RFC](./schema_source_of_truth_rfc.md) — backend-as-SSOT design.
+> - [CLAUDE.md](../CLAUDE.md) — project overview, key files, architecture patterns.
 
 ---
 
-## Wave 10 — plugin recipe (canonical)
+## Wave 10 — `@register_node` dict form (historical)
 
-Since Wave 10 the canonical path is **one Python file per node** via the
-`@register_node` plugin pattern. Drop a file in `server/nodes/`; the
-auto-discovery walker in `server/nodes/__init__.py` picks it up at import
-time and writes to the four registries
-(`NODE_METADATA`, `_DIRECT_MODELS`, `NODE_OUTPUT_SCHEMAS`,
-`_HANDLER_REGISTRY`) atomically.
+Drop a file in `server/nodes/`; the auto-discovery walker in
+`server/nodes/__init__.py` picks it up at import time and writes to
+the four registries (`NODE_METADATA`, `_DIRECT_MODELS`,
+`NODE_OUTPUT_SCHEMAS`, `_HANDLER_REGISTRY`) atomically.
 
 **Zero frontend edits.** The backend is SSOT for parameter schemas,
 output schemas, visual metadata (icon / color / handles / componentKind),

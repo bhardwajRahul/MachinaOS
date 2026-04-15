@@ -275,6 +275,68 @@ declaring `{label, icon, color, visibility}`. Retires the frontend's
   `client/src/assets/icons/`
 - every palette group carries non-empty label + icon
 
+## Wave 11 — plugin-first class hierarchy
+
+Wave 10 shipped the `@register_node` decorator and per-file plugin
+layout but kept handlers as standalone async functions. Wave 11
+promotes nodes to a class-based plugin model, extracts runtime
+infrastructure into `services/plugin/`, and unifies the node-creation
+API around a single `BaseNode` hierarchy. See
+**[plugin_system.md](./plugin_system.md)** for the canonical reference.
+
+### What changed
+
+- **`BaseNode` class hierarchy.** Three concrete kinds —
+  `ActionNode` / `TriggerNode` / `ToolNode`. Each subclass declares
+  everything on its class object: `type`, metadata, `Params` +
+  `Output` Pydantic models, `credentials`, `handles`, `task_queue`,
+  `retry_policy`, operations. `__init_subclass__` writes to the four
+  legacy registries on import, so existing consumers are unchanged.
+- **`@Operation` decorator** for multi-op dispatch.
+- **Declarative `Routing` DSL** + **`Connection` facade (Nango
+  pattern).** Plugins never see tokens; routing owns templating + HTTP.
+- **Credential classes** (`ApiKeyCredential`, `OAuth2Credential`)
+  with declarative `inject()` methods. Auto-registry via
+  `__init_subclass__`.
+- **Per-plugin Temporal activities** (Wave 11.F). Every subclass
+  exposes `cls.as_activity()` with name `node.{type}.v{version}`.
+  `TemporalWorkerPool` spawns one worker per declared `task_queue`
+  with tuned concurrency (ai-heavy=4, rest-api=50, triggers-poll=100).
+- **Folder layout mirrors palette groups.** `server/nodes/<group>/<name>.py`.
+- **Auto-populate trigger registries** (Wave 11.D.11). Plugins
+  declaring `event_type` + `build_filter` auto-register into
+  `event_waiter.TRIGGER_REGISTRY` + `FILTER_BUILDERS`.
+- **Shared helpers under `services/plugin/`**: `edge_walker.py`
+  (agent connection discovery), `base.py` (BaseNode lifecycle),
+  `context.py` (typed NodeContext), `scaling.py` (TaskQueue +
+  RetryPolicy), `operation.py` (@Operation decorator + collector),
+  `routing.py` (declarative REST DSL), `connection.py` (authed
+  httpx wrapper), `credential.py`, `interceptor.py`.
+
+### Contract invariants
+
+Adds 16 invariants to the 108 Wave 10 suite → **124 total**:
+
+- Every `BaseNode` subclass has `type`, `display_name`, `group`.
+- `Params` + `Output` are Pydantic `BaseModel` subclasses.
+- Every declared credential resolves to `CREDENTIAL_REGISTRY`.
+- `@Operation` names unique per class; `routing=…` requires credentials.
+- `task_queue` ∈ `TaskQueue.ALL`; `retry_policy` is `RetryPolicy`.
+- Every `ToolNode` JSON schema has no `$defs` / `$ref`.
+- Every event-mode `TriggerNode` declares `event_type`.
+- Fast-path covers every AI-tool-usable plugin.
+- Trigger registry auto-populates for every event-mode plugin.
+
+### Status
+
+111 plugins live across 9 Temporal task queues. Handlers in
+`services/handlers/*.py` stay as implementations that plugins call
+(Wave 11.D.1–6 inlined the trivial ones into the plugin files; complex
+handlers like WhatsApp RPC + Google Workspace + document pipeline
+stay delegated — those migrations are deferred polish). Sunset of the
+empty `nodes/{agents,services,triggers,tools,utilities}.py` bulk files
++ dead dispatcher fallbacks is complete (Wave 11.D.13).
+
 ## References
 
 - [n8n `schemaPreview.api.ts`](https://github.com/n8n-io/n8n/blob/master/packages/frontend/editor-ui/src/features/ndv/runData/schemaPreview.api.ts)
