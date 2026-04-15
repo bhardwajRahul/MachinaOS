@@ -159,65 +159,18 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
             context={}
         )
 
-    # WhatsApp send (existing node used as tool)
-    if node_type == 'whatsappSend':
-        return await _execute_whatsapp_send(tool_args, config.get('parameters', {}))
+    # WhatsApp / Twitter / Google Workspace / Search / Maps tool branches
+    # all migrated to plugin classes — routed via the Wave 11.B.1 fast-path
+    # at the top of execute_tool. Branches below kept only for the few
+    # tool types still on the legacy path:
 
-    # WhatsApp DB (existing node used as tool) - query contacts, groups, messages
-    if node_type == 'whatsappDb':
-        return await _execute_whatsapp_db(tool_args, config.get('parameters', {}))
-
-    # Twitter Send (dual-purpose: workflow node + AI tool)
-    if node_type == 'twitterSend':
-        return await _execute_twitter_send(tool_args, config.get('parameters', {}))
-
-    # Twitter Search (dual-purpose: workflow node + AI tool)
-    if node_type == 'twitterSearch':
-        return await _execute_twitter_search(tool_args, config.get('parameters', {}))
-
-    # Twitter User (dual-purpose: workflow node + AI tool)
-    if node_type == 'twitterUser':
-        return await _execute_twitter_user(tool_args, config.get('parameters', {}))
-
-    # ========================================================================
-    # GOOGLE WORKSPACE TOOLS (consolidated: gmail, calendar, drive, sheets, tasks, contacts)
-    # ========================================================================
-
-    # gmail: migrated to plugin (Wave 11.B). Handled by fast-path above.
-    if node_type == 'calendar':
-        return await _execute_google_calendar(tool_args, config.get('parameters', {}))
-    if node_type == 'drive':
-        return await _execute_google_drive(tool_args, config.get('parameters', {}))
-    if node_type == 'sheets':
-        return await _execute_google_sheets(tool_args, config.get('parameters', {}))
-    if node_type == 'tasks':
-        return await _execute_google_tasks(tool_args, config.get('parameters', {}))
-    if node_type == 'contacts':
-        return await _execute_google_contacts(tool_args, config.get('parameters', {}))
-
-    # Android toolkit - routes to connected service nodes
+    # androidTool (toolkit aggregator): kept until 11.D.
     if node_type == 'androidTool':
         return await _execute_android_toolkit(tool_args, config)
 
     # Direct Android service node (connected directly to AI Agent tools handle)
     if node_type in ANDROID_SERVICE_NODE_TYPES:
         return await _execute_android_service(tool_args, config)
-
-    # braveSearch: migrated to plugin (Wave 11.B). Handled by fast-path above.
-
-    # Serper Search (dual-purpose: workflow node + AI tool)
-    if node_type == 'serperSearch':
-        return await _execute_serper_search_tool(tool_args, config.get('parameters', {}))
-
-    # perplexitySearch: migrated to plugin (Wave 11.C). Handled by fast-path above.
-
-    # Google Maps Geocoding (gmaps_locations node as tool)
-    if node_type == 'gmaps_locations':
-        return await _execute_geocoding(tool_args, config.get('parameters', {}))
-
-    # Google Maps Nearby Places (gmaps_nearby_places node as tool)
-    if node_type == 'gmaps_nearby_places':
-        return await _execute_nearby_places(tool_args, config.get('parameters', {}))
 
     # Write Todos (dedicated AI tool for task planning)
     if node_type == 'writeTodos':
