@@ -18,13 +18,45 @@ class PythonExecutorNode(CodeExecutorBase):
 
     @Operation("execute")
     async def execute_op(self, ctx: NodeContext, params: CodeExecutorParams) -> Any:
-        from services.handlers.code import handle_python_executor
-        outputs = ctx.raw.get("connected_outputs") or {}
-        response = await handle_python_executor(
-            node_id=ctx.node_id, node_type=self.type,
-            parameters=params.model_dump(by_alias=True),
-            context=ctx.raw, connected_outputs=outputs,
-        )
-        if response.get("success"):
-            return response.get("result") or response
-        raise RuntimeError(response.get("error") or "Python executor failed")
+        """Inlined from handlers/code.py (Wave 11.D.2).
+
+        Executes user code in a restricted namespace with stdout capture.
+        ``input_data`` exposes ``connected_outputs`` so upstream node
+        results are reachable; ``workspace_dir`` is the per-workflow
+        scratch directory.
+        """
+        import io
+        import json as json_module
+        import math
+
+        if not params.code.strip():
+            raise RuntimeError("No code provided")
+
+        input_data = ctx.raw.get("connected_outputs") or {}
+        stdout_capture = io.StringIO()
+
+        def captured_print(*args, **kwargs):
+            kwargs["file"] = stdout_capture
+            print(*args, **kwargs)
+
+        safe_builtins = {
+            "abs": abs, "all": all, "any": any, "bool": bool,
+            "dict": dict, "enumerate": enumerate, "filter": filter,
+            "float": float, "int": int, "len": len, "list": list,
+            "map": map, "max": max, "min": min, "print": captured_print,
+            "range": range, "round": round, "set": set, "sorted": sorted,
+            "str": str, "sum": sum, "tuple": tuple, "type": type, "zip": zip,
+            "True": True, "False": False, "None": None,
+            "math": math, "json": json_module,
+        }
+        namespace = {
+            "__builtins__": safe_builtins,
+            "input_data": input_data,
+            "workspace_dir": ctx.workspace_dir or "",
+            "output": None,
+        }
+        exec(params.code, namespace)  # noqa: S102 — sandboxed namespace
+        return {
+            "output": namespace.get("output"),
+            "console_output": stdout_capture.getvalue(),
+        }

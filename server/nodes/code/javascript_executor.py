@@ -18,13 +18,24 @@ class JavaScriptExecutorNode(CodeExecutorBase):
 
     @Operation("execute")
     async def execute_op(self, ctx: NodeContext, params: CodeExecutorParams) -> Any:
-        from services.handlers.code import handle_javascript_executor
-        outputs = ctx.raw.get("connected_outputs") or {}
-        response = await handle_javascript_executor(
-            node_id=ctx.node_id, node_type=self.type,
-            parameters=params.model_dump(by_alias=True),
-            context=ctx.raw, connected_outputs=outputs,
+        """Inlined from handlers/code.py (Wave 11.D.2). Dispatches to the
+        persistent Node.js server via the shared NodeJSClient singleton."""
+        from ._nodejs import get_nodejs_client
+
+        if not params.code.strip():
+            raise RuntimeError("No code provided")
+        input_data = dict(ctx.raw.get("connected_outputs") or {})
+        input_data["workspace_dir"] = ctx.workspace_dir or ""
+
+        result = await get_nodejs_client().execute(
+            code=params.code,
+            input_data=input_data,
+            timeout=params.timeout * 1000,
+            language="javascript",
         )
-        if response.get("success"):
-            return response.get("result") or response
-        raise RuntimeError(response.get("error") or "JavaScript executor failed")
+        if not result.get("success"):
+            raise RuntimeError(result.get("error") or "JavaScript executor failed")
+        return {
+            "output": result.get("output"),
+            "console_output": result.get("console_output", ""),
+        }
