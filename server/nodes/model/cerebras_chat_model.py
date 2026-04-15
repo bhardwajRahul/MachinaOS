@@ -4,7 +4,7 @@ from pydantic import Field
 
 from ._base import ChatModelBase, ChatModelParams
 
-from credentials.llm import CerebrasCredential
+from ._credentials import CerebrasCredential
 
 
 class CerebrasChatModelParams(ChatModelParams):

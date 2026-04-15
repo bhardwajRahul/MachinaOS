@@ -4,7 +4,7 @@ from pydantic import Field
 
 from ._base import ChatModelBase, ChatModelParams
 
-from credentials.llm import GeminiCredential
+from ._credentials import GeminiCredential
 
 
 class GeminiChatModelParams(ChatModelParams):

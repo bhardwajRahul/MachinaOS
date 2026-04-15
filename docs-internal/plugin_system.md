@@ -180,30 +180,38 @@ async with ctx.connection("brave_search") as conn:
 
 ### Credentials
 
-Declarative types under `server/credentials/` (or inlined next to
-their plugin for single-use). Three base classes:
+Declarative credentials live **in each node folder's `_credentials.py`**
+(Wave 11.E.1) — same "one domain owns its own code" principle as
+`_base.py` and `_inline.py` helpers. Three base classes (stay in
+`services/plugin/credential.py` as infrastructure):
 
 - `ApiKeyCredential` — header / query / bearer injection.
 - `OAuth2Credential` — `Authorization: Bearer <access_token>` with
   auto-refresh via `auth_service.get_oauth_tokens`.
 - `Credential` — fully custom (override `resolve()` + `inject()`).
 
-Auto-discovery: `server/credentials/__init__.py` walks the package at
-import. `CREDENTIAL_REGISTRY` indexes by `cls.id`. Contract invariant
-ensures every declared credential on a plugin resolves to a
-registered class.
+Auto-discovery rides on node-package import. When
+`nodes/__init__.py:pkgutil.walk_packages` imports a plugin module,
+that module's `from ._credentials import XCredential` statement
+imports the sibling `_credentials.py`, which triggers
+`Credential.__init_subclass__` → writes to `CREDENTIAL_REGISTRY`
+*before* the plugin class is defined. The walker skips
+underscore-prefixed files, so `_credentials.py` is never
+double-imported. Contract invariant
+`test_credentials_are_registered` ensures every declared credential
+on a plugin resolves to a registered class.
 
-**Shipped credentials** (Wave 11.E):
+**Shipped credentials** (Wave 11.E → E.1):
 
-| Module | Class | Auth | Covers |
+| File | Class(es) | Auth | Covers |
 |---|---|---|---|
-| `credentials/google.py` | `GoogleCredential` | oauth2 | gmail, calendar, drive, sheets, tasks, contacts, gmailReceive |
-| `credentials/google_maps.py` | `GoogleMapsCredential` | api_key (query) | gmaps_create / gmaps_locations / gmaps_nearby_places |
-| `credentials/twitter.py` | `TwitterCredential` | oauth2 | twitterSend / twitterSearch / twitterUser / twitterReceive |
-| `credentials/telegram.py` | `TelegramCredential` | api_key | telegramSend / telegramReceive |
-| `credentials/apify.py` | `ApifyCredential` | api_key (bearer) | apifyActor |
-| `credentials/llm.py` | `OpenAI / Anthropic / Gemini / OpenRouter / Groq / Cerebras / DeepSeek / Kimi / Mistral / Xai` | api_key | one per chat model |
-| `nodes/search/*.py` | `BraveSearch / Serper / Perplexity` (inline) | api_key | single-use search nodes |
+| `nodes/google/_credentials.py` | `GoogleCredential` | oauth2 | gmail, calendar, drive, sheets, tasks, contacts, gmailReceive |
+| `nodes/location/_credentials.py` | `GoogleMapsCredential` | api_key (query) | gmaps_create / gmaps_locations / gmaps_nearby_places |
+| `nodes/twitter/_credentials.py` | `TwitterCredential` | oauth2 | twitterSend / twitterSearch / twitterUser / twitterReceive |
+| `nodes/telegram/_credentials.py` | `TelegramCredential` | api_key | telegramSend / telegramReceive |
+| `nodes/scraper/_credentials.py` | `ApifyCredential` | api_key (bearer) | apifyActor |
+| `nodes/model/_credentials.py` | `OpenAI / Anthropic / Gemini / OpenRouter / Groq / Cerebras / DeepSeek / Kimi / Mistral / Xai` | api_key | 9 chat models (xAI reserved) |
+| `nodes/search/*.py` (inline) | `BraveSearch / Serper / Perplexity` | api_key | single-use search nodes |
 
 `GoogleCredential` exposes a `build_credentials()` classmethod that
 returns a `google.oauth2.credentials.Credentials` — hand-off to

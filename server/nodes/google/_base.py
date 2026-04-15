@@ -17,7 +17,7 @@ from typing import Any, Dict
 from googleapiclient.discovery import build
 
 from core.logging import get_logger
-from credentials.google import GoogleCredential
+from ._credentials import GoogleCredential
 from services.pricing import get_pricing_service
 
 logger = get_logger(__name__)

@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from core.logging import get_logger
 from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
-from credentials.apify import ApifyCredential
+from ._credentials import ApifyCredential
 
 logger = get_logger(__name__)
 

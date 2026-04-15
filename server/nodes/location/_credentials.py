@@ -1,7 +1,9 @@
-"""Google Maps API-key credential (Wave 11.E).
+"""Google Maps credential (Wave 11.E.1 — per-domain).
 
-Separate from :class:`GoogleCredential` because Maps uses a static API
-key (billing-tied to a GCP project) whereas Workspace uses OAuth.
+Used by the three location plugins in this folder (gmaps_create,
+gmaps_locations, gmaps_nearby_places). Separate from
+:class:`GoogleCredential` because Maps uses a static API key
+(billing-tied to a GCP project) whereas Workspace uses OAuth.
 """
 
 from __future__ import annotations

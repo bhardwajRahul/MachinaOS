@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from core.logging import get_logger
 from services.plugin import NodeContext, Operation, TaskQueue, TriggerNode
 
-from credentials.google import GoogleCredential
+from ._credentials import GoogleCredential
 
 from ._base import build_google_service, track_google_usage
 from ._gmail import fetch_email_details, mark_email_as_read, poll_gmail_ids

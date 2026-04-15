@@ -1,10 +1,12 @@
-"""LLM provider API-key credentials (Wave 11.E).
+"""LLM provider credentials (Wave 11.E.1 — per-domain).
 
-One :class:`ApiKeyCredential` per provider. Chat-model and agent
-plugins reference them via ``credentials = (OpenAICredential,)`` etc.
-At execution time the plugin's LangChain / native SDK client pulls the
-key directly from :mod:`services.auth`; this class is the
-Credentials-modal + discovery manifest, not the runtime client.
+One :class:`ApiKeyCredential` per provider. Used by the 9 chat-model
+plugins in this folder (openai, anthropic, gemini, openrouter, groq,
+cerebras, deepseek, kimi, mistral) plus the xAI credential referenced
+by agent plugins. At execution time the plugin's LangChain / native
+SDK client pulls the key directly from :mod:`services.auth`; this
+class is the Credentials-modal + discovery manifest, not the runtime
+client.
 """
 
 from __future__ import annotations

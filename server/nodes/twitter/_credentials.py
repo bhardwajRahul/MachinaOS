@@ -1,4 +1,7 @@
-"""Twitter / X credential (Wave 11.E).
+"""Twitter / X credential (Wave 11.E.1 — per-domain).
+
+Used by the four twitter plugins in this folder (twitter_send, twitter_search,
+twitter_user, twitter_receive).
 
 OAuth 2.0 with PKCE. The refresh flow is non-trivial (custom code exchange
 in :mod:`services.twitter_oauth`), so :meth:`build_client` returns an

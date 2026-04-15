@@ -1,4 +1,7 @@
-"""Telegram bot-token credential (Wave 11.E)."""
+"""Telegram bot-token credential (Wave 11.E.1 — per-domain).
+
+Used by the two telegram plugins in this folder (telegram_send, telegram_receive).
+"""
 
 from __future__ import annotations
 

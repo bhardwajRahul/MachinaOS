@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
-from credentials.google_maps import GoogleMapsCredential
+from ._credentials import GoogleMapsCredential
 
 
 class GmapsNearbyPlacesParams(BaseModel):

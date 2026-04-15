@@ -1,4 +1,8 @@
-"""Apify API-token credential (Wave 11.E)."""
+"""Apify credential (Wave 11.E.1 — per-domain).
+
+The crawlee_scraper plugin in this folder may also add its own Credential
+subclasses here in future.
+"""
 
 from __future__ import annotations
 

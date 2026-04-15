@@ -4,7 +4,7 @@ from pydantic import Field
 
 from ._base import ChatModelBase, ChatModelParams
 
-from credentials.llm import DeepSeekCredential
+from ._credentials import DeepSeekCredential
 
 
 class DeepseekChatModelParams(ChatModelParams):

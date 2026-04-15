@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
-from credentials.telegram import TelegramCredential
+from ._credentials import TelegramCredential
 
 
 class TelegramSendParams(BaseModel):

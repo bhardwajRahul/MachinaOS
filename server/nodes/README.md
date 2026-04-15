@@ -14,13 +14,13 @@ Full reference: [docs-internal/plugin_system.md](../../docs-internal/plugin_syst
 from pydantic import BaseModel, ConfigDict, Field
 from typing import List, Literal, Optional
 
-from credentials.llm import OpenAICredential  # or your provider
 from services.plugin import (
     ActionNode, ApiKeyCredential, NodeContext, Operation, TaskQueue,
 )
 
 
-# 1. Credential (or import a shared one from server/credentials/).
+# 1. Credential — inline here (single-use) or move to
+#    server/nodes/search/_credentials.py if 2+ plugins will share it.
 class AcmeCredential(ApiKeyCredential):
     id = "acme"
     display_name = "Acme Search"
@@ -148,24 +148,40 @@ declarative REST).
 
 ## Shared credentials
 
-For any new node reaching an external API, prefer a shared credential
-under `server/credentials/` over an inline one:
+Credentials live **in each node folder's `_credentials.py`** — same
+"one domain owns its own code" principle as `_base.py`. Import from
+the sibling file via relative path:
 
 ```python
-from credentials.google import GoogleCredential         # OAuth, 7 nodes
-from credentials.google_maps import GoogleMapsCredential
-from credentials.twitter import TwitterCredential
-from credentials.telegram import TelegramCredential
-from credentials.apify import ApifyCredential
-from credentials.llm import (
-    OpenAICredential, AnthropicCredential, GeminiCredential,
-    OpenRouterCredential, GroqCredential, CerebrasCredential,
-    DeepSeekCredential, KimiCredential, MistralCredential, XaiCredential,
-)
+# inside server/nodes/google/gmail.py
+from ._credentials import GoogleCredential               # shared with 6 siblings
+
+# inside server/nodes/model/openai_chat_model.py
+from ._credentials import OpenAICredential               # one of 10 LLM creds
+
+# inside server/nodes/twitter/twitter_send.py
+from ._credentials import TwitterCredential              # shared with 3 siblings
 ```
 
+| Folder | `_credentials.py` contents | Plugins |
+|---|---|---|
+| `nodes/google/` | `GoogleCredential` (OAuth2, 7 Workspace scopes union) | gmail, calendar, drive, sheets, tasks, contacts, gmailReceive |
+| `nodes/location/` | `GoogleMapsCredential` (API key via `?key=`) | gmaps_create / gmaps_locations / gmaps_nearby_places |
+| `nodes/twitter/` | `TwitterCredential` (OAuth2 + PKCE) | twitter_send / _search / _user / _receive |
+| `nodes/telegram/` | `TelegramCredential` (bot token + owner chat id) | telegram_send / _receive |
+| `nodes/scraper/` | `ApifyCredential` (Bearer) | apify_actor |
+| `nodes/model/` | 10 LLM classes (`OpenAI / Anthropic / Gemini / OpenRouter / Groq / Cerebras / DeepSeek / Kimi / Mistral / Xai`) | 9 chat models |
+| `nodes/search/` | `BraveSearch / Serper / Perplexity` inlined in each plugin file | single-use per plugin |
+
 Declare inline only when genuinely single-use (see
-`nodes/search/brave_search.py` for the inline pattern).
+`nodes/search/brave_search.py` for the inline pattern). Declare in
+`_credentials.py` when the folder has 2+ plugins that share auth.
+
+Auto-discovery is automatic — when the nodes walker imports a plugin
+file, the plugin's `from ._credentials import X` triggers the
+credential module import, which registers every `Credential` subclass
+into `CREDENTIAL_REGISTRY` before the plugin class body runs. No
+wiring beyond the import statement.
 
 ---
 

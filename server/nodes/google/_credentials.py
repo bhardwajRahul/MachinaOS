@@ -1,6 +1,6 @@
-"""Google Workspace credential (Wave 11.E).
+"""Google Workspace credential (Wave 11.E.1 — per-domain).
 
-One declarative credential shared by all six Google plugins — gmail,
+Used by the seven Google plugins in this folder — gmail, gmail_receive,
 calendar, drive, sheets, tasks, contacts. The plugins don't use the
 :class:`Connection` facade (they need ``google.oauth2.credentials.Credentials``
 to hand to ``googleapiclient.discovery.build``), so :meth:`build_credentials`
