@@ -432,14 +432,46 @@ every CI run. Examples:
 - Wave 11.D.12 — Fast-path contract invariants.
 - Wave 11.D.13 — Sunset empty bulk files + dead dispatch.
 - Wave 11.F — Per-plugin Temporal activities + worker pools.
-- Wave 11.E — Declarative credentials: 18 `Credential` subclasses under
-  `server/credentials/` (GoogleCredential + GoogleMapsCredential +
-  TwitterCredential + TelegramCredential + ApifyCredential + 10 LLM
-  providers + 3 inline search credentials). 29 plugins now declare
-  `credentials = (...)`. Agents stay poly-provider (empty tuple).
+- Wave 11.E — Declarative credentials: 18 `Credential` subclasses
+  (GoogleCredential + GoogleMapsCredential + TwitterCredential +
+  TelegramCredential + ApifyCredential + 10 LLM providers + 3 inline
+  search credentials). 29 plugins now declare `credentials = (...)`.
+  Agents stay poly-provider (empty tuple).
+- Wave 11.E.1 — Modularised credentials into per-domain
+  `nodes/<group>/_credentials.py` files. `server/credentials/`
+  directory deleted; auto-discovery rides on node-package import.
+- Wave 11.E.2 — Dead-code sweep: fixed 2 broken agent imports,
+  stripped 13 dead dispatch branches in `tools.py`, deleted duplicate
+  `handlers/proxy.py`, moved misnamed `routers/whatsapp.py` →
+  `services/whatsapp_service.py`, dedup'd `TRIGGER_NODE_TYPES`.
+- Wave 11.E.3 — Inlined the last per-domain handler bodies into
+  plugins. Deleted 8 fully-orphan handler files (search, code,
+  telegram, http, filesystem, email, process, todo) and 5
+  still-referenced ones (browser, android, claude_code, rlm,
+  deep_agent) by inlining into their plugins. Split `handlers/ai.py`
+  4 ways: `handle_ai_chat_model` → `ChatModelBase.chat`,
+  `handle_simple_memory` → `SimpleMemoryNode.read`,
+  `handle_ai_agent` / `handle_chat_agent` → deleted entirely
+  (`tools.py:_execute_delegated_agent` now uses
+  `BaseNode.execute()` + `NodeContext.from_legacy()` directly via the
+  node registry).
+- Wave 11.E.4 — Relocated `tools.py` movables: proxyConfig 10-op
+  matrix → `nodes/proxy/proxy_config.execute_proxy_config`, Android
+  AI-tool dispatch (toolkit + direct service) →
+  `nodes/android/_base.{execute_android_toolkit,
+  execute_android_service_tool}`. `tools.py` from 1,255 → 821 LOC.
 - Wave 11.G — (this file) Docs + packaging.
 
-Every handler body now lives on its plugin. `services/handlers/` keeps
-only small shared helpers (`google_auth.py`, `triggers.py`) and the
-`tools.py` AI-tool dispatcher — everything else is gone (~8K LOC moved
-or deleted across 11.D.4–10).
+`services/handlers/` is now **4 files / 1,112 LOC** (down from 16
+files / 12,800 LOC):
+
+| File | LOC | Purpose |
+|---|---|---|
+| `tools.py` | 821 | AI-tool dispatcher, plugin fast-path, agent delegation infrastructure (shared `_delegated_tasks` / `_delegation_results` state). |
+| `google_auth.py` | 142 | Shared OAuth helper for the 7 Google plugins. |
+| `triggers.py` | 126 | Generic event-trigger handler for `twitterReceive` and other polling triggers. |
+| `__init__.py` | 23 | Package docstring; nothing imports from `services.handlers` at package level. |
+
+Every domain owns its own code under `nodes/<group>/` — plugin file +
+optional `_base.py` / `_inline.py` / `_credentials.py` siblings. No
+handler shells, no central credential registry, no cross-domain reach.

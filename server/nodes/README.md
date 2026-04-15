@@ -131,14 +131,16 @@ these first before writing new code:
 |---|---|---|
 | `agent/` | `_inline.prepare_agent_call` | One-shot pre-dispatch for every agent (memory + skill + tool + teammate collection) |
 | `agent/` | `_specialized.SpecializedAgentBase` | Base for 13 specialized agents |
-| `model/` | `_base.ChatModelBase` | 9 chat models inherit → same `@Operation("chat")` body |
-| `android/` | `_base.AndroidServiceBase` | 16 Android services inherit |
+| `model/` | `_base.ChatModelBase` | 9 chat models inherit → same `@Operation("chat")` body that calls `ai_service.execute_chat` |
+| `android/` | `_base.AndroidServiceBase` | 16 Android services inherit; payload translation + `SERVICE_ID_MAP` lives on this base |
+| `android/` | `_base.execute_android_toolkit` / `execute_android_service_tool` | AI-tool dispatchers — called from `services/handlers/tools.py` for the toolkit aggregator + direct service tool branches |
 | `code/` | `_base.CodeExecutorBase` + `_nodejs.NodeJSClient` | Python/JS/TS executors |
 | `google/` | `_base.build_google_service` / `track_google_usage` | 7 Google plugins (OAuth + API) |
 | `google/` | `_gmail.fetch_email_details` / `mark_email_as_read` | gmail + gmail_receive |
 | `twitter/` | `_base.call_with_retry` / `format_tweet` / `sync_search_recent` | 4 twitter plugins (XDK + refresh) |
-| `whatsapp/` | `_base.*` | whatsappSend / whatsappDb |
+| `whatsapp/` | `_base.*` | whatsappSend / whatsappDb (RPC dispatch via `services/whatsapp_service.py`) |
 | `social/` | `_base.*` | socialReceive / socialSend |
+| `proxy/` | `proxy_config.execute_proxy_config` | 10-operation matrix; called by both `ProxyConfigNode.dispatch` and `tools.py`'s AI-tool branch |
 
 Cross-domain infrastructure lives in `services/plugin/` (e.g.
 `edge_walker.py` for agent connection discovery, `routing.py` for
@@ -235,11 +237,28 @@ Added in Wave 11 (Mar 2026):
 - **11.A**: `BaseNode` / `ActionNode` / `TriggerNode` / `ToolNode`
   + `@Operation` + `Routing` + `Connection` + `Credential`.
 - **11.B/C**: 111 plugins migrated, folder layout adopted.
-- **11.D**: Handler bodies inlined into plugins (handlers/ shrank
-  ~12.8K → ~4.9K LOC).
+- **11.D**: Per-domain handler bodies inlined.
 - **11.E**: 18 declarative credentials, 29 plugins wired.
+- **11.E.1**: Credentials moved into per-domain `_credentials.py`
+  (no central `server/credentials/` dir).
+- **11.E.2**: Dead-code sweep — 2 broken imports fixed, 13 dead
+  dispatch branches stripped, duplicate proxy handler removed,
+  `routers/whatsapp.py` (misnamed) → `services/whatsapp_service.py`.
+- **11.E.3**: 14 handler files deleted, last per-domain bodies
+  inlined into plugins; `handle_ai_agent` / `handle_chat_agent`
+  retired in favour of `BaseNode.execute()` via the node registry.
+- **11.E.4**: Last `tools.py` movables relocated to their domains
+  (proxyConfig matrix → `nodes/proxy/proxy_config`, Android tool
+  dispatch → `nodes/android/_base`).
 - **11.F**: Per-plugin Temporal activities, 9 worker pools with tuned
   concurrency.
 - **11.G** (this doc): Cookbook.
 
-Plan + migration history: [plugin_system.md](../../docs-internal/plugin_system.md).
+End state: `services/handlers/` is **4 files / 1.1K LOC** (down from
+16 / 12.8K). Only cross-cutting orchestration remains there:
+`tools.py` (AI-tool dispatch + agent delegation), `triggers.py`
+(generic event-trigger handler), `google_auth.py` (shared OAuth
+helper), and a 23-line package docstring.
+
+Plan + full migration history:
+[plugin_system.md](../../docs-internal/plugin_system.md).
