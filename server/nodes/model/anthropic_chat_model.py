@@ -1,15 +1,12 @@
-from typing import Literal, Optional
+from typing import Optional
 
 from pydantic import Field
 
 from ._base import ChatModelBase, ChatModelParams
 
 
-class GeminiChatModelParams(ChatModelParams):
+class AnthropicChatModelParams(ChatModelParams):
     top_k: Optional[int] = Field(default=40, alias="topK", ge=1, le=100)
-    safety_settings: Literal["default", "strict", "permissive"] = Field(
-        default="default", alias="safetySettings",
-    )
     thinking_enabled: bool = Field(default=False, alias="thinkingEnabled")
     thinking_budget: Optional[int] = Field(
         default=2048, alias="thinkingBudget", ge=1024, le=16000,
@@ -17,13 +14,13 @@ class GeminiChatModelParams(ChatModelParams):
     )
 
 
-class GeminiChatModelNode(ChatModelBase):
-    type = "geminiChatModel"
-    display_name = "Gemini"
+class AnthropicChatModelNode(ChatModelBase):
+    type = "anthropicChatModel"
+    display_name = "Claude"
     subtitle = "Chat Model"
-    icon = "lobehub:gemini"
-    color = "#4285F4"
+    icon = "lobehub:claude"
+    color = "#FF6B35"
     group = ("model",)
-    description = "Google Gemini models for multimodal AI capabilities"
+    description = "Anthropic Claude models for conversation and analysis"
 
-    Params = GeminiChatModelParams
+    Params = AnthropicChatModelParams

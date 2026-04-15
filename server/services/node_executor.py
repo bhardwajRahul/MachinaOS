@@ -141,26 +141,8 @@ class NodeExecutor:
             'start': handle_start,
             'cronScheduler': handle_cron_scheduler,
             'timer': handle_timer,
-            # AI
-            # aiAgent + chatAgent: migrated to nodes/agent/{ai_agent,chat_agent}.py (Wave 11.C).
-            # Plugin handler wins via registry merge.
-            # Specialized Agents (use chatAgent handler - same skill/memory/tools architecture)
-            'android_agent': partial(handle_chat_agent, ai_service=self.ai_service, database=self.database),
-            'coding_agent': partial(handle_chat_agent, ai_service=self.ai_service, database=self.database),
-            'web_agent': partial(handle_chat_agent, ai_service=self.ai_service, database=self.database),
-            'task_agent': partial(handle_chat_agent, ai_service=self.ai_service, database=self.database),
-            'social_agent': partial(handle_chat_agent, ai_service=self.ai_service, database=self.database),
-            'travel_agent': partial(handle_chat_agent, ai_service=self.ai_service, database=self.database),
-            'tool_agent': partial(handle_chat_agent, ai_service=self.ai_service, database=self.database),
-            'productivity_agent': partial(handle_chat_agent, ai_service=self.ai_service, database=self.database),
-            'payments_agent': partial(handle_chat_agent, ai_service=self.ai_service, database=self.database),
-            'consumer_agent': partial(handle_chat_agent, ai_service=self.ai_service, database=self.database),
-            'autonomous_agent': partial(handle_chat_agent, ai_service=self.ai_service, database=self.database),
-            'orchestrator_agent': partial(handle_chat_agent, ai_service=self.ai_service, database=self.database),
-            'ai_employee': partial(handle_chat_agent, ai_service=self.ai_service, database=self.database),
-            'deep_agent': partial(handle_deep_agent, ai_service=self.ai_service, database=self.database),
-            'rlm_agent': partial(handle_rlm_agent, ai_service=self.ai_service, database=self.database),
-            'claude_code_agent': partial(handle_claude_code_agent, ai_service=self.ai_service, database=self.database),
+            # AI agents — all migrated to nodes/agent/*.py (Wave 11.C).
+            # Plugin handlers win via registry.update(_PLUGIN_HANDLERS) merge below.
             'simpleMemory': handle_simple_memory,
             # Maps
             'gmaps_create': partial(handle_create_map, maps_service=self.maps_service),
@@ -195,7 +177,7 @@ class NodeExecutor:
             # perplexitySearch: migrated to nodes/search/perplexity_search.py (Wave 11.C). Plugin handler wins.
             # Social (unified messaging)
             # Note: socialReceive handled in _dispatch with connected_outputs
-            'socialSend': handle_social_send,
+            # socialSend: migrated to nodes/social/social_send.py (Wave 11.C).
             # Chat
             'chatSend': handle_chat_send,
             'chatHistory': handle_chat_history,
@@ -234,9 +216,8 @@ class NodeExecutor:
             # Note: 'console' handled in _dispatch with connected_outputs
         }
 
-        # Register AI chat models
-        for node_type in AI_CHAT_MODEL_TYPES:
-            registry[node_type] = partial(handle_ai_chat_model, ai_service=self.ai_service)
+        # AI chat models — all 9 migrated to nodes/model/*.py (Wave 11.C).
+        # Plugin handlers register themselves via _PLUGIN_HANDLERS merge below.
 
         # Register Android services
         for node_type in ANDROID_SERVICE_NODE_TYPES:
@@ -397,12 +378,9 @@ class NodeExecutor:
             return await handler(node_id, node_type, params, context)
 
         # Legacy special handlers — invoked when no plugin is registered.
-        # console: migrated to nodes/utility/console.py (Wave 11.C); plugin wins above.
+        # console + socialReceive: migrated to nodes/{utility,social}/ (Wave 11.C); plugins win above.
         if node_type in self._NEEDS_CONNECTED_OUTPUTS:
             outputs = context['connected_outputs']
-            source_nodes = context['source_nodes']
-            if node_type == 'socialReceive':
-                return await handle_social_receive(node_id, node_type, params, context, outputs, source_nodes)
             handlers = {
                 'pythonExecutor': handle_python_executor,
                 'javascriptExecutor': handle_javascript_executor,

@@ -61,15 +61,7 @@ register_node(type="mediaControl",           metadata={"displayName": "Media Con
 # 2. AI chat models (9) + memory + skill — model dispatch + accent colors
 # ---------------------------------------------------------------------------
 
-register_node(type="openaiChatModel",     metadata={"displayName": "OpenAI",      "subtitle": "Chat Model", "icon": "lobehub:openai",     "color": "#00A67E", "group": ["model"], "componentKind": "model", "handles": _MODEL_OUT, "description": "OpenAI GPT models for chat completion and generation", "version": 1})
-register_node(type="anthropicChatModel",  metadata={"displayName": "Claude",      "subtitle": "Chat Model", "icon": "lobehub:claude",     "color": "#FF6B35", "group": ["model"], "componentKind": "model", "handles": _MODEL_OUT, "description": "Anthropic Claude models for conversation and analysis", "version": 1})
-# geminiChatModel — migrated to nodes/model/gemini_chat_model.py (Wave 11.C).
-register_node(type="openrouterChatModel", metadata={"displayName": "OpenRouter",  "subtitle": "Chat Model", "icon": "lobehub:openrouter", "color": "#6366F1", "group": ["model"], "componentKind": "model", "handles": _MODEL_OUT, "description": "OpenRouter unified API - access OpenAI, Claude, Gemini, Llama, and more", "version": 1})
-register_node(type="groqChatModel",       metadata={"displayName": "Groq",        "subtitle": "Chat Model", "icon": "lobehub:groq",       "color": "#F55036", "group": ["model"], "componentKind": "model", "handles": _MODEL_OUT, "description": "Groq ultra-fast LLM inference (Llama, Qwen3, GPT-OSS)", "version": 1})
-register_node(type="cerebrasChatModel",   metadata={"displayName": "Cerebras",    "subtitle": "Chat Model", "icon": "lobehub:cerebras",   "color": "#ffb86c", "group": ["model"], "componentKind": "model", "handles": _MODEL_OUT, "description": "Cerebras ultra-fast inference on custom AI hardware", "version": 1})
-register_node(type="deepseekChatModel",   metadata={"displayName": "DeepSeek",    "subtitle": "Chat Model", "icon": "lobehub:deepseek",   "color": "#8be9fd", "group": ["model"], "componentKind": "model", "handles": _MODEL_OUT, "description": "DeepSeek V3 models (deepseek-chat, deepseek-reasoner with always-on CoT)", "version": 1})
-register_node(type="kimiChatModel",       metadata={"displayName": "Kimi",        "subtitle": "Chat Model", "icon": "lobehub:kimi",       "color": "#bd93f9", "group": ["model"], "componentKind": "model", "handles": _MODEL_OUT, "description": "Kimi K2 models by Moonshot AI with 256K context (thinking on by default)", "version": 1})
-register_node(type="mistralChatModel",    metadata={"displayName": "Mistral",     "subtitle": "Chat Model", "icon": "lobehub:mistral",    "color": "#ffb86c", "group": ["model"], "componentKind": "model", "handles": _MODEL_OUT, "description": "Mistral AI models for reasoning, coding, and multilingual tasks", "version": 1})
+# All 9 chat models — migrated to nodes/model/*.py (Wave 11.C).
 
 register_node(
     type="simpleMemory",
