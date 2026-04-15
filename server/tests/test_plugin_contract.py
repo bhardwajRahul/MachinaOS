@@ -147,3 +147,62 @@ class TestToolSchemaGeneration:
             )
             assert "definitions" not in params
             assert schema.get("name") == cls.type
+
+
+class TestToolSchemaFastPath:
+    """Wave 11.D.12: every plugin node usable as an AI tool must resolve
+    via the plugin fast-path in :meth:`AIService._get_tool_schema`.
+    Legacy per-type hardcoded branches become dead code once this test
+    passes — scheduled for deletion in 11.D.13.
+    """
+
+    def test_fast_path_covers_every_plugin_tool(self):
+        from services.node_registry import get_node_class
+        from services.plugin.tool import ToolNode
+
+        for cls in _all_plugin_classes():
+            is_tool = issubclass(cls, ToolNode) or getattr(cls, "usable_as_tool", False)
+            if not is_tool:
+                continue
+            resolved = get_node_class(cls.type)
+            assert resolved is cls, (
+                f"{cls.__qualname__}: fast-path lookup by type '{cls.type}' "
+                f"returned {resolved}, expected {cls}"
+            )
+            assert hasattr(resolved, "Params"), (
+                f"{cls.__qualname__} has no Params — fast-path would miss it"
+            )
+
+
+class TestTriggerRegistryAutoPopulate:
+    """Wave 11.D.11: every event-mode TriggerNode plugin must register
+    itself into event_waiter.TRIGGER_REGISTRY + FILTER_BUILDERS
+    (hardcoded entries still win so this is a superset check)."""
+
+    def test_every_event_trigger_has_event_type(self):
+        from services.plugin.trigger import TriggerNode
+
+        for cls in _all_plugin_classes():
+            if not issubclass(cls, TriggerNode):
+                continue
+            if getattr(cls, "mode", "event") != "event":
+                continue
+            assert cls.event_type, (
+                f"{cls.__qualname__} (TriggerNode, mode=event) is missing "
+                "event_type — event_waiter won't auto-populate for it"
+            )
+
+    def test_event_triggers_populate_registry(self):
+        from services import event_waiter
+        from services.plugin.trigger import TriggerNode
+
+        for cls in _all_plugin_classes():
+            if not issubclass(cls, TriggerNode):
+                continue
+            if getattr(cls, "mode", "event") != "event" or not cls.event_type:
+                continue
+            cfg = event_waiter.get_trigger_config(cls.type)
+            assert cfg is not None, (
+                f"{cls.__qualname__}: get_trigger_config('{cls.type}') returned None"
+            )
+            assert cfg.event_type == cls.event_type
