@@ -193,6 +193,27 @@ import. `CREDENTIAL_REGISTRY` indexes by `cls.id`. Contract invariant
 ensures every declared credential on a plugin resolves to a
 registered class.
 
+**Shipped credentials** (Wave 11.E):
+
+| Module | Class | Auth | Covers |
+|---|---|---|---|
+| `credentials/google.py` | `GoogleCredential` | oauth2 | gmail, calendar, drive, sheets, tasks, contacts, gmailReceive |
+| `credentials/google_maps.py` | `GoogleMapsCredential` | api_key (query) | gmaps_create / gmaps_locations / gmaps_nearby_places |
+| `credentials/twitter.py` | `TwitterCredential` | oauth2 | twitterSend / twitterSearch / twitterUser / twitterReceive |
+| `credentials/telegram.py` | `TelegramCredential` | api_key | telegramSend / telegramReceive |
+| `credentials/apify.py` | `ApifyCredential` | api_key (bearer) | apifyActor |
+| `credentials/llm.py` | `OpenAI / Anthropic / Gemini / OpenRouter / Groq / Cerebras / DeepSeek / Kimi / Mistral / Xai` | api_key | one per chat model |
+| `nodes/search/*.py` | `BraveSearch / Serper / Perplexity` (inline) | api_key | single-use search nodes |
+
+`GoogleCredential` exposes a `build_credentials()` classmethod that
+returns a `google.oauth2.credentials.Credentials` — hand-off to
+`googleapiclient.discovery.build(...)` is unchanged from Wave 11.D.4.
+
+Agents (aiAgent / chatAgent / 13 specialized) stay `credentials = ()`
+because they are poly-provider — the user picks the provider at
+runtime via `params.provider`, so declaring any single credential
+would be misleading.
+
 ### Shared agent helpers
 
 Every agent plugin (ai_agent, chat_agent, 13 specialized agents, team
@@ -403,7 +424,11 @@ every CI run. Examples:
 - Wave 11.D.12 — Fast-path contract invariants.
 - Wave 11.D.13 — Sunset empty bulk files + dead dispatch.
 - Wave 11.F — Per-plugin Temporal activities + worker pools.
-- Wave 11.E — (next) Declarative credentials consolidation.
+- Wave 11.E — Declarative credentials: 18 `Credential` subclasses under
+  `server/credentials/` (GoogleCredential + GoogleMapsCredential +
+  TwitterCredential + TelegramCredential + ApifyCredential + 10 LLM
+  providers + 3 inline search credentials). 29 plugins now declare
+  `credentials = (...)`. Agents stay poly-provider (empty tuple).
 - Wave 11.G — (this file) Docs + packaging.
 
 Every handler body now lives on its plugin. `services/handlers/` keeps
