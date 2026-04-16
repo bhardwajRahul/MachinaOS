@@ -21,13 +21,26 @@ def patched_container(
     auth_api_keys: Optional[Dict[str, str]] = None,
     auth_oauth_tokens: Optional[Dict[str, Dict[str, Any]]] = None,
     database: Optional[MagicMock] = None,
+    ai_service: Optional[Any] = None,
+    android_service: Optional[Any] = None,
+    maps_service: Optional[Any] = None,
+    text_service: Optional[Any] = None,
 ) -> Iterator[MagicMock]:
     """Patch `core.container.container` so handlers see canned credentials and DB.
+
+    Scaling-branch plugins resolve services via
+    `from core.container import container; svc = container.X()` inside the
+    plugin body, so the NodeExecutor-injected services on `harness.X` are
+    orphaned unless we also wire them onto the container mock here.
 
     Args:
         auth_api_keys: Map of provider -> api_key string returned by get_api_key.
         auth_oauth_tokens: Map of provider -> token dict returned by get_oauth_tokens.
         database: Optional MagicMock to use as the database; defaults to a stub.
+        ai_service / android_service / maps_service / text_service: Optional
+            service instances that `container.X()` should return. Pass the
+            harness's pre-wired mocks so assertions on `harness.ai_service.
+            execute_chat.assert_awaited_once()` survive plugin dispatch.
 
     Yields:
         The patched container MagicMock so tests can inspect calls.
@@ -57,6 +70,15 @@ def patched_container(
     container_mock = MagicMock(name="Container")
     container_mock.auth_service = MagicMock(return_value=auth_service)
     container_mock.database = MagicMock(return_value=db_mock)
+
+    if ai_service is not None:
+        container_mock.ai_service = MagicMock(return_value=ai_service)
+    if android_service is not None:
+        container_mock.android_service = MagicMock(return_value=android_service)
+    if maps_service is not None:
+        container_mock.maps_service = MagicMock(return_value=maps_service)
+    if text_service is not None:
+        container_mock.text_service = MagicMock(return_value=text_service)
 
     with patch("core.container.container", container_mock):
         yield container_mock
@@ -99,6 +121,7 @@ def patched_broadcaster() -> Iterator[MagicMock]:
         "update_node_status",
         "update_workflow_status",
         "broadcast_terminal_log",
+        "broadcast_console_log",
         "send_custom_event",
         "broadcast_message",
         "_broadcast",

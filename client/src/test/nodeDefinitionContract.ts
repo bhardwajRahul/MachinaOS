@@ -19,10 +19,15 @@ export interface ContractIssue {
   message: string;
 }
 
+// Wave 10.B: `icon` is now backend-owned (served via NodeSpec from
+// server/models/node_metadata.NODE_METADATA and assembled in
+// services/node_spec.get_node_spec). The frontend type declares it as
+// `icon?: string` and every entry in client/src/nodeDefinitions/*.ts
+// has had its icon field stripped. Do NOT add `icon` back to this list --
+// the source of truth has moved. See docs-internal/schema_source_of_truth_rfc.md.
 const REQUIRED_TOP_LEVEL: (keyof INodeTypeDescription)[] = [
   'displayName',
   'name',
-  'icon',
   'group',
   'version',
   'description',
