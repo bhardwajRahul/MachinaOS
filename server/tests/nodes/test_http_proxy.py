@@ -170,7 +170,7 @@ class TestProxyRequest:
         pricing = _pricing_with_proxy_config()
 
         with patch(
-            "services.handlers.proxy.get_proxy_service", return_value=proxy_svc
+            "services.proxy.service.get_proxy_service", return_value=proxy_svc
         ), patch(
             "services.pricing.get_pricing_service", return_value=pricing
         ), patched_container():
@@ -214,7 +214,7 @@ class TestProxyRequest:
         proxy_svc = _make_proxy_service_mock(enabled=False)
 
         with patch(
-            "services.handlers.proxy.get_proxy_service", return_value=proxy_svc
+            "services.proxy.service.get_proxy_service", return_value=proxy_svc
         ), patched_container():
             result = await harness.execute(
                 "proxyRequest", {"method": "GET", "url": "https://x.test"}
@@ -227,7 +227,7 @@ class TestProxyRequest:
         proxy_svc = _make_proxy_service_mock()
 
         with patch(
-            "services.handlers.proxy.get_proxy_service", return_value=proxy_svc
+            "services.proxy.service.get_proxy_service", return_value=proxy_svc
         ), patched_container():
             result = await harness.execute(
                 "proxyRequest", {"method": "GET", "url": ""}
@@ -240,7 +240,7 @@ class TestProxyRequest:
         proxy_svc = _make_proxy_service_mock(proxy_url=None)
 
         with patch(
-            "services.handlers.proxy.get_proxy_service", return_value=proxy_svc
+            "services.proxy.service.get_proxy_service", return_value=proxy_svc
         ), patched_container():
             result = await harness.execute(
                 "proxyRequest", {"method": "GET", "url": "https://x.test"}
@@ -256,7 +256,7 @@ class TestProxyRequest:
         proxy_svc = _make_proxy_service_mock()
 
         with patch(
-            "services.handlers.proxy.get_proxy_service", return_value=proxy_svc
+            "services.proxy.service.get_proxy_service", return_value=proxy_svc
         ), patched_container():
             result = await harness.execute(
                 "proxyRequest",
@@ -295,7 +295,7 @@ class TestProxyConfig:
         # so we must patch it in the handler module too. tools.py re-imports
         # it inside the function, so patching the source is sufficient there.
         with patch(
-            "services.handlers.proxy.get_proxy_service", return_value=proxy_svc
+            "services.proxy.service.get_proxy_service", return_value=proxy_svc
         ), patch(
             "services.proxy.service.get_proxy_service", return_value=proxy_svc
         ), patched_container():
@@ -317,7 +317,7 @@ class TestProxyConfig:
         proxy_svc = _make_proxy_service_mock()
 
         with patch(
-            "services.handlers.proxy.get_proxy_service", return_value=proxy_svc
+            "services.proxy.service.get_proxy_service", return_value=proxy_svc
         ), patch(
             "services.proxy.service.get_proxy_service", return_value=proxy_svc
         ), patched_container():
@@ -338,7 +338,7 @@ class TestProxyConfig:
         proxy_svc = _make_proxy_service_mock()
 
         with patch(
-            "services.handlers.proxy.get_proxy_service", return_value=proxy_svc
+            "services.proxy.service.get_proxy_service", return_value=proxy_svc
         ), patch(
             "services.proxy.service.get_proxy_service", return_value=proxy_svc
         ), patched_container():
@@ -367,7 +367,7 @@ class TestProxyStatus:
         )
 
         with patch(
-            "services.handlers.proxy.get_proxy_service", return_value=proxy_svc
+            "services.proxy.service.get_proxy_service", return_value=proxy_svc
         ):
             result = await harness.execute("proxyStatus", {})
 
@@ -382,7 +382,7 @@ class TestProxyStatus:
         proxy_svc = _make_proxy_service_mock(enabled=False)
 
         with patch(
-            "services.handlers.proxy.get_proxy_service", return_value=proxy_svc
+            "services.proxy.service.get_proxy_service", return_value=proxy_svc
         ):
             result = await harness.execute("proxyStatus", {})
 
@@ -396,7 +396,7 @@ class TestProxyStatus:
         proxy_svc.get_stats = MagicMock(side_effect=RuntimeError("kaboom"))
 
         with patch(
-            "services.handlers.proxy.get_proxy_service", return_value=proxy_svc
+            "services.proxy.service.get_proxy_service", return_value=proxy_svc
         ):
             result = await harness.execute("proxyStatus", {})
 

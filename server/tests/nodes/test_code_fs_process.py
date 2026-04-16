@@ -17,7 +17,7 @@ Mocking strategy:
   - filesystem nodes (fileRead, fileModify, shell, fsSearch): patch
     services.handlers.filesystem._get_backend to return a fake backend with
     the methods each mode invokes.
-  - processManager: patch services.handlers.process.get_process_service to
+  - processManager: patch services.process_service.get_process_service to
     return a fake ProcessService with the dispatched method set to an
     AsyncMock / MagicMock.
 """
@@ -39,14 +39,17 @@ pytestmark = pytest.mark.node_contract
 
 
 def _reset_nodejs_singleton():
-    """Clear the module-level client singleton in services.handlers.code.
+    """Clear the module-level client singleton in nodes.code._nodejs.
 
-    The handler caches its NodeJSClient on first use; tests that patch must
+    The plugin caches its NodeJSClient on first use; tests that patch must
     either reset this between cases or patch the module attribute directly.
     """
-    import services.handlers.code as code_mod
+    try:
+        import nodes.code._nodejs as code_mod
 
-    code_mod._nodejs_client = None
+        code_mod._client = None  # scaling-branch singleton name
+    except (ImportError, AttributeError):
+        pass
 
 
 class _FakeWriteResult(SimpleNamespace):
@@ -69,9 +72,9 @@ class _FakeFileInfo(dict):
 
 
 def _patch_fs_backend(backend: MagicMock):
-    """Patch services.handlers.filesystem._get_backend to return a fake."""
+    """Patch nodes.filesystem._backend.get_backend (shared by all 4 fs plugins)."""
     return patch(
-        "services.handlers.filesystem._get_backend",
+        "nodes.filesystem._backend.get_backend",
         return_value=backend,
     )
 
@@ -157,7 +160,7 @@ class TestJavascriptExecutor:
         )
 
         with patch(
-            "services.handlers.code.get_nodejs_client",
+            "nodes.code._nodejs.get_nodejs_client",
             return_value=fake_client,
         ):
             result = await harness.execute(
@@ -200,7 +203,7 @@ class TestJavascriptExecutor:
         )
 
         with patch(
-            "services.handlers.code.get_nodejs_client",
+            "nodes.code._nodejs.get_nodejs_client",
             return_value=fake_client,
         ):
             result = await harness.execute(
@@ -220,7 +223,7 @@ class TestJavascriptExecutor:
         )
 
         with patch(
-            "services.handlers.code.get_nodejs_client",
+            "nodes.code._nodejs.get_nodejs_client",
             return_value=fake_client,
         ):
             result = await harness.execute(
@@ -249,7 +252,7 @@ class TestTypescriptExecutor:
         )
 
         with patch(
-            "services.handlers.code.get_nodejs_client",
+            "nodes.code._nodejs.get_nodejs_client",
             return_value=fake_client,
         ):
             result = await harness.execute(
@@ -282,7 +285,7 @@ class TestTypescriptExecutor:
         )
 
         with patch(
-            "services.handlers.code.get_nodejs_client",
+            "nodes.code._nodejs.get_nodejs_client",
             return_value=fake_client,
         ):
             result = await harness.execute(
@@ -646,7 +649,7 @@ def _fake_process_service():
 
 def _patch_process_service(svc):
     return patch(
-        "services.handlers.process.get_process_service",
+        "services.process_service.get_process_service",
         return_value=svc,
     )
 

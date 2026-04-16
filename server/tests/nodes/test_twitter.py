@@ -74,8 +74,10 @@ def _make_client_class(*, posts=None, users=None):
 
 
 def _patch_client(stub_cls):
-    """Patch the xdk.Client reference inside the handler module."""
-    return patch("services.handlers.twitter.Client", stub_cls)
+    """Patch xdk.Client at the SDK module. Scaling-branch plugin does
+    `from xdk import Client` inside `nodes.twitter._base.get_twitter_client`
+    per call, so patching the source module is the correct target."""
+    return patch("xdk.Client", stub_cls)
 
 
 # ============================================================================

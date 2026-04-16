@@ -50,7 +50,7 @@ class _FakeBrowserService:
 
 def _patch_browser_service(svc):
     """Patch get_browser_service to return the fake."""
-    return patch("services.handlers.browser.get_browser_service", return_value=svc)
+    return patch("services.browser_service.get_browser_service", return_value=svc)
 
 
 # ============================================================================
@@ -140,7 +140,7 @@ class TestBrowser:
 
     async def test_service_not_installed(self, harness):
         with patch(
-            "services.handlers.browser.get_browser_service", return_value=None
+            "services.browser_service.get_browser_service", return_value=None
         ):
             result = await harness.execute("browser", {"operation": "navigate", "url": "https://x"})
 
@@ -331,7 +331,7 @@ class TestApifyActor:
         fake_client = _make_fake_apify_client(run_info=run_info, items=items)
 
         with patched_container(auth_api_keys={"apify": "tk_apify"}), patch(
-            "services.handlers.apify.ApifyClientAsync", return_value=fake_client
+            "apify_client.ApifyClientAsync", return_value=fake_client
         ):
             result = await harness.execute(
                 "apifyActor",
@@ -392,7 +392,7 @@ class TestApifyActor:
         fake_client = _make_fake_apify_client(run_info={})
 
         with patched_container(auth_api_keys={"apify": "tk"}), patch(
-            "services.handlers.apify.ApifyClientAsync", return_value=fake_client
+            "apify_client.ApifyClientAsync", return_value=fake_client
         ):
             result = await harness.execute("apifyActor", {"actorId": ""})
 
@@ -409,7 +409,7 @@ class TestApifyActor:
         fake_client = _make_fake_apify_client(run_info=run_info, items=[])
 
         with patched_container(auth_api_keys={"apify": "tk"}), patch(
-            "services.handlers.apify.ApifyClientAsync", return_value=fake_client
+            "apify_client.ApifyClientAsync", return_value=fake_client
         ):
             result = await harness.execute(
                 "apifyActor", {"actorId": "apify/some-actor"}
@@ -428,7 +428,7 @@ class TestApifyActor:
         )
 
         with patched_container(auth_api_keys={"apify": "tk"}), patch(
-            "services.handlers.apify.ApifyClientAsync", return_value=fake_client
+            "apify_client.ApifyClientAsync", return_value=fake_client
         ):
             result = await harness.execute(
                 "apifyActor", {"actorId": "apify/some-actor"}
@@ -449,7 +449,7 @@ class TestApifyActor:
         fake_client = _make_fake_apify_client(run_info=run_info, items=[])
 
         with patched_container(auth_api_keys={"apify": "tk"}), patch(
-            "services.handlers.apify.ApifyClientAsync", return_value=fake_client
+            "apify_client.ApifyClientAsync", return_value=fake_client
         ):
             result = await harness.execute(
                 "apifyActor",

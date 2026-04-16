@@ -37,18 +37,29 @@ def patched_trigger_waiter(
     *,
     raise_cancelled: bool = False,
 ) -> Iterator[MagicMock]:
-    """Patch event_waiter on the triggers handler namespace.
+    """Patch event_waiter at its source module for the plugin trigger path.
 
-    The generic trigger handler imports `from services import event_waiter`,
-    so the bound name lives at `services.handlers.triggers.event_waiter`.
-    Mocks replicate the real module surface used by the handler:
-      - get_trigger_config(node_type) -> TriggerConfig-like MagicMock
-      - register(...) -> awaitable that yields a Waiter-like MagicMock
-      - wait_for_event(waiter) -> awaitable that yields canned_event
-      - get_backend_mode() -> "memory"
+    Scaling-branch plugin TriggerNode.execute does:
+        from services import event_waiter
+        waiter = event_waiter.register(...)   # sync
+        event_data = await waiter.future      # awaitable
+
+    So `register` is a sync MagicMock and `waiter.future` is a pre-resolved
+    asyncio.Future (or raises CancelledError if `raise_cancelled=True`).
     """
+    import asyncio as _asyncio
+
     event_data = canned_event if canned_event is not None else {}
+
+    loop = _asyncio.get_event_loop()
+    future = loop.create_future()
+    if raise_cancelled:
+        future.set_exception(_asyncio.CancelledError())
+    else:
+        future.set_result(event_data)
+
     waiter_obj = MagicMock(name="Waiter", id="waiter-test-id")
+    waiter_obj.future = future
 
     mock = MagicMock(name="event_waiter_module")
     mock.get_trigger_config = MagicMock(
@@ -58,21 +69,15 @@ def patched_trigger_waiter(
             display_name="Test Trigger",
         )
     )
-    mock.register = AsyncMock(return_value=waiter_obj)
-
+    mock.register = MagicMock(return_value=waiter_obj)
     if raise_cancelled:
-        import asyncio as _asyncio
-
         mock.wait_for_event = AsyncMock(side_effect=_asyncio.CancelledError())
     else:
         mock.wait_for_event = AsyncMock(return_value=event_data)
-
     mock.get_backend_mode = MagicMock(return_value="memory")
     mock.is_trigger_node = MagicMock(return_value=True)
 
-    with patch("services.handlers.triggers.event_waiter", mock), patch(
-        "services.node_executor.event_waiter", mock
-    ):
+    with patch("services.event_waiter", mock):
         yield mock
 
 
