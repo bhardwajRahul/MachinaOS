@@ -143,15 +143,54 @@ def _build_args(op: str, p: Dict[str, Any]) -> List[str]:
 
 
 class BrowserParams(BaseModel):
+    """Browser automation parameters.
+
+    Mirrors the operation-facing surface of the agent-browser CLI. Fields
+    are scoped to what the LLM needs to drive each operation; stealth and
+    runtime config (headed, browser, chromeProfile, proxy, timeout, ...)
+    flow through as node_params via the plugin's {**node_params, **tool_args}
+    merge and are consumed by dispatch() with sensible defaults, without
+    being exposed to the LLM tool schema.
+    """
+
     operation: Literal[
         "navigate", "click", "type", "fill", "screenshot", "snapshot",
-        "get_text", "get_html", "eval", "wait", "scroll", "select", "batch",
-    ] = "navigate"
-    url: str = Field(default="")
-    selector: str = Field(default="")
-    text: str = Field(default="")
-    session: str = Field(default="")
+        "get_text", "get_html", "eval", "wait", "scroll", "select",
+        "console", "errors", "batch",
+    ] = Field(
+        default="navigate",
+        description=(
+            "Operation: navigate, click, type, fill, screenshot, snapshot, "
+            "get_text, get_html, eval, wait, scroll, select, console, errors, batch. "
+            "Typical flow: navigate -> snapshot -> interact using @eN refs -> snapshot."
+        ),
+    )
 
+    url: Optional[str] = Field(default=None, description="[navigate] URL to open")
+    selector: Optional[str] = Field(
+        default=None,
+        description="[click/type/fill/get_text/get_html/wait/select] CSS selector or @eN ref from snapshot",
+    )
+    text: Optional[str] = Field(default=None, description="[type] Text to type")
+    value: Optional[str] = Field(
+        default=None,
+        description="[fill/select] Value to fill or option to select",
+    )
+    expression: Optional[str] = Field(default=None, description="[eval] JavaScript to execute")
+    direction: Optional[str] = Field(default="down", description="[scroll] up, down, left, right")
+    amount: Optional[int] = Field(default=500, description="[scroll] Pixels to scroll")
+    fullPage: Optional[bool] = Field(default=False, description="[screenshot] Capture full scrollable page")
+
+    session: Optional[str] = Field(
+        default=None,
+        description="Browser session name for state sharing across chained nodes (auto-derived when empty)",
+    )
+
+    # extra="allow" lets stealth and runtime config (headed, browser,
+    # chromeProfile, proxy, timeout, newWindow, userAgent, autoConnect,
+    # executablePath, actionDelay, annotate, screenshotFormat,
+    # screenshotQuality, commands) flow through from node_params without
+    # surfacing in the LLM tool schema. dispatch() reads them with defaults.
     model_config = ConfigDict(extra="allow")
 
 

@@ -91,8 +91,12 @@ class ToolAdapter:
             try:
                 result = await execute_tool(tool_name, kwargs, cfg)
                 elapsed = time.time() - t0
+                if isinstance(result, dict):
+                    success = result.get('success', 'error' not in result)
+                else:
+                    success = True
                 logger.info("[DeepAgent] Tool done: %s (%.2fs) success=%s",
-                            tool_name, elapsed, result.get('success', True) if isinstance(result, dict) else True)
+                            tool_name, elapsed, success)
                 if tool_node_id and broadcaster:
                     await broadcaster.update_node_status(
                         tool_node_id, "success",
