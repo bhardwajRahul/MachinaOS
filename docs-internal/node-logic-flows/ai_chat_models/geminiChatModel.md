@@ -1,0 +1,110 @@
+# Gemini Chat Model (`geminiChatModel`)
+
+| Field | Value |
+|------|-------|
+| **Category** | ai_chat_models |
+| **Frontend definition** | [`client/src/nodeDefinitions/aiModelNodes.ts`](../../../client/src/nodeDefinitions/aiModelNodes.ts) |
+| **Backend handler** | [`server/services/handlers/ai.py::handle_ai_chat_model`](../../../server/services/handlers/ai.py) |
+| **AI service** | [`server/services/ai.py::AIService.execute_chat`](../../../server/services/ai.py) |
+| **Tests** | [`server/tests/nodes/test_ai_chat_models.py`](../../../server/tests/nodes/test_ai_chat_models.py) |
+| **Skill (if any)** | n/a |
+| **Dual-purpose tool** | no |
+
+## Purpose
+
+Single-turn chat completion against Google's Gemini API (google-genai native SDK). Shares the common `handle_ai_chat_model` handler.
+
+## Inputs (handles)
+
+| Handle | Connection type | Required | Purpose |
+|--------|-----------------|----------|---------|
+| `input-main` | main | no | Upstream data; not consumed directly |
+
+## Parameters
+
+| Name | Type | Default | Required | displayOptions.show | Description |
+|------|------|---------|----------|---------------------|-------------|
+| `prompt` | string | `""` | yes (non-empty) | - | User message |
+| `systemMessage` | string | `""` | no | - | System prompt |
+| `model` | string | injected | no | - | e.g. `gemini-2.5-pro`, `gemini-2.5-flash`, `gemini-3-pro` |
+| `temperature` | number | 0-2 | no | - | 0-2 range |
+| `maxTokens` | number | clamped to model ceiling | no | - | Up to 65K output |
+| `topP` | number | - | no | - | |
+| `thinkingEnabled` | boolean | false | no | - | Enable thinking (2.5 Pro/Flash, 3.x) |
+| `thinkingBudget` | number | 2048 | no | `thinkingEnabled=[true]` | Token budget for internal reasoning |
+| `safetySettings` | object | provider defaults | no | - | Gemini safety category thresholds |
+| `apiKey` | string | injected | no | - | `auth_service.get_api_key('gemini', 'default')` |
+| `options` | object | `{}` | no | - | Flattened |
+
+## Outputs (handles)
+
+| Handle | Shape | Description |
+|--------|-------|-------------|
+| `output-main` | object | Standard envelope payload |
+
+### Output payload
+
+```ts
+{
+  response: string;
+  thinking: string | null;
+  thinking_enabled: boolean;
+  model: string;
+  provider: 'gemini';
+  finish_reason: string;
+  timestamp: string;
+  input: { prompt: string; system_prompt: string };
+}
+```
+
+## Logic Flow
+
+```mermaid
+flowchart TD
+  A[NodeExecutor dispatch] --> B[_prepare_parameters]
+  B --> C[handle_ai_chat_model -> AIService.execute_chat]
+  C --> D{valid key + prompt?}
+  D -- no --> X[error envelope]
+  D -- yes --> E[detect_ai_provider -> 'gemini']
+  E --> F[Build NativeThinkingConfig w/ budget]
+  F --> G[Native path: create_provider gemini<br/>google.genai.Client]
+  G --> H[provider.chat -> LLMResponse]
+  H --> I[success envelope]
+  G -- Exception --> X
+```
+
+## Decision Logic
+
+- **Validation**: missing api_key / empty prompt -> error envelope.
+- **Provider routing**: matches `'gemini' in node_type.lower()`.
+- **Native SDK**: uses `google.genai.Client` (NOT LangChain's `langchain_google_genai`) to dodge the Windows/Python 3.13 gRPC import hang.
+- **Thinking budget**: `thinkingBudget` -> `NativeThinkingConfig.budget` -> Gemini `thinking_budget` API parameter.
+- **Model string scrubbing**: `[FREE] ` prefix stripped; `owner/model` prefix stripped (non-OpenRouter).
+
+## Side Effects
+
+- **Database writes**: none on bare chat path.
+- **Broadcasts**: none.
+- **External API calls**: `POST https://generativelanguage.googleapis.com/v1beta/...` via `google-genai` SDK; base URL from `llm_defaults.json`.
+- **File I/O**: none.
+- **Subprocess**: none.
+
+## External Dependencies
+
+- **Credentials**: `auth_service.get_api_key('gemini', 'default')` plus optional `gemini_proxy`.
+- **Services**: `services/llm/providers/gemini.py`.
+- **Python packages**: `google-genai` (native).
+- **Environment variables**: none.
+
+## Edge cases & known limits
+
+- **Windows/Python 3.13 quirk**: importing `langchain_google_genai` hangs due to a gRPC deadlock. The native path bypasses this entirely. The LangChain fallback is NEVER used for Gemini on `execute_chat` - it is only lazy-imported for agent execution.
+- **Thinking budget units**: expressed as token count, not low/medium/high effort levels. Defaults to 2048.
+- **Safety settings**: forwarded via the SDK; malformed values surface as `success=false` in the envelope.
+- **`maxTokens` clamp**: capped at the model's ceiling (65K for 2.5/3.x).
+- **Errors swallowed into envelope** - handler never raises.
+
+## Related
+
+- **Peer nodes**: [`openaiChatModel`](./openaiChatModel.md), [`anthropicChatModel`](./anthropicChatModel.md), [`openrouterChatModel`](./openrouterChatModel.md), [`groqChatModel`](./groqChatModel.md), [`cerebrasChatModel`](./cerebrasChatModel.md), [`deepseekChatModel`](./deepseekChatModel.md), [`kimiChatModel`](./kimiChatModel.md), [`mistralChatModel`](./mistralChatModel.md).
+- **Architecture docs**: [Native LLM SDK](../../native_llm_sdk.md).

@@ -12,6 +12,7 @@ import { INodeTypeDescription, INodeProperties } from '../../types/INodeProperti
 import { ExecutionResult } from '../../services/executionService';
 import { Edge } from 'reactflow';
 import { SKILL_NODE_TYPES, skillNodes } from '../../nodeDefinitions/skillNodes';
+import { shouldShowParameter } from './paramVisibility';
 
 // Tool node types that support schema editing
 const TOOL_NODE_TYPES = ['androidTool', 'calculatorTool', 'currentTimeTool', 'duckduckgoSearch'];
@@ -55,30 +56,6 @@ interface MiddleSectionProps {
   isLoadingParameters?: boolean;
   executionResults?: ExecutionResult[];
 }
-
-const shouldShowParameter = (param: INodeProperties, allParameters: Record<string, any>): boolean => {
-  if (!param.displayOptions?.show) {
-    return true;
-  }
-
-  const showConditions = param.displayOptions.show;
-
-  for (const [paramName, allowedValues] of Object.entries(showConditions)) {
-    const currentValue = allParameters[paramName];
-
-    if (Array.isArray(allowedValues)) {
-      if (!allowedValues.includes(currentValue)) {
-        return false;
-      }
-    } else {
-      if (currentValue !== allowedValues) {
-        return false;
-      }
-    }
-  }
-
-  return true;
-};
 
 const MiddleSection: React.FC<MiddleSectionProps> = ({
   nodeId,
