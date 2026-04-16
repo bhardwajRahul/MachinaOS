@@ -12,6 +12,32 @@ from typing import Any, Dict, Iterator, Optional
 from unittest.mock import AsyncMock, MagicMock, patch
 
 
+# ---------------------- harness service registry ---------------------- #
+#
+# Tests commonly set `harness.ai_service.execute_chat = AsyncMock(...)` then
+# call `harness.execute("..." )`. On the plugin-refactored scaling branch
+# the plugin reaches `container.ai_service()` instead of the harness's
+# injected service, so without wiring the harness mocks onto the container
+# the assignment is a no-op.
+#
+# The `harness` fixture registers its services here; every `patched_container`
+# call auto-wires them onto the container unless the test passes its own
+# service instance. This keeps existing `patched_container(auth_api_keys=...)`
+# call sites working without editing per-test files.
+_ACTIVE_HARNESS_SERVICES: Dict[str, Any] = {}
+
+
+def register_harness_services(**services: Any) -> None:
+    """Install service mocks from the active harness for `patched_container`
+    to pick up. Called by the `harness` fixture."""
+    _ACTIVE_HARNESS_SERVICES.clear()
+    _ACTIVE_HARNESS_SERVICES.update({k: v for k, v in services.items() if v is not None})
+
+
+def clear_harness_services() -> None:
+    _ACTIVE_HARNESS_SERVICES.clear()
+
+
 # ---------------------- container patches ---------------------- #
 
 
@@ -71,14 +97,21 @@ def patched_container(
     container_mock.auth_service = MagicMock(return_value=auth_service)
     container_mock.database = MagicMock(return_value=db_mock)
 
-    if ai_service is not None:
-        container_mock.ai_service = MagicMock(return_value=ai_service)
-    if android_service is not None:
-        container_mock.android_service = MagicMock(return_value=android_service)
-    if maps_service is not None:
-        container_mock.maps_service = MagicMock(return_value=maps_service)
-    if text_service is not None:
-        container_mock.text_service = MagicMock(return_value=text_service)
+    # Explicit kwargs win; otherwise fall back to the active harness registry
+    # so tests that only pass `auth_api_keys=` still see their services wired.
+    effective_ai = ai_service if ai_service is not None else _ACTIVE_HARNESS_SERVICES.get("ai_service")
+    effective_android = android_service if android_service is not None else _ACTIVE_HARNESS_SERVICES.get("android_service")
+    effective_maps = maps_service if maps_service is not None else _ACTIVE_HARNESS_SERVICES.get("maps_service")
+    effective_text = text_service if text_service is not None else _ACTIVE_HARNESS_SERVICES.get("text_service")
+
+    if effective_ai is not None:
+        container_mock.ai_service = MagicMock(return_value=effective_ai)
+    if effective_android is not None:
+        container_mock.android_service = MagicMock(return_value=effective_android)
+    if effective_maps is not None:
+        container_mock.maps_service = MagicMock(return_value=effective_maps)
+    if effective_text is not None:
+        container_mock.text_service = MagicMock(return_value=effective_text)
 
     with patch("core.container.container", container_mock):
         yield container_mock

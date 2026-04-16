@@ -5,9 +5,9 @@ These tests freeze the input -> output behaviour documented in
 to the Go `whatsapp-rpc` service via a WebSocket RPC client in
 `routers/whatsapp.py`. We patch the two entry points the handlers use:
 
-  - `routers.whatsapp.handle_whatsapp_send` - sending messages
-  - `routers.whatsapp.whatsapp_rpc_call`    - generic RPC calls
-  - `routers.whatsapp.handle_whatsapp_chat_history` - chat history RPC
+  - `services.whatsapp_service.handle_whatsapp_send` - sending messages
+  - `services.whatsapp_service.whatsapp_rpc_call`    - generic RPC calls
+  - `services.whatsapp_service.handle_whatsapp_chat_history` - chat history RPC
 
 For `whatsappReceive` we use the same event-waiter stub pattern as
 `test_telegram_social.py` - patching the module reference imported by both
@@ -32,15 +32,15 @@ pytestmark = pytest.mark.node_contract
 
 
 def _patch_whatsapp_send(return_value):
-    """Patch routers.whatsapp.handle_whatsapp_send at the import site."""
+    """Patch services.whatsapp_service.handle_whatsapp_send at the import site."""
     return patch(
-        "routers.whatsapp.handle_whatsapp_send",
+        "services.whatsapp_service.handle_whatsapp_send",
         new=AsyncMock(return_value=return_value),
     )
 
 
 def _patch_rpc_call(return_value=None, *, side_effect=None):
-    """Patch routers.whatsapp.whatsapp_rpc_call.
+    """Patch services.whatsapp_service.whatsapp_rpc_call.
 
     ``return_value`` may be a dict or list. ``side_effect`` may be a callable
     for per-method routing.
@@ -50,12 +50,12 @@ def _patch_rpc_call(return_value=None, *, side_effect=None):
         kwargs["side_effect"] = side_effect
     else:
         kwargs["return_value"] = return_value if return_value is not None else {}
-    return patch("routers.whatsapp.whatsapp_rpc_call", new=AsyncMock(**kwargs))
+    return patch("services.whatsapp_service.whatsapp_rpc_call", new=AsyncMock(**kwargs))
 
 
 def _patch_chat_history_handler(return_value):
     return patch(
-        "routers.whatsapp.handle_whatsapp_chat_history",
+        "services.whatsapp_service.handle_whatsapp_chat_history",
         new=AsyncMock(return_value=return_value),
     )
 
@@ -95,7 +95,7 @@ class TestWhatsappSend:
             return {"success": True}
 
         with patch(
-            "routers.whatsapp.handle_whatsapp_send",
+            "services.whatsapp_service.handle_whatsapp_send",
             new=AsyncMock(side_effect=fake_send),
         ), patch(
             "services.markdown_formatter.to_whatsapp",
@@ -325,9 +325,28 @@ class TestWhatsappDb:
 
 
 def _make_waiter_stub(*, canned_event=None, is_trigger=True, wait_side_effect=None):
-    """Fake event_waiter module stub for the generic trigger path."""
+    """Fake event_waiter module stub for the generic trigger path.
+
+    Scaling-branch plugin trigger does::
+
+        waiter = event_waiter.register(...)   # sync
+        event_data = await waiter.future      # awaitable
+
+    So `register` is a sync MagicMock and `waiter_obj.future` is a
+    pre-resolved asyncio.Future (or raises the side-effect exception).
+    """
+    import asyncio
+
+    loop = asyncio.get_event_loop()
+    future = loop.create_future()
+    if wait_side_effect is not None:
+        future.set_exception(wait_side_effect)
+    else:
+        future.set_result(canned_event or {})
+
     waiter_obj = MagicMock(name="Waiter")
     waiter_obj.id = "waiter-test-id"
+    waiter_obj.future = future
 
     stub = MagicMock(name="event_waiter_module")
     stub.is_trigger_node = MagicMock(return_value=is_trigger)
@@ -338,7 +357,8 @@ def _make_waiter_stub(*, canned_event=None, is_trigger=True, wait_side_effect=No
             display_name="WhatsApp Message",
         )
     )
-    stub.register = AsyncMock(return_value=waiter_obj)
+    stub.register = MagicMock(return_value=waiter_obj)
+    # Kept for back-compat with tests still asserting wait_for_event calls.
     if wait_side_effect is not None:
         stub.wait_for_event = AsyncMock(side_effect=wait_side_effect)
     else:
@@ -368,8 +388,8 @@ class TestWhatsappReceive:
         waiter = _make_waiter_stub(canned_event=self.CANNED)
 
         with patched_broadcaster(), patched_container(), patch(
-            "services.node_executor.event_waiter", waiter
-        ), patch("services.handlers.triggers.event_waiter", waiter):
+            "services.event_waiter", waiter
+        ):
             result = await harness.execute(
                 "whatsappReceive",
                 {
@@ -383,8 +403,8 @@ class TestWhatsappReceive:
         payload = result["result"]
         assert payload["text"] == "hello there"
         assert payload["sender_phone"] == "15551234567"
-        waiter.register.assert_awaited_once()
-        waiter.wait_for_event.assert_awaited_once()
+        # Plugin trigger calls register synchronously; waiter.future is awaited.
+        waiter.register.assert_called_once()
 
     async def test_cancellation_propagates_as_error(self, harness):
         import asyncio
@@ -392,8 +412,8 @@ class TestWhatsappReceive:
         waiter = _make_waiter_stub(wait_side_effect=asyncio.CancelledError())
 
         with patched_broadcaster(), patched_container(), patch(
-            "services.node_executor.event_waiter", waiter
-        ), patch("services.handlers.triggers.event_waiter", waiter):
+            "services.event_waiter", waiter
+        ):
             result = await harness.execute(
                 "whatsappReceive",
                 {"filter": "all"},
@@ -406,8 +426,8 @@ class TestWhatsappReceive:
         waiter = _make_waiter_stub(wait_side_effect=RuntimeError("redis stream down"))
 
         with patched_broadcaster(), patched_container(), patch(
-            "services.node_executor.event_waiter", waiter
-        ), patch("services.handlers.triggers.event_waiter", waiter):
+            "services.event_waiter", waiter
+        ):
             result = await harness.execute(
                 "whatsappReceive",
                 {"filter": "keywords", "keywords": "urgent,fire"},

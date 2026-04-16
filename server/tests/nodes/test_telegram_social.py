@@ -226,10 +226,26 @@ class TestTelegramSend:
 # ============================================================================
 
 
-def _make_waiter_stub(*, canned_event=None, is_trigger=True):
-    """Fake event_waiter module with just the methods the trigger path calls."""
+def _make_waiter_stub(*, canned_event=None, is_trigger=True, wait_side_effect=None):
+    """Fake event_waiter module with just the methods the trigger path calls.
+
+    Scaling-branch plugin trigger does `waiter = event_waiter.register(...)`
+    (sync) and then `await waiter.future`, so `register` is a sync MagicMock
+    and `waiter.future` is a pre-resolved asyncio.Future (or raises the
+    side-effect exception when awaited).
+    """
+    import asyncio
+
+    loop = asyncio.get_event_loop()
+    future = loop.create_future()
+    if wait_side_effect is not None:
+        future.set_exception(wait_side_effect)
+    else:
+        future.set_result(canned_event or {})
+
     waiter_obj = MagicMock(name="Waiter")
     waiter_obj.id = "waiter-test-id"
+    waiter_obj.future = future
 
     stub = MagicMock(name="event_waiter_module")
     stub.is_trigger_node = MagicMock(return_value=is_trigger)
@@ -240,8 +256,12 @@ def _make_waiter_stub(*, canned_event=None, is_trigger=True):
             display_name="Telegram Message",
         )
     )
-    stub.register = AsyncMock(return_value=waiter_obj)
-    stub.wait_for_event = AsyncMock(return_value=canned_event or {})
+    stub.register = MagicMock(return_value=waiter_obj)
+    # Kept for back-compat with tests still asserting wait_for_event calls.
+    if wait_side_effect is not None:
+        stub.wait_for_event = AsyncMock(side_effect=wait_side_effect)
+    else:
+        stub.wait_for_event = AsyncMock(return_value=canned_event or {})
     stub.get_backend_mode = MagicMock(return_value="asyncio.Future")
     stub.cancel = MagicMock(return_value=True)
     stub.dispatch = MagicMock(return_value=1)
@@ -270,8 +290,8 @@ class TestTelegramReceive:
         waiter = _make_waiter_stub(canned_event=self.CANNED)
 
         with _patch_telegram_service(svc), patched_broadcaster(), patch(
-            "services.node_executor.event_waiter", waiter
-        ), patch("services.handlers.triggers.event_waiter", waiter):
+            "services.event_waiter", waiter
+        ):
             result = await harness.execute(
                 "telegramReceive",
                 {"senderFilter": "all", "contentTypeFilter": "all"},
@@ -280,16 +300,16 @@ class TestTelegramReceive:
         harness.assert_envelope(result, success=True)
         assert result["result"]["text"] == "hello from alice"
         assert result["result"]["chat_id"] == 555
-        waiter.register.assert_awaited_once()
-        waiter.wait_for_event.assert_awaited_once()
+        # Plugin trigger calls register synchronously and awaits waiter.future.
+        waiter.register.assert_called_once()
 
     async def test_bot_not_connected_returns_error(self, harness):
         svc = _make_telegram_service(connected=False)
         waiter = _make_waiter_stub(canned_event=self.CANNED)
 
         with _patch_telegram_service(svc), patched_broadcaster(), patch(
-            "services.node_executor.event_waiter", waiter
-        ), patch("services.handlers.triggers.event_waiter", waiter):
+            "services.event_waiter", waiter
+        ):
             result = await harness.execute(
                 "telegramReceive",
                 {"senderFilter": "all"},
@@ -297,19 +317,18 @@ class TestTelegramReceive:
 
         harness.assert_envelope(result, success=False)
         assert "not connected" in result["error"].lower()
-        # Must NOT have registered a waiter when bot is offline
-        waiter.register.assert_not_awaited()
+        # Must NOT have registered a waiter when bot is offline (sync call).
+        waiter.register.assert_not_called()
 
     async def test_cancellation_propagates_as_error(self, harness):
         import asyncio
 
         svc = _make_telegram_service(connected=True, owner_chat_id=1)
-        waiter = _make_waiter_stub()
-        waiter.wait_for_event = AsyncMock(side_effect=asyncio.CancelledError())
+        waiter = _make_waiter_stub(wait_side_effect=asyncio.CancelledError())
 
         with _patch_telegram_service(svc), patched_broadcaster(), patch(
-            "services.node_executor.event_waiter", waiter
-        ), patch("services.handlers.triggers.event_waiter", waiter):
+            "services.event_waiter", waiter
+        ):
             result = await harness.execute(
                 "telegramReceive",
                 {"senderFilter": "all"},
@@ -330,7 +349,7 @@ class TestSocialSend:
             return_value={"success": True, "message_id": "wamid.xyz"}
         )
 
-        with patch("routers.whatsapp.handle_whatsapp_send", whatsapp_send):
+        with patch("services.whatsapp_service.handle_whatsapp_send", whatsapp_send):
             result = await harness.execute(
                 "socialSend",
                 {
@@ -360,7 +379,7 @@ class TestSocialSend:
         # recipientType=phone but no phone param -> ValueError inside handler
         whatsapp_send = AsyncMock()
 
-        with patch("routers.whatsapp.handle_whatsapp_send", whatsapp_send):
+        with patch("services.whatsapp_service.handle_whatsapp_send", whatsapp_send):
             result = await harness.execute(
                 "socialSend",
                 {
@@ -379,7 +398,7 @@ class TestSocialSend:
         # Any non-whatsapp channel should surface as a failed envelope.
         whatsapp_send = AsyncMock()
 
-        with patch("routers.whatsapp.handle_whatsapp_send", whatsapp_send):
+        with patch("services.whatsapp_service.handle_whatsapp_send", whatsapp_send):
             result = await harness.execute(
                 "socialSend",
                 {
@@ -400,7 +419,7 @@ class TestSocialSend:
             return_value={"success": False, "error": "rpc boom"}
         )
 
-        with patch("routers.whatsapp.handle_whatsapp_send", whatsapp_send):
+        with patch("services.whatsapp_service.handle_whatsapp_send", whatsapp_send):
             result = await harness.execute(
                 "socialSend",
                 {

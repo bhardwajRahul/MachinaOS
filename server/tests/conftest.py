@@ -119,7 +119,35 @@ async def harness():
 
     Imported lazily so the conftest stubs above land before NodeExecutor pulls
     in its handler chain.
+
+    Side-effects:
+    - Registers the harness's service mocks (ai, android, maps, text) in the
+      active-services registry so any `patched_container(...)` call the test
+      makes also wires those onto `core.container.container`. Scaling-branch
+      plugins resolve services via `container.X()` rather than
+      NodeExecutor-injected services, so without this the harness's
+      `execute_chat` / `execute_action` mocks would be orphaned.
+    - Installs a baseline `patched_container()` for the life of the fixture
+      so tests that don't explicitly patch the container still see wired
+      services (and callers of `ApiKeyCredential.resolve()` can fail cleanly
+      with PermissionError instead of calling the real credentials db).
     """
     from tests.nodes._harness import NodeTestHarness
+    from tests.nodes._mocks import (
+        register_harness_services,
+        clear_harness_services,
+        patched_container,
+    )
 
-    return NodeTestHarness()
+    h = NodeTestHarness()
+    register_harness_services(
+        ai_service=h.ai_service,
+        android_service=h.android_service,
+        maps_service=h.maps_service,
+        text_service=h.text_service,
+    )
+    try:
+        with patched_container():
+            yield h
+    finally:
+        clear_harness_services()
