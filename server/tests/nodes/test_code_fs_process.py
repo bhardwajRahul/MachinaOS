@@ -1,0 +1,778 @@
+"""Contract tests for code_fs_process nodes.
+
+Covers: pythonExecutor, javascriptExecutor, typescriptExecutor,
+        fileRead, fileModify, shell, fsSearch, processManager.
+
+Frozen behavioural contract for the 8 nodes in
+`docs-internal/node-logic-flows/code_fs_process/`. Each test asserts the
+standard handler envelope shape and at least one payload detail from the
+matching doc; external side-effects (subprocess spawn, Node.js HTTP call,
+deepagents backend, Terminal broadcast) are mocked.
+
+Mocking strategy:
+  - pythonExecutor runs in-process (no external service) -- tests exercise
+    the real exec() path.
+  - javascriptExecutor / typescriptExecutor: patch NodeJSClient.execute()
+    via the module-level _nodejs_client singleton.
+  - filesystem nodes (fileRead, fileModify, shell, fsSearch): patch
+    services.handlers.filesystem._get_backend to return a fake backend with
+    the methods each mode invokes.
+  - processManager: patch services.handlers.process.get_process_service to
+    return a fake ProcessService with the dispatched method set to an
+    AsyncMock / MagicMock.
+"""
+
+from __future__ import annotations
+
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+
+pytestmark = pytest.mark.node_contract
+
+
+# ============================================================================
+# Helpers
+# ============================================================================
+
+
+def _reset_nodejs_singleton():
+    """Clear the module-level client singleton in services.handlers.code.
+
+    The handler caches its NodeJSClient on first use; tests that patch must
+    either reset this between cases or patch the module attribute directly.
+    """
+    import services.handlers.code as code_mod
+
+    code_mod._nodejs_client = None
+
+
+class _FakeWriteResult(SimpleNamespace):
+    """Mimics deepagents WriteResult / EditResult dataclasses."""
+
+    def __init__(self, error: str = "", path: str = "", occurrences: int = 0):
+        super().__init__(error=error, path=path, occurrences=occurrences)
+
+
+class _FakeExecuteResult(SimpleNamespace):
+    def __init__(self, output: str = "", exit_code: int = 0, truncated: bool = False):
+        super().__init__(output=output, exit_code=exit_code, truncated=truncated)
+
+
+class _FakeFileInfo(dict):
+    """Dataclass stand-in that `dict(entry)` can iterate."""
+
+    def __iter__(self):
+        return iter(self.items())
+
+
+def _patch_fs_backend(backend: MagicMock):
+    """Patch services.handlers.filesystem._get_backend to return a fake."""
+    return patch(
+        "services.handlers.filesystem._get_backend",
+        return_value=backend,
+    )
+
+
+# ============================================================================
+# pythonExecutor
+# ============================================================================
+
+
+class TestPythonExecutor:
+    async def test_happy_path_reads_input_and_sets_output(self, harness):
+        # NodeExecutor keys connected_outputs by SOURCE TYPE (not id).
+        # See node_executor._get_connected_outputs_with_info (outputs[source_type] = output).
+        upstream = {
+            "source_A::output_main": {"n": 5},
+        }
+        nodes = [
+            {"id": "py1", "type": "pythonExecutor"},
+            {"id": "source_A", "type": "start"},
+        ]
+        edges = [
+            {"source": "source_A", "target": "py1", "sourceHandle": "output-main"},
+        ]
+
+        code = (
+            "val = input_data.get('start', {}).get('n', 0)\n"
+            "print('doubled', val * 2)\n"
+            "output = {'doubled': val * 2}\n"
+        )
+
+        result = await harness.execute(
+            "pythonExecutor",
+            {"code": code},
+            node_id="py1",
+            upstream_outputs=upstream,
+            nodes=nodes,
+            edges=edges,
+        )
+
+        harness.assert_envelope(result, success=True)
+        harness.assert_output_shape(
+            result, ["output", "console_output", "timestamp"]
+        )
+        payload = result["result"]
+        assert payload["output"] == {"doubled": 10}
+        assert "doubled 10" in payload["console_output"]
+
+    async def test_empty_code_short_circuits(self, harness):
+        result = await harness.execute(
+            "pythonExecutor", {"code": "   \n\t"}
+        )
+
+        harness.assert_envelope(result, success=False)
+        assert "no code provided" in result["error"].lower()
+
+    async def test_exception_in_user_code_is_captured(self, harness):
+        result = await harness.execute(
+            "pythonExecutor",
+            {"code": "raise ValueError('boom')"},
+        )
+
+        harness.assert_envelope(result, success=False)
+        assert "boom" in result["error"]
+        # Per doc: console_output is empty on the exception path
+        assert result.get("console_output", "") == ""
+
+
+# ============================================================================
+# javascriptExecutor
+# ============================================================================
+
+
+class TestJavascriptExecutor:
+    async def test_happy_path_returns_node_output(self, harness):
+        _reset_nodejs_singleton()
+        fake_client = MagicMock(name="NodeJSClient")
+        fake_client.execute = AsyncMock(
+            return_value={
+                "success": True,
+                "output": {"v": 42},
+                "console_output": "running\n",
+            }
+        )
+
+        with patch(
+            "services.handlers.code.get_nodejs_client",
+            return_value=fake_client,
+        ):
+            result = await harness.execute(
+                "javascriptExecutor",
+                {"code": "output = {v: 42}", "timeout": 15},
+            )
+
+        harness.assert_envelope(result, success=True)
+        harness.assert_output_shape(
+            result, ["output", "console_output", "timestamp"]
+        )
+        payload = result["result"]
+        assert payload["output"] == {"v": 42}
+        assert "running" in payload["console_output"]
+
+        # timeout: seconds -> milliseconds forwarded to the Node server
+        call_kwargs = fake_client.execute.await_args.kwargs
+        assert call_kwargs["timeout"] == 15 * 1000
+        assert call_kwargs["language"] == "javascript"
+        # workspace_dir injected into input_data
+        assert "workspace_dir" in call_kwargs["input_data"]
+
+    async def test_empty_code_short_circuits(self, harness):
+        result = await harness.execute(
+            "javascriptExecutor", {"code": ""}
+        )
+
+        harness.assert_envelope(result, success=False)
+        assert "no code provided" in result["error"].lower()
+
+    async def test_node_server_returns_failure_preserves_console(self, harness):
+        _reset_nodejs_singleton()
+        fake_client = MagicMock(name="NodeJSClient")
+        fake_client.execute = AsyncMock(
+            return_value={
+                "success": False,
+                "error": "SyntaxError: unexpected token",
+                "console_output": "partial log\n",
+            }
+        )
+
+        with patch(
+            "services.handlers.code.get_nodejs_client",
+            return_value=fake_client,
+        ):
+            result = await harness.execute(
+                "javascriptExecutor", {"code": "oops"}
+            )
+
+        harness.assert_envelope(result, success=False)
+        assert "syntaxerror" in result["error"].lower()
+        # Per doc: console_output is preserved on the failure path
+        assert "partial log" in result.get("console_output", "")
+
+    async def test_http_exception_wrapped_in_envelope(self, harness):
+        _reset_nodejs_singleton()
+        fake_client = MagicMock(name="NodeJSClient")
+        fake_client.execute = AsyncMock(
+            side_effect=ConnectionRefusedError("Cannot connect to host localhost:3020")
+        )
+
+        with patch(
+            "services.handlers.code.get_nodejs_client",
+            return_value=fake_client,
+        ):
+            result = await harness.execute(
+                "javascriptExecutor", {"code": "output = 1"}
+            )
+
+        harness.assert_envelope(result, success=False)
+        assert "localhost:3020" in result["error"]
+
+
+# ============================================================================
+# typescriptExecutor
+# ============================================================================
+
+
+class TestTypescriptExecutor:
+    async def test_happy_path_forwards_language_typescript(self, harness):
+        _reset_nodejs_singleton()
+        fake_client = MagicMock(name="NodeJSClient")
+        fake_client.execute = AsyncMock(
+            return_value={
+                "success": True,
+                "output": "typed-output",
+                "console_output": "",
+            }
+        )
+
+        with patch(
+            "services.handlers.code.get_nodejs_client",
+            return_value=fake_client,
+        ):
+            result = await harness.execute(
+                "typescriptExecutor",
+                {"code": "const x: number = 1; output = 'typed-output'"},
+            )
+
+        harness.assert_envelope(result, success=True)
+        assert result["result"]["output"] == "typed-output"
+        call_kwargs = fake_client.execute.await_args.kwargs
+        assert call_kwargs["language"] == "typescript"
+
+    async def test_empty_code_short_circuits(self, harness):
+        result = await harness.execute(
+            "typescriptExecutor", {"code": ""}
+        )
+
+        harness.assert_envelope(result, success=False)
+        assert "no code provided" in result["error"].lower()
+
+    async def test_node_server_failure_preserves_console(self, harness):
+        _reset_nodejs_singleton()
+        fake_client = MagicMock(name="NodeJSClient")
+        fake_client.execute = AsyncMock(
+            return_value={
+                "success": False,
+                "error": "TS2304: Cannot find name 'foo'",
+                "console_output": "compiling...\n",
+            }
+        )
+
+        with patch(
+            "services.handlers.code.get_nodejs_client",
+            return_value=fake_client,
+        ):
+            result = await harness.execute(
+                "typescriptExecutor", {"code": "output = foo"}
+            )
+
+        harness.assert_envelope(result, success=False)
+        assert "ts2304" in result["error"].lower()
+        assert "compiling" in result.get("console_output", "")
+
+
+# ============================================================================
+# fileRead
+# ============================================================================
+
+
+class TestFileRead:
+    async def test_happy_path_returns_content(self, harness):
+        backend = MagicMock(name="LocalShellBackend")
+        backend.read = MagicMock(return_value="line1\nline2\n")
+
+        with _patch_fs_backend(backend):
+            result = await harness.execute(
+                "fileRead",
+                {"file_path": "notes.txt", "offset": 0, "limit": 100},
+            )
+
+        harness.assert_envelope(result, success=True)
+        harness.assert_output_shape(result, ["content", "file_path"])
+        payload = result["result"]
+        assert payload["content"] == "line1\nline2\n"
+        assert payload["file_path"] == "notes.txt"
+        backend.read.assert_called_once_with("notes.txt", offset=0, limit=100)
+
+    async def test_missing_file_path_short_circuits(self, harness):
+        # No backend patch: we should short-circuit before reaching it.
+        result = await harness.execute("fileRead", {"file_path": ""})
+
+        harness.assert_envelope(result, success=False)
+        assert "file_path is required" in result["error"].lower()
+
+    async def test_backend_exception_becomes_error_envelope(self, harness):
+        backend = MagicMock(name="LocalShellBackend")
+        backend.read = MagicMock(side_effect=FileNotFoundError("No such file: ../../etc/passwd"))
+
+        with _patch_fs_backend(backend):
+            result = await harness.execute(
+                "fileRead", {"file_path": "../../etc/passwd"}
+            )
+
+        harness.assert_envelope(result, success=False)
+        assert "no such file" in result["error"].lower()
+
+
+# ============================================================================
+# fileModify
+# ============================================================================
+
+
+class TestFileModify:
+    async def test_write_happy_path(self, harness):
+        backend = MagicMock(name="LocalShellBackend")
+        backend.write = MagicMock(return_value=_FakeWriteResult(path="hello.txt"))
+
+        with _patch_fs_backend(backend):
+            result = await harness.execute(
+                "fileModify",
+                {
+                    "operation": "write",
+                    "file_path": "hello.txt",
+                    "content": "hi there",
+                },
+            )
+
+        harness.assert_envelope(result, success=True)
+        harness.assert_output_shape(result, ["operation", "file_path"])
+        assert result["result"]["operation"] == "write"
+        assert result["result"]["file_path"] == "hello.txt"
+        backend.write.assert_called_once_with("hello.txt", "hi there")
+
+    async def test_edit_happy_path_returns_occurrences(self, harness):
+        backend = MagicMock(name="LocalShellBackend")
+        backend.edit = MagicMock(
+            return_value=_FakeWriteResult(path="README.md", occurrences=3)
+        )
+
+        with _patch_fs_backend(backend):
+            result = await harness.execute(
+                "fileModify",
+                {
+                    "operation": "edit",
+                    "file_path": "README.md",
+                    "old_string": "foo",
+                    "new_string": "bar",
+                    "replace_all": True,
+                },
+            )
+
+        harness.assert_envelope(result, success=True)
+        harness.assert_output_shape(
+            result, ["operation", "file_path", "occurrences"]
+        )
+        assert result["result"]["occurrences"] == 3
+        backend.edit.assert_called_once_with(
+            "README.md", "foo", "bar", replace_all=True
+        )
+
+    async def test_edit_missing_old_string_short_circuits(self, harness):
+        backend = MagicMock(name="LocalShellBackend")
+
+        with _patch_fs_backend(backend):
+            result = await harness.execute(
+                "fileModify",
+                {
+                    "operation": "edit",
+                    "file_path": "x",
+                    "old_string": "",
+                },
+            )
+
+        harness.assert_envelope(result, success=False)
+        assert "old_string is required" in result["error"].lower()
+        backend.edit.assert_not_called() if hasattr(backend, "edit") else None
+
+    async def test_backend_reports_error_in_result(self, harness):
+        backend = MagicMock(name="LocalShellBackend")
+        backend.edit = MagicMock(
+            return_value=_FakeWriteResult(error="old_string found 2 times; need unique")
+        )
+
+        with _patch_fs_backend(backend):
+            result = await harness.execute(
+                "fileModify",
+                {
+                    "operation": "edit",
+                    "file_path": "x.md",
+                    "old_string": "foo",
+                    "new_string": "bar",
+                    "replace_all": False,
+                },
+            )
+
+        harness.assert_envelope(result, success=False)
+        assert "2 times" in result["error"]
+
+    async def test_unknown_operation_returns_error(self, harness):
+        backend = MagicMock(name="LocalShellBackend")
+
+        with _patch_fs_backend(backend):
+            result = await harness.execute(
+                "fileModify",
+                {"operation": "delete", "file_path": "x"},
+            )
+
+        harness.assert_envelope(result, success=False)
+        assert "unknown operation" in result["error"].lower()
+
+
+# ============================================================================
+# shell
+# ============================================================================
+
+
+class TestShell:
+    async def test_happy_path_returns_stdout_and_exit_code(self, harness):
+        backend = MagicMock(name="LocalShellBackend")
+        backend.execute = MagicMock(
+            return_value=_FakeExecuteResult(
+                output="hello world\n", exit_code=0, truncated=False
+            )
+        )
+
+        with _patch_fs_backend(backend):
+            result = await harness.execute(
+                "shell",
+                {"command": "echo hello world", "timeout": 10},
+            )
+
+        harness.assert_envelope(result, success=True)
+        harness.assert_output_shape(
+            result, ["stdout", "exit_code", "truncated", "command"]
+        )
+        payload = result["result"]
+        assert payload["stdout"] == "hello world\n"
+        assert payload["exit_code"] == 0
+        assert payload["truncated"] is False
+        assert payload["command"] == "echo hello world"
+        backend.execute.assert_called_once_with("echo hello world", timeout=10)
+
+    async def test_empty_command_short_circuits(self, harness):
+        result = await harness.execute("shell", {"command": ""})
+
+        harness.assert_envelope(result, success=False)
+        assert "command is required" in result["error"].lower()
+
+    async def test_timeout_surfaces_exit_124(self, harness):
+        backend = MagicMock(name="LocalShellBackend")
+        backend.execute = MagicMock(
+            return_value=_FakeExecuteResult(
+                output="partial...", exit_code=124, truncated=True
+            )
+        )
+
+        with _patch_fs_backend(backend):
+            result = await harness.execute(
+                "shell",
+                {"command": "sleep 999", "timeout": 1},
+            )
+
+        # Per doc: non-zero exit still returns success=True at the envelope
+        # level. Users inspect exit_code.
+        harness.assert_envelope(result, success=True)
+        assert result["result"]["exit_code"] == 124
+        assert result["result"]["truncated"] is True
+
+    async def test_backend_exception_becomes_error_envelope(self, harness):
+        backend = MagicMock(name="LocalShellBackend")
+        backend.execute = MagicMock(side_effect=RuntimeError("backend blew up"))
+
+        with _patch_fs_backend(backend):
+            result = await harness.execute("shell", {"command": "ls"})
+
+        harness.assert_envelope(result, success=False)
+        assert "backend blew up" in result["error"]
+
+
+# ============================================================================
+# fsSearch
+# ============================================================================
+
+
+class TestFsSearch:
+    async def test_ls_mode_returns_entries(self, harness):
+        entries = [
+            _FakeFileInfo({"name": "a.py", "is_dir": False, "size": 10}),
+            _FakeFileInfo({"name": "sub", "is_dir": True, "size": 0}),
+        ]
+        backend = MagicMock(name="LocalShellBackend")
+        backend.ls_info = MagicMock(return_value=entries)
+
+        with _patch_fs_backend(backend):
+            result = await harness.execute(
+                "fsSearch", {"mode": "ls", "path": "."}
+            )
+
+        harness.assert_envelope(result, success=True)
+        harness.assert_output_shape(result, ["path", "entries", "count"])
+        assert result["result"]["count"] == 2
+        assert result["result"]["entries"][0]["name"] == "a.py"
+
+    async def test_glob_requires_pattern(self, harness):
+        backend = MagicMock(name="LocalShellBackend")
+
+        with _patch_fs_backend(backend):
+            result = await harness.execute(
+                "fsSearch", {"mode": "glob", "path": ".", "pattern": ""}
+            )
+
+        harness.assert_envelope(result, success=False)
+        assert "pattern is required" in result["error"].lower()
+
+    async def test_glob_happy_path(self, harness):
+        matches = [_FakeFileInfo({"name": "x.py", "path": "src/x.py"})]
+        backend = MagicMock(name="LocalShellBackend")
+        backend.glob_info = MagicMock(return_value=matches)
+
+        with _patch_fs_backend(backend):
+            result = await harness.execute(
+                "fsSearch",
+                {"mode": "glob", "path": "src", "pattern": "**/*.py"},
+            )
+
+        harness.assert_envelope(result, success=True)
+        harness.assert_output_shape(
+            result, ["path", "pattern", "matches", "count"]
+        )
+        assert result["result"]["count"] == 1
+        backend.glob_info.assert_called_once_with("**/*.py", path="src")
+
+    async def test_grep_returns_string_error_as_error_envelope(self, harness):
+        # Per doc: grep_raw returns a str on error, list on success.
+        backend = MagicMock(name="LocalShellBackend")
+        backend.grep_raw = MagicMock(return_value="invalid regex: unbalanced parenthesis")
+
+        with _patch_fs_backend(backend):
+            result = await harness.execute(
+                "fsSearch",
+                {
+                    "mode": "grep",
+                    "path": ".",
+                    "pattern": "foo(",
+                    "file_filter": "*.py",
+                },
+            )
+
+        harness.assert_envelope(result, success=False)
+        assert "invalid regex" in result["error"].lower()
+
+    async def test_unknown_mode_returns_error(self, harness):
+        backend = MagicMock(name="LocalShellBackend")
+
+        with _patch_fs_backend(backend):
+            result = await harness.execute(
+                "fsSearch", {"mode": "teleport", "path": "."}
+            )
+
+        harness.assert_envelope(result, success=False)
+        assert "unknown mode" in result["error"].lower()
+
+
+# ============================================================================
+# processManager
+# ============================================================================
+
+
+def _fake_process_service():
+    svc = MagicMock(name="ProcessService")
+    svc.start = AsyncMock(
+        return_value={
+            "success": True,
+            "result": {
+                "name": "my-server",
+                "command": "python -m http.server 8080",
+                "pid": 12345,
+                "status": "running",
+                "started_at": "2026-04-15T00:00:00",
+                "exit_code": None,
+                "working_directory": "/workspace/proc_node",
+                "stdout_lines": 0,
+                "stderr_lines": 0,
+                "log_dir": "/workspace/proc_node/.processes/my-server",
+            },
+        }
+    )
+    svc.stop = AsyncMock(
+        return_value={
+            "success": True,
+            "result": {"name": "my-server", "status": "stopped", "exit_code": 0},
+        }
+    )
+    svc.restart = AsyncMock(
+        return_value={"success": True, "result": {"name": "my-server", "status": "running"}}
+    )
+    svc.send_input = AsyncMock(
+        return_value={"success": True, "result": {"sent": "hello"}}
+    )
+    svc.list_processes = MagicMock(
+        return_value=[
+            {"name": "my-server", "status": "running", "pid": 12345},
+        ]
+    )
+    svc.get_output = MagicMock(
+        return_value={
+            "lines": ["listening on :8080"],
+            "total": 1,
+            "file": "/workspace/proc_node/.processes/my-server/stdout.log",
+        }
+    )
+    return svc
+
+
+def _patch_process_service(svc):
+    return patch(
+        "services.handlers.process.get_process_service",
+        return_value=svc,
+    )
+
+
+class TestProcessManager:
+    async def test_start_happy_path(self, harness):
+        svc = _fake_process_service()
+
+        with _patch_process_service(svc):
+            result = await harness.execute(
+                "processManager",
+                {
+                    "operation": "start",
+                    "name": "my-server",
+                    "command": "python -m http.server 8080",
+                    "working_directory": "",
+                },
+                node_id="proc_node",
+            )
+
+        harness.assert_envelope(result, success=True)
+        payload = result["result"]
+        assert payload["name"] == "my-server"
+        assert payload["status"] == "running"
+        assert payload["pid"] == 12345
+
+        # Handler passes workflow_id from context and per-node workspace subdir
+        svc.start.assert_awaited_once()
+        call_kwargs = svc.start.await_args.kwargs
+        assert call_kwargs["name"] == "my-server"
+        assert call_kwargs["command"] == "python -m http.server 8080"
+
+    async def test_stop_returns_stopped_status(self, harness):
+        svc = _fake_process_service()
+
+        with _patch_process_service(svc):
+            result = await harness.execute(
+                "processManager",
+                {"operation": "stop", "name": "my-server"},
+            )
+
+        harness.assert_envelope(result, success=True)
+        assert result["result"]["status"] == "stopped"
+        svc.stop.assert_awaited_once()
+
+    async def test_list_returns_processes_array(self, harness):
+        svc = _fake_process_service()
+
+        with _patch_process_service(svc):
+            result = await harness.execute(
+                "processManager", {"operation": "list"}
+            )
+
+        harness.assert_envelope(result, success=True)
+        harness.assert_output_shape(result, ["processes"])
+        assert len(result["result"]["processes"]) == 1
+        assert result["result"]["processes"][0]["name"] == "my-server"
+
+    async def test_get_output_returns_lines(self, harness):
+        svc = _fake_process_service()
+
+        with _patch_process_service(svc):
+            result = await harness.execute(
+                "processManager",
+                {
+                    "operation": "get_output",
+                    "name": "my-server",
+                    # Handler coerces 'None' and empty strings via _clean_arg
+                    "stream": "stdout",
+                    "tail": 50,
+                },
+            )
+
+        harness.assert_envelope(result, success=True)
+        harness.assert_output_shape(result, ["lines", "total", "file"])
+        payload = result["result"]
+        assert payload["total"] == 1
+        assert "listening" in payload["lines"][0]
+        svc.get_output.assert_called_once()
+
+    async def test_send_input_forwards_text(self, harness):
+        svc = _fake_process_service()
+
+        with _patch_process_service(svc):
+            result = await harness.execute(
+                "processManager",
+                {
+                    "operation": "send_input",
+                    "name": "my-server",
+                    "text": "hello",
+                },
+            )
+
+        harness.assert_envelope(result, success=True)
+        assert result["result"]["sent"] == "hello"
+        svc.send_input.assert_awaited_once()
+
+    async def test_unknown_operation_returns_error(self, harness):
+        svc = _fake_process_service()
+
+        with _patch_process_service(svc):
+            result = await harness.execute(
+                "processManager", {"operation": "teleport"}
+            )
+
+        harness.assert_envelope(result, success=False)
+        assert "unknown operation" in result["error"].lower()
+
+    async def test_start_failure_from_service_surfaces(self, harness):
+        svc = _fake_process_service()
+        svc.start = AsyncMock(
+            return_value={
+                "success": False,
+                "error": "Destructive commands blocked in process_manager.",
+            }
+        )
+
+        with _patch_process_service(svc):
+            result = await harness.execute(
+                "processManager",
+                {
+                    "operation": "start",
+                    "name": "bad",
+                    "command": "rm -rf /",
+                },
+            )
+
+        harness.assert_envelope(result, success=False)
+        assert "destructive" in result["error"].lower()

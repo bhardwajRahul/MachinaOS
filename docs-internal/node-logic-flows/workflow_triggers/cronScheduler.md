@@ -1,0 +1,149 @@
+# Cron Scheduler (`cronScheduler`)
+
+| Field | Value |
+|------|-------|
+| **Category** | workflow / trigger / tool (dual-purpose) |
+| **Frontend definition** | [`client/src/nodeDefinitions/schedulerNodes.ts`](../../../client/src/nodeDefinitions/schedulerNodes.ts) |
+| **Backend handler** | [`server/services/handlers/utility.py::handle_cron_scheduler`](../../../server/services/handlers/utility.py) |
+| **Tests** | [`server/tests/nodes/test_workflow_triggers.py`](../../../server/tests/nodes/test_workflow_triggers.py) |
+| **Skill (if any)** | [`server/skills/task_agent/cron-scheduler-skill/SKILL.md`](../../../server/skills/task_agent/cron-scheduler-skill/SKILL.md) |
+| **Dual-purpose tool** | yes - exposed on the `tool` output handle |
+
+## Purpose
+
+Recurring time-based trigger. In **deployed** workflows the scheduling
+happens inside `DeploymentManager` using APScheduler; this handler only
+runs when the node is executed directly (manual run) or as an AI tool. In
+that mode it simply sleeps for the computed interval once, then returns
+metadata describing the schedule. It is NOT an event-waiter - it does not
+call `event_waiter.register()`.
+
+## Inputs (handles)
+
+| Handle | Connection type | Required | Purpose |
+|--------|-----------------|----------|---------|
+| (none) | - | - | Trigger nodes have no inputs. |
+
+## Parameters
+
+| Name | Type | Default | Required | displayOptions.show | Description |
+|------|------|---------|----------|---------------------|-------------|
+| `frequency` | options | `minutes` | no | - | One of `seconds`, `minutes`, `hours`, `days`, `weeks`, `months`, `once`. |
+| `interval` | number | `30` | no | frequency == `seconds` | Interval in seconds. |
+| `interval_minutes` | number | `5` | no | frequency == `minutes` | Interval in minutes. |
+| `interval_hours` | number | `1` | no | frequency == `hours` | Interval in hours. |
+| `daily_time` | options | `09:00` | no | frequency == `days` | Display-only in the handler. |
+| `weekday` | options | `'1'` (Mon) | no | frequency == `weeks` | Display-only. |
+| `weekly_time` | options | `09:00` | no | frequency == `weeks` | Display-only. |
+| `month_day` | options | `'1'` | no | frequency == `months` | Display-only. |
+| `monthly_time` | options | `09:00` | no | frequency == `months` | Display-only. |
+| `timezone` | options | `UTC` | no | - | Used in the description string only. |
+
+Note: for `days` / `weeks` / `months` the handler hard-codes the wait to 24h
+/ 7d / ~30d respectively; the `daily_time` / `weekday` / `weekly_time` /
+`month_day` / `monthly_time` parameters only flow into the human-readable
+`schedule` string, not the actual wait duration.
+
+## Outputs (handles)
+
+| Handle | Shape | Description |
+|--------|-------|-------------|
+| `output-main` | object | Schedule metadata (see below). |
+| `output-tool` | object | Same payload when invoked as an AI agent tool. |
+
+### Output payload
+
+```ts
+{
+  timestamp: string;         // ISO 8601 when the trigger fired
+  iteration: 1;              // Always 1 in handler mode - see limits below
+  frequency: string;
+  timezone: string;
+  schedule: string;          // Human-readable, e.g. "Every 5 minutes"
+  scheduled_time: string;    // ISO 8601 of the originally-planned trigger time
+  triggered_at: string;      // ISO 8601 when execution actually fired
+  waited_seconds: number;    // How long the handler slept
+  message: string;           // Status message
+  next_run?: string;         // Only when frequency != 'once'
+}
+```
+
+Wrapped in the standard envelope.
+
+## Logic Flow
+
+```mermaid
+flowchart TD
+  A[handle_cron_scheduler] --> B[frequency = parameters.frequency default 'minutes']
+  B --> C[_get_schedule_description<br/>returns e.g. 'Every 5 minutes']
+  C --> D[_calculate_wait_seconds<br/>maps frequency to seconds]
+  D --> E[get_status_broadcaster.update_node_status 'waiting']
+  E --> F[await asyncio.sleep wait_seconds]
+  F -- CancelledError --> G[Return success=false<br/>error: Scheduler cancelled]
+  F -- Exception --> H[Return success=false<br/>error: str e]
+  F -- ok --> I[Build result_data: timestamp / iteration=1 / frequency / schedule / waited_seconds]
+  I --> J{frequency == 'once'?}
+  J -- yes --> K[message: 'Triggered after waiting ...']
+  J -- no --> L[Add next_run = schedule<br/>message: 'Triggered after ..., will repeat ...']
+  K --> M[Return success envelope]
+  L --> M
+```
+
+## Decision Logic
+
+- **Interval mapping** (`_calculate_wait_seconds`):
+  - `seconds` -> `interval` (default 30)
+  - `minutes` -> `interval_minutes` * 60 (default 300)
+  - `hours` -> `interval_hours` * 3600 (default 3600)
+  - `days` -> 86400 (ignores `daily_time`)
+  - `weeks` -> 604800 (ignores `weekday` / `weekly_time`)
+  - `months` -> 2592000 (~30 days, ignores `month_day` / `monthly_time`)
+  - `once` -> 0 (fire immediately)
+  - unknown -> 300 (5 minutes fallback)
+- **Once vs recurring**: determines whether `next_run` is added to the
+  payload and which `message` template is used. Both branches still return
+  `success=True`.
+- **Cancellation / exception**: both produce a failed envelope with
+  `success=False`.
+
+## Side Effects
+
+- **Database writes**: none.
+- **Broadcasts**: `StatusBroadcaster.update_node_status(node_id, "waiting", {message, trigger_time, wait_seconds}, workflow_id)`.
+- **External API calls**: none.
+- **File I/O**: none.
+- **Subprocess**: none.
+
+## External Dependencies
+
+- **Credentials**: none.
+- **Services**: `services.status_broadcaster.get_status_broadcaster`.
+- **Python packages**: `asyncio`, `datetime`, `time` (stdlib).
+- **Environment variables**: none.
+
+## Edge cases & known limits
+
+- **Handler is not the real scheduler.** Real cron semantics
+  (exact-time-of-day, weekday selection, timezones) live in
+  `DeploymentManager` + APScheduler. The manual-run handler does not use any
+  of that - it only sleeps for a fixed interval. `daily_time`, `weekday`,
+  `weekly_time`, `month_day`, `monthly_time`, and `timezone` are
+  **display-only** in this code path.
+- `iteration` is always `1`. The handler does not loop; repeated firings
+  come from APScheduler calling the handler again each tick (deployment mode).
+- `interval`, `interval_minutes`, `interval_hours` are coerced with
+  `int(...)`; non-numeric values raise `ValueError` which is caught and
+  returned as an error envelope.
+- `weekday` is read via `parameters.get('weekday', '1')` and expected to be
+  a string digit - if a number is passed it will raise on `.isdigit()` in
+  `_get_schedule_description`, but that only affects the description string.
+- Unknown `frequency` values silently use 300s wait and produce
+  `schedule: "Unknown schedule"`.
+
+## Related
+
+- **Skills using this as a tool**: [`cron-scheduler-skill`](../../../server/skills/task_agent/cron-scheduler-skill/SKILL.md)
+- **Sibling triggers**: [`timer`](./timer.md) (one-shot delay),
+  [`start`](./start.md) (manual entry).
+- **Architecture docs**: [Execution Engine Design](../../DESIGN.md),
+  [Temporal Architecture](../../TEMPORAL_ARCHITECTURE.md)
