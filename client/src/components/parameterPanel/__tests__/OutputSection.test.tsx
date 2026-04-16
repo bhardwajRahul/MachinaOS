@@ -10,12 +10,19 @@
 
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
+import { renderWithProviders } from '../../../test/providers';
 
-// --- Mock NodeOutputPanel: capture results received ------------------------
+// Scaling-v2: OutputSection now wraps the new shadcn OutputPanel at
+// `components/output/OutputPanel`, which uses TanStack Query + ThemeContext.
+// renderWithProviders handles both -- and we still mock the panel itself so
+// the test stays focused on combineResults logic.
+const render = renderWithProviders;
+
+// --- Mock the new OutputPanel (path changed in scaling-v2) ----------------
 
 const capturedResults: any[][] = [];
-vi.mock('../../ui/NodeOutputPanel', () => ({
+vi.mock('../../output/OutputPanel', () => ({
   default: ({ results, onClear }: any) => {
     capturedResults.push(results);
     return (

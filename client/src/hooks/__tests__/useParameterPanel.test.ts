@@ -13,6 +13,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useParameterPanel } from '../useParameterPanel';
+import { wrapperWithProviders } from '../../test/providers';
+
+// Scaling-v2 wraps useParameterPanel reads in TanStack Query, so the hook
+// MUST be rendered inside a QueryClientProvider. `wrapperWithProviders` adds
+// QueryClientProvider + ThemeProvider for every renderHook call below.
+const wrapper = wrapperWithProviders;
 
 // --- Mock store --------------------------------------------------------------
 
@@ -83,7 +89,7 @@ beforeEach(() => {
 
 describe('initial parameter loading', () => {
   it('returns empty params when no node is selected', () => {
-    const { result } = renderHook(() => useParameterPanel());
+    const { result } = renderHook(() => useParameterPanel(), { wrapper: wrapper() });
     expect(result.current.parameters).toEqual({});
     expect(result.current.hasUnsavedChanges).toBe(false);
   });
@@ -91,7 +97,7 @@ describe('initial parameter loading', () => {
   it('loads defaults from nodeDefinition.properties when DB has nothing', async () => {
     selectNode({ id: 'n-1', type: 'httpRequest' });
 
-    const { result } = renderHook(() => useParameterPanel());
+    const { result } = renderHook(() => useParameterPanel(), { wrapper: wrapper() });
 
     await waitFor(() => {
       expect(result.current.parameters.method).toBe('GET');
@@ -104,7 +110,7 @@ describe('initial parameter loading', () => {
   it('uses null when a property has no default', async () => {
     selectNode({ id: 'n-1', type: 'nodeWithoutDefaults' });
 
-    const { result } = renderHook(() => useParameterPanel());
+    const { result } = renderHook(() => useParameterPanel(), { wrapper: wrapper() });
 
     await waitFor(() => {
       expect(result.current.parameters).toHaveProperty('foo');
@@ -120,7 +126,7 @@ describe('initial parameter loading', () => {
     });
 
     selectNode({ id: 'n-1', type: 'httpRequest' });
-    const { result } = renderHook(() => useParameterPanel());
+    const { result } = renderHook(() => useParameterPanel(), { wrapper: wrapper() });
 
     await waitFor(() => {
       expect(result.current.parameters.method).toBe('POST');
@@ -133,7 +139,7 @@ describe('initial parameter loading', () => {
     wsMock.getNodeParameters.mockRejectedValue(new Error('WS down'));
 
     selectNode({ id: 'n-1', type: 'httpRequest' });
-    const { result } = renderHook(() => useParameterPanel());
+    const { result } = renderHook(() => useParameterPanel(), { wrapper: wrapper() });
 
     await waitFor(() => {
       expect(result.current.error).toBeTruthy();
@@ -146,7 +152,7 @@ describe('initial parameter loading', () => {
 describe('hasUnsavedChanges and handleParameterChange', () => {
   it('starts false and flips true after a parameter change', async () => {
     selectNode({ id: 'n-1', type: 'httpRequest' });
-    const { result } = renderHook(() => useParameterPanel());
+    const { result } = renderHook(() => useParameterPanel(), { wrapper: wrapper() });
 
     await waitFor(() => expect(result.current.parameters.method).toBe('GET'));
     expect(result.current.hasUnsavedChanges).toBe(false);
@@ -161,7 +167,7 @@ describe('hasUnsavedChanges and handleParameterChange', () => {
 
   it('flips back to false when the value is reverted to original', async () => {
     selectNode({ id: 'n-1', type: 'httpRequest' });
-    const { result } = renderHook(() => useParameterPanel());
+    const { result } = renderHook(() => useParameterPanel(), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.parameters.method).toBe('GET'));
 
     act(() => result.current.handleParameterChange('method', 'POST'));
@@ -176,7 +182,7 @@ describe('hasUnsavedChanges and handleParameterChange', () => {
 describe('handleSave', () => {
   it('saves to WebSocket and updates originalParameters on success', async () => {
     selectNode({ id: 'n-42', type: 'httpRequest' });
-    const { result } = renderHook(() => useParameterPanel());
+    const { result } = renderHook(() => useParameterPanel(), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.parameters.method).toBe('GET'));
 
     act(() => result.current.handleParameterChange('method', 'PUT'));
@@ -186,10 +192,12 @@ describe('handleSave', () => {
       await result.current.handleSave();
     });
 
-    expect(wsMock.saveNodeParameters).toHaveBeenCalledWith(
-      'n-42',
-      expect.objectContaining({ method: 'PUT' }),
-    );
+    // Scaling-v2 may pass an optional `version` as the 3rd arg for optimistic
+    // concurrency control. Inspect the spy call directly to remain agnostic.
+    expect(wsMock.saveNodeParameters).toHaveBeenCalledTimes(1);
+    const [calledNodeId, calledParams] = wsMock.saveNodeParameters.mock.calls[0];
+    expect(calledNodeId).toBe('n-42');
+    expect(calledParams).toEqual(expect.objectContaining({ method: 'PUT' }));
     expect(result.current.hasUnsavedChanges).toBe(false);
     expect(result.current.error).toBeNull();
   });
@@ -198,7 +206,7 @@ describe('handleSave', () => {
     wsMock.saveNodeParameters.mockResolvedValue(false);
 
     selectNode({ id: 'n-1', type: 'httpRequest' });
-    const { result } = renderHook(() => useParameterPanel());
+    const { result } = renderHook(() => useParameterPanel(), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.parameters.method).toBe('GET'));
 
     act(() => result.current.handleParameterChange('method', 'POST'));
@@ -215,7 +223,7 @@ describe('handleSave', () => {
     wsMock.saveNodeParameters.mockRejectedValue(new Error('boom'));
 
     selectNode({ id: 'n-1', type: 'httpRequest' });
-    const { result } = renderHook(() => useParameterPanel());
+    const { result } = renderHook(() => useParameterPanel(), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.parameters.method).toBe('GET'));
 
     act(() => result.current.handleParameterChange('method', 'POST'));
@@ -232,7 +240,7 @@ describe('handleSave', () => {
 describe('handleCancel', () => {
   it('reverts pending edits and clears selection', async () => {
     selectNode({ id: 'n-1', type: 'httpRequest' });
-    const { result } = renderHook(() => useParameterPanel());
+    const { result } = renderHook(() => useParameterPanel(), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.parameters.method).toBe('GET'));
 
     act(() => result.current.handleParameterChange('method', 'DELETE'));
@@ -249,14 +257,14 @@ describe('handleCancel', () => {
 describe('nodeDefinition exposure', () => {
   it('exposes the matching node definition', async () => {
     selectNode({ id: 'n-1', type: 'httpRequest' });
-    const { result } = renderHook(() => useParameterPanel());
+    const { result } = renderHook(() => useParameterPanel(), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.nodeDefinition).toBeTruthy());
     expect(result.current.nodeDefinition?.displayName).toBe('HTTP Request');
   });
 
   it('returns falsy nodeDefinition for unknown node type', async () => {
     selectNode({ id: 'n-1', type: 'unknownType' });
-    const { result } = renderHook(() => useParameterPanel());
+    const { result } = renderHook(() => useParameterPanel(), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.parameters).toEqual({}));
     // nodeDefinitions[unknownType] is undefined; hook returns it as-is
     expect(result.current.nodeDefinition).toBeFalsy();
