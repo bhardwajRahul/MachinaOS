@@ -48,7 +48,7 @@ class TestCalculatorTool:
         ],
     )
     async def test_supported_operations_compute_expected_result(self, op, a, b, expected):
-        from services.handlers.tools import _execute_calculator
+        from tests.nodes._compat import _execute_calculator
 
         result = await _execute_calculator({"operation": op, "a": a, "b": b})
 
@@ -58,25 +58,25 @@ class TestCalculatorTool:
         assert result["result"] == pytest.approx(expected)
 
     async def test_sqrt_uses_abs_for_negative_input(self):
-        from services.handlers.tools import _execute_calculator
+        from tests.nodes._compat import _execute_calculator
 
         result = await _execute_calculator({"operation": "sqrt", "a": -9})
         assert result["result"] == pytest.approx(3.0)
 
     async def test_divide_by_zero_returns_infinity(self):
-        from services.handlers.tools import _execute_calculator
+        from tests.nodes._compat import _execute_calculator
 
         result = await _execute_calculator({"operation": "divide", "a": 5, "b": 0})
         assert result["result"] == math.inf
 
     async def test_mod_by_zero_returns_zero(self):
-        from services.handlers.tools import _execute_calculator
+        from tests.nodes._compat import _execute_calculator
 
         result = await _execute_calculator({"operation": "mod", "a": 5, "b": 0})
         assert result["result"] == 0
 
     async def test_unknown_operation_returns_error_with_supported_list(self):
-        from services.handlers.tools import _execute_calculator
+        from tests.nodes._compat import _execute_calculator
 
         result = await _execute_calculator({"operation": "quantum", "a": 1, "b": 2})
         assert "error" in result
@@ -93,13 +93,13 @@ class TestCalculatorTool:
         # refactor doesn't accidentally swallow it.
         import pytest as _pytest
 
-        from services.handlers.tools import _execute_calculator
+        from tests.nodes._compat import _execute_calculator
 
         with _pytest.raises(ValueError):
             await _execute_calculator({"operation": "add", "a": "abc", "b": 1})
 
     async def test_operation_is_case_insensitive(self):
-        from services.handlers.tools import _execute_calculator
+        from tests.nodes._compat import _execute_calculator
 
         result = await _execute_calculator({"operation": "ADD", "a": 1, "b": 2})
         assert result["result"] == 3
@@ -114,7 +114,7 @@ class TestCurrentTimeTool:
     """datetime.now(tz) wrapper - timezone resolution + error path."""
 
     async def test_happy_path_returns_documented_fields(self):
-        from services.handlers.tools import _execute_current_time
+        from tests.nodes._compat import _execute_current_time
 
         result = await _execute_current_time({"timezone": "UTC"}, {})
 
@@ -129,7 +129,7 @@ class TestCurrentTimeTool:
         assert len(result["time"].split(":")) == 3
 
     async def test_arg_timezone_overrides_node_param(self):
-        from services.handlers.tools import _execute_current_time
+        from tests.nodes._compat import _execute_current_time
 
         result = await _execute_current_time(
             {"timezone": "America/New_York"},
@@ -138,19 +138,19 @@ class TestCurrentTimeTool:
         assert result["timezone"] == "America/New_York"
 
     async def test_empty_arg_falls_back_to_node_param(self):
-        from services.handlers.tools import _execute_current_time
+        from tests.nodes._compat import _execute_current_time
 
         result = await _execute_current_time({"timezone": ""}, {"timezone": "Europe/London"})
         assert result["timezone"] == "Europe/London"
 
     async def test_no_timezone_anywhere_defaults_to_utc(self):
-        from services.handlers.tools import _execute_current_time
+        from tests.nodes._compat import _execute_current_time
 
         result = await _execute_current_time({}, {})
         assert result["timezone"] == "UTC"
 
     async def test_invalid_timezone_returns_error_dict(self):
-        from services.handlers.tools import _execute_current_time
+        from tests.nodes._compat import _execute_current_time
 
         result = await _execute_current_time({"timezone": "Mars/OlympusMons"}, {})
         assert "error" in result
@@ -195,7 +195,7 @@ class TestDuckDuckGoSearch:
         fake_ddgs_instance.text.assert_called_once_with("python", max_results=2)
 
     async def test_empty_query_short_circuits_before_import(self):
-        from services.handlers.tools import _execute_duckduckgo_search
+        from tests.nodes._compat import _execute_duckduckgo_search
 
         result = await _execute_duckduckgo_search({"query": ""}, {})
         assert result == {"error": "No search query provided"}
@@ -367,7 +367,7 @@ class TestWriteTodos:
             svc_mod._service = backup
 
     async def test_happy_path_stores_todos_and_broadcasts(self):
-        from services.handlers.todo import handle_write_todos
+        from tests.nodes._compat import handle_write_todos
         from services.todo_service import get_todo_service
 
         broadcaster = MagicMock()
@@ -407,7 +407,7 @@ class TestWriteTodos:
         assert kwargs.get("workflow_id") == "wf-42"
 
     async def test_invalid_items_are_silently_dropped_or_coerced(self):
-        from services.handlers.todo import handle_write_todos
+        from tests.nodes._compat import handle_write_todos
         from services.todo_service import get_todo_service
 
         todos = [
@@ -448,7 +448,7 @@ class TestWriteTodos:
         ]
 
     async def test_empty_todos_list_yields_empty_stored_state(self):
-        from services.handlers.todo import handle_write_todos
+        from tests.nodes._compat import handle_write_todos
         from services.todo_service import get_todo_service
 
         result = await handle_write_todos(
@@ -465,7 +465,7 @@ class TestWriteTodos:
     async def test_no_broadcaster_no_broadcast_but_still_success(self):
         """If the caller omits broadcaster (e.g. test harness, CLI), the
         handler must still succeed and persist state."""
-        from services.handlers.todo import handle_write_todos
+        from tests.nodes._compat import handle_write_todos
         from services.todo_service import get_todo_service
 
         result = await handle_write_todos(

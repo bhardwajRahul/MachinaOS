@@ -479,7 +479,7 @@ class TestClaudeCodeAgent:
         service = self._wire_claude_service()
 
         with patched_container(auth_api_keys={}), patched_broadcaster(), patch(
-            "services.handlers.claude_code.get_claude_code_service",
+            "services.claude_code_service.get_claude_code_service",
             return_value=service,
         ):
             result = await harness.execute(
@@ -512,7 +512,7 @@ class TestClaudeCodeAgent:
         service = self._wire_claude_service()
 
         with patched_container(auth_api_keys={}), patched_broadcaster(), patch(
-            "services.handlers.claude_code.get_claude_code_service",
+            "services.claude_code_service.get_claude_code_service",
             return_value=service,
         ):
             await harness.execute(
@@ -528,7 +528,7 @@ class TestClaudeCodeAgent:
         service = self._wire_claude_service()
 
         with patched_container(auth_api_keys={}), patched_broadcaster(), patch(
-            "services.handlers.claude_code.get_claude_code_service",
+            "services.claude_code_service.get_claude_code_service",
             return_value=service,
         ):
             result = await harness.execute(
@@ -548,7 +548,7 @@ class TestClaudeCodeAgent:
         service.execute = AsyncMock(side_effect=RuntimeError("cli exit 1: boom"))
 
         with patched_container(auth_api_keys={}), patched_broadcaster(), patch(
-            "services.handlers.claude_code.get_claude_code_service",
+            "services.claude_code_service.get_claude_code_service",
             return_value=service,
         ):
             result = await harness.execute(
@@ -576,7 +576,7 @@ class TestClaudeCodeAgent:
         )
 
         with patched_container(auth_api_keys={}), patched_broadcaster(), patch(
-            "services.handlers.claude_code.get_claude_code_service",
+            "services.claude_code_service.get_claude_code_service",
             return_value=service,
         ):
             await harness.execute(

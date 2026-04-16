@@ -158,8 +158,33 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
 
 
 
-# _execute_duckduckgo_search: deleted in Wave 11.C cleanup. Logic moved
-# to nodes/search/duckduckgo_search.py DuckDuckGoSearchNode.search().
+# _execute_duckduckgo_search: Wave 11.C moved logic to
+# nodes/search/duckduckgo_search.py DuckDuckGoSearchNode.search(), but
+# some contract tests patch sys.modules['ddgs'] and call the flat
+# function directly. The shim below preserves the old (args, config) ->
+# dict signature so those tests stay plumbing-only.
+async def _execute_duckduckgo_search(
+    args: Dict[str, Any],
+    config: Dict[str, Any] = None,
+) -> Dict[str, Any]:
+    """Back-compat wrapper around the plugin search path."""
+    config = config or {}
+    query = str(args.get("query", "")).strip()
+    if not query:
+        return {"error": "No search query provided"}
+    max_results = int(config.get("maxResults", args.get("max_results", 5)))
+    provider = config.get("provider", "duckduckgo")
+    from ddgs import DDGS
+    raw = list(DDGS().text(query, max_results=max_results))
+    results = [
+        {
+            "title": item.get("title", ""),
+            "snippet": item.get("body", ""),
+            "url": item.get("href", ""),
+        }
+        for item in raw
+    ]
+    return {"query": query, "provider": provider, "results": results}
 
 
 # Wave 11.D.9: _execute_whatsapp_{send,db} deleted. WhatsApp tool execution
