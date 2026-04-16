@@ -541,18 +541,19 @@ const DashboardContent: React.FC = () => {
 
   const proOptions = React.useMemo(() => ({ hideAttribution: true }), []);
 
-  // Wave 10.D step 2: nodeTypes is rebuilt once after the NodeSpec
-  // prefetch lands so spec.componentKind dispatch becomes effective.
-  // Using `useMemo` (not a ref) so React Flow actually sees the new
-  // reference and re-mounts nodes with the correct components (e.g.
-  // `aiAgent` → AIAgentNode instead of the SquareNode fallback chosen
-  // when the spec cache was cold). Before `specsReady`, returns the
-  // module-scope map (stable identity). After prefetch: returns the
-  // spec-aware map (stable identity for the rest of the session).
-  const nodeTypes = React.useMemo(
-    () => (specsReady ? createNodeTypes() : moduleNodeTypes),
-    [specsReady],
-  );
+  // Wave 10.D step 2: nodeTypes dispatch map. Cold cache uses the
+  // module-scope fallback (agents/skills/teamMonitor already correct via
+  // hardcoded guards in createNodeTypes); post-prefetch we rebuild and
+  // only swap the reference if any mapping genuinely differs, so React
+  // Flow doesn't remount every canvas node for a no-op rebuild.
+  const nodeTypes = React.useMemo(() => {
+    if (!specsReady) return moduleNodeTypes;
+    const fresh = createNodeTypes();
+    for (const key of Object.keys(fresh)) {
+      if (fresh[key] !== moduleNodeTypes[key]) return fresh;
+    }
+    return moduleNodeTypes;
+  }, [specsReady]);
   const edgeTypes = moduleEdgeTypes;
 
   // Execute entire workflow from start node to end

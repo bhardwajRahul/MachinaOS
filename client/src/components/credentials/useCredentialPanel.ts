@@ -47,29 +47,31 @@ export function useCredentialPanel(config: ProviderConfig, visible: boolean) {
     resetFields: () => setValues({}),
   }).current;
 
-  // Load stored values into form when panel becomes visible
+  // Load stored values into form when panel becomes visible. Fields load
+  // in parallel via Promise.all so a 3-field provider takes one WS
+  // round-trip instead of six sequential ones (fields populate together
+  // instead of one-by-one on modal open).
   useEffect(() => {
     if (!visible || !isConnected || !config.fields) return;
     let cancelled = false;
     (async () => {
-      const next: CredentialFormValues = {};
-      let anyStored = false;
-      for (const field of config.fields!) {
-        const storeKey = field.key === 'apiKey' ? config.id : field.key;
-        const has = await hasStoredKey(storeKey);
-        if (has) {
+      const entries = await Promise.all(
+        config.fields!.map(async (field) => {
+          const storeKey = field.key === 'apiKey' ? config.id : field.key;
+          const has = await hasStoredKey(storeKey);
+          if (!has) return null;
           const val = await getStoredApiKey(storeKey);
-          if (val && !cancelled) {
-            next[field.key] = val;
-            anyStored = true;
-          }
-        }
+          return val ? ([field.key, val] as const) : null;
+        }),
+      );
+      if (cancelled) return;
+      const next: CredentialFormValues = {};
+      for (const entry of entries) {
+        if (entry) next[entry[0]] = entry[1];
       }
-      if (!cancelled) {
-        setValues(next);
-        setStored(anyStored);
-        setError(null);
-      }
+      setValues(next);
+      setStored(Object.keys(next).length > 0);
+      setError(null);
     })();
     return () => { cancelled = true; };
   }, [config.id, visible, isConnected]);

@@ -6,6 +6,7 @@ import ComponentItem from './ComponentItem';
 import CollapsibleSection from './CollapsibleSection';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Search } from 'lucide-react';
 import { resolveIcon, resolveLibraryIcon, isImageIcon } from '../../assets/icons';
 import { useNodeGroups, NodeGroupEntry } from '../../lib/nodeSpec';
@@ -26,9 +27,10 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
   const theme = useAppTheme();
 
   // Backend-driven group metadata via the shared WS-in-queryFn hook.
-  // `useNodeGroups` auto-fires on WS connect and re-renders the palette
-  // with proper icons once the response lands.
-  const groupIndex = useNodeGroups();
+  // `useNodeGroups` returns the full query result so we can render a
+  // loading skeleton on cold first-paint instead of masking the filter
+  // or flashing an empty palette.
+  const { data: groupIndex, isPending: groupsLoading } = useNodeGroups();
 
   const getCategoryConfig = React.useCallback((category: string) => {
     const entry = groupIndex?.[category.toLowerCase()] as NodeGroupEntry | undefined;
@@ -118,7 +120,9 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
 
       {/* Categories */}
       <div className="flex-1 overflow-y-auto p-3">
-        {Object.keys(categorizedComponents).length === 0 ? (
+        {groupsLoading ? (
+          <PaletteSkeleton />
+        ) : Object.keys(categorizedComponents).length === 0 ? (
           <div className="flex flex-col items-center px-6 py-12 text-center text-muted-foreground">
             <Search className="mb-3 h-12 w-12 opacity-50" />
             <p className="text-sm">
@@ -194,5 +198,31 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
     </div>
   );
 };
+
+/**
+ * Loading placeholder for the palette's categories area. Mirrors the
+ * shape of three collapsed category sections + a handful of items so
+ * the layout does not jump when real data arrives.
+ */
+const PALETTE_SKELETON_CATEGORIES = 3;
+const PALETTE_SKELETON_ITEMS_PER_CATEGORY = 2;
+
+const PaletteSkeleton: React.FC = () => (
+  <div aria-busy="true" aria-label="Loading components">
+    {Array.from({ length: PALETTE_SKELETON_CATEGORIES }).map((_, categoryIdx) => (
+      <div key={categoryIdx} className="mb-3 space-y-2">
+        <div className="flex items-center gap-2.5 px-1 py-2">
+          <Skeleton className="h-7 w-7 rounded-md" />
+          <Skeleton className="h-4 w-24" />
+        </div>
+        <div className="grid gap-2 pt-2">
+          {Array.from({ length: PALETTE_SKELETON_ITEMS_PER_CATEGORY }).map((_, itemIdx) => (
+            <Skeleton key={itemIdx} className="h-10 w-full rounded-md" />
+          ))}
+        </div>
+      </div>
+    ))}
+  </div>
+);
 
 export default ComponentPalette;

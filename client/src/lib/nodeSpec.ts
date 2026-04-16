@@ -12,11 +12,12 @@
  * See C:\\Users\\Tgroh\\.claude\\plans\\typed-splashing-crown.md.
  */
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { nodeSpecToDescription, type NodeSpec } from '../adapters/nodeSpecToDescription';
 import type { INodeTypeDescription } from '../types/INodeProperties';
 import { featureFlags } from './featureFlags';
 import { queryClient } from './queryClient';
+import { STALE_TIME } from './queryConfig';
 import { useWebSocket } from '../contexts/WebSocketContext';
 
 type SendRequest = (type: string, data?: any) => Promise<any>;
@@ -42,7 +43,7 @@ export async function fetchNodeSpec(
         return null;
       }
     },
-    staleTime: Infinity,
+    staleTime: STALE_TIME.FOREVER,
   });
 }
 
@@ -98,29 +99,31 @@ export function useNodeSpec(nodeType: string | undefined | null): NodeSpec | nul
       }
     },
     enabled: !!nodeType && isConnected,
-    staleTime: 60_000, // 60s — short enough to pick up backend restarts in dev
-    refetchOnMount: 'always',
+    // Node specs only change with a backend deploy; dev restarts are
+    // covered by the WS reconnect handler which invalidates ['nodeSpec'].
+    staleTime: STALE_TIME.FOREVER,
   });
   return data ?? null;
 }
 
 /**
  * Reactive node-groups subscription. Same WS-in-queryFn pattern as
- * `useNodeSpec`. Replaces the old double-wrapped `fetchNodeGroups`
- * call inside `useQuery` (which deadlocked on the shared query key).
+ * `useNodeSpec`. Returns the full `UseQueryResult` so callers can
+ * branch on `data` / `isPending` / `error` and render a proper loading
+ * state rather than masking missing data. Matches TkDodo's recommended
+ * status-check pattern: check data first, error second, loading last.
  */
-export function useNodeGroups(): Record<string, NodeGroupEntry> | undefined {
+export function useNodeGroups(): UseQueryResult<Record<string, NodeGroupEntry>> {
   const { sendRequest, isConnected } = useWebSocket();
-  const { data } = useQuery<Record<string, NodeGroupEntry>>({
+  return useQuery<Record<string, NodeGroupEntry>>({
     queryKey: nodeGroupsQueryKey,
     queryFn: async () => {
       const response = await sendRequest('get_node_groups', {});
       return (response?.groups ?? {}) as Record<string, NodeGroupEntry>;
     },
     enabled: isConnected,
-    staleTime: Infinity,
+    staleTime: STALE_TIME.FOREVER,
   });
-  return data;
 }
 
 /** Wire shape for one entry in the GET /api/schemas/nodes/groups
@@ -150,7 +153,7 @@ export async function fetchNodeGroups(
       const response = await sendRequest('get_node_groups', {});
       return (response?.groups ?? {}) as Record<string, NodeGroupEntry>;
     },
-    staleTime: Infinity,
+    staleTime: STALE_TIME.FOREVER,
   });
 }
 

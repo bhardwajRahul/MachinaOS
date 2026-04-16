@@ -8,6 +8,7 @@ import { useAppTheme } from '../hooks/useAppTheme';
 import { useWebSocket, useWhatsAppStatus } from '../contexts/WebSocketContext';
 import { useApiKeys } from '../hooks/useApiKeys';
 import { getCachedNodeSpec, isNodeInBackendGroup, resolveNodeDescription, useNodeSpec } from '../lib/nodeSpec';
+import { queryKeys, STALE_TIME } from '../lib/queryConfig';
 import { resolveIcon, resolveLibraryIcon } from '../assets/icons';
 import { AI_MODEL_PROVIDER_MAP } from '../nodeDefinitions/aiModelNodes';
 
@@ -169,10 +170,10 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
   }, [definition?.credentials, type]);
 
   const apiKeyQuery = useQuery<string | null, Error>({
-    queryKey: ['storedApiKey', providerId],
+    ...queryKeys.storedApiKey.byProvider(providerId),
     queryFn: () => getStoredApiKey(providerId),
     enabled: !!providerId && wsConnected,
-    staleTime: 30_000,
+    staleTime: STALE_TIME.SHORT,
   });
   const hasApiKey = !!apiKeyQuery.data;
   const isConfigured = hasApiKey && !!data && Object.keys(data).length > 0;

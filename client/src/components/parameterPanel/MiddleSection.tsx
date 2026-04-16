@@ -33,6 +33,8 @@ import { useAppTheme } from '../../hooks/useAppTheme';
 import { useAppStore } from '../../store/useAppStore';
 import { useWebSocket, CompactionStats } from '../../contexts/WebSocketContext';
 import { useUserSettingsQuery } from '../../hooks/useUserSettingsQuery';
+import { nodeParamsQueryKey, type NodeParametersResponse } from '../../hooks/useNodeParamsQuery';
+import { queryKeys, STALE_TIME } from '../../lib/queryConfig';
 import { nodeDefinitions } from '../../nodeDefinitions';
 import { INodeTypeDescription, INodeProperties } from '../../types/INodeProperties';
 import { resolveIcon, resolveLibraryIcon, isImageIcon } from '../../assets/icons';
@@ -84,7 +86,7 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
 }) => {
   const theme = useAppTheme();
   const { currentWorkflow } = useAppStore();
-  const { clearMemory, resetSkill, sendRequest, compactionStats: contextCompactionStats, updateCompactionStats } = useWebSocket();
+  const { clearMemory, resetSkill, sendRequest, getNodeParameters, compactionStats: contextCompactionStats, updateCompactionStats } = useWebSocket();
 
   const [showClearMemoryDialog, setShowClearMemoryDialog] = useState(false);
   const [showResetSkillDialog, setShowResetSkillDialog] = useState(false);
@@ -199,24 +201,20 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
     return memoryEdge?.source ?? null;
   }, [isAgentWithSkills, currentWorkflow, nodeId]);
 
-  const memoryParamsQuery = useQuery<Record<string, any>, Error>({
-    queryKey: ['nodeParameters', memoryEdgeSourceId],
-    queryFn: async () => {
-      const response = await sendRequest<{ parameters: Record<string, any> }>(
-        'get_node_parameters',
-        { node_id: memoryEdgeSourceId },
-      );
-      return response?.parameters ?? {};
-    },
+  const memoryParamsQuery = useQuery<NodeParametersResponse | null, Error>({
+    queryKey: memoryEdgeSourceId ? nodeParamsQueryKey(memoryEdgeSourceId) : nodeParamsQueryKey('none'),
+    queryFn: () => (memoryEdgeSourceId ? getNodeParameters(memoryEdgeSourceId) : Promise.resolve(null)),
     enabled: !!memoryEdgeSourceId,
-    staleTime: 30_000,
+    staleTime: STALE_TIME.MEDIUM,
   });
+
+  const memoryParamsData = memoryParamsQuery.data?.parameters;
 
   const connectedMemorySessionId = useMemo<string | null>(() => {
     if (!memoryEdgeSourceId) return null;
-    const configured: string = memoryParamsQuery.data?.sessionId || '';
+    const configured: string = memoryParamsData?.sessionId || '';
     return configured && configured !== 'default' ? configured : nodeId;
-  }, [memoryEdgeSourceId, memoryParamsQuery.data?.sessionId, nodeId]);
+  }, [memoryEdgeSourceId, memoryParamsData?.sessionId, nodeId]);
 
   const compactionStatsQuery = useQuery<{
     session_id: string;
@@ -225,7 +223,11 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
     context_length?: number;
     count: number;
   }, Error>({
-    queryKey: ['compactionStats', connectedMemorySessionId, parameters.model, parameters.provider],
+    ...queryKeys.compactionStats.bySession(
+      connectedMemorySessionId ?? '',
+      parameters.model || '',
+      parameters.provider || '',
+    ),
     queryFn: () =>
       sendRequest('get_compaction_stats', {
         session_id: connectedMemorySessionId,
@@ -233,7 +235,7 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
         provider: parameters.provider || '',
       }),
     enabled: !!connectedMemorySessionId,
-    staleTime: 15_000,
+    staleTime: STALE_TIME.SHORT,
   });
   const compactionLoading = compactionStatsQuery.isFetching;
 
@@ -291,15 +293,9 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
 
   const masterSkillParamsQueries = useQueries({
     queries: masterSkillEdgeSources.map((id) => ({
-      queryKey: ['nodeParameters', id],
-      queryFn: async () => {
-        const response = await sendRequest<{ parameters: Record<string, any> }>(
-          'get_node_parameters',
-          { node_id: id },
-        );
-        return response?.parameters ?? {};
-      },
-      staleTime: 30_000,
+      queryKey: nodeParamsQueryKey(id),
+      queryFn: () => getNodeParameters(id),
+      staleTime: STALE_TIME.MEDIUM,
     })),
   });
 
@@ -307,7 +303,7 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
     const out: Record<string, any> = {};
     masterSkillEdgeSources.forEach((id, i) => {
       const data = masterSkillParamsQueries[i]?.data;
-      if (data) out[id] = data;
+      if (data?.parameters) out[id] = data.parameters;
     });
     return out;
   }, [masterSkillEdgeSources, masterSkillParamsQueries]);

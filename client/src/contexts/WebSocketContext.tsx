@@ -15,6 +15,9 @@ import { API_CONFIG } from '../config/api';
 import { useAppStore } from '../store/useAppStore';
 import { useAuth } from './AuthContext';
 import { queryClient } from '../lib/queryClient';
+import { queryKeys } from '../lib/queryConfig';
+import { CATALOGUE_QUERY_KEY } from '../hooks/useCatalogueQuery';
+import { nodeParamsQueryKey } from '../hooks/useNodeParamsQuery';
 
 // Generate unique request ID
 const generateRequestId = (): string => {
@@ -551,7 +554,19 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             if (data.twitter) setTwitterStatus(data.twitter);
             if (data.google) setGoogleStatus(data.google);
             if (data.telegram) setTelegramStatus(data.telegram);
-            if (data.api_keys) setApiKeyStatuses(data.api_keys);
+            if (data.api_keys) {
+              setApiKeyStatuses(data.api_keys);
+              // Warm the per-provider storedApiKey query cache so SquareNode
+              // configured badges resolve from the broadcast without a
+              // separate get_stored_api_key round-trip per node.
+              for (const [provider, status] of Object.entries(data.api_keys)) {
+                const s = status as { hasKey?: boolean; api_key?: string | null };
+                queryClient.setQueryData(
+                  queryKeys.storedApiKey.byProvider(provider).queryKey,
+                  s?.hasKey ? s.api_key ?? null : null,
+                );
+              }
+            }
             // Node statuses from initial_status - group by workflow_id (n8n pattern)
             if (data.nodes) {
               const groupedStatuses: Record<string, Record<string, NodeStatus>> = {};
@@ -563,7 +578,14 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
               }
               setAllNodeStatuses(prev => ({ ...prev, ...groupedStatuses }));
             }
-            if (data.node_parameters) setNodeParameters(data.node_parameters);
+            if (data.node_parameters) {
+              setNodeParameters(data.node_parameters);
+              // Warm the nodeParams query cache so MiddleSection's memory /
+              // master-skill queries hit immediately on first open.
+              for (const [nodeId, params] of Object.entries(data.node_parameters)) {
+                queryClient.setQueryData(nodeParamsQueryKey(nodeId), params);
+              }
+            }
             // Variables from initial_status - group by workflow_id (n8n pattern)
             if (data.variables) {
               // Variables may come with workflow_id or need grouping
@@ -585,6 +607,9 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
                 status: data.deployment.status || 'idle'
               });
             }
+            // Catalogue 'stored' flags derive from api_keys + oauth state;
+            // re-sync once after the bulk status lands.
+            queryClient.invalidateQueries({ queryKey: CATALOGUE_QUERY_KEY });
           }
           break;
 
@@ -594,7 +619,19 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
               ...prev,
               [message.provider]: data
             }));
+            queryClient.setQueryData(
+              queryKeys.storedApiKey.byProvider(message.provider).queryKey,
+              data?.hasKey ? (data as any).api_key ?? null : null,
+            );
+            queryClient.invalidateQueries({ queryKey: CATALOGUE_QUERY_KEY });
           }
+          break;
+
+        case 'credential_catalogue_updated':
+          // Future server emitter (per useCatalogueQuery.ts TODO). Client
+          // handler is wired now so once the server pushes it, consumers
+          // refresh automatically.
+          queryClient.invalidateQueries({ queryKey: CATALOGUE_QUERY_KEY });
           break;
 
         case 'android_status':
@@ -603,6 +640,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
         case 'whatsapp_status':
           setWhatsappStatus(data || defaultWhatsAppStatus);
+          queryClient.invalidateQueries({ queryKey: CATALOGUE_QUERY_KEY });
           break;
 
         case 'twitter_oauth_complete':
@@ -615,6 +653,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
               name: data.name,
               profile_image_url: data.profile_image_url,
             });
+            queryClient.invalidateQueries({ queryKey: CATALOGUE_QUERY_KEY });
           }
           break;
 
@@ -627,6 +666,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
               name: data.name,
               profile_image_url: data.profile_image_url,
             });
+            queryClient.invalidateQueries({ queryKey: CATALOGUE_QUERY_KEY });
           }
           break;
 
@@ -638,6 +678,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
               email: data.email || null,
               name: data.name,
             });
+            queryClient.invalidateQueries({ queryKey: CATALOGUE_QUERY_KEY });
           }
           break;
 
@@ -651,6 +692,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
               bot_id: data.bot_id || null,
               owner_chat_id: data.owner_chat_id ?? null,
             });
+            queryClient.invalidateQueries({ queryKey: CATALOGUE_QUERY_KEY });
           }
           break;
 
@@ -753,14 +795,13 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         // Node parameters broadcasts (from other clients)
         case 'node_parameters_updated':
           if (node_id) {
-            setNodeParameters(prev => ({
-              ...prev,
-              [node_id]: {
-                parameters: message.parameters,
-                version: message.version,
-                timestamp: message.timestamp
-              }
-            }));
+            const nextParams = {
+              parameters: message.parameters,
+              version: message.version,
+              timestamp: message.timestamp,
+            };
+            setNodeParameters(prev => ({ ...prev, [node_id]: nextParams }));
+            queryClient.setQueryData(nodeParamsQueryKey(node_id), nextParams);
           }
           break;
 
@@ -771,6 +812,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
               delete updated[node_id];
               return updated;
             });
+            queryClient.removeQueries({ queryKey: nodeParamsQueryKey(node_id) });
           }
           break;
 
@@ -1003,6 +1045,11 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
                 }
               };
             });
+            // Session-scoped invalidation: the query key also carries
+            // model + provider, which aren't in the broadcast payload, so
+            // we invalidate the whole namespace and let the ~1-2 mounted
+            // compaction queries refetch fresh values.
+            queryClient.invalidateQueries({ queryKey: queryKeys.compactionStats._def });
           }
           break;
         }
@@ -1027,6 +1074,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
               }
               return updated;
             });
+            queryClient.invalidateQueries({ queryKey: queryKeys.compactionStats._def });
           }
           break;
         }
