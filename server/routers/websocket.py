@@ -2975,6 +2975,13 @@ async def handle_save_pricing_config(data: Dict[str, Any], websocket: WebSocket)
 
 
 @ws_handler()
+async def handle_get_node_allowlist(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Return the node allowlist that controls which nodes appear in the palette."""
+    from services.node_allowlist import get_node_allowlist_service
+    return get_node_allowlist_service().get_config()
+
+
+@ws_handler()
 async def handle_get_api_usage_summary(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
     """Get aggregated API usage and cost by service (Twitter, etc.)."""
     database = container.database()
@@ -3382,6 +3389,9 @@ MESSAGE_HANDLERS: Dict[str, MessageHandler] = {
     "get_pricing_config": handle_get_pricing_config,
     "save_pricing_config": handle_save_pricing_config,
     "get_api_usage_summary": handle_get_api_usage_summary,
+
+    # Node Allowlist (UI palette filter)
+    "get_node_allowlist": handle_get_node_allowlist,
 
     # Model Registry
     "get_model_constraints": handle_get_model_constraints,
