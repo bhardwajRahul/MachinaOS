@@ -1,4 +1,29 @@
 {
   "_comment": "List node types to show in the Component Palette. Empty list or missing file = all nodes shown (default-on). Node type identifiers must match the 'name' field in client/src/nodeDefinitions/*.ts definitions verbatim.",
-  "enabled_nodes": []
+  "enabled_nodes": [
+    "start",
+    "chatTrigger",
+    "console",
+
+    "aiAgent",
+    "chatAgent",
+
+    "simpleMemory",
+    "masterSkill",
+
+    "openaiChatModel",
+    "anthropicChatModel",
+    "geminiChatModel",
+
+    "calculatorTool",
+    "currentTimeTool",
+    "writeTodos",
+
+    "httpRequest",
+    "timer",
+    "cronScheduler",
+
+    "telegramSend",
+    "telegramReceive"
+  ]
 }
