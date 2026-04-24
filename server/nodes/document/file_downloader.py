@@ -18,12 +18,12 @@ logger = get_logger(__name__)
 
 class FileDownloaderParams(BaseModel):
     urls: List[str] = Field(default_factory=list)
-    output_dir: str = Field(default="downloads", alias="outputDir")
-    max_workers: int = Field(default=4, alias="maxWorkers", ge=1, le=32)
-    skip_existing: bool = Field(default=True, alias="skipExisting")
+    output_dir: str = Field(default="downloads")
+    max_workers: int = Field(default=4, ge=1, le=32)
+    skip_existing: bool = Field(default=True)
     timeout: int = Field(default=60, ge=1, le=600)
 
-    model_config = ConfigDict(populate_by_name=True, extra="allow")
+    model_config = ConfigDict(extra="allow")
 
 
 class FileDownloaderOutput(BaseModel):
@@ -57,7 +57,7 @@ class FileDownloaderNode(ActionNode):
 
     @Operation("download")
     async def download(self, ctx: NodeContext, params: FileDownloaderParams) -> FileDownloaderOutput:
-        p = params.model_dump(by_alias=True)
+        p = params.model_dump()
         items = p.get('items') or [{'url': u} for u in p.get('urls', [])]
         workspace_dir = ctx.raw.get('workspace_dir', '')
         default_dir = str(Path(workspace_dir) / 'downloads') if workspace_dir else p.get('outputDir', 'downloads')

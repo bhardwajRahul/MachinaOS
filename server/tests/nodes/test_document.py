@@ -52,7 +52,7 @@ class TestHttpScraper:
 
         result = await harness.execute(
             "httpScraper",
-            {"url": "https://example.com/list", "linkSelector": 'a[href$=".pdf"]'},
+            {"url": "https://example.com/list", "link_selector": 'a[href$=".pdf"]'},
         )
 
         harness.assert_envelope(result, success=True)
@@ -84,10 +84,10 @@ class TestHttpScraper:
             "httpScraper",
             {
                 "url": "https://example.com/p{page}",
-                "iterationMode": "page",
-                "startPage": 1,
-                "endPage": 2,
-                "linkSelector": "a",
+                "iteration_mode": "page",
+                "start_page": 1,
+                "end_page": 2,
+                "link_selector": "a",
             },
         )
 
@@ -108,10 +108,10 @@ class TestHttpScraper:
             "httpScraper",
             {
                 "url": "https://example.com/?d={date}",
-                "iterationMode": "date",
-                "startDate": "2025-01-01",
-                "endDate": "2025-01-03",
-                "linkSelector": "a",
+                "iteration_mode": "date",
+                "start_date": "2025-01-01",
+                "end_date": "2025-01-03",
+                "link_selector": "a",
             },
         )
 
@@ -227,7 +227,7 @@ class TestDocumentParser:
 
         result = await harness.execute(
             "documentParser",
-            {"files": [{"path": str(f)}], "parser": "beautifulsoup"},
+            {"file_path": str(f), "parser": "beautifulsoup"},
         )
 
         harness.assert_envelope(result, success=True)
@@ -277,7 +277,7 @@ class TestDocumentParser:
         with patch.dict(sys.modules, {"pypdf": fake_pypdf}):
             result = await harness.execute(
                 "documentParser",
-                {"files": [{"path": str(f)}], "parser": "pypdf"},
+                {"file_path": str(f), "parser": "pypdf"},
             )
 
         harness.assert_envelope(result, success=True)
@@ -298,8 +298,8 @@ class TestTextChunker:
             "textChunker",
             {
                 "documents": [{"content": content, "source": "src1"}],
-                "chunkSize": 500,
-                "chunkOverlap": 50,
+                "chunk_size": 500,
+                "chunk_overlap": 50,
                 "strategy": "recursive",
             },
         )
@@ -327,8 +327,8 @@ class TestTextChunker:
                     {"content": "", "source": "empty"},
                     {"content": "short text", "source": "s2"},
                 ],
-                "chunkSize": 1024,
-                "chunkOverlap": 100,
+                "chunk_size": 1024,
+                "chunk_overlap": 100,
             },
         )
         harness.assert_envelope(result, success=True)
@@ -343,8 +343,8 @@ class TestTextChunker:
             "textChunker",
             {
                 "documents": [{"content": md, "source": "md1"}],
-                "chunkSize": 200,
-                "chunkOverlap": 20,
+                "chunk_size": 200,
+                "chunk_overlap": 20,
                 "strategy": "markdown",
             },
         )
@@ -427,7 +427,7 @@ class TestEmbeddingGenerator:
                     "chunks": [{"content": "only"}],
                     "provider": "openai",
                     "model": "text-embedding-3-small",
-                    "apiKey": "sk-test",
+                    "api_key": "sk-test",
                 },
             )
 
@@ -489,13 +489,13 @@ class TestVectorStore:
                 {
                     "operation": "store",
                     "backend": "chroma",
-                    "collectionName": "docs",
+                    "collection_name": "docs",
                     "embeddings": [[0.1, 0.2], [0.3, 0.4]],
                     "chunks": [
                         {"content": "c1", "source": "s1", "chunk_index": 0},
                         {"content": "c2", "source": "s1", "chunk_index": 1},
                     ],
-                    "persistDir": str(tmp_path),
+                    "persist_dir": str(tmp_path),
                 },
             )
 
@@ -520,7 +520,7 @@ class TestVectorStore:
                     "backend": "chroma",
                     "embeddings": [],
                     "chunks": [],
-                    "persistDir": str(tmp_path),
+                    "persist_dir": str(tmp_path),
                 },
             )
         harness.assert_envelope(result, success=True)
@@ -536,10 +536,10 @@ class TestVectorStore:
                 {
                     "operation": "query",
                     "backend": "chroma",
-                    "collectionName": "docs",
-                    "queryEmbedding": [0.1, 0.2],
-                    "topK": 2,
-                    "persistDir": str(tmp_path),
+                    "collection_name": "docs",
+                    "query_embedding": [0.1, 0.2],
+                    "top_k": 2,
+                    "persist_dir": str(tmp_path),
                 },
             )
 
@@ -560,7 +560,7 @@ class TestVectorStore:
                     "operation": "delete",
                     "backend": "chroma",
                     "ids": ["id-a", "id-b", "id-c"],
-                    "persistDir": str(tmp_path),
+                    "persist_dir": str(tmp_path),
                 },
             )
 

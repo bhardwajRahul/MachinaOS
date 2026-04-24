@@ -10,9 +10,9 @@ from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
 
 class ProxyStatusParams(BaseModel):
-    provider_name: str = Field(default="", alias="providerName")
+    provider_name: str = Field(default="")
 
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+    model_config = ConfigDict(extra="ignore")
 
 
 class ProxyStatusOutput(BaseModel):
@@ -28,7 +28,7 @@ class ProxyStatusNode(ActionNode):
     subtitle = "Health Stats"
     icon = "📊"
     color = "#ffb86c"
-    group = ("proxy",)
+    group = ("proxy", "tool")
     description = "View proxy provider health, scores, and usage statistics"
     component_kind = "square"
     handles = (
@@ -37,6 +37,7 @@ class ProxyStatusNode(ActionNode):
     )
     annotations = {"destructive": False, "readonly": True, "open_world": False}
     task_queue = TaskQueue.DEFAULT
+    usable_as_tool = True
 
     Params = ProxyStatusParams
     Output = ProxyStatusOutput

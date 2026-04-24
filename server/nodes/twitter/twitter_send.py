@@ -17,12 +17,76 @@ from ._base import (
 
 
 class TwitterSendParams(BaseModel):
-    action: Literal["tweet", "reply", "retweet", "like", "unlike", "delete"] = "tweet"
-    text: str = Field(default="")
-    tweet_id: str = Field(default="", alias="tweetId")
-    reply_to_id: str = Field(default="", alias="replyToId")
+    """8-field schema matching main-branch baseline. Snake_case throughout,
+    no aliases. ``reply`` action uses ``tweet_id`` as the target (unified
+    with other id-based actions) — baseline behaviour.
+    """
+    action: Literal[
+        "tweet", "reply", "retweet", "quote", "like", "unlike", "delete",
+    ] = Field(default="tweet", description="Action to perform")
+    text: str = Field(
+        default="",
+        description="Tweet text (max 280 chars)",
+        json_schema_extra={
+            "rows": 4,
+            "displayOptions": {"show": {"action": ["tweet", "reply", "quote"]}},
+        },
+    )
+    tweet_id: str = Field(
+        default="",
+        description="Target tweet ID (for reply/retweet/quote/like/unlike/delete)",
+        json_schema_extra={
+            "displayOptions": {"show": {"action": [
+                "reply", "retweet", "quote", "like", "unlike", "delete",
+            ]}},
+        },
+    )
+    include_media: bool = Field(
+        default=False,
+        description="Attach images or videos",
+        json_schema_extra={
+            "displayOptions": {"show": {"action": ["tweet", "reply", "quote"]}},
+        },
+    )
+    media_urls: str = Field(
+        default="",
+        description="Comma-separated URLs; max 4 images or 1 video",
+        json_schema_extra={
+            "displayOptions": {"show": {
+                "action": ["tweet", "reply", "quote"],
+                "include_media": [True],
+            }},
+        },
+    )
+    include_poll: bool = Field(
+        default=False,
+        description="Create poll with tweet",
+        json_schema_extra={
+            "displayOptions": {"show": {"action": ["tweet"]}},
+        },
+    )
+    poll_options: str = Field(
+        default="",
+        description="Comma-separated options (2-4 items, 25 chars each)",
+        json_schema_extra={
+            "displayOptions": {"show": {
+                "action": ["tweet"],
+                "include_poll": [True],
+            }},
+        },
+    )
+    poll_duration: int = Field(
+        default=1440, ge=5, le=10080,
+        description="Poll duration in minutes (5 min - 7 days)",
+        json_schema_extra={
+            "displayOptions": {"show": {
+                "action": ["tweet"],
+                "include_poll": [True],
+            }},
+        },
+    )
 
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+    model_config = ConfigDict(extra="ignore")
 
 
 class TwitterSendOutput(BaseModel):
@@ -43,9 +107,9 @@ async def _do_send(client, action: str, p: dict, node_id: str, ctx_raw: dict) ->
 
     if action == "reply":
         text = p.get("text", "")
-        reply_to = p.get("replyToId") or p.get("reply_to_id")
+        reply_to = p.get("tweet_id")
         if not text or not reply_to:
-            raise RuntimeError("Text and reply_to_id are required")
+            raise RuntimeError("Text and tweet_id are required for reply")
         result = await asyncio.to_thread(
             client.posts.create,
             body={"text": text[:280], "reply": {"in_reply_to_tweet_id": reply_to}},
@@ -53,7 +117,19 @@ async def _do_send(client, action: str, p: dict, node_id: str, ctx_raw: dict) ->
         await track_twitter_usage(node_id, "reply", 1, ctx_raw)
         return TwitterSendOutput(action="reply_sent", data=format_response(result))
 
-    tweet_id = p.get("tweetId") or p.get("tweet_id")
+    if action == "quote":
+        text = p.get("text", "")
+        quote_id = p.get("tweet_id")
+        if not text or not quote_id:
+            raise RuntimeError("Text and tweet_id are required for quote")
+        result = await asyncio.to_thread(
+            client.posts.create,
+            body={"text": text[:280], "quote_tweet_id": quote_id},
+        )
+        await track_twitter_usage(node_id, "quote", 1, ctx_raw)
+        return TwitterSendOutput(action="quoted", data=format_response(result))
+
+    tweet_id = p.get("tweet_id")
     if not tweet_id:
         raise RuntimeError("tweet_id is required")
 
@@ -114,6 +190,6 @@ class TwitterSendNode(ActionNode):
 
     @Operation("send", cost={"service": "twitter", "action": "send", "count": 1})
     async def send(self, ctx: NodeContext, params: TwitterSendParams) -> TwitterSendOutput:
-        p = params.model_dump(by_alias=True)
+        p = params.model_dump()
         action = p.get("action", "tweet")
         return await call_with_retry(_do_send, action, p, ctx.node_id, ctx.raw)

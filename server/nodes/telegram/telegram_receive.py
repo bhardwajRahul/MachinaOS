@@ -18,29 +18,57 @@ from ._credentials import TelegramCredential
 
 
 class TelegramReceiveParams(BaseModel):
+    """7-field schema. Snake_case field names throughout; JSON Schema
+    keys match field names exactly (no aliases).
+    """
+
     content_type_filter: Literal[
         "all", "text", "photo", "video", "audio", "voice", "document",
         "sticker", "location", "contact", "poll",
-    ] = Field(default="all", alias="contentTypeFilter")
+    ] = Field(
+        default="all",
+        description="Filter by message content type",
+    )
     sender_filter: Literal[
         "all", "self", "private", "group", "supergroup", "channel",
         "specific_chat", "specific_user", "keywords",
-    ] = Field(default="all", alias="senderFilter")
+    ] = Field(
+        default="all",
+        description="Filter which messages trigger the workflow",
+    )
     chat_id: str = Field(
-        default="", alias="chatId",
-        json_schema_extra={"displayOptions": {"show": {"sender_filter": ["specific_chat"]}}},
+        default="",
+        description="Only trigger for messages from this specific chat ID",
+        json_schema_extra={
+            "displayOptions": {"show": {"sender_filter": ["specific_chat"]}},
+        },
     )
     from_user: str = Field(
-        default="", alias="fromUser",
-        json_schema_extra={"displayOptions": {"show": {"sender_filter": ["specific_user"]}}},
+        default="",
+        description="Only trigger for messages from this specific user ID",
+        json_schema_extra={
+            "displayOptions": {"show": {"sender_filter": ["specific_user"]}},
+        },
     )
     keywords: str = Field(
         default="",
-        json_schema_extra={"displayOptions": {"show": {"sender_filter": ["keywords"]}}},
+        description="Comma-separated keywords to trigger on (case-insensitive)",
+        json_schema_extra={
+            "displayOptions": {"show": {"sender_filter": ["keywords"]}},
+        },
     )
-    ignore_bots: bool = Field(default=True, alias="ignoreBots")
+    ignore_bots: bool = Field(
+        default=True,
+        description="Do not trigger on messages from other bots",
+        json_schema_extra={
+            "displayOptions": {"show": {"sender_filter": [
+                "all", "private", "group", "supergroup", "channel",
+                "specific_chat", "specific_user", "keywords",
+            ]}},
+        },
+    )
 
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+    model_config = ConfigDict(extra="ignore")
 
 
 class TelegramReceiveOutput(BaseModel):
@@ -90,7 +118,7 @@ class TelegramReceiveNode(TriggerNode):
         # Delegate to legacy filter builder for full feature parity —
         # 11.F ports the body and removes the legacy registry entry.
         from services.event_waiter import build_telegram_filter
-        return build_telegram_filter(params.model_dump(by_alias=True))
+        return build_telegram_filter(params.model_dump())
 
     @Operation("wait")
     async def wait(self, ctx: NodeContext, params: TelegramReceiveParams) -> TelegramReceiveOutput:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, Optional
+from typing import Any, Dict, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -12,14 +12,23 @@ from ._credentials import GoogleMapsCredential
 
 
 class GmapsCreateParams(BaseModel):
-    center_lat: float = Field(default=0.0, alias="centerLat")
-    center_lng: float = Field(default=0.0, alias="centerLng")
-    zoom: int = Field(default=10, ge=1, le=20)
+    center_lat: float = Field(default=0.0, description="Map center latitude.")
+    center_lng: float = Field(default=0.0, description="Map center longitude.")
+    zoom: int = Field(default=10, ge=1, le=20, description="Zoom level (1=world, 20=street).")
     map_type: Literal["roadmap", "satellite", "hybrid", "terrain"] = Field(
-        default="roadmap", alias="mapType",
+        default="roadmap",
+    )
+    options: Dict[str, Any] = Field(
+        default_factory=dict,
+        description=(
+            "Map customization options. Supported keys: disable_default_ui (bool), "
+            "zoom_control (bool), street_view_control (bool), map_type_control (bool), "
+            "fullscreen_control (bool)."
+        ),
+        json_schema_extra={"rows": 4},
     )
 
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+    model_config = ConfigDict(extra="ignore")
 
 
 class GmapsCreateOutput(BaseModel):
@@ -58,7 +67,7 @@ class GmapsCreateNode(ActionNode):
 
         maps_service = container.maps_service()
         response = await maps_service.create_map(
-            ctx.node_id, params.model_dump(by_alias=True), ctx.raw,
+            ctx.node_id, params.model_dump(), ctx.raw,
         )
         if response.get("success"):
             return response.get("result") or response

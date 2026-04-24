@@ -15,22 +15,65 @@ from services.plugin import NodeContext, Operation, TaskQueue, TriggerNode
 
 
 class WhatsAppReceiveParams(BaseModel):
+    """Snake_case field names throughout; JSON Schema keys match field
+    names exactly (no aliases). ``displayOptions.show`` references are
+    guaranteed consistent with the driver field's JSON key.
+    """
+
     message_type_filter: Literal[
         "all", "text", "image", "video", "audio",
         "document", "location", "contact",
-    ] = Field(default="all", alias="messageTypeFilter")
-    filter: Literal["all", "any_contact", "contact", "group", "channel", "keywords"] = "all"
-    phone_number: str = Field(default="", alias="phoneNumber")
-    group_id: str = Field(default="", alias="groupId")
-    channel_jid: str = Field(default="", alias="channelJid")
-    keywords: str = Field(default="")
-    forwarded_filter: Literal["all", "only_forwarded", "ignore_forwarded"] = Field(
-        default="all", alias="forwardedFilter",
+    ] = Field(default="all")
+    filter: Literal[
+        "all", "self", "any_contact", "contact", "group", "channel", "keywords",
+    ] = "all"
+    phone_number: str = Field(
+        default="",
+        description="Contact phone (digits only, no + prefix)",
+        json_schema_extra={"displayOptions": {"show": {"filter": ["contact"]}}},
     )
-    ignore_own_messages: bool = Field(default=True, alias="ignoreOwnMessages")
-    include_media_data: bool = Field(default=False, alias="includeMediaData")
+    group_id: str = Field(
+        default="",
+        description="WhatsApp group JID",
+        json_schema_extra={
+            "component": "GroupIdSelector",
+            "displayOptions": {"show": {"filter": ["group"]}},
+        },
+    )
+    sender_number: str = Field(
+        default="",
+        description="Optional: filter group messages to a specific member",
+        json_schema_extra={
+            "component": "SenderNumberSelector",
+            "dependsOn": "group_id",
+            "displayOptions": {"show": {"filter": ["group"]}},
+        },
+    )
+    channel_jid: str = Field(
+        default="",
+        description="Newsletter channel JID",
+        json_schema_extra={
+            "component": "ChannelJidSelector",
+            "displayOptions": {"show": {"filter": ["channel"]}},
+        },
+    )
+    keywords: str = Field(
+        default="",
+        description="Comma-separated keywords (case-insensitive)",
+        json_schema_extra={"displayOptions": {"show": {"filter": ["keywords"]}}},
+    )
+    forwarded_filter: Literal["all", "only_forwarded", "ignore_forwarded"] = Field(default="all")
+    ignore_own_messages: bool = Field(
+        default=True,
+        json_schema_extra={
+            "displayOptions": {"show": {"filter": [
+                "all", "any_contact", "contact", "group", "channel", "keywords",
+            ]}},
+        },
+    )
+    include_media_data: bool = Field(default=False)
 
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+    model_config = ConfigDict(extra="ignore")
 
 
 class WhatsAppReceiveOutput(BaseModel):
@@ -71,7 +114,7 @@ class WhatsAppReceiveNode(TriggerNode):
 
     def build_filter(self, params: WhatsAppReceiveParams) -> Callable[[Dict[str, Any]], bool]:
         from services.event_waiter import build_whatsapp_filter
-        return build_whatsapp_filter(params.model_dump(by_alias=True))  # camelCase — matches filter builder
+        return build_whatsapp_filter(params.model_dump())
 
     @Operation("wait")
     async def wait(self, ctx: NodeContext, params: WhatsAppReceiveParams) -> WhatsAppReceiveOutput:

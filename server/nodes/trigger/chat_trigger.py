@@ -21,10 +21,10 @@ from services.plugin import NodeContext, Operation, TaskQueue, TriggerNode
 
 
 class ChatTriggerParams(BaseModel):
-    session_id: str = Field(default="default", alias="sessionId")
+    session_id: str = Field(default="default")
     placeholder: str = "Type a message..."
 
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+    model_config = ConfigDict(extra="ignore")
 
 
 class ChatTriggerOutput(BaseModel):

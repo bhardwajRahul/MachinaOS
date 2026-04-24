@@ -148,7 +148,7 @@ class TestTwitterSend:
                 {
                     "action": "reply",
                     "text": "replying",
-                    "reply_to_id": "1234567890",
+                    "tweet_id": "1234567890",
                 },
             )
 
@@ -172,7 +172,7 @@ class TestTwitterSend:
             )
 
         harness.assert_envelope(result, success=False)
-        assert "reply_to_id" in result["error"].lower()
+        assert "tweet_id" in result["error"].lower()
         posts.create.assert_not_called()
 
     async def test_tweet_empty_text_errors(self, harness):
@@ -190,14 +190,14 @@ class TestTwitterSend:
         assert "text is required" in result["error"].lower()
 
     async def test_unknown_action_errors(self, harness):
-        # 'quote' is exposed in the frontend but not implemented in the handler.
+        # Post-refactor: action is a Literal; unknown values rejected by Pydantic.
         stub_cls = _make_client_class()
 
         with _patch_client(stub_cls), patched_container(
             auth_oauth_tokens=_ok_tokens()
         ), patched_pricing():
             result = await harness.execute(
-                "twitterSend", {"action": "quote", "text": "x", "tweet_id": "1"}
+                "twitterSend", {"action": "mysterious", "text": "x", "tweet_id": "1"}
             )
 
         harness.assert_envelope(result, success=False)

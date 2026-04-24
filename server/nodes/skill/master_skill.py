@@ -16,12 +16,12 @@ from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
 
 class MasterSkillParams(BaseModel):
-    skill_folder: str = Field(default="assistant", alias="skillFolder")
+    skill_folder: str = Field(default="assistant")
     skills_config: Dict[str, Any] = Field(
-        default_factory=dict, alias="skillsConfig",
+        default_factory=dict,
     )
 
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+    model_config = ConfigDict(extra="ignore")
 
 
 class MasterSkillOutput(BaseModel):

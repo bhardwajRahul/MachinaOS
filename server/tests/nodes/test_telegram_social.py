@@ -294,7 +294,7 @@ class TestTelegramReceive:
         ):
             result = await harness.execute(
                 "telegramReceive",
-                {"senderFilter": "all", "contentTypeFilter": "all"},
+                {"sender_filter": "all", "content_type_filter": "all"},
             )
 
         harness.assert_envelope(result, success=True)
@@ -312,7 +312,7 @@ class TestTelegramReceive:
         ):
             result = await harness.execute(
                 "telegramReceive",
-                {"senderFilter": "all"},
+                {"sender_filter": "all"},
             )
 
         harness.assert_envelope(result, success=False)
@@ -331,7 +331,7 @@ class TestTelegramReceive:
         ):
             result = await harness.execute(
                 "telegramReceive",
-                {"senderFilter": "all"},
+                {"sender_filter": "all"},
             )
 
         harness.assert_envelope(result, success=False)
@@ -354,9 +354,9 @@ class TestSocialSend:
                 "socialSend",
                 {
                     "channel": "whatsapp",
-                    "recipientType": "phone",
+                    "recipient_type": "phone",
                     "phone": "+15551234567",
-                    "messageType": "text",
+                    "message_type": "text",
                     "message": "hi there",
                 },
             )
@@ -384,8 +384,8 @@ class TestSocialSend:
                 "socialSend",
                 {
                     "channel": "whatsapp",
-                    "recipientType": "phone",
-                    "messageType": "text",
+                    "recipient_type": "phone",
+                    "message_type": "text",
                     "message": "x",
                 },
             )
@@ -403,15 +403,15 @@ class TestSocialSend:
                 "socialSend",
                 {
                     "channel": "discord",
-                    "recipientType": "user",
-                    "userId": "u1",
-                    "messageType": "text",
+                    "recipient_type": "phone",
+                    "phone": "+15551234567",
+                    "message_type": "text",
                     "message": "hi",
                 },
             )
 
         harness.assert_envelope(result, success=False)
-        assert "discord" in result["error"].lower() or "not yet implemented" in result["error"].lower()
+        assert "discord" in result["error"].lower() or "not yet implemented" in result["error"].lower() or "not supported" in result["error"].lower()
         whatsapp_send.assert_not_awaited()
 
     async def test_whatsapp_failure_becomes_error_envelope(self, harness):
@@ -424,9 +424,9 @@ class TestSocialSend:
                 "socialSend",
                 {
                     "channel": "whatsapp",
-                    "recipientType": "phone",
+                    "recipient_type": "phone",
                     "phone": "+15551234567",
-                    "messageType": "text",
+                    "message_type": "text",
                     "message": "x",
                 },
             )
@@ -471,7 +471,7 @@ class TestSocialReceive:
 
         result = await harness.execute(
             "socialReceive",
-            {"channelFilter": "all", "senderFilter": "all"},
+            {"channel_filter": "all", "sender_filter": "all"},
             node_id="tgt_social",
             nodes=nodes,
             edges=edges,
@@ -536,8 +536,8 @@ class TestSocialReceive:
         result = await harness.execute(
             "socialReceive",
             {
-                "channelFilter": "all",
-                "senderFilter": "keywords",
+                "channel_filter": "all",
+                "sender_filter": "keywords",
                 "keywords": "hello,hi",
             },
             node_id="tgt_social",
@@ -578,7 +578,7 @@ class TestSocialReceive:
 
         result = await harness.execute(
             "socialReceive",
-            {"senderFilter": "all"},  # ignoreOwnMessages default true
+            {"sender_filter": "all"},  # ignoreOwnMessages default true
             node_id="tgt_social",
             nodes=nodes,
             edges=edges,

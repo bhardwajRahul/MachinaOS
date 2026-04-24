@@ -18,55 +18,118 @@ from ._credentials import TelegramCredential
 
 
 class TelegramSendParams(BaseModel):
-    recipient_type: Literal["self", "chat_id"] = Field(
-        default="self", alias="recipientType",
+    """13-field schema matching main-branch baseline. All field names use
+    snake_case to match baseline directly (no camelCase aliases) — the
+    frontend stores params under these exact keys and ``displayOptions``
+    must reference them to stay consistent.
+    """
+
+    # ===== RECIPIENT =====
+    recipient_type: Literal["self", "user", "group"] = Field(
+        default="self",
+        description="Send to bot owner (self), specific user, or group",
     )
     chat_id: str = Field(
-        default="", alias="chatId",
-        json_schema_extra={"displayOptions": {"show": {"recipient_type": ["chat_id"]}}},
+        default="",
+        description="Telegram chat ID (numeric) or @username",
+        json_schema_extra={
+            "displayOptions": {"show": {"recipient_type": ["user", "group"]}},
+        },
     )
+
+    # ===== MESSAGE TYPE =====
     message_type: Literal["text", "photo", "document", "location", "contact"] = Field(
-        default="text", alias="messageType",
+        default="text",
+        description="Type of message to send",
     )
+
+    # ===== TEXT =====
     text: str = Field(
         default="",
-        json_schema_extra={"displayOptions": {"show": {"message_type": ["text"]}}},
+        description="Text message content",
+        json_schema_extra={
+            "rows": 4,
+            "displayOptions": {"show": {"message_type": ["text"]}},
+        },
     )
+
+    # ===== MEDIA (photo / document) =====
     media_url: str = Field(
-        default="", alias="mediaUrl",
-        json_schema_extra={"displayOptions": {"show": {"message_type": ["photo", "document"]}}},
+        default="",
+        description="URL of the media file or file_id from previous message",
+        json_schema_extra={
+            "displayOptions": {"show": {"message_type": ["photo", "document"]}},
+        },
     )
     caption: str = Field(
         default="",
-        json_schema_extra={"displayOptions": {"show": {"message_type": ["photo", "document"]}}},
+        description="Optional caption for media",
+        json_schema_extra={
+            "rows": 2,
+            "displayOptions": {"show": {"message_type": ["photo", "document"]}},
+        },
     )
-    latitude: Optional[float] = Field(
-        default=None,
-        json_schema_extra={"displayOptions": {"show": {"message_type": ["location"]}}},
+
+    # ===== LOCATION =====
+    latitude: float = Field(
+        default=0.0,
+        description="Location latitude (-90 to 90)",
+        json_schema_extra={
+            "displayOptions": {"show": {"message_type": ["location"]}},
+        },
     )
-    longitude: Optional[float] = Field(
-        default=None,
-        json_schema_extra={"displayOptions": {"show": {"message_type": ["location"]}}},
+    longitude: float = Field(
+        default=0.0,
+        description="Location longitude (-180 to 180)",
+        json_schema_extra={
+            "displayOptions": {"show": {"message_type": ["location"]}},
+        },
     )
-    phone: str = Field(
+
+    # ===== CONTACT =====
+    phone_number: str = Field(
         default="",
-        json_schema_extra={"displayOptions": {"show": {"message_type": ["contact"]}}},
+        description="Contact phone number (with country code)",
+        json_schema_extra={
+            "displayOptions": {"show": {"message_type": ["contact"]}},
+        },
     )
     first_name: str = Field(
-        default="", alias="firstName",
-        json_schema_extra={"displayOptions": {"show": {"message_type": ["contact"]}}},
+        default="",
+        description="Contact first name",
+        json_schema_extra={
+            "displayOptions": {"show": {"message_type": ["contact"]}},
+        },
     )
     last_name: str = Field(
-        default="", alias="lastName",
-        json_schema_extra={"displayOptions": {"show": {"message_type": ["contact"]}}},
+        default="",
+        description="Contact last name (optional)",
+        json_schema_extra={
+            "displayOptions": {"show": {"message_type": ["contact"]}},
+        },
     )
-    parse_mode: Literal["Auto", "HTML", "Markdown", "MarkdownV2", "None"] = Field(
-        default="Auto", alias="parseMode",
-    )
-    silent: bool = False
-    reply_to_message_id: Optional[int] = Field(default=None, alias="replyToMessageId")
 
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+    # ===== OPTIONS =====
+    parse_mode: Literal["Auto", "", "HTML", "Markdown", "MarkdownV2"] = Field(
+        default="Auto",
+        description=(
+            "Auto converts LLM markdown to Telegram HTML. "
+            "Empty string = no parse mode (raw text)."
+        ),
+        json_schema_extra={
+            "displayOptions": {"show": {"message_type": ["text", "photo", "document"]}},
+        },
+    )
+    silent: bool = Field(
+        default=False,
+        description="Send message without notification sound",
+    )
+    reply_to_message_id: int = Field(
+        default=0,
+        description="If > 0, sends the message as a reply to this message ID",
+    )
+
+    model_config = ConfigDict(extra="ignore")
 
 
 class TelegramSendOutput(BaseModel):
@@ -136,7 +199,9 @@ class TelegramSendNode(ActionNode):
             if not chat_id:
                 raise RuntimeError("chat_id is required")
 
-        parse_mode = params.parse_mode if params.parse_mode != "None" else None
+        # Empty string = no parse mode (Python None); other values pass through
+        # so the TelegramService can handle "Auto" and the formal parse modes.
+        parse_mode = params.parse_mode or None
         reply_to = int(params.reply_to_message_id) if params.reply_to_message_id else None
 
         common = dict(
@@ -176,12 +241,12 @@ class TelegramSendNode(ActionNode):
                 **common,
             )
         elif mt == "contact":
-            if not params.phone or not params.first_name:
+            if not params.phone_number or not params.first_name:
                 raise RuntimeError(
-                    "phone and first_name are required for contact message",
+                    "phone_number and first_name are required for contact message",
                 )
             result = await service.send_contact(
-                phone_number=params.phone,
+                phone_number=params.phone_number,
                 first_name=params.first_name,
                 last_name=params.last_name or None,
                 **common,

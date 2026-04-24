@@ -15,14 +15,14 @@ from services.plugin import NodeContext, Operation, TaskQueue, TriggerNode
 
 
 class TaskTriggerParams(BaseModel):
-    task_id: str = Field(default="", alias="taskId")
-    agent_name: str = Field(default="", alias="agentName")
+    task_id: str = Field(default="")
+    agent_name: str = Field(default="")
     status_filter: Literal["all", "completed", "error"] = Field(
-        default="all", alias="statusFilter",
+        default="all",
     )
-    parent_node_id: str = Field(default="", alias="parentNodeId")
+    parent_node_id: str = Field(default="")
 
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+    model_config = ConfigDict(extra="ignore")
 
 
 class TaskTriggerOutput(BaseModel):

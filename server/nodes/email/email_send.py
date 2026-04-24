@@ -19,9 +19,9 @@ class EmailSendParams(BaseModel):
     body: str = Field(default="", json_schema_extra={"rows": 6})
     cc: str = Field(default="")
     bcc: str = Field(default="")
-    body_type: Literal["text", "html"] = Field(default="text", alias="bodyType")
+    body_type: Literal["text", "html"] = Field(default="text")
 
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+    model_config = ConfigDict(extra="ignore")
 
 
 class EmailSendOutput(BaseModel):

@@ -14,32 +14,47 @@ from ._credentials import GoogleCredential
 from ._base import build_google_service, run_sync, track_google_usage
 
 
+_CREATE = {"displayOptions": {"show": {"operation": ["create"]}}}
+_LIST = {"displayOptions": {"show": {"operation": ["list"]}}}
+_UPDATE = {"displayOptions": {"show": {"operation": ["update"]}}}
+_UPDATE_OR_DELETE = {"displayOptions": {"show": {"operation": ["update", "delete"]}}}
+
+
 class CalendarParams(BaseModel):
     operation: Literal["create", "list", "update", "delete"] = "list"
-    calendar_id: str = Field(default="primary", alias="calendarId")
-    event_id: Optional[str] = Field(default=None, alias="eventId")
-    title: Optional[str] = None
-    description: Optional[str] = None
-    start_time: Optional[str] = Field(default=None, alias="startTime")
-    end_time: Optional[str] = Field(default=None, alias="endTime")
-    location: Optional[str] = None
-    attendees: Optional[str] = None
-    timezone: str = "UTC"
-    reminder_minutes: int = Field(default=30, alias="reminderMinutes")
-    start_date: Optional[str] = Field(default=None, alias="startDate")
-    end_date: Optional[str] = Field(default=None, alias="endDate")
-    max_results: int = Field(default=10, alias="maxResults", ge=1, le=250)
-    single_events: bool = Field(default=True, alias="singleEvents")
-    order_by: str = Field(default="startTime", alias="orderBy")
-    send_updates: str = Field(default="all", alias="sendUpdates")
+    calendar_id: str = Field(default="primary")
+    event_id: Optional[str] = Field(default=None, json_schema_extra=_UPDATE_OR_DELETE)
 
-    update_title: Optional[str] = Field(default=None, alias="updateTitle")
-    update_start_time: Optional[str] = Field(default=None, alias="updateStartTime")
-    update_end_time: Optional[str] = Field(default=None, alias="updateEndTime")
-    update_description: Optional[str] = Field(default=None, alias="updateDescription")
-    update_location: Optional[str] = Field(default=None, alias="updateLocation")
+    # Create fields
+    title: Optional[str] = Field(default=None, json_schema_extra=_CREATE)
+    description: Optional[str] = Field(default=None, json_schema_extra=_CREATE)
+    start_time: Optional[str] = Field(default=None, json_schema_extra=_CREATE)
+    end_time: Optional[str] = Field(default=None, json_schema_extra=_CREATE)
+    location: Optional[str] = Field(default=None, json_schema_extra=_CREATE)
+    attendees: Optional[str] = Field(default=None, json_schema_extra=_CREATE)
+    timezone: str = Field(default="UTC", json_schema_extra=_CREATE)
+    reminder_minutes: int = Field(default=30, json_schema_extra=_CREATE)
 
-    model_config = ConfigDict(populate_by_name=True, extra="allow")
+    # List fields
+    start_date: Optional[str] = Field(default=None, json_schema_extra=_LIST)
+    end_date: Optional[str] = Field(default=None, json_schema_extra=_LIST)
+    max_results: int = Field(default=10, ge=1, le=250, json_schema_extra=_LIST)
+    single_events: bool = Field(default=True, json_schema_extra=_LIST)
+    order_by: str = Field(default="startTime", json_schema_extra=_LIST)
+
+    # Update + delete
+    send_updates: Literal["all", "externalOnly", "none"] = Field(
+        default="all", json_schema_extra=_UPDATE_OR_DELETE,
+    )
+
+    # Update-only fields
+    update_title: Optional[str] = Field(default=None, json_schema_extra=_UPDATE)
+    update_start_time: Optional[str] = Field(default=None, json_schema_extra=_UPDATE)
+    update_end_time: Optional[str] = Field(default=None, json_schema_extra=_UPDATE)
+    update_description: Optional[str] = Field(default=None, json_schema_extra=_UPDATE)
+    update_location: Optional[str] = Field(default=None, json_schema_extra=_UPDATE)
+
+    model_config = ConfigDict(extra="ignore")
 
 
 class CalendarOutput(BaseModel):
@@ -96,7 +111,7 @@ class CalendarNode(ActionNode):
 
     @Operation("dispatch", cost={"service": "calendar", "action": "op", "count": 1})
     async def dispatch(self, ctx: NodeContext, params: CalendarParams) -> CalendarOutput:
-        svc = await build_google_service("calendar", "v3", params.model_dump(by_alias=True), ctx.raw)
+        svc = await build_google_service("calendar", "v3", params.model_dump(), ctx.raw)
         events_svc = svc.events()
         op = params.operation
         cal_id = params.calendar_id

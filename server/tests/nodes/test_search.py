@@ -55,7 +55,7 @@ class TestBraveSearch:
         with patched_container(auth_api_keys={"brave_search": "tk_brave"}), patched_pricing():
             result = await harness.execute(
                 "braveSearch",
-                {"query": "hello world", "maxResults": 2, "country": "US"},
+                {"query": "hello world", "max_results": 2, "country": "US"},
             )
 
         harness.assert_envelope(result, success=True)
@@ -108,7 +108,7 @@ class TestBraveSearch:
         respx.get(self.URL).mock(return_value=httpx.Response(200, json={"web": {"results": []}}))
 
         with patched_container(auth_api_keys={"brave_search": "tk"}), patched_pricing():
-            result = await harness.execute("braveSearch", {"query": "x", "maxResults": 500})
+            result = await harness.execute("braveSearch", {"query": "x", "max_results": 500})
 
         # Post-refactor: Params tightens max_results with le=20 upper bound; 500 is rejected at validation.
         harness.assert_envelope(result, success=False)
@@ -145,7 +145,7 @@ class TestSerperSearch:
         with patched_container(auth_api_keys={"serper": "tk_serp"}), patched_pricing():
             result = await harness.execute(
                 "serperSearch",
-                {"query": "best pizza", "searchType": "search", "country": "us"},
+                {"query": "best pizza", "search_type": "search", "country": "us"},
             )
 
         harness.assert_envelope(result, success=True)
@@ -183,7 +183,7 @@ class TestSerperSearch:
         )
 
         with patched_container(auth_api_keys={"serper": "tk"}), patched_pricing():
-            result = await harness.execute("serperSearch", {"query": "ai", "searchType": "news"})
+            result = await harness.execute("serperSearch", {"query": "ai", "search_type": "news"})
 
         harness.assert_envelope(result, success=True)
         assert result["result"]["search_type"] == "news"
@@ -201,7 +201,7 @@ class TestSerperSearch:
 
         with patched_container(auth_api_keys={"serper": "tk"}), patched_pricing():
             result = await harness.execute(
-                "serperSearch", {"query": "x", "searchType": "nonsense"}
+                "serperSearch", {"query": "x", "search_type": "nonsense"}
             )
 
         harness.assert_envelope(result, success=False)
@@ -252,9 +252,9 @@ class TestPerplexitySearch:
                 {
                     "query": "what is rust",
                     "model": "sonar-pro",
-                    "searchRecencyFilter": "week",
-                    "returnImages": True,
-                    "returnRelatedQuestions": True,
+                    "search_recency_filter": "week",
+                    "return_images": True,
+                    "return_related_questions": True,
                 },
             )
 

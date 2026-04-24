@@ -46,8 +46,8 @@ class TestChatSend:
                 {
                     "host": "chat.local",
                     "port": 9000,
-                    "sessionId": "s1",
-                    "apiKey": "tk",
+                    "session_id": "s1",
+                    "api_key": "tk",
                     "content": "hello there",
                 },
             )
@@ -109,7 +109,7 @@ class TestChatHistory:
         ) as fetch:
             result = await harness.execute(
                 "chatHistory",
-                {"host": "chat.local", "port": 9000, "sessionId": "s1", "limit": 10},
+                {"host": "chat.local", "port": 9000, "session_id": "s1", "limit": 10},
             )
 
         harness.assert_envelope(result, success=True)
@@ -171,7 +171,7 @@ class TestConsole:
         with patched_broadcaster() as broadcaster:
             result = await harness.execute(
                 "console",
-                {"label": "dbg", "logMode": "all", "format": "json"},
+                {"label": "dbg", "log_mode": "all", "format": "json"},
                 node_id="console-1",
                 nodes=nodes,
                 edges=edges,
@@ -218,7 +218,7 @@ class TestConsole:
         with patched_broadcaster():
             result = await harness.execute(
                 "console",
-                {"logMode": "field", "fieldPath": "data.items[1].name", "format": "text"},
+                {"log_mode": "field", "field_path": "data.items[1].name", "format": "text"},
                 node_id="console-2",
                 nodes=nodes,
                 edges=edges,
@@ -232,7 +232,7 @@ class TestConsole:
         with patched_broadcaster() as broadcaster:
             result = await harness.execute(
                 "console",
-                {"logMode": "all", "format": "json"},
+                {"log_mode": "all", "format": "json"},
             )
         harness.assert_envelope(result, success=True)
         assert result["result"]["data"] == {}
@@ -277,7 +277,7 @@ class TestTeamMonitor:
         ):
             result = await harness.execute(
                 "teamMonitor",
-                {"maxHistoryItems": 2},
+                {"max_history_items": 2},
                 context=ctx,
             )
 

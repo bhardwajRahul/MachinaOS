@@ -50,7 +50,7 @@ class FsSearchNode(ActionNode):
         import asyncio
         from ._backend import get_backend
 
-        backend = get_backend(params.model_dump(by_alias=True), ctx.raw)
+        backend = get_backend(params.model_dump(), ctx.raw)
 
         if params.mode == "ls":
             entries = await asyncio.to_thread(backend.ls_info, params.path)

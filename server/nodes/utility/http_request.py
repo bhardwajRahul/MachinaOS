@@ -11,13 +11,50 @@ from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
 class HttpRequestParams(BaseModel):
     method: Literal["GET", "POST", "PUT", "DELETE", "PATCH"] = "GET"
-    url: str = Field(...)
-    headers: Dict[str, str] = Field(default_factory=dict)
-    body: Optional[Any] = None
-    timeout: int = Field(default=30, ge=1, le=600)
-    use_proxy: bool = Field(default=False, alias="useProxy")
+    url: str = Field(..., description="Target URL.")
+    headers: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Request headers as JSON object.",
+        json_schema_extra={"rows": 3},
+    )
+    body: Optional[Any] = Field(
+        default=None,
+        description="Request body (JSON object or raw string). Ignored for GET/DELETE.",
+        json_schema_extra={
+            "rows": 4,
+            "displayOptions": {"show": {"method": ["POST", "PUT", "PATCH"]}},
+        },
+    )
+    timeout: int = Field(default=30, ge=1, le=600, description="Timeout in seconds.")
 
-    model_config = ConfigDict(populate_by_name=True, extra="allow")
+    use_proxy: bool = Field(
+        default=False,
+        description="Route through residential proxy provider.",
+    )
+    proxy_provider: str = Field(
+        default="auto",
+        description="Provider name ('auto' selects by health score).",
+        json_schema_extra={"displayOptions": {"show": {"use_proxy": [True]}}},
+    )
+    proxy_country: str = Field(
+        default="",
+        description="ISO country code (e.g. US, GB) for geo-targeted IP.",
+        json_schema_extra={"displayOptions": {"show": {"use_proxy": [True]}}},
+    )
+    session_type: Literal["rotating", "sticky"] = Field(
+        default="rotating",
+        description="Rotating changes IPs per request; sticky holds one IP.",
+        json_schema_extra={"displayOptions": {"show": {"use_proxy": [True]}}},
+    )
+    sticky_duration: int = Field(
+        default=600, ge=1,
+        description="Sticky session duration in seconds.",
+        json_schema_extra={
+            "displayOptions": {"show": {"use_proxy": [True], "session_type": ["sticky"]}},
+        },
+    )
+
+    model_config = ConfigDict(extra="ignore")
 
 
 class HttpRequestOutput(BaseModel):
@@ -65,7 +102,7 @@ class HttpRequestNode(ActionNode):
             raise RuntimeError("URL is required")
 
         proxy_url = await _resolve_proxy_url(params.url, params.use_proxy,
-                                              params.model_dump(by_alias=True))
+                                              params.model_dump())
         log.info("[HTTP Request] Executing", node_id=ctx.node_id,
                  method=params.method, url=params.url, proxy=bool(proxy_url))
 

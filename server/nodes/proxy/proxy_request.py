@@ -15,14 +15,14 @@ class ProxyRequestParams(BaseModel):
     headers: Dict[str, str] = Field(default_factory=dict)
     body: Optional[Any] = None
     timeout: int = Field(default=30, ge=1, le=600)
-    proxy_provider: str = Field(default="auto", alias="proxyProvider")
-    proxy_country: str = Field(default="", alias="proxyCountry")
-    session_type: Literal["rotating", "sticky"] = Field(default="rotating", alias="sessionType")
-    sticky_duration: int = Field(default=600, alias="stickyDuration", ge=1)
-    max_retries: int = Field(default=3, alias="maxRetries", ge=0, le=10)
-    follow_redirects: bool = Field(default=True, alias="followRedirects")
+    proxy_provider: str = Field(default="auto")
+    proxy_country: str = Field(default="")
+    session_type: Literal["rotating", "sticky"] = Field(default="rotating")
+    sticky_duration: int = Field(default=600, ge=1)
+    max_retries: int = Field(default=3, ge=0, le=10)
+    follow_redirects: bool = Field(default=True)
 
-    model_config = ConfigDict(populate_by_name=True, extra="allow")
+    model_config = ConfigDict(extra="allow")
 
 
 class ProxyRequestOutput(BaseModel):
@@ -39,7 +39,7 @@ class ProxyRequestNode(ActionNode):
     subtitle = "Routed HTTP"
     icon = "🛡"
     color = "#ffb86c"
-    group = ("proxy",)
+    group = ("proxy", "tool")
     description = "Make HTTP requests through residential proxy providers"
     component_kind = "square"
     handles = (
@@ -48,6 +48,7 @@ class ProxyRequestNode(ActionNode):
     )
     annotations = {"destructive": False, "readonly": False, "open_world": True}
     task_queue = TaskQueue.REST_API
+    usable_as_tool = True
 
     Params = ProxyRequestParams
     Output = ProxyRequestOutput
@@ -78,13 +79,13 @@ class ProxyRequestNode(ActionNode):
                 "provider first.",
             )
 
-        raw = params.model_dump(by_alias=True)
+        raw = params.model_dump()
         proxy_url = await svc.get_proxy_url(params.url, raw)
         if not proxy_url:
             raise RuntimeError("No proxy provider available")
 
         max_retries = params.max_retries
-        failover = raw.get("proxyFailover", True)
+        failover = raw.get("proxy_failover", True)
         provider_name = params.proxy_provider or ""
 
         last_error: str = ""

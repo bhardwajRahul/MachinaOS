@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -12,8 +12,30 @@ from ._credentials import GoogleMapsCredential
 
 
 class GmapsLocationsParams(BaseModel):
-    address: str = Field(..., min_length=1)
-    region: str = Field(default="")
+    service_type: Literal["geocode", "reverse_geocode"] = Field(
+        default="geocode",
+        description="geocode: address -> lat/lng. reverse_geocode: lat/lng -> address.",
+    )
+    address: str = Field(
+        default="",
+        description="Street address or place name.",
+        json_schema_extra={"displayOptions": {"show": {"service_type": ["geocode"]}}},
+    )
+    region: str = Field(
+        default="",
+        description="ISO country code bias (e.g. US, GB).",
+        json_schema_extra={"displayOptions": {"show": {"service_type": ["geocode"]}}},
+    )
+    lat: float = Field(
+        default=0.0,
+        description="Latitude (-90 to 90).",
+        json_schema_extra={"displayOptions": {"show": {"service_type": ["reverse_geocode"]}}},
+    )
+    lng: float = Field(
+        default=0.0,
+        description="Longitude (-180 to 180).",
+        json_schema_extra={"displayOptions": {"show": {"service_type": ["reverse_geocode"]}}},
+    )
 
     model_config = ConfigDict(extra="ignore")
 
@@ -56,7 +78,7 @@ class GmapsLocationsNode(ActionNode):
 
         maps_service = container.maps_service()
         response = await maps_service.geocode_location(
-            ctx.node_id, params.model_dump(by_alias=True), ctx.raw,
+            ctx.node_id, params.model_dump(), ctx.raw,
         )
         if response.get("success"):
             return response.get("result") or response

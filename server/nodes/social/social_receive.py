@@ -10,9 +10,9 @@ delegates the per-platform unwrap to the existing handler.
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
@@ -21,8 +21,65 @@ _SOCIAL_SIZE = {"width": 260, "height": 160}
 
 
 class SocialReceiveParams(BaseModel):
-    """Pure passthrough — no user-facing params; all data flows from
-    upstream trigger nodes via connected_outputs."""
+    """9-field schema matching main-branch baseline. Normaliser for
+    messages from any upstream platform trigger; filters by channel /
+    content-type / sender before fanning out across four output handles.
+    Snake_case throughout, no aliases.
+    """
+
+    channel_filter: Literal[
+        "all", "whatsapp", "telegram", "discord", "slack", "signal",
+        "sms", "webchat", "email", "matrix", "teams",
+    ] = Field(
+        default="all",
+        description="Filter by source platform",
+    )
+    message_type_filter: Literal[
+        "all", "text", "image", "video", "audio", "document",
+        "sticker", "location", "contact", "poll", "reaction",
+    ] = Field(
+        default="all",
+        description="Filter by content type",
+    )
+    sender_filter: Literal[
+        "all", "any_contact", "contact", "group", "keywords",
+    ] = Field(
+        default="all",
+        description="Filter which messages pass through",
+    )
+    contact_phone: str = Field(
+        default="",
+        description="Contact phone number (no + prefix)",
+        json_schema_extra={
+            "displayOptions": {"show": {"sender_filter": ["contact"]}},
+        },
+    )
+    group_id: str = Field(
+        default="",
+        description="Group identifier",
+        json_schema_extra={
+            "displayOptions": {"show": {"sender_filter": ["group"]}},
+        },
+    )
+    keywords: str = Field(
+        default="",
+        description="Comma-separated keywords (case-insensitive)",
+        json_schema_extra={
+            "displayOptions": {"show": {"sender_filter": ["keywords"]}},
+        },
+    )
+    ignore_own_messages: bool = Field(
+        default=True,
+        description="Exclude messages sent by the connected account",
+    )
+    ignore_bots: bool = Field(
+        default=False,
+        description="Exclude messages from other bots",
+    )
+    include_media_data: bool = Field(
+        default=False,
+        description="Include base64 media payload (memory-intensive)",
+    )
 
     model_config = ConfigDict(extra="allow")
 
@@ -65,7 +122,7 @@ class SocialReceiveNode(ActionNode):
         source_nodes = ctx.raw.get("source_nodes") or []
         response = await handle_social_receive(
             node_id=ctx.node_id, node_type=self.type,
-            parameters=params.model_dump(by_alias=True), context=ctx.raw,
+            parameters=params.model_dump(), context=ctx.raw,
             connected_outputs=outputs, source_nodes=source_nodes,
         )
         if response.get("success") is False:

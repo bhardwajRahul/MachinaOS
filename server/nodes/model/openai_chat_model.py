@@ -9,19 +9,17 @@ from ._credentials import OpenAICredential
 
 class OpenAIChatModelParams(ChatModelParams):
     frequency_penalty: Optional[float] = Field(
-        default=0.0, alias="frequencyPenalty", ge=-2.0, le=2.0,
+        default=0.0, ge=-2.0, le=2.0,
         json_schema_extra={"numberStepSize": 0.1},
     )
     presence_penalty: Optional[float] = Field(
-        default=0.0, alias="presencePenalty", ge=-2.0, le=2.0,
+        default=0.0, ge=-2.0, le=2.0,
         json_schema_extra={"numberStepSize": 0.1},
     )
-    response_format: Optional[Literal["text", "json_object"]] = Field(
-        default="text", alias="responseFormat",
-    )
-    thinking_enabled: bool = Field(default=False, alias="thinkingEnabled")
+    response_format: Optional[Literal["text", "json_object"]] = Field(default="text")
+    thinking_enabled: bool = Field(default=False)
     reasoning_effort: Optional[Literal["minimal", "low", "medium", "high"]] = Field(
-        default="medium", alias="reasoningEffort",
+        default="medium",
         json_schema_extra={"displayOptions": {"show": {"thinking_enabled": [True]}}},
     )
 

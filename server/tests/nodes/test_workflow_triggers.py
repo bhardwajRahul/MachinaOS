@@ -89,7 +89,7 @@ def patched_trigger_waiter(
 class TestStart:
     async def test_happy_path_returns_parsed_initial_data(self, harness):
         result = await harness.execute(
-            "start", {"initialData": '{"message": "hi", "n": 7}'}
+            "start", {"initial_data": '{"message": "hi", "n": 7}'}
         )
         harness.assert_envelope(result, success=True)
         payload = result["result"]
@@ -97,7 +97,7 @@ class TestStart:
 
     async def test_invalid_json_silently_becomes_empty_dict(self, harness):
         # Documented behaviour: invalid JSON -> {} with success=True.
-        result = await harness.execute("start", {"initialData": "not json"})
+        result = await harness.execute("start", {"initial_data": "not json"})
         harness.assert_envelope(result, success=True)
         assert result["result"] == {}
 
@@ -203,21 +203,14 @@ class TestCronScheduler:
         assert "will repeat" in payload["message"]
         sleep_mock.assert_awaited_once()
 
-    async def test_unknown_frequency_uses_default_wait_and_unknown_schedule(
-        self, harness
-    ):
-        # Documented gotcha: unknown frequency -> 300s wait, "Unknown schedule".
-        with patched_broadcaster(), patch(
-            "asyncio.sleep", new=AsyncMock()
-        ) as sleep_mock:
+    async def test_unknown_frequency_rejected(self, harness):
+        # Post-refactor: frequency is a Literal; unknown value rejected at Params level.
+        with patched_broadcaster():
             result = await harness.execute(
                 "cronScheduler", {"frequency": "quantum"}
             )
-        harness.assert_envelope(result, success=True)
-        payload = result["result"]
-        assert payload["schedule"] == "Unknown schedule"
-        assert payload["waited_seconds"] == 300
-        sleep_mock.assert_awaited_once()
+        harness.assert_envelope(result, success=False)
+        assert "invalid parameters" in result["error"].lower()
 
 
 # ============================================================================
@@ -494,6 +487,6 @@ class TestWebhookResponse:
         with _patched_resolve_webhook_response():
             result = await harness.execute(
                 "webhookResponse",
-                {"statusCode": "abc", "responseBody": "x"},
+                {"status_code": "abc", "body": "x"},
             )
         harness.assert_envelope(result, success=False)

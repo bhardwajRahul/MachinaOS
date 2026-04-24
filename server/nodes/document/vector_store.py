@@ -19,17 +19,38 @@ from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 class VectorStoreParams(BaseModel):
     operation: Literal["store", "query", "delete"] = "store"
     backend: Literal["chroma", "chromadb", "qdrant", "pinecone"] = "chroma"
-    collection_name: str = Field(default="documents", alias="collectionName")
+    collection_name: str = Field(default="documents")
     embeddings: Optional[list] = None
-    chunks: Optional[list] = None
-    query_embedding: Optional[list] = Field(default=None, alias="queryEmbedding")
-    top_k: int = Field(default=5, alias="topK", ge=1, le=100)
-    ids: Optional[list] = None
-    persist_dir: str = Field(default="./data/vectors", alias="persistDir")
-    qdrant_url: str = Field(default="http://localhost:6333", alias="qdrantUrl")
-    pinecone_api_key: str = Field(default="", alias="pineconeApiKey")
+    chunks: Optional[list] = Field(
+        default=None,
+        json_schema_extra={"displayOptions": {"show": {"operation": ["store"]}}},
+    )
+    query_embedding: Optional[list] = Field(
+        default=None,
+        json_schema_extra={"displayOptions": {"show": {"operation": ["query"]}}},
+    )
+    top_k: int = Field(
+        default=5, ge=1, le=100,
+        json_schema_extra={"displayOptions": {"show": {"operation": ["query"]}}},
+    )
+    ids: Optional[list] = Field(
+        default=None,
+        json_schema_extra={"displayOptions": {"show": {"operation": ["delete"]}}},
+    )
+    persist_dir: str = Field(
+        default="./data/vectors",
+        json_schema_extra={"displayOptions": {"show": {"backend": ["chroma", "chromadb"]}}},
+    )
+    qdrant_url: str = Field(
+        default="http://localhost:6333",
+        json_schema_extra={"displayOptions": {"show": {"backend": ["qdrant"]}}},
+    )
+    pinecone_api_key: str = Field(
+        default="",
+        json_schema_extra={"displayOptions": {"show": {"backend": ["pinecone"]}}},
+    )
 
-    model_config = ConfigDict(populate_by_name=True, extra="allow")
+    model_config = ConfigDict(extra="ignore")
 
 
 class VectorStoreOutput(BaseModel):
@@ -51,7 +72,7 @@ async def _chroma_op(operation: str, params: Dict[str, Any], collection: str) ->
     except ImportError:
         raise RuntimeError("ChromaDB unavailable. pip install chromadb")
 
-    persist_dir = params.get('persistDir', './data/vectors')
+    persist_dir = params.get('persist_dir', './data/vectors')
     client = chromadb.PersistentClient(path=persist_dir)
     coll = client.get_or_create_collection(name=collection)
 
@@ -75,8 +96,8 @@ async def _chroma_op(operation: str, params: Dict[str, Any], collection: str) ->
         return {"stored_count": len(embeddings), "collection_count": coll.count()}
 
     if operation == 'query':
-        query_emb = params.get('queryEmbedding', [])
-        top_k = int(params.get('topK', 5))
+        query_emb = params.get('query_embedding', [])
+        top_k = int(params.get('top_k', 5))
         if not query_emb:
             return {"matches": []}
         results = coll.query(query_embeddings=[query_emb], n_results=top_k)
@@ -107,7 +128,7 @@ async def _qdrant_op(operation: str, params: Dict[str, Any], collection: str) ->
     except ImportError:
         raise RuntimeError("Qdrant client unavailable. pip install qdrant-client")
 
-    url = params.get('qdrantUrl', 'http://localhost:6333')
+    url = params.get('qdrant_url', 'http://localhost:6333')
     client = QdrantClient(url=url)
 
     if operation == 'store':
@@ -140,8 +161,8 @@ async def _qdrant_op(operation: str, params: Dict[str, Any], collection: str) ->
         return {"stored_count": len(embeddings)}
 
     if operation == 'query':
-        query_emb = params.get('queryEmbedding', [])
-        top_k = int(params.get('topK', 5))
+        query_emb = params.get('query_embedding', [])
+        top_k = int(params.get('top_k', 5))
         if not query_emb:
             return {"matches": []}
         results = await asyncio.to_thread(
@@ -165,7 +186,7 @@ async def _qdrant_op(operation: str, params: Dict[str, Any], collection: str) ->
 async def _pinecone_op(operation: str, params: Dict[str, Any], collection: str) -> Dict[str, Any]:
     from pinecone import Pinecone
 
-    api_key = params.get('pineconeApiKey', '')
+    api_key = params.get('pinecone_api_key', '')
     if not api_key:
         raise RuntimeError("Pinecone API key required")
 
@@ -239,11 +260,11 @@ class VectorStoreNode(ActionNode):
 
     @Operation("dispatch")
     async def dispatch(self, ctx: NodeContext, params: VectorStoreParams) -> VectorStoreOutput:
-        p = params.model_dump(by_alias=True)
-        operation = p.get('operation', 'store')
-        backend_raw = p.get('backend', 'chroma')
+        p = params.model_dump()
+        operation = params.operation
+        backend_raw = params.backend
         backend = 'chroma' if backend_raw in ('chroma', 'chromadb') else backend_raw
-        collection = p.get('collectionName', 'documents')
+        collection = params.collection_name
 
         if backend == 'chroma':
             result = await _chroma_op(operation, p, collection)

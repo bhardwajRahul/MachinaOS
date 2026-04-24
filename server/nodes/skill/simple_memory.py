@@ -20,24 +20,21 @@ logger = get_logger(__name__)
 
 
 class SimpleMemoryParams(BaseModel):
-    session_id: str = Field(default="default", alias="sessionId")
-    window_size: int = Field(default=10, alias="windowSize", ge=1, le=100)
+    session_id: str = Field(default="default")
+    window_size: int = Field(default=10, ge=1, le=100)
     memory_content: str = Field(
         default="# Conversation History\n",
-        alias="memoryContent",
         json_schema_extra={"rows": 12},
     )
-    memory_type: Literal["buffer", "window"] = Field(
-        default="buffer", alias="memoryType",
-    )
-    clear_on_run: bool = Field(default=False, alias="clearOnRun")
-    long_term_enabled: bool = Field(default=False, alias="longTermEnabled")
+    memory_type: Literal["buffer", "window"] = Field(default="buffer")
+    clear_on_run: bool = Field(default=False)
+    long_term_enabled: bool = Field(default=False)
     retrieval_count: int = Field(
-        default=3, alias="retrievalCount", ge=1, le=20,
+        default=3, ge=1, le=20,
         json_schema_extra={"displayOptions": {"show": {"long_term_enabled": [True]}}},
     )
 
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+    model_config = ConfigDict(extra="ignore")
 
 
 class SimpleMemoryOutput(BaseModel):
@@ -71,22 +68,16 @@ class SimpleMemoryNode(ActionNode):
     async def read(self, ctx: NodeContext, params: SimpleMemoryParams) -> SimpleMemoryOutput:
         """Return the current message log for the session.
 
-        ``memory_type`` (legacy alias-only field, defaults to ``buffer``)
-        and ``clear_on_run`` are read straight off the raw payload
-        because they're optional UI toggles, not part of the canonical
-        Params surface.
+        All fields read via Pydantic-typed access on ``params`` — no dict
+        lookups needed now that aliases are gone.
         """
         from services.memory_store import clear_session, get_messages
 
-        payload = params.model_dump(by_alias=True)
-        session_id = payload.get("sessionId", params.session_id)
-        memory_type = payload.get("memoryType", "buffer")
-        window_size = (
-            int(payload.get("windowSize", params.window_size))
-            if memory_type == "window" else None
-        )
+        session_id = params.session_id
+        memory_type = params.memory_type
+        window_size = params.window_size if memory_type == "window" else None
 
-        if payload.get("clearOnRun"):
+        if params.clear_on_run:
             cleared = clear_session(session_id)
             logger.info("[Memory] Cleared %d messages from session '%s'", cleared, session_id)
 

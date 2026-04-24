@@ -15,10 +15,10 @@ class GmapsNearbyPlacesParams(BaseModel):
     latitude: float = Field(..., ge=-90.0, le=90.0)
     longitude: float = Field(..., ge=-180.0, le=180.0)
     radius: int = Field(default=1000, ge=1, le=50000)
-    place_type: str = Field(default="", alias="placeType")
+    place_type: str = Field(default="")
     keyword: str = Field(default="")
 
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+    model_config = ConfigDict(extra="ignore")
 
 
 class GmapsNearbyPlacesOutput(BaseModel):
@@ -57,7 +57,7 @@ class GmapsNearbyPlacesNode(ActionNode):
 
         maps_service = container.maps_service()
         response = await maps_service.find_nearby_places(
-            ctx.node_id, params.model_dump(by_alias=True), ctx.raw,
+            ctx.node_id, params.model_dump(), ctx.raw,
         )
         if response.get("success"):
             return response.get("result") or response

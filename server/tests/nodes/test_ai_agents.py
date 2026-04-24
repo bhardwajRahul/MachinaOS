@@ -439,7 +439,7 @@ class TestSimpleMemory:
     async def test_happy_path_empty_session(self, harness, _reset_memory_store):
         result = await harness.execute(
             "simpleMemory",
-            {"sessionId": "sess-a", "memoryType": "buffer"},
+            {"session_id": "sess-a", "memory_type": "buffer"},
         )
 
         harness.assert_envelope(result, success=True)
@@ -458,7 +458,7 @@ class TestSimpleMemory:
 
         result = await harness.execute(
             "simpleMemory",
-            {"sessionId": "sess-b", "memoryType": "window", "windowSize": 2},
+            {"session_id": "sess-b", "memory_type": "window", "window_size": 2},
         )
 
         harness.assert_envelope(result, success=True)
@@ -477,7 +477,7 @@ class TestSimpleMemory:
 
         result = await harness.execute(
             "simpleMemory",
-            {"sessionId": "sess-c", "clearOnRun": True},
+            {"session_id": "sess-c", "clear_on_run": True},
         )
 
         harness.assert_envelope(result, success=True)

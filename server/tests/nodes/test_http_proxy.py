@@ -126,7 +126,7 @@ class TestHttpRequest:
         with patch("services.proxy.service.get_proxy_service", return_value=proxy_svc):
             result = await harness.execute(
                 "httpRequest",
-                {"method": "GET", "url": self.URL, "useProxy": True, "proxyCountry": "US"},
+                {"method": "GET", "url": self.URL, "use_proxy": True, "proxy_country": "US"},
             )
 
         harness.assert_envelope(result, success=True)
@@ -135,7 +135,7 @@ class TestHttpRequest:
         proxy_svc.get_proxy_url.assert_awaited_once()
         call_args = proxy_svc.get_proxy_url.await_args
         assert call_args.args[0] == self.URL
-        assert call_args.args[1]["proxyCountry"] == "US"
+        assert call_args.args[1]["proxy_country"] == "US"
 
     @respx.mock
     async def test_use_proxy_swallows_proxy_error_and_proceeds(self, harness):
@@ -148,7 +148,7 @@ class TestHttpRequest:
         with patch("services.proxy.service.get_proxy_service", return_value=proxy_svc):
             result = await harness.execute(
                 "httpRequest",
-                {"method": "GET", "url": self.URL, "useProxy": True},
+                {"method": "GET", "url": self.URL, "use_proxy": True},
             )
 
         harness.assert_envelope(result, success=True)
@@ -179,8 +179,8 @@ class TestProxyRequest:
                 {
                     "method": "GET",
                     "url": self.URL,
-                    "proxyProvider": "smart_proxy",
-                    "proxyCountry": "US",
+                    "proxy_provider": "smart_proxy",
+                    "proxy_country": "US",
                 },
             )
 
@@ -264,9 +264,9 @@ class TestProxyRequest:
                 {
                     "method": "GET",
                     "url": self.URL,
-                    "proxyProvider": "p1",
-                    "maxRetries": 2,
-                    "proxyFailover": True,
+                    "proxy_provider": "p1",
+                    "max_retries": 2,
+                    "proxy_failover": True,
                 },
             )
 

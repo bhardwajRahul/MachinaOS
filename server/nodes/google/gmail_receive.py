@@ -38,7 +38,7 @@ class GmailReceiveParams(BaseModel):
 class GmailReceiveOutput(BaseModel):
     message_id: Optional[str] = None
     thread_id: Optional[str] = None
-    from_: Optional[str] = Field(default=None, alias="from")
+    from_: Optional[str] = Field(default=None)
     to: Optional[str] = None
     subject: Optional[str] = None
     body: Optional[str] = None
@@ -48,7 +48,7 @@ class GmailReceiveOutput(BaseModel):
     attachments: Optional[list] = None
     is_unread: Optional[bool] = None
 
-    model_config = ConfigDict(populate_by_name=True, extra="allow")
+    model_config = ConfigDict(extra="allow")
 
 
 class GmailReceiveNode(TriggerNode):

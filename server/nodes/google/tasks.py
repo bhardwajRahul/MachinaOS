@@ -19,22 +19,22 @@ def _ensure_rfc3339(due: str) -> str:
 
 class TasksParams(BaseModel):
     operation: Literal["create", "list", "complete", "update", "delete"] = "list"
-    tasklist_id: str = Field(default="@default", alias="tasklistId")
-    task_id: Optional[str] = Field(default=None, alias="taskId")
+    tasklist_id: str = Field(default="@default")
+    task_id: Optional[str] = Field(default=None)
     title: Optional[str] = None
     notes: Optional[str] = None
-    due_date: Optional[str] = Field(default=None, alias="dueDate")
+    due_date: Optional[str] = Field(default=None)
     status: Optional[str] = None
-    show_completed: bool = Field(default=False, alias="showCompleted")
-    show_hidden: bool = Field(default=False, alias="showHidden")
-    max_results: int = Field(default=100, alias="maxResults")
+    show_completed: bool = Field(default=False)
+    show_hidden: bool = Field(default=False)
+    max_results: int = Field(default=100)
 
-    update_title: Optional[str] = Field(default=None, alias="updateTitle")
-    update_notes: Optional[str] = Field(default=None, alias="updateNotes")
-    update_due_date: Optional[str] = Field(default=None, alias="updateDueDate")
-    update_status: Optional[str] = Field(default=None, alias="updateStatus")
+    update_title: Optional[str] = Field(default=None)
+    update_notes: Optional[str] = Field(default=None)
+    update_due_date: Optional[str] = Field(default=None)
+    update_status: Optional[str] = Field(default=None)
 
-    model_config = ConfigDict(populate_by_name=True, extra="allow")
+    model_config = ConfigDict(extra="allow")
 
 
 class TasksOutput(BaseModel):
@@ -78,7 +78,7 @@ class TasksNode(ActionNode):
 
     @Operation("dispatch", cost={"service": "tasks", "action": "op", "count": 1})
     async def dispatch(self, ctx: NodeContext, params: TasksParams) -> TasksOutput:
-        svc = await build_google_service("tasks", "v1", params.model_dump(by_alias=True), ctx.raw)
+        svc = await build_google_service("tasks", "v1", params.model_dump(), ctx.raw)
         tasks_svc = svc.tasks()
         op = params.operation
         tasklist = params.tasklist_id

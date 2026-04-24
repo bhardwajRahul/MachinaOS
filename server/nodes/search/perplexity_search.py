@@ -48,15 +48,24 @@ class PerplexitySearchOutput(BaseModel):
 
 
 class PerplexitySearchParams(BaseModel):
+    tool_name: str = Field(
+        default="perplexity_search",
+        description="Override name shown to the LLM when used as a tool.",
+    )
+    tool_description: str = Field(
+        default="AI-powered search using Perplexity Sonar. Returns a markdown-formatted answer with inline citation references and source URLs.",
+        description="Override description shown to the LLM when used as a tool.",
+        json_schema_extra={"rows": 3},
+    )
     query: str = Field(..., min_length=1)
     model: Literal["sonar", "sonar-pro", "sonar-reasoning", "sonar-reasoning-pro"] = "sonar"
     search_recency_filter: Literal["all", "month", "week", "day", "hour"] = Field(
-        default="all", alias="searchRecencyFilter",
+        default="all",
     )
-    return_images: bool = Field(default=False, alias="returnImages")
-    return_related_questions: bool = Field(default=False, alias="returnRelatedQuestions")
+    return_images: bool = Field(default=False)
+    return_related_questions: bool = Field(default=False)
 
-    model_config = {"populate_by_name": True, "extra": "ignore"}
+    model_config = {"extra": "ignore"}
 
 
 class PerplexitySearchNode(ActionNode):

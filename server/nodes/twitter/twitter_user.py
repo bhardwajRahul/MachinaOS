@@ -15,12 +15,38 @@ from ._base import call_with_retry, format_user, get_my_user_id, track_twitter_u
 
 
 class TwitterUserParams(BaseModel):
-    operation: Literal["me", "by_username", "by_id", "followers", "following"] = "me"
-    username: str = Field(default="")
-    user_id: str = Field(default="", alias="userId")
-    max_results: int = Field(default=100, alias="maxResults", ge=1, le=1000)
+    """Baseline-aligned schema with conditional fields per operation.
+    Snake_case throughout."""
 
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+    operation: Literal["me", "by_username", "by_id", "followers", "following"] = Field(
+        default="me",
+        description="User-lookup operation",
+    )
+    username: str = Field(
+        default="",
+        description="Twitter username (without @ prefix)",
+        json_schema_extra={
+            "displayOptions": {"show": {"operation": ["by_username"]}},
+        },
+    )
+    user_id: str = Field(
+        default="",
+        description="Twitter user ID (numeric)",
+        json_schema_extra={
+            "displayOptions": {"show": {"operation": [
+                "by_id", "followers", "following",
+            ]}},
+        },
+    )
+    max_results: int = Field(
+        default=100, ge=1, le=1000,
+        description="Number of users to return (1-1000)",
+        json_schema_extra={
+            "displayOptions": {"show": {"operation": ["followers", "following"]}},
+        },
+    )
+
+    model_config = ConfigDict(extra="ignore")
 
 
 class TwitterUserOutput(BaseModel):
@@ -71,7 +97,7 @@ async def _do_lookup(client, op: str, p: dict, node_id: str, ctx_raw: dict) -> T
         return TwitterUserOutput(operation="by_username", user=format_user(users[0]))
 
     if op == "by_id":
-        user_id = p.get("userId") or p.get("user_id")
+        user_id = p.get("user_id")
         if not user_id:
             raise RuntimeError("User ID is required")
         result = await asyncio.to_thread(
@@ -85,8 +111,8 @@ async def _do_lookup(client, op: str, p: dict, node_id: str, ctx_raw: dict) -> T
         return TwitterUserOutput(operation="by_id", user=format_user(users[0]))
 
     if op in ("followers", "following"):
-        user_id = p.get("userId") or p.get("user_id") or await get_my_user_id(client)
-        max_results = max(1, min(int(p.get("maxResults", 100)), 1000))
+        user_id = p.get("user_id") or await get_my_user_id(client)
+        max_results = max(1, min(int(p.get("max_results", 100)), 1000))
         fetch = _sync_followers if op == "followers" else _sync_following
         raw = await asyncio.to_thread(fetch, client, user_id, max_results)
         users = [format_user(u) for u in raw]
@@ -122,6 +148,6 @@ class TwitterUserNode(ActionNode):
 
     @Operation("lookup", cost={"service": "twitter", "action": "user_lookup", "count": 1})
     async def lookup(self, ctx: NodeContext, params: TwitterUserParams) -> TwitterUserOutput:
-        p = params.model_dump(by_alias=True)
+        p = params.model_dump()
         op = p.get("operation", "me")
         return await call_with_retry(_do_lookup, op, p, ctx.node_id, ctx.raw)

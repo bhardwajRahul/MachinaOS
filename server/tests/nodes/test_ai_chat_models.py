@@ -116,9 +116,9 @@ class TestAllChatModelsHappyPath:
             f"expected get_api_key({provider}, ...) for {node_type}, got {calls}"
         )
 
-        # Plugin dumps params with by_alias=True so snake_case api_key is emitted as apiKey
+        # Plugin Params use snake_case throughout; model_dump() preserves field names.
         params = harness.ai_service.execute_chat.await_args.args[2]
-        assert params.get("apiKey") == "test-api-key"
+        assert params.get("api_key") == "test-api-key"
 
     @pytest.mark.parametrize("node_type,provider", ALL_PROVIDERS)
     async def test_error_envelope_propagates(self, harness, node_type, provider):
@@ -158,18 +158,18 @@ class TestThinkingParamForwarding:
             node_type,
             {
                 "prompt": "hi",
-                "thinkingEnabled": True,
-                "thinkingBudget": 4096,
-                "reasoningEffort": "high",
-                "reasoningFormat": "parsed",
+                "thinking_enabled": True,
+                "thinking_budget": 4096,
+                "reasoning_effort": "high",
+                "reasoning_format": "parsed",
             },
         )
 
         params = harness.ai_service.execute_chat.await_args.args[2]
-        assert params["thinkingEnabled"] is True
-        assert params["thinkingBudget"] == 4096
-        assert params["reasoningEffort"] == "high"
-        assert params["reasoningFormat"] == "parsed"
+        assert params["thinking_enabled"] is True
+        assert params["thinking_budget"] == 4096
+        assert params["reasoning_effort"] == "high"
+        assert params["reasoning_format"] == "parsed"
 
     @pytest.mark.parametrize("node_type,provider", ALL_PROVIDERS)
     async def test_system_message_forwarded(self, harness, node_type, provider):
@@ -177,12 +177,12 @@ class TestThinkingParamForwarding:
 
         await harness.execute(
             node_type,
-            {"prompt": "hi", "systemMessage": "You are terse."},
+            {"prompt": "hi", "system_prompt": "You are terse."},
         )
 
         params = harness.ai_service.execute_chat.await_args.args[2]
-        # Handler does not normalize - raw param key reaches execute_chat
-        assert params["systemMessage"] == "You are terse."
+        # Plugin Params field is system_prompt; model_dump preserves the name.
+        assert params["system_prompt"] == "You are terse."
 
 
 # ============================================================================
@@ -254,11 +254,11 @@ class TestKimiThinkingDefault:
 
         await harness.execute(
             "kimiChatModel",
-            {"prompt": "hi", "thinkingEnabled": False},
+            {"prompt": "hi", "thinking_enabled": False},
         )
 
         params = harness.ai_service.execute_chat.await_args.args[2]
-        assert params["thinkingEnabled"] is False
+        assert params["thinking_enabled"] is False
 
 
 class TestGroqReasoningFormat:
@@ -273,13 +273,13 @@ class TestGroqReasoningFormat:
             {
                 "prompt": "hi",
                 "model": "qwen/qwen3-32b",
-                "thinkingEnabled": True,
-                "reasoningFormat": "hidden",
+                "thinking_enabled": True,
+                "reasoning_format": "hidden",
             },
         )
 
         params = harness.ai_service.execute_chat.await_args.args[2]
-        assert params["reasoningFormat"] == "hidden"
+        assert params["reasoning_format"] == "hidden"
         assert params["model"] == "qwen/qwen3-32b"
 
 
@@ -321,14 +321,14 @@ class TestMistralNoThinking:
             {
                 "prompt": "hi",
                 "model": "mistral-large-latest",
-                "thinkingEnabled": True,  # User tries to enable
+                "thinking_enabled": True,  # User tries to enable
             },
         )
 
         harness.assert_envelope(result, success=True)
         # Handler forwarded the user's flag
         params = harness.ai_service.execute_chat.await_args.args[2]
-        assert params["thinkingEnabled"] is True
+        assert params["thinking_enabled"] is True
         # But envelope reflects Mistral's lack of support
         assert result["result"]["thinking"] is None
         assert result["result"]["thinking_enabled"] is False

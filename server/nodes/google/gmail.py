@@ -38,7 +38,10 @@ class GmailParams(BaseModel):
             "displayOptions": {"show": {"operation": ["send"]}},
         },
     )
-    body_type: Literal["text", "html"] = Field(default="text", alias="bodyType")
+    body_type: Literal["text", "html"] = Field(
+        default="text",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["send"]}}},
+    )
 
     query: str = Field(
         default="",
@@ -47,17 +50,25 @@ class GmailParams(BaseModel):
             "displayOptions": {"show": {"operation": ["search"]}},
         },
     )
-    max_results: int = Field(default=10, alias="maxResults", ge=1, le=100)
-    include_body: bool = Field(default=False, alias="includeBody")
+    max_results: int = Field(
+        default=10, ge=1, le=100,
+        json_schema_extra={"displayOptions": {"show": {"operation": ["search"]}}},
+    )
+    include_body: bool = Field(
+        default=False,
+        json_schema_extra={"displayOptions": {"show": {"operation": ["search"]}}},
+    )
 
     message_id: str = Field(
         default="",
-        alias="messageId",
         json_schema_extra={"displayOptions": {"show": {"operation": ["read"]}}},
     )
-    format: Literal["full", "minimal", "raw", "metadata"] = "full"
+    format: Literal["full", "minimal", "raw", "metadata"] = Field(
+        default="full",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["read"]}}},
+    )
 
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+    model_config = ConfigDict(extra="ignore")
 
 
 class GmailOutput(BaseModel):
@@ -71,14 +82,14 @@ class GmailOutput(BaseModel):
     count: Optional[int] = None
     query: Optional[str] = None
     result_size_estimate: Optional[int] = None
-    from_: Optional[str] = Field(default=None, alias="from")
+    from_: Optional[str] = Field(default=None)
     date: Optional[str] = None
     body: Optional[str] = None
     snippet: Optional[str] = None
     labels: Optional[List[str]] = None
     attachments: Optional[List[dict]] = None
 
-    model_config = ConfigDict(populate_by_name=True, extra="allow")
+    model_config = ConfigDict(extra="allow")
 
 
 class GmailNode(ActionNode):
@@ -106,7 +117,7 @@ class GmailNode(ActionNode):
 
     async def _service(self, ctx: NodeContext, params: GmailParams):
         return await build_google_service(
-            "gmail", "v1", params.model_dump(by_alias=True), ctx.raw,
+            "gmail", "v1", params.model_dump(), ctx.raw,
         )
 
     @Operation("send", cost={"service": "gmail", "action": "send", "count": 1})

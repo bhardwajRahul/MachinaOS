@@ -8,7 +8,7 @@ raw ``actorInput`` JSON for common actors.
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -32,12 +32,16 @@ async def _get_apify_client():
 
 
 def _build_actor_input(parameters: Dict[str, Any]) -> Dict[str, Any]:
-    """Merge actor quick-input helpers into the raw ``actorInput`` JSON."""
-    actor_id = parameters.get('actorId', '')
-    if actor_id == 'custom':
-        actor_id = parameters.get('customActorId', '')
+    """Merge actor quick-input helpers into the raw ``actor_input`` JSON.
 
-    actor_input = parameters.get('actorInput', '{}')
+    Apify actors expect camelCase keys in their run input (that's the
+    SDK contract). The plugin Params are snake_case; we translate here.
+    """
+    actor_id = parameters.get('actor_id', '')
+    if actor_id == 'custom':
+        actor_id = parameters.get('custom_actor_id', '')
+
+    actor_input = parameters.get('actor_input', {})
     if isinstance(actor_input, str):
         try:
             actor_input = json.loads(actor_input) if actor_input.strip() else {}
@@ -47,33 +51,33 @@ def _build_actor_input(parameters: Dict[str, Any]) -> Dict[str, Any]:
         actor_input = {}
 
     if actor_id == 'apify/instagram-scraper':
-        urls = parameters.get('instagramUrls', '')
+        urls = parameters.get('instagram_urls', '')
         if urls:
             actor_input['directUrls'] = [u.strip() for u in urls.split(',') if u.strip()]
     elif actor_id == 'clockworks/tiktok-scraper':
-        profiles = parameters.get('tiktokProfiles', '')
-        hashtags = parameters.get('tiktokHashtags', '')
+        profiles = parameters.get('tiktok_profiles', '')
+        hashtags = parameters.get('tiktok_hashtags', '')
         if profiles:
             actor_input['profiles'] = [p.strip() for p in profiles.split(',') if p.strip()]
         if hashtags:
             actor_input['hashtags'] = [h.strip() for h in hashtags.split(',') if h.strip()]
     elif actor_id == 'apidojo/tweet-scraper':
-        search_terms = parameters.get('twitterSearchTerms', '')
-        handles = parameters.get('twitterHandles', '')
+        search_terms = parameters.get('twitter_search_terms', '')
+        handles = parameters.get('twitter_handles', '')
         if search_terms:
             actor_input['searchTerms'] = [t.strip() for t in search_terms.split(',') if t.strip()]
         if handles:
             actor_input['twitterHandles'] = [h.strip() for h in handles.split(',') if h.strip()]
     elif actor_id == 'apify/google-search-scraper':
-        query = parameters.get('googleSearchQuery', '')
-        pages = parameters.get('googleSearchPages', 1)
+        query = parameters.get('google_search_query', '')
+        pages = parameters.get('google_search_pages', 1)
         if query:
             actor_input['searchQuery'] = query
             actor_input['maxPagesPerQuery'] = pages
     elif actor_id == 'apify/website-content-crawler':
-        start_urls = parameters.get('crawlerStartUrls', '')
-        max_depth = parameters.get('crawlerMaxDepth', 2)
-        max_pages = parameters.get('crawlerMaxPages', 50)
+        start_urls = parameters.get('crawler_start_urls', '')
+        max_depth = parameters.get('crawler_max_depth', 2)
+        max_pages = parameters.get('crawler_max_pages', 50)
         if start_urls:
             actor_input['startUrls'] = [{'url': u.strip()} for u in start_urls.split(',') if u.strip()]
             actor_input['maxCrawlDepth'] = max_depth
@@ -110,14 +114,109 @@ async def validate_apify_token(api_token: str) -> Dict[str, Any]:
         return {"valid": False, "error": msg}
 
 
-class ApifyActorParams(BaseModel):
-    actor_id: str = Field(default="", alias="actorId")
-    actor_input: Any = Field(default_factory=dict, alias="actorInput")
-    max_results: int = Field(default=100, alias="maxResults", ge=1, le=10000)
-    timeout: int = Field(default=300, ge=1, le=3600)
-    memory: int = Field(default=1024, ge=128, le=8192)
+_ACTOR_PRESETS = [
+    "apify/instagram-scraper",
+    "clockworks/tiktok-scraper",
+    "apidojo/tweet-scraper",
+    "apify/linkedin-scraper",
+    "apify/facebook-pages-scraper",
+    "streamers/youtube-scraper",
+    "apify/google-search-scraper",
+    "compass/crawler-google-places",
+    "apify/website-content-crawler",
+    "curious_coder/web-scraper",
+    "custom",
+]
 
-    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+class ApifyActorParams(BaseModel):
+    actor_id: Literal[
+        "apify/instagram-scraper",
+        "clockworks/tiktok-scraper",
+        "apidojo/tweet-scraper",
+        "apify/linkedin-scraper",
+        "apify/facebook-pages-scraper",
+        "streamers/youtube-scraper",
+        "apify/google-search-scraper",
+        "compass/crawler-google-places",
+        "apify/website-content-crawler",
+        "curious_coder/web-scraper",
+        "custom",
+    ] = Field(
+        default="apify/instagram-scraper",
+        description="Actor preset. Pick 'custom' to enter a specific actor ID.",
+    )
+    custom_actor_id: str = Field(
+        default="",
+        description="Custom actor ID (e.g. username/actor-name).",
+        json_schema_extra={"displayOptions": {"show": {"actor_id": ["custom"]}}},
+    )
+    actor_input: Any = Field(
+        default_factory=dict,
+        description="Raw JSON input passed to the actor (merged with quick-input fields below).",
+        json_schema_extra={"rows": 6},
+    )
+
+    # Quick-input helpers per actor
+    instagram_urls: str = Field(
+        default="",
+        description="Comma-separated Instagram URLs.",
+        json_schema_extra={"displayOptions": {"show": {"actor_id": ["apify/instagram-scraper"]}}},
+    )
+    tiktok_profiles: str = Field(
+        default="",
+        description="Comma-separated TikTok profile handles.",
+        json_schema_extra={"displayOptions": {"show": {"actor_id": ["clockworks/tiktok-scraper"]}}},
+    )
+    tiktok_hashtags: str = Field(
+        default="",
+        description="Comma-separated TikTok hashtags.",
+        json_schema_extra={"displayOptions": {"show": {"actor_id": ["clockworks/tiktok-scraper"]}}},
+    )
+    twitter_search_terms: str = Field(
+        default="",
+        description="Comma-separated search terms.",
+        json_schema_extra={"displayOptions": {"show": {"actor_id": ["apidojo/tweet-scraper"]}}},
+    )
+    twitter_handles: str = Field(
+        default="",
+        description="Comma-separated Twitter handles.",
+        json_schema_extra={"displayOptions": {"show": {"actor_id": ["apidojo/tweet-scraper"]}}},
+    )
+    google_search_query: str = Field(
+        default="",
+        description="Google search query.",
+        json_schema_extra={"displayOptions": {"show": {"actor_id": ["apify/google-search-scraper"]}}},
+    )
+    google_search_pages: int = Field(
+        default=1, ge=1, le=100,
+        description="Max pages per query.",
+        json_schema_extra={"displayOptions": {"show": {"actor_id": ["apify/google-search-scraper"]}}},
+    )
+    crawler_start_urls: str = Field(
+        default="",
+        description="Comma-separated start URLs.",
+        json_schema_extra={"displayOptions": {"show": {"actor_id": ["apify/website-content-crawler"]}}},
+    )
+    crawler_max_depth: int = Field(
+        default=2, ge=0, le=20,
+        description="Max crawl depth.",
+        json_schema_extra={"displayOptions": {"show": {"actor_id": ["apify/website-content-crawler"]}}},
+    )
+    crawler_max_pages: int = Field(
+        default=50, ge=1, le=10000,
+        description="Max pages to crawl.",
+        json_schema_extra={"displayOptions": {"show": {"actor_id": ["apify/website-content-crawler"]}}},
+    )
+
+    max_results: int = Field(default=100, ge=1, le=10000)
+    timeout: int = Field(default=300, ge=1, le=3600)
+    memory: Literal[128, 256, 512, 1024, 2048, 4096, 8192] = Field(
+        default=1024,
+        description="Actor memory in MB.",
+    )
+
+    model_config = ConfigDict(extra="ignore")
 
 
 class ApifyActorOutput(BaseModel):
@@ -163,17 +262,16 @@ class ApifyActorNode(ActionNode):
                 "Apify API token not configured. Please add your token in Credentials.",
             )
 
-        p = params.model_dump(by_alias=True)
-        actor_id = p.get("actorId", "")
+        actor_id = params.actor_id
         if actor_id == "custom":
-            actor_id = p.get("customActorId", "")
+            actor_id = params.custom_actor_id
         if not actor_id:
             raise RuntimeError("Actor ID is required")
 
-        actor_input = _build_actor_input(p)
-        timeout_secs = int(p.get("timeout", 300))
-        max_results = int(p.get("maxResults", 100))
-        memory_mbytes = int(p.get("memory", 1024))
+        actor_input = _build_actor_input(params.model_dump())
+        timeout_secs = params.timeout
+        max_results = params.max_results
+        memory_mbytes = int(params.memory)
 
         logger.info(
             f"[Apify] Running actor {actor_id} "

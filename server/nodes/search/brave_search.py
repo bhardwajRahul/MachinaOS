@@ -52,15 +52,24 @@ class BraveSearchOutput(BaseModel):
 
 
 class BraveSearchParams(BaseModel):
+    tool_name: str = Field(
+        default="brave_search",
+        description="Override name shown to the LLM when used as a tool.",
+    )
+    tool_description: str = Field(
+        default="Search the web using the Brave Search API. Returns web results with titles, snippets, and URLs.",
+        description="Override description shown to the LLM when used as a tool.",
+        json_schema_extra={"rows": 3},
+    )
     query: str = Field(..., description="Search query", min_length=1)
-    max_results: int = Field(default=10, alias="maxResults", ge=1, le=20)
+    max_results: int = Field(default=10, ge=1, le=20)
     country: str = Field(default="", description="ISO country code (e.g. US, GB)")
-    search_lang: str = Field(default="en", alias="searchLang")
+    search_lang: str = Field(default="en")
     safe_search: Literal["off", "moderate", "strict"] = Field(
-        default="moderate", alias="safeSearch"
+        default="moderate"
     )
 
-    model_config = {"populate_by_name": True, "extra": "ignore"}
+    model_config = {"extra": "ignore"}
 
 
 class BraveSearchNode(ActionNode):

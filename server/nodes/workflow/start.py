@@ -16,9 +16,9 @@ from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
 
 class StartParams(BaseModel):
-    initial_data: Any = Field(default=None, alias="initialData")
+    initial_data: Any = Field(default=None)
 
-    model_config = ConfigDict(populate_by_name=True, extra="allow")
+    model_config = ConfigDict(extra="allow")
 
 
 class StartOutput(BaseModel):

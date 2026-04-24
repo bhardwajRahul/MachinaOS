@@ -12,10 +12,10 @@ from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 class TextChunkerParams(BaseModel):
     text: str = Field(default="")
     strategy: Literal["recursive", "markdown", "token"] = "recursive"
-    chunk_size: int = Field(default=1000, alias="chunkSize", ge=100, le=8000)
-    overlap: int = Field(default=200, alias="chunkOverlap", ge=0, le=1000)
+    chunk_size: int = Field(default=1000, ge=100, le=8000)
+    overlap: int = Field(default=200, ge=0, le=1000)
 
-    model_config = ConfigDict(populate_by_name=True, extra="allow")
+    model_config = ConfigDict(extra="allow")
 
 
 class TextChunkerOutput(BaseModel):
@@ -50,7 +50,7 @@ class TextChunkerNode(ActionNode):
             MarkdownTextSplitter, RecursiveCharacterTextSplitter,
         )
 
-        p = params.model_dump(by_alias=True)
+        p = params.model_dump()
         documents = p.get('documents') or ([{'content': p.get('text', '')}] if p.get('text') else [])
         chunk_size = int(p.get('chunkSize', 1000))
         chunk_overlap = int(p.get('chunkOverlap') or p.get('overlap', 200))

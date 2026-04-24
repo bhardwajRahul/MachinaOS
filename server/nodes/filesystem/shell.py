@@ -53,7 +53,7 @@ class ShellNode(ActionNode):
         from ._backend import get_backend
 
         log = get_logger(__name__)
-        backend = get_backend(params.model_dump(by_alias=True), ctx.raw)
+        backend = get_backend(params.model_dump(), ctx.raw)
         log.info(
             "[Shell] Executing (non-blocking): %s (timeout=%ds)",
             params.command[:200], params.timeout,

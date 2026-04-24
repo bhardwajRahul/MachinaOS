@@ -36,18 +36,17 @@ class AIAgentParams(BaseModel):
         default=0.7, ge=0.0, le=2.0,
         json_schema_extra={"numberStepSize": 0.1},
     )
-    max_tokens: Optional[int] = Field(default=1000, alias="maxTokens", ge=1, le=200000)
+    max_tokens: Optional[int] = Field(default=1000, ge=1, le=200000)
     system_message: Optional[str] = Field(
         default="You are a helpful assistant",
-        alias="systemMessage",
         json_schema_extra={"rows": 3},
     )
     api_key: Optional[str] = Field(
-        default=None, alias="apiKey",
+        default=None,
         json_schema_extra={"password": True},
     )
 
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+    model_config = ConfigDict(extra="ignore")
 
 
 class AIAgentOutput(BaseModel):
@@ -96,7 +95,7 @@ class AIAgentNode(ActionNode):
         database = container.database()
         kwargs = await prepare_agent_call(
             node_id=ctx.node_id, node_type=self.type,
-            parameters=params.model_dump(by_alias=True),
+            parameters=params.model_dump(),
             context=ctx.raw, database=database,
             log_prefix="[AI Agent]",
         )

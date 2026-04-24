@@ -13,15 +13,15 @@ from ._credentials import TwitterCredential
 
 class TwitterReceiveParams(BaseModel):
     trigger_type: Literal["mentions", "search", "timeline"] = Field(
-        default="mentions", alias="triggerType",
+        default="mentions",
     )
-    search_query: str = Field(default="", alias="searchQuery")
-    user_id: str = Field(default="", alias="userId")
-    filter_retweets: bool = Field(default=True, alias="filterRetweets")
-    filter_replies: bool = Field(default=False, alias="filterReplies")
-    poll_interval: int = Field(default=60, alias="pollInterval", ge=15, le=3600)
+    search_query: str = Field(default="")
+    user_id: str = Field(default="")
+    filter_retweets: bool = Field(default=True)
+    filter_replies: bool = Field(default=False)
+    poll_interval: int = Field(default=60, ge=15, le=3600)
 
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+    model_config = ConfigDict(extra="ignore")
 
 
 class TwitterReceiveOutput(BaseModel):

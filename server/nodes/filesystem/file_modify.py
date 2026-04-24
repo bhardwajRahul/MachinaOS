@@ -11,13 +11,13 @@ from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
 class FileModifyParams(BaseModel):
     operation: Literal["write", "edit"] = "write"
-    file_path: str = Field(..., alias="filePath")
+    file_path: str = Field(...)
     content: str = Field(default="")
-    old_string: str = Field(default="", alias="oldString")
-    new_string: str = Field(default="", alias="newString")
-    replace_all: bool = Field(default=False, alias="replaceAll")
+    old_string: str = Field(default="")
+    new_string: str = Field(default="")
+    replace_all: bool = Field(default=False)
 
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+    model_config = ConfigDict(extra="ignore")
 
 
 class FileModifyOutput(BaseModel):
@@ -55,7 +55,7 @@ class FileModifyNode(ActionNode):
 
         if not params.file_path:
             raise RuntimeError("file_path is required")
-        backend = get_backend(params.model_dump(by_alias=True), ctx.raw)
+        backend = get_backend(params.model_dump(), ctx.raw)
 
         if params.operation == "write":
             result = await asyncio.to_thread(backend.write, params.file_path, params.content)

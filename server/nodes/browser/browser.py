@@ -109,14 +109,14 @@ def _build_args(op: str, p: Dict[str, Any]) -> List[str]:
             return ["fill", _req_sel(s), p.get("value") or ""]
         case "screenshot":
             args = ["screenshot"]
-            if p.get("fullPage"):
+            if p.get("full_page"):
                 args.append("--full")
             if p.get("annotate"):
                 args.append("--annotate")
-            fmt = p.get("screenshotFormat", "png")
+            fmt = p.get("screenshot_format", "png")
             if fmt and fmt != "png":
                 args.extend(["--screenshot-format", fmt])
-                quality = p.get("screenshotQuality")
+                quality = p.get("screenshot_quality")
                 if quality and fmt == "jpeg":
                     args.extend(["--screenshot-quality", str(quality)])
             return args
@@ -143,14 +143,11 @@ def _build_args(op: str, p: Dict[str, Any]) -> List[str]:
 
 
 class BrowserParams(BaseModel):
-    """Browser automation parameters.
+    """Browser automation parameters — full baseline schema.
 
-    Mirrors the operation-facing surface of the agent-browser CLI. Fields
-    are scoped to what the LLM needs to drive each operation; stealth and
-    runtime config (headed, browser, chromeProfile, proxy, timeout, ...)
-    flow through as node_params via the plugin's {**node_params, **tool_args}
-    merge and are consumed by dispatch() with sensible defaults, without
-    being exposed to the LLM tool schema.
+    Organized into operation-scoped fields (drive the LLM tool schema) and
+    runtime/stealth config (always visible in the workflow panel, used for
+    browser binary selection, profiles, proxy, user agent, etc.).
     """
 
     operation: Literal[
@@ -160,38 +157,136 @@ class BrowserParams(BaseModel):
     ] = Field(
         default="navigate",
         description=(
-            "Operation: navigate, click, type, fill, screenshot, snapshot, "
-            "get_text, get_html, eval, wait, scroll, select, console, errors, batch. "
-            "Typical flow: navigate -> snapshot -> interact using @eN refs -> snapshot."
+            "Browser operation. Typical flow: navigate -> snapshot -> "
+            "interact using @eN refs -> snapshot."
         ),
     )
 
-    url: Optional[str] = Field(default=None, description="[navigate] URL to open")
-    selector: Optional[str] = Field(
-        default=None,
-        description="[click/type/fill/get_text/get_html/wait/select] CSS selector or @eN ref from snapshot",
+    # Operation-scoped fields
+    url: str = Field(
+        default="",
+        description="URL to open.",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["navigate"]}}},
     )
-    text: Optional[str] = Field(default=None, description="[type] Text to type")
-    value: Optional[str] = Field(
-        default=None,
-        description="[fill/select] Value to fill or option to select",
+    selector: str = Field(
+        default="",
+        description="CSS selector or @eN ref from snapshot.",
+        json_schema_extra={
+            "displayOptions": {"show": {"operation": [
+                "click", "type", "fill", "get_text", "get_html", "wait", "select",
+            ]}},
+        },
     )
-    expression: Optional[str] = Field(default=None, description="[eval] JavaScript to execute")
-    direction: Optional[str] = Field(default="down", description="[scroll] up, down, left, right")
-    amount: Optional[int] = Field(default=500, description="[scroll] Pixels to scroll")
-    fullPage: Optional[bool] = Field(default=False, description="[screenshot] Capture full scrollable page")
+    text: str = Field(
+        default="",
+        description="Text to type keystroke-by-keystroke.",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["type"]}}},
+    )
+    value: str = Field(
+        default="",
+        description="Value to fill (fill) or option value to select (select).",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["fill", "select"]}}},
+    )
+    expression: str = Field(
+        default="",
+        description="JavaScript to execute in page context.",
+        json_schema_extra={
+            "rows": 4,
+            "displayOptions": {"show": {"operation": ["eval"]}},
+        },
+    )
+    direction: Literal["up", "down", "left", "right"] = Field(
+        default="down",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["scroll"]}}},
+    )
+    amount: int = Field(
+        default=500, ge=1, le=20000,
+        description="Pixels to scroll.",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["scroll"]}}},
+    )
+    commands: str = Field(
+        default="[]",
+        description="JSON array of batch commands (see agent-browser batch docs).",
+        json_schema_extra={
+            "rows": 6,
+            "displayOptions": {"show": {"operation": ["batch"]}},
+        },
+    )
 
-    session: Optional[str] = Field(
-        default=None,
-        description="Browser session name for state sharing across chained nodes (auto-derived when empty)",
+    # Screenshot options
+    full_page: bool = Field(
+        default=False,
+        description="Capture full scrollable page.",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["screenshot"]}}},
+    )
+    annotate: bool = Field(
+        default=False,
+        description="Overlay element boxes on screenshot.",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["screenshot"]}}},
+    )
+    screenshot_format: Literal["png", "jpeg"] = Field(
+        default="png",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["screenshot"]}}},
+    )
+    screenshot_quality: int = Field(
+        default=85, ge=1, le=100,
+        description="JPEG quality (1-100).",
+        json_schema_extra={
+            "displayOptions": {"show": {
+                "operation": ["screenshot"], "screenshot_format": ["jpeg"],
+            }},
+        },
     )
 
-    # extra="allow" lets stealth and runtime config (headed, browser,
-    # chromeProfile, proxy, timeout, newWindow, userAgent, autoConnect,
-    # executablePath, actionDelay, annotate, screenshotFormat,
-    # screenshotQuality, commands) flow through from node_params without
-    # surfacing in the LLM tool schema. dispatch() reads them with defaults.
-    model_config = ConfigDict(extra="allow")
+    # Session
+    session: str = Field(
+        default="",
+        description="Browser session name for state sharing across chained nodes (auto-derived when empty).",
+    )
+
+    # Browser binary selection
+    browser: Literal["chrome", "edge", "chromium", "bundled_explicit", "custom"] = Field(
+        default="chrome",
+        description="Which browser binary to drive.",
+    )
+    executable_path: str = Field(
+        default="",
+        description="Full path to browser executable.",
+        json_schema_extra={"displayOptions": {"show": {"browser": ["custom"]}}},
+    )
+
+    # Runtime config
+    headed: bool = Field(default=True, description="Show browser window (false = headless).")
+    new_window: bool = Field(
+        default=True,
+        description="Open a new browser window for this run.",
+    )
+    auto_connect: bool = Field(
+        default=False,
+        description="Reuse an already-running browser with CDP enabled.",
+    )
+    chrome_profile: str = Field(
+        default="",
+        description="Chrome user-profile name (e.g. 'Default').",
+    )
+    user_agent: str = Field(
+        default="",
+        description="Custom User-Agent string.",
+    )
+    proxy: str = Field(
+        default="",
+        description="Proxy URL (e.g. http://user:pass@host:port).",
+    )
+    action_delay: int = Field(
+        default=0, ge=0, le=60000,
+        description="Delay before each action in milliseconds (for stealth).",
+    )
+    timeout: int = Field(
+        default=30, ge=1, le=600,
+        description="Per-action timeout in seconds.",
+    )
+
+    model_config = ConfigDict(extra="ignore")
 
 
 class BrowserOutput(BaseModel):
@@ -232,38 +327,34 @@ class BrowserNode(ActionNode):
                 "agent-browser not installed. Run: pnpm install && npx agent-browser install",
             )
 
-        p = params.model_dump(by_alias=True)
-        op = p.get("operation") or "navigate"
+        op = params.operation
         session = (
-            (p.get("session") or "").strip()
+            params.session.strip()
             or f"machina_{ctx.raw.get('execution_id', 'default')}"
         )
-        timeout = int(p.get("timeout") or 30)
-        headed = bool(p.get("headed", True))
-        auto_connect = bool(p.get("autoConnect", False))
-        browser_sel = p.get("browser", "chrome")
-        if not browser_sel or browser_sel == "bundled":
+        timeout = params.timeout
+        browser_sel = params.browser or "chrome"
+        if browser_sel == "bundled":
             browser_sel = "chrome"
-        custom_path = (p.get("executablePath") or "").strip()
-        executable_path = _resolve_browser(browser_sel, custom_path)
+        executable_path = _resolve_browser(browser_sel, params.executable_path.strip())
         logger.info("[Browser] browser=%s executable=%s", browser_sel, executable_path)
-        new_window = bool(p.get("newWindow", True)) and executable_path is not None
-        chrome_profile = (p.get("chromeProfile") or "").strip() or None
-        user_agent = (p.get("userAgent") or "").strip() or None
-        proxy = (p.get("proxy") or "").strip() or None
-        action_delay = int(p.get("actionDelay") or 0)
 
         run_kw = dict(
-            headed=headed, user_agent=user_agent, proxy=proxy,
-            executable_path=executable_path, auto_connect=auto_connect,
-            chrome_profile=chrome_profile, new_window=new_window,
+            headed=params.headed,
+            user_agent=params.user_agent.strip() or None,
+            proxy=params.proxy.strip() or None,
+            executable_path=executable_path,
+            auto_connect=params.auto_connect,
+            chrome_profile=params.chrome_profile.strip() or None,
+            new_window=params.new_window and executable_path is not None,
         )
 
-        if action_delay > 0:
-            await svc.run(["wait", str(action_delay)], session, timeout, **run_kw)
+        if params.action_delay > 0:
+            await svc.run(["wait", str(params.action_delay)], session, timeout, **run_kw)
 
+        p = params.model_dump()
         if op == "batch":
-            cmds = json.loads(p.get("commands", "[]"))
+            cmds = json.loads(params.commands or "[]")
             data = await svc.run(
                 ["batch", "--json"], session, timeout,
                 stdin=json.dumps(cmds).encode(),

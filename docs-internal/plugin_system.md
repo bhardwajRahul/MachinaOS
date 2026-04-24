@@ -128,6 +128,55 @@ class SpecializedAgentBase(ActionNode, abstract=True):
 | `retry_policy` | `RetryPolicy` dataclass (mirrors `temporalio.common.RetryPolicy`). |
 | `start_to_close_timeout` / `heartbeat_timeout` | Per-node Temporal knobs. |
 
+### Params schema conventions
+
+**snake_case everywhere.** Field names are the JSON Schema keys, the UI
+parameter keys, and the `displayOptions.show` reference keys. Keeping
+a single naming convention makes cross-references trivially correct.
+
+- No `alias="camelName"` on `Field(...)`.
+- No `populate_by_name=True` in `model_config`.
+- No `model_dump(by_alias=True)` in handlers — call `model_dump()` or
+  read typed attributes off the validated `params` object.
+- `displayOptions.show["driver_field"]` must match a Pydantic field
+  name in the same `Params` class. The frontend's visibility evaluator
+  looks up that exact key.
+
+Example:
+
+```python
+class ExampleParams(BaseModel):
+    operation: Literal["send", "search"] = Field(default="send")
+    recipient: str = Field(
+        default="",
+        description="Email recipient",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["send"]}}},
+    )
+    query: str = Field(
+        default="",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["search"]}}},
+    )
+    model_config = ConfigDict(extra="ignore")
+```
+
+Option labels (the `name` shown in dropdowns) ride on `json_schema_extra`:
+
+```python
+operation: Literal["send", "search"] = Field(
+    default="send",
+    json_schema_extra={"options": [
+        {"name": "Send", "value": "send"},
+        {"name": "Search", "value": "search"},
+    ]},
+)
+```
+
+If a user-facing input needs multi-line, a password mask, or a code
+editor, set those via `json_schema_extra` keys the adapter lifts into
+`typeOptions`: `rows`, `password`, `editor`, `editorLanguage`,
+`dynamicOptions`, `loadOptionsMethod`, `numberStepSize`, `widget`,
+`accept`.
+
 ### Operations (`@Operation`)
 
 A multi-op node declares multiple methods, each decorated with
@@ -237,7 +286,7 @@ from ._inline import prepare_agent_call
 
 kwargs = await prepare_agent_call(
     node_id=ctx.node_id, node_type=self.type,
-    parameters=params.model_dump(by_alias=True),
+    parameters=params.model_dump(),
     context=ctx.raw, database=database,
     log_prefix=f"[{self.type}]",
 )

@@ -15,11 +15,11 @@ class ProcessManagerParams(BaseModel):
     command: str = Field(default="")
     cwd: str = Field(default="")
     env: Dict[str, str] = Field(default_factory=dict)
-    input_text: str = Field(default="", alias="inputText")
+    input_text: str = Field(default="")
     stream: Literal["stdout", "stderr"] = "stdout"
     tail: int = Field(default=100, ge=1, le=10000)
 
-    model_config = ConfigDict(populate_by_name=True, extra="allow")
+    model_config = ConfigDict(extra="allow")
 
 
 class ProcessManagerOutput(BaseModel):

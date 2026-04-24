@@ -38,10 +38,24 @@ def _parse_file_sync(path: Path, parser: str) -> str:
 
 
 class DocumentParserParams(BaseModel):
-    file_path: str = Field(default="", alias="filePath")
-    parser: Literal["pypdf", "marker", "unstructured", "beautifulsoup"] = "pypdf"
+    parser: Literal["pypdf", "marker", "unstructured", "beautifulsoup"] = Field(
+        default="pypdf",
+        description="Parser backend. pypdf is fast; marker uses GPU OCR; unstructured handles multi-format; beautifulsoup for HTML.",
+    )
+    file_path: str = Field(
+        default="",
+        description="Single file path (takes precedence over input_dir).",
+    )
+    input_dir: str = Field(
+        default="",
+        description="Directory to scan for files matching file_pattern.",
+    )
+    file_pattern: str = Field(
+        default="*.pdf",
+        description="Glob pattern for input_dir scan (e.g. *.pdf, *.html).",
+    )
 
-    model_config = ConfigDict(populate_by_name=True, extra="allow")
+    model_config = ConfigDict(extra="ignore")
 
 
 class DocumentParserOutput(BaseModel):
@@ -73,20 +87,14 @@ class DocumentParserNode(ActionNode):
 
     @Operation("parse")
     async def parse(self, ctx: NodeContext, params: DocumentParserParams) -> DocumentParserOutput:
-        p = params.model_dump(by_alias=True)
-        files = p.get('files', [])
-        input_dir = p.get('inputDir', '')
-        parser = p.get('parser', 'pypdf')
-        file_pattern = p.get('filePattern', '*.pdf')
-        explicit_path = p.get('filePath') or p.get('file_path')
+        parser = params.parser
+        explicit_path = params.file_path
+        input_dir = params.input_dir
+        file_pattern = params.file_pattern or '*.pdf'
 
         paths: list[Path] = []
         if explicit_path:
             paths.append(Path(explicit_path))
-        for f in files:
-            path = f.get('path', '') if isinstance(f, dict) else str(f)
-            if path:
-                paths.append(Path(path))
         if input_dir and Path(input_dir).exists():
             paths.extend(Path(input_dir).glob(file_pattern))
 

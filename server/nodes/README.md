@@ -30,10 +30,11 @@ class AcmeCredential(ApiKeyCredential):
 
 
 # 2. Params — user-visible config (UI + LLM tool schema).
+#    snake_case throughout — field names = JSON Schema keys = UI param keys.
 class AcmeParams(BaseModel):
     query: str = Field(..., min_length=1)
-    max_results: int = Field(default=10, ge=1, le=100, alias="maxResults")
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+    max_results: int = Field(default=10, ge=1, le=100)
+    model_config = ConfigDict(extra="ignore")
 
 
 # 3. Output — runtime result shape.
@@ -221,8 +222,12 @@ Run: `pytest server/tests/test_plugin_contract.py -q`.
 - **Pydantic `extra="ignore"` is the default for Params** — extra fields
   silently drop. Use `extra="allow"` if the node passes unknown fields
   through to a handler.
-- **Alias camelCase fields** via `Field(..., alias="camelName")` +
-  `ConfigDict(populate_by_name=True)`. Frontend sends camelCase.
+- **snake_case everywhere.** Field names, JSON Schema keys,
+  `displayOptions.show` keys, and handler dict access all use snake_case.
+  No `alias="camelName"`, no `populate_by_name=True`, no
+  `model_dump(by_alias=True)`. `displayOptions.show["driver_field"]` must
+  match a property name in the same `Params` class — the frontend's
+  visibility evaluator looks up that exact key.
 - **LLM tool schemas must be flat.** If your Params uses nested
   Pydantic models or `Union`, the LLM-schema emission will add `$defs`
   and fail the invariant. Keep tool-facing Params flat; move nested

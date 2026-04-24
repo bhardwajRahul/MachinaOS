@@ -31,15 +31,33 @@ class WebhookTriggerParams(BaseModel):
         default="",
         description="URL path fragment — becomes /webhook/{path}",
     )
-    method: Literal["GET", "POST", "PUT", "DELETE", "ALL"] = "POST"
-    response_mode: Literal["immediate", "responseNode"] = Field(
-        default="immediate", alias="responseMode",
+    method: Literal["GET", "POST", "PUT", "DELETE", "ALL"] = Field(
+        default="POST",
+        description="HTTP method to accept. ALL accepts any method.",
     )
-    authentication: Literal["none", "header"] = "none"
-    header_name: str = Field(default="X-API-Key", alias="headerName")
-    header_value: str = Field(default="", alias="headerValue")
+    response_mode: Literal["immediate", "responseNode"] = Field(
+        default="immediate",
+        description="immediate: return 200 OK right away. responseNode: wait for a webhookResponse node downstream.",
+    )
+    authentication: Literal["none", "header"] = Field(
+        default="none",
+        description="none: no auth. header: require a matching header on inbound requests.",
+    )
+    header_name: str = Field(
+        default="X-API-Key",
+        description="Header name to check when authentication=header.",
+        json_schema_extra={"displayOptions": {"show": {"authentication": ["header"]}}},
+    )
+    header_value: str = Field(
+        default="",
+        description="Expected header value when authentication=header.",
+        json_schema_extra={
+            "widget": "password",
+            "displayOptions": {"show": {"authentication": ["header"]}},
+        },
+    )
 
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+    model_config = ConfigDict(extra="ignore")
 
 
 class WebhookTriggerOutput(BaseModel):
@@ -48,9 +66,9 @@ class WebhookTriggerOutput(BaseModel):
     headers: Optional[dict] = None
     query: Optional[dict] = None
     body: Optional[str] = None
-    json_: Optional[dict] = Field(default=None, alias="json")
+    json_: Optional[dict] = Field(default=None)
 
-    model_config = ConfigDict(populate_by_name=True, extra="allow")
+    model_config = ConfigDict(extra="allow")
 
 
 class WebhookTriggerNode(TriggerNode):

@@ -487,8 +487,8 @@ class TestClaudeCodeAgent:
                 {
                     "prompt": "write a hello world script",
                     "model": "claude-sonnet-4-6",
-                    "maxTurns": 5,
-                    "maxBudgetUsd": 2.0,
+                    "max_turns": 5,
+                    "max_budget_usd": 2.0,
                 },
             )
 
@@ -517,7 +517,7 @@ class TestClaudeCodeAgent:
         ):
             await harness.execute(
                 "claude_code_agent",
-                {"prompt": "x", "maxBudgetUsd": 7.5},
+                {"prompt": "x", "max_budget_usd": 7.5},
             )
 
         call = service.execute.await_args

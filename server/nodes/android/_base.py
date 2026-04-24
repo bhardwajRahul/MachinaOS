@@ -43,7 +43,14 @@ SERVICE_ID_MAP: Dict[str, str] = {
 
 
 class AndroidServiceParams(BaseModel):
-    action: str = Field(default="status", description="Service action to invoke")
+    action: str = Field(
+        default="status",
+        description="Service action to invoke (populated dynamically from backend)",
+        json_schema_extra={
+            "dynamicOptions": True,
+            "loadOptionsMethod": "getAndroidServiceActions",
+        },
+    )
     parameters: Dict[str, Any] = Field(default_factory=dict)
 
     model_config = ConfigDict(extra="allow")

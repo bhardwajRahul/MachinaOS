@@ -716,11 +716,21 @@ class MasterSkillParams(BaseNodeParams):
 
 
 class TelegramReceiveParams(BaseNodeParams):
-    """Parameters for Telegram receive trigger node."""
+    """Parameters for Telegram receive trigger node.
+
+    Field names match main-branch baseline: ``contentTypeFilter`` /
+    ``senderFilter`` / ``ignoreBots`` are camelCase in the UI, while
+    ``chat_id`` / ``from_user`` / ``keywords`` are snake_case. The Pydantic
+    JSON Schema output (alias when set, field name otherwise) MUST be
+    what ``displayOptions.show`` references — otherwise the frontend's
+    ``shouldShowParameter`` lookup never resolves and conditional fields
+    never appear.
+    """
     type: Literal["telegramReceive"]
     content_type_filter: Literal["all", "text", "photo", "video", "audio", "voice", "document", "sticker", "location", "contact", "poll"] = Field(
         default="all",
         alias="contentTypeFilter",
+        description="Filter by message content type",
         json_schema_extra={"options": [
             {"name": "All Types", "value": "all"},
             {"name": "Text Only", "value": "text"},
@@ -738,6 +748,7 @@ class TelegramReceiveParams(BaseNodeParams):
     sender_filter: Literal["all", "self", "private", "group", "supergroup", "channel", "specific_chat", "specific_user", "keywords"] = Field(
         default="all",
         alias="senderFilter",
+        description="Filter which messages trigger the workflow",
         json_schema_extra={"options": [
             {"name": "All Messages", "value": "all"},
             {"name": "From Self (Bot Owner)", "value": "self"},
@@ -750,21 +761,34 @@ class TelegramReceiveParams(BaseNodeParams):
             {"name": "Contains Keywords", "value": "keywords"},
         ]},
     )
+    # chat_id / from_user / keywords: baseline uses snake_case UI names,
+    # so Pydantic field = snake_case with NO alias. JSON Schema key ==
+    # field name, displayOptions.show references the camelCase aliases of
+    # the driver fields (senderFilter) since those ARE aliased.
     chat_id: str = Field(
         default="",
-        alias="chatId",
-        json_schema_extra={"displayOptions": {"show": {"sender_filter": ["specific_chat"]}}},
+        description="Only trigger for messages from this specific chat ID",
+        json_schema_extra={"displayOptions": {"show": {"senderFilter": ["specific_chat"]}}},
     )
     from_user: str = Field(
         default="",
-        alias="fromUser",
-        json_schema_extra={"displayOptions": {"show": {"sender_filter": ["specific_user"]}}},
+        description="Only trigger for messages from this specific user ID",
+        json_schema_extra={"displayOptions": {"show": {"senderFilter": ["specific_user"]}}},
     )
     keywords: str = Field(
         default="",
-        json_schema_extra={"displayOptions": {"show": {"sender_filter": ["keywords"]}}},
+        description="Comma-separated keywords to trigger on (case-insensitive)",
+        json_schema_extra={"displayOptions": {"show": {"senderFilter": ["keywords"]}}},
     )
-    ignore_bots: bool = Field(default=True, alias="ignoreBots")
+    ignore_bots: bool = Field(
+        default=True,
+        alias="ignoreBots",
+        description="Do not trigger on messages from other bots",
+        json_schema_extra={"displayOptions": {"show": {"senderFilter": [
+            "all", "private", "group", "supergroup", "channel",
+            "specific_chat", "specific_user", "keywords",
+        ]}}},
+    )
 
 
 class TwitterReceiveParams(BaseNodeParams):
@@ -795,53 +819,123 @@ class TwitterReceiveParams(BaseNodeParams):
 
 
 class TelegramSendParams(BaseNodeParams):
-    """Parameters for Telegram send message node."""
+    """Parameters for Telegram send message node.
+
+    Matches main-branch baseline field names (all snake_case, no aliases).
+    ``displayOptions.show`` keys reference the JSON Schema output keys —
+    which, with no aliases, ARE the field names.
+    """
     type: Literal["telegramSend"]
-    recipient_type: Literal["self", "chat_id"] = Field(default="self", alias="recipientType")
+
+    # ===== RECIPIENT =====
+    recipient_type: Literal["self", "user", "group"] = Field(
+        default="self",
+        description="Send to bot owner (self), specific user, or group",
+        json_schema_extra={"options": [
+            {"name": "Self (Bot Owner)", "value": "self"},
+            {"name": "User / Chat ID", "value": "user"},
+            {"name": "Group", "value": "group"},
+        ]},
+    )
     chat_id: str = Field(
         default="",
-        alias="chatId",
-        json_schema_extra={"displayOptions": {"show": {"recipient_type": ["chat_id"]}}},
+        description="Telegram chat ID (numeric) or @username",
+        json_schema_extra={"displayOptions": {"show": {"recipient_type": ["user", "group"]}}},
     )
-    message_type: Literal["text", "photo", "document", "location", "contact"] = Field(default="text", alias="messageType")
+
+    # ===== MESSAGE TYPE =====
+    message_type: Literal["text", "photo", "document", "location", "contact"] = Field(
+        default="text",
+        description="Type of message to send",
+        json_schema_extra={"options": [
+            {"name": "Text", "value": "text"},
+            {"name": "Photo", "value": "photo"},
+            {"name": "Document", "value": "document"},
+            {"name": "Location", "value": "location"},
+            {"name": "Contact", "value": "contact"},
+        ]},
+    )
+
+    # ===== TEXT =====
     text: str = Field(
         default="",
-        json_schema_extra={"displayOptions": {"show": {"message_type": ["text"]}}},
+        description="Text message content",
+        json_schema_extra={
+            "rows": 4,
+            "displayOptions": {"show": {"message_type": ["text"]}},
+        },
     )
+
+    # ===== MEDIA (photo / document) =====
     media_url: str = Field(
         default="",
-        alias="mediaUrl",
+        description="URL of the media file or file_id from a previous message",
         json_schema_extra={"displayOptions": {"show": {"message_type": ["photo", "document"]}}},
     )
     caption: str = Field(
         default="",
-        json_schema_extra={"displayOptions": {"show": {"message_type": ["photo", "document"]}}},
+        description="Optional caption for media",
+        json_schema_extra={
+            "rows": 2,
+            "displayOptions": {"show": {"message_type": ["photo", "document"]}},
+        },
     )
-    latitude: Optional[float] = Field(
-        default=None,
+
+    # ===== LOCATION =====
+    latitude: float = Field(
+        default=0.0,
+        description="Location latitude (-90 to 90)",
         json_schema_extra={"displayOptions": {"show": {"message_type": ["location"]}}},
     )
-    longitude: Optional[float] = Field(
-        default=None,
+    longitude: float = Field(
+        default=0.0,
+        description="Location longitude (-180 to 180)",
         json_schema_extra={"displayOptions": {"show": {"message_type": ["location"]}}},
     )
-    phone: str = Field(
+
+    # ===== CONTACT =====
+    phone_number: str = Field(
         default="",
+        description="Contact phone number (with country code, e.g. +1234567890)",
         json_schema_extra={"displayOptions": {"show": {"message_type": ["contact"]}}},
     )
     first_name: str = Field(
         default="",
-        alias="firstName",
+        description="Contact first name",
         json_schema_extra={"displayOptions": {"show": {"message_type": ["contact"]}}},
     )
     last_name: str = Field(
         default="",
-        alias="lastName",
+        description="Contact last name (optional)",
         json_schema_extra={"displayOptions": {"show": {"message_type": ["contact"]}}},
     )
-    parse_mode: Literal["Auto", "HTML", "Markdown", "MarkdownV2", "None"] = Field(default="Auto", alias="parseMode")
-    silent: bool = False
-    reply_to_message_id: Optional[int] = Field(default=None, alias="replyToMessageId")
+
+    # ===== OPTIONS =====
+    parse_mode: Literal["Auto", "", "HTML", "Markdown", "MarkdownV2"] = Field(
+        default="Auto",
+        description=(
+            "Auto converts LLM markdown to Telegram HTML. Empty string = "
+            "no parse mode (raw text)."
+        ),
+        json_schema_extra={
+            "options": [
+                {"name": "Auto (Recommended)", "value": "Auto"},
+                {"name": "None", "value": ""},
+                {"name": "HTML", "value": "HTML"},
+                {"name": "Markdown", "value": "Markdown"},
+                {"name": "MarkdownV2", "value": "MarkdownV2"},
+            ],
+            "displayOptions": {"show": {"message_type": ["text", "photo", "document"]}},
+        },
+    )
+    silent: bool = Field(
+        default=False,
+        description="Send message without notification sound",
+    )
+    reply_to_message_id: int = Field(
+        default=0,
+        description="If > 0, sends the message as a reply to this message ID",
+    )
 
 
 class TwitterSendParams(BaseNodeParams):

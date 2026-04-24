@@ -12,11 +12,25 @@ from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
 class EmbeddingGeneratorParams(BaseModel):
     chunks: List[Optional[dict]] = Field(default_factory=list)
-    provider: Literal["huggingface", "openai", "ollama"] = "huggingface"
-    model: str = Field(default="BAAI/bge-small-en-v1.5")
-    api_key: str = Field(default="", alias="apiKey")
+    provider: Literal["huggingface", "openai", "ollama"] = Field(
+        default="huggingface",
+        description="Embedding provider. HuggingFace runs locally; OpenAI needs API key; Ollama connects to local server.",
+    )
+    model: str = Field(
+        default="BAAI/bge-small-en-v1.5",
+        description="Model name (provider-specific). HuggingFace: BAAI/bge-*. OpenAI: text-embedding-3-small.",
+    )
+    batch_size: int = Field(
+        default=32, ge=1, le=256,
+        description="Number of texts per embedding batch.",
+    )
+    api_key: str = Field(
+        default="",
+        description="API key (OpenAI only).",
+        json_schema_extra={"displayOptions": {"show": {"provider": ["openai"]}}},
+    )
 
-    model_config = ConfigDict(populate_by_name=True, extra="allow")
+    model_config = ConfigDict(extra="ignore")
 
 
 class EmbeddingGeneratorOutput(BaseModel):
@@ -51,11 +65,10 @@ class EmbeddingGeneratorNode(ActionNode):
 
     @Operation("embed")
     async def embed(self, ctx: NodeContext, params: EmbeddingGeneratorParams) -> EmbeddingGeneratorOutput:
-        p = params.model_dump(by_alias=True)
-        chunks = p.get('chunks', [])
-        provider = p.get('provider', 'huggingface')
-        model = p.get('model', 'BAAI/bge-small-en-v1.5')
-        api_key = p.get('apiKey', '')
+        chunks = params.chunks
+        provider = params.provider
+        model = params.model
+        api_key = params.api_key
 
         if not chunks:
             return EmbeddingGeneratorOutput(

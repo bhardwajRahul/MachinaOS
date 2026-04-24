@@ -11,11 +11,11 @@ from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
 class FileHandlerParams(BaseModel):
     operation: Literal["read", "write", "append", "delete"] = "read"
-    file_path: str = Field(..., alias="filePath")
+    file_path: str = Field(...)
     content: str = Field(default="")
     encoding: str = Field(default="utf-8")
 
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+    model_config = ConfigDict(extra="ignore")
 
 
 class FileHandlerOutput(BaseModel):
@@ -51,7 +51,7 @@ class FileHandlerNode(ActionNode):
 
         text_service = container.text_service()
         response = await text_service.execute_file_handler(
-            ctx.node_id, params.model_dump(by_alias=True),
+            ctx.node_id, params.model_dump(),
         )
         if response.get("success"):
             return response.get("result") or response

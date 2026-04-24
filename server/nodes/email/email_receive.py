@@ -29,10 +29,10 @@ class EmailReceiveParams(BaseModel):
 class EmailReceiveOutput(BaseModel):
     message_id: Optional[str] = None
     subject: Optional[str] = None
-    from_: Optional[str] = Field(default=None, alias="from")
+    from_: Optional[str] = Field(default=None)
     body: Optional[str] = None
 
-    model_config = ConfigDict(populate_by_name=True, extra="allow")
+    model_config = ConfigDict(extra="allow")
 
 
 class EmailReceiveNode(TriggerNode):

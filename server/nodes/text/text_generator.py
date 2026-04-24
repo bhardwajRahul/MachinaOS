@@ -12,10 +12,10 @@ from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 class TextGeneratorParams(BaseModel):
     source: Literal["static", "ai", "file", "api"] = "static"
     text: str = Field(default="", json_schema_extra={"rows": 4})
-    file_path: str = Field(default="", alias="filePath")
-    api_url: str = Field(default="", alias="apiUrl")
+    file_path: str = Field(default="")
+    api_url: str = Field(default="")
 
-    model_config = ConfigDict(populate_by_name=True, extra="allow")
+    model_config = ConfigDict(extra="allow")
 
 
 class TextGeneratorOutput(BaseModel):
@@ -50,7 +50,7 @@ class TextGeneratorNode(ActionNode):
 
         text_service = container.text_service()
         response = await text_service.execute_text_generator(
-            ctx.node_id, params.model_dump(by_alias=True),
+            ctx.node_id, params.model_dump(),
         )
         if response.get("success"):
             return response.get("result") or response

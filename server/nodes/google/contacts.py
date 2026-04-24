@@ -13,29 +13,47 @@ from ._credentials import GoogleCredential
 from ._base import build_google_service, run_sync, track_google_usage
 
 
+_CREATE = {"displayOptions": {"show": {"operation": ["create"]}}}
+_LIST = {"displayOptions": {"show": {"operation": ["list"]}}}
+_SEARCH = {"displayOptions": {"show": {"operation": ["search"]}}}
+_LIST_OR_SEARCH = {"displayOptions": {"show": {"operation": ["list", "search"]}}}
+_GET_UPDATE_DELETE = {"displayOptions": {"show": {"operation": ["get", "update", "delete"]}}}
+_UPDATE = {"displayOptions": {"show": {"operation": ["update"]}}}
+
+
 class ContactsParams(BaseModel):
     operation: Literal["create", "list", "search", "get", "update", "delete"] = "list"
-    resource_name: Optional[str] = Field(default=None, alias="resourceName")
-    first_name: Optional[str] = Field(default=None, alias="firstName")
-    last_name: Optional[str] = Field(default=None, alias="lastName")
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    company: Optional[str] = None
-    job_title: Optional[str] = Field(default=None, alias="jobTitle")
-    notes: Optional[str] = None
-    query: Optional[str] = None
-    page_size: int = Field(default=100, alias="pageSize")
-    page_token: Optional[str] = Field(default=None, alias="pageToken")
-    sort_order: str = Field(default="LAST_MODIFIED_DESCENDING", alias="sortOrder")
+    resource_name: Optional[str] = Field(default=None, json_schema_extra=_GET_UPDATE_DELETE)
 
-    update_first_name: Optional[str] = Field(default=None, alias="updateFirstName")
-    update_last_name: Optional[str] = Field(default=None, alias="updateLastName")
-    update_email: Optional[str] = Field(default=None, alias="updateEmail")
-    update_phone: Optional[str] = Field(default=None, alias="updatePhone")
-    update_company: Optional[str] = Field(default=None, alias="updateCompany")
-    update_job_title: Optional[str] = Field(default=None, alias="updateJobTitle")
+    # Create fields
+    first_name: Optional[str] = Field(default=None, json_schema_extra=_CREATE)
+    last_name: Optional[str] = Field(default=None, json_schema_extra=_CREATE)
+    email: Optional[str] = Field(default=None, json_schema_extra=_CREATE)
+    phone: Optional[str] = Field(default=None, json_schema_extra=_CREATE)
+    company: Optional[str] = Field(default=None, json_schema_extra=_CREATE)
+    job_title: Optional[str] = Field(default=None, json_schema_extra=_CREATE)
+    notes: Optional[str] = Field(default=None, json_schema_extra=_CREATE)
 
-    model_config = ConfigDict(populate_by_name=True, extra="allow")
+    # Search
+    query: Optional[str] = Field(default=None, json_schema_extra=_SEARCH)
+
+    # List + search pagination
+    page_size: int = Field(default=100, ge=1, le=1000, json_schema_extra=_LIST_OR_SEARCH)
+    page_token: Optional[str] = Field(default=None, json_schema_extra=_LIST)
+    sort_order: Literal[
+        "LAST_MODIFIED_ASCENDING", "LAST_MODIFIED_DESCENDING",
+        "FIRST_NAME_ASCENDING", "LAST_NAME_ASCENDING",
+    ] = Field(default="LAST_MODIFIED_DESCENDING", json_schema_extra=_LIST)
+
+    # Update-only
+    update_first_name: Optional[str] = Field(default=None, json_schema_extra=_UPDATE)
+    update_last_name: Optional[str] = Field(default=None, json_schema_extra=_UPDATE)
+    update_email: Optional[str] = Field(default=None, json_schema_extra=_UPDATE)
+    update_phone: Optional[str] = Field(default=None, json_schema_extra=_UPDATE)
+    update_company: Optional[str] = Field(default=None, json_schema_extra=_UPDATE)
+    update_job_title: Optional[str] = Field(default=None, json_schema_extra=_UPDATE)
+
+    model_config = ConfigDict(extra="ignore")
 
 
 class ContactsOutput(BaseModel):
@@ -104,7 +122,7 @@ class ContactsNode(ActionNode):
 
     @Operation("dispatch", cost={"service": "contacts", "action": "op", "count": 1})
     async def dispatch(self, ctx: NodeContext, params: ContactsParams) -> ContactsOutput:
-        svc = await build_google_service("people", "v1", params.model_dump(by_alias=True), ctx.raw)
+        svc = await build_google_service("people", "v1", params.model_dump(), ctx.raw)
         people_svc = svc.people()
         op = params.operation
 

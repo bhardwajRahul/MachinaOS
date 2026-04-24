@@ -88,11 +88,9 @@ def _format_console_output(data: Any, format_type: str) -> str:
 
 class ConsoleParams(BaseModel):
     label: str = ""
-    log_mode: Literal["all", "field", "expression"] = Field(
-        default="all", alias="logMode",
-    )
+    log_mode: Literal["all", "field", "expression"] = Field(default="all")
     field_path: str = Field(
-        default="", alias="fieldPath",
+        default="",
         json_schema_extra={"displayOptions": {"show": {"log_mode": ["field"]}}},
     )
     expression: str = Field(
@@ -101,7 +99,7 @@ class ConsoleParams(BaseModel):
     )
     format: Literal["json", "json_compact", "text", "table"] = "json"
 
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+    model_config = ConfigDict(extra="ignore")
 
 
 class ConsoleOutput(BaseModel):

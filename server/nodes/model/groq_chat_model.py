@@ -8,9 +8,9 @@ from ._credentials import GroqCredential
 
 
 class GroqChatModelParams(ChatModelParams):
-    thinking_enabled: bool = Field(default=False, alias="thinkingEnabled")
+    thinking_enabled: bool = Field(default=False)
     reasoning_format: Optional[Literal["parsed", "hidden"]] = Field(
-        default="parsed", alias="reasoningFormat",
+        default="parsed",
         json_schema_extra={"displayOptions": {"show": {"thinking_enabled": [True]}}},
     )
 

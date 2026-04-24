@@ -17,26 +17,48 @@ from ._credentials import GoogleCredential
 from ._base import build_google_service, run_sync, track_google_usage
 
 
+_UPLOAD = {"displayOptions": {"show": {"operation": ["upload"]}}}
+_DOWNLOAD = {"displayOptions": {"show": {"operation": ["download"]}}}
+_LIST = {"displayOptions": {"show": {"operation": ["list"]}}}
+_SHARE = {"displayOptions": {"show": {"operation": ["share"]}}}
+_DOWNLOAD_OR_SHARE = {"displayOptions": {"show": {"operation": ["download", "share"]}}}
+
+
 class DriveParams(BaseModel):
     operation: Literal["upload", "download", "list", "share"] = "list"
-    file_id: Optional[str] = Field(default=None, alias="fileId")
-    filename: Optional[str] = None
-    file_url: Optional[str] = Field(default=None, alias="fileUrl")
-    file_content: Optional[str] = Field(default=None, alias="fileContent")
-    folder_id: Optional[str] = Field(default=None, alias="folderId")
-    mime_type: str = Field(default="application/octet-stream", alias="mimeType")
-    description: Optional[str] = None
-    output_format: Literal["base64", "url"] = Field(default="base64", alias="outputFormat")
-    query: Optional[str] = None
-    file_types: str = Field(default="all", alias="fileTypes")
-    order_by: str = Field(default="modifiedTime desc", alias="orderBy")
-    max_results: int = Field(default=20, alias="maxResults", ge=1, le=1000)
-    email: Optional[str] = None
-    role: str = "reader"
-    send_notification: bool = Field(default=True, alias="sendNotification")
-    message: Optional[str] = None
 
-    model_config = ConfigDict(populate_by_name=True, extra="allow")
+    file_id: Optional[str] = Field(default=None, json_schema_extra=_DOWNLOAD_OR_SHARE)
+
+    # Upload
+    filename: Optional[str] = Field(default=None, json_schema_extra=_UPLOAD)
+    file_url: Optional[str] = Field(default=None, json_schema_extra=_UPLOAD)
+    file_content: Optional[str] = Field(default=None, json_schema_extra=_UPLOAD)
+    mime_type: str = Field(default="application/octet-stream", json_schema_extra=_UPLOAD)
+    description: Optional[str] = Field(default=None, json_schema_extra=_UPLOAD)
+
+    # List + Upload share folder_id
+    folder_id: Optional[str] = Field(
+        default=None,
+        description="Target folder (upload) or scope folder (list).",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["upload", "list"]}}},
+    )
+
+    # Download
+    output_format: Literal["base64", "url"] = Field(default="base64", json_schema_extra=_DOWNLOAD)
+
+    # List
+    query: Optional[str] = Field(default=None, json_schema_extra=_LIST)
+    file_types: str = Field(default="all", json_schema_extra=_LIST)
+    order_by: str = Field(default="modifiedTime desc", json_schema_extra=_LIST)
+    max_results: int = Field(default=20, ge=1, le=1000, json_schema_extra=_LIST)
+
+    # Share
+    email: Optional[str] = Field(default=None, json_schema_extra=_SHARE)
+    role: Literal["reader", "commenter", "writer"] = Field(default="reader", json_schema_extra=_SHARE)
+    send_notification: bool = Field(default=True, json_schema_extra=_SHARE)
+    message: Optional[str] = Field(default=None, json_schema_extra=_SHARE)
+
+    model_config = ConfigDict(extra="ignore")
 
 
 class DriveOutput(BaseModel):
@@ -93,7 +115,7 @@ class DriveNode(ActionNode):
 
     @Operation("dispatch", cost={"service": "drive", "action": "op", "count": 1})
     async def dispatch(self, ctx: NodeContext, params: DriveParams) -> DriveOutput:
-        svc = await build_google_service("drive", "v3", params.model_dump(by_alias=True), ctx.raw)
+        svc = await build_google_service("drive", "v3", params.model_dump(), ctx.raw)
         files_svc = svc.files()
         op = params.operation
 

@@ -42,15 +42,24 @@ class SerperSearchOutput(BaseModel):
 
 
 class SerperSearchParams(BaseModel):
+    tool_name: str = Field(
+        default="serper_search",
+        description="Override name shown to the LLM when used as a tool.",
+    )
+    tool_description: str = Field(
+        default="Search the web using Google via Serper API. Supports web, news, images, and places search with knowledge graph.",
+        description="Override description shown to the LLM when used as a tool.",
+        json_schema_extra={"rows": 3},
+    )
     query: str = Field(..., min_length=1)
     search_type: Literal["search", "news", "images", "places"] = Field(
-        default="search", alias="searchType",
+        default="search",
     )
-    max_results: int = Field(default=10, alias="maxResults", ge=1, le=100)
+    max_results: int = Field(default=10, ge=1, le=100)
     country: str = Field(default="")
     language: str = Field(default="en")
 
-    model_config = {"populate_by_name": True, "extra": "ignore"}
+    model_config = {"extra": "ignore"}
 
 
 _ENDPOINTS = {

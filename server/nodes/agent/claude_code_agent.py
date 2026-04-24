@@ -26,16 +26,15 @@ logger = get_logger(__name__)
 class ClaudeCodeAgentParams(SpecializedAgentParams):
     """Adds CLI-specific flags the handler body reads from payload."""
 
-    max_turns: int = Field(default=10, alias="maxTurns", ge=1)
-    max_budget_usd: float = Field(default=5.0, alias="maxBudgetUsd", ge=0.0)
-    system_prompt: Optional[str] = Field(default=None, alias="systemPrompt")
-    working_directory: Optional[str] = Field(default=None, alias="workingDirectory")
+    max_turns: int = Field(default=10, ge=1)
+    max_budget_usd: float = Field(default=5.0, ge=0.0)
+    system_prompt: Optional[str] = Field(default=None)
+    working_directory: Optional[str] = Field(default=None)
     allowed_tools: str = Field(
         default="Read,Edit,Bash,Glob,Grep,Write",
-        alias="allowedTools",
-    )
+        )
 
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+    model_config = ConfigDict(extra="ignore")
 
 
 class ClaudeCodeAgentNode(ActionNode):
@@ -65,7 +64,7 @@ class ClaudeCodeAgentNode(ActionNode):
         broadcaster = get_status_broadcaster()
         workflow_id = ctx.workflow_id
         node_id = ctx.node_id
-        payload = params.model_dump(by_alias=True)
+        payload = params.model_dump()
 
         await broadcaster.update_node_status(
             node_id, "executing",
@@ -93,8 +92,8 @@ class ClaudeCodeAgentNode(ActionNode):
         _, skill_data, _, _, _ = await collect_agent_connections(node_id, ctx.raw, database)
 
         system_parts = []
-        if payload.get("systemPrompt"):
-            system_parts.append(payload["systemPrompt"])
+        if payload.get("system_prompt"):
+            system_parts.append(payload["system_prompt"])
         for skill in skill_data:
             instr = skill.get("parameters", {}).get("instructions", "")
             if instr:
@@ -112,10 +111,10 @@ class ClaudeCodeAgentNode(ActionNode):
             prompt=prompt,
             node_id=node_id,
             model=model,
-            cwd=payload.get("workingDirectory") or None,
-            allowed_tools=payload.get("allowedTools", "Read,Edit,Bash,Glob,Grep,Write"),
-            max_turns=int(payload.get("maxTurns", 10)),
-            max_budget_usd=float(payload.get("maxBudgetUsd", 5.0)),
+            cwd=payload.get("working_directory") or None,
+            allowed_tools=payload.get("allowed_tools", "Read,Edit,Bash,Glob,Grep,Write"),
+            max_turns=int(payload.get("max_turns", 10)),
+            max_budget_usd=float(payload.get("max_budget_usd", 5.0)),
             system_prompt="\n\n".join(system_parts) if system_parts else None,
         )
 

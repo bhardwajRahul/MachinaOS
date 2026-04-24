@@ -24,7 +24,12 @@ from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 class ChatModelParams(BaseModel):
     """Shared params surface — providers override fields where their
     capabilities differ (e.g. fixed temperature for o-series, no
-    thinking for openrouter passthrough)."""
+    thinking for openrouter passthrough).
+
+    Snake_case field names throughout; JSON Schema keys match field
+    names exactly. ``displayOptions.show`` references resolve because
+    no alias/field-name divergence can occur.
+    """
 
     prompt: str = Field(
         default="",
@@ -38,31 +43,25 @@ class ChatModelParams(BaseModel):
         default=0.7, ge=0.0, le=2.0,
         json_schema_extra={"numberStepSize": 0.1},
     )
-    max_tokens: Optional[int] = Field(default=1000, alias="maxTokens", ge=1, le=200000)
+    max_tokens: Optional[int] = Field(default=1000, ge=1, le=200000)
     system_prompt: Optional[str] = Field(
-        default="", alias="systemMessage",
+        default="",
         json_schema_extra={"rows": 3, "placeholder": "You are a helpful assistant."},
     )
     api_key: Optional[str] = Field(
-        default=None, alias="apiKey",
+        default=None,
         json_schema_extra={"password": True},
     )
     top_p: Optional[float] = Field(
-        default=1.0, alias="topP", ge=0.0, le=1.0,
+        default=1.0, ge=0.0, le=1.0,
         json_schema_extra={"numberStepSize": 0.1},
     )
-    thinking_enabled: bool = Field(default=False, alias="thinkingEnabled")
-    thinking_budget: Optional[int] = Field(
-        default=None, alias="thinkingBudget", ge=1,
-    )
-    reasoning_effort: Optional[Literal["low", "medium", "high"]] = Field(
-        default=None, alias="reasoningEffort",
-    )
-    reasoning_format: Optional[Literal["parsed", "hidden"]] = Field(
-        default=None, alias="reasoningFormat",
-    )
+    thinking_enabled: bool = Field(default=False)
+    thinking_budget: Optional[int] = Field(default=None, ge=1)
+    reasoning_effort: Optional[Literal["low", "medium", "high"]] = Field(default=None)
+    reasoning_format: Optional[Literal["parsed", "hidden"]] = Field(default=None)
 
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+    model_config = ConfigDict(extra="ignore")
 
 
 class ChatModelOutput(BaseModel):
@@ -97,7 +96,7 @@ class ChatModelBase(ActionNode, abstract=True):
 
         ai_service = container.ai_service()
         response = await ai_service.execute_chat(
-            ctx.node_id, self.type, params.model_dump(by_alias=True),
+            ctx.node_id, self.type, params.model_dump(),
         )
         if response.get("success"):
             return response.get("result") or response

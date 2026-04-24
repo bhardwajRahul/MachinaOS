@@ -10,11 +10,11 @@ from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
 
 class TeamMonitorParams(BaseModel):
-    team_id: str = Field(default="", alias="teamId")
-    auto_refresh: bool = Field(default=True, alias="autoRefresh")
-    max_history_items: int = Field(default=50, alias="maxHistoryItems", ge=1)
+    team_id: str = Field(default="")
+    auto_refresh: bool = Field(default=True)
+    max_history_items: int = Field(default=50, ge=1)
 
-    model_config = ConfigDict(populate_by_name=True, extra="allow")
+    model_config = ConfigDict(extra="allow")
 
 
 class TeamMonitorOutput(BaseModel):

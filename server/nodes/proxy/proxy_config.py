@@ -20,29 +20,114 @@ from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 logger = get_logger(__name__)
 
 
+_PROVIDER_OPS = ["add_provider", "update_provider", "remove_provider", "set_credentials", "test_provider"]
+_PROVIDER_EDIT_OPS = ["add_provider", "update_provider"]
+_CREDENTIAL_OPS = ["set_credentials"]
+_ROUTING_EDIT_OPS = ["add_routing_rule"]
+_ROUTING_REMOVE_OPS = ["remove_routing_rule"]
+
+
 class ProxyConfigParams(BaseModel):
     operation: Literal[
         "list_providers", "add_provider", "update_provider", "remove_provider",
         "set_credentials", "test_provider", "get_stats",
         "add_routing_rule", "list_routing_rules", "remove_routing_rule",
-    ] = "list_providers"
-    name: str = Field(default="")
-    provider_name: str = Field(default="", alias="providerName")
-    gateway_host: str = Field(default="", alias="gateway_host")
-    gateway_port: int = Field(default=0, alias="gateway_port")
-    url_template: Any = Field(default="{}", alias="url_template")
-    cost_per_gb: float = Field(default=0.0, alias="cost_per_gb")
-    enabled: Optional[bool] = None
-    priority: int = Field(default=50)
-    username: str = Field(default="")
-    password: str = Field(default="")
-    domain_pattern: str = Field(default="", alias="domain_pattern")
-    preferred_providers: Any = Field(default="[]", alias="preferred_providers")
-    required_country: str = Field(default="", alias="required_country")
-    session_type: str = Field(default="rotating", alias="session_type")
-    rule_id: Optional[int] = None
+    ] = Field(
+        default="list_providers",
+        description="Proxy management operation. list_providers / get_stats / list_routing_rules need no extra params.",
+    )
 
-    model_config = ConfigDict(populate_by_name=True, extra="allow")
+    # Provider identity (all provider-scoped ops)
+    name: str = Field(
+        default="",
+        description="Provider name (unique ID).",
+        json_schema_extra={"displayOptions": {"show": {"operation": _PROVIDER_OPS}}},
+    )
+
+    # Provider definition (add/update only)
+    gateway_host: str = Field(
+        default="",
+        description="Proxy gateway hostname.",
+        json_schema_extra={"displayOptions": {"show": {"operation": _PROVIDER_EDIT_OPS}}},
+    )
+    gateway_port: int = Field(
+        default=0,
+        description="Proxy gateway port.",
+        json_schema_extra={"displayOptions": {"show": {"operation": _PROVIDER_EDIT_OPS}}},
+    )
+    url_template: Any = Field(
+        default="{}",
+        description="JSON template for proxy URL formatting (e.g. {\"username\": \"{user}-country-{country}\"}).",
+        json_schema_extra={
+            "rows": 4,
+            "displayOptions": {"show": {"operation": _PROVIDER_EDIT_OPS}},
+        },
+    )
+    cost_per_gb: float = Field(
+        default=0.0,
+        description="Cost in USD per GB of traffic (for ranking).",
+        json_schema_extra={"displayOptions": {"show": {"operation": _PROVIDER_EDIT_OPS}}},
+    )
+    enabled: Optional[bool] = Field(
+        default=None,
+        description="Whether the provider is active.",
+        json_schema_extra={"displayOptions": {"show": {"operation": _PROVIDER_EDIT_OPS}}},
+    )
+    priority: int = Field(
+        default=50,
+        ge=0, le=100,
+        description="Selection priority (higher ranks first).",
+        json_schema_extra={"displayOptions": {"show": {"operation": _PROVIDER_EDIT_OPS}}},
+    )
+
+    # Credentials (set_credentials only)
+    username: str = Field(
+        default="",
+        description="Proxy account username.",
+        json_schema_extra={"displayOptions": {"show": {"operation": _CREDENTIAL_OPS}}},
+    )
+    password: str = Field(
+        default="",
+        description="Proxy account password.",
+        json_schema_extra={
+            "widget": "password",
+            "displayOptions": {"show": {"operation": _CREDENTIAL_OPS}},
+        },
+    )
+
+    # Routing rule definition (add_routing_rule)
+    domain_pattern: str = Field(
+        default="",
+        description="Domain glob pattern (e.g. *.example.com).",
+        json_schema_extra={"displayOptions": {"show": {"operation": _ROUTING_EDIT_OPS}}},
+    )
+    preferred_providers: Any = Field(
+        default="[]",
+        description="JSON array of preferred provider names.",
+        json_schema_extra={
+            "rows": 2,
+            "displayOptions": {"show": {"operation": _ROUTING_EDIT_OPS}},
+        },
+    )
+    required_country: str = Field(
+        default="",
+        description="ISO country code required for this route.",
+        json_schema_extra={"displayOptions": {"show": {"operation": _ROUTING_EDIT_OPS}}},
+    )
+    session_type: Literal["rotating", "sticky"] = Field(
+        default="rotating",
+        description="Rotating rotates IPs each request; sticky holds one IP per session.",
+        json_schema_extra={"displayOptions": {"show": {"operation": _ROUTING_EDIT_OPS}}},
+    )
+
+    # Routing rule removal (remove_routing_rule)
+    rule_id: Optional[int] = Field(
+        default=None,
+        description="Routing rule ID to remove.",
+        json_schema_extra={"displayOptions": {"show": {"operation": _ROUTING_REMOVE_OPS}}},
+    )
+
+    model_config = ConfigDict(extra="ignore")
 
 
 class ProxyConfigOutput(BaseModel):
@@ -79,7 +164,7 @@ async def _list_routing_rules(proxy_svc) -> Dict[str, Any]:
 async def _add_provider(p: Dict[str, Any], proxy_svc) -> Dict[str, Any]:
     from core.container import container
 
-    name = p.get("name") or p.get("providerName")
+    name = p.get("name", "")
     if not name:
         return {"success": False, "error": "Provider name is required"}
 
@@ -109,7 +194,7 @@ async def _add_provider(p: Dict[str, Any], proxy_svc) -> Dict[str, Any]:
 async def _update_provider(p: Dict[str, Any], proxy_svc) -> Dict[str, Any]:
     from core.container import container
 
-    name = p.get("name") or p.get("providerName")
+    name = p.get("name", "")
     if not name:
         return {"success": False, "error": "Provider name is required"}
     db = container.database()
@@ -142,7 +227,7 @@ async def _update_provider(p: Dict[str, Any], proxy_svc) -> Dict[str, Any]:
 async def _remove_provider(p: Dict[str, Any], proxy_svc) -> Dict[str, Any]:
     from core.container import container
 
-    name = p.get("name") or p.get("providerName")
+    name = p.get("name", "")
     if not name:
         return {"success": False, "error": "Provider name is required"}
     db = container.database()
@@ -155,7 +240,7 @@ async def _remove_provider(p: Dict[str, Any], proxy_svc) -> Dict[str, Any]:
 async def _set_credentials(p: Dict[str, Any], proxy_svc) -> Dict[str, Any]:
     from core.container import container
 
-    name = p.get("name") or p.get("providerName")
+    name = p.get("name", "")
     if not name:
         return {"success": False, "error": "Provider name is required"}
     username, password = p.get("username", ""), p.get("password", "")
@@ -171,7 +256,7 @@ async def _set_credentials(p: Dict[str, Any], proxy_svc) -> Dict[str, Any]:
 
 
 async def _test_provider(p: Dict[str, Any], proxy_svc) -> Dict[str, Any]:
-    name = p.get("name") or p.get("providerName")
+    name = p.get("name", "")
     if not name:
         return {"success": False, "error": "Provider name is required"}
     if not proxy_svc:
@@ -299,7 +384,7 @@ class ProxyConfigNode(ActionNode):
 
     @Operation("dispatch")
     async def dispatch(self, ctx: NodeContext, params: ProxyConfigParams) -> Any:
-        result = await execute_proxy_config(params.model_dump(by_alias=True))
+        result = await execute_proxy_config(params.model_dump())
         if not result.get("success"):
             raise RuntimeError(result.get("error") or "Proxy config failed")
         return result

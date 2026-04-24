@@ -10,11 +10,11 @@ from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
 
 class FileReadParams(BaseModel):
-    file_path: str = Field(..., alias="filePath")
+    file_path: str = Field(...)
     offset: int = Field(default=0, ge=0)
     limit: int = Field(default=2000, ge=1, le=10000)
 
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+    model_config = ConfigDict(extra="ignore")
 
 
 class FileReadOutput(BaseModel):
@@ -52,7 +52,7 @@ class FileReadNode(ActionNode):
 
         if not params.file_path:
             raise RuntimeError("file_path is required")
-        backend = get_backend(params.model_dump(by_alias=True), ctx.raw)
+        backend = get_backend(params.model_dump(), ctx.raw)
         content = await asyncio.to_thread(
             backend.read, params.file_path,
             offset=params.offset, limit=params.limit,

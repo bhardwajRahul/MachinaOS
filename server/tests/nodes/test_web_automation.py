@@ -109,10 +109,10 @@ class TestBrowser:
                 "browser",
                 {
                     "operation": "screenshot",
-                    "fullPage": True,
+                    "full_page": True,
                     "annotate": True,
-                    "screenshotFormat": "jpeg",
-                    "screenshotQuality": 80,
+                    "screenshot_format": "jpeg",
+                    "screenshot_quality": 80,
                 },
             )
 
@@ -212,7 +212,7 @@ class TestCrawleeScraper:
                 "crawleeScraper",
                 {
                     "url": "https://example.com",
-                    "crawlerType": "beautifulsoup",
+                    "crawler_type": "beautifulsoup",
                     "mode": "single",
                 },
             )
@@ -233,7 +233,7 @@ class TestCrawleeScraper:
 
     async def test_missing_url_returns_validation_error(self, harness):
         result = await harness.execute(
-            "crawleeScraper", {"url": "", "crawlerType": "beautifulsoup"}
+            "crawleeScraper", {"url": "", "crawler_type": "beautifulsoup"}
         )
 
         harness.assert_envelope(result, success=False)
@@ -243,7 +243,7 @@ class TestCrawleeScraper:
         # Handler does not attempt any import for unknown crawler types.
         result = await harness.execute(
             "crawleeScraper",
-            {"url": "https://x.test", "crawlerType": "teleportron"},
+            {"url": "https://x.test", "crawler_type": "teleportron"},
         )
 
         harness.assert_envelope(result, success=False)
@@ -259,7 +259,7 @@ class TestCrawleeScraper:
         ):
             result = await harness.execute(
                 "crawleeScraper",
-                {"url": "https://x.test", "crawlerType": "beautifulsoup"},
+                {"url": "https://x.test", "crawler_type": "beautifulsoup"},
             )
 
         harness.assert_envelope(result, success=False)
@@ -280,7 +280,7 @@ class TestCrawleeScraper:
         ):
             result = await harness.execute(
                 "crawleeScraper",
-                {"url": "https://x.test", "crawlerType": "beautifulsoup"},
+                {"url": "https://x.test", "crawler_type": "beautifulsoup"},
             )
 
         harness.assert_envelope(result, success=False)
@@ -336,9 +336,9 @@ class TestApifyActor:
             result = await harness.execute(
                 "apifyActor",
                 {
-                    "actorId": "apify/instagram-scraper",
-                    "instagramUrls": "https://instagram.com/a, https://instagram.com/b",
-                    "maxResults": 50,
+                    "actor_id": "apify/instagram-scraper",
+                    "instagram_urls": "https://instagram.com/a, https://instagram.com/b",
+                    "max_results": 50,
                 },
             )
 
@@ -382,7 +382,7 @@ class TestApifyActor:
         with patched_container(auth_api_keys={}):
             result = await harness.execute(
                 "apifyActor",
-                {"actorId": "apify/instagram-scraper"},
+                {"actor_id": "apify/instagram-scraper"},
             )
 
         harness.assert_envelope(result, success=False)
@@ -394,10 +394,10 @@ class TestApifyActor:
         with patched_container(auth_api_keys={"apify": "tk"}), patch(
             "apify_client.ApifyClientAsync", return_value=fake_client
         ):
-            result = await harness.execute("apifyActor", {"actorId": ""})
+            result = await harness.execute("apifyActor", {"actor_id": ""})
 
         harness.assert_envelope(result, success=False)
-        assert "actor id is required" in result["error"].lower()
+        assert "invalid parameters" in result["error"].lower()
 
     async def test_failed_run_status_returns_error_envelope(self, harness):
         run_info = {
@@ -412,7 +412,7 @@ class TestApifyActor:
             "apify_client.ApifyClientAsync", return_value=fake_client
         ):
             result = await harness.execute(
-                "apifyActor", {"actorId": "apify/some-actor"}
+                "apifyActor", {"actor_id": "apify/instagram-scraper"}
             )
 
         harness.assert_envelope(result, success=False)
@@ -427,7 +427,7 @@ class TestApifyActor:
             "apify_client.ApifyClientAsync", return_value=fake_client
         ):
             result = await harness.execute(
-                "apifyActor", {"actorId": "apify/some-actor"}
+                "apifyActor", {"actor_id": "apify/instagram-scraper"}
             )
 
         harness.assert_envelope(result, success=False)
@@ -450,7 +450,7 @@ class TestApifyActor:
             result = await harness.execute(
                 "apifyActor",
                 {
-                    "actorId": "apify/some-actor",
+                    "actor_id": "apify/instagram-scraper",
                     "actorInput": "{ this is not json",
                 },
             )

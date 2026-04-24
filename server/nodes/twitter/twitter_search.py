@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -18,10 +18,41 @@ from ._base import (
 
 
 class TwitterSearchParams(BaseModel):
-    query: str = Field(default="", min_length=0)
-    max_results: int = Field(default=10, alias="maxResults", ge=10, le=100)
+    """7-field schema matching main-branch baseline. Snake_case throughout."""
 
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+    query: str = Field(
+        default="",
+        description=(
+            "Twitter search query (operators: keywords, hashtags, @mentions, "
+            "from:user, -exclude, OR, lang:, has:*, is:*)"
+        ),
+    )
+    max_results: int = Field(
+        default=10, ge=10, le=100,
+        description="Number of results (X API minimum 10, max 100)",
+    )
+    sort_order: Literal["recency", "relevancy"] = Field(
+        default="recency",
+        description="Sort by recent or relevant",
+    )
+    start_time: str = Field(
+        default="",
+        description="ISO 8601 timestamp (optional); e.g. 2024-01-01T00:00:00Z",
+    )
+    end_time: str = Field(
+        default="",
+        description="ISO 8601 timestamp (optional)",
+    )
+    include_metrics: bool = Field(
+        default=True,
+        description="Include likes / retweets / replies / quote counts",
+    )
+    include_author: bool = Field(
+        default=True,
+        description="Include author profile (username, name, verified)",
+    )
+
+    model_config = ConfigDict(extra="ignore")
 
 
 class TwitterSearchOutput(BaseModel):

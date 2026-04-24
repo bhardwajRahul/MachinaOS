@@ -19,15 +19,37 @@ from ._base import build_google_service, run_sync, track_google_usage
 
 class SheetsParams(BaseModel):
     operation: Literal["read", "write", "append"] = "read"
-    spreadsheet_id: str = Field(default="", alias="spreadsheetId")
-    range: str = Field(default="A1:Z1000")
-    values: Any = Field(default_factory=list)
-    value_input_option: str = Field(default="USER_ENTERED", alias="valueInputOption")
-    value_render_option: str = Field(default="FORMATTED_VALUE", alias="valueRenderOption")
-    major_dimension: str = Field(default="ROWS", alias="majorDimension")
-    insert_data_option: str = Field(default="INSERT_ROWS", alias="insertDataOption")
+    spreadsheet_id: str = Field(default="", description="Spreadsheet ID from the Sheets URL.")
+    range: str = Field(default="A1:Z1000", description="A1 notation range (e.g. Sheet1!A1:C10).")
 
-    model_config = ConfigDict(populate_by_name=True, extra="allow")
+    values: Any = Field(
+        default_factory=list,
+        description="2D array of cells to write.",
+        json_schema_extra={
+            "rows": 4,
+            "displayOptions": {"show": {"operation": ["write", "append"]}},
+        },
+    )
+    value_input_option: Literal["RAW", "USER_ENTERED"] = Field(
+        default="USER_ENTERED",
+        description="RAW writes literal strings; USER_ENTERED evaluates formulas.",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["write", "append"]}}},
+    )
+    insert_data_option: Literal["INSERT_ROWS", "OVERWRITE"] = Field(
+        default="INSERT_ROWS",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["append"]}}},
+    )
+
+    value_render_option: Literal["FORMATTED_VALUE", "UNFORMATTED_VALUE", "FORMULA"] = Field(
+        default="FORMATTED_VALUE",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["read"]}}},
+    )
+    major_dimension: Literal["ROWS", "COLUMNS"] = Field(
+        default="ROWS",
+        json_schema_extra={"displayOptions": {"show": {"operation": ["read"]}}},
+    )
+
+    model_config = ConfigDict(extra="ignore")
 
 
 class SheetsOutput(BaseModel):
@@ -84,7 +106,7 @@ class SheetsNode(ActionNode):
         if not params.range:
             raise RuntimeError("Range is required (e.g., 'Sheet1!A1:D10')")
 
-        svc = await build_google_service("sheets", "v4", params.model_dump(by_alias=True), ctx.raw)
+        svc = await build_google_service("sheets", "v4", params.model_dump(), ctx.raw)
         values_svc = svc.spreadsheets().values()
         op = params.operation
 

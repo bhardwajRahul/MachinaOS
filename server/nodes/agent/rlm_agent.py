@@ -47,7 +47,7 @@ class RLMAgentNode(ActionNode):
         database = container.database()
         node_id = ctx.node_id
         workflow_id = ctx.workflow_id
-        payload = params.model_dump(by_alias=True)
+        payload = params.model_dump()
 
         # 1. Edge-walk for memory / skill / tool / input / task connections.
         memory_data, skill_data, tool_data, input_data, task_data = await collect_agent_connections(
