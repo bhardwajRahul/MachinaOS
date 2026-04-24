@@ -792,14 +792,11 @@ NODE_OUTPUT_SCHEMAS: dict[str, type[BaseModel]] = {
     "whatsappDb": WhatsAppDbOutput,
     # telegram / twitter
     "telegramReceive": TelegramReceiveOutput,
-    "telegram": TelegramReceiveOutput,  # legacy alias
     "twitterSend": TwitterSendOutput,
-    "twitter": TwitterSendOutput,  # legacy alias
     "twitterSearch": TwitterSearchOutput,
     "twitterUser": TwitterUserOutput,
     # social
     "socialReceive": SocialReceiveOutput,
-    "social": SocialReceiveOutput,  # legacy alias
     "socialSend": SocialSendOutput,
     # google workspace
     "gmail": GmailOutput,
@@ -829,10 +826,8 @@ NODE_OUTPUT_SCHEMAS: dict[str, type[BaseModel]] = {
     "vectorStore": VectorStoreOutput,
     # web scrapers / browser
     "apifyActor": ApifyOutput,
-    "apify": ApifyOutput,  # legacy alias
     "browser": BrowserOutput,
     "crawleeScraper": CrawleeOutput,
-    "crawlee": CrawleeOutput,  # legacy alias
     # proxy
     "proxyRequest": ProxyRequestOutput,
     "proxyStatus": ProxyStatusOutput,

@@ -70,15 +70,6 @@ class TestNodeSpec:
         assert "outputs" in spec
         assert spec["version"] == 1
 
-    def test_spec_fallback_metadata_when_unseeded(self):
-        # apify has an output schema but no input model and no metadata yet
-        # (Phase 3d.ii target). Spec still emits with id-fallback metadata.
-        spec = get_node_spec("apify")
-        assert spec is not None
-        assert spec["type"] == "apify"
-        assert spec["displayName"] == "apify"  # falls back to id
-        assert spec["group"] == []
-
     def test_spec_missing_entirely(self):
         assert get_node_spec("nonExistentNodeXyz") is None
 
