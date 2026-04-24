@@ -357,7 +357,7 @@ def _make_waiter_stub(*, canned_event=None, is_trigger=True, wait_side_effect=No
             display_name="WhatsApp Message",
         )
     )
-    stub.register = MagicMock(return_value=waiter_obj)
+    stub.register = AsyncMock(return_value=waiter_obj)
     # Kept for back-compat with tests still asserting wait_for_event calls.
     if wait_side_effect is not None:
         stub.wait_for_event = AsyncMock(side_effect=wait_side_effect)

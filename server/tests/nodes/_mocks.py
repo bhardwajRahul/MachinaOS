@@ -192,7 +192,7 @@ def patched_event_waiter(canned_event: Optional[Dict[str, Any]] = None) -> Itera
 
     waiter_mock = MagicMock(name="event_waiter")
     waiter_mock.is_trigger_node = MagicMock(return_value=True)
-    waiter_mock.register = MagicMock(return_value=MagicMock(id="waiter-test-id"))
+    waiter_mock.register = AsyncMock(return_value=MagicMock(id="waiter-test-id"))
     waiter_mock.wait_for_event = AsyncMock(return_value=event_data)
     waiter_mock.cancel = MagicMock(return_value=True)
     waiter_mock.dispatch = MagicMock(return_value=1)

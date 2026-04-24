@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import time
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
+
+from pydantic import ConfigDict, Field
 
 from core.logging import get_logger
 from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
@@ -19,6 +21,21 @@ from ._handles import STD_AGENT_HINTS, std_agent_handles
 from ._specialized import SpecializedAgentOutput, SpecializedAgentParams
 
 logger = get_logger(__name__)
+
+
+class ClaudeCodeAgentParams(SpecializedAgentParams):
+    """Adds CLI-specific flags the handler body reads from payload."""
+
+    max_turns: int = Field(default=10, alias="maxTurns", ge=1)
+    max_budget_usd: float = Field(default=5.0, alias="maxBudgetUsd", ge=0.0)
+    system_prompt: Optional[str] = Field(default=None, alias="systemPrompt")
+    working_directory: Optional[str] = Field(default=None, alias="workingDirectory")
+    allowed_tools: str = Field(
+        default="Read,Edit,Bash,Glob,Grep,Write",
+        alias="allowedTools",
+    )
+
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
 
 class ClaudeCodeAgentNode(ActionNode):
@@ -35,11 +52,11 @@ class ClaudeCodeAgentNode(ActionNode):
     annotations = {"destructive": True, "readonly": False, "open_world": True}
     task_queue = TaskQueue.AI_HEAVY
 
-    Params = SpecializedAgentParams
+    Params = ClaudeCodeAgentParams
     Output = SpecializedAgentOutput
 
     @Operation("execute", cost={"service": "claude_code_agent", "action": "run", "count": 1})
-    async def execute_op(self, ctx: NodeContext, params: SpecializedAgentParams) -> Any:
+    async def execute_op(self, ctx: NodeContext, params: ClaudeCodeAgentParams) -> Any:
         from core.container import container
         from services.claude_code_service import get_claude_code_service
         from services.status_broadcaster import get_status_broadcaster

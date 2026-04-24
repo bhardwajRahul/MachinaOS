@@ -69,7 +69,7 @@ def patched_trigger_waiter(
             display_name="Test Trigger",
         )
     )
-    mock.register = MagicMock(return_value=waiter_obj)
+    mock.register = AsyncMock(return_value=waiter_obj)
     if raise_cancelled:
         mock.wait_for_event = AsyncMock(side_effect=_asyncio.CancelledError())
     else:

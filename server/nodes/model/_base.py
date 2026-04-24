@@ -51,6 +51,16 @@ class ChatModelParams(BaseModel):
         default=1.0, alias="topP", ge=0.0, le=1.0,
         json_schema_extra={"numberStepSize": 0.1},
     )
+    thinking_enabled: bool = Field(default=False, alias="thinkingEnabled")
+    thinking_budget: Optional[int] = Field(
+        default=None, alias="thinkingBudget", ge=1,
+    )
+    reasoning_effort: Optional[Literal["low", "medium", "high"]] = Field(
+        default=None, alias="reasoningEffort",
+    )
+    reasoning_format: Optional[Literal["parsed", "hidden"]] = Field(
+        default=None, alias="reasoningFormat",
+    )
 
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 

@@ -9,7 +9,7 @@ plus the live message log returned here.
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -27,6 +27,10 @@ class SimpleMemoryParams(BaseModel):
         alias="memoryContent",
         json_schema_extra={"rows": 12},
     )
+    memory_type: Literal["buffer", "window"] = Field(
+        default="buffer", alias="memoryType",
+    )
+    clear_on_run: bool = Field(default=False, alias="clearOnRun")
     long_term_enabled: bool = Field(default=False, alias="longTermEnabled")
     retrieval_count: int = Field(
         default=3, alias="retrievalCount", ge=1, le=20,

@@ -91,7 +91,7 @@ class TriggerNode(BaseNode, abstract=True):
             return self._wrap_error(start_time=start_time, error=f"Invalid parameters: {e}")
 
         if self.mode == "event":
-            waiter = event_waiter.register(
+            waiter = await event_waiter.register(
                 node_type=self.type,
                 node_id=node_id,
                 params=parameters,

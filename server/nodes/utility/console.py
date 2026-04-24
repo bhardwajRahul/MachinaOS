@@ -163,7 +163,7 @@ class ConsoleNode(ActionNode):
                 log_value = input_data
             case "field":
                 if field_path:
-                    if "{{" not in field_path and field_path not in input_data:
+                    if "{{" in field_path:
                         log_value = field_path
                     else:
                         log_value = _navigate_field_path(input_data, field_path)
@@ -189,12 +189,13 @@ class ConsoleNode(ActionNode):
             "source_node_label": source_info.get("label") if source_info else None,
         })
 
-        # Pass through original input for downstream nodes.
+        # Pass through original input for downstream nodes; explicit keys
+        # take precedence over upstream keys of the same name.
         return {
+            **input_data,
             "label": label or f"Console ({ctx.node_id[:8]})",
             "logged_at": datetime.now().isoformat(),
             "format": format_type,
             "data": log_value,
             "formatted": formatted_output,
-            **input_data,
         }
