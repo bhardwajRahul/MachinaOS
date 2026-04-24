@@ -17,24 +17,38 @@ def _ensure_rfc3339(due: str) -> str:
     return due if 'T' in due else f"{due}T00:00:00.000Z"
 
 
+_CREATE = {"displayOptions": {"show": {"operation": ["create"]}}}
+_LIST = {"displayOptions": {"show": {"operation": ["list"]}}}
+_UPDATE = {"displayOptions": {"show": {"operation": ["update"]}}}
+_COMPLETE_UPDATE_DELETE = {"displayOptions": {"show": {"operation": ["complete", "update", "delete"]}}}
+
+
 class TasksParams(BaseModel):
     operation: Literal["create", "list", "complete", "update", "delete"] = "list"
-    tasklist_id: str = Field(default="@default")
-    task_id: Optional[str] = Field(default=None)
-    title: Optional[str] = None
-    notes: Optional[str] = None
-    due_date: Optional[str] = Field(default=None)
-    status: Optional[str] = None
-    show_completed: bool = Field(default=False)
-    show_hidden: bool = Field(default=False)
-    max_results: int = Field(default=100)
+    tasklist_id: str = Field(
+        default="@default",
+        json_schema_extra={"loadOptionsMethod": "googleTasklists"},
+    )
+    task_id: Optional[str] = Field(default=None, json_schema_extra=_COMPLETE_UPDATE_DELETE)
 
-    update_title: Optional[str] = Field(default=None)
-    update_notes: Optional[str] = Field(default=None)
-    update_due_date: Optional[str] = Field(default=None)
-    update_status: Optional[str] = Field(default=None)
+    # Create fields
+    title: Optional[str] = Field(default=None, json_schema_extra=_CREATE)
+    notes: Optional[str] = Field(default=None, json_schema_extra=_CREATE)
+    due_date: Optional[str] = Field(default=None, json_schema_extra=_CREATE)
+    status: Optional[str] = Field(default=None, json_schema_extra=_CREATE)
 
-    model_config = ConfigDict(extra="allow")
+    # List fields
+    show_completed: bool = Field(default=False, json_schema_extra=_LIST)
+    show_hidden: bool = Field(default=False, json_schema_extra=_LIST)
+    max_results: int = Field(default=100, json_schema_extra=_LIST)
+
+    # Update-only fields
+    update_title: Optional[str] = Field(default=None, json_schema_extra=_UPDATE)
+    update_notes: Optional[str] = Field(default=None, json_schema_extra=_UPDATE)
+    update_due_date: Optional[str] = Field(default=None, json_schema_extra=_UPDATE)
+    update_status: Optional[str] = Field(default=None, json_schema_extra=_UPDATE)
+
+    model_config = ConfigDict(extra="ignore")
 
 
 class TasksOutput(BaseModel):

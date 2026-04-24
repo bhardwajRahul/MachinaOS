@@ -67,12 +67,15 @@ def register_node(
     if handler is not None:
         _HANDLER_REGISTRY[type] = handler
 
-    # Invalidate any NodeSpec cached under the same type — otherwise a
-    # consumer that read the pre-registration (empty metadata) spec gets
-    # stuck with stale fields. Re-registration is the whole point of
-    # the strangler-fig migration, so caches must re-compute.
+    # Invalidate any NodeSpec and per-type input-schema cached under the
+    # same type — otherwise a consumer that read the pre-registration
+    # (empty metadata) spec gets stuck with stale fields. Re-registration
+    # is the whole point of the strangler-fig migration, so caches must
+    # re-compute.
     from services.node_spec import _spec_cache  # local import to avoid cycle
     _spec_cache.pop(type, None)
+    from services.node_input_schemas import _schema_cache  # local import
+    _schema_cache.pop(type, None)
 
 
 def get_registered_handler(node_type: str) -> Optional[Callable]:

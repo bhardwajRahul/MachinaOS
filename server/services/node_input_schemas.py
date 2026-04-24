@@ -1,165 +1,38 @@
 """Per-node input parameter schema registry.
 
-Mirror of services/node_output_schemas.py but for the input side. Lifts
-the Pydantic models in models/nodes.py into JSON Schema 7 documents the
-editor can drive its parameter panel from. Single source of truth: the
-discriminated-union variants registered in models.nodes. Adding a new
-node type's input schema = add a Pydantic class + register it in
-KnownNodeParams; this module discovers it automatically.
+Single source of truth: the plugin `Params` classes in ``server/nodes/``.
+Each plugin's ``BaseNode.__init_subclass__`` hook calls
+``services.node_registry.register_node`` at import time, which writes the
+plugin class's ``Params`` into ``_DIRECT_MODELS`` here. Plugin discovery
+happens in ``server/nodes/__init__.py`` via ``pkgutil.walk_packages``.
 
-Wave 6 Phase 1 — see C:\\Users\\Tgroh\\.claude\\plans\\typed-splashing-crown.md.
+No class is pre-seeded from ``models/nodes.py``. If a node type is
+requested but no plugin registered its Params, ``get_node_input_schema``
+returns None and logs a warning — the plugin module failed to import or
+the plugin class forgot to set ``Params = X``.
 """
 
 from typing import Any, Optional
 
 from pydantic import BaseModel
 
-from constants import ANDROID_SERVICE_NODE_TYPES
-from models.nodes import (
-    AIAgentParams, AIChatModelParams, AndroidServiceParams, ApifyActorParams,
-    BraveSearchParams, BrowserParams, CalendarParams, ChatAgentParams,
-    ChatHistoryParams, ChatSendParams, ChatTriggerParams, ConsoleParams,
-    ContactsParams, CrawleeScraperParams, CreateMapParams, CronSchedulerParams,
-    DocumentParserParams, DriveParams, EmailReadParams, EmailReceiveParams,
-    EmailSendParams, EmbeddingGeneratorParams, FileDownloaderParams,
-    FileHandlerParams, FileModifyParams, FileReadParams, FsSearchParams,
-    GmailParams, GmailReceiveParams, GmapsLocationsParams,
-    GmapsNearbyPlacesParams, HttpRequestParams, HttpScraperParams,
-    JavaScriptExecutorParams, MasterSkillParams, PerplexitySearchParams, ProcessManagerParams,
-    ProxyConfigParams, ProxyRequestParams, ProxyStatusParams,
-    PythonExecutorParams, SerperSearchParams, ShellParams,
-    SheetsParams, SimpleMemoryParams, SocialReceiveParams,
-    SocialSendParams, SpecializedAgentParams, StartNodeParams,
-    TasksParams, TaskTriggerParams, TeamMonitorParams, TelegramReceiveParams,
-    TelegramSendParams, TextChunkerParams, TextGeneratorParams,
-    TwitterReceiveParams, TwitterSearchParams, TwitterSendParams,
-    TwitterUserParams, TypeScriptExecutorParams, VectorStoreParams,
-    WebhookResponseParams, WebhookTriggerParams, WhatsAppDbParams,
-    WhatsAppReceiveParams, WhatsAppSendParams, WorkflowTriggerParams,
-)
+from core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
 # Type → Pydantic model registry
 # ---------------------------------------------------------------------------
-# Single-Literal models map directly. SpecializedAgentParams covers many
-# types via its Literal[...] union — we expand at registration time so a
-# type-id lookup is always O(1).
+# Populated at runtime by plugin ``BaseNode.__init_subclass__`` via
+# ``services.node_registry.register_node``. Starts empty on module import.
+
+_DIRECT_MODELS: dict[str, type[BaseModel]] = {}
 
 
-_DIRECT_MODELS: dict[str, type[BaseModel]] = {
-    # AI
-    "openaiChatModel": AIChatModelParams,
-    "anthropicChatModel": AIChatModelParams,
-    "geminiChatModel": AIChatModelParams,
-    "openrouterChatModel": AIChatModelParams,
-    "groqChatModel": AIChatModelParams,
-    "cerebrasChatModel": AIChatModelParams,
-    "deepseekChatModel": AIChatModelParams,
-    "kimiChatModel": AIChatModelParams,
-    "mistralChatModel": AIChatModelParams,
-    "aiAgent": AIAgentParams,
-    "chatAgent": ChatAgentParams,
-    "simpleMemory": SimpleMemoryParams,
-    # Maps
-    "gmaps_create": CreateMapParams,
-    "gmaps_locations": GmapsLocationsParams,
-    "gmaps_nearby_places": GmapsNearbyPlacesParams,
-    # WhatsApp
-    "whatsappSend": WhatsAppSendParams,
-    "whatsappReceive": WhatsAppReceiveParams,
-    "whatsappDb": WhatsAppDbParams,
-    # Telegram
-    "telegramSend": TelegramSendParams,
-    # Twitter / X
-    "twitterSend": TwitterSendParams,
-    "twitterSearch": TwitterSearchParams,
-    "twitterUser": TwitterUserParams,
-    # Unified social
-    "socialReceive": SocialReceiveParams,
-    "socialSend": SocialSendParams,
-    # Code
-    "pythonExecutor": PythonExecutorParams,
-    "javascriptExecutor": JavaScriptExecutorParams,
-    "typescriptExecutor": TypeScriptExecutorParams,
-    # Process management
-    "processManager": ProcessManagerParams,
-    # HTTP
-    "httpRequest": HttpRequestParams,
-    "webhookTrigger": WebhookTriggerParams,
-    "webhookResponse": WebhookResponseParams,
-    # Utility
-    "console": ConsoleParams,
-    "teamMonitor": TeamMonitorParams,
-    # Workflow / scheduling
-    "start": StartNodeParams,
-    "cronScheduler": CronSchedulerParams,
-    "timer": WorkflowTriggerParams,
-    # Triggers
-    "taskTrigger": TaskTriggerParams,
-    "chatTrigger": ChatTriggerParams,
-    "telegramReceive": TelegramReceiveParams,
-    "twitterReceive": TwitterReceiveParams,
-    "gmailReceive": GmailReceiveParams,
-    # Text
-    "textGenerator": TextGeneratorParams,
-    "fileHandler": FileHandlerParams,
-    # Chat
-    "chatSend": ChatSendParams,
-    "chatHistory": ChatHistoryParams,
-    # Skills
-    "masterSkill": MasterSkillParams,
-    # Search (Wave 6 Phase 3d.ii)
-    "braveSearch": BraveSearchParams,
-    "serperSearch": SerperSearchParams,
-    "perplexitySearch": PerplexitySearchParams,
-    # Browser / scraping
-    "browser": BrowserParams,
-    "crawleeScraper": CrawleeScraperParams,
-    "httpScraper": HttpScraperParams,
-    "apifyActor": ApifyActorParams,
-    # Email
-    "emailSend": EmailSendParams,
-    "emailRead": EmailReadParams,
-    "emailReceive": EmailReceiveParams,
-    # Google Workspace
-    "gmail": GmailParams,
-    "calendar": CalendarParams,
-    "drive": DriveParams,
-    "sheets": SheetsParams,
-    "tasks": TasksParams,
-    "contacts": ContactsParams,
-    # Document / RAG
-    "documentParser": DocumentParserParams,
-    "textChunker": TextChunkerParams,
-    "embeddingGenerator": EmbeddingGeneratorParams,
-    "vectorStore": VectorStoreParams,
-    "fileDownloader": FileDownloaderParams,
-    # Filesystem
-    "fileRead": FileReadParams,
-    "fileModify": FileModifyParams,
-    "fsSearch": FsSearchParams,
-    "shell": ShellParams,
-    # Proxy
-    "proxyRequest": ProxyRequestParams,
-    "proxyConfig": ProxyConfigParams,
-    "proxyStatus": ProxyStatusParams,
-}
-
-
-# Specialized agents share one Pydantic class but expand across many
-# discriminator values. Pull the literal list from the model itself so
-# the registry stays in sync if the union grows.
-_SPECIALIZED_AGENT_TYPES = (
-    SpecializedAgentParams.model_fields["type"].annotation.__args__
-)
-
-
-NODE_INPUT_MODELS: dict[str, type[BaseModel]] = {
-    **_DIRECT_MODELS,
-    **{t: SpecializedAgentParams for t in _SPECIALIZED_AGENT_TYPES},
-    **{t: AndroidServiceParams for t in ANDROID_SERVICE_NODE_TYPES},
-}
+# Alias kept for readability in downstream callers that predate the
+# plugin migration. They're identical objects now.
+NODE_INPUT_MODELS: dict[str, type[BaseModel]] = _DIRECT_MODELS
 
 
 # ---------------------------------------------------------------------------
@@ -172,12 +45,21 @@ _schema_cache: dict[str, dict[str, Any]] = {}
 
 def get_node_input_schema(node_type: str) -> Optional[dict[str, Any]]:
     """Return the JSON Schema 7 document for a node's input parameters,
-    or None if the node type has no Pydantic model. Cached per-process."""
+    or None if no plugin registered a Params class for this type.
+    Cached per-process; ``services.node_registry.register_node`` pops
+    the entry on re-registration so plugin hot-reload refreshes the
+    served schema."""
 
     if node_type in _schema_cache:
         return _schema_cache[node_type]
     model = NODE_INPUT_MODELS.get(node_type)
     if model is None:
+        logger.warning(
+            "No plugin Params registered for node type %r. "
+            "Did the plugin module fail to import, or is ``Params = X`` "
+            "missing on the node class? Check server/nodes/<category>/<name>.py.",
+            node_type,
+        )
         return None
     schema = _post_process(model.model_json_schema(), node_type)
     _schema_cache[node_type] = schema
@@ -194,7 +76,12 @@ def _post_process(schema: dict[str, Any], node_type: str) -> dict[str, Any]:
     """Strip the discriminator field from the surface schema and lift
     nested ``$defs`` references inline so the editor doesn't have to
     resolve them. The discriminator (``type``) is implicit at the
-    transport layer (URL path) and shouldn't render as a parameter."""
+    transport layer (URL path) and shouldn't render as a parameter.
+
+    Plugin Params extend ``BaseModel`` directly (no ``type: Literal[...]``)
+    so for plugin-sourced schemas this strip is a no-op; the lines stay
+    for any legacy classes still routed through here during migration.
+    """
 
     cleaned = dict(schema)
     props = dict(cleaned.get("properties") or {})

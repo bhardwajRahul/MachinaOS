@@ -239,14 +239,15 @@ def build_whatsapp_filter(params: Dict) -> Callable[[Dict], bool]:
     Note: The Go RPC already resolves LIDs to phone numbers before sending the event.
     The sender_phone field contains the resolved phone number - no manual LID resolution needed!
     """
-    msg_type = params.get('messageTypeFilter', 'all')
+    # Snake_case throughout — matches plugin Params (no camelCase aliases).
+    msg_type = params.get('message_type_filter', 'all')
     sender_filter = params.get('filter', 'all')
-    contact_phone = params.get('contactPhone', '')
-    group_id = params.get('group_id') or params.get('groupId', '')
-    sender_number = params.get('senderNumber', '')  # Optional sender filter within group
+    contact_phone = params.get('phone_number', '')
+    group_id = params.get('group_id', '')
+    sender_number = params.get('sender_number', '')
     keywords = [k.strip().lower() for k in params.get('keywords', '').split(',') if k.strip()]
-    ignore_own = params.get('ignoreOwnMessages', True)
-    forwarded_filter = params.get('forwardedFilter', 'all')  # 'all', 'only_forwarded', 'ignore_forwarded'
+    ignore_own = params.get('ignore_own_messages', True)
+    forwarded_filter = params.get('forwarded_filter', 'all')
 
     logger.debug(f"[WhatsAppFilter] Built: type={msg_type}, filter={sender_filter}, group_id='{group_id}', forwarded={forwarded_filter}")
 

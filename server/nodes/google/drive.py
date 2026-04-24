@@ -40,7 +40,10 @@ class DriveParams(BaseModel):
     folder_id: Optional[str] = Field(
         default=None,
         description="Target folder (upload) or scope folder (list).",
-        json_schema_extra={"displayOptions": {"show": {"operation": ["upload", "list"]}}},
+        json_schema_extra={
+            "loadOptionsMethod": "googleDriveFolders",
+            "displayOptions": {"show": {"operation": ["upload", "list"]}},
+        },
     )
 
     # Download

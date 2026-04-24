@@ -52,7 +52,7 @@ class WebhookTriggerParams(BaseModel):
         default="",
         description="Expected header value when authentication=header.",
         json_schema_extra={
-            "widget": "password",
+            "password": True,
             "displayOptions": {"show": {"authentication": ["header"]}},
         },
     )

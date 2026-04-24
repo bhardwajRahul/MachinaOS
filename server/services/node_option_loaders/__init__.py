@@ -21,6 +21,7 @@ is what wires it through.
 
 from typing import Any, Awaitable, Callable, Optional
 
+from .android_loaders import load_android_service_actions
 from .google_loaders import (
     load_gmail_labels,
     load_google_calendar_list,
@@ -48,6 +49,8 @@ LOAD_OPTIONS_REGISTRY: dict[str, LoadOptionsFn] = {
     "googleCalendarList": load_google_calendar_list,
     "googleDriveFolders": load_google_drive_folders,
     "googleTasklists": load_google_tasklists,
+    # Android - service actions enum loaded from the connected bridge.
+    "getAndroidServiceActions": load_android_service_actions,
 }
 
 

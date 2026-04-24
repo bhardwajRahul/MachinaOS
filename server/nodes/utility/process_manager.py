@@ -9,17 +9,22 @@ from pydantic import BaseModel, ConfigDict, Field
 from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
 
+_START = {"displayOptions": {"show": {"operation": ["start"]}}}
+_GET_OUTPUT = {"displayOptions": {"show": {"operation": ["get_output"]}}}
+_SEND_INPUT = {"displayOptions": {"show": {"operation": ["send_input"]}}}
+
+
 class ProcessManagerParams(BaseModel):
     operation: Literal["start", "stop", "restart", "list", "send_input", "get_output"] = "list"
     name: str = Field(default="")
-    command: str = Field(default="")
-    cwd: str = Field(default="")
-    env: Dict[str, str] = Field(default_factory=dict)
-    input_text: str = Field(default="")
-    stream: Literal["stdout", "stderr"] = "stdout"
-    tail: int = Field(default=100, ge=1, le=10000)
+    command: str = Field(default="", json_schema_extra=_START)
+    cwd: str = Field(default="", json_schema_extra=_START)
+    env: Dict[str, str] = Field(default_factory=dict, json_schema_extra=_START)
+    input_text: str = Field(default="", json_schema_extra=_SEND_INPUT)
+    stream: Literal["stdout", "stderr"] = Field(default="stdout", json_schema_extra=_GET_OUTPUT)
+    tail: int = Field(default=100, ge=1, le=10000, json_schema_extra=_GET_OUTPUT)
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="ignore")
 
 
 class ProcessManagerOutput(BaseModel):

@@ -13,7 +13,13 @@ class ProxyRequestParams(BaseModel):
     method: Literal["GET", "POST", "PUT", "DELETE", "PATCH"] = "GET"
     url: str = Field(...)
     headers: Dict[str, str] = Field(default_factory=dict)
-    body: Optional[Any] = None
+    body: Optional[Any] = Field(
+        default=None,
+        json_schema_extra={
+            "rows": 4,
+            "displayOptions": {"show": {"method": ["POST", "PUT", "PATCH"]}},
+        },
+    )
     timeout: int = Field(default=30, ge=1, le=600)
     proxy_provider: str = Field(default="auto")
     proxy_country: str = Field(default="")

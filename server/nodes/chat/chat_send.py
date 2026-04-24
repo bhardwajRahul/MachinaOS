@@ -19,7 +19,7 @@ class ChatSendParams(BaseModel):
     host: str = Field(default="localhost")
     port: int = Field(default=8080, ge=1, le=65535)
     session_id: str = Field(default="default")
-    api_key: str = Field(default="")
+    api_key: str = Field(default="", json_schema_extra={"password": True})
     content: str = Field(default="")
     # legacy field alias — earlier migration used ``message``
     message: str = Field(default="")

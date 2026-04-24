@@ -17,7 +17,7 @@ class ChatHistoryParams(BaseModel):
     host: str = Field(default="localhost")
     port: int = Field(default=8080, ge=1, le=65535)
     session_id: str = Field(default="default")
-    api_key: str = Field(default="")
+    api_key: str = Field(default="", json_schema_extra={"password": True})
     limit: int = Field(default=50, ge=1, le=500)
 
     model_config = ConfigDict(extra="ignore")

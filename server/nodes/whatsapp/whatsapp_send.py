@@ -39,6 +39,7 @@ class WhatsAppSendParams(BaseModel):
         description="Group JID (format: 123456789@g.us). Use Load button to select.",
         json_schema_extra={
             "component": "GroupIdSelector",
+            "loadOptionsMethod": "whatsappGroups",
             "displayOptions": {"show": {"recipient_type": ["group"]}},
         },
     )
@@ -50,6 +51,7 @@ class WhatsAppSendParams(BaseModel):
         ),
         json_schema_extra={
             "component": "ChannelJidSelector",
+            "loadOptionsMethod": "whatsappChannels",
             "displayOptions": {"show": {"recipient_type": ["channel"]}},
         },
     )

@@ -9,13 +9,17 @@ from pydantic import BaseModel, ConfigDict, Field
 from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
 
+_WRITE = {"displayOptions": {"show": {"operation": ["write"]}}}
+_EDIT = {"displayOptions": {"show": {"operation": ["edit"]}}}
+
+
 class FileModifyParams(BaseModel):
     operation: Literal["write", "edit"] = "write"
     file_path: str = Field(...)
-    content: str = Field(default="")
-    old_string: str = Field(default="")
-    new_string: str = Field(default="")
-    replace_all: bool = Field(default=False)
+    content: str = Field(default="", json_schema_extra=_WRITE)
+    old_string: str = Field(default="", json_schema_extra=_EDIT)
+    new_string: str = Field(default="", json_schema_extra=_EDIT)
+    replace_all: bool = Field(default=False, json_schema_extra=_EDIT)
 
     model_config = ConfigDict(extra="ignore")
 

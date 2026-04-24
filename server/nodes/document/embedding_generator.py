@@ -27,7 +27,10 @@ class EmbeddingGeneratorParams(BaseModel):
     api_key: str = Field(
         default="",
         description="API key (OpenAI only).",
-        json_schema_extra={"displayOptions": {"show": {"provider": ["openai"]}}},
+        json_schema_extra={
+            "password": True,
+            "displayOptions": {"show": {"provider": ["openai"]}},
+        },
     )
 
     model_config = ConfigDict(extra="ignore")

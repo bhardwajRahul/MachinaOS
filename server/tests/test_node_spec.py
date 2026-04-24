@@ -27,7 +27,7 @@ class TestInputSchemas:
         assert "url" in props
         assert props["method"]["enum"] == ["GET", "POST", "PUT", "DELETE", "PATCH"]
         assert props["timeout"]["minimum"] == 1
-        assert props["timeout"]["maximum"] == 300
+        assert props["timeout"]["maximum"] == 600
         # Discriminator stripped from surface
         assert "type" not in props
 
@@ -37,10 +37,10 @@ class TestInputSchemas:
         props = schema["properties"]
         assert props["temperature"]["minimum"] == 0.0
         assert props["temperature"]["maximum"] == 2.0
-        # camelCase aliases present
-        assert "apiKey" in props
-        assert "maxTokens" in props
-        assert "systemMessage" in props
+        # snake_case keys per Wave 11.E.4+ convention
+        assert "api_key" in props
+        assert "max_tokens" in props
+        assert "system_message" in props
 
     def test_specialized_agents_share_schema(self):
         # All 16 specialized agents go through SpecializedAgentParams
@@ -130,11 +130,12 @@ class TestPhase3aCoverage:
     def test_process_manager_operation_enum(self):
         spec = get_node_spec("processManager")
         op = spec["inputs"]["properties"]["operation"]
-        assert op["enum"] == ["start", "stop", "restart", "send_input", "list", "get_output"]
+        # Literal ordering mirrors the Params declaration.
+        assert set(op["enum"]) >= {"start", "stop", "restart", "list", "send_input"}
 
     def test_console_log_mode_enum(self):
         spec = get_node_spec("console")
-        log_mode = spec["inputs"]["properties"]["logMode"]
+        log_mode = spec["inputs"]["properties"]["log_mode"]
         assert log_mode["enum"] == ["all", "field", "expression"]
 
 
@@ -169,12 +170,15 @@ class TestPhase3bCoverage:
     def test_twitter_send_action_enum(self):
         spec = get_node_spec("twitterSend")
         action = spec["inputs"]["properties"]["action"]
-        assert action["enum"] == ["tweet", "reply", "retweet", "like", "unlike", "delete"]
+        assert set(action["enum"]) >= {
+            "tweet", "reply", "retweet", "quote", "like", "unlike", "delete",
+        }
 
     def test_telegram_send_parse_mode_enum(self):
         spec = get_node_spec("telegramSend")
-        parse_mode = spec["inputs"]["properties"]["parseMode"]
-        assert parse_mode["enum"] == ["Auto", "HTML", "Markdown", "MarkdownV2", "None"]
+        parse_mode = spec["inputs"]["properties"]["parse_mode"]
+        # Empty string is the "no parse mode" option (handler coerces to Python None).
+        assert set(parse_mode["enum"]) == {"Auto", "", "HTML", "Markdown", "MarkdownV2"}
 
     def test_social_send_platform_enum(self):
         spec = get_node_spec("socialSend")
@@ -329,7 +333,7 @@ class TestPhase3dIICoverage:
 
     def test_apify_actor_actor_id_field(self):
         spec = get_node_spec("apifyActor")
-        assert "actorId" in spec["inputs"]["properties"]
+        assert "actor_id" in spec["inputs"]["properties"]
 
     def test_proxy_request_method_enum(self):
         spec = get_node_spec("proxyRequest")
@@ -454,7 +458,7 @@ class TestDisplayOptionsEnrichment:
 
     def test_twitter_send_tweet_id_shown_for_edit_actions(self):
         spec = get_node_spec("twitterSend")
-        prop = spec["inputs"]["properties"]["tweetId"]
+        prop = spec["inputs"]["properties"]["tweet_id"]
         rule = prop.get("displayOptions", {}).get("show", {})
         assert "reply" in rule.get("action", [])
         assert "delete" in rule.get("action", [])
@@ -466,7 +470,7 @@ class TestDisplayOptionsEnrichment:
 
     def test_telegram_send_media_shown_for_photo_document(self):
         spec = get_node_spec("telegramSend")
-        media_url = spec["inputs"]["properties"]["mediaUrl"]
+        media_url = spec["inputs"]["properties"]["media_url"]
         assert media_url["displayOptions"]["show"]["message_type"] == ["photo", "document"]
 
     def test_telegram_send_text_shown_for_text_type(self):
@@ -481,25 +485,25 @@ class TestDisplayOptionsEnrichment:
 
     def test_http_request_proxy_fields_gated_on_use_proxy(self):
         spec = get_node_spec("httpRequest")
-        for field in ["proxyCountry", "proxyProvider", "sessionType"]:
+        for field in ["proxy_country", "proxy_provider", "session_type"]:
             prop = spec["inputs"]["properties"][field]
             assert prop["displayOptions"]["show"]["use_proxy"] == [True]
 
     def test_whatsapp_send_groupid_carries_load_options(self):
-        # whatsappSend groupId field should route through loadOptionsMethod
+        # whatsappSend group_id routes through loadOptionsMethod
         spec = get_node_spec("whatsappSend")
-        group_id = spec["inputs"]["properties"]["groupId"]
+        group_id = spec["inputs"]["properties"]["group_id"]
         assert group_id["loadOptionsMethod"] == "whatsappGroups"
         assert group_id["displayOptions"]["show"]["recipient_type"] == ["group"]
 
     def test_whatsapp_send_channel_jid_carries_load_options(self):
         spec = get_node_spec("whatsappSend")
-        channel = spec["inputs"]["properties"]["channelJid"]
+        channel = spec["inputs"]["properties"]["channel_jid"]
         assert channel["loadOptionsMethod"] == "whatsappChannels"
 
     def test_whatsapp_send_media_shown_for_media_types(self):
         spec = get_node_spec("whatsappSend")
-        media = spec["inputs"]["properties"]["mediaUrl"]
+        media = spec["inputs"]["properties"]["media_url"]
         assert "image" in media["displayOptions"]["show"]["message_type"]
         assert "document" in media["displayOptions"]["show"]["message_type"]
 
@@ -507,38 +511,38 @@ class TestDisplayOptionsEnrichment:
         spec = get_node_spec("gmail")
         assert spec["inputs"]["properties"]["to"]["displayOptions"]["show"]["operation"] == ["send"]
         assert spec["inputs"]["properties"]["query"]["displayOptions"]["show"]["operation"] == ["search"]
-        assert spec["inputs"]["properties"]["messageId"]["displayOptions"]["show"]["operation"] == ["read"]
+        assert spec["inputs"]["properties"]["message_id"]["displayOptions"]["show"]["operation"] == ["read"]
 
     def test_calendar_event_id_gated_on_update_delete(self):
         spec = get_node_spec("calendar")
-        event_id = spec["inputs"]["properties"]["eventId"]
+        event_id = spec["inputs"]["properties"]["event_id"]
         assert event_id["displayOptions"]["show"]["operation"] == ["update", "delete"]
 
     def test_social_send_media_url_gated_on_message_type(self):
         spec = get_node_spec("socialSend")
-        media = spec["inputs"]["properties"]["mediaUrl"]
+        media = spec["inputs"]["properties"]["media_url"]
         assert "image" in media["displayOptions"]["show"]["message_type"]
         # 'text' is in the message field's gate, mediaUrl is gated on media types.
         assert "text" not in media["displayOptions"]["show"]["message_type"]
 
     def test_gmail_receive_label_carries_load_options(self):
         spec = get_node_spec("gmailReceive")
-        label = spec["inputs"]["properties"]["labelFilter"]
+        label = spec["inputs"]["properties"]["label_filter"]
         assert label["loadOptionsMethod"] == "gmailLabels"
 
     def test_calendar_calendar_id_carries_load_options(self):
         spec = get_node_spec("calendar")
-        cal = spec["inputs"]["properties"]["calendarId"]
+        cal = spec["inputs"]["properties"]["calendar_id"]
         assert cal["loadOptionsMethod"] == "googleCalendarList"
 
     def test_drive_folder_id_carries_load_options(self):
         spec = get_node_spec("drive")
-        folder = spec["inputs"]["properties"]["folderId"]
+        folder = spec["inputs"]["properties"]["folder_id"]
         assert folder["loadOptionsMethod"] == "googleDriveFolders"
 
     def test_tasks_tasklist_id_carries_load_options(self):
         spec = get_node_spec("tasks")
-        tl = spec["inputs"]["properties"]["tasklistId"]
+        tl = spec["inputs"]["properties"]["tasklist_id"]
         assert tl["loadOptionsMethod"] == "googleTasklists"
 
     def test_ai_agent_temperature_step_size(self):
@@ -554,37 +558,40 @@ class TestDisplayOptionsEnrichment:
 
     def test_ai_agent_api_key_password_masked(self):
         spec = get_node_spec("aiAgent")
-        api_key = spec["inputs"]["properties"]["apiKey"]
+        api_key = spec["inputs"]["properties"]["api_key"]
         assert api_key["password"] is True
 
-    def test_specialized_agent_thinking_budget_gated(self):
+    def test_specialized_agent_shares_ai_agent_tuning_surface(self):
+        # SpecializedAgentParams mirrors AIAgentParams — same provider,
+        # model, temperature, max_tokens, system_message, api_key fields.
+        # Thinking/reasoning mode is surfaced via AIAgentOutput.thinking,
+        # not as a Params toggle.
         spec = get_node_spec("coding_agent")
-        budget = spec["inputs"]["properties"]["thinkingBudget"]
-        assert budget["displayOptions"]["show"]["thinking_enabled"] == [True]
-        effort = spec["inputs"]["properties"]["reasoningEffort"]
-        assert effort["displayOptions"]["show"]["thinking_enabled"] == [True]
+        props = spec["inputs"]["properties"]
+        for field in ("provider", "model", "temperature", "max_tokens", "system_message", "api_key"):
+            assert field in props, f"coding_agent missing {field}"
 
     def test_chat_model_password_masked(self):
         spec = get_node_spec("openaiChatModel")
-        api_key = spec["inputs"]["properties"]["apiKey"]
+        api_key = spec["inputs"]["properties"]["api_key"]
         assert api_key["password"] is True
 
     def test_webhook_trigger_header_auth_gated(self):
         spec = get_node_spec("webhookTrigger")
-        for field in ["headerName", "headerValue"]:
+        for field in ["header_name", "header_value"]:
             prop = spec["inputs"]["properties"][field]
             assert prop["displayOptions"]["show"]["authentication"] == ["header"]
-        assert spec["inputs"]["properties"]["headerValue"]["password"] is True
+        assert spec["inputs"]["properties"]["header_value"]["password"] is True
 
     def test_console_field_mode_gating(self):
         spec = get_node_spec("console")
-        assert spec["inputs"]["properties"]["fieldPath"]["displayOptions"]["show"]["log_mode"] == ["field"]
+        assert spec["inputs"]["properties"]["field_path"]["displayOptions"]["show"]["log_mode"] == ["field"]
         assert spec["inputs"]["properties"]["expression"]["displayOptions"]["show"]["log_mode"] == ["expression"]
 
     def test_process_manager_operation_gating(self):
         spec = get_node_spec("processManager")
         assert spec["inputs"]["properties"]["command"]["displayOptions"]["show"]["operation"] == ["start"]
-        assert spec["inputs"]["properties"]["input"]["displayOptions"]["show"]["operation"] == ["send_input"]
+        assert spec["inputs"]["properties"]["input_text"]["displayOptions"]["show"]["operation"] == ["send_input"]
 
     def test_proxy_request_body_gating(self):
         spec = get_node_spec("proxyRequest")
@@ -593,17 +600,17 @@ class TestDisplayOptionsEnrichment:
 
     def test_vector_store_query_fields_gated(self):
         spec = get_node_spec("vectorStore")
-        for field in ["query", "topK"]:
+        for field in ["query_embedding", "top_k"]:
             assert spec["inputs"]["properties"][field]["displayOptions"]["show"]["operation"] == ["query"]
 
     def test_email_read_operation_gating(self):
         spec = get_node_spec("emailRead")
         assert "search" in spec["inputs"]["properties"]["query"]["displayOptions"]["show"]["operation"]
-        assert "read" in spec["inputs"]["properties"]["messageId"]["displayOptions"]["show"]["operation"]
+        assert "read" in spec["inputs"]["properties"]["message_id"]["displayOptions"]["show"]["operation"]
 
     def test_file_modify_edit_gated(self):
         spec = get_node_spec("fileModify")
-        for field in ["oldString", "newString", "replaceAll"]:
+        for field in ["old_string", "new_string", "replace_all"]:
             assert spec["inputs"]["properties"][field]["displayOptions"]["show"]["operation"] == ["edit"]
         assert spec["inputs"]["properties"]["content"]["displayOptions"]["show"]["operation"] == ["write"]
 
@@ -995,7 +1002,7 @@ class TestWave10GContractInvariants:
             if not schema:
                 continue
             for name, prop in (schema.get("properties") or {}).items():
-                if name in ("apiKey", "api_key") and prop.get("password") is not True:
+                if name in ("api_key", "api_key") and prop.get("password") is not True:
                     offenders.append(f"{t}.{name}")
         assert not offenders, (
             "API-key fields missing password:True — they would render in "

@@ -22,7 +22,10 @@ _UPDATE_OR_DELETE = {"displayOptions": {"show": {"operation": ["update", "delete
 
 class CalendarParams(BaseModel):
     operation: Literal["create", "list", "update", "delete"] = "list"
-    calendar_id: str = Field(default="primary")
+    calendar_id: str = Field(
+        default="primary",
+        json_schema_extra={"loadOptionsMethod": "googleCalendarList"},
+    )
     event_id: Optional[str] = Field(default=None, json_schema_extra=_UPDATE_OR_DELETE)
 
     # Create fields

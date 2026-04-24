@@ -28,6 +28,7 @@ class GmailReceiveParams(BaseModel):
     label_filter: str = Field(
         default="INBOX",
         description="Label to filter by (or 'all' to disable)",
+        json_schema_extra={"loadOptionsMethod": "gmailLabels"},
     )
     mark_as_read: bool = False
     poll_interval: int = Field(default=60, ge=10, le=3600)

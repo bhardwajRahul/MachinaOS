@@ -19,9 +19,9 @@ from constants import (
     GOOGLE_MAPS_TYPES,
     detect_ai_provider,
 )
-from models.nodes import validate_node_params
 from pydantic import ValidationError
 from services import event_waiter
+from services.node_registry import get_node_class
 # Wave 11.D.13 sunset: every handler that was imported here is now
 # either (a) called lazily from a plugin's execute_op / execute method,
 # or (b) retired entirely. The dispatcher itself only needs the
@@ -214,12 +214,15 @@ class NodeExecutor:
         db_params = await self.database.get_node_parameters(node_id) or {}
         merged = {**db_params, **params} if params else db_params
 
-        # Validate
-        try:
-            validated = validate_node_params(node_type, merged)
-            merged = {**merged, **validated.model_dump(by_alias=True, exclude_unset=True)}
-        except ValidationError as e:
-            logger.warning("Validation warning", node_type=node_type, errors=str(e))
+        # Validate via plugin Params (snake_case, plugin-only path).
+        node_cls = get_node_class(node_type)
+        params_model = getattr(node_cls, "Params", None) if node_cls else None
+        if params_model is not None:
+            try:
+                validated = params_model.model_validate(merged)
+                merged = {**merged, **validated.model_dump(exclude_unset=True)}
+            except ValidationError as e:
+                logger.warning("Validation warning", node_type=node_type, errors=str(e))
 
         # Inject API keys
         return await self._inject_api_keys(node_type, merged)
