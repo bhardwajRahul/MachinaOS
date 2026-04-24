@@ -2038,66 +2038,23 @@ from services.telegram_service import get_telegram_service
 
 
 async def handle_telegram_connect(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
-    """Connect to Telegram with bot token. Stores token in encrypted credentials."""
-    token = data.get("token")
-    if not token:
-        return {"success": False, "error": "Bot token required"}
-
-    service = get_telegram_service()
-    result = await service.connect(token)
-
-    # Store token in encrypted credentials on success
-    if result.get("success"):
-        try:
-            auth_service = get_auth_service()
-            await auth_service.store_api_key(
-                provider="telegram_bot_token",
-                api_key=token,
-                models=[],
-                session_id="default",
-            )
-            # Restore owner_chat_id from credentials if previously captured
-            saved_owner = await auth_service.get_api_key("telegram_owner_chat_id")
-            if saved_owner:
-                await service.set_owner(int(saved_owner))
-        except Exception as e:
-            logger.warning(f"[Telegram] Failed to store token in credentials: {e}")
-
-    return result
+    """Connect to Telegram. Service reads stored token from DB when the
+    payload omits it — DB is the source of truth, the frontend saves the
+    token via save_api_key before calling this handler."""
+    return await get_telegram_service().connect(data.get("token"))
 
 
 async def handle_telegram_disconnect(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
-    """Disconnect Telegram bot and remove stored token and owner chat ID."""
-    service = get_telegram_service()
-    result = await service.disconnect()
-
-    # Remove stored token and owner chat ID
-    try:
-        auth_service = get_auth_service()
-        await auth_service.remove_api_key("telegram_bot_token")
-        await auth_service.remove_api_key("telegram_owner_chat_id")
-    except Exception as e:
-        logger.warning(f"[Telegram] Failed to remove stored credentials: {e}")
-
-    result["has_stored_token"] = False
-    return result
+    """Stop the polling session. The stored token stays in DB; explicit
+    delete_api_key removes it."""
+    return await get_telegram_service().disconnect()
 
 
 async def handle_telegram_status(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
-    """Get Telegram bot connection status. Also checks for stored token."""
+    """Get Telegram bot connection status."""
     service = get_telegram_service()
     status = service.get_status()
-
-    # Check if token is stored (for reconnect UI)
-    has_stored_token = False
-    try:
-        auth_service = get_auth_service()
-        stored = await auth_service.get_api_key("telegram_bot_token")
-        has_stored_token = stored is not None
-    except Exception:
-        pass
-
-    status["has_stored_token"] = has_stored_token
+    status["has_stored_token"] = await service.has_stored_token()
     return {"success": True, "status": status}
 
 

@@ -337,75 +337,42 @@ class StatusBroadcaster:
     async def _refresh_telegram_status(self):
         """Refresh Telegram status from stored credentials and auto-reconnect.
 
-        Called on client connect. If bot has a stored token and isn't connected,
-        attempts auto-reconnect (mirrors the Android relay reconnect pattern).
+        Called on client connect. Auth reads + owner restore are handled
+        inside TelegramService; this function just decides whether to
+        attempt an auto-reconnect and mirrors the resulting status into
+        the broadcaster cache.
         """
         try:
             from services.telegram_service import get_telegram_service
             service = get_telegram_service()
 
-            # If already connected, just sync status cache
+            def _snapshot(connected: bool, has_token: bool) -> Dict[str, Any]:
+                s = service.get_status()
+                return {
+                    "connected": connected,
+                    "bot_id": s.get("bot_id") if connected else None,
+                    "bot_username": s.get("bot_username") if connected else None,
+                    "bot_name": s.get("bot_name") if connected else None,
+                    "owner_chat_id": s.get("owner_chat_id") if connected else None,
+                    "has_stored_token": has_token,
+                }
+
             if service.connected:
-                status = service.get_status()
-                self._status["telegram"] = {
-                    "connected": True,
-                    "bot_id": status.get("bot_id"),
-                    "bot_username": status.get("bot_username"),
-                    "bot_name": status.get("bot_name"),
-                    "owner_chat_id": status.get("owner_chat_id"),
-                    "has_stored_token": True,
-                }
-                logger.debug(f"[StatusBroadcaster] Telegram already connected: @{status.get('bot_username')}")
+                self._status["telegram"] = _snapshot(True, True)
                 return
 
-            # Not connected - check for stored token
-            from core.container import container
-            auth_service = container.auth_service()
-            stored_token = await auth_service.get_api_key("telegram_bot_token")
-
-            if not stored_token:
-                self._status["telegram"] = {
-                    "connected": False,
-                    "bot_id": None,
-                    "bot_username": None,
-                    "bot_name": None,
-                    "owner_chat_id": None,
-                    "has_stored_token": False,
-                }
+            if not await service.has_stored_token():
+                self._status["telegram"] = _snapshot(False, False)
                 return
 
-            # Has stored token but not connected - auto-reconnect
             logger.info("[StatusBroadcaster] Auto-reconnecting Telegram bot...")
-            result = await service.connect(stored_token)
-
-            if result.get("success"):
-                # Restore owner_chat_id from credentials
-                try:
-                    saved_owner = await auth_service.get_api_key("telegram_owner_chat_id")
-                    if saved_owner:
-                        await service.set_owner(int(saved_owner))
-                except Exception:
-                    pass
-
-                status = service.get_status()
-                self._status["telegram"] = {
-                    "connected": True,
-                    "bot_id": status.get("bot_id"),
-                    "bot_username": status.get("bot_username"),
-                    "bot_name": status.get("bot_name"),
-                    "owner_chat_id": status.get("owner_chat_id"),
-                    "has_stored_token": True,
-                }
-                logger.info(f"[StatusBroadcaster] Telegram auto-reconnected: @{status.get('bot_username')}")
+            result = await service.connect()  # service reads token from DB
+            ok = bool(result.get("success"))
+            self._status["telegram"] = _snapshot(ok, True)
+            if ok:
+                bot_username = self._status["telegram"].get("bot_username")
+                logger.info(f"[StatusBroadcaster] Telegram auto-reconnected: @{bot_username}")
             else:
-                self._status["telegram"] = {
-                    "connected": False,
-                    "bot_id": None,
-                    "bot_username": None,
-                    "bot_name": None,
-                    "owner_chat_id": None,
-                    "has_stored_token": True,
-                }
                 logger.warning(f"[StatusBroadcaster] Telegram auto-reconnect failed: {result.get('error')}")
 
         except Exception as e:

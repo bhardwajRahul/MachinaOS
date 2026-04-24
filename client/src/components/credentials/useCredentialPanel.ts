@@ -17,7 +17,7 @@
  * panel action has the same ergonomics.
  */
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useApiKeys } from '../../hooks/useApiKeys';
 import { useWebSocket } from '../../contexts/WebSocketContext';
@@ -33,6 +33,16 @@ export function useCredentialPanel(config: ProviderConfig, visible: boolean) {
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [stored, setStored] = useState(false);
+
+  // Reset transient UI state when the user switches providers so a
+  // "Bot Token required" error from Telegram doesn't bleed into the
+  // Google Workspace panel, etc. `stored` is re-seeded from the
+  // credentialValuesQuery below.
+  useEffect(() => {
+    setError(null);
+    setLoading(null);
+    setStored(false);
+  }, [config.id]);
 
   const {
     validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey,
@@ -87,17 +97,25 @@ export function useCredentialPanel(config: ProviderConfig, visible: boolean) {
     [qc, providerKey],
   );
 
-  const form = useRef({
-    getFieldValue: (key: string): string | undefined => valuesRef.current[key],
-    getFieldsValue: (): CredentialFormValues => ({ ...valuesRef.current }),
-    setFieldValue: (key: string, value: string) => {
-      writeValues((prev) => ({ ...prev, [key]: value }));
-    },
-    setFieldsValue: (next: CredentialFormValues) => {
-      writeValues((prev) => ({ ...prev, ...next }));
-    },
-    resetFields: () => writeValues(() => EMPTY_VALUES),
-  }).current;
+  // useMemo keyed on writeValues so form.setFieldValue always targets the
+  // current provider's cache. useRef would freeze the closure to the
+  // first render's providerKey — breaking every panel opened after the
+  // first one (typing would write to the wrong provider, save would read
+  // undefined from the right provider).
+  const form = useMemo(
+    () => ({
+      getFieldValue: (key: string): string | undefined => valuesRef.current[key],
+      getFieldsValue: (): CredentialFormValues => ({ ...valuesRef.current }),
+      setFieldValue: (key: string, value: string) => {
+        writeValues((prev) => ({ ...prev, [key]: value }));
+      },
+      setFieldsValue: (next: CredentialFormValues) => {
+        writeValues((prev) => ({ ...prev, ...next }));
+      },
+      resetFields: () => writeValues(() => EMPTY_VALUES),
+    }),
+    [writeValues],
+  );
 
   // Sync stored from query on first load — if the backend already has
   // a key, mark stored=true so the badge renders without a validate click.

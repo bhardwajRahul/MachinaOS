@@ -3,7 +3,7 @@
  * Takes a FieldDef[] array + the form shim from useCredentialPanel.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 
 import { Input } from '@/components/ui/input';
@@ -37,8 +37,22 @@ interface FieldRowProps {
 
 const FieldRow: React.FC<FieldRowProps> = ({ field, form }) => {
   const [revealed, setRevealed] = useState(false);
-  const value = form.getFieldValue(field.key) ?? '';
+  // Local state for the controlled input — same pattern ApiKeyPanel
+  // uses. Reading the value directly from form.getFieldValue (backed by
+  // a TanStack Query cache) introduces a render-timing gap in the
+  // controlled-input loop that drops keystrokes. Local state avoids it;
+  // we mirror to the form on every change so panel-level getFieldValue
+  // still works for Save Credentials.
+  const initial = form.getFieldValue(field.key) ?? '';
+  const [value, setValue] = useState(initial);
   const isSecret = !!field.secret;
+
+  // When the stored value arrives (query resolves), seed the local
+  // state. After that, user input is authoritative.
+  useEffect(() => {
+    if (!value && initial) setValue(initial);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initial]);
 
   return (
     <div className="grid gap-1.5">
@@ -51,7 +65,11 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, form }) => {
           id={`field-${field.key}`}
           type={isSecret && !revealed ? 'password' : 'text'}
           value={value}
-          onChange={(e) => form.setFieldValue(field.key, e.target.value)}
+          onChange={(e) => {
+            const v = e.target.value;
+            setValue(v);
+            form.setFieldValue(field.key, v);
+          }}
           placeholder={field.placeholder}
           className={isSecret ? 'font-mono pr-9' : 'font-mono'}
         />

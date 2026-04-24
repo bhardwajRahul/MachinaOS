@@ -26,8 +26,17 @@ const OAuthPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = ({ co
         onSaveCredentials={() => {
           const missing = config.fields?.find(f => f.required && !panel.form.getFieldValue(f.key)?.trim());
           if (missing) { panel.setError(`${missing.label} is required`); return; }
+          // Snapshot values BEFORE the loop. Each panel.actions.save call
+          // invalidates the credentialValues query, which refetches and
+          // only reflects fields already stored on the server — reading
+          // getFieldValue inside the loop would return undefined for any
+          // field we haven't saved yet, silently dropping them.
+          const snapshot = panel.form.getFieldsValue();
           panel.execute('save', async () => {
-            for (const f of config.fields!) { const v = panel.form.getFieldValue(f.key)?.trim(); if (v) await panel.actions.save(f.key, v); }
+            for (const f of config.fields!) {
+              const v = snapshot[f.key]?.trim();
+              if (v) await panel.actions.save(f.key, v);
+            }
             panel.setStored(true);
             return { success: true };
           });

@@ -85,15 +85,35 @@ class TelegramService:
             "owner_chat_id": self._owner_chat_id,
         }
 
-    async def connect(self, token: str) -> Dict[str, Any]:
+    async def has_stored_token(self) -> bool:
+        """Whether a ``telegram_bot_token`` is persisted in auth credentials."""
+        from core.container import container
+        auth = container.auth_service()
+        return bool(await auth.get_api_key("telegram_bot_token"))
+
+    async def connect(self, token: Optional[str] = None) -> Dict[str, Any]:
         """Connect to Telegram with bot token and start polling.
 
+        When ``token`` is omitted, falls back to the stored
+        ``telegram_bot_token`` credential — matches the Twitter/Google
+        OAuth pattern where the frontend saves credentials first and then
+        calls connect. On success the token is persisted (idempotent) and
+        any previously captured owner chat id is restored.
+
         Args:
-            token: Bot token from @BotFather
+            token: Bot token from @BotFather. Optional when a token has
+                already been saved via ``auth_service.store_api_key``.
 
         Returns:
             Connection result with bot info
         """
+        from core.container import container
+        auth = container.auth_service()
+
+        if not token:
+            token = await auth.get_api_key("telegram_bot_token")
+        if not token:
+            return {"success": False, "error": "Bot token required"}
         async with self._lock:
             if self._connected:
                 await self._disconnect_internal()
@@ -147,6 +167,15 @@ class TelegramService:
 
                 # Broadcast status update
                 await self._broadcast_status()
+
+                # Hydrate runtime owner_chat_id from stored credential.
+                # The DB is the source of truth; connect only reads.
+                saved_owner = await auth.get_api_key("telegram_owner_chat_id")
+                if saved_owner:
+                    try:
+                        self._owner_chat_id = int(saved_owner)
+                    except (TypeError, ValueError):
+                        pass
 
                 logger.info(f"[Telegram] Connected and polling started for @{me.username}")
 
