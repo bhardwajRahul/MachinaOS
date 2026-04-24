@@ -100,7 +100,12 @@ class AIAgentNode(ActionNode):
             context=ctx.raw, database=database,
             log_prefix="[AI Agent]",
         )
-        response = await ai_service.execute_agent(ctx.node_id, **kwargs)
+        # ``AIService.execute_agent`` signature is
+        # ``(node_id, parameters, **opts)`` -- pass parameters positionally.
+        call_parameters = kwargs.pop("parameters")
+        response = await ai_service.execute_agent(
+            ctx.node_id, call_parameters, **kwargs,
+        )
         if response.get("success"):
             return response.get("result") or response
         raise RuntimeError(response.get("error") or "AI Agent execution failed")

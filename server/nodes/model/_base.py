@@ -83,12 +83,32 @@ class ChatModelBase(ActionNode, abstract=True):
 
     @Operation("chat", cost={"service": "chat_model", "action": "chat", "count": 1})
     async def chat(self, ctx: NodeContext, params: ChatModelParams) -> Any:
+        from constants import detect_ai_provider
         from core.container import container
 
         ai_service = container.ai_service()
-        response = await ai_service.execute_chat(
-            ctx.node_id, self.type, params.model_dump(by_alias=True),
-        )
+        payload = params.model_dump(by_alias=True)
+
+        # Pre-refactor contract: NodeExecutor._inject_api_keys fetched the
+        # key from auth_service and wrote it into the params dict under
+        # the snake_case `api_key` key. Preserve that wire format so
+        # downstream execute_chat + telemetry see the resolved credential
+        # in the same place it always lived. Fetch missing, then mirror
+        # the aliased form into snake_case.
+        if not payload.get("api_key") and not payload.get("apiKey"):
+            provider = detect_ai_provider(self.type, payload)
+            try:
+                resolved = await ai_service.auth.get_api_key(provider)
+            except Exception:
+                resolved = None
+            if resolved:
+                payload["api_key"] = resolved
+                payload["apiKey"] = resolved
+        elif payload.get("apiKey") and not payload.get("api_key"):
+            # Pydantic emitted the camelCase alias; ensure snake_case also set.
+            payload["api_key"] = payload["apiKey"]
+
+        response = await ai_service.execute_chat(ctx.node_id, self.type, payload)
         if response.get("success"):
             return response.get("result") or response
         raise RuntimeError(response.get("error") or f"{self.type} chat failed")

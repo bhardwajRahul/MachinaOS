@@ -18,7 +18,7 @@ from ._base import build_google_service, run_sync, track_google_usage
 
 
 class DriveParams(BaseModel):
-    operation: Literal["upload", "download", "list", "share"] = "list"
+    operation: str = "list"  # handler dispatches; unknown op raised from body
     file_id: Optional[str] = Field(default=None, alias="fileId")
     filename: Optional[str] = None
     file_url: Optional[str] = Field(default=None, alias="fileUrl")

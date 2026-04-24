@@ -15,7 +15,8 @@ from ._base import build_google_service, run_sync, track_google_usage
 
 
 class CalendarParams(BaseModel):
-    operation: Literal["create", "list", "update", "delete"] = "list"
+    # Pre-refactor: unknown op -> "Unknown operation ..." from handler, not Pydantic.
+    operation: str = "list"
     calendar_id: str = Field(default="primary", alias="calendarId")
     event_id: Optional[str] = Field(default=None, alias="eventId")
     title: Optional[str] = None

@@ -14,7 +14,7 @@ from ._base import build_google_service, run_sync, track_google_usage
 
 
 class ContactsParams(BaseModel):
-    operation: Literal["create", "list", "search", "get", "update", "delete"] = "list"
+    operation: str = "list"  # handler dispatches; unknown op raised from body
     resource_name: Optional[str] = Field(default=None, alias="resourceName")
     first_name: Optional[str] = Field(default=None, alias="firstName")
     last_name: Optional[str] = Field(default=None, alias="lastName")

@@ -10,7 +10,9 @@ from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
 
 class ProcessManagerParams(BaseModel):
-    operation: Literal["start", "stop", "restart", "list", "send_input", "get_output"] = "list"
+    # Pre-refactor contract: unknown op -> "Unknown operation ..."
+    # from handler, not Pydantic error.
+    operation: str = Field(default="list")
     name: str = Field(default="")
     command: str = Field(default="")
     cwd: str = Field(default="")

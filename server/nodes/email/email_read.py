@@ -14,7 +14,7 @@ class EmailReadParams(BaseModel):
         "gmail", "outlook", "yahoo", "icloud",
         "protonmail", "fastmail", "custom",
     ] = "gmail"
-    operation: Literal["list", "search", "read", "folders", "move", "delete", "flag"] = "list"
+    operation: str = "list"  # handler dispatches; unknown op raised from body
     folder: str = Field(default="INBOX")
     query: str = Field(default="")
     message_id: str = Field(default="", alias="messageId")

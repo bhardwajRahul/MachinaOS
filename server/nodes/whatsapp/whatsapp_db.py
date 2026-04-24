@@ -15,15 +15,8 @@ from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
 
 class WhatsAppDbParams(BaseModel):
-    operation: Literal[
-        "chat_history", "search_groups", "get_group_info",
-        "get_contact_info", "list_contacts", "check_contacts",
-        "list_channels", "get_channel_info", "channel_messages",
-        "channel_stats", "channel_follow", "channel_unfollow",
-        "channel_create", "channel_mute", "channel_mark_viewed",
-        "newsletter_react", "newsletter_live_updates",
-        "contact_profile_pic",
-    ] = "chat_history"
+    # Pre-refactor contract: unknown op -> "Unknown operation ..." from handler.
+    operation: str = Field(default="chat_history")
     chat_id: str = Field(default="", alias="chatId")
     group_id: str = Field(default="", alias="groupId")
     phone_number: str = Field(default="", alias="phoneNumber")

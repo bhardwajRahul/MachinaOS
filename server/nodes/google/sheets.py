@@ -18,7 +18,7 @@ from ._base import build_google_service, run_sync, track_google_usage
 
 
 class SheetsParams(BaseModel):
-    operation: Literal["read", "write", "append"] = "read"
+    operation: str = "read"  # handler dispatches; unknown op raised from body
     spreadsheet_id: str = Field(default="", alias="spreadsheetId")
     range: str = Field(default="A1:Z1000")
     values: Any = Field(default_factory=list)
