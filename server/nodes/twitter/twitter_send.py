@@ -26,8 +26,12 @@ class TwitterSendParams(BaseModel):
 
 
 class TwitterSendOutput(BaseModel):
+    # Pre-refactor: response fields (id, text, ...) land at the top
+    # level of the envelope, not under a `data` wrapper. Declared as
+    # Optional[str] so Pydantic doesn't complain when they're absent.
     action: Optional[str] = None
-    data: Optional[dict] = None
+    id: Optional[str] = None
+    text: Optional[str] = None
 
     model_config = ConfigDict(extra="allow")
 
@@ -39,7 +43,8 @@ async def _do_send(client, action: str, p: dict, node_id: str, ctx_raw: dict) ->
             raise RuntimeError("Tweet text is required")
         result = await asyncio.to_thread(client.posts.create, body={"text": text[:280]})
         await track_twitter_usage(node_id, "tweet", 1, ctx_raw)
-        return TwitterSendOutput(action="tweet_sent", data=format_response(result))
+        resp = format_response(result)
+        return TwitterSendOutput(action="tweet_sent", **(resp if isinstance(resp, dict) else {}))
 
     if action == "reply":
         text = p.get("text", "")
@@ -51,7 +56,8 @@ async def _do_send(client, action: str, p: dict, node_id: str, ctx_raw: dict) ->
             body={"text": text[:280], "reply": {"in_reply_to_tweet_id": reply_to}},
         )
         await track_twitter_usage(node_id, "reply", 1, ctx_raw)
-        return TwitterSendOutput(action="reply_sent", data=format_response(result))
+        resp = format_response(result)
+        return TwitterSendOutput(action="reply_sent", **(resp if isinstance(resp, dict) else {}))
 
     tweet_id = p.get("tweetId") or p.get("tweet_id")
     if not tweet_id:

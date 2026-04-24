@@ -170,10 +170,9 @@ async def _run_playwright(url, pages, p, proxy_config, css_selector, extract_lin
 
 class CrawleeScraperParams(BaseModel):
     url: str = Field(default="")
-    crawler_type: Literal["beautifulsoup", "playwright", "adaptive"] = Field(
-        default="beautifulsoup", alias="crawlerType",
-    )
-    mode: Literal["single", "crawl"] = "single"
+    # Pre-refactor: unknown crawler_type / mode -> handler error.
+    crawler_type: str = Field(default="beautifulsoup", alias="crawlerType")
+    mode: str = Field(default="single")
     css_selector: str = Field(default="", alias="cssSelector")
     extract_links: bool = Field(default=False, alias="extractLinks")
     max_pages: int = Field(default=10, alias="maxPages", ge=1, le=1000)
