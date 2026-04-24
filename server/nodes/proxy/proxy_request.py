@@ -71,6 +71,12 @@ class ProxyRequestNode(ActionNode):
         from ._usage import track_proxy_usage
 
         log = get_logger(__name__)
+
+        # Pre-refactor contract: empty URL short-circuits with a clear
+        # "URL is required" error before contacting the proxy service.
+        if not params.url.strip():
+            raise ValueError("URL is required")
+
         svc = get_proxy_service()
         if not svc or not svc.is_enabled():
             raise RuntimeError(

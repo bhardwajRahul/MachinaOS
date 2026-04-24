@@ -245,6 +245,16 @@ def _build_mock_maps_service() -> MagicMock:
 def _build_mock_text_service() -> MagicMock:
     svc = MagicMock(name="TextService")
     svc.generate_text = AsyncMock(return_value="mocked text")
+    # Plugin paths for text generator / file handler now call these names
+    # directly on the TextService singleton.
+    svc.execute_text_generator = AsyncMock(return_value={
+        "success": True,
+        "text": "mocked text",
+    })
+    svc.execute_file_handler = AsyncMock(return_value={
+        "success": True,
+        "content": "mocked content",
+    })
     return svc
 
 

@@ -221,9 +221,12 @@ class BaseNode:
         op_name = self._pick_operation(parameters)
         op_spec = self._operations.get(op_name)
         if op_spec is None:
+            # Pre-refactor error wording: "Unknown <node_type> operation: <op>"
+            # so tests that assert `"unknown gmail operation"` etc. continue
+            # to match via lowercase-contains.
             return self._wrap_error(
                 start_time=start_time,
-                error=f"Unknown operation '{op_name}' for node {self.type}",
+                error=f"Unknown {self.type} operation: '{op_name}'",
                 error_type="InvalidParametersError",
             )
 
