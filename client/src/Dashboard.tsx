@@ -295,7 +295,13 @@ const DashboardContent: React.FC = () => {
     const nodeIds = agentNodes.map(n => n.id);
     const allParams = await getAllNodeParameters(nodeIds);
     await Promise.all(agentNodes.map(n => {
-      const existing = allParams[n.id] || {};
+      // `allParams[n.id]` is the NodeParameters wrapper
+      // `{parameters, version, timestamp}` — unwrap to the raw params
+      // dict before spreading, otherwise we'd persist {parameters: {...},
+      // version, timestamp, provider, model} and every declared field
+      // (temperature, system_message, prompt, ...) gets buried inside
+      // the nested `parameters` key, unreachable by the panel.
+      const existing = allParams[n.id]?.parameters || {};
       return saveNodeParameters(n.id, { ...existing, provider, model });
     }));
   }, [nodes, getAllNodeParameters, saveNodeParameters]);
