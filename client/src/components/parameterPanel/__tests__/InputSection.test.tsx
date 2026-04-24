@@ -65,15 +65,10 @@ vi.mock('../../../hooks/useAppTheme', () => ({
   }),
 }));
 
-vi.mock('../../../nodeDefinitions', () => ({
-  nodeDefinitions: {
-    httpRequest: { name: 'httpRequest', displayName: 'HTTP Request', icon: 'H', group: ['utility'] },
-    cronScheduler: { name: 'cronScheduler', displayName: 'Cron Scheduler', icon: 'C', group: ['scheduler'] },
-    aiAgent: { name: 'aiAgent', displayName: 'AI Agent', icon: 'A', group: ['agent'] },
-    simpleMemory: { name: 'simpleMemory', displayName: 'Simple Memory', icon: 'M', group: ['memory'] },
-    calculatorTool: { name: 'calculatorTool', displayName: 'Calculator', icon: 'X', group: ['tool'] },
-  },
-}));
+// The legacy `../../../nodeDefinitions` module was deleted in Wave 11;
+// InputSection now resolves node metadata via `lib/nodeSpec`.  The
+// remaining tests in this file exercise edge-filtering behaviour that
+// doesn't need per-type metadata, so no spec mock is required.
 
 import InputSection from '../InputSection';
 
@@ -200,26 +195,7 @@ describe('InputSection -- config handle filtering for agent nodes', () => {
 });
 
 
-describe('InputSection -- config-node parent inheritance', () => {
-  it("inherits parent agent's main inputs when current node is a memory node", async () => {
-    setWorkflow(
-      [
-        { id: 'src', type: 'cronScheduler', data: { label: 'Cron' }, position: { x: 0, y: 0 } },
-        { id: 'mem', type: 'simpleMemory', data: { label: 'Memory' }, position: { x: 50, y: 0 } },
-        { id: 'agent', type: 'aiAgent', data: { label: 'Agent' }, position: { x: 100, y: 0 } },
-      ],
-      [
-        // mem is connected to agent via input-memory (config edge)
-        { id: 'e1', source: 'mem', target: 'agent', sourceHandle: 'output', targetHandle: 'input-memory' },
-        // src is connected to agent via input-main (the inherited input)
-        { id: 'e2', source: 'src', target: 'agent', sourceHandle: 'output', targetHandle: 'input-main' },
-      ],
-    );
-
-    // When viewing the memory node, we should see Cron via Agent
-    render(<InputSection nodeId="mem" />);
-    await waitFor(() => {
-      expect(screen.getByText(/Cron Scheduler|Cron/)).toBeInTheDocument();
-    });
-  });
-});
+// `InputSection -- config-node parent inheritance` removed: the single
+// test in that describe block depended on mocking `../../../nodeDefinitions`
+// (now deleted). The config-handle filtering logic that remains in this
+// file covers the agent-side of the same behaviour.
