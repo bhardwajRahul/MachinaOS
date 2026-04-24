@@ -17,6 +17,14 @@ from ._handles import STD_AGENT_HINTS, std_agent_handles
 
 
 class ChatAgentParams(BaseModel):
+    """Zeenie tuning surface.
+
+    Matches AIAgentParams: no ``api_key`` field (credentials auto-injected
+    at execution time), tuning fields grouped under "options" for
+    collapsible rendering. See docs-internal/plugin_system.md for the
+    convention.
+    """
+
     provider: Literal[
         "openai", "anthropic", "gemini", "openrouter",
         "groq", "cerebras", "deepseek", "kimi", "mistral",
@@ -34,14 +42,28 @@ class ChatAgentParams(BaseModel):
     system_message: Optional[str] = Field(
         default="", json_schema_extra={"rows": 3},
     )
-    temperature: float = Field(default=0.7, ge=0.0, le=2.0)
-    max_tokens: Optional[int] = Field(default=1000, ge=1, le=200000)
-    api_key: Optional[str] = Field(
-        default=None,
-        json_schema_extra={"password": True},
+
+    # ---- "Options" group (collapsed by default in the parameter panel) ----
+    temperature: float = Field(
+        default=0.7, ge=0.0, le=2.0,
+        json_schema_extra={"group": "options"},
+    )
+    max_tokens: Optional[int] = Field(
+        default=1000, ge=1, le=200000,
+        json_schema_extra={"group": "options"},
     )
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(
+        extra="ignore",
+        json_schema_extra={
+            "groups": {
+                "options": {
+                    "display_name": "Options",
+                    "placeholder": "Add Option",
+                },
+            },
+        },
+    )
 
 
 class ChatAgentOutput(BaseModel):

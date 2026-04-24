@@ -49,6 +49,16 @@ async def prepare_agent_call(
     """Run the 3-step pre-dispatch flow and return a kwargs dict ready
     to splat into ``AIService.execute_agent`` or ``execute_chat_agent``.
     """
+    # api_key is NOT a declared Params field on aiAgent/chatAgent/
+    # specialized agents — credentials live in the credentials DB and
+    # node_executor._inject_api_keys puts the resolved key into the
+    # *raw* parameters dict before Pydantic validation strips it. Recover
+    # it from context so ai_service.execute_[chat_]agent receives the
+    # key it reads via ``flattened.get('api_key')``.
+    raw_params = context.get("_raw_parameters") or {}
+    if "api_key" in raw_params and "api_key" not in parameters:
+        parameters = {**parameters, "api_key": raw_params["api_key"]}
+
     memory_data, skill_data, tool_data, input_data, task_data = await collect_agent_connections(
         node_id, context, database, log_prefix=log_prefix,
     )

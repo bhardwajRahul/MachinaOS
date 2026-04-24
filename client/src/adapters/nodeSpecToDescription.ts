@@ -61,6 +61,22 @@ interface JsonSchema {
   additionalProperties?: boolean | JsonSchema;
   title?: string;
   description?: string;
+  /**
+   * Field-group metadata lifted from the Pydantic Params class's
+   * ``model_config = ConfigDict(json_schema_extra={"groups": {...}})``.
+   *
+   * Each field that carries ``json_schema_extra={"group": "<key>"}`` gets
+   * nested into a synthetic ``type: "collection"`` INodeProperty at
+   * adapter time. ``groups[<key>]`` lets the Params class override the
+   * display name and placeholder; missing keys fall back to title-cased
+   * defaults.
+   */
+  groups?: Record<string, GroupMetadata>;
+}
+
+interface GroupMetadata {
+  display_name?: string;
+  placeholder?: string;
 }
 
 interface JsonSchemaProperty {
@@ -188,7 +204,101 @@ function toInodeProperty(
   if (Object.keys(lifted).length > 0) {
     out.typeOptions = { ...out.typeOptions, ...lifted } as INodeProperties['typeOptions'];
   }
+  // Stash the group key on the INodeProperty if set — picked up by
+  // ``collectGroups`` in the grouping pass. Not consumed by the
+  // renderer directly.
+  const groupKey = readHint<string>('group');
+  if (groupKey) (out as any).__group = groupKey;
   return out;
+}
+
+/**
+ * Convert `snake_case` / `kebab-case` / `camelCase` to Title Case.
+ * Adapter defaults for group display names when the Params class didn't
+ * declare explicit metadata.
+ */
+function titleCase(key: string): string {
+  return key
+    .replace(/[_-]+/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .split(' ')
+    .filter(Boolean)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
+
+/**
+ * Collapse properties marked with ``json_schema_extra={"group": "X"}``
+ * into a synthetic ``type: "collection"`` parent. Ungrouped properties
+ * keep their original positions; the collection container takes the
+ * position of the **first** field with that group key so schema order
+ * is preserved.
+ *
+ * The convention is opt-in — plugins that don't declare groups get the
+ * same flat output as before. See docs-internal/plugin_system.md for the
+ * convention spec.
+ */
+function groupProperties(
+  properties: INodeProperties[],
+  groupsMeta: Record<string, GroupMetadata>,
+): INodeProperties[] {
+  // First pass: figure out group membership + first-position index per group.
+  const groupKeyOf = (p: INodeProperties): string | undefined =>
+    (p as any).__group as string | undefined;
+  const firstIndex = new Map<string, number>();
+  for (let i = 0; i < properties.length; i++) {
+    const g = groupKeyOf(properties[i]);
+    if (g && !firstIndex.has(g)) firstIndex.set(g, i);
+  }
+  if (firstIndex.size === 0) {
+    // Clean up the private marker before returning.
+    return properties.map(p => {
+      const { __group, ...rest } = p as any;
+      return rest as INodeProperties;
+    });
+  }
+
+  const collected: Record<string, INodeProperties[]> = {};
+  const emitted = new Set<string>();
+  const result: INodeProperties[] = [];
+
+  for (let i = 0; i < properties.length; i++) {
+    const p = properties[i];
+    const g = groupKeyOf(p);
+    // Strip marker before storing.
+    const { __group, ...clean } = p as any;
+    const childProp = clean as INodeProperties;
+
+    if (!g) {
+      result.push(childProp);
+      continue;
+    }
+    collected[g] = collected[g] || [];
+    collected[g].push(childProp);
+    if (firstIndex.get(g) === i && !emitted.has(g)) {
+      emitted.add(g);
+      // Placeholder; filled in after all children are collected.
+      result.push({ __groupPlaceholder: g } as unknown as INodeProperties);
+    }
+  }
+
+  // Second pass: replace placeholders with the collection wrapper.
+  return result.map(p => {
+    const placeholder = (p as any).__groupPlaceholder as string | undefined;
+    if (!placeholder) return p;
+    const meta = groupsMeta[placeholder] || {};
+    const displayName = meta.display_name || titleCase(placeholder);
+    const defaultPlaceholder = `Add ${displayName.replace(/s$/, '') || displayName}`;
+    const collection: INodeProperties = {
+      displayName,
+      name: placeholder,
+      type: 'collection',
+      placeholder: meta.placeholder || defaultPlaceholder,
+      default: {},
+      options: collected[placeholder],
+    };
+    return collection;
+  });
 }
 
 /**
@@ -209,9 +319,15 @@ function defaultHandles(): NodeConnectionType[] {
 export function nodeSpecToDescription(spec: NodeSpec): INodeTypeDescription {
   const propsObject = spec.inputs?.properties ?? {};
   const requiredSet = new Set(spec.inputs?.required ?? []);
-  const properties: INodeProperties[] = Object.entries(propsObject).map(
+  const flatProperties: INodeProperties[] = Object.entries(propsObject).map(
     ([name, prop]) => toInodeProperty(name, prop, requiredSet.has(name)),
   );
+  // Lift ``json_schema_extra={"group": "X"}`` fields into synthetic
+  // ``type: "collection"`` containers. Group display metadata comes from
+  // ``model_config.json_schema_extra.groups`` on the Pydantic Params
+  // class; unspecified groups get a title-cased default.
+  const groupsMeta = spec.inputs?.groups ?? {};
+  const properties = groupProperties(flatProperties, groupsMeta);
 
   return {
     displayName: spec.displayName,

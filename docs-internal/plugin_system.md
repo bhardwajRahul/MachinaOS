@@ -177,6 +177,74 @@ editor, set those via `json_schema_extra` keys the adapter lifts into
 `dynamicOptions`, `loadOptionsMethod`, `numberStepSize`, `widget`,
 `accept`.
 
+### Field grouping (collapsible collections)
+
+Mark a field with `json_schema_extra={"group": "<key>"}` to nest it
+under a collapsible **collection** container in the parameter panel
+(same UX as an n8n "Options" accordion). Group membership is opt-in —
+plugins that don't declare any group render flat exactly like today.
+
+```python
+class AIAgentParams(BaseModel):
+    # Top-level fields (always visible)
+    provider: Literal[...] = "openai"
+    model: str = Field(default="")
+    prompt: str = Field(default="", json_schema_extra={"rows": 4})
+    system_message: Optional[str] = Field(default="")
+
+    # "Options" group — collapsed by default, "Add Option" reveals them
+    temperature: float = Field(
+        default=0.7, ge=0.0, le=2.0,
+        json_schema_extra={"group": "options"},
+    )
+    max_tokens: Optional[int] = Field(
+        default=1000, ge=1, le=200000,
+        json_schema_extra={"group": "options"},
+    )
+
+    # Class-level metadata (optional — title-cased defaults otherwise)
+    model_config = ConfigDict(
+        extra="ignore",
+        json_schema_extra={
+            "groups": {
+                "options": {
+                    "display_name": "Options",
+                    "placeholder": "Add Option",
+                },
+            },
+        },
+    )
+```
+
+**Adapter behaviour** (`client/src/adapters/nodeSpecToDescription.ts`):
+
+- Fields with the same `group` key are collected into a single
+  `type: "collection"` INodeProperty. The collection is positioned at
+  the **first** child's slot in the original schema order; subsequent
+  children slot into its `options` array.
+- Missing class-level `groups[<key>]` metadata falls back to
+  `display_name = titleCase(key)` (e.g. `"options"` → `"Options"`) and
+  `placeholder = f"Add {displayName.rstrip('s')}"` (e.g. `"Add Option"`).
+- Multiple groups per class are supported — just declare each key.
+
+**When to use it:** cluster advanced / rarely-tuned knobs (temperature,
+max_tokens, thinking params) behind an "Add Option" button so the
+default panel stays small. Main-entry fields (provider, prompt,
+required inputs) stay at the top level.
+
+### Credentials vs. Params
+
+`api_key` is never a declared Params field. Credentials live in the
+credentials DB via `ApiKeyCredential` / `OAuthCredential` subclasses;
+`services/node_executor._inject_api_keys()` resolves them at execution
+time and puts them in the raw parameters dict. Plugins that need the
+injected key read `ctx.raw["_raw_parameters"]["api_key"]` (stashed by
+`BaseNode.execute` before Pydantic validation strips it).
+
+If you find yourself declaring an `api_key: str = Field(...)` on a
+Params class, stop: add an `ApiKeyCredential` subclass instead and wire
+it via the `credentials = (...)` tuple on the node class.
+
 ### Operations (`@Operation`)
 
 A multi-op node declares multiple methods, each decorated with

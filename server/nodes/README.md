@@ -232,6 +232,18 @@ Run: `pytest server/tests/test_plugin_contract.py -q`.
   Pydantic models or `Union`, the LLM-schema emission will add `$defs`
   and fail the invariant. Keep tool-facing Params flat; move nested
   types to `Output` instead.
+- **Collapse advanced options with `group="..."`.** Tag rarely-tuned
+  fields with `json_schema_extra={"group": "options"}` and they get
+  lifted into a collapsible "Options" collection in the parameter
+  panel (adapter-side). Declare custom display name / placeholder via
+  `model_config = ConfigDict(json_schema_extra={"groups": {...}})`.
+  Main-entry fields stay top-level. Full spec in
+  [`docs-internal/plugin_system.md`](../../docs-internal/plugin_system.md).
+- **Never declare `api_key` as a Params field.** Credentials live in
+  the credentials DB via `ApiKeyCredential` / `OAuthCredential`
+  subclasses and auto-inject at execution time. Plugins that need the
+  injected key read `ctx.raw["_raw_parameters"]["api_key"]` — it's
+  stashed before Pydantic validation strips it.
 
 ---
 

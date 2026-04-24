@@ -209,6 +209,14 @@ class BaseNode:
         """
         start_time = time.time()
 
+        # Stash the raw (pre-validation) parameters dict in context.raw
+        # so plugins can recover values the Pydantic extra="ignore" policy
+        # would drop — e.g. ``api_key`` injected by node_executor's
+        # _inject_api_keys that isn't a declared Params field for AI agent
+        # nodes. Plugins that need it: ``ctx.raw["_raw_parameters"]``.
+        if isinstance(context.raw, dict):
+            context.raw["_raw_parameters"] = parameters
+
         try:
             params_obj = self._validate_params(parameters)
         except ValidationError as e:

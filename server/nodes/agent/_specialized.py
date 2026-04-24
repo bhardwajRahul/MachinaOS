@@ -21,7 +21,12 @@ from ._handles import STD_AGENT_HINTS, std_agent_handles
 
 
 class SpecializedAgentParams(BaseModel):
-    """Identical to AIAgentParams — full LLM tuning surface."""
+    """Identical to AIAgentParams — full LLM tuning surface.
+
+    Mirrors AIAgentParams: no ``api_key`` field (credentials come from the
+    credentials DB via runtime injection), tuning fields live in the
+    "options" group so the panel renders a collapsible Options collection.
+    """
 
     prompt: str = Field(
         default="",
@@ -37,18 +42,32 @@ class SpecializedAgentParams(BaseModel):
     model: str = Field(
         default="", json_schema_extra={"placeholder": "Select a model..."},
     )
-    temperature: float = Field(default=0.7, ge=0.0, le=2.0)
-    max_tokens: Optional[int] = Field(default=1000, ge=1, le=200000)
     system_message: Optional[str] = Field(
         default="You are a helpful assistant",
         json_schema_extra={"rows": 3},
     )
-    api_key: Optional[str] = Field(
-        default=None,
-        json_schema_extra={"password": True},
+
+    # ---- "Options" group (collapsed by default in the parameter panel) ----
+    temperature: float = Field(
+        default=0.7, ge=0.0, le=2.0,
+        json_schema_extra={"group": "options"},
+    )
+    max_tokens: Optional[int] = Field(
+        default=1000, ge=1, le=200000,
+        json_schema_extra={"group": "options"},
     )
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(
+        extra="ignore",
+        json_schema_extra={
+            "groups": {
+                "options": {
+                    "display_name": "Options",
+                    "placeholder": "Add Option",
+                },
+            },
+        },
+    )
 
 
 class SpecializedAgentOutput(BaseModel):

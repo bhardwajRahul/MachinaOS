@@ -252,4 +252,101 @@ describe('nodeSpecToDescription contract', () => {
     });
     expect(def.uiHints).toEqual({ isMasterSkillEditor: true, hasCodeEditor: false });
   });
+
+  // ---- json_schema_extra group convention ---------------------------------
+
+  it('lifts group="X" fields into a synthetic type="collection" parent', () => {
+    const def = nodeSpecToDescription({
+      type: 'groupedNode',
+      displayName: 'Grouped Node',
+      icon: '🗂️',
+      group: ['utility'],
+      version: 1,
+      inputs: {
+        properties: {
+          prompt: { type: 'string', title: 'Prompt' },
+          temperature: { type: 'number', default: 0.7, group: 'options' },
+          max_tokens: { type: 'integer', default: 1000, group: 'options' },
+        },
+      },
+    });
+    // prompt stays top-level; temperature + max_tokens absorbed into Options.
+    expect(def.properties).toHaveLength(2);
+    expect(def.properties[0].name).toBe('prompt');
+    const options = def.properties[1];
+    expect(options.name).toBe('options');
+    expect(options.type).toBe('collection');
+    expect(options.displayName).toBe('Options');  // title-cased default
+    expect(options.placeholder).toBe('Add Option');
+    expect(options.default).toEqual({});
+    expect(options.options?.map(o => o.name)).toEqual(['temperature', 'max_tokens']);
+    // Children don't carry the private marker.
+    expect((options.options?.[0] as any).__group).toBeUndefined();
+  });
+
+  it('honours class-level groups metadata overrides', () => {
+    const def = nodeSpecToDescription({
+      type: 'customGroupsNode',
+      displayName: 'Custom Groups',
+      icon: '🗄️',
+      group: ['utility'],
+      version: 1,
+      inputs: {
+        properties: {
+          name: { type: 'string' },
+          x: { type: 'string', group: 'advanced' },
+          y: { type: 'string', group: 'advanced' },
+        },
+        groups: {
+          advanced: { display_name: 'Advanced', placeholder: 'Add Advanced' },
+        },
+      },
+    });
+    const advanced = def.properties.find(p => p.name === 'advanced')!;
+    expect(advanced).toBeDefined();
+    expect(advanced.displayName).toBe('Advanced');
+    expect(advanced.placeholder).toBe('Add Advanced');
+    expect(advanced.options?.map(o => o.name)).toEqual(['x', 'y']);
+  });
+
+  it('places the collection at the position of the first grouped field', () => {
+    const def = nodeSpecToDescription({
+      type: 'orderedNode',
+      displayName: 'Ordered Node',
+      icon: '📑',
+      group: ['utility'],
+      version: 1,
+      inputs: {
+        properties: {
+          a: { type: 'string' },
+          grouped1: { type: 'string', group: 'g' },
+          b: { type: 'string' },
+          grouped2: { type: 'string', group: 'g' },
+          c: { type: 'string' },
+        },
+      },
+    });
+    // Expected order: a, g (takes grouped1's slot), b, c
+    expect(def.properties.map(p => p.name)).toEqual(['a', 'g', 'b', 'c']);
+    const g = def.properties.find(p => p.name === 'g')!;
+    expect(g.options?.map(o => o.name)).toEqual(['grouped1', 'grouped2']);
+  });
+
+  it('leaves ungrouped schemas flat (no regression for legacy plugins)', () => {
+    const def = nodeSpecToDescription({
+      type: 'flatNode',
+      displayName: 'Flat',
+      icon: '▫️',
+      group: ['utility'],
+      version: 1,
+      inputs: {
+        properties: {
+          a: { type: 'string' },
+          b: { type: 'number' },
+        },
+      },
+    });
+    expect(def.properties.map(p => p.name)).toEqual(['a', 'b']);
+    expect(def.properties.every(p => p.type !== 'collection')).toBe(true);
+  });
 });

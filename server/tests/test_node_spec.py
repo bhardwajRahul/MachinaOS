@@ -37,10 +37,26 @@ class TestInputSchemas:
         props = schema["properties"]
         assert props["temperature"]["minimum"] == 0.0
         assert props["temperature"]["maximum"] == 2.0
-        # snake_case keys per Wave 11.E.4+ convention
-        assert "api_key" in props
+        # snake_case keys per Wave 11.E.4+ convention.
+        # NB: ``api_key`` is NOT a declared field — credentials live in
+        # the credentials DB and are auto-injected at execution time.
+        assert "api_key" not in props
         assert "max_tokens" in props
         assert "system_message" in props
+
+    def test_ai_agent_options_group(self):
+        """temperature + max_tokens carry ``group=\"options\"`` so the
+        frontend adapter lifts them into a collapsible Options collection.
+        Class-level ``groups`` metadata customises the display name /
+        placeholder. See docs-internal/plugin_system.md for the
+        convention."""
+        schema = get_node_input_schema("aiAgent")
+        props = schema["properties"]
+        assert props["temperature"]["group"] == "options"
+        assert props["max_tokens"]["group"] == "options"
+        # Class-level groups metadata is emitted at the schema root.
+        assert schema["groups"]["options"]["display_name"] == "Options"
+        assert schema["groups"]["options"]["placeholder"] == "Add Option"
 
     def test_specialized_agents_share_schema(self):
         # All 16 specialized agents go through SpecializedAgentParams
@@ -547,20 +563,23 @@ class TestDisplayOptionsEnrichment:
         assert prompt["placeholder"] == "Enter your prompt or use template variables..."
         assert prompt["rows"] == 4
 
-    def test_ai_agent_api_key_password_masked(self):
+    def test_ai_agent_has_no_api_key_field(self):
+        # Credentials live in the credentials DB and are auto-injected by
+        # node_executor._inject_api_keys at execution time — they must
+        # NOT surface as a user-editable node parameter.
         spec = get_node_spec("aiAgent")
-        api_key = spec["inputs"]["properties"]["api_key"]
-        assert api_key["password"] is True
+        assert "api_key" not in spec["inputs"]["properties"]
 
     def test_specialized_agent_shares_ai_agent_tuning_surface(self):
         # SpecializedAgentParams mirrors AIAgentParams — same provider,
-        # model, temperature, max_tokens, system_message, api_key fields.
-        # Thinking/reasoning mode is surfaced via AIAgentOutput.thinking,
-        # not as a Params toggle.
+        # model, temperature, max_tokens, system_message fields. No
+        # api_key (injected at runtime). Thinking mode surfaces via
+        # AIAgentOutput.thinking, not as a Params toggle.
         spec = get_node_spec("coding_agent")
         props = spec["inputs"]["properties"]
-        for field in ("provider", "model", "temperature", "max_tokens", "system_message", "api_key"):
+        for field in ("provider", "model", "temperature", "max_tokens", "system_message"):
             assert field in props, f"coding_agent missing {field}"
+        assert "api_key" not in props
 
     def test_chat_model_password_masked(self):
         spec = get_node_spec("openaiChatModel")

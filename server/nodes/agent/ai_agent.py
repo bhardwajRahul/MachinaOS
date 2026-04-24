@@ -18,6 +18,19 @@ from ._handles import STD_AGENT_HINTS, std_agent_handles
 
 
 class AIAgentParams(BaseModel):
+    """AI Agent tuning surface.
+
+    ``api_key`` is intentionally NOT a node field — credentials are stored
+    via the credentials DB and auto-injected at execution time by
+    ``services/node_executor._inject_api_keys`` (see AI_MODEL_TYPES in
+    ``server/constants.py``).
+
+    Tuning fields use the ``group="options"`` convention so the parameter
+    panel nests them in a collapsible "Options" collection rather than
+    rendering flat beside provider/model/prompt. See
+    ``docs-internal/plugin_system.md`` for the convention spec.
+    """
+
     prompt: str = Field(
         default="",
         json_schema_extra={
@@ -32,21 +45,32 @@ class AIAgentParams(BaseModel):
     model: str = Field(
         default="", json_schema_extra={"placeholder": "Select a model..."},
     )
-    temperature: float = Field(
-        default=0.7, ge=0.0, le=2.0,
-        json_schema_extra={"numberStepSize": 0.1},
-    )
-    max_tokens: Optional[int] = Field(default=1000, ge=1, le=200000)
     system_message: Optional[str] = Field(
         default="You are a helpful assistant",
         json_schema_extra={"rows": 3},
     )
-    api_key: Optional[str] = Field(
-        default=None,
-        json_schema_extra={"password": True},
+
+    # ---- "Options" group (collapsed by default in the parameter panel) ----
+    temperature: float = Field(
+        default=0.7, ge=0.0, le=2.0,
+        json_schema_extra={"numberStepSize": 0.1, "group": "options"},
+    )
+    max_tokens: Optional[int] = Field(
+        default=1000, ge=1, le=200000,
+        json_schema_extra={"group": "options"},
     )
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(
+        extra="ignore",
+        json_schema_extra={
+            "groups": {
+                "options": {
+                    "display_name": "Options",
+                    "placeholder": "Add Option",
+                },
+            },
+        },
+    )
 
 
 class AIAgentOutput(BaseModel):
