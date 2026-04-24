@@ -18,16 +18,14 @@ from ._credentials import TelegramCredential
 
 
 class TelegramSendParams(BaseModel):
-    recipient_type: Literal["self", "chat_id"] = Field(
-        default="self", alias="recipientType",
-    )
+    # Pre-refactor: unknown recipient/message type -> handler error, not
+    # Pydantic ValidationError.
+    recipient_type: str = Field(default="self", alias="recipientType")
     chat_id: str = Field(
         default="", alias="chatId",
         json_schema_extra={"displayOptions": {"show": {"recipient_type": ["chat_id"]}}},
     )
-    message_type: Literal["text", "photo", "document", "location", "contact"] = Field(
-        default="text", alias="messageType",
-    )
+    message_type: str = Field(default="text", alias="messageType")
     text: str = Field(
         default="",
         json_schema_extra={"displayOptions": {"show": {"message_type": ["text"]}}},

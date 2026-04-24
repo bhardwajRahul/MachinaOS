@@ -187,7 +187,7 @@ class TestCronScheduler:
     ):
         # Patch asyncio.sleep so the handler doesn't actually wait 30s.
         with patched_broadcaster(), patch(
-            "services.handlers.utility.asyncio.sleep", new=AsyncMock()
+            "nodes.scheduler.cron_scheduler.asyncio.sleep", new=AsyncMock()
         ) as sleep_mock:
             result = await harness.execute(
                 "cronScheduler", {"frequency": "seconds", "interval": 30}
@@ -206,7 +206,7 @@ class TestCronScheduler:
     ):
         # Documented gotcha: unknown frequency -> 300s wait, "Unknown schedule".
         with patched_broadcaster(), patch(
-            "services.handlers.utility.asyncio.sleep", new=AsyncMock()
+            "nodes.scheduler.cron_scheduler.asyncio.sleep", new=AsyncMock()
         ) as sleep_mock:
             result = await harness.execute(
                 "cronScheduler", {"frequency": "quantum"}

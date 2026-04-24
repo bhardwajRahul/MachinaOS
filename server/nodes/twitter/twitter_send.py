@@ -17,7 +17,7 @@ from ._base import (
 
 
 class TwitterSendParams(BaseModel):
-    action: Literal["tweet", "reply", "retweet", "like", "unlike", "delete"] = "tweet"
+    action: str = "tweet"  # unknown action -> handler "Unknown action" error
     text: str = Field(default="")
     tweet_id: str = Field(default="", alias="tweetId")
     reply_to_id: str = Field(default="", alias="replyToId")

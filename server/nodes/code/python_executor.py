@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 from services.plugin import NodeContext, Operation
@@ -63,8 +64,9 @@ class PythonExecutorNode(CodeExecutorBase):
             "re": re,
             "random": random,
         }
-        exec(params.code, namespace)  # noqa: S102 — sandboxed namespace
+        exec(params.code, namespace)  # noqa: S102 -- sandboxed namespace
         return {
             "output": namespace.get("output"),
             "console_output": stdout_capture.getvalue(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }

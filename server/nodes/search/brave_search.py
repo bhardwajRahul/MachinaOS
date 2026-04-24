@@ -86,6 +86,11 @@ class BraveSearchNode(ActionNode):
 
     @Operation("search", cost={"service": "brave_search", "action": "web_search", "count": 1})
     async def search(self, ctx: NodeContext, params: BraveSearchParams) -> BraveSearchOutput:
+        # Pre-refactor: handler short-circuited whitespace/empty queries
+        # with "query is required" (matches old error string in tests).
+        if not params.query.strip():
+            raise ValueError("query is required")
+
         qs: dict = {"q": params.query, "count": min(params.max_results, 20)}
         if params.country:
             qs["country"] = params.country

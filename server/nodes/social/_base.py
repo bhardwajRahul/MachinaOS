@@ -208,8 +208,13 @@ async def handle_social_receive(
     parameters: Dict[str, Any],
     context: Dict[str, Any],
     outputs: Dict[str, Any] = None,
-    source_nodes: list = None
+    source_nodes: list = None,
+    connected_outputs: Dict[str, Any] = None,
 ) -> Dict[str, Any]:
+    # Back-compat: pre-refactor NodeExecutor passed connected_outputs as
+    # the keyword; the plugin now forwards it under either name.
+    if outputs is None and connected_outputs is not None:
+        outputs = connected_outputs
     """Handle Social Receive node - normalizes and filters incoming messages.
 
     This node connects to platform-specific triggers (WhatsApp Receive, etc.)

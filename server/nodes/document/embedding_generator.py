@@ -12,7 +12,7 @@ from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
 class EmbeddingGeneratorParams(BaseModel):
     chunks: List[Optional[dict]] = Field(default_factory=list)
-    provider: Literal["huggingface", "openai", "ollama"] = "huggingface"
+    provider: str = "huggingface"  # unknown -> handler error, not Pydantic
     model: str = Field(default="BAAI/bge-small-en-v1.5")
     api_key: str = Field(default="", alias="apiKey")
 

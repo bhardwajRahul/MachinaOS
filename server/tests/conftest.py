@@ -66,6 +66,7 @@ _make_submodule(
 )
 _make_submodule("core", "container", {"container": MagicMock()})
 _make_submodule("core", "database", {})  # stubbed package for ad-hoc imports
+_make_submodule("core", "config", {})   # stubbed package for ad-hoc imports
 
 
 # services.pricing -- pre-stub the singleton so handler modules that do
