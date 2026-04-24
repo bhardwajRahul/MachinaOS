@@ -161,10 +161,17 @@ class ConsoleNode(ActionNode):
                 log_value = input_data
             case "field":
                 if field_path:
-                    if "{{" in field_path:
+                    # Try dot-path navigation against input_data first.
+                    navigated = _navigate_field_path(input_data, field_path)
+                    if navigated is not None:
+                        log_value = navigated
+                    elif not any(c in field_path for c in "./["):
+                        # No path syntax → the user dragged a variable
+                        # into the field and the resolver replaced it
+                        # with a scalar value. Log directly.
                         log_value = field_path
                     else:
-                        log_value = _navigate_field_path(input_data, field_path)
+                        log_value = None
                 else:
                     log_value = input_data
             case "expression":

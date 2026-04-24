@@ -135,11 +135,21 @@ class ParameterResolver:
         # Case-insensitive lookup
         data_lower = {k.lower(): v for k, v in connected_data.items()}
 
-        # Log template resolution context at debug level
-        if logger.isEnabledFor(10):  # DEBUG level
-            template_params = {k: v for k, v in parameters.items() if isinstance(v, str) and '{{' in v}
-            if template_params:
-                logger.debug(f"[ParameterResolver] Resolving templates: {list(template_params.keys())}")
+        # Log template resolution context at debug level. structlog
+        # filters internally — no need for an ``isEnabledFor`` guard.
+        # The stdlib name ``isEnabledFor`` does NOT exist on structlog's
+        # BoundLogger; the earlier guard silently broke every template
+        # resolution with AttributeError (bubbled up as a node execution
+        # failure), which is how any node with a dynamic parameter
+        # started returning null-ish envelopes.
+        template_params = {
+            k: v for k, v in parameters.items() if isinstance(v, str) and '{{' in v
+        }
+        if template_params:
+            logger.debug(
+                "[ParameterResolver] Resolving templates",
+                keys=list(template_params.keys()),
+            )
 
         def resolve(value: Any) -> Any:
             if isinstance(value, str) and '{{' in value:
