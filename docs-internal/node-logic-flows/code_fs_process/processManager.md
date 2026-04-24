@@ -3,7 +3,6 @@
 | Field | Value |
 |------|-------|
 | **Category** | code_fs_process / process |
-| **Frontend definition** | [`client/src/nodeDefinitions/processNodes.ts`](../../../client/src/nodeDefinitions/processNodes.ts) |
 | **Backend handler** | [`server/services/handlers/process.py::handle_process_manager`](../../../server/services/handlers/process.py) |
 | **Service** | [`server/services/process_service.py::ProcessService`](../../../server/services/process_service.py) |
 | **Tests** | [`server/tests/nodes/test_code_fs_process.py`](../../../server/tests/nodes/test_code_fs_process.py) |

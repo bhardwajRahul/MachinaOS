@@ -84,7 +84,6 @@ Custom/self-hosted providers rely on stored custom keys because their presets ar
 | `server/services/ai.py` | `EmailSendSchema`, `EmailReadSchema` Pydantic schemas for AI tool calling + `DEFAULT_TOOL_NAMES` / `DEFAULT_TOOL_DESCRIPTIONS` entries. |
 | `server/services/handlers/tools.py` | `_execute_email_tool` dispatch for `emailSend` / `emailRead` when called by an AI Agent. |
 | `server/constants.py` | `EMAIL_TYPES`, `EMAIL_TOOL_TYPES`, plus `emailReceive` in `POLLING_TRIGGER_TYPES` and `WORKFLOW_TRIGGER_TYPES`. |
-| `client/src/nodeDefinitions/emailNodes.ts` | Three node definitions (send/read/receive) with provider dropdown, operation dispatcher, displayOptions.show. |
 | `client/src/assets/icons/email/` | `send.svg`, `read.svg`, `receive.svg` + `index.ts` registering them as data URIs via `?raw` import. |
 | `client/src/components/CredentialsModal.tsx` | Email credentials panel (provider dropdown, email/password inputs, conditional custom IMAP/SMTP section). |
 

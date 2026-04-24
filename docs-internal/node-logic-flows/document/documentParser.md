@@ -3,7 +3,6 @@
 | Field | Value |
 |------|-------|
 | **Category** | document |
-| **Frontend definition** | [`client/src/nodeDefinitions/documentNodes.ts`](../../../client/src/nodeDefinitions/documentNodes.ts) |
 | **Backend handler** | [`server/services/handlers/document.py::handle_document_parser`](../../../server/services/handlers/document.py) |
 | **Tests** | [`server/tests/nodes/test_document.py`](../../../server/tests/nodes/test_document.py) |
 | **Skill (if any)** | none |

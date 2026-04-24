@@ -1,5 +1,8 @@
 # New Service Integration Guide
 
+> **⚠️ Pre-Wave-11 — historical reference only.**
+> Node authoring now happens on the backend: each node is a Python plugin under `server/nodes/<category>/<node>.py` that emits a `NodeSpec`. The frontend reads specs via [client/src/lib/nodeSpec.ts](../client/src/lib/nodeSpec.ts) + [adapters/nodeSpecToDescription.ts](../client/src/adapters/nodeSpecToDescription.ts). See [plugin_system.md](./plugin_system.md) and [server/nodes/README.md](../server/nodes/README.md) for the current model. The snippets below that reference `client/src/nodeDefinitions/*` are kept for historical context.
+
 This guide provides a comprehensive walkthrough for integrating new external services (like Google Workspace, Slack, Notion, etc.) into MachinaOs. It covers OAuth authentication, database models, API handlers, frontend nodes, and AI Agent tool integration.
 
 > **Wave 6 update (April 2026):** the **Frontend Node Definitions** step (#4 below) has shrunk dramatically. Parameter schemas, validation, conditional visibility, and dynamic-option dispatch now live on the backend via Pydantic + the NodeSpec contract. The legacy frontend `nodeDefinitions/*.ts` `properties` arrays are still active until Phase 3e flips `VITE_NODESPEC_BACKEND` ON, but new integrations should follow the [Wave 6 recommended recipe](./node_creation.md#wave-6-recommended-recipe-backend-first) in the node creation guide so they ship through the new path automatically.

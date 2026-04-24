@@ -3,7 +3,6 @@
 | Field | Value |
 |------|-------|
 | **Category** | ai_tools (dual-purpose) |
-| **Frontend definition** | [`client/src/nodeDefinitions/toolNodes.ts`](../../../client/src/nodeDefinitions/toolNodes.ts) |
 | **Backend handler** | [`server/services/handlers/todo.py::handle_write_todos`](../../../server/services/handlers/todo.py) (workflow) / `execute_write_todos` (tool) |
 | **Service** | [`server/services/todo_service.py::TodoService`](../../../server/services/todo_service.py) |
 | **Tests** | [`server/tests/nodes/test_ai_tools.py`](../../../server/tests/nodes/test_ai_tools.py) |

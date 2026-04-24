@@ -3,7 +3,6 @@
 | Field | Value |
 |------|-------|
 | **Category** | code_fs_process / filesystem |
-| **Frontend definition** | [`client/src/nodeDefinitions/filesystemNodes.ts`](../../../client/src/nodeDefinitions/filesystemNodes.ts) |
 | **Backend handler** | [`server/services/handlers/filesystem.py::handle_shell`](../../../server/services/handlers/filesystem.py) |
 | **Backend** | [`deepagents.backends.LocalShellBackend.execute`](https://github.com/langchain-ai/deepagents) |
 | **Tests** | [`server/tests/nodes/test_code_fs_process.py`](../../../server/tests/nodes/test_code_fs_process.py) |

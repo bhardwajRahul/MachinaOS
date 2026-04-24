@@ -3,7 +3,6 @@
 | Field | Value |
 |------|-------|
 | **Category** | whatsapp / tool (dual-purpose) |
-| **Frontend definition** | [`client/src/nodeDefinitions/whatsappNodes.ts`](../../../client/src/nodeDefinitions/whatsappNodes.ts) |
 | **Backend handler** | [`server/services/handlers/whatsapp.py::handle_whatsapp_db`](../../../server/services/handlers/whatsapp.py) |
 | **Tests** | [`server/tests/nodes/test_whatsapp.py`](../../../server/tests/nodes/test_whatsapp.py) |
 | **Skill (if any)** | [`server/skills/social_agent/whatsapp-db-skill/SKILL.md`](../../../server/skills/social_agent/whatsapp-db-skill/SKILL.md) |

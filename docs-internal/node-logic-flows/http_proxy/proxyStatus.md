@@ -3,7 +3,6 @@
 | Field | Value |
 |------|-------|
 | **Category** | proxy / tool |
-| **Frontend definition** | [`client/src/nodeDefinitions/proxyNodes.ts`](../../../client/src/nodeDefinitions/proxyNodes.ts) |
 | **Backend handler** | [`server/services/handlers/proxy.py::handle_proxy_status`](../../../server/services/handlers/proxy.py) |
 | **Tests** | [`server/tests/nodes/test_http_proxy.py`](../../../server/tests/nodes/test_http_proxy.py) |
 | **Skill (if any)** | [`server/skills/web_agent/proxy-config-skill/SKILL.md`](../../../server/skills/web_agent/proxy-config-skill/SKILL.md) |

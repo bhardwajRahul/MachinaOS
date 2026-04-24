@@ -3,7 +3,6 @@
 | Field | Value |
 |------|-------|
 | **Category** | web_automation / tool (dual-purpose) |
-| **Frontend definition** | [`client/src/nodeDefinitions/apifyNodes.ts`](../../../client/src/nodeDefinitions/apifyNodes.ts) |
 | **Backend handler** | [`server/services/handlers/apify.py::handle_apify_actor`](../../../server/services/handlers/apify.py) |
 | **Tests** | [`server/tests/nodes/test_web_automation.py`](../../../server/tests/nodes/test_web_automation.py) |
 | **Skill (if any)** | [`server/skills/web_agent/apify-skill/SKILL.md`](../../../server/skills/web_agent/apify-skill/SKILL.md) |

@@ -3,7 +3,6 @@
 | Field | Value |
 |------|-------|
 | **Category** | chat_utility |
-| **Frontend definition** | not exposed in `client/src/nodeDefinitions/` (backend-only registry entry) |
 | **Backend handler** | [`server/services/handlers/utility.py::handle_text_generator`](../../../server/services/handlers/utility.py) |
 | **Tests** | [`server/tests/nodes/test_chat_utility.py`](../../../server/tests/nodes/test_chat_utility.py) |
 | **Skill (if any)** | - |

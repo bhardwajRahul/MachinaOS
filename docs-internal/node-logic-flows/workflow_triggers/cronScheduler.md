@@ -3,7 +3,6 @@
 | Field | Value |
 |------|-------|
 | **Category** | workflow / trigger / tool (dual-purpose) |
-| **Frontend definition** | [`client/src/nodeDefinitions/schedulerNodes.ts`](../../../client/src/nodeDefinitions/schedulerNodes.ts) |
 | **Backend handler** | [`server/services/handlers/utility.py::handle_cron_scheduler`](../../../server/services/handlers/utility.py) |
 | **Tests** | [`server/tests/nodes/test_workflow_triggers.py`](../../../server/tests/nodes/test_workflow_triggers.py) |
 | **Skill (if any)** | [`server/skills/task_agent/cron-scheduler-skill/SKILL.md`](../../../server/skills/task_agent/cron-scheduler-skill/SKILL.md) |

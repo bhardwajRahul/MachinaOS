@@ -494,8 +494,6 @@ All broadcasts include `workflow_id` for UI scoping. The frontend uses these to 
 | `server/services/handlers/tools.py` | `execute_tool()` dispatcher, `_execute_delegated_agent()`, `_delegated_tasks` tracking |
 | `server/constants.py` | `AI_AGENT_TYPES` frozenset, `detect_ai_provider()` |
 | `client/src/components/AIAgentNode.tsx` | Frontend rendering of execution phase animations |
-| `client/src/nodeDefinitions/specializedAgentNodes.ts` | Agent node definitions with `AI_AGENT_PROPERTIES` |
-
 ---
 
 ## Key Findings
@@ -587,7 +585,6 @@ The `taskTrigger` node supports filtering to match specific delegation events:
 | `server/services/event_waiter.py` | TriggerConfig, filter builder, FILTER_BUILDERS entry |
 | `server/services/handlers/tools.py` | `send_custom_event()` calls (success + error paths) |
 | `server/constants.py` | `taskTrigger` in EVENT_TRIGGER_TYPES, WORKFLOW_TRIGGER_TYPES |
-| `client/src/nodeDefinitions/workflowNodes.ts` | Node definition |
 | `client/src/components/parameterPanel/InputSection.tsx` | Output schema for draggable variables |
 
 ### LLM-Driven vs Event-Driven vs Agent-Handled
@@ -654,8 +651,6 @@ Please report this error to the user and suggest next steps if appropriate.
 | File | Changes |
 |------|---------|
 | `client/src/components/AIAgentNode.tsx` | `input-task` handle in leftHandles for all 12 agent configs |
-| `client/src/nodeDefinitions/aiAgentNodes.ts` | Task input in aiAgent and chatAgent inputs arrays |
-| `client/src/nodeDefinitions/specializedAgentNodes.ts` | `AI_AGENT_INPUTS` constant with task input |
 | `server/services/handlers/ai.py` | `task_data` collection, `_format_task_context()`, prompt injection |
 
 ### Usage Example

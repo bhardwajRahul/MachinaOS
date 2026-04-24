@@ -7,8 +7,8 @@ match its doc here, and each doc must still describe what the code does.
 ## How to use
 
 - **Adding a node**: copy [`_TEMPLATE.md`](./_TEMPLATE.md) into the right
-  category folder, name it `<nodeName>.md` (camelCase, matching the registry
-  key in `client/src/nodeDefinitions/`).
+  category folder, name it `<nodeName>.md` (camelCase, matching the
+  `type` field on the backend plugin at `server/nodes/<category>/<node>.py`).
 - **Refactoring a node**: update the matching contract test in
   `server/tests/nodes/test_<category>.py` *first*, then change the handler,
   then update this doc.

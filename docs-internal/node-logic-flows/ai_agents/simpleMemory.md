@@ -3,7 +3,6 @@
 | Field | Value |
 |------|-------|
 | **Category** | ai_agents / memory (UI group: `['tool', 'memory']`) |
-| **Frontend definition** | [`client/src/nodeDefinitions/aiAgentNodes.ts`](../../../client/src/nodeDefinitions/aiAgentNodes.ts) |
 | **Backend handler** | [`server/services/handlers/ai.py::handle_simple_memory`](../../../server/services/handlers/ai.py) |
 | **Tests** | [`server/tests/nodes/test_ai_agents.py`](../../../server/tests/nodes/test_ai_agents.py) |
 | **Skill (if any)** | n/a |

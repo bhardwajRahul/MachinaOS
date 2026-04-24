@@ -3,7 +3,6 @@
 | Field | Value |
 |------|-------|
 | **Category** | specialized_agents |
-| **Frontend definition** | [`client/src/nodeDefinitions/specializedAgentNodes.ts`](../../../client/src/nodeDefinitions/specializedAgentNodes.ts) (search `ai_employee`) |
 | **Backend handler** | [`server/services/handlers/ai.py::handle_chat_agent`](../../../server/services/handlers/ai.py) |
 | **Theme color** | `dracula.purple` |
 | **Icon** | people / briefcase (U+1F465) |

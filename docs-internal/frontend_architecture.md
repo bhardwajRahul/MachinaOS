@@ -171,10 +171,13 @@ client/src/
 │   ├── apiKeyManager.ts            # LangChain API key utilities
 │   └── dynamicParameterService.ts  # Remote options loaders for ParameterRenderer
 │
-├── factories/
-│   └── baseChatModelFactory.ts     # AI chat-model node definitions
-│
-├── nodeDefinitions/                # Static TS node registry (will become schema-driven in Phase 6)
+├── adapters/
+│   └── nodeSpecToDescription.ts    # Backend NodeSpec -> legacy INodeTypeDescription shape
+├── lib/
+│   ├── nodeSpec.ts                 # TanStack-Query spec fetch, resolveNodeDescription, listCachedNodeSpecs
+│   ├── aiModelProviders.ts         # Frontend-only AI provider icon/credential map
+│   ├── queryClient.ts / queryConfig.ts / featureFlags.ts
+│   └── utils.ts
 ├── types/                          # INodeProperties, NodeTypes, etc.
 └── utils/                          # formatters, apiKeySecurity, workflowExport, parameterSanitizer
 ```

@@ -3,7 +3,6 @@
 | Field | Value |
 |------|-------|
 | **Category** | email / tool (dual-purpose) |
-| **Frontend definition** | [`client/src/nodeDefinitions/emailNodes.ts`](../../../client/src/nodeDefinitions/emailNodes.ts) |
 | **Backend handler** | [`server/services/handlers/email.py::handle_email_send`](../../../server/services/handlers/email.py) |
 | **Tests** | [`server/tests/nodes/test_email.py`](../../../server/tests/nodes/test_email.py) |
 | **Skill (if any)** | none shipped |

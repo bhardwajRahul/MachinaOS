@@ -3,7 +3,6 @@
 | Field | Value |
 |------|-------|
 | **Category** | social / trigger |
-| **Frontend definition** | [`client/src/nodeDefinitions/twitterNodes.ts`](../../../client/src/nodeDefinitions/twitterNodes.ts) |
 | **Backend handler** | [`server/services/handlers/triggers.py::handle_trigger_node`](../../../server/services/handlers/triggers.py) (generic) + [`server/services/event_waiter.py::build_twitter_filter`](../../../server/services/event_waiter.py) |
 | **Tests** | [`server/tests/nodes/test_twitter.py`](../../../server/tests/nodes/test_twitter.py) |
 | **Skill (if any)** | none |

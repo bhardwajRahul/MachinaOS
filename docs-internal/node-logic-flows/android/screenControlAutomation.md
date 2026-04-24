@@ -3,7 +3,6 @@
 | Field | Value |
 |------|-------|
 | **Category** | android / automation |
-| **Frontend definition** | [`client/src/nodeDefinitions/androidServiceNodes.ts`](../../../client/src/nodeDefinitions/androidServiceNodes.ts) |
 | **Backend handler** | [`server/services/handlers/android.py::handle_android_service`](../../../server/services/handlers/android.py) (shared) |
 | **Tests** | [`server/tests/nodes/test_android.py`](../../../server/tests/nodes/test_android.py) |
 | **Skill (if any)** | [`server/skills/android_agent/screen-control-skill/SKILL.md`](../../../server/skills/android_agent/screen-control-skill/SKILL.md) |

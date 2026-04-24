@@ -3,7 +3,6 @@
 | Field | Value |
 |------|-------|
 | **Category** | social / tool (dual-purpose) |
-| **Frontend definition** | [`client/src/nodeDefinitions/telegramNodes.ts`](../../../client/src/nodeDefinitions/telegramNodes.ts) |
 | **Backend handler** | [`server/services/handlers/telegram.py::handle_telegram_send`](../../../server/services/handlers/telegram.py) |
 | **Tests** | [`server/tests/nodes/test_telegram_social.py`](../../../server/tests/nodes/test_telegram_social.py) |
 | **Skill (if any)** | none |

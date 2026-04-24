@@ -67,7 +67,6 @@ httpx.AsyncClient(proxy=proxy_url)
 | `server/core/container.py` | DI: `proxy_service()` factory |
 | `server/main.py` | Startup: `proxy_svc.startup()` after database init |
 | `server/constants.py` | `PROXY_NODE_TYPES` frozenset |
-| `client/src/nodeDefinitions/proxyNodes.ts` | 3 node definitions + shared `PROXY_PARAMETERS` array |
 | `server/skills/web_agent/proxy-config-skill/SKILL.md` | AI skill: proxy provider setup and management |
 | `server/skills/web_agent/http-request-skill/SKILL.md` | AI skill: HTTP requests with `useProxy: true` |
 

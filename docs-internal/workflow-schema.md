@@ -61,7 +61,7 @@ A workflow JSON document contains:
 
 ## Supported Node Types (96 Total)
 
-> Counts are grouped by source file under `client/src/nodeDefinitions/`. The canonical list lives there; this section is a human-readable index.
+> The canonical list of nodes lives in the backend plugin tree at `server/nodes/<category>/<node>.py`; this section is a human-readable index.
 
 ### Workflow Nodes (2 nodes)
 - `start` - Workflow entry point with initial data
@@ -426,7 +426,7 @@ Nodes are identified as config nodes by their group membership:
 
 ```typescript
 const isConfigNode = (nodeType: string): boolean => {
-  const definition = nodeDefinitions[nodeType];
+  const definition = resolveNodeDescription(nodeType);
   const groups = definition?.group || [];
   return groups.includes('memory') || groups.includes('tool');
 };

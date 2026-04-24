@@ -3,7 +3,6 @@
 | Field | Value |
 |------|-------|
 | **Category** | specialized_agents |
-| **Frontend definition** | [`client/src/nodeDefinitions/specializedAgentNodes.ts`](../../../client/src/nodeDefinitions/specializedAgentNodes.ts) (search `android_agent`) |
 | **Backend handler** | [`server/services/handlers/ai.py::handle_chat_agent`](../../../server/services/handlers/ai.py) (routed via registry) |
 | **Theme color** | `dracula.green` |
 | **Icon** | phone (U+1F4F1) |

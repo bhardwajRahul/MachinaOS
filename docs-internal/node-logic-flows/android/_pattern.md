@@ -9,7 +9,6 @@ for everything that is not node-specific.
 
 | Concern | Location |
 |---------|----------|
-| Frontend factory | [`client/src/nodeDefinitions/androidServiceNodes.ts::createAndroidServiceNode`](../../../client/src/nodeDefinitions/androidServiceNodes.ts) |
 | Backend handler | [`server/services/handlers/android.py::handle_android_service`](../../../server/services/handlers/android.py) |
 | Underlying service | [`server/services/android_service.py::AndroidService.execute_service`](../../../server/services/android_service.py) |
 | Registry binding | [`server/services/node_executor.py`](../../../server/services/node_executor.py) lines 228-230 |

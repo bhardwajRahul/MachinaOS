@@ -210,7 +210,6 @@ Connect Team Monitor to a team lead's output to visualize team activity.
 | `server/services/agent_team.py` | `AgentTeamService` for team tracking |
 | `server/services/handlers/tools.py` | `_execute_delegated_agent()` for actual delegation |
 | `server/services/ai.py` | `_build_tool_from_node()` builds delegate_to_* tools |
-| `client/src/nodeDefinitions/specializedAgentNodes.ts` | `ai_employee` and `orchestrator_agent` definitions |
 | `client/src/components/AIAgentNode.tsx` | Agent node rendering with `input-teammates` handle |
 | `client/src/components/TeamMonitorNode.tsx` | Team monitoring UI |
 

@@ -3,7 +3,6 @@
 | Field | Value |
 |------|-------|
 | **Category** | specialized_agents |
-| **Frontend definition** | [`client/src/nodeDefinitions/specializedAgentNodes.ts`](../../../client/src/nodeDefinitions/specializedAgentNodes.ts) (search `claude_code_agent`) |
 | **Backend handler** | [`server/services/handlers/claude_code.py::handle_claude_code_agent`](../../../server/services/handlers/claude_code.py) |
 | **Backend service** | [`server/services/claude_code_service.py::ClaudeCodeService.execute`](../../../server/services/claude_code_service.py) |
 | **Tests** | [`server/tests/nodes/test_specialized_agents.py::TestClaudeCodeAgent`](../../../server/tests/nodes/test_specialized_agents.py) |

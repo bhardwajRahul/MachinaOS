@@ -24,7 +24,7 @@ are already done. Your job is to repeat the pilot pattern for your category.
 ## What to read
 
 1. The handler file(s) for your category (paths in your prompt).
-2. The frontend node definition file in `client/src/nodeDefinitions/`.
+2. The backend plugin at `server/nodes/<category>/<node>.py` (the NodeSpec SSOT).
 3. Any matching skill at `server/skills/<folder>/<skill>/SKILL.md` - link to it from the doc, do not duplicate.
 4. The pilot files above so you copy the structure exactly.
 

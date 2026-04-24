@@ -3,7 +3,6 @@
 | Field | Value |
 |------|-------|
 | **Category** | google_workspace / trigger (polling) |
-| **Frontend definition** | [`client/src/nodeDefinitions/googleWorkspaceNodes.ts`](../../../client/src/nodeDefinitions/googleWorkspaceNodes.ts) |
 | **Backend handler** | [`server/services/handlers/gmail.py::handle_gmail_receive`](../../../server/services/handlers/gmail.py) |
 | **Tests** | [`server/tests/nodes/test_google_workspace.py`](../../../server/tests/nodes/test_google_workspace.py) |
 | **Skill (if any)** | none |

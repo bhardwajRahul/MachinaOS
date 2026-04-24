@@ -3,7 +3,6 @@
 | Field | Value |
 |------|-------|
 | **Category** | workflow / utility |
-| **Frontend definition** | [`client/src/nodeDefinitions/utilityNodes.ts`](../../../client/src/nodeDefinitions/utilityNodes.ts) |
 | **Backend handler** | [`server/services/handlers/http.py::handle_webhook_response`](../../../server/services/handlers/http.py) |
 | **Tests** | [`server/tests/nodes/test_workflow_triggers.py`](../../../server/tests/nodes/test_workflow_triggers.py) |
 | **Skill (if any)** | none |

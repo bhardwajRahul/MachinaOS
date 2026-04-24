@@ -3,7 +3,6 @@
 | Field | Value |
 |------|-------|
 | **Category** | whatsapp / trigger |
-| **Frontend definition** | [`client/src/nodeDefinitions/whatsappNodes.ts`](../../../client/src/nodeDefinitions/whatsappNodes.ts) |
 | **Backend handler** | [`server/services/handlers/triggers.py::handle_trigger_node`](../../../server/services/handlers/triggers.py) (generic) + [`server/services/event_waiter.py::build_whatsapp_filter`](../../../server/services/event_waiter.py) |
 | **Tests** | [`server/tests/nodes/test_whatsapp.py`](../../../server/tests/nodes/test_whatsapp.py) |
 | **Skill (if any)** | n/a |

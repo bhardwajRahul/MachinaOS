@@ -3,7 +3,6 @@
 | Field | Value |
 |------|-------|
 | **Category** | chat_utility |
-| **Frontend definition** | [`client/src/nodeDefinitions/chatNodes.ts`](../../../client/src/nodeDefinitions/chatNodes.ts) |
 | **Backend handler** | [`server/services/handlers/utility.py::handle_chat_send`](../../../server/services/handlers/utility.py) |
 | **Tests** | [`server/tests/nodes/test_chat_utility.py`](../../../server/tests/nodes/test_chat_utility.py) |
 | **Skill (if any)** | - |

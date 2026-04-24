@@ -3,7 +3,6 @@
 | Field | Value |
 |------|-------|
 | **Category** | search / tool (dual-purpose) |
-| **Frontend definition** | [`client/src/nodeDefinitions/searchNodes.ts`](../../../client/src/nodeDefinitions/searchNodes.ts) |
 | **Backend handler** | [`server/services/handlers/search.py::handle_serper_search`](../../../server/services/handlers/search.py) |
 | **Tests** | [`server/tests/nodes/test_search.py`](../../../server/tests/nodes/test_search.py) |
 | **Skill (if any)** | [`server/skills/web_agent/serper-search-skill/SKILL.md`](../../../server/skills/web_agent/serper-search-skill/SKILL.md) |

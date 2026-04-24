@@ -449,31 +449,19 @@ The project was completely refactored from schema-based node definitions to expl
 - `src/types/NodeTypes.ts` - Legacy compatibility types (NodeParameter, NodeOutput)
 
 ### Node System
-- `src/nodeDefinitions.ts` - Main registry importing and merging all modular node definitions
-- `src/nodeDefinitions/aiModelNodes.ts` - AI chat model definitions using factory pattern
-- `src/nodeDefinitions/aiAgentNodes.ts` - AI agent and processing components
-- `src/nodeDefinitions/skillNodes.ts` - Skill node definition (masterSkill aggregator)
-- `src/nodeDefinitions/specializedAgentNodes.ts` - Specialized AI agent definitions (15 nodes) with shared AI_AGENT_PROPERTIES and centralized dracula theming
-- `src/nodeDefinitions/toolNodes.ts` - AI Agent tool nodes (calculatorTool, currentTimeTool, duckduckgoSearch)
-- `src/nodeDefinitions/searchNodes.ts` - Search API nodes (braveSearch, serperSearch, perplexitySearch)
-- `src/nodeDefinitions/androidServiceNodes.ts` - 16 Android service nodes (monitoring, apps, automation, sensors, media)
-- `src/nodeDefinitions/locationNodes.ts` - Google Maps and location services
-- `src/nodeDefinitions/googleWorkspaceNodes.ts` - All Google Workspace nodes (7 consolidated nodes)
-- `src/nodeDefinitions/whatsappNodes.ts` - WhatsApp messaging integration (3 nodes)
-- `src/nodeDefinitions/twitterNodes.ts` - Twitter/X integration (4 nodes: send, search, user, receive)
-- `src/nodeDefinitions/telegramNodes.ts` - Telegram bot integration (2 nodes: send, receive)
-- `src/nodeDefinitions/socialNodes.ts` - Unified social messaging nodes (socialReceive, socialSend)
-- `src/nodeDefinitions/codeNodes.ts` - Python, JavaScript, and TypeScript code execution nodes
-- `src/nodeDefinitions/proxyNodes.ts` - Proxy nodes (proxyRequest, proxyConfig, proxyStatus) and shared PROXY_PARAMETERS
-- `src/nodeDefinitions/utilityNodes.ts` - HTTP, Webhook, chatTrigger, and console nodes
-- `src/nodeDefinitions/crawleeNodes.ts` - Crawlee web scraping node (crawleeScraper) with static/Playwright modes
-- `src/nodeDefinitions/browserNodes.ts` - Browser automation node (browser) via agent-browser CLI with stealth config
-- `src/nodeDefinitions/documentNodes.ts` - Document processing nodes (httpScraper, fileDownloader, documentParser, textChunker, embeddingGenerator, vectorStore)
-- `src/nodeDefinitions/chatNodes.ts` - Chat send and history nodes
-- `src/nodeDefinitions/schedulerNodes.ts` - Timer and cron scheduler nodes
-- `src/nodeDefinitions/workflowNodes.ts` - Workflow start node
-- `src/factories/baseChatModelFactory.ts` - Factory for creating standardized chat models
-- `src/services/executionService.ts` - Node execution engine with routing to Python backend
+Node metadata is SSOT on the backend after Wave 11. Each node is a Python
+plugin at `server/nodes/<category>/<node>.py` that emits a `NodeSpec` via
+the registry. The frontend fetches specs through
+[`client/src/lib/nodeSpec.ts`](./client/src/lib/nodeSpec.ts) and adapts
+them via [`client/src/adapters/nodeSpecToDescription.ts`](./client/src/adapters/nodeSpecToDescription.ts).
+See [`docs-internal/plugin_system.md`](./docs-internal/plugin_system.md)
+and [`server/nodes/README.md`](./server/nodes/README.md) for the plugin
+authoring model.
+
+- `src/lib/nodeSpec.ts` - TanStack-Query-backed spec fetch, `resolveNodeDescription`, `listCachedNodeSpecs`, group lookup
+- `src/lib/aiModelProviders.ts` - Frontend-only AI provider icon/credential map
+- `src/adapters/nodeSpecToDescription.ts` - Backend `NodeSpec` → legacy `INodeTypeDescription` shape
+- `src/services/executionService.ts` - Node execution routed through the backend WebSocket layer
 
 ### Assets
 - `src/assets/icons/google/` - Official Google service SVG icons (Gmail, Calendar, Drive, Sheets, Tasks, Contacts) using n8n pattern with data URI exports
@@ -716,7 +704,6 @@ Skill nodes display an Ant Design `Input.TextArea` (markdown content) to view an
 **Key Files:**
 | File | Description |
 |------|-------------|
-| `client/src/nodeDefinitions/skillNodes.ts` | Skill node definitions with factory pattern |
 | `client/src/hooks/useParameterPanel.ts` | Loads/saves skill content for skill nodes |
 | `server/services/skill_loader.py` | SkillLoader for filesystem and database skills |
 | `server/routers/websocket.py` | `get_skill_content`, `save_skill_content`, `list_skill_folders`, `scan_skill_folder` handlers |
@@ -802,7 +789,6 @@ if skill_type == 'masterSkill':
 | File | Description |
 |------|-------------|
 | `client/src/components/parameterPanel/MasterSkillEditor.tsx` | Split-panel skill aggregator UI with inline user skill CRUD |
-| `client/src/nodeDefinitions/skillNodes.ts` | masterSkill node definition (group: tool) |
 | `server/routers/websocket.py` | User skill CRUD: `get_user_skills`, `create_user_skill`, `update_user_skill`, `delete_user_skill` |
 | `server/core/database.py` | UserSkill model and database CRUD methods |
 | `server/services/handlers/ai.py` | Expands masterSkill into individual skills at execution |
@@ -824,7 +810,6 @@ Search API nodes that work BOTH as standalone workflow nodes AND as AI Agent too
 **Key Files:**
 | File | Description |
 |------|-------------|
-| `client/src/nodeDefinitions/searchNodes.ts` | 3 dual-purpose search node definitions |
 | `server/services/handlers/search.py` | 3 handler functions with API key fetch + usage tracking |
 | `server/services/handlers/tools.py` | Tool dispatch wrappers for AI Agent tool calling |
 | `server/services/ai.py` | Tool names, descriptions, and Pydantic schemas |
@@ -1032,7 +1017,6 @@ Authentication is handled via OAuth 2.0 PKCE flow in the Credentials Modal:
 | `server/services/oauth_utils.py` | Runtime OAuth redirect URI derivation from request context |
 | `server/routers/twitter.py` | OAuth callback endpoint, token exchange |
 | `server/services/handlers/twitter.py` | Node handlers using XDK SDK |
-| `client/src/nodeDefinitions/twitterNodes.ts` | 4 node definitions |
 | `client/src/components/CredentialsModal.tsx` | Twitter panel with OAuth button |
 | `server/skills/social_agent/twitter-*-skill/` | 3 Twitter skills for AI agents |
 
@@ -1078,7 +1062,6 @@ Telegram bot integration using `python-telegram-bot` SDK with long-polling for i
 |------|-------------|
 | `server/services/telegram_service.py` | TelegramService with long-polling message handler |
 | `server/services/handlers/telegram.py` | Node handlers for send and receive |
-| `client/src/nodeDefinitions/telegramNodes.ts` | 2 node definitions |
 | `client/src/components/CredentialsModal.tsx` | Telegram bot token panel |
 
 **Authentication:** Bot token from @BotFather on Telegram. Stored via `auth_service.store_api_key('telegram_bot_token', token, models=[])`. Owner auto-captured on first private message, persisted as `telegram_owner_chat_id`. Credentials panel: Save (store only), Connect (store + connect), Reconnect. All credential access uses `from core.container import container; container.auth_service()` (NOT `from services.auth import get_auth_service`).
@@ -1172,7 +1155,6 @@ GOOGLE_WORKSPACE_SCOPES = [
 | `server/services/handlers/contacts.py` | Contacts handlers |
 | `server/models/database.py` | `GoogleConnection` model |
 | `server/skills/productivity_agent/` | Google Workspace skills for AI agents |
-| `client/src/nodeDefinitions/googleWorkspaceNodes.ts` | All 7 Google node definitions (consolidated) |
 | `client/src/assets/icons/google/` | Official Google service SVG icons (n8n pattern) |
 | `client/src/components/CredentialsModal.tsx` | Google Workspace panel |
 
@@ -1242,7 +1224,6 @@ himalaya CLI binary    <-- generates TOML config, calls IMAP/SMTP
 **Key Files:**
 | File | Description |
 |------|-------------|
-| `client/src/nodeDefinitions/emailNodes.ts` | 3 node definitions with provider presets |
 | `client/src/assets/icons/email/` | Email icons (send, read, receive) loaded via `?raw` + `svgToDataUri` |
 | `client/src/components/CredentialsModal.tsx` | Email credentials panel (provider dropdown, email/password, conditional custom IMAP/SMTP) |
 | `server/services/himalaya_service.py` | Himalaya CLI wrapper -- send, list_envelopes, search, read, move, delete, flag, list_folders |
@@ -1305,7 +1286,6 @@ Interactive browser automation via the [agent-browser](https://www.npmjs.com/pac
 **Key Files:**
 | File | Description |
 |------|-------------|
-| `client/src/nodeDefinitions/browserNodes.ts` | Node definition with 12 operations and stealth config |
 | `client/src/assets/icons/browser/` | Chrome browser icon (from @ant-design/icons-svg) |
 | `server/services/browser_service.py` | BrowserService singleton -- thin subprocess wrapper, reads first JSON line from stdout |
 | `server/services/handlers/browser.py` | Handler dispatcher mapping operation+params to agent-browser CLI args |
@@ -1329,7 +1309,6 @@ Python-based web scraping via the [crawlee](https://github.com/apify/crawlee-pyt
 **Key Files:**
 | File | Description |
 |------|-------------|
-| `client/src/nodeDefinitions/crawleeNodes.ts` | Node definition with crawler type + mode |
 | `server/services/handlers/crawlee.py` | Handler using `BeautifulSoupCrawler` + `PlaywrightCrawler` from crawlee library |
 | `server/skills/web_agent/crawlee-scraper-skill/SKILL.md` | AI agent skill for web scraping |
 
@@ -1345,7 +1324,6 @@ Web scraping service for social media, search engines, and websites using pre-bu
 **Key Files:**
 | File | Description |
 |------|-------------|
-| `client/src/nodeDefinitions/apifyNodes.ts` | Node definition with actor presets |
 | `server/services/handlers/apify.py` | Actor execution via apify-client SDK |
 | `server/skills/web_agent/apify-skill/SKILL.md` | AI agent skill for web scraping |
 | `client/src/components/CredentialsModal.tsx` | Apify API token panel |
@@ -1367,7 +1345,6 @@ Residential proxy provider management with geo-targeting, session control, and a
 **Key Files:**
 | File | Description |
 |------|-------------|
-| `client/src/nodeDefinitions/proxyNodes.ts` | 3 node definitions + shared PROXY_PARAMETERS |
 | `server/services/proxy/service.py` | ProxyService singleton with provider selection and URL generation |
 | `server/services/proxy/providers.py` | TemplateProxyProvider for JSON url_template formatting |
 | `server/services/proxy/models.py` | ProxyProvider, RoutingRule, SessionType dataclasses |
@@ -1395,7 +1372,6 @@ Dual-purpose tool nodes delegating to `deepagents.backends.LocalShellBackend`. U
 **Key Files:**
 | File | Description |
 |------|-------------|
-| `client/src/nodeDefinitions/filesystemNodes.ts` | 4 dual-purpose node definitions |
 | `server/services/handlers/filesystem.py` | Handlers delegating to `deepagents.backends.LocalShellBackend` |
 | `server/skills/coding_agent/` | Skills: file-read-skill, file-modify-skill, fs-search-skill |
 | `server/skills/terminal/` | Skills: shell-skill, process-manager-skill, bash-skill, powershell-skill, wsl-skill |
@@ -1417,7 +1393,6 @@ Cross-platform process manager for long-running subprocesses (dev servers, watch
 |------|-------------|
 | `server/services/process_service.py` | ProcessService singleton with start/stop/restart/list/send_input/get_output/shutdown |
 | `server/services/handlers/process.py` | Dual-purpose handler (workflow + AI tool) |
-| `client/src/nodeDefinitions/processNodes.ts` | Node definition with operation dropdown |
 | `server/skills/terminal/process-manager-skill/` | Skill for AI agents |
 
 ### Utility Nodes (6 nodes)
@@ -1464,11 +1439,13 @@ pypdf>=4.0.0
 
 #### Document Node Architecture
 ```
-server/services/handlers/
-└── document.py           # 6 async handler functions
-
-client/src/nodeDefinitions/
-└── documentNodes.ts      # 6 node definitions with conditional properties
+server/nodes/document/
+├── http_scraper.py       # each plugin emits its own NodeSpec
+├── file_downloader.py
+├── document_parser.py
+├── text_chunker.py
+├── embedding_generator.py
+└── vector_store.py
 ```
 
 ## Backend Services
@@ -2484,8 +2461,9 @@ The `AIAgentNode.tsx` component uses `AGENT_CONFIGS` to render all agent types w
 
 ## File Structure Cleanup
 **Removed Files:**
+- `src/nodeDefinitions.ts` + `src/nodeDefinitions/` (27 files) — superseded by backend NodeSpec SSOT; frontend resolves specs via `lib/nodeSpec.ts` + `adapters/nodeSpecToDescription.ts`
 - `src/nodeDefinitions.backup.ts` (backup file)
-- `src/schemas/` directory (unused schema system)  
+- `src/schemas/` directory (unused schema system)
 - `src/utils/schemaParser.ts` (legacy parser)
 - `src/utils/nodeSchemaParser.ts` (unused modern parser)
 - `src/types/NodeSchema.ts` (legacy schema types)
@@ -3334,11 +3312,18 @@ See **[Onboarding Service](./docs-internal/onboarding.md)** for full documentati
 
 ### Adding New AI Providers
 
-Follow these steps to add a new AI provider. OpenRouter is used as a complete example.
+Follow these steps to add a new AI provider. OpenRouter is used as a
+complete example. **Note (Wave 11+)**: node metadata is authored on the
+backend as a plugin under `server/nodes/model/<provider>_chat_model.py`.
+The frontend snippets below are kept as historical reference — the
+current entry point is the backend plugin + the shared
+`ChatModelBase.chat()` path. See
+[docs-internal/plugin_system.md](./docs-internal/plugin_system.md) and
+[server/nodes/README.md](./server/nodes/README.md).
 
-#### Step 1: Frontend Node Definition
+#### Step 1: Frontend Node Definition (pre-Wave-11 — now lives on backend)
 
-Create provider config in `client/src/nodeDefinitions/aiModelNodes.ts`:
+Historical: provider config used to live in `client/src/nodeDefinitions/aiModelNodes.ts`:
 
 ```typescript
 const openrouterConfig: ChatModelConfig = {
@@ -3524,7 +3509,6 @@ class AIChatModelParams(BaseNodeParams):
 
 | File | Purpose |
 |------|---------|
-| `client/src/nodeDefinitions/aiModelNodes.ts` | Provider config with ChatModelConfig |
 | `client/src/factories/baseChatModelFactory.ts` | Factory function for node definitions |
 | `client/src/components/ModelNode.tsx` | Credential mapping and icon detection |
 | `client/src/components/CredentialsModal.tsx` | API key entry UI |
@@ -3573,7 +3557,7 @@ I don't have access to real-time weather data...
 - **Uses LangChain's InMemoryVectorStore**: Per-session vector stores with HuggingFaceEmbeddings (BAAI/bge-small-en-v1.5)
 
 ### Key Files
-- **Node Definition**: `client/src/nodeDefinitions/aiAgentNodes.ts` - simpleMemory node config
+- **Node Definition**: `server/nodes/skill/simple_memory.py` - simpleMemory plugin (NodeSpec + execute)
 - **Memory Helpers**: `server/services/ai.py` - `_parse_memory_markdown()`, `_append_to_memory_markdown()`, `_trim_markdown_window()`
 - **Vector Store**: `server/services/ai.py` - `_get_memory_vector_store()` with InMemoryVectorStore
 - **AI Integration**: `server/services/ai.py` - execute_agent with memory_data parameter
@@ -3975,9 +3959,6 @@ Tool Node (calculatorTool) → (tool output) → AI Agent (input-tools handle)
 ### Key Files
 | File | Description |
 |------|-------------|
-| `client/src/nodeDefinitions/toolNodes.ts` | Tool node definitions (calculatorTool, currentTimeTool, duckduckgoSearch, androidTool) |
-| `client/src/nodeDefinitions/searchNodes.ts` | Search node definitions (braveSearch, serperSearch, perplexitySearch) |
-| `client/src/nodeDefinitions/specializedAgentNodes.ts` | Specialized agent definitions (10 nodes) + AI_AGENT_PROPERTIES + SPECIALIZED_AGENT_TYPES |
 | `server/services/handlers/tools.py` | Tool execution handlers |
 | `server/services/ai.py` | `_get_tool_schema()` - Pydantic schemas for tools |
 | `server/services/handlers/ai.py` | Tool discovery from edges |
@@ -4238,7 +4219,7 @@ const isConfigHandle = (handle: string | null | undefined): boolean => {
 
 // Check if node is a config/auxiliary node
 const isConfigNode = (nodeType: string | undefined): boolean => {
-  const definition = nodeDefinitions[nodeType];
+  const definition = resolveNodeDescription(nodeType);
   const groups = definition?.group || [];
   return groups.includes('memory') || groups.includes('tool');
 };
@@ -4302,39 +4283,26 @@ Android services use a factory pattern with `createAndroidServiceNode()` for con
 - **Parameter System**: Flexible JSON parameters for service-specific configuration
 
 ### Adding New Android Services
-1. **Add Node Definition** in `src/nodeDefinitions/androidServiceNodes.ts`:
-   ```typescript
-   newService: createAndroidServiceNode({
-     name: 'newService',
-     displayName: 'New Service',
-     serviceId: 'new_service',
-     icon: '🎯',
-     color: '#FF5722',
-     group: ['android', 'category'],
-     description: 'Service description',
-     defaultAction: 'default_action'
-   })
-   ```
 
-2. **Add to Node Type Array** in same file:
-   ```typescript
-   export const ANDROID_SERVICE_NODE_TYPES = [
-     // ... existing nodes
-     'newService'
-   ];
-   ```
+**Wave 11+**: Android service nodes are authored as backend plugins
+under `server/nodes/android/<service>.py`. Each plugin subclasses the
+shared `AndroidServiceBase` (see `server/nodes/android/_base.py`), which
+handles ADB dispatch via `SERVICE_ID_MAP`. See the
+[Android Services Development Guide](./docs-internal/plugin_system.md#android).
 
-3. **Implement Backend Handler** in `server/services/workflow.py`:
-   - Add execution logic for the new service
-   - Handle parameters and return formatted results
-   - Use subprocess for ADB commands if needed
+Adding a new Android service:
 
-4. **Add API Endpoint** (optional) in `server/routers/android.py`:
-   - Add endpoints for service-specific operations
-   - Implement action handlers with proper error handling
+1. **Create the plugin** at `server/nodes/android/<service_name>.py`
+   subclassing `AndroidServiceBase` — the base handles `service_id`
+   routing, argument translation, and broadcast status updates.
+2. **Register the service id** in `SERVICE_ID_MAP` on
+   `server/nodes/android/_base.py` (camelCase node type → snake_case
+   service id).
+3. **Implement the execution path** in the plugin's `execute` method;
+   shared ADB infrastructure lives in `AndroidService`.
 
 ### Key Files
-- **Node Factory**: `src/nodeDefinitions/androidServiceNodes.ts` - Creates Android service nodes
+- **Shared base**: `server/nodes/android/_base.py` — `AndroidServiceBase`, `SERVICE_ID_MAP`, `execute_android_toolkit`, `execute_android_service_tool`
 - **Backend Router**: `server/routers/android.py` - API endpoints for Android operations
 - **Workflow Handler**: `server/services/workflow.py` - Execution logic for all nodes
 - **Execution Service**: `src/services/executionService.ts` - Routes Android nodes to Python backend
@@ -4734,7 +4702,7 @@ async def handle_get_active_waiters(data: Dict[str, Any], websocket: WebSocket):
 
 ### WhatsApp Receive Node
 
-#### Node Definition (`client/src/nodeDefinitions/whatsappNodes.ts`)
+#### Node Definition (plugin: `server/nodes/whatsapp/whatsapp_receive.py`; pre-Wave-11 frontend shape shown below for historical reference)
 ```typescript
 whatsappReceive: {
   displayName: 'WhatsApp Receive',
@@ -4788,7 +4756,7 @@ Served via `GET /api/schemas/nodes/whatsappReceive.json` + `get_node_output_sche
 
 The Task Trigger node fires when a delegated child agent completes its task (success or error). This enables parent agents to react to child completion via workflow nodes.
 
-#### Node Definition (`client/src/nodeDefinitions/workflowNodes.ts`)
+#### Node Definition (plugin: `server/nodes/trigger/task_trigger.py`; pre-Wave-11 frontend shape shown below for historical reference)
 ```typescript
 taskTrigger: {
   displayName: 'Task Completed',
@@ -4864,9 +4832,10 @@ await broadcaster.send_custom_event('task_completed', {
    FILTER_BUILDERS['emailTrigger'] = build_email_filter
    ```
 
-3. **Add Node Definition** in `client/src/nodeDefinitions/`:
-   - Define properties for filter configuration
-   - Set outputs with expected data structure
+3. **Add the plugin** at `server/nodes/<category>/<trigger_name>.py`:
+   - Define the `NodeSpec` (inputs / outputs / uiHints) as a subclass
+     or dataclass per the plugin system
+   - Implement the trigger-handler `execute` method
 
 4. **Add Output Schema** in `InputSection.tsx`:
    ```typescript

@@ -3,7 +3,6 @@
 | Field | Value |
 |------|-------|
 | **Category** | web_automation / tool (dual-purpose) |
-| **Frontend definition** | [`client/src/nodeDefinitions/crawleeNodes.ts`](../../../client/src/nodeDefinitions/crawleeNodes.ts) |
 | **Backend handler** | [`server/services/handlers/crawlee.py::handle_crawlee_scraper`](../../../server/services/handlers/crawlee.py) |
 | **Tests** | [`server/tests/nodes/test_web_automation.py`](../../../server/tests/nodes/test_web_automation.py) |
 | **Skill (if any)** | [`server/skills/web_agent/crawlee-scraper-skill/SKILL.md`](../../../server/skills/web_agent/crawlee-scraper-skill/SKILL.md) |

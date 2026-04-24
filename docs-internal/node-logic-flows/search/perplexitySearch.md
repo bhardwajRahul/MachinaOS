@@ -3,7 +3,6 @@
 | Field | Value |
 |------|-------|
 | **Category** | search / tool (dual-purpose) |
-| **Frontend definition** | [`client/src/nodeDefinitions/searchNodes.ts`](../../../client/src/nodeDefinitions/searchNodes.ts) |
 | **Backend handler** | [`server/services/handlers/search.py::handle_perplexity_search`](../../../server/services/handlers/search.py) |
 | **Tests** | [`server/tests/nodes/test_search.py`](../../../server/tests/nodes/test_search.py) |
 | **Skill (if any)** | [`server/skills/web_agent/perplexity-search-skill/SKILL.md`](../../../server/skills/web_agent/perplexity-search-skill/SKILL.md) |

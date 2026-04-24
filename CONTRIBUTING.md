@@ -44,7 +44,7 @@ Deep dives: [agent_architecture.md](docs-internal/agent_architecture.md) - [nati
 
 | Directory | What lives here | Start reading |
 |---|---|---|
-| `client/src/nodeDefinitions/` | 106 workflow node definitions across 25 TypeScript files | [node_creation.md](docs-internal/node_creation.md) |
+| `server/nodes/<category>/<node>.py` | Workflow node plugins (NodeSpec + execute) — backend SSOT since Wave 11 | [plugin_system.md](docs-internal/plugin_system.md), [server/nodes/README.md](server/nodes/README.md) |
 | `client/src/components/` | React Flow canvas, parameter panel, modals | [CLAUDE.md](CLAUDE.md) |
 | `server/services/` | WorkflowService, NodeExecutor, AI service | [DESIGN.md](docs-internal/DESIGN.md) |
 | `server/services/handlers/` | One handler per node type (dispatch targets) | [node_creation.md](docs-internal/node_creation.md) |
@@ -64,15 +64,14 @@ Deep dives: [agent_architecture.md](docs-internal/agent_architecture.md) - [nati
 The diagram above shows the full lifecycle of a workflow node from TypeScript definition to Python handler. Use these recipes as a starting point:
 
 **Add a workflow node**
-- Node definition: `client/src/nodeDefinitions/<yourCategory>.ts`
-- Backend handler: `server/services/handlers/<your_handler>.py`
-- Register in: `server/services/node_executor.py` registry
-- Guide: [node_creation.md](docs-internal/node_creation.md)
+- Author a plugin: `server/nodes/<category>/<node>.py` — subclasses `BaseNode`, declares `NodeSpec` + `execute`
+- Add a contract test: `server/tests/nodes/test_<category>.py`
+- Guide: [plugin_system.md](docs-internal/plugin_system.md) + [server/nodes/README.md](server/nodes/README.md)
 
 **Add an LLM provider**
 - OpenAI-compatible (DeepSeek, Kimi, Mistral pattern): config-only in `server/config/llm_defaults.json`
 - Custom-SDK provider: new file in `server/services/llm/providers/`, branch in `factory.py`
-- Frontend node: `client/src/nodeDefinitions/aiModelNodes.ts`
+- Backend plugin: `server/nodes/model/<provider>_chat_model.py`
 - Guide: [native_llm_sdk.md](docs-internal/native_llm_sdk.md)
 
 **Add a dual-purpose tool (workflow node + AI tool)**
@@ -82,7 +81,7 @@ The diagram above shows the full lifecycle of a workflow node from TypeScript de
 - Guide: [dual_purpose_tool_node_creation.md](docs-internal/dual_purpose_tool_node_creation.md)
 
 **Add a specialized AI agent**
-- `client/src/nodeDefinitions/specializedAgentNodes.ts`
+- Add the plugin under `server/nodes/agent/` (typically extends the shared specialized-agent base in `server/nodes/agent/_specialized.py`)
 - Add to `SPECIALIZED_AGENT_TYPES` in `server/constants.py`
 - Register in `server/services/node_executor.py`
 - Guide: [specialized_agent_node_creation.md](docs-internal/specialized_agent_node_creation.md)

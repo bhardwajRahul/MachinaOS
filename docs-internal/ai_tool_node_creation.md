@@ -1,5 +1,8 @@
 # AI Agent Tool Node Creation Guide
 
+> **⚠️ Pre-Wave-11 — historical reference only.**
+> Node authoring now happens on the backend: each node is a Python plugin under `server/nodes/<category>/<node>.py` that emits a `NodeSpec`. The frontend reads specs via [client/src/lib/nodeSpec.ts](../client/src/lib/nodeSpec.ts) + [adapters/nodeSpecToDescription.ts](../client/src/adapters/nodeSpecToDescription.ts). See [plugin_system.md](./plugin_system.md) and [server/nodes/README.md](../server/nodes/README.md) for the current model. The snippets below that reference `client/src/nodeDefinitions/*` are kept for historical context.
+
 This guide provides a complete walkthrough for creating **dedicated AI Agent tool nodes** - nodes that ONLY work as AI tools (passive, no workflow execution). For nodes that work as BOTH workflow nodes AND AI tools, see the [Dual-Purpose Tool Node Guide](./dual_purpose_tool_node_creation.md).
 
 > **Related Documentation:**

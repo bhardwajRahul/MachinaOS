@@ -3,7 +3,6 @@
 | Field | Value |
 |------|-------|
 | **Category** | ai_tools (dedicated AI tool) |
-| **Frontend definition** | [`client/src/nodeDefinitions/toolNodes.ts`](../../../client/src/nodeDefinitions/toolNodes.ts) |
 | **Backend handler** | [`server/services/handlers/tools.py::_execute_calculator`](../../../server/services/handlers/tools.py) |
 | **Tests** | [`server/tests/nodes/test_ai_tools.py`](../../../server/tests/nodes/test_ai_tools.py) |
 | **Skill (if any)** | None (referenced directly by AI agents via tool-calling) |

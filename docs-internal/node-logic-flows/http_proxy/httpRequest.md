@@ -3,7 +3,6 @@
 | Field | Value |
 |------|-------|
 | **Category** | utility / tool (dual-purpose) |
-| **Frontend definition** | [`client/src/nodeDefinitions/utilityNodes.ts`](../../../client/src/nodeDefinitions/utilityNodes.ts) |
 | **Backend handler** | [`server/services/handlers/http.py::handle_http_request`](../../../server/services/handlers/http.py) |
 | **Tests** | [`server/tests/nodes/test_http_proxy.py`](../../../server/tests/nodes/test_http_proxy.py) |
 | **Skill (if any)** | [`server/skills/web_agent/http-request-skill/SKILL.md`](../../../server/skills/web_agent/http-request-skill/SKILL.md) |

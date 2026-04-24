@@ -3,7 +3,6 @@
 | Field | Value |
 |------|-------|
 | **Category** | specialized_agents |
-| **Frontend definition** | [`client/src/nodeDefinitions/specializedAgentNodes.ts`](../../../client/src/nodeDefinitions/specializedAgentNodes.ts) (search `orchestrator_agent`) |
 | **Backend handler** | [`server/services/handlers/ai.py::handle_chat_agent`](../../../server/services/handlers/ai.py) |
 | **Theme color** | `dracula.cyan` |
 | **Icon** | musical score (U+1F3BC) |

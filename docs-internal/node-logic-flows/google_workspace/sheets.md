@@ -3,7 +3,6 @@
 | Field | Value |
 |------|-------|
 | **Category** | google_workspace / tool (dual-purpose) |
-| **Frontend definition** | [`client/src/nodeDefinitions/googleWorkspaceNodes.ts`](../../../client/src/nodeDefinitions/googleWorkspaceNodes.ts) |
 | **Backend handler** | [`server/services/handlers/sheets.py::handle_google_sheets`](../../../server/services/handlers/sheets.py) |
 | **Tests** | [`server/tests/nodes/test_google_workspace.py`](../../../server/tests/nodes/test_google_workspace.py) |
 | **Skill (if any)** | [`server/skills/productivity_agent/sheets-skill/SKILL.md`](../../../server/skills/productivity_agent/sheets-skill/SKILL.md) |

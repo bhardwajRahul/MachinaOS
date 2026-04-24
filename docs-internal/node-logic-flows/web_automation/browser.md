@@ -3,7 +3,6 @@
 | Field | Value |
 |------|-------|
 | **Category** | web_automation / tool (dual-purpose) |
-| **Frontend definition** | [`client/src/nodeDefinitions/browserNodes.ts`](../../../client/src/nodeDefinitions/browserNodes.ts) |
 | **Backend handler** | [`server/services/handlers/browser.py::handle_browser`](../../../server/services/handlers/browser.py) |
 | **Service** | [`server/services/browser_service.py::BrowserService`](../../../server/services/browser_service.py) |
 | **Tests** | [`server/tests/nodes/test_web_automation.py`](../../../server/tests/nodes/test_web_automation.py) |

@@ -15,7 +15,6 @@ this file must still describe what the code does end-to-end.
 | Field | Value |
 |------|-------|
 | **Category** | <group, e.g. search / ai / android / google> |
-| **Frontend definition** | [`client/src/nodeDefinitions/<file>.ts`](../../../client/src/nodeDefinitions/<file>.ts) |
 | **Backend handler** | [`server/services/handlers/<file>.py::<handler_fn>`](../../../server/services/handlers/<file>.py) |
 | **Tests** | [`server/tests/nodes/test_<category>.py`](../../../server/tests/nodes/test_<category>.py) |
 | **Skill (if any)** | [`server/skills/<folder>/<skill>/SKILL.md`](../../../server/skills/<folder>/<skill>/SKILL.md) |

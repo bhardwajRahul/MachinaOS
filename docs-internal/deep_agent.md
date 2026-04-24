@@ -375,7 +375,6 @@ Matches `execute_chat_agent` format for frontend compatibility:
 ### Frontend
 | File | Description |
 |------|-------------|
-| `client/src/nodeDefinitions/specializedAgentNodes.ts` | Node definition + `SPECIALIZED_AGENT_TYPES` |
 | `client/src/components/AIAgentNode.tsx` | `AGENT_CONFIGS` visual entry |
 | `client/src/components/parameterPanel/MiddleSection.tsx` | `AGENT_WITH_SKILLS_TYPES` |
 | `client/src/components/parameterPanel/InputSection.tsx` | `AGENT_WITH_SKILLS_TYPES` + `aiAgentTypes` |
@@ -400,7 +399,7 @@ MachinaOs provides 4 dual-purpose tool nodes that delegate to `deepagents.backen
 | `shell` | `shell_execute` | Execute shell commands with timeout |
 | `fsSearch` | `fs_search` | List directories, glob pattern match, or grep file contents |
 
-These work as standalone workflow nodes AND as AI agent tools when connected to any agent's `input-tools` handle. Defined in `client/src/nodeDefinitions/filesystemNodes.ts`, handlers in `server/services/handlers/filesystem.py`.
+These work as standalone workflow nodes AND as AI agent tools when connected to any agent's `input-tools` handle. Defined as backend plugins under `server/nodes/filesystem/*.py`.
 
 ---
 

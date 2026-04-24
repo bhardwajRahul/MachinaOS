@@ -3,7 +3,6 @@
 | Field | Value |
 |------|-------|
 | **Category** | code_fs_process / code |
-| **Frontend definition** | [`client/src/nodeDefinitions/codeNodes.ts`](../../../client/src/nodeDefinitions/codeNodes.ts) |
 | **Backend handler** | [`server/services/handlers/code.py::handle_python_executor`](../../../server/services/handlers/code.py) |
 | **Tests** | [`server/tests/nodes/test_code_fs_process.py`](../../../server/tests/nodes/test_code_fs_process.py) |
 | **Skill (if any)** | [`server/skills/coding_agent/python-skill/SKILL.md`](../../../server/skills/coding_agent/python-skill/SKILL.md) |

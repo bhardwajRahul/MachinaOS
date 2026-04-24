@@ -3,7 +3,6 @@
 | Field | Value |
 |------|-------|
 | **Category** | specialized_agents |
-| **Frontend definition** | [`client/src/nodeDefinitions/specializedAgentNodes.ts`](../../../client/src/nodeDefinitions/specializedAgentNodes.ts) (search `rlm_agent`) |
 | **Backend handler** | [`server/services/handlers/rlm.py::handle_rlm_agent`](../../../server/services/handlers/rlm.py) |
 | **Backend service** | `AIService.rlm_service` -> `RLMService.execute` |
 | **Theme color** | `dracula.orange` |

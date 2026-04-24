@@ -3,7 +3,6 @@
 | Field | Value |
 |------|-------|
 | **Category** | specialized_agents |
-| **Frontend definition** | [`client/src/nodeDefinitions/specializedAgentNodes.ts`](../../../client/src/nodeDefinitions/specializedAgentNodes.ts) (search `deep_agent`) |
 | **Backend handler** | [`server/services/handlers/deep_agent.py::handle_deep_agent`](../../../server/services/handlers/deep_agent.py) |
 | **Backend service** | [`server/services/agents/service.py::DeepAgentService.execute`](../../../server/services/agents/service.py) |
 | **Theme color** | `dracula.green` |

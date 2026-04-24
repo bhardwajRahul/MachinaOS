@@ -3,7 +3,6 @@
 | Field | Value |
 |------|-------|
 | **Category** | ai_chat_models |
-| **Frontend definition** | [`client/src/nodeDefinitions/aiModelNodes.ts`](../../../client/src/nodeDefinitions/aiModelNodes.ts) |
 | **Backend handler** | [`server/services/handlers/ai.py::handle_ai_chat_model`](../../../server/services/handlers/ai.py) |
 | **AI service** | [`server/services/ai.py::AIService.execute_chat`](../../../server/services/ai.py) |
 | **Tests** | [`server/tests/nodes/test_ai_chat_models.py`](../../../server/tests/nodes/test_ai_chat_models.py) |

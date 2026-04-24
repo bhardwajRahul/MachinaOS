@@ -3,7 +3,6 @@
 | Field | Value |
 |------|-------|
 | **Category** | social / trigger |
-| **Frontend definition** | [`client/src/nodeDefinitions/telegramNodes.ts`](../../../client/src/nodeDefinitions/telegramNodes.ts) |
 | **Backend handler** | [`server/services/handlers/triggers.py::handle_trigger_node`](../../../server/services/handlers/triggers.py) (generic) + [`server/services/event_waiter.py::build_telegram_filter`](../../../server/services/event_waiter.py) |
 | **Tests** | [`server/tests/nodes/test_telegram_social.py`](../../../server/tests/nodes/test_telegram_social.py) |
 | **Skill (if any)** | none |

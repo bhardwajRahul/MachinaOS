@@ -3,7 +3,6 @@
 | Field | Value |
 |------|-------|
 | **Category** | social / tool (dual-purpose) |
-| **Frontend definition** | [`client/src/nodeDefinitions/twitterNodes.ts`](../../../client/src/nodeDefinitions/twitterNodes.ts) |
 | **Backend handler** | [`server/services/handlers/twitter.py::handle_twitter_user`](../../../server/services/handlers/twitter.py) |
 | **Tests** | [`server/tests/nodes/test_twitter.py`](../../../server/tests/nodes/test_twitter.py) |
 | **Skill (if any)** | [`server/skills/social_agent/twitter-user-skill/SKILL.md`](../../../server/skills/social_agent/twitter-user-skill/SKILL.md) |

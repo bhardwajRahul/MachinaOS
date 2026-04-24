@@ -1,5 +1,8 @@
 # Specialized AI Agent Node Creation Guide
 
+> **⚠️ Pre-Wave-11 — historical reference only.**
+> Node authoring now happens on the backend: each node is a Python plugin under `server/nodes/<category>/<node>.py` that emits a `NodeSpec`. The frontend reads specs via [client/src/lib/nodeSpec.ts](../client/src/lib/nodeSpec.ts) + [adapters/nodeSpecToDescription.ts](../client/src/adapters/nodeSpecToDescription.ts). See [plugin_system.md](./plugin_system.md) and [server/nodes/README.md](../server/nodes/README.md) for the current model. The snippets below that reference `client/src/nodeDefinitions/*` are kept for historical context.
+
 ## Overview
 
 Specialized Agent nodes are AI Agents pre-configured for specific domains and use cases. They inherit full AI Agent functionality (provider selection, model configuration, prompt templates, thinking/reasoning) while being tailored for specific capabilities like Android control, coding, web automation, task management, or social messaging.
@@ -798,7 +801,6 @@ Node parameters, memory content, and tool schemas come from database first (not 
 ### Frontend
 | File | Purpose |
 |------|---------|
-| `client/src/nodeDefinitions/specializedAgentNodes.ts` | Node definitions + AI_AGENT_PROPERTIES + SPECIALIZED_AGENT_TYPES |
 | `client/src/styles/theme.ts` | Centralized dracula theme constants (colors used in node defaults) |
 | `client/src/components/AIAgentNode.tsx` | AGENT_CONFIGS visual configuration with themeColorKey |
 | `client/src/components/parameterPanel/MiddleSection.tsx` | AGENT_WITH_SKILLS_TYPES array |

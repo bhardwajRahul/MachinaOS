@@ -41,7 +41,7 @@
   <!-- 1. Node definition -->
   <rect class="fe-box" x="50" y="145" width="360" height="85" rx="8"/>
   <text x="70" y="170" class="title">1. Node definition</text>
-  <text x="70" y="190" class="path">client/src/nodeDefinitions/&lt;category&gt;.ts</text>
+  <text x="70" y="190" class="path">server/nodes/&lt;category&gt;/&lt;node&gt;.py</text>
   <text x="70" y="210" class="sub">INodeProperties: displayName, group, inputs,</text>
   <text x="70" y="224" class="sub">outputs, properties[], displayOptions.show</text>
 

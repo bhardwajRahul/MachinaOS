@@ -3,7 +3,6 @@
 | Field | Value |
 |------|-------|
 | **Category** | workflow / utility / tool (dual-purpose) |
-| **Frontend definition** | [`client/src/nodeDefinitions/schedulerNodes.ts`](../../../client/src/nodeDefinitions/schedulerNodes.ts) |
 | **Backend handler** | [`server/services/handlers/utility.py::handle_timer`](../../../server/services/handlers/utility.py) |
 | **Tests** | [`server/tests/nodes/test_workflow_triggers.py`](../../../server/tests/nodes/test_workflow_triggers.py) |
 | **Skill (if any)** | none |

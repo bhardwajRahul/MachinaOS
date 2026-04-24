@@ -3,7 +3,6 @@
 | Field | Value |
 |------|-------|
 | **Category** | ai_tools (dual-purpose) |
-| **Frontend definition** | [`client/src/nodeDefinitions/toolNodes.ts`](../../../client/src/nodeDefinitions/toolNodes.ts) |
 | **Backend handler** | [`server/services/handlers/tools.py::handle_task_manager`](../../../server/services/handlers/tools.py) (workflow-node entry) -> `_execute_task_manager` |
 | **Tests** | [`server/tests/nodes/test_ai_tools.py`](../../../server/tests/nodes/test_ai_tools.py) |
 | **Skill (if any)** | [`server/skills/task_agent/task-manager-skill/SKILL.md`](../../../server/skills/task_agent/task-manager-skill/SKILL.md) |

@@ -3,7 +3,6 @@
 | Field | Value |
 |------|-------|
 | **Category** | chat_utility (grouping) / location (functional domain) |
-| **Frontend definition** | [`client/src/nodeDefinitions/locationNodes.ts`](../../../client/src/nodeDefinitions/locationNodes.ts) |
 | **Backend handler** | [`server/services/handlers/utility.py::handle_create_map`](../../../server/services/handlers/utility.py) -> [`server/services/maps.py::MapsService.create_map`](../../../server/services/maps.py) |
 | **Tests** | [`server/tests/nodes/test_chat_utility.py`](../../../server/tests/nodes/test_chat_utility.py) |
 | **Skill (if any)** | - |
