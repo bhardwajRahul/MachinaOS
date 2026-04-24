@@ -116,9 +116,9 @@ class TestAllChatModelsHappyPath:
             f"expected get_api_key({provider}, ...) for {node_type}, got {calls}"
         )
 
-        # And the injected api_key landed in the params dict execute_chat saw
+        # Plugin dumps params with by_alias=True so snake_case api_key is emitted as apiKey
         params = harness.ai_service.execute_chat.await_args.args[2]
-        assert params.get("api_key") == "test-api-key"
+        assert params.get("apiKey") == "test-api-key"
 
     @pytest.mark.parametrize("node_type,provider", ALL_PROVIDERS)
     async def test_error_envelope_propagates(self, harness, node_type, provider):

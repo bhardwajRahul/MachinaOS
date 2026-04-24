@@ -245,7 +245,7 @@ class TestAIAgent:
         assert kwargs["tool_data"] is None
 
         # Prompt got the task context prepended
-        sent_params = harness.ai_service.execute_agent.call_args.args[1]
+        sent_params = harness.ai_service.execute_agent.call_args.kwargs["parameters"]
         assert "delegated task has completed" in sent_params["prompt"]
         assert "original" in sent_params["prompt"]
 
@@ -301,7 +301,7 @@ class TestChatAgent:
             context=ctx,
         )
 
-        sent_params = harness.ai_service.execute_chat_agent.call_args.args[1]
+        sent_params = harness.ai_service.execute_chat_agent.call_args.kwargs["parameters"]
         assert sent_params["prompt"] == "from upstream"
 
     async def test_input_fallback_prefers_message_over_text_over_content(self, harness):
@@ -323,7 +323,7 @@ class TestChatAgent:
             context=ctx,
         )
 
-        sent_params = harness.ai_service.execute_chat_agent.call_args.args[1]
+        sent_params = harness.ai_service.execute_chat_agent.call_args.kwargs["parameters"]
         assert sent_params["prompt"] == "via-message"
 
     async def test_non_empty_prompt_is_NOT_overridden_by_input_data(self, harness):
@@ -342,7 +342,7 @@ class TestChatAgent:
             context=ctx,
         )
 
-        sent_params = harness.ai_service.execute_chat_agent.call_args.args[1]
+        sent_params = harness.ai_service.execute_chat_agent.call_args.kwargs["parameters"]
         assert sent_params["prompt"] == "explicit"
 
     async def test_orchestrator_adds_teammates_as_delegation_tools(self, harness):
@@ -411,7 +411,7 @@ class TestChatAgent:
 
         _, kwargs = harness.ai_service.execute_chat_agent.call_args
         assert kwargs["tool_data"] is None
-        sent_params = harness.ai_service.execute_chat_agent.call_args.args[1]
+        sent_params = harness.ai_service.execute_chat_agent.call_args.kwargs["parameters"]
         assert "failed" in sent_params["prompt"].lower()
 
 

@@ -105,8 +105,8 @@ class TestTwitterSend:
 
         harness.assert_envelope(result, success=True)
         payload = result["result"]
-        assert payload["id"] == "1999000000000000001"
-        assert payload["text"] == "hello world"
+        assert payload["data"]["id"] == "1999000000000000001"
+        assert payload["data"]["text"] == "hello world"
         posts.create.assert_called_once()
         body = posts.create.call_args.kwargs["body"]
         assert body == {"text": "hello world"}
@@ -201,8 +201,7 @@ class TestTwitterSend:
             )
 
         harness.assert_envelope(result, success=False)
-        assert "unknown action" in result["error"].lower()
-        assert "quote" in result["error"].lower()
+        assert "invalid parameters" in result["error"].lower()
 
     async def test_missing_oauth_tokens_errors(self, harness):
         stub_cls = _make_client_class()
@@ -390,7 +389,7 @@ class TestTwitterSearch:
         assert tw["text"].startswith("this is a long form thread")
         assert tw["display_text"] == tw["text"]
 
-    async def test_max_results_clamped_above_100(self, harness):
+    async def test_max_results_above_100_rejected(self, harness):
         posts = MagicMock(name="posts")
         posts.search_recent = MagicMock(return_value=iter([self._search_page([], {})]))
         stub_cls = _make_client_class(posts=posts)
@@ -398,14 +397,14 @@ class TestTwitterSearch:
         with _patch_client(stub_cls), patched_container(
             auth_oauth_tokens=_ok_tokens()
         ), patched_pricing():
-            await harness.execute(
+            result = await harness.execute(
                 "twitterSearch", {"query": "x", "max_results": 500}
             )
 
-        # Handler should pass max_results=100 (upper clamp) to the SDK.
-        assert posts.search_recent.call_args.kwargs["max_results"] == 100
+        harness.assert_envelope(result, success=False)
+        assert "invalid parameters" in result["error"].lower()
 
-    async def test_max_results_clamped_below_10(self, harness):
+    async def test_max_results_below_10_rejected(self, harness):
         posts = MagicMock(name="posts")
         posts.search_recent = MagicMock(return_value=iter([self._search_page([], {})]))
         stub_cls = _make_client_class(posts=posts)
@@ -413,12 +412,12 @@ class TestTwitterSearch:
         with _patch_client(stub_cls), patched_container(
             auth_oauth_tokens=_ok_tokens()
         ), patched_pricing():
-            await harness.execute(
+            result = await harness.execute(
                 "twitterSearch", {"query": "x", "max_results": 3}
             )
 
-        # API minimum is 10; handler clamps up silently.
-        assert posts.search_recent.call_args.kwargs["max_results"] == 10
+        harness.assert_envelope(result, success=False)
+        assert "invalid parameters" in result["error"].lower()
 
     async def test_empty_query_short_circuits(self, harness):
         posts = MagicMock(name="posts")
@@ -482,11 +481,11 @@ class TestTwitterUser:
             result = await harness.execute("twitterUser", {"operation": "me"})
 
         harness.assert_envelope(result, success=True)
-        payload = result["result"]
-        assert payload["id"] == "me1"
-        assert payload["username"] == "me"
-        assert payload["description"] == "hi"
-        assert payload["verified"] is True
+        user = result["result"]["user"]
+        assert user["id"] == "me1"
+        assert user["username"] == "me"
+        assert user["description"] == "hi"
+        assert user["verified"] is True
         users.get_me.assert_called_once()
 
     async def test_by_username_not_found(self, harness):
@@ -523,9 +522,8 @@ class TestTwitterUser:
         assert "username" in result["error"].lower()
         users.get_by_usernames.assert_not_called()
 
-    async def test_followers_clamps_max_results(self, harness):
+    async def test_followers_above_1000_rejected(self, harness):
         users = MagicMock(name="users")
-        # get_followers is a paginated generator returning SimpleNamespace pages
         users.get_followers = MagicMock(
             return_value=iter(
                 [SimpleNamespace(data=[{"id": "u1", "username": "a", "name": "A"}])]
@@ -541,12 +539,8 @@ class TestTwitterUser:
                 {"operation": "followers", "user_id": "x1", "max_results": 9999},
             )
 
-        harness.assert_envelope(result, success=True)
-        payload = result["result"]
-        assert payload["count"] == 1
-        assert payload["users"][0]["username"] == "a"
-        # Upper clamp is 1000.
-        assert users.get_followers.call_args.kwargs["max_results"] == 1000
+        harness.assert_envelope(result, success=False)
+        assert "invalid parameters" in result["error"].lower()
 
     async def test_unknown_operation(self, harness):
         stub_cls = _make_client_class()
@@ -559,7 +553,7 @@ class TestTwitterUser:
             )
 
         harness.assert_envelope(result, success=False)
-        assert "unknown operation" in result["error"].lower()
+        assert "invalid parameters" in result["error"].lower()
 
 
 # ============================================================================

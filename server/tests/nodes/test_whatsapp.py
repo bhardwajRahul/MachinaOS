@@ -306,7 +306,7 @@ class TestWhatsappDb:
             )
 
         harness.assert_envelope(result, success=False)
-        assert "unknown operation" in result["error"].lower()
+        assert "invalid parameters" in result["error"].lower()
 
     async def test_rpc_exception_becomes_error_envelope(self, harness):
         with _patch_rpc_call(side_effect=Exception("rpc down")):

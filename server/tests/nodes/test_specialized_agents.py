@@ -67,12 +67,12 @@ class TestGenericSpecializedAgents:
 
         harness.assert_envelope(result, success=True)
         assert harness.ai_service.execute_chat_agent.await_count == 1
-        # node_id is the first positional arg, parameters is the second.
+        # Plugin calls execute_chat_agent(node_id, **kwargs) where kwargs["parameters"] holds the param dict.
         args, kwargs = harness.ai_service.execute_chat_agent.await_args
         assert args[0].startswith(f"test_{node_type}_")
-        assert args[1]["provider"] == "openai"
-        assert args[1]["model"] == "gpt-4o"
-        assert args[1]["prompt"] == "hello"
+        assert kwargs["parameters"]["provider"] == "openai"
+        assert kwargs["parameters"]["model"] == "gpt-4o"
+        assert kwargs["parameters"]["prompt"] == "hello"
 
     @pytest.mark.parametrize("node_type", GENERIC_SPECIALIZED_AGENTS)
     async def test_envelope_payload_shape(self, harness, node_type):
@@ -127,8 +127,8 @@ class TestGenericSpecializedAgents:
                 context=ctx,
             )
 
-        args, _ = harness.ai_service.execute_chat_agent.await_args
-        assert args[1]["prompt"] == "upstream prompt"
+        _, kwargs = harness.ai_service.execute_chat_agent.await_args
+        assert kwargs["parameters"]["prompt"] == "upstream prompt"
 
     async def test_task_completion_strips_tools(self, harness):
         """When task_data.status is completed, tool_data is stripped to []."""

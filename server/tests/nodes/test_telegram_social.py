@@ -218,7 +218,7 @@ class TestTelegramSend:
             )
 
         harness.assert_envelope(result, success=False)
-        assert "unsupported" in result["error"].lower()
+        assert "invalid parameters" in result["error"].lower()
 
 
 # ============================================================================

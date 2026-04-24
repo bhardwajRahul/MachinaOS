@@ -24,14 +24,15 @@ async def _execute_calculator(args: Dict[str, Any]) -> Dict[str, Any]:
     from nodes.tool.calculator_tool import CalculatorToolNode, CalculatorParams
 
     op = str(args.get("operation", "")).lower()
-    # Old behaviour: unknown op -> {"error": "...supported: [...]"}
+    # Old behaviour: unknown op -> {"error": "...", "supported_operations": [...]}
     supported = {"add", "subtract", "multiply", "divide", "power", "sqrt", "mod", "abs"}
     if op not in supported:
         return {
             "error": (
                 f"Unsupported operation '{op}'. "
                 f"Supported: {sorted(supported)}"
-            )
+            ),
+            "supported_operations": sorted(supported),
         }
 
     # Pydantic will raise ValueError on non-numeric a/b -- propagate to
@@ -88,7 +89,10 @@ async def _execute_current_time(
     }
 
 
-async def _execute_duckduckgo_search(args: Dict[str, Any]) -> Dict[str, Any]:
+async def _execute_duckduckgo_search(
+    args: Dict[str, Any],
+    node_params: Dict[str, Any] = None,
+) -> Dict[str, Any]:
     """Shim for deleted services.handlers.tools._execute_duckduckgo_search."""
     try:
         # Plugin layout under scaling branch: nodes/search/duckduckgo_search.py

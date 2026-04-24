@@ -190,7 +190,7 @@ class TestEmailRead:
             )
 
         harness.assert_envelope(result, success=False)
-        assert "unknown operation" in result["error"].lower()
+        assert "invalid parameters" in result["error"].lower()
 
     async def test_subprocess_failure_returns_error(self, harness):
         with _patch_ensure_binary(), \
@@ -226,7 +226,7 @@ class TestEmailReceive:
         with patched_container(auth_api_keys={"email_address": "alice@example.com", "email_password": "sekret", "email_provider": "gmail"}), patched_pricing(), \
              patch.object(EmailService, "poll_ids", poll_ids_mock), \
              patch.object(EmailService, "fetch_detail", fetch_detail_mock), \
-             patch("nodes.email.email_receive.asyncio.sleep", new=AsyncMock(return_value=None)), \
+             patch("asyncio.sleep", new=AsyncMock(return_value=None)), \
              patch("services.status_broadcaster.get_status_broadcaster") as bcast, \
              patch("services.event_waiter.dispatch") as dispatch_mock:
             bcast.return_value.update_node_status = AsyncMock(return_value=None)
@@ -259,7 +259,7 @@ class TestEmailReceive:
              patch.object(EmailService, "poll_ids", poll_ids_mock), \
              patch.object(EmailService, "fetch_detail", fetch_detail_mock), \
              patch.object(HimalayaService, "flag_message", flag_mock), \
-             patch("nodes.email.email_receive.asyncio.sleep", new=AsyncMock(return_value=None)), \
+             patch("asyncio.sleep", new=AsyncMock(return_value=None)), \
              patch("services.status_broadcaster.get_status_broadcaster") as bcast, \
              patch("services.event_waiter.dispatch"):
             bcast.return_value.update_node_status = AsyncMock(return_value=None)
@@ -280,7 +280,7 @@ class TestEmailReceive:
 
     async def test_missing_credentials_returns_error(self, harness):
         with patched_container(auth_api_keys={}), patched_pricing(), \
-             patch("nodes.email.email_receive.asyncio.sleep", new=AsyncMock(return_value=None)):
+             patch("asyncio.sleep", new=AsyncMock(return_value=None)):
             result = await harness.execute(
                 "emailReceive",
                 {"provider": "gmail", "folder": "INBOX"},
@@ -297,7 +297,7 @@ class TestEmailReceive:
 
         with patched_container(auth_api_keys={"email_address": "alice@example.com", "email_password": "sekret", "email_provider": "gmail"}), patched_pricing(), \
              patch.object(EmailService, "poll_ids", poll_ids_mock), \
-             patch("nodes.email.email_receive.asyncio.sleep", new=AsyncMock(return_value=None)), \
+             patch("asyncio.sleep", new=AsyncMock(return_value=None)), \
              patch("services.status_broadcaster.get_status_broadcaster") as bcast, \
              patch("services.event_waiter.dispatch"):
             bcast.return_value.update_node_status = AsyncMock(return_value=None)

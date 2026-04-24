@@ -173,7 +173,7 @@ class TestGmail:
             )
 
         harness.assert_envelope(result, success=False)
-        assert "unknown gmail operation" in result["error"].lower()
+        assert "invalid parameters" in result["error"].lower()
 
     async def test_missing_credentials_short_circuits(self, harness):
         with _patch_creds(
@@ -367,7 +367,7 @@ class TestCalendar:
             )
 
         harness.assert_envelope(result, success=False)
-        assert "unknown calendar operation" in result["error"].lower()
+        assert "invalid parameters" in result["error"].lower()
 
     async def test_missing_credentials_short_circuits(self, harness):
         with _patch_creds(
@@ -485,7 +485,7 @@ class TestDrive:
             )
 
         harness.assert_envelope(result, success=False)
-        assert "unknown drive operation" in result["error"].lower()
+        assert "invalid parameters" in result["error"].lower()
 
 
 # ============================================================================
@@ -570,7 +570,7 @@ class TestSheets:
             )
 
         harness.assert_envelope(result, success=False)
-        assert "unknown sheets operation" in result["error"].lower()
+        assert "invalid parameters" in result["error"].lower()
 
 
 # ============================================================================
@@ -654,7 +654,7 @@ class TestTasks:
             )
 
         harness.assert_envelope(result, success=False)
-        assert "unknown tasks operation" in result["error"].lower()
+        assert "invalid parameters" in result["error"].lower()
 
 
 # ============================================================================
@@ -687,9 +687,10 @@ class TestContacts:
 
         harness.assert_envelope(result, success=True)
         payload = result["result"]
-        assert payload["resource_name"] == "people/c123"
-        assert payload["display_name"] == "Alice Smith"
-        assert payload["email"] == "alice@example.com"
+        contact = payload["contact"]
+        assert contact["resource_name"] == "people/c123"
+        assert contact["display_name"] == "Alice Smith"
+        assert contact["email"] == "alice@example.com"
 
     async def test_search_happy_path(self, harness):
         service = MagicMock(name="PeopleService")
@@ -745,7 +746,7 @@ class TestContacts:
             )
 
         harness.assert_envelope(result, success=False)
-        assert "unknown contacts operation" in result["error"].lower()
+        assert "invalid parameters" in result["error"].lower()
 
     async def test_missing_credentials_short_circuits(self, harness):
         with _patch_creds(

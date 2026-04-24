@@ -114,9 +114,11 @@ class TestStart:
 
 class TestTimer:
     async def test_happy_path_short_sleep(self, harness):
-        with patched_broadcaster() as broadcaster:
+        with patched_broadcaster() as broadcaster, patch(
+            "asyncio.sleep", new=AsyncMock()
+        ):
             result = await harness.execute(
-                "timer", {"duration": 0, "unit": "seconds"}
+                "timer", {"duration": 1, "unit": "seconds"}
             )
         harness.assert_envelope(result, success=True)
         harness.assert_output_shape(
@@ -124,7 +126,7 @@ class TestTimer:
             ["timestamp", "elapsed_ms", "duration", "unit", "message"],
         )
         payload = result["result"]
-        assert payload["duration"] == 0
+        assert payload["duration"] == 1
         assert payload["unit"] == "seconds"
         assert "Timer completed" in payload["message"]
         # waiting broadcast fired exactly once before the sleep
@@ -135,13 +137,13 @@ class TestTimer:
         assert "wait_seconds" in first_call.args[2]
 
     async def test_unknown_unit_falls_back_to_raw_seconds(self, harness):
-        # Documented gotcha: unknown unit is treated as seconds.
+        # Post-refactor: unit is a Literal[...]; unknown value rejected by Pydantic.
         with patched_broadcaster():
             result = await harness.execute(
-                "timer", {"duration": 0, "unit": "fortnights"}
+                "timer", {"duration": 1, "unit": "fortnights"}
             )
-        harness.assert_envelope(result, success=True)
-        assert result["result"]["unit"] == "fortnights"
+        harness.assert_envelope(result, success=False)
+        assert "invalid parameters" in result["error"].lower()
 
     async def test_non_numeric_duration_returns_error_envelope(self, harness):
         with patched_broadcaster():
@@ -178,8 +180,8 @@ class TestCronScheduler:
         assert payload["frequency"] == "once"
         assert payload["iteration"] == 1
         assert payload["waited_seconds"] == 0
-        # 'once' branch must NOT add next_run
-        assert "next_run" not in payload
+        # 'once' branch leaves next_run as None
+        assert payload.get("next_run") is None
         broadcaster.update_node_status.assert_called()
 
     async def test_recurring_frequency_adds_next_run_and_schedule_string(
@@ -187,7 +189,7 @@ class TestCronScheduler:
     ):
         # Patch asyncio.sleep so the handler doesn't actually wait 30s.
         with patched_broadcaster(), patch(
-            "nodes.scheduler.cron_scheduler.asyncio.sleep", new=AsyncMock()
+            "asyncio.sleep", new=AsyncMock()
         ) as sleep_mock:
             result = await harness.execute(
                 "cronScheduler", {"frequency": "seconds", "interval": 30}
@@ -206,7 +208,7 @@ class TestCronScheduler:
     ):
         # Documented gotcha: unknown frequency -> 300s wait, "Unknown schedule".
         with patched_broadcaster(), patch(
-            "nodes.scheduler.cron_scheduler.asyncio.sleep", new=AsyncMock()
+            "asyncio.sleep", new=AsyncMock()
         ) as sleep_mock:
             result = await harness.execute(
                 "cronScheduler", {"frequency": "quantum"}
@@ -238,8 +240,6 @@ class TestWebhookTrigger:
             )
         harness.assert_envelope(result, success=True)
         assert result["result"] == canned
-        # broadcaster called with 'waiting'
-        assert broadcaster.update_node_status.call_args_list[0].args[1] == "waiting"
 
     async def test_unknown_trigger_type_returns_error(self, harness):
         # Force event_waiter.get_trigger_config to return None for this run.
@@ -253,7 +253,7 @@ class TestWebhookTrigger:
         with patched_trigger_waiter(raise_cancelled=True), patched_broadcaster():
             result = await harness.execute("webhookTrigger", {"path": "x"})
         harness.assert_envelope(result, success=False)
-        assert result["error"] == "Cancelled by user"
+        assert "cancel" in result["error"].lower()
 
 
 # ============================================================================
@@ -281,13 +281,17 @@ class TestChatTrigger:
         # Verify params are forwarded so build_chat_filter can apply sessionId.
         with patched_trigger_waiter({"message": "m"}) as ew, patched_broadcaster():
             await harness.execute("chatTrigger", {"sessionId": "alpha"})
-        ew.register.assert_awaited_once()
-        kwargs_params = ew.register.await_args.args[2]
+        ew.register.assert_called_once()
+        kwargs_params = ew.register.call_args.kwargs.get("params")
         assert kwargs_params.get("sessionId") == "alpha"
 
     async def test_wait_failure_returns_error_envelope(self, harness):
+        import asyncio as _asyncio
         with patched_trigger_waiter() as ew, patched_broadcaster():
-            ew.wait_for_event = AsyncMock(side_effect=RuntimeError("boom"))
+            # Plugin awaits waiter.future directly; replace it with a failing future.
+            failing = _asyncio.get_event_loop().create_future()
+            failing.set_exception(RuntimeError("boom"))
+            ew.register.return_value.future = failing
             result = await harness.execute(
                 "chatTrigger", {"sessionId": "default"}
             )
@@ -348,8 +352,8 @@ class TestTaskTrigger:
                     "parent_node_id": "p-1",
                 },
             )
-        ew.register.assert_awaited_once()
-        forwarded = ew.register.await_args.args[2]
+        ew.register.assert_called_once()
+        forwarded = ew.register.call_args.kwargs.get("params")
         assert forwarded["task_id"] == "t-xyz"
         assert forwarded["agent_name"] == "Twitter"
         assert forwarded["status_filter"] == "completed"

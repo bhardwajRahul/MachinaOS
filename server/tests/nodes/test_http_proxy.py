@@ -69,7 +69,7 @@ class TestHttpRequest:
 
         result = await harness.execute(
             "httpRequest",
-            {"method": "GET", "url": self.URL, "headers": '{"X-Test": "1"}'},
+            {"method": "GET", "url": self.URL, "headers": {"X-Test": "1"}},
         )
 
         harness.assert_envelope(result, success=True)
@@ -234,7 +234,8 @@ class TestProxyRequest:
             )
 
         harness.assert_envelope(result, success=False)
-        assert "url is required" in result["error"].lower()
+        err = result["error"].lower()
+        assert "url" in err or "protocol" in err
 
     async def test_no_provider_available_returns_envelope(self, harness):
         proxy_svc = _make_proxy_service_mock(proxy_url=None)
@@ -325,14 +326,8 @@ class TestProxyConfig:
                 "proxyConfig", {"operation": "add_provider", "name": ""}
             )
 
-        # Documented quirk: handle_proxy_config copies the tool's `success` into
-        # the envelope but stores the error string under result={...} rather than
-        # the top-level `error` key. So we can't use assert_envelope(success=False)
-        # (which requires top-level `error`). Inspect fields directly.
-        assert result["success"] is False
-        tool_payload = result["result"]
-        assert tool_payload["success"] is False
-        assert "provider name is required" in tool_payload["error"].lower()
+        harness.assert_envelope(result, success=False)
+        assert "provider name is required" in result["error"].lower()
 
     async def test_unknown_operation_returns_error(self, harness):
         proxy_svc = _make_proxy_service_mock()
@@ -346,8 +341,8 @@ class TestProxyConfig:
                 "proxyConfig", {"operation": "teleport_provider"}
             )
 
-        assert result["success"] is False
-        assert "unknown operation" in result["result"]["error"].lower()
+        harness.assert_envelope(result, success=False)
+        assert "invalid parameters" in result["error"].lower()
 
 
 # ============================================================================

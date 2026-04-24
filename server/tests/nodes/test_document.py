@@ -259,12 +259,8 @@ class TestDocumentParser:
             {"files": [{"path": str(f)}], "parser": "nonsense"},
         )
 
-        # Per-file failures bubble into `failed`, NOT the top-level envelope.
-        harness.assert_envelope(result, success=True)
-        payload = result["result"]
-        assert payload["parsed_count"] == 0
-        assert len(payload["failed"]) == 1
-        assert "Unknown parser" in payload["failed"][0]["error"]
+        harness.assert_envelope(result, success=False)
+        assert "invalid parameters" in result["error"].lower()
 
     async def test_pypdf_branch_via_patched_reader(self, harness, tmp_path):
         # Patch pypdf at its import site inside _parse_file_sync.
@@ -415,7 +411,7 @@ class TestEmbeddingGenerator:
             {"chunks": [{"content": "x"}], "provider": "made_up_provider"},
         )
         harness.assert_envelope(result, success=False)
-        assert "provider" in result["error"].lower()
+        assert "invalid parameters" in result["error"].lower()
 
     async def test_openai_provider_uses_apikey_param(self, harness):
         fake_embedder = MagicMock()
@@ -579,7 +575,7 @@ class TestVectorStore:
             {"operation": "store", "backend": "madeup", "embeddings": [[0.1]]},
         )
         harness.assert_envelope(result, success=False)
-        assert "backend" in result["error"].lower()
+        assert "invalid parameters" in result["error"].lower()
 
     async def test_pinecone_requires_api_key(self, harness):
         result = await harness.execute(
