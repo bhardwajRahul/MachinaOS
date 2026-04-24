@@ -37,17 +37,14 @@ export interface ProvidersOptions {
 }
 
 export function makeTestQueryClient(): QueryClient {
+  // TanStack Query v5 dropped the ``logger`` option entirely; global
+  // fetch/query errors silently propagate to the nearest error
+  // boundary. The old ``logger: {log, warn, error}`` shim is gone.
   return new QueryClient({
     defaultOptions: {
       queries: { retry: false, gcTime: 0, staleTime: 0 },
       mutations: { retry: false },
     },
-    // Silence React Query's default error logging in test runs.
-    logger: {
-      log: () => {},
-      warn: () => {},
-      error: () => {},
-    } as any,
   });
 }
 

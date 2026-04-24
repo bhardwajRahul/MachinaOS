@@ -143,7 +143,13 @@ export interface INodeProperties {
   required?: boolean;
   noDataExpression?: boolean;
   
-  options?: INodePropertyOption[] | INodePropertyCollection[];
+  /**
+   * Enum choices (``type: "options"`` / ``"multiOptions"``) OR nested
+   * child properties for a ``type: "collection"`` container. The
+   * collection case lets the adapter nest grouped fields under a
+   * collapsible parent (see ``nodeSpecToDescription.groupProperties``).
+   */
+  options?: INodePropertyOption[] | INodePropertyCollection[] | INodeProperties[];
   typeOptions?: INodePropertyTypeOptions;
   displayOptions?: INodePropertyDisplayOptions;
   validation?: INodePropertyValidation[];

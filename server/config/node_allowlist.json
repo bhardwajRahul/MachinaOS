@@ -1,5 +1,5 @@
 {
-  "_comment": "List node types to show in the Component Palette. Empty list or missing file = all nodes shown (default-on). Node type identifiers must match the 'name' field in client/src/nodeDefinitions/*.ts definitions verbatim.",
+  "_comment": "List node types to show in the Component Palette. Empty list or missing file = all nodes shown (default-on). Node type identifiers must match the 'type' class attribute on the plugin in server/nodes/<category>/<file>.py verbatim.",
   "enabled_nodes": [
     "start",
     "chatTrigger",

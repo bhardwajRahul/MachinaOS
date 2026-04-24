@@ -14,7 +14,8 @@ class ResizeObserverStub {
 }
 
 if (typeof globalThis.ResizeObserver === 'undefined') {
-  // @ts-expect-error - intentional shim
+  // TS infers the assignment is fine now (target widened); kept only
+  // for the historical note. No @ts-expect-error needed.
   globalThis.ResizeObserver = ResizeObserverStub;
 }
 
@@ -46,7 +47,8 @@ if (typeof globalThis.IntersectionObserver === 'undefined') {
     rootMargin = '';
     thresholds = [];
   }
-  // @ts-expect-error - intentional shim
+  // TS infers the assignment is fine now (target widened); kept only
+  // for the historical note. No @ts-expect-error needed.
   globalThis.IntersectionObserver = IntersectionObserverStub;
 }
 

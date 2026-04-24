@@ -1,9 +1,15 @@
 /**
- * Contract assertions for INodeTypeDescription registry entries.
+ * Contract assertions for INodeTypeDescription values.
  *
- * Used by the single sweep test that iterates every node in `nodeDefinitions`
- * and verifies its shape - so a refactor that drops `displayName`, mangles
- * `displayOptions.show`, or uses the wrong handle naming is caught instantly.
+ * Used by the adapter sweep in ``adapters/__tests__/nodeSpecToDescription.test.ts``
+ * — each synthetic ``NodeSpec`` is converted via the adapter and the
+ * resulting description must satisfy these invariants. A refactor that
+ * drops ``displayName``, mangles ``displayOptions.show``, or uses the
+ * wrong handle naming fails loudly.
+ *
+ * The legacy ``validateRegistry`` entry point (which iterated the old
+ * ``nodeDefinitions/`` registry) was removed when the frontend registry
+ * was deleted in favour of the backend NodeSpec path.
  */
 
 import type {
@@ -19,12 +25,12 @@ export interface ContractIssue {
   message: string;
 }
 
-// Wave 10.B: `icon` is now backend-owned (served via NodeSpec from
+// Wave 10.B: ``icon`` is backend-owned (served via NodeSpec from
 // server/models/node_metadata.NODE_METADATA and assembled in
 // services/node_spec.get_node_spec). The frontend type declares it as
-// `icon?: string` and every entry in client/src/nodeDefinitions/*.ts
-// has had its icon field stripped. Do NOT add `icon` back to this list --
-// the source of truth has moved. See docs-internal/schema_source_of_truth_rfc.md.
+// ``icon?: string`` — do NOT add ``icon`` back to this required list;
+// the source of truth is the backend. See
+// docs-internal/schema_source_of_truth_rfc.md.
 const REQUIRED_TOP_LEVEL: (keyof INodeTypeDescription)[] = [
   'displayName',
   'name',
@@ -166,16 +172,6 @@ function validateProperty(
   if ((prop.type === 'options' || prop.type === 'multiOptions') && !Array.isArray(prop.options)) {
     push(`${pathPrefix}.options`, `${prop.type} property must declare an options array`);
   }
-}
-
-export function validateRegistry(
-  registry: Record<string, INodeTypeDescription>,
-): ContractIssue[] {
-  const issues: ContractIssue[] = [];
-  for (const [key, def] of Object.entries(registry)) {
-    issues.push(...validateNodeDefinition(key, def));
-  }
-  return issues;
 }
 
 export function formatIssues(issues: ContractIssue[]): string {

@@ -22,15 +22,11 @@ vi.mock('../../store/useAppStore', () => ({
   useAppStore: () => storeState,
 }));
 
-// --- Mock node definitions ---------------------------------------------------
-
-vi.mock('../../nodeDefinitions', () => ({
-  nodeDefinitions: {
-    cronScheduler: { displayName: 'Cron Scheduler', name: 'cronScheduler' },
-    httpRequest: { displayName: 'HTTP Request', name: 'httpRequest' },
-    aiAgent: { displayName: 'AI Agent', name: 'aiAgent' },
-  },
-}));
+// nodeDefinitions/ was deleted in commit fc10fd3 — the hook now
+// resolves via ``lib/nodeSpec.resolveNodeDescription`` off the
+// backend NodeSpec cache. The legacy ``vi.mock("../../nodeDefinitions")``
+// used to live here; removed so it can't silently mask a real
+// import-path bug.
 
 
 function setWorkflow(nodes: any[]) {

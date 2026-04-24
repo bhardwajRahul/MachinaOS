@@ -9,7 +9,9 @@
  * Walks `docs-internal/node-logic-flows/<category>/<node>.md`, scrapes the
  * first H1 of each doc, and rewrites the AUTO-GENERATED-INDEX block in
  * README.md. With --check, also cross-references against
- * `client/src/nodeDefinitions/` to catch missing docs after a refactor.
+ * `server/nodes/` (the plugin tree, post-Wave-11 source of truth) to
+ * catch missing docs after a new plugin lands. Pre-Wave-11 this
+ * scraped `client/src/nodeDefinitions/`; that folder is gone.
  */
 
 import fs from 'node:fs';
@@ -22,7 +24,10 @@ const __dirname = path.dirname(__filename);
 const ROOT = path.resolve(__dirname, '..');
 const DOCS_DIR = path.join(ROOT, 'docs-internal', 'node-logic-flows');
 const INDEX_FILE = path.join(DOCS_DIR, 'README.md');
-const REGISTRY_GLOB = path.join(ROOT, 'client', 'src', 'nodeDefinitions');
+// The plugin tree at server/nodes/<category>/<file>.py is the canonical
+// list of node types (post-Wave-11). Each plugin class declares
+// ``type = "<nodeType>"`` at class scope — we scrape those.
+const REGISTRY_GLOB = path.join(ROOT, 'server', 'nodes');
 
 const START_MARKER = '<!-- AUTO-GENERATED-INDEX-START -->';
 const END_MARKER = '<!-- AUTO-GENERATED-INDEX-END -->';
@@ -95,22 +100,23 @@ function collectDocumentedKeys() {
 }
 
 function collectRegistryKeys() {
-  // Scrape the exported *_NODE_TYPES arrays (e.g. SEARCH_NODE_TYPES =
-  // ['braveSearch', ...]). These are the canonical lists each module
-  // exports for the registry. Skip parameter `name:` strings and other
-  // noise by anchoring on `_NODE_TYPES = [...]` / `_NODE_TYPES: [...]`.
+  // Scrape the plugin ``type = "<nodeType>"`` class attribute from every
+  // Python file under server/nodes/. Skips ``_*.py`` helpers (``_base``,
+  // ``_credentials``, ``_inline``) and ``__init__.py``. Each plugin class
+  // declares this once at class scope, so a simple line-anchored regex
+  // is enough — no full AST parse.
   const keys = new Set();
-  const files = walk(REGISTRY_GLOB).filter((f) => f.endsWith('.ts'));
-  const arrayRe = /[A-Z_]+_NODE_TYPES\s*(?:=|:)\s*\[([^\]]+)\]/g;
-  const itemRe = /['"]([a-zA-Z_][\w]*)['"]/g;
+  const files = walk(REGISTRY_GLOB).filter(
+    (f) =>
+      f.endsWith('.py') &&
+      !path.basename(f).startsWith('_') &&
+      path.basename(f) !== '__init__.py',
+  );
+  const typeRe = /^\s{4}type\s*(?::\s*str\s*)?=\s*['"]([a-zA-Z_][\w]*)['"]/m;
   for (const f of files) {
     const text = fs.readFileSync(f, 'utf8');
-    let m;
-    while ((m = arrayRe.exec(text))) {
-      const body = m[1];
-      let im;
-      while ((im = itemRe.exec(body))) keys.add(im[1]);
-    }
+    const m = text.match(typeRe);
+    if (m) keys.add(m[1]);
   }
   return keys;
 }
