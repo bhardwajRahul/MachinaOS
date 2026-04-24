@@ -15,11 +15,10 @@ from ._base import call_with_retry, format_user, get_my_user_id, track_twitter_u
 
 
 class TwitterUserParams(BaseModel):
-    operation: str = "me"  # unknown op -> handler error, not Pydantic
+    operation: Literal["me", "by_username", "by_id", "followers", "following"] = "me"
     username: str = Field(default="")
     user_id: str = Field(default="", alias="userId")
-    # Pre-refactor: max_results accepted any int (handler clamped internally).
-    max_results: int = Field(default=100, alias="maxResults", ge=1)
+    max_results: int = Field(default=100, alias="maxResults", ge=1, le=1000)
 
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 

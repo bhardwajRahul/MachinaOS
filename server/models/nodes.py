@@ -35,12 +35,7 @@ from constants import (
 
 class BaseNodeParams(BaseModel):
     """Base class for all node parameters."""
-    # populate_by_name=True so snake_case field names are accepted as
-    # inputs even when an alias (camelCase) is declared. Pre-refactor
-    # NodeExecutor._inject_api_keys + handler code both wrote/read
-    # snake_case; without this, validate_node_params would silently
-    # lose user-provided snake_case values and re-dump the defaults.
-    model_config = {"extra": "allow", "populate_by_name": True}
+    model_config = {"extra": "allow"}  # Allow extra fields for flexibility
 
 
 # =============================================================================

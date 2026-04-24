@@ -12,9 +12,6 @@ from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 class TeamMonitorParams(BaseModel):
     team_id: str = Field(default="", alias="teamId")
     auto_refresh: bool = Field(default=True, alias="autoRefresh")
-    max_history_items: int = Field(
-        default=50, alias="maxHistoryItems", ge=1, le=1000,
-    )
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 
@@ -69,7 +66,7 @@ class TeamMonitorNode(ActionNode):
             }
 
         status = await get_agent_team_service().get_team_status(team_id)
-        max_history = params.max_history_items
+        max_history = ctx.raw.get("parameters", {}).get("maxHistoryItems", 50)
         return {
             "team_id": team_id,
             "members": status.get("members", []),

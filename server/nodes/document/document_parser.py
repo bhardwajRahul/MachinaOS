@@ -39,8 +39,7 @@ def _parse_file_sync(path: Path, parser: str) -> str:
 
 class DocumentParserParams(BaseModel):
     file_path: str = Field(default="", alias="filePath")
-    # Pre-refactor: unknown parser -> handler error, not Pydantic ValidationError.
-    parser: str = "pypdf"
+    parser: Literal["pypdf", "marker", "unstructured", "beautifulsoup"] = "pypdf"
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 

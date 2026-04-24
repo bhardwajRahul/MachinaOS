@@ -6,9 +6,6 @@ IMAP polling for new mail via Himalaya CLI. Thin delegation to
 
 from __future__ import annotations
 
-# Re-exported so tests can patch `nodes.email.email_receive.asyncio.sleep`
-# without reaching into the delegate handler module.
-import asyncio  # noqa: F401
 from typing import Any, Dict, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field

@@ -15,8 +15,15 @@ from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
 
 class WhatsAppDbParams(BaseModel):
-    # Pre-refactor contract: unknown op -> "Unknown operation ..." from handler.
-    operation: str = Field(default="chat_history")
+    operation: Literal[
+        "chat_history", "search_groups", "get_group_info",
+        "get_contact_info", "list_contacts", "check_contacts",
+        "list_channels", "get_channel_info", "channel_messages",
+        "channel_stats", "channel_follow", "channel_unfollow",
+        "channel_create", "channel_mute", "channel_mark_viewed",
+        "newsletter_react", "newsletter_live_updates",
+        "contact_profile_pic",
+    ] = "chat_history"
     chat_id: str = Field(default="", alias="chatId")
     group_id: str = Field(default="", alias="groupId")
     phone_number: str = Field(default="", alias="phoneNumber")
@@ -65,7 +72,7 @@ class WhatsAppDbNode(ActionNode):
         from ._base import handle_whatsapp_db
         response = await handle_whatsapp_db(
             node_id=ctx.node_id, node_type=self.type,
-            parameters=params.model_dump(by_alias=False), context=ctx.raw,
+            parameters=params.model_dump(by_alias=True), context=ctx.raw,
         )
         if response.get("success"):
             return response.get("result") or response

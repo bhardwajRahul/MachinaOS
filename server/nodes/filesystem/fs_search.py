@@ -10,9 +10,7 @@ from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
 
 class FsSearchParams(BaseModel):
-    # Pre-refactor contract: unknown mode raised "Unknown mode ..." from
-    # the handler body rather than failing Pydantic validation.
-    mode: str = Field(default="ls")
+    mode: Literal["ls", "glob", "grep"] = "ls"
     path: str = Field(default=".")
     pattern: str = Field(default="")
 

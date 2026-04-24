@@ -80,8 +80,6 @@ class TriggerNode(BaseNode, abstract=True):
         Deployment-mode long-running watches are driven by
         :class:`TriggerManager`, not this method.
         """
-        import asyncio
-        import inspect
         import time
         from services import event_waiter
 
@@ -93,24 +91,13 @@ class TriggerNode(BaseNode, abstract=True):
             return self._wrap_error(start_time=start_time, error=f"Invalid parameters: {e}")
 
         if self.mode == "event":
-            # ``event_waiter.register`` is declared ``async def`` in the
-            # real module but tests patch it as a sync MagicMock returning
-            # a waiter with a pre-resolved ``.future``. Handle both shapes
-            # so production + test paths remain symmetric.
-            registered = event_waiter.register(
+            waiter = event_waiter.register(
                 node_type=self.type,
                 node_id=node_id,
                 params=parameters,
             )
-            waiter = (
-                await registered if inspect.isawaitable(registered) else registered
-            )
             try:
                 event_data = await waiter.future
-            except asyncio.CancelledError:
-                return self._wrap_error(
-                    start_time=start_time, error="Cancelled by user",
-                )
             except Exception as e:
                 return self._wrap_error(start_time=start_time, error=str(e))
             return self._wrap_success(start_time=start_time, result=event_data)

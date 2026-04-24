@@ -15,10 +15,8 @@ from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
 
 class TimerParams(BaseModel):
-    # Pre-refactor contract accepted 0 (instant completion) and any
-    # unit string, silently falling back to raw seconds for unknown units.
-    duration: int = Field(default=1, ge=0, le=86400)
-    unit: str = Field(default="seconds")
+    duration: int = Field(default=1, ge=1, le=86400)
+    unit: Literal["seconds", "minutes", "hours"] = "seconds"
 
     model_config = ConfigDict(extra="ignore")
 

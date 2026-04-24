@@ -14,7 +14,7 @@ class EmailReadParams(BaseModel):
         "gmail", "outlook", "yahoo", "icloud",
         "protonmail", "fastmail", "custom",
     ] = "gmail"
-    operation: str = "list"  # handler dispatches; unknown op raised from body
+    operation: Literal["list", "search", "read", "folders", "move", "delete", "flag"] = "list"
     folder: str = Field(default="INBOX")
     query: str = Field(default="")
     message_id: str = Field(default="", alias="messageId")
@@ -60,4 +60,4 @@ class EmailReadNode(ActionNode):
     async def query(self, ctx: NodeContext, params: EmailReadParams) -> Any:
         # Body inlined from handlers/email.py (Wave 11.D.1).
         from services.email_service import get_email_service
-        return await get_email_service().read(params.model_dump(by_alias=False))
+        return await get_email_service().read(params.model_dump(by_alias=True))

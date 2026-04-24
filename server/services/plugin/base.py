@@ -221,12 +221,9 @@ class BaseNode:
         op_name = self._pick_operation(parameters)
         op_spec = self._operations.get(op_name)
         if op_spec is None:
-            # Pre-refactor error wording: "Unknown <node_type> operation: <op>"
-            # so tests that assert `"unknown gmail operation"` etc. continue
-            # to match via lowercase-contains.
             return self._wrap_error(
                 start_time=start_time,
-                error=f"Unknown {self.type} operation: '{op_name}'",
+                error=f"Unknown operation '{op_name}' for node {self.type}",
                 error_type="InvalidParametersError",
             )
 
@@ -321,15 +318,9 @@ class BaseNode:
         return await method(ctx, params_obj)
 
     def _wrap_success(self, *, start_time: float, result: Any) -> Dict[str, Any]:
-        """95%-universal return shape. Subclasses (ToolNode) override.
-
-        ``exclude_none=True`` preserves the pre-refactor contract where
-        Optional output fields were absent from the payload (rather than
-        present-but-None). Plugins that want an explicit None can return
-        a plain dict instead of a ``BaseModel``.
-        """
+        """95%-universal return shape. Subclasses (ToolNode) override."""
         if isinstance(result, BaseModel):
-            result_data: Any = result.model_dump(exclude_none=True)
+            result_data: Any = result.model_dump()
         else:
             result_data = result
         return {

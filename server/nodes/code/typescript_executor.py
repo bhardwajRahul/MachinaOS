@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from typing import Any
 
 from services.plugin import NodeContext, Operation
@@ -38,5 +37,4 @@ class TypeScriptExecutorNode(CodeExecutorBase):
         return {
             "output": result.get("output"),
             "console_output": result.get("console_output", ""),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
         }

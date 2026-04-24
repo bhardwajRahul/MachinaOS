@@ -87,10 +87,7 @@ class ChatAgentNode(ActionNode):
             context=ctx.raw, database=database,
             log_prefix="[Chat Agent]",
         )
-        call_parameters = kwargs.pop("parameters")
-        response = await ai_service.execute_chat_agent(
-            ctx.node_id, call_parameters, **kwargs,
-        )
+        response = await ai_service.execute_chat_agent(ctx.node_id, **kwargs)
         if response.get("success"):
             return response.get("result") or response
         raise RuntimeError(response.get("error") or "Chat Agent execution failed")

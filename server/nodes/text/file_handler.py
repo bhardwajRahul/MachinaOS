@@ -11,7 +11,7 @@ from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
 class FileHandlerParams(BaseModel):
     operation: Literal["read", "write", "append", "delete"] = "read"
-    file_path: str = Field(default="", alias="filePath")
+    file_path: str = Field(..., alias="filePath")
     content: str = Field(default="")
     encoding: str = Field(default="utf-8")
 

@@ -9,7 +9,7 @@ add more lines than it saves.
 
 from __future__ import annotations
 
-from typing import Any, List, Literal, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -41,9 +41,7 @@ class PerplexitySearchOutput(BaseModel):
     answer: str = ""
     citations: List[str] = Field(default_factory=list)
     results: List[PerplexityResult] = Field(default_factory=list)
-    # Pre-refactor contract accepted list[str] OR list[dict]; Perplexity
-    # has historically returned both shapes across model versions.
-    images: Optional[List[Any]] = None
+    images: Optional[List[dict]] = None
     related_questions: Optional[List[str]] = None
     model: str = "sonar"
     provider: Literal["perplexity"] = "perplexity"

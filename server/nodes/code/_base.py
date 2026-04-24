@@ -15,10 +15,7 @@ from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
 
 class CodeExecutorParams(BaseModel):
-    # Pre-refactor contract: empty code returned an error envelope from
-    # the handler body ("No code provided"), not a Pydantic ValidationError.
-    # Let empty through so the handler's explicit check drives the error.
-    code: str = Field(default="", json_schema_extra={"editor": "code"})
+    code: str = Field(..., min_length=1, json_schema_extra={"editor": "code"})
     timeout: int = Field(default=30, ge=1, le=600)
 
     model_config = ConfigDict(extra="allow")

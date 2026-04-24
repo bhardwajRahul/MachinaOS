@@ -30,10 +30,6 @@ class SerperSearchResult(BaseModel):
     snippet: str = ""
     url: str = ""
     position: Optional[int] = None
-    # News-vertical extras (populated only by the news branch; Optional so
-    # web/images/places results don't emit empty strings).
-    date: Optional[str] = None
-    source: Optional[str] = None
 
 
 class SerperSearchOutput(BaseModel):
@@ -47,8 +43,9 @@ class SerperSearchOutput(BaseModel):
 
 class SerperSearchParams(BaseModel):
     query: str = Field(..., min_length=1)
-    # Pre-refactor: unknown search_type fell back to web endpoint handler-side.
-    search_type: str = Field(default="search", alias="searchType")
+    search_type: Literal["search", "news", "images", "places"] = Field(
+        default="search", alias="searchType",
+    )
     max_results: int = Field(default=10, alias="maxResults", ge=1, le=100)
     country: str = Field(default="")
     language: str = Field(default="en")
@@ -119,8 +116,6 @@ class SerperSearchNode(ActionNode):
                     title=item.get("title", ""),
                     snippet=item.get("snippet", ""),
                     url=item.get("link", ""),
-                    date=item.get("date") or None,
-                    source=item.get("source") or None,
                 ))
         elif params.search_type == "images":
             for item in (data.get("images") or [])[: params.max_results]:

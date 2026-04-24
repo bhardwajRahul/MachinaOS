@@ -18,7 +18,7 @@ def _ensure_rfc3339(due: str) -> str:
 
 
 class TasksParams(BaseModel):
-    operation: str = "list"  # handler dispatches; unknown op raised from body
+    operation: Literal["create", "list", "complete", "update", "delete"] = "list"
     tasklist_id: str = Field(default="@default", alias="tasklistId")
     task_id: Optional[str] = Field(default=None, alias="taskId")
     title: Optional[str] = None

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from typing import Any
 
 from services.plugin import NodeContext, Operation
@@ -26,13 +25,9 @@ class PythonExecutorNode(CodeExecutorBase):
         results are reachable; ``workspace_dir`` is the per-workflow
         scratch directory.
         """
-        import collections
-        import datetime as datetime_module
         import io
         import json as json_module
         import math
-        import random
-        import re
 
         if not params.code.strip():
             raise RuntimeError("No code provided")
@@ -44,29 +39,24 @@ class PythonExecutorNode(CodeExecutorBase):
             kwargs["file"] = stdout_capture
             print(*args, **kwargs)
 
-        import builtins as _builtins_module
-
-        builtins_dict = dict(_builtins_module.__dict__)
-        builtins_dict["print"] = captured_print
-
+        safe_builtins = {
+            "abs": abs, "all": all, "any": any, "bool": bool,
+            "dict": dict, "enumerate": enumerate, "filter": filter,
+            "float": float, "int": int, "len": len, "list": list,
+            "map": map, "max": max, "min": min, "print": captured_print,
+            "range": range, "round": round, "set": set, "sorted": sorted,
+            "str": str, "sum": sum, "tuple": tuple, "type": type, "zip": zip,
+            "True": True, "False": False, "None": None,
+            "math": math, "json": json_module,
+        }
         namespace = {
-            "__builtins__": builtins_dict,
+            "__builtins__": safe_builtins,
             "input_data": input_data,
             "workspace_dir": ctx.workspace_dir or "",
             "output": None,
-            "math": math,
-            "json": json_module,
-            "datetime": datetime_module.datetime,
-            "timedelta": datetime_module.timedelta,
-            "collections": collections,
-            "Counter": collections.Counter,
-            "defaultdict": collections.defaultdict,
-            "re": re,
-            "random": random,
         }
-        exec(params.code, namespace)  # noqa: S102 -- sandboxed namespace
+        exec(params.code, namespace)  # noqa: S102 — sandboxed namespace
         return {
             "output": namespace.get("output"),
             "console_output": stdout_capture.getvalue(),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
         }

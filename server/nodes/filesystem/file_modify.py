@@ -10,10 +10,8 @@ from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
 
 class FileModifyParams(BaseModel):
-    # Pre-refactor contract: unknown operation -> "Unknown operation ..."
-    # error from handler body, not Pydantic ValidationError.
-    operation: str = Field(default="write")
-    file_path: str = Field(default="", alias="filePath")
+    operation: Literal["write", "edit"] = "write"
+    file_path: str = Field(..., alias="filePath")
     content: str = Field(default="")
     old_string: str = Field(default="", alias="oldString")
     new_string: str = Field(default="", alias="newString")

@@ -51,16 +51,6 @@ class ChatModelParams(BaseModel):
         default=1.0, alias="topP", ge=0.0, le=1.0,
         json_schema_extra={"numberStepSize": 0.1},
     )
-    # Thinking / reasoning knobs (Anthropic extended thinking, Gemini
-    # thinking budget, OpenAI o-series reasoning effort, Groq reasoning
-    # format). Pre-refactor handler forwarded these verbatim; provider
-    # plugins that don't support them simply ignore the keys downstream.
-    thinking_enabled: bool = Field(default=False, alias="thinkingEnabled")
-    thinking_budget: Optional[int] = Field(
-        default=None, alias="thinkingBudget", ge=0, le=64000,
-    )
-    reasoning_effort: Optional[str] = Field(default=None, alias="reasoningEffort")
-    reasoning_format: Optional[str] = Field(default=None, alias="reasoningFormat")
 
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
@@ -93,32 +83,12 @@ class ChatModelBase(ActionNode, abstract=True):
 
     @Operation("chat", cost={"service": "chat_model", "action": "chat", "count": 1})
     async def chat(self, ctx: NodeContext, params: ChatModelParams) -> Any:
-        from constants import detect_ai_provider
         from core.container import container
 
         ai_service = container.ai_service()
-        payload = params.model_dump(by_alias=True)
-
-        # Pre-refactor contract: NodeExecutor._inject_api_keys fetched the
-        # key from auth_service and wrote it into the params dict under
-        # the snake_case `api_key` key. Preserve that wire format so
-        # downstream execute_chat + telemetry see the resolved credential
-        # in the same place it always lived. Fetch missing, then mirror
-        # the aliased form into snake_case.
-        if not payload.get("api_key") and not payload.get("apiKey"):
-            provider = detect_ai_provider(self.type, payload)
-            try:
-                resolved = await ai_service.auth.get_api_key(provider)
-            except Exception:
-                resolved = None
-            if resolved:
-                payload["api_key"] = resolved
-                payload["apiKey"] = resolved
-        elif payload.get("apiKey") and not payload.get("api_key"):
-            # Pydantic emitted the camelCase alias; ensure snake_case also set.
-            payload["api_key"] = payload["apiKey"]
-
-        response = await ai_service.execute_chat(ctx.node_id, self.type, payload)
+        response = await ai_service.execute_chat(
+            ctx.node_id, self.type, params.model_dump(by_alias=True),
+        )
         if response.get("success"):
             return response.get("result") or response
         raise RuntimeError(response.get("error") or f"{self.type} chat failed")

@@ -10,9 +10,7 @@ from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
 
 class ShellParams(BaseModel):
-    # Pre-refactor contract: empty command returned
-    # "Command is required" from the handler body.
-    command: str = Field(default="")
+    command: str = Field(..., min_length=1)
     cwd: str = Field(default="")
     timeout: int = Field(default=30, ge=1, le=600)
 

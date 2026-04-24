@@ -17,9 +17,8 @@ from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
 
 class VectorStoreParams(BaseModel):
-    # Pre-refactor: unknown op / backend -> handler error, not Pydantic.
-    operation: str = "store"
-    backend: str = "chroma"
+    operation: Literal["store", "query", "delete"] = "store"
+    backend: Literal["chroma", "chromadb", "qdrant", "pinecone"] = "chroma"
     collection_name: str = Field(default="documents", alias="collectionName")
     embeddings: Optional[list] = None
     chunks: Optional[list] = None

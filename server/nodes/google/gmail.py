@@ -18,7 +18,7 @@ from ._gmail import fetch_email_details, format_message
 
 
 class GmailParams(BaseModel):
-    operation: str = "send"  # handler dispatches; unknown op raised from body
+    operation: Literal["send", "search", "read"] = "send"
 
     to: str = Field(
         default="",
