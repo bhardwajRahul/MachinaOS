@@ -69,19 +69,30 @@ class ProcessManagerNode(ActionNode):
         op = params.operation
         name = _clean(params.name)
 
+        # Pre-refactor contract: the envelope the service returns is
+        # `{success, result: {...}, error?}`; the plugin's own return
+        # should be the INNER result dict so downstream gets the flat
+        # shape (name, status, pid, ...) at `result["result"]`.
+        def _unwrap(envelope: Any) -> Any:
+            if isinstance(envelope, dict) and "result" in envelope and "success" in envelope:
+                if not envelope.get("success"):
+                    raise RuntimeError(envelope.get("error") or "Process service error")
+                return envelope.get("result") or {}
+            return envelope
+
         if op == "start":
-            return await svc.start(
+            return _unwrap(await svc.start(
                 name=name,
                 command=_clean(params.command),
                 workflow_id=workflow_id,
                 working_directory=_clean(params.cwd) or agent_dir,
-            )
+            ))
         if op == "stop":
-            return await svc.stop(name, workflow_id)
+            return _unwrap(await svc.stop(name, workflow_id))
         if op == "restart":
-            return await svc.restart(name, workflow_id)
+            return _unwrap(await svc.restart(name, workflow_id))
         if op == "send_input":
-            return await svc.send_input(name, workflow_id, _clean(params.input_text))
+            return _unwrap(await svc.send_input(name, workflow_id, _clean(params.input_text)))
         if op == "list":
             return {"processes": svc.list_processes(workflow_id)}
         if op == "get_output":
