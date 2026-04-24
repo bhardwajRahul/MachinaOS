@@ -72,23 +72,32 @@ class ProcessManagerNode(ActionNode):
         op = params.operation
         name = _clean(params.name)
 
+        def _unwrap(response: Any) -> Any:
+            """Raise on service-level failure envelopes so the plugin
+            wrapper returns success=False instead of burying a
+            ``{"success": False, "error": "..."}`` inside the result dict.
+            """
+            if isinstance(response, dict) and response.get("success") is False:
+                raise RuntimeError(response.get("error") or "process operation failed")
+            return response
+
         if op == "start":
-            return await svc.start(
+            return _unwrap(await svc.start(
                 name=name,
                 command=_clean(params.command),
                 workflow_id=workflow_id,
                 working_directory=_clean(params.cwd) or agent_dir,
-            )
+            ))
         if op == "stop":
-            return await svc.stop(name, workflow_id)
+            return _unwrap(await svc.stop(name, workflow_id))
         if op == "restart":
-            return await svc.restart(name, workflow_id)
+            return _unwrap(await svc.restart(name, workflow_id))
         if op == "send_input":
-            return await svc.send_input(name, workflow_id, _clean(params.input_text))
+            return _unwrap(await svc.send_input(name, workflow_id, _clean(params.input_text)))
         if op == "list":
             return {"processes": svc.list_processes(workflow_id)}
         if op == "get_output":
-            return svc.get_output(name, workflow_id, params.stream, params.tail, 0)
+            return _unwrap(svc.get_output(name, workflow_id, params.stream, params.tail, 0))
         raise RuntimeError(f"Unknown operation: {op}")
 
 

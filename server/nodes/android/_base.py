@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from core.logging import get_logger
 from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
@@ -54,6 +54,32 @@ class AndroidServiceParams(BaseModel):
     parameters: Dict[str, Any] = Field(default_factory=dict)
 
     model_config = ConfigDict(extra="allow")
+
+    @field_validator("parameters", mode="before")
+    @classmethod
+    def _coerce_parameters(cls, value: Any) -> Dict[str, Any]:
+        """Accept a JSON-encoded string in the ``parameters`` slot.
+
+        Pre-refactor handlers sometimes receive ``parameters`` as a raw
+        JSON string when the node is wired from an upstream template.
+        Malformed JSON silently becomes an empty dict rather than
+        failing validation — matches the pre-refactor tolerance
+        (see tests/nodes/test_android.py::TestParameterHandling).
+        """
+        if value is None:
+            return {}
+        if isinstance(value, dict):
+            return value
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                return {}
+            try:
+                parsed = json.loads(stripped)
+                return parsed if isinstance(parsed, dict) else {}
+            except (ValueError, TypeError):
+                return {}
+        return {}
 
 
 class AndroidServiceOutput(BaseModel):

@@ -371,27 +371,33 @@ class TestTextGenerator:
 
 class TestFileHandler:
     async def test_happy_path_wraps_content_metadata(self, harness):
+        # Nest a fresh patched_container so container.text_service() is
+        # wired to the real TextService (plugin resolves text_service via
+        # container, not the NodeExecutor-injected one).
         from services.text import TextService
         from services.node_executor import NodeExecutor
+        from tests.nodes._mocks import patched_container
 
-        harness.text_service = TextService()
+        real_text = TextService()
+        harness.text_service = real_text
         harness.executor = NodeExecutor(
             database=harness.database,
             ai_service=harness.ai_service,
             maps_service=harness.maps_service,
-            text_service=harness.text_service,
+            text_service=real_text,
             android_service=harness.android_service,
             settings=harness.settings,
             output_store=harness._record_output,
         )
-        result = await harness.execute(
-            "fileHandler",
-            {
-                "fileType": "markdown",
-                "content": "# hello",
-                "fileName": "note.md",
-            },
-        )
+        with patched_container(text_service=real_text):
+            result = await harness.execute(
+                "fileHandler",
+                {
+                    "file_type": "markdown",
+                    "content": "# hello",
+                    "file_name": "note.md",
+                },
+            )
         harness.assert_envelope(result, success=True)
         payload = result["result"]
         assert payload["type"] == "file"
@@ -405,18 +411,21 @@ class TestFileHandler:
     async def test_defaults_applied(self, harness):
         from services.text import TextService
         from services.node_executor import NodeExecutor
+        from tests.nodes._mocks import patched_container
 
-        harness.text_service = TextService()
+        real_text = TextService()
+        harness.text_service = real_text
         harness.executor = NodeExecutor(
             database=harness.database,
             ai_service=harness.ai_service,
             maps_service=harness.maps_service,
-            text_service=harness.text_service,
+            text_service=real_text,
             android_service=harness.android_service,
             settings=harness.settings,
             output_store=harness._record_output,
         )
-        result = await harness.execute("fileHandler", {})
+        with patched_container(text_service=real_text):
+            result = await harness.execute("fileHandler", {})
         harness.assert_envelope(result, success=True)
         assert result["result"]["data"]["fileName"] == "untitled.txt"
         assert result["result"]["data"]["fileType"] == "generic"

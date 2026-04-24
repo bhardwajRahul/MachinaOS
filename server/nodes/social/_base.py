@@ -153,17 +153,17 @@ def _apply_filters(
         True if message passes all filters
     """
     # Channel filter
-    channel_filter = parameters.get('channelFilter', 'all')
+    channel_filter = parameters.get('channel_filter', 'all')
     if channel_filter != 'all' and message.get('channel') != channel_filter:
         return False
 
     # Message type filter
-    type_filter = parameters.get('messageTypeFilter', 'all')
+    type_filter = parameters.get('message_type_filter', 'all')
     if type_filter != 'all' and message.get('message_type') != type_filter:
         return False
 
     # Sender filter
-    sender_filter = parameters.get('senderFilter', 'all')
+    sender_filter = parameters.get('sender_filter', 'all')
 
     if sender_filter == 'any_contact':
         # Non-group messages only
@@ -172,13 +172,13 @@ def _apply_filters(
 
     elif sender_filter == 'contact':
         # Specific contact
-        contact_phone = parameters.get('contactPhone', '')
+        contact_phone = parameters.get('contact_phone', '')
         if contact_phone and message.get('sender_phone') != contact_phone:
             return False
 
     elif sender_filter == 'group':
         # Specific group
-        group_id = parameters.get('groupId', '')
+        group_id = parameters.get('group_id', '')
         if group_id and message.get('chat_id') != group_id:
             return False
 
@@ -192,11 +192,11 @@ def _apply_filters(
                 return False
 
     # Ignore own messages
-    if parameters.get('ignoreOwnMessages', True) and message.get('is_from_me'):
+    if parameters.get('ignore_own_messages', True) and message.get('is_from_me'):
         return False
 
     # Ignore bots
-    if parameters.get('ignoreBots', False) and message.get('is_bot'):
+    if parameters.get('ignore_bots', False) and message.get('is_bot'):
         return False
 
     return True

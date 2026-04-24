@@ -71,15 +71,19 @@ class TelegramSendParams(BaseModel):
     )
 
     # ===== LOCATION =====
-    latitude: float = Field(
-        default=0.0,
+    # Optional[float] with default None so the handler can tell the
+    # "user omitted the field" case apart from "user set 0.0 deliberately"
+    # (Null Island is a real place). The matching handler check is
+    # ``if params.latitude is None or params.longitude is None: raise``.
+    latitude: Optional[float] = Field(
+        default=None,
         description="Location latitude (-90 to 90)",
         json_schema_extra={
             "displayOptions": {"show": {"message_type": ["location"]}},
         },
     )
-    longitude: float = Field(
-        default=0.0,
+    longitude: Optional[float] = Field(
+        default=None,
         description="Location longitude (-180 to 180)",
         json_schema_extra={
             "displayOptions": {"show": {"message_type": ["location"]}},

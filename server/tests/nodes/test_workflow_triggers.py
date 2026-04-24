@@ -390,9 +390,9 @@ class TestWebhookResponse:
             result = await harness.execute(
                 "webhookResponse",
                 {
-                    "statusCode": 201,
-                    "responseBody": '{"ok": true}',
-                    "contentType": "application/json",
+                    "status_code": 201,
+                    "body": '{"ok": true}',
+                    "content_type": "application/json",
                 },
             )
         harness.assert_envelope(result, success=True)
@@ -436,9 +436,9 @@ class TestWebhookResponse:
             await harness.execute(
                 "webhookResponse",
                 {
-                    "statusCode": 200,
-                    "responseBody": "echo {{input.status}} and {{httpRequest.data}}",
-                    "contentType": "text/plain",
+                    "status_code": 200,
+                    "body": "echo {{input.status}} and {{httpRequest.data}}",
+                    "content_type": "text/plain",
                 },
                 node_id="resp-node",
                 nodes=nodes,
@@ -473,7 +473,7 @@ class TestWebhookResponse:
         with _patched_resolve_webhook_response() as resolve:
             await harness.execute(
                 "webhookResponse",
-                {"statusCode": 200, "responseBody": "", "contentType": "application/json"},
+                {"status_code": 200, "body": "", "content_type": "application/json"},
                 node_id="resp-node",
                 nodes=nodes,
                 edges=edges,

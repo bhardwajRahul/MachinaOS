@@ -20,6 +20,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+# Force import so unittest.mock.patch("services.telegram_service.X") can
+# resolve the attribute path. Without this the module is never loaded at
+# test-collection time and patch raises AttributeError.
+import services.telegram_service  # noqa: F401
+
 from tests.nodes._mocks import patched_broadcaster, patched_container
 
 

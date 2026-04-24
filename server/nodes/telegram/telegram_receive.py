@@ -120,6 +120,30 @@ class TelegramReceiveNode(TriggerNode):
         from services.event_waiter import build_telegram_filter
         return build_telegram_filter(params.model_dump())
 
+    async def execute(
+        self,
+        node_id: str,
+        parameters: Dict[str, Any],
+        context,
+    ) -> Dict[str, Any]:
+        # Pre-flight: refuse to register a waiter if the bot isn't
+        # connected. Matches the pre-refactor handler contract where a
+        # disconnected bot short-circuits before event_waiter.register
+        # and returns an error envelope.
+        import time
+
+        from services.telegram_service import get_telegram_service
+
+        svc = get_telegram_service()
+        if not getattr(svc, "connected", False):
+            return self._wrap_error(
+                start_time=time.time(),
+                error=(
+                    "Telegram bot not connected. Add bot token in Credentials."
+                ),
+            )
+        return await super().execute(node_id, parameters, context)
+
     @Operation("wait")
     async def wait(self, ctx: NodeContext, params: TelegramReceiveParams) -> TelegramReceiveOutput:
         raise NotImplementedError(

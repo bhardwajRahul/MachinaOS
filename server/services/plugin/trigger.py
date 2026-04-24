@@ -91,6 +91,15 @@ class TriggerNode(BaseNode, abstract=True):
             return self._wrap_error(start_time=start_time, error=f"Invalid parameters: {e}")
 
         if self.mode == "event":
+            # Pre-flight: refuse to register a waiter if event_waiter
+            # doesn't recognise this trigger type. Pre-refactor handler
+            # contract — keeps Run-button feedback honest when the trigger
+            # config registry is missing the event_type entry.
+            if event_waiter.get_trigger_config(self.type) is None:
+                return self._wrap_error(
+                    start_time=start_time,
+                    error=f"Unknown trigger type: {self.type}",
+                )
             waiter = await event_waiter.register(
                 node_type=self.type,
                 node_id=node_id,

@@ -10,7 +10,7 @@ delegates the per-platform unwrap to the existing handler.
 
 from __future__ import annotations
 
-from typing import Any, Literal, Optional
+from typing import Any, Dict, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -115,19 +115,42 @@ class SocialReceiveNode(ActionNode):
     Params = SocialReceiveParams
     Output = SocialReceiveOutput
 
+    async def execute(
+        self,
+        node_id: str,
+        parameters: Dict[str, Any],
+        context,
+    ) -> Dict[str, Any]:
+        """Override the base envelope wrap so the ``filtered`` metadata
+        flag the handler emits survives to the top-level result dict.
+        Without this override, BaseNode._wrap_success would re-wrap
+        ``response.get("result")`` and drop every sibling key, including
+        ``filtered`` and ``reason``.
+        """
+        import time
+
+        from ._base import handle_social_receive
+
+        start_time = time.time()
+        try:
+            params_obj = self._validate_params(parameters)
+        except Exception as e:
+            return self._wrap_error(start_time=start_time, error=f"Invalid parameters: {e}")
+
+        outputs = context.raw.get("connected_outputs") or {}
+        source_nodes = context.raw.get("source_nodes") or []
+        response = await handle_social_receive(
+            node_id=node_id, node_type=self.type,
+            parameters=params_obj.model_dump(), context=context.raw,
+            outputs=outputs, source_nodes=source_nodes,
+        )
+        return response
+
     @Operation("normalize")
     async def normalize(self, ctx: NodeContext, params: SocialReceiveParams) -> Any:
-        from ._base import handle_social_receive
-        outputs = ctx.raw.get("connected_outputs") or {}
-        source_nodes = ctx.raw.get("source_nodes") or []
-        response = await handle_social_receive(
-            node_id=ctx.node_id, node_type=self.type,
-            parameters=params.model_dump(), context=ctx.raw,
-            connected_outputs=outputs, source_nodes=source_nodes,
-        )
-        if response.get("success") is False:
-            raise RuntimeError(response.get("error") or "social receive failed")
-        return response.get("result") or {}
+        # Kept for the contract invariant that every plugin declares an
+        # @Operation. Real dispatch goes through :meth:`execute` above.
+        raise NotImplementedError("socialReceive uses execute() override")
 
 
 # socialReceive needs the executor's connected_outputs injection
