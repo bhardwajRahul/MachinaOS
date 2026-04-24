@@ -21,12 +21,14 @@ logger = get_logger(__name__)
 
 class SimpleMemoryParams(BaseModel):
     session_id: str = Field(default="default", alias="sessionId")
+    memory_type: str = Field(default="buffer", alias="memoryType")
     window_size: int = Field(default=10, alias="windowSize", ge=1, le=100)
     memory_content: str = Field(
         default="# Conversation History\n",
         alias="memoryContent",
         json_schema_extra={"rows": 12},
     )
+    clear_on_run: bool = Field(default=False, alias="clearOnRun")
     long_term_enabled: bool = Field(default=False, alias="longTermEnabled")
     retrieval_count: int = Field(
         default=3, alias="retrievalCount", ge=1, le=20,

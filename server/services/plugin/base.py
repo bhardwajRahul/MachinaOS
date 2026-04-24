@@ -318,9 +318,15 @@ class BaseNode:
         return await method(ctx, params_obj)
 
     def _wrap_success(self, *, start_time: float, result: Any) -> Dict[str, Any]:
-        """95%-universal return shape. Subclasses (ToolNode) override."""
+        """95%-universal return shape. Subclasses (ToolNode) override.
+
+        ``exclude_none=True`` preserves the pre-refactor contract where
+        Optional output fields were absent from the payload (rather than
+        present-but-None). Plugins that want an explicit None can return
+        a plain dict instead of a ``BaseModel``.
+        """
         if isinstance(result, BaseModel):
-            result_data: Any = result.model_dump()
+            result_data: Any = result.model_dump(exclude_none=True)
         else:
             result_data = result
         return {

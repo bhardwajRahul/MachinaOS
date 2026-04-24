@@ -11,7 +11,7 @@ from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
 
 class WebhookResponseParams(BaseModel):
     status_code: int = Field(default=200, alias="statusCode", ge=100, le=599)
-    body: Any = Field(default=None)
+    body: Any = Field(default=None, alias="responseBody")
     headers: Dict[str, str] = Field(default_factory=dict)
     content_type: str = Field(default="application/json", alias="contentType")
 

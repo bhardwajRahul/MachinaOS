@@ -57,4 +57,4 @@ class EmailSendNode(ActionNode):
     async def send(self, ctx: NodeContext, params: EmailSendParams) -> Any:
         # Body inlined from handlers/email.py (Wave 11.D.1).
         from services.email_service import get_email_service
-        return await get_email_service().send(params.model_dump(by_alias=True))
+        return await get_email_service().send(params.model_dump(by_alias=False))

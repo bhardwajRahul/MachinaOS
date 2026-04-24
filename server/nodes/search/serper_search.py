@@ -30,6 +30,10 @@ class SerperSearchResult(BaseModel):
     snippet: str = ""
     url: str = ""
     position: Optional[int] = None
+    # News-vertical extras (populated only by the news branch; Optional so
+    # web/images/places results don't emit empty strings).
+    date: Optional[str] = None
+    source: Optional[str] = None
 
 
 class SerperSearchOutput(BaseModel):
@@ -116,6 +120,8 @@ class SerperSearchNode(ActionNode):
                     title=item.get("title", ""),
                     snippet=item.get("snippet", ""),
                     url=item.get("link", ""),
+                    date=item.get("date") or None,
+                    source=item.get("source") or None,
                 ))
         elif params.search_type == "images":
             for item in (data.get("images") or [])[: params.max_results]:

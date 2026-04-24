@@ -71,7 +71,7 @@ class WhatsAppReceiveNode(TriggerNode):
 
     def build_filter(self, params: WhatsAppReceiveParams) -> Callable[[Dict[str, Any]], bool]:
         from services.event_waiter import build_whatsapp_filter
-        return build_whatsapp_filter(params.model_dump(by_alias=True))
+        return build_whatsapp_filter(params.model_dump(by_alias=True))  # camelCase — matches filter builder
 
     @Operation("wait")
     async def wait(self, ctx: NodeContext, params: WhatsAppReceiveParams) -> WhatsAppReceiveOutput:

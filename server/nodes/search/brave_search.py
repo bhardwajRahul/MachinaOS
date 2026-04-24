@@ -53,7 +53,7 @@ class BraveSearchOutput(BaseModel):
 
 class BraveSearchParams(BaseModel):
     query: str = Field(..., description="Search query", min_length=1)
-    max_results: int = Field(default=10, alias="maxResults", ge=1, le=20)
+    max_results: int = Field(default=10, alias="maxResults", ge=1, le=100)
     country: str = Field(default="", description="ISO country code (e.g. US, GB)")
     search_lang: str = Field(default="en", alias="searchLang")
     safe_search: Literal["off", "moderate", "strict"] = Field(

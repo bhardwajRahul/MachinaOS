@@ -60,4 +60,4 @@ class EmailReadNode(ActionNode):
     async def query(self, ctx: NodeContext, params: EmailReadParams) -> Any:
         # Body inlined from handlers/email.py (Wave 11.D.1).
         from services.email_service import get_email_service
-        return await get_email_service().read(params.model_dump(by_alias=True))
+        return await get_email_service().read(params.model_dump(by_alias=False))

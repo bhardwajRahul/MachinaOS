@@ -86,8 +86,17 @@ def patched_container(
     auth_service.remove_oauth_tokens = AsyncMock(return_value=True)
     auth_service.delete_api_key = AsyncMock(return_value=True)
 
-    db_mock = database or MagicMock(name="Database")
-    if database is None:
+    # Explicit kwarg wins; otherwise fall back to the harness-registered
+    # database so tests that mutate `harness.database.get_node_parameters`
+    # see their AsyncMocks picked up by plugin dispatch (plugins resolve
+    # via `container.database()` rather than the executor-injected
+    # `self.database`).
+    if database is not None:
+        db_mock = database
+    elif _ACTIVE_HARNESS_SERVICES.get("database") is not None:
+        db_mock = _ACTIVE_HARNESS_SERVICES["database"]
+    else:
+        db_mock = MagicMock(name="Database")
         db_mock.save_api_usage_metric = AsyncMock(return_value=None)
         db_mock.add_token_usage_metric = AsyncMock(return_value=None)
         db_mock.get_node_parameters = AsyncMock(return_value={})

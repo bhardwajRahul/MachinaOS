@@ -145,6 +145,7 @@ async def harness():
         android_service=h.android_service,
         maps_service=h.maps_service,
         text_service=h.text_service,
+        database=h.database,
     )
     try:
         with patched_container():

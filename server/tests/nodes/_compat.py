@@ -122,30 +122,30 @@ async def handle_write_todos(
     parameters: Dict[str, Any],
     context: Dict[str, Any],
 ) -> Dict[str, Any]:
-    """Shim for deleted services.handlers.todo.handle_write_todos.
+    """Legacy flat-envelope shim. Drops invalid items at the service
+    layer rather than raising at the pydantic boundary (matches the
+    pre-refactor handler contract)."""
+    from services.todo_service import get_todo_service
 
-    Old signature: (node_id, node_type, parameters, context) -> envelope.
-    Dispatches to WriteTodosNode.write and returns the envelope shape.
-    """
-    from nodes.tool.write_todos import WriteTodosNode, WriteTodosParams
+    session_key = context.get("workflow_id") or node_id or "default"
+    raw_todos = parameters.get("todos", [])
+    service = get_todo_service()
+    stored = service.write(session_key, raw_todos)
 
-    try:
-        params = WriteTodosParams(**parameters)
-    except Exception as exc:
-        return {"success": False, "error": f"Invalid parameters: {exc}"}
+    broadcaster = context.get("broadcaster")
+    if broadcaster:
+        await broadcaster.update_node_status(
+            node_id, "executing",
+            {"phase": "todo_update", "todos": stored},
+            workflow_id=context.get("workflow_id"),
+        )
 
-    ctx = _DummyContext()
-    ctx.node_id = node_id
-    ctx.workflow_id = context.get("workflow_id", "")
-    ctx.session_id = context.get("session_id", "default")
-    ctx.raw = dict(context)
-
-    node = WriteTodosNode()
-    try:
-        result = await node.write(ctx, params)
-    except Exception as exc:
-        return {"success": False, "error": str(exc)}
-    return {"success": True, "result": result}
+    return {
+        "success": True,
+        "message": f"Updated todo list ({len(stored)} items)",
+        "count": len(stored),
+        "todos": service.format_for_llm(session_key),
+    }
 
 
 class _DummyContext:
