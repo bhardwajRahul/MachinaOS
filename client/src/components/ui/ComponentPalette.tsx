@@ -1,5 +1,6 @@
 import React from 'react';
 import { useAppTheme } from '../../hooks/useAppTheme';
+import { useNodeAllowlist } from '../../hooks/useNodeAllowlist';
 import { ComponentPaletteProps } from '../../types/ComponentTypes';
 import { INodeTypeDescription } from '../../types/INodeProperties';
 import ComponentItem from './ComponentItem';
@@ -45,6 +46,7 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
   proMode = false,  // Default to simple mode
 }) => {
   const theme = useAppTheme();
+  const { isVisible } = useNodeAllowlist();
 
   const getCategoryConfig = (category: string) => {
     const key = category.toLowerCase();
@@ -103,6 +105,9 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
     const categories: Record<string, INodeTypeDescription[]> = {};
 
     const filteredDefinitions = Object.values(nodeDefinitions).filter((definition) => {
+      // Filter by backend allowlist (server/config/node_allowlist.json)
+      if (!isVisible(definition.name)) return false;
+
       // Filter by search query
       if (searchQuery.trim()) {
         try {
@@ -148,7 +153,7 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
     });
 
     return categories;
-  }, [nodeDefinitions, searchQuery, proMode]);
+  }, [nodeDefinitions, searchQuery, proMode, isVisible]);
 
   const totalComponents = Object.values(categorizedComponents).reduce(
     (acc, components) => acc + components.length, 
