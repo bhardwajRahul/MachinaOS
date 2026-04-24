@@ -22,18 +22,19 @@ const ApiKeyPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = ({ c
   const field = config.fields?.[0];
   const iconSize = parseInt(theme.iconSize.md);
 
-  // Local state for the controlled input. antd Form.getFieldValue/setFieldValue
-  // are snapshots that don't trigger re-renders — using them as a controlled
-  // input's value prop causes typing to be silently rejected. useState is the
-  // standard React pattern for controlled inputs.
   const [inputValue, setInputValue] = useState('');
+  // Direct local flag — same pattern as main repo's validKeys[id].
+  // Completely independent from useCredentialPanel's stored state.
+  const [validated, setValidated] = useState(panel.stored);
 
-  // Sync from the form when stored credentials load (useCredentialPanel
-  // populates the form asynchronously via getStoredApiKey on mount).
+  // Sync from the form when stored credentials load
   useEffect(() => {
     if (panel.stored && field) {
       const v = panel.form.getFieldValue(field.key);
-      if (v) setInputValue(v);
+      if (v) {
+        setInputValue(v);
+        setValidated(true);
+      }
     }
   }, [panel.stored, field, panel.form]);
 
@@ -55,7 +56,7 @@ const ApiKeyPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = ({ c
             </div>
             <CardTitle className="text-lg">{config.name}</CardTitle>
           </div>
-          {panel.stored && (
+          {validated && (
             <Badge variant="success" className="gap-1">
               <CheckCircle className="h-3 w-3" />
               Connected
@@ -69,26 +70,27 @@ const ApiKeyPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = ({ c
               onChange={(v) => {
                 setInputValue(v);
                 panel.form.setFieldValue(field.key, v);
-                panel.setStored(false);
+                setValidated(false);
               }}
               onSave={() =>
                 panel.actions
                   .validate(config.id, inputValue.trim())
                   .then((r) => {
-                    if (r?.isValid) panel.setStored(true);
+                    if (r?.isValid) setValidated(true);
                   })
               }
               onDelete={
-                panel.stored
+                validated
                   ? () => {
                       panel.actions.remove(config.id);
                       setInputValue('');
+                      setValidated(false);
                     }
                   : undefined
               }
               placeholder={field.placeholder}
               loading={panel.loading === 'validate'}
-              isStored={panel.stored}
+              isStored={validated}
             />
           )}
         </CardContent>

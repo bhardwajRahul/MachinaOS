@@ -1126,11 +1126,25 @@ async def handle_get_ai_models(data: Dict[str, Any], websocket: WebSocket) -> Di
 
 @ws_handler("provider", "api_key")
 async def handle_validate_api_key(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
-    """Validate and store an API key."""
+    """Validate and store an API key.
+
+    Single entry point for all providers. Dispatches to provider-specific
+    validators (Google Maps geocode probe, Apify /users/me probe) for
+    non-LLM providers; otherwise falls through to the default LLM
+    ``/v1/models`` probe via ``ai_service.fetch_models``. The frontend
+    calls this one handler for every provider — no per-provider branching
+    on the TypeScript side.
+    """
+    provider = data["provider"].lower()
+    normalized = dict(data, provider=provider)
+
+    if provider in _SPECIAL_PROVIDER_VALIDATORS:
+        return await _SPECIAL_PROVIDER_VALIDATORS[provider](normalized, websocket)
+
     ai_service = container.ai_service()
     auth_service = container.auth_service()
     broadcaster = get_status_broadcaster()
-    provider, api_key = data["provider"].lower(), data["api_key"].strip()
+    api_key = data["api_key"].strip()
 
     # Fetch models for AI providers (any provider with a models_endpoint in llm_defaults.json)
     from services.ai import PROVIDER_CONFIGS
@@ -1147,14 +1161,20 @@ async def handle_validate_api_key(data: Dict[str, Any], websocket: WebSocket) ->
 
 @ws_handler("provider")
 async def handle_get_stored_api_key(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
-    """Get stored API key for a provider."""
+    """Get stored API key for a provider.
+
+    Response uses camelCase (``hasKey`` / ``apiKey``) to match the
+    ``update_api_key_status`` broadcast shape — every WS payload the
+    frontend receives for API key state uses the same convention, so no
+    per-field adapter is needed on the TypeScript side.
+    """
     auth_service = container.auth_service()
     provider = data["provider"].lower()
     api_key = await auth_service.get_api_key(provider, data.get("session_id", "default"))
     if not api_key:
-        return {"provider": provider, "has_key": False}
+        return {"provider": provider, "hasKey": False}
     models = await auth_service.get_stored_models(provider, data.get("session_id", "default"))
-    return {"provider": provider, "has_key": True, "api_key": api_key, "models": models, "timestamp": time.time()}
+    return {"provider": provider, "hasKey": True, "apiKey": api_key, "models": models, "timestamp": time.time()}
 
 
 @ws_handler("provider", "api_key")
@@ -1862,6 +1882,15 @@ async def handle_validate_apify_key(data: Dict[str, Any], websocket: WebSocket) 
             message=str(e)
         )
         return {"success": False, "valid": False, "error": str(e)}
+
+
+# Per-provider validation strategies. Register any non-LLM provider here
+# and `handle_validate_api_key` will dispatch to it automatically, so the
+# frontend only ever calls one WS message type.
+_SPECIAL_PROVIDER_VALIDATORS = {
+    "google_maps": handle_validate_maps_key,
+    "apify": handle_validate_apify_key,
+}
 
 
 # ============================================================================

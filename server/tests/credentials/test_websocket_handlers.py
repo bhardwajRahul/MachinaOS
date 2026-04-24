@@ -6,7 +6,8 @@ LangChain / native LLM SDKs.
 
 Locks in invariants 1, 5, 6 from docs-internal/credentials_panel.md:
   - WebSocket message types and payload shapes
-  - Status responses use snake_case has_key
+  - Status responses use camelCase hasKey / apiKey (matches the
+    update_api_key_status broadcaster convention)
   - Provider Defaults uses dedicated handler, not save_api_key
 """
 
@@ -141,8 +142,8 @@ class TestGetStoredApiKey:
             ws_module.handle_get_stored_api_key, {"provider": "openai"}, fake_ws
         )
         assert result["success"] is True
-        assert result["has_key"] is False
-        assert "api_key" not in result
+        assert result["hasKey"] is False
+        assert "apiKey" not in result
 
     async def test_returns_key_and_models_when_present(
         self, patched_container, fake_ws
@@ -155,8 +156,8 @@ class TestGetStoredApiKey:
             ws_module.handle_get_stored_api_key, {"provider": "OpenAI"}, fake_ws
         )
 
-        assert result["has_key"] is True
-        assert result["api_key"] == "sk-stored"
+        assert result["hasKey"] is True
+        assert result["apiKey"] == "sk-stored"
         assert result["models"] == ["gpt-4", "gpt-3.5"]
         assert result["provider"] == "openai"
 

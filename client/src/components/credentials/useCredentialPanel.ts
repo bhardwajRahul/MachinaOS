@@ -1,62 +1,56 @@
 /**
  * useCredentialPanel — single hook for credential panel state.
  *
- * Plain React state (no antd Form, no react-hook-form). The credential
- * panels save fields individually via `actions.save(key, value)` rather
- * than submitting a single form, so a form library is overkill — the
- * field values are just a key-value bag with stored/loading/error state
- * around them.
+ * The "what is stored on the server" source of truth is a TanStack
+ * Query keyed by provider (`queryKeys.credentialValues.byProvider(id)`).
+ * Visible in the React Query devtools so per-provider state can be
+ * inspected at runtime.
  *
- * Provides a generic `execute(key, fn)` that handles try/catch/loading/
- * error identically to every handleTwitterSave, handleGmailLogin, etc.
+ * `values` / `stored` are derived from the query data — never held in a
+ * separate useState copy, so there is one source of truth.
+ *
+ * `loading` / `error` stay as local useState since they are transient UI
+ * state for in-flight user actions (validate / save / delete), not
+ * server-cached data.
+ *
+ * `execute(key, fn)` wraps try/catch/loading/error uniformly so every
+ * panel action has the same ergonomics.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useApiKeys } from '../../hooks/useApiKeys';
 import { useWebSocket } from '../../contexts/WebSocketContext';
+import { queryKeys, STALE_TIME } from '../../lib/queryConfig';
 import type { ProviderConfig } from './types';
 
 export type CredentialFormValues = Record<string, string>;
 
+const EMPTY_VALUES: CredentialFormValues = {};
+
 export function useCredentialPanel(config: ProviderConfig, visible: boolean) {
-  const [values, setValues] = useState<CredentialFormValues>({});
+  const qc = useQueryClient();
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [stored, setStored] = useState(false);
 
-  const { validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey,
-    validateGoogleMapsKey, validateApifyKey, getProviderDefaults, saveProviderDefaults,
+  const {
+    validateApiKey, saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey,
+    getProviderDefaults, saveProviderDefaults,
     getProviderUsageSummary, getAPIUsageSummary, getStoredModels, getModelConstraints,
-    isConnected } = useApiKeys();
+    isConnected,
+  } = useApiKeys();
   const { sendRequest } = useWebSocket();
 
-  // Imperative form-like API for compat with existing callers. Stable across
-  // renders so memoized children don't re-render.
-  const valuesRef = useRef(values);
-  valuesRef.current = values;
-
-  const form = useRef({
-    getFieldValue: (key: string): string | undefined => valuesRef.current[key],
-    getFieldsValue: (): CredentialFormValues => ({ ...valuesRef.current }),
-    setFieldValue: (key: string, value: string) => {
-      setValues((prev) => ({ ...prev, [key]: value }));
-    },
-    setFieldsValue: (next: CredentialFormValues) => {
-      setValues((prev) => ({ ...prev, ...next }));
-    },
-    resetFields: () => setValues({}),
-  }).current;
-
-  // Load stored values into form when panel becomes visible. Fields load
-  // in parallel via Promise.all so a 3-field provider takes one WS
-  // round-trip instead of six sequential ones (fields populate together
-  // instead of one-by-one on modal open).
-  useEffect(() => {
-    if (!visible || !isConnected || !config.fields) return;
-    let cancelled = false;
-    (async () => {
+  // Server-cached credential values. Fields load in parallel via
+  // Promise.all so a 3-field provider takes one WS round-trip instead
+  // of six sequential ones.
+  const credentialValuesQuery = useQuery<CredentialFormValues, Error>({
+    queryKey: queryKeys.credentialValues.byProvider(config.id).queryKey,
+    queryFn: async () => {
+      if (!config.fields) return EMPTY_VALUES;
       const entries = await Promise.all(
-        config.fields!.map(async (field) => {
+        config.fields.map(async (field) => {
           const storeKey = field.key === 'apiKey' ? config.id : field.key;
           const has = await hasStoredKey(storeKey);
           if (!has) return null;
@@ -64,17 +58,51 @@ export function useCredentialPanel(config: ProviderConfig, visible: boolean) {
           return val ? ([field.key, val] as const) : null;
         }),
       );
-      if (cancelled) return;
       const next: CredentialFormValues = {};
       for (const entry of entries) {
         if (entry) next[entry[0]] = entry[1];
       }
-      setValues(next);
-      setStored(Object.keys(next).length > 0);
-      setError(null);
-    })();
-    return () => { cancelled = true; };
-  }, [config.id, visible, isConnected]);
+      return next;
+    },
+    enabled: visible && isConnected && !!config.fields,
+    staleTime: STALE_TIME.FOREVER,
+  });
+
+  const values = credentialValuesQuery.data ?? EMPTY_VALUES;
+
+  // Imperative form-like API kept for compat with existing panel code.
+  // Writes go through setQueryData on the provider's query so the cache
+  // (and devtools) stays in sync; there's no separate useState copy.
+  const valuesRef = useRef(values);
+  valuesRef.current = values;
+
+  const providerKey = config.id;
+  const writeValues = useCallback(
+    (updater: (prev: CredentialFormValues) => CredentialFormValues) => {
+      qc.setQueryData<CredentialFormValues>(
+        queryKeys.credentialValues.byProvider(providerKey).queryKey,
+        (prev) => updater(prev ?? EMPTY_VALUES),
+      );
+    },
+    [qc, providerKey],
+  );
+
+  const form = useRef({
+    getFieldValue: (key: string): string | undefined => valuesRef.current[key],
+    getFieldsValue: (): CredentialFormValues => ({ ...valuesRef.current }),
+    setFieldValue: (key: string, value: string) => {
+      writeValues((prev) => ({ ...prev, [key]: value }));
+    },
+    setFieldsValue: (next: CredentialFormValues) => {
+      writeValues((prev) => ({ ...prev, ...next }));
+    },
+    resetFields: () => writeValues(() => EMPTY_VALUES),
+  }).current;
+
+  // Sync stored from query on first load — if the backend already has
+  // a key, mark stored=true so the badge renders without a validate click.
+  const queriedStored = Object.keys(values).length > 0;
+  if (queriedStored && !stored) setStored(true);
 
   // Generic action executor — replaces 19 duplicate handler functions.
   const execute = useCallback(async (key: string, fn: () => Promise<any>) => {
@@ -94,18 +122,38 @@ export function useCredentialPanel(config: ProviderConfig, visible: boolean) {
     }
   }, []);
 
+  // After every mutation, invalidate the provider's credentialValues
+  // query so the loader's queryFn re-runs against the backend — same
+  // path as a page reload. Guarantees every observer (Connected badge,
+  // Valid pill, ApiKeyInput isStored) reflects the new state.
+  const invalidateValues = useCallback(() => {
+    return qc.invalidateQueries({
+      queryKey: queryKeys.credentialValues.byProvider(providerKey).queryKey,
+    });
+  }, [qc, providerKey]);
+
   // Pre-built actions that panels call directly.
   const actions = {
     validate: (id: string, key: string) => execute('validate', async () => {
-      if (config.validateAs === 'google_maps') return validateGoogleMapsKey(key);
-      if (config.validateAs === 'apify') return validateApifyKey(key);
-      return validateApiKey(id, key);
+      const r = await validateApiKey(id, key);
+      if (r?.isValid) {
+        setStored(true);
+        await invalidateValues();
+      }
+      return r;
     }),
-    save: (key: string, value: string) => execute('save', () => saveApiKey(key, value)),
+    save: (key: string, value: string) => execute('save', async () => {
+      const r = await saveApiKey(key, value);
+      if (r?.isValid) {
+        setStored(true);
+        await invalidateValues();
+      }
+      return r;
+    }),
     remove: (key: string) => execute('remove', async () => {
       await removeApiKey(key);
       setStored(false);
-      setValues({});
+      await invalidateValues();
     }),
     oauthLogin: () => execute('login', async () => {
       const res = await sendRequest(config.ws!.login, {});

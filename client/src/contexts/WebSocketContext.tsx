@@ -555,17 +555,10 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             if (data.google) setGoogleStatus(data.google);
             if (data.telegram) setTelegramStatus(data.telegram);
             if (data.api_keys) {
+              // SquareNode and the credentials modal both read from this
+              // context map — no query cache to warm/invalidate for API
+              // keys (the canvas never holds decrypted keys).
               setApiKeyStatuses(data.api_keys);
-              // Warm the per-provider storedApiKey query cache so SquareNode
-              // configured badges resolve from the broadcast without a
-              // separate get_stored_api_key round-trip per node.
-              for (const [provider, status] of Object.entries(data.api_keys)) {
-                const s = status as { hasKey?: boolean; api_key?: string | null };
-                queryClient.setQueryData(
-                  queryKeys.storedApiKey.byProvider(provider).queryKey,
-                  s?.hasKey ? s.api_key ?? null : null,
-                );
-              }
             }
             // Node statuses from initial_status - group by workflow_id (n8n pattern)
             if (data.nodes) {
@@ -619,10 +612,8 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
               ...prev,
               [message.provider]: data
             }));
-            queryClient.setQueryData(
-              queryKeys.storedApiKey.byProvider(message.provider).queryKey,
-              data?.hasKey ? (data as any).api_key ?? null : null,
-            );
+            // Sidebar catalogue's `stored` flag depends on server-side
+            // api_keys + oauth state; refresh it.
             queryClient.invalidateQueries({ queryKey: CATALOGUE_QUERY_KEY });
           }
           break;
@@ -1148,7 +1139,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
               ws.send(JSON.stringify({ type: 'get_stored_api_key', provider, request_id: requestId }));
             });
 
-            if (response.has_key) {
+            if (response.hasKey) {
               setApiKeyStatuses(prev => ({
                 ...prev,
                 [provider]: { hasKey: true, valid: true }
@@ -1834,14 +1825,21 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     provider: string
   ): Promise<{ hasKey: boolean; apiKey?: string; models?: string[] }> => {
     try {
-      const response = await sendRequest<any>('get_stored_api_key', { provider });
+      // Backend emits camelCase (hasKey/apiKey) — same convention as the
+      // update_api_key_status broadcast. No per-field adapter needed.
+      const response = await sendRequest<{
+        hasKey?: boolean;
+        apiKey?: string;
+        models?: string[];
+      }>('get_stored_api_key', { provider });
       const result = {
-        hasKey: response.has_key || false,
-        apiKey: response.api_key,
-        models: response.models
+        hasKey: !!response.hasKey,
+        apiKey: response.apiKey,
+        models: response.models,
       };
 
-      // Update apiKeyStatuses with stored models
+      // Mirror into apiKeyStatuses so consumers reading from context
+      // stay in sync without an extra round-trip.
       if (result.hasKey) {
         setApiKeyStatuses(prev => ({
           ...prev,

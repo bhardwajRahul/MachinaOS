@@ -43,10 +43,13 @@ export const GC_TIME = {
 } as const;
 
 /**
- * Decrypted value for a stored credential field. SquareNode reads it;
- * WebSocketContext bridges `api_key_status` broadcasts into it.
+ * Stored credential field values for a provider panel in the credentials
+ * modal. One entry per provider. useCredentialPanel reads + updates it;
+ * validate/save/remove mutations write through queryClient.setQueryData
+ * so the cache always matches backend state and stays visible in
+ * devtools.
  */
-const storedApiKey = createQueryKeys('storedApiKey', {
+const credentialValues = createQueryKeys('credentialValues', {
   byProvider: (provider: string) => [provider],
 });
 
@@ -61,10 +64,10 @@ const compactionStats = createQueryKeys('compactionStats', {
 });
 
 /**
- * Merged factory. Consumers call
- *   queryKeys.storedApiKey.byProvider(provider).queryKey
+ * Merged factory. Consumers call e.g.
+ *   queryKeys.credentialValues.byProvider(id).queryKey
  * for a specific key, and
- *   queryKeys.storedApiKey._def
+ *   queryKeys.credentialValues._def
  * for partial-match invalidation across the namespace.
  */
-export const queryKeys = mergeQueryKeys(storedApiKey, compactionStats);
+export const queryKeys = mergeQueryKeys(credentialValues, compactionStats);

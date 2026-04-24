@@ -1,14 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { NodeData } from '../types/NodeTypes';
 import { useAppStore } from '../store/useAppStore';
 import { nodeDefinitions } from '../nodeDefinitions';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { useWebSocket, useWhatsAppStatus } from '../contexts/WebSocketContext';
-import { useApiKeys } from '../hooks/useApiKeys';
 import { getCachedNodeSpec, isNodeInBackendGroup, resolveNodeDescription, useNodeSpec } from '../lib/nodeSpec';
-import { queryKeys, STALE_TIME } from '../lib/queryConfig';
 import { resolveIcon, resolveLibraryIcon } from '../assets/icons';
 import { AI_MODEL_PROVIDER_MAP } from '../nodeDefinitions/aiModelNodes';
 
@@ -43,7 +40,6 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
 
   // Get Android status, node status, and API key status from WebSocket context
   const { androidStatus, getNodeStatus, getApiKeyStatus } = useWebSocket();
-  const { getStoredApiKey, isConnected: wsConnected } = useApiKeys();
   const nodeStatus = getNodeStatus(id);
   const executionStatus = nodeStatus?.status || 'idle';
 
@@ -162,6 +158,9 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
     setRenamingNodeId(id);
   }, [id, setRenamingNodeId]);
 
+  // Provider id for legacy credentialed nodes (non-AI, non-maps). AI
+  // model nodes route through `aiProviderId` above, Google Maps through
+  // `googleMapsKeyStatus` — both read from WS-context apiKeyStatuses.
   const providerId = useMemo<string>(() => {
     const credName = definition?.credentials?.[0]?.name;
     if (credName && CREDENTIAL_TO_PROVIDER[credName]) return CREDENTIAL_TO_PROVIDER[credName];
@@ -169,13 +168,11 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
     return '';
   }, [definition?.credentials, type]);
 
-  const apiKeyQuery = useQuery<string | null, Error>({
-    ...queryKeys.storedApiKey.byProvider(providerId),
-    queryFn: () => getStoredApiKey(providerId),
-    enabled: !!providerId && wsConnected,
-    staleTime: STALE_TIME.SHORT,
-  });
-  const hasApiKey = !!apiKeyQuery.data;
+  // "Is a credential configured for this provider?" is read from the
+  // WS-context apiKeyStatuses map — populated synchronously by
+  // validateApiKeyAsync + the api_key_status broadcast. The canvas node
+  // never fetches decrypted keys; that's the credentials modal's job.
+  const hasApiKey = !!(providerId && getApiKeyStatus(providerId)?.hasKey);
   const isConfigured = hasApiKey && !!data && Object.keys(data).length > 0;
 
   const handleParametersClick = (e: React.MouseEvent) => {
