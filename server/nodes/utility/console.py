@@ -163,7 +163,16 @@ class ConsoleNode(ActionNode):
                 log_value = input_data
             case "field":
                 if field_path:
-                    if "{{" not in field_path and field_path not in input_data:
+                    # Pre-refactor contract: dot / bracket notation always
+                    # navigates; a bare key that isn't in input_data is
+                    # only treated as a literal when it clearly isn't a
+                    # path expression. This order lets `data.items[1].name`
+                    # resolve even when `data.items[1].name` is not itself
+                    # a top-level input_data key.
+                    has_path_syntax = "." in field_path or "[" in field_path
+                    if has_path_syntax or field_path in input_data:
+                        log_value = _navigate_field_path(input_data, field_path)
+                    elif "{{" not in field_path:
                         log_value = field_path
                     else:
                         log_value = _navigate_field_path(input_data, field_path)
@@ -189,12 +198,15 @@ class ConsoleNode(ActionNode):
             "source_node_label": source_info.get("label") if source_info else None,
         })
 
-        # Pass through original input for downstream nodes.
+        # Pass through original input for downstream nodes. `data` is the
+        # user-selected log value (after field-path navigation), so it must
+        # not be overwritten by the raw input_data spread below; put the
+        # spread first, then the console-owned keys.
         return {
+            **input_data,
             "label": label or f"Console ({ctx.node_id[:8]})",
             "logged_at": datetime.now().isoformat(),
             "format": format_type,
             "data": log_value,
             "formatted": formatted_output,
-            **input_data,
         }

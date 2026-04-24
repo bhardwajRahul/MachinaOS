@@ -51,6 +51,16 @@ class ChatModelParams(BaseModel):
         default=1.0, alias="topP", ge=0.0, le=1.0,
         json_schema_extra={"numberStepSize": 0.1},
     )
+    # Thinking / reasoning knobs (Anthropic extended thinking, Gemini
+    # thinking budget, OpenAI o-series reasoning effort, Groq reasoning
+    # format). Pre-refactor handler forwarded these verbatim; provider
+    # plugins that don't support them simply ignore the keys downstream.
+    thinking_enabled: bool = Field(default=False, alias="thinkingEnabled")
+    thinking_budget: Optional[int] = Field(
+        default=None, alias="thinkingBudget", ge=0, le=64000,
+    )
+    reasoning_effort: Optional[str] = Field(default=None, alias="reasoningEffort")
+    reasoning_format: Optional[str] = Field(default=None, alias="reasoningFormat")
 
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
