@@ -36,8 +36,22 @@ interface PendingRequest {
   timeout: NodeJS.Timeout | null;  // null for no timeout (trigger nodes)
 }
 
+// Queued send tracking (for replay after reconnect)
+interface QueuedSend {
+  type: string;
+  data: Record<string, any> | undefined;
+  resolve: (value: any) => void;
+  reject: (reason: any) => void;
+  enqueuedAt: number;
+  timeoutMs: number; // -1 = no timeout, otherwise the per-request budget
+  abortController: AbortController; // for clean cancellation of queue-side timeout
+}
+
 // Request timeout (30 seconds)
 const REQUEST_TIMEOUT = 30000;
+
+// Maximum queued sends before backpressure kicks in (FIFO eviction of oldest)
+const QUEUE_MAX_SIZE = 200;
 
 // Trigger node types that wait indefinitely for events
 const TRIGGER_NODE_TYPES = ['whatsappReceive', 'webhookTrigger', 'cronScheduler', 'chatTrigger', 'telegramReceive'];
@@ -480,17 +494,21 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const pendingRequestsRef = useRef<Map<string, PendingRequest>>(new Map());
-  // Ref for current workflow ID - allows message handler to access latest value
-  // without recreating the WebSocket connection (n8n pattern)
-  const currentWorkflowIdRef = useRef<string | undefined>(currentWorkflowId);
+  // Pending-send queue for backpressure + replay across reconnects.
+  // Drained inside `ws.onopen` after the init burst. Source of truth
+  // for currentWorkflowId is `useAppStore.getState().currentWorkflow?.id`
+  // (read via Zustand's documented escape hatch in non-React listeners).
+  const pendingSendQueueRef = useRef<Array<QueuedSend>>([]);
+  // Tracks the previously-seen workflow id purely for the prev-vs-current
+  // comparison inside the workflow-switch effect below. NOT a global mirror;
+  // do not read from elsewhere.
+  const previousWorkflowIdForSwitchRef = useRef<string | undefined>(currentWorkflowId);
 
-  // Keep the ref in sync with the state and clear node statuses on workflow switch (n8n pattern)
+  // Detect workflow switches and refresh deployment status from the backend.
+  // The single source of truth for currentWorkflowId is `useAppStore`; the
+  // node-status store is synced from Dashboard.tsx, not from here.
   useEffect(() => {
-    const previousWorkflowId = currentWorkflowIdRef.current;
-    currentWorkflowIdRef.current = currentWorkflowId;
-    // Mirror into the node-status store so its slice selectors stay
-    // scoped to the same workflow as the rest of the app.
-    useNodeStatusStore.getState().setCurrentWorkflowId(currentWorkflowId);
+    const previousWorkflowId = previousWorkflowIdForSwitchRef.current;
 
     // No need to clear node statuses - they are now stored per-workflow (n8n pattern)
     // Each workflow's statuses are isolated in allNodeStatuses[workflow_id]
@@ -553,6 +571,9 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         fetchDeploymentStatus();
       }
     }
+
+    // Update at the END of the effect so the next run sees the prior id.
+    previousWorkflowIdForSwitchRef.current = currentWorkflowId;
   }, [currentWorkflowId]);
 
   // Handle incoming messages
@@ -859,7 +880,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           // Per-workflow scoping (n8n pattern): Only apply updates for current workflow
           if (message.status) {
             const deploymentWorkflowId = message.workflow_id;
-            const activeWorkflowId = currentWorkflowIdRef.current;
+            const activeWorkflowId = useAppStore.getState().currentWorkflow?.id;
 
             // Apply deployment update if:
             // 1. It's for the current workflow, OR
@@ -1007,7 +1028,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           // Only update lock state if it's for the current workflow or if unlocking
           if (data) {
             const lockWorkflowId = message.workflow_id || data.workflow_id;
-            const activeWorkflowId = currentWorkflowIdRef.current;
+            const activeWorkflowId = useAppStore.getState().currentWorkflow?.id;
 
             // Apply lock update if:
             // 1. It's for the current workflow, OR
@@ -1031,7 +1052,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         case 'token_usage_update': {
           // Real-time token usage from backend after each AI execution
           const tokenSessionId = message.session_id;
-          const tokenWorkflowId = message.workflow_id || currentWorkflowIdRef.current || '';
+          const tokenWorkflowId = message.workflow_id || useAppStore.getState().currentWorkflow?.id || '';
           const trackingData = message.data || {};
           if (tokenSessionId && tokenWorkflowId) {
             setAllCompactionStats(prev => {
@@ -1099,7 +1120,52 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     } catch (error) {
       console.error('[WebSocket] Failed to parse message:', error);
     }
-  }, []);  // Empty deps - uses ref for currentWorkflowId to avoid reconnecting WebSocket
+  }, []);  // Empty deps - reads workflow id via useAppStore.getState() escape hatch
+
+  // Drain queued sends after a successful reconnect. Each queued send gets a
+  // fresh request_id and a reset timeout budget; responses correlate via the
+  // existing pendingRequestsRef map. Per-call abortController cancels the
+  // queue-side timeout that was running while the request was waiting in line.
+  const drainPendingSends = useCallback((ws: WebSocket) => {
+    const queue = pendingSendQueueRef.current;
+    pendingSendQueueRef.current = [];
+    for (const queued of queue) {
+      try {
+        queued.abortController.abort();
+      } catch {
+        // Ignore — abort is idempotent.
+      }
+      if (ws.readyState !== WebSocket.OPEN) {
+        // Defensive: should not happen since we drain inside onopen.
+        try {
+          queued.reject(new Error('WebSocket closed during drain'));
+        } catch {
+          // Ignore — caller may have already settled.
+        }
+        continue;
+      }
+      const requestId = generateRequestId();
+      let timeout: NodeJS.Timeout | null = null;
+      if (queued.timeoutMs > 0) {
+        // Reset the timeout budget on replay so caller's perspective
+        // remains "now"; queue-side timer was already aborted above.
+        timeout = setTimeout(() => {
+          pendingRequestsRef.current.delete(requestId);
+          queued.reject(new Error(`Request timeout: ${queued.type}`));
+        }, queued.timeoutMs);
+      }
+      pendingRequestsRef.current.set(requestId, {
+        resolve: queued.resolve,
+        reject: queued.reject,
+        timeout,
+      });
+      ws.send(JSON.stringify({
+        type: queued.type,
+        request_id: requestId,
+        ...queued.data,
+      }));
+    }
+  }, []);
 
   // Connect to WebSocket
   const connect = useCallback(() => {
@@ -1274,6 +1340,12 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           // Ignore errors loading console logs
         }
 
+        // Drain any sends that were queued while the socket was reconnecting.
+        // Must run BEFORE setIsReady(true) so isReady-gated callers don't race
+        // an empty pendingRequestsRef. Mirrors socket.io-client's offline buffer
+        // and Apollo RetryLink semantics.
+        drainPendingSends(ws);
+
         // Init burst complete — flip `isReady` so queries that gate on
         // it (catalogue, node specs, node parameters, user settings,
         // credential panels) fire once against a stable socket instead
@@ -1306,6 +1378,22 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           pendingRequestsRef.current.clear();
         }
 
+        // Pending-send queue handling: only drop on intentional close (code 1000).
+        // Transient closes preserve the queue so the next onopen drain replays them.
+        if (event.code === 1000) {
+          if (pendingSendQueueRef.current.length > 0) {
+            for (const queued of pendingSendQueueRef.current) {
+              try {
+                queued.abortController.abort();
+                queued.reject(new Error('WebSocket closed (intentional)'));
+              } catch {
+                // Ignore — caller may have already settled.
+              }
+            }
+            pendingSendQueueRef.current = [];
+          }
+        }
+
         // Clear ping interval
         if (pingIntervalRef.current) {
           clearInterval(pingIntervalRef.current);
@@ -1331,7 +1419,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       setReconnecting(true);
       reconnectTimeoutRef.current = setTimeout(connect, 3000);
     }
-  }, [handleMessage]);
+  }, [handleMessage, drainPendingSends]);
 
   // Request current status
   const requestStatus = useCallback(() => {
@@ -1367,7 +1455,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   // Clear node status (used when clearing execution results)
   // Also clears the backend node_outputs storage
   const clearNodeStatus = useCallback(async (nodeId: string) => {
-    const workflowId = currentWorkflowIdRef.current;
+    const workflowId = useAppStore.getState().currentWorkflow?.id;
     if (workflowId) {
       useNodeStatusStore.getState().clearStatus(workflowId, nodeId);
     }
@@ -1455,38 +1543,86 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   // Core Request/Response Pattern
   // =========================================================================
 
-  // Send a request and wait for response
-  // timeoutMs: undefined/0 = use default, negative = no timeout (for trigger nodes)
+  // Send a request and wait for response.
+  // timeoutMs: undefined/0 = use default, negative = no timeout (for trigger nodes).
+  //
+  // Fast path: socket open -> send immediately (legacy behaviour).
+  // Slow path: socket closed/connecting -> enqueue with backpressure cap (FIFO
+  //   eviction at QUEUE_MAX_SIZE) and replay on the next ws.onopen drain.
+  // Per-request timeout is enforced both while queued (via AbortController-
+  // backed setTimeout) and after replay (regular pendingRequestsRef timeout).
   const sendRequest = useCallback(async <T = any>(
     type: string,
     data?: Record<string, any>,
     timeoutMs?: number
   ): Promise<T> => {
     return new Promise((resolve, reject) => {
-      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-        reject(new Error('WebSocket not connected'));
+      const useTimeout = timeoutMs === undefined || timeoutMs >= 0;
+      const actualTimeout = timeoutMs && timeoutMs > 0 ? timeoutMs : REQUEST_TIMEOUT;
+      const effectiveTimeout = (timeoutMs === -1 || !useTimeout) ? -1 : actualTimeout;
+
+      // FAST PATH: socket open — send immediately.
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        const requestId = generateRequestId();
+        let timeout: NodeJS.Timeout | null = null;
+        if (effectiveTimeout > 0) {
+          timeout = setTimeout(() => {
+            pendingRequestsRef.current.delete(requestId);
+            reject(new Error(`Request timeout: ${type}`));
+          }, effectiveTimeout);
+        }
+        pendingRequestsRef.current.set(requestId, { resolve, reject, timeout });
+        wsRef.current.send(JSON.stringify({
+          type,
+          request_id: requestId,
+          ...data,
+        }));
         return;
       }
 
-      const requestId = generateRequestId();
-      const useTimeout = timeoutMs === undefined || timeoutMs >= 0;
-      const actualTimeout = timeoutMs && timeoutMs > 0 ? timeoutMs : REQUEST_TIMEOUT;
-
-      let timeout: NodeJS.Timeout | null = null;
-      if (useTimeout && timeoutMs !== -1) {
-        timeout = setTimeout(() => {
-          pendingRequestsRef.current.delete(requestId);
-          reject(new Error(`Request timeout: ${type}`));
-        }, actualTimeout);
+      // SLOW PATH: socket closed/connecting — queue with backpressure cap.
+      // FIFO eviction: when at capacity, reject the oldest entry to make room.
+      if (pendingSendQueueRef.current.length >= QUEUE_MAX_SIZE) {
+        const oldest = pendingSendQueueRef.current.shift();
+        if (oldest) {
+          try {
+            oldest.abortController.abort();
+            oldest.reject(new Error('backpressure: too many queued requests'));
+          } catch {
+            // Ignore — caller may have already settled.
+          }
+        }
       }
 
-      pendingRequestsRef.current.set(requestId, { resolve, reject, timeout });
-
-      wsRef.current.send(JSON.stringify({
+      const abortController = new AbortController();
+      const queued: QueuedSend = {
         type,
-        request_id: requestId,
-        ...data
-      }));
+        data,
+        resolve,
+        reject,
+        enqueuedAt: Date.now(),
+        timeoutMs: effectiveTimeout,
+        abortController,
+      };
+      pendingSendQueueRef.current.push(queued);
+
+      // Per-request timeout while queued (only when finite). The drain helper
+      // aborts this controller before replaying so the timeout doesn't fire
+      // after the request is back in flight.
+      if (effectiveTimeout > 0) {
+        const queueTimeout = setTimeout(() => {
+          const idx = pendingSendQueueRef.current.indexOf(queued);
+          if (idx >= 0) {
+            pendingSendQueueRef.current.splice(idx, 1);
+            try {
+              reject(new Error(`Request timeout (queued): ${type}`));
+            } catch {
+              // Ignore — caller may have already settled.
+            }
+          }
+        }, effectiveTimeout);
+        abortController.signal.addEventListener('abort', () => clearTimeout(queueTimeout));
+      }
     });
   }, []);
 
@@ -2262,6 +2398,18 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   // Handle logout - separate effect to avoid reconnect loops
   useEffect(() => {
     if (!isAuthenticated && wsRef.current) {
+      // Drain the pending-send queue with a clear auth error before closing.
+      if (pendingSendQueueRef.current.length > 0) {
+        for (const queued of pendingSendQueueRef.current) {
+          try {
+            queued.abortController.abort();
+            queued.reject(new Error('auth: not authenticated'));
+          } catch {
+            // Ignore — caller may have already settled.
+          }
+        }
+        pendingSendQueueRef.current = [];
+      }
       wsRef.current.close(1000, 'User logged out');
       wsRef.current = null;
       setIsConnected(false);
@@ -2275,6 +2423,19 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       isMountedRef.current = false;
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
+      // Drain the pending-send queue so any in-flight awaiters fail fast on
+      // unmount instead of dangling forever.
+      if (pendingSendQueueRef.current.length > 0) {
+        for (const queued of pendingSendQueueRef.current) {
+          try {
+            queued.abortController.abort();
+            queued.reject(new Error('WebSocket unmounting'));
+          } catch {
+            // Ignore — caller may have already settled.
+          }
+        }
+        pendingSendQueueRef.current = [];
+      }
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.close(1000, 'Component unmounted');
       }

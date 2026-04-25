@@ -45,6 +45,7 @@ import { useComponentPalette } from './hooks/useComponentPalette';
 import { useReactFlowNodes } from './hooks/useReactFlowNodes';
 import { useCopyPaste } from './hooks/useCopyPaste';
 import { useWebSocket } from './contexts/WebSocketContext';
+import { useNodeStatusStore } from './stores/nodeStatusStore';
 import { useTheme } from './contexts/ThemeContext';
 import {
   sanitizeNodesForComparison,
@@ -238,6 +239,15 @@ const DashboardContent: React.FC = () => {
     clearWorkflowExecutionState,
   } = useAppStore();
   
+  // Single source-to-store sync: push currentWorkflow.id into the
+  // node-status Zustand store from the canonical app store. Previously
+  // this was mirrored from inside WebSocketProvider; consolidating here
+  // removes the multi-mirror gap that left broadcasts landing in the
+  // wrong workflow bucket during workflow switches.
+  useEffect(() => {
+    useNodeStatusStore.getState().setCurrentWorkflowId(currentWorkflow?.id);
+  }, [currentWorkflow?.id]);
+
   // ReactFlow state management (local state for performance)
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -412,28 +422,25 @@ const DashboardContent: React.FC = () => {
     void prefetchAllNodeSpecs(sendRequest).finally(() => setSpecsReady(true));
   }, [isReady, sendRequest]);
 
-  // Update nodes with execution status classes
+  // Workflow-level "pending" class only. The executing / completed /
+  // error classes used to be painted here too, which forced the entire
+  // nodes array to re-derive on every per-node status broadcast and
+  // triggered a full canvas re-render. Each node component now reads
+  // its own status via the `useNodeStatus(id)` slice selector and
+  // paints its own border/glow, so this useMemo only needs to know
+  // about workflow-run progress (executionOrder + executedNodes), not
+  // individual node statuses.
   const styledNodes = React.useMemo(() => {
     return nodes.map(node => {
-      const nodeStatus = nodeStatuses[node.id];
-      let className = '';
-
-      if (nodeStatus?.status === 'executing' || nodeStatus?.status === 'waiting') {
-        className = 'executing';
-      } else if (nodeStatus?.status === 'success') {
-        className = 'completed';
-      } else if (nodeStatus?.status === 'error') {
-        className = 'error';
-      } else if (isExecuting && executionOrder.includes(node.id) && !executedNodes.has(node.id)) {
-        className = 'pending';
-      }
-
-      return {
-        ...node,
-        className
-      };
+      const className =
+        isExecuting &&
+        executionOrder.includes(node.id) &&
+        !executedNodes.has(node.id)
+          ? 'pending'
+          : '';
+      return { ...node, className };
     });
-  }, [nodes, nodeStatuses, isExecuting, executionOrder, executedNodes]);
+  }, [nodes, isExecuting, executionOrder, executedNodes]);
 
   // Update edges with execution status classes
   const styledEdges = React.useMemo(() => {
