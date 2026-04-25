@@ -18,7 +18,7 @@ import { nodeSpecToDescription, type NodeSpec } from '../adapters/nodeSpecToDesc
 import type { INodeTypeDescription } from '../types/INodeProperties';
 import { featureFlags } from './featureFlags';
 import { queryClient } from './queryClient';
-import { STALE_TIME } from './queryConfig';
+import { GC_TIME, STALE_TIME } from './queryConfig';
 import { useWebSocket } from '../contexts/WebSocketContext';
 
 type SendRequest = (type: string, data?: any) => Promise<any>;
@@ -45,6 +45,12 @@ export async function fetchNodeSpec(
       }
     },
     staleTime: STALE_TIME.FOREVER,
+    // useNodeSpec subscribes via useSyncExternalStore (no observer), so
+    // without an explicit gcTime override every spec entry is evicted
+    // ~5 min after prefetch lands. That makes node icons + handles
+    // disappear on every idle canvas. Keep the entries forever; the
+    // persistor in lib/queryPersist.ts also writes them to localStorage.
+    gcTime: GC_TIME.FOREVER,
   });
 }
 
@@ -132,6 +138,7 @@ export function useNodeGroups(): UseQueryResult<Record<string, NodeGroupEntry>> 
     },
     enabled: isReady,
     staleTime: STALE_TIME.FOREVER,
+    gcTime: GC_TIME.FOREVER,
   });
 }
 
@@ -163,6 +170,7 @@ export async function fetchNodeGroups(
       return (response?.groups ?? {}) as Record<string, NodeGroupEntry>;
     },
     staleTime: STALE_TIME.FOREVER,
+    gcTime: GC_TIME.FOREVER,
   });
 }
 

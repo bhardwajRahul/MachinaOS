@@ -40,6 +40,14 @@ export const STALE_TIME = {
 export const GC_TIME = {
   DEFAULT: 5 * 60_000,
   CATALOGUE: 10 * 60_000,
+  /**
+   * Never garbage-collect. Use for catalogue / NodeSpec entries that
+   * are subscribed via `useSyncExternalStore` (no `useQuery` observer
+   * holds them alive) and survive page reloads via the persistor in
+   * `lib/queryPersist.ts`. Without this, idle entries vanish from the
+   * cache after `DEFAULT` and every consumer reads `undefined`.
+   */
+  FOREVER: Infinity,
 } as const;
 
 /**
