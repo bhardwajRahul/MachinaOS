@@ -120,28 +120,30 @@ class StatusBroadcaster:
         logger.info(f"[StatusBroadcaster] Client disconnected. Total: {len(self._connections)}")
 
     async def _refresh_all_services(self):
-        """Refresh all service statuses concurrently and broadcast updates.
+        """Spawn per-service refresh tasks; each broadcasts as soon as
+        its own status is ready.
 
-        Runs as a background task so the WebSocket handshake is never
-        blocked by slow network calls.  Uses asyncio.gather with
-        return_exceptions so one failure does not prevent others.
+        Uses ``asyncio.TaskGroup`` (Python 3.11+) for structured
+        concurrency: every refresh runs as an independent task and
+        publishes its own ``<service>_status`` message the moment its
+        cache slot is populated. The slowest service (e.g. Telegram's
+        10 s ``getMe`` cold-DNS path) no longer gates the others — the
+        credentials/status UI hydrates incrementally.
+
+        Each ``_refresh_*`` already swallows its own exceptions, so
+        TaskGroup never sees one. Kept inside try/except* defensively
+        in case a future refactor lets one escape.
         """
-        results = await asyncio.gather(
-            self._refresh_whatsapp_status(),
-            self._refresh_twitter_status(),
-            self._refresh_google_status(),
-            self._refresh_telegram_status(),
-            self._auto_reconnect_android_relay(),
-            return_exceptions=True,
-        )
-        for r in results:
-            if isinstance(r, Exception):
-                logger.warning("[StatusBroadcaster] Service refresh failed: %s", r)
-
         try:
-            await self.broadcast({"type": "full_status", "data": self._status})
-        except Exception as e:
-            logger.warning("[StatusBroadcaster] Failed to broadcast refreshed status: %s", e)
+            async with asyncio.TaskGroup() as tg:
+                tg.create_task(self._refresh_whatsapp_status())
+                tg.create_task(self._refresh_twitter_status())
+                tg.create_task(self._refresh_google_status())
+                tg.create_task(self._refresh_telegram_status())
+                tg.create_task(self._auto_reconnect_android_relay())
+        except* Exception as eg:
+            for exc in eg.exceptions:
+                logger.warning("[StatusBroadcaster] Service refresh task failed: %s", exc)
 
     async def broadcast(self, message: Dict[str, Any]):
         """Broadcast a message to all connected clients using TaskGroup.
@@ -276,6 +278,10 @@ class StatusBroadcaster:
                 "timestamp": time.time()
             }
             logger.debug(f"[StatusBroadcaster] Refreshed WhatsApp status: connected={status_data.get('connected')}")
+            await self.broadcast({
+                "type": "whatsapp_status",
+                "data": self._status["whatsapp"],
+            })
         except Exception as e:
             # Don't fail client connection if WhatsApp service is down
             logger.debug(f"[StatusBroadcaster] Could not refresh WhatsApp status: {e}")
@@ -300,21 +306,25 @@ class StatusBroadcaster:
                     "name": None,
                     "profile_image_url": None
                 }
-                return
+            else:
+                # User info is stored in the OAuth token record
+                email = tokens.get("email", "")  # Stored as "@username"
+                name = tokens.get("name", "")
+                username = email.lstrip("@") if email.startswith("@") else email
 
-            # User info is stored in the OAuth token record
-            email = tokens.get("email", "")  # Stored as "@username"
-            name = tokens.get("name", "")
-            username = email.lstrip("@") if email.startswith("@") else email
+                self._status["twitter"] = {
+                    "connected": True,
+                    "username": username or None,
+                    "user_id": None,
+                    "name": name or None,
+                    "profile_image_url": None
+                }
+                logger.debug(f"[StatusBroadcaster] Twitter status: connected as @{username}")
 
-            self._status["twitter"] = {
-                "connected": True,
-                "username": username or None,
-                "user_id": None,
-                "name": name or None,
-                "profile_image_url": None
-            }
-            logger.debug(f"[StatusBroadcaster] Twitter status: connected as @{username}")
+            await self.broadcast({
+                "type": "twitter_status",
+                "data": self._status["twitter"],
+            })
         except Exception as e:
             logger.debug(f"[StatusBroadcaster] Could not refresh Twitter status: {e}")
 
@@ -334,14 +344,18 @@ class StatusBroadcaster:
                     "email": None,
                     "name": None,
                 }
-                return
+            else:
+                self._status["google"] = {
+                    "connected": True,
+                    "email": tokens.get("email"),
+                    "name": tokens.get("name"),
+                }
+                logger.debug(f"[StatusBroadcaster] Google status: connected as {tokens.get('email')}")
 
-            self._status["google"] = {
-                "connected": True,
-                "email": tokens.get("email"),
-                "name": tokens.get("name"),
-            }
-            logger.debug(f"[StatusBroadcaster] Google status: connected as {tokens.get('email')}")
+            await self.broadcast({
+                "type": "google_status",
+                "data": self._status["google"],
+            })
         except Exception as e:
             logger.debug(f"[StatusBroadcaster] Could not refresh Google status: {e}")
 
@@ -370,22 +384,23 @@ class StatusBroadcaster:
 
             if service.connected:
                 self._status["telegram"] = _snapshot(True, True)
-                return
-
-            if not await service.has_stored_token():
+            elif not await service.has_stored_token():
                 self._status["telegram"] = _snapshot(False, False)
-                return
-
-            logger.info("[StatusBroadcaster] Auto-reconnecting Telegram bot...")
-            result = await service.connect()  # service reads token from DB
-            ok = bool(result.get("success"))
-            self._status["telegram"] = _snapshot(ok, True)
-            if ok:
-                bot_username = self._status["telegram"].get("bot_username")
-                logger.info(f"[StatusBroadcaster] Telegram auto-reconnected: @{bot_username}")
             else:
-                logger.warning(f"[StatusBroadcaster] Telegram auto-reconnect failed: {result.get('error')}")
+                logger.info("[StatusBroadcaster] Auto-reconnecting Telegram bot...")
+                result = await service.connect()  # service reads token from DB
+                ok = bool(result.get("success"))
+                self._status["telegram"] = _snapshot(ok, True)
+                if ok:
+                    bot_username = self._status["telegram"].get("bot_username")
+                    logger.info(f"[StatusBroadcaster] Telegram auto-reconnected: @{bot_username}")
+                else:
+                    logger.warning(f"[StatusBroadcaster] Telegram auto-reconnect failed: {result.get('error')}")
 
+            await self.broadcast({
+                "type": "telegram_status",
+                "data": self._status["telegram"],
+            })
         except Exception as e:
             logger.debug(f"[StatusBroadcaster] Could not refresh Telegram status: {e}")
 
@@ -412,6 +427,10 @@ class StatusBroadcaster:
                     "session_token": existing.session_token
                 }
                 logger.debug("[StatusBroadcaster] Android relay already connected")
+                await self.broadcast({
+                    "type": "android_status",
+                    "data": self._status["android"],
+                })
                 return
 
             # Check for stored session
@@ -454,6 +473,10 @@ class StatusBroadcaster:
                     "qr_data": client.qr_data,
                     "session_token": client.session_token
                 }
+                await self.broadcast({
+                    "type": "android_status",
+                    "data": self._status["android"],
+                })
             else:
                 logger.warning(f"[StatusBroadcaster] Failed to reconnect Android relay: {error}")
                 # Clear the stored session since reconnect failed
