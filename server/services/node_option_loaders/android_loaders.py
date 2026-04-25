@@ -18,7 +18,7 @@ async def load_android_service_actions(params: dict[str, Any]) -> list[dict[str,
     correctness boundary. The frontend falls back to a free-text input
     if the loader returns an empty list.
     """
-    node_type = params.get("node_type") or params.get("nodeType") or ""
+    node_type = params.get("node_type") or ""
     service_id = _ANDROID_SERVICE_MAP.get(node_type)
     if not service_id:
         return []

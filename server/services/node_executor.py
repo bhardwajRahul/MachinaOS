@@ -233,7 +233,7 @@ class NodeExecutor:
 
         if node_type in AI_MODEL_TYPES:
             provider = detect_ai_provider(node_type, params)
-            if not result.get('api_key') and not result.get('apiKey'):
+            if not result.get('api_key'):
                 key = await self.ai_service.auth.get_api_key(provider, "default")
                 if key:
                     result['api_key'] = key

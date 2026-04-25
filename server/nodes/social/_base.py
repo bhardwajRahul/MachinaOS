@@ -403,21 +403,21 @@ async def handle_social_send(
 
     try:
         channel = parameters.get('channel', 'whatsapp')
-        recipient_type = parameters.get('recipientType', 'phone')
-        message_type = parameters.get('messageType', 'text')
+        recipient_type = parameters.get('recipient_type', 'phone')
+        message_type = parameters.get('message_type', 'text')
 
         # Get recipient based on type
         recipient = None
         if recipient_type == 'phone':
             recipient = parameters.get('phone')
         elif recipient_type == 'group':
-            recipient = parameters.get('groupId')
+            recipient = parameters.get('group_id')
         elif recipient_type == 'channel':
-            recipient = parameters.get('channelId')
+            recipient = parameters.get('channel_id')
         elif recipient_type == 'user':
-            recipient = parameters.get('userId')
+            recipient = parameters.get('user_id')
         elif recipient_type == 'chat':
-            recipient = parameters.get('chatId')
+            recipient = parameters.get('chat_id')
 
         if not recipient:
             raise ValueError(f"Recipient ({recipient_type}) is required")
@@ -494,18 +494,18 @@ async def _send_via_whatsapp(
         whatsapp_params['message'] = parameters.get('message', '')
 
     elif message_type in ('image', 'video', 'audio', 'document', 'sticker'):
-        media_source = parameters.get('mediaSource', 'url')
+        media_source = parameters.get('media_source', 'url')
         whatsapp_params['media_source'] = media_source
 
         if media_source == 'url':
-            whatsapp_params['media_url'] = parameters.get('mediaUrl', '')
+            whatsapp_params['media_url'] = parameters.get('media_url', '')
         elif media_source == 'base64':
-            whatsapp_params['media_data'] = parameters.get('mediaData', '')
+            whatsapp_params['media_data'] = parameters.get('media_data', '')
         elif media_source == 'file':
-            whatsapp_params['file_path'] = parameters.get('filePath', '')
+            whatsapp_params['file_path'] = parameters.get('file_path', '')
 
-        if parameters.get('mimeType'):
-            whatsapp_params['mime_type'] = parameters['mimeType']
+        if parameters.get('mime_type'):
+            whatsapp_params['mime_type'] = parameters['mime_type']
         if parameters.get('caption'):
             whatsapp_params['caption'] = parameters['caption']
         if parameters.get('filename'):
@@ -514,17 +514,17 @@ async def _send_via_whatsapp(
     elif message_type == 'location':
         whatsapp_params['latitude'] = parameters.get('latitude', 0)
         whatsapp_params['longitude'] = parameters.get('longitude', 0)
-        whatsapp_params['location_name'] = parameters.get('locationName', '')
+        whatsapp_params['location_name'] = parameters.get('location_name', '')
         whatsapp_params['address'] = parameters.get('address', '')
 
     elif message_type == 'contact':
-        whatsapp_params['contact_name'] = parameters.get('contactName', '')
+        whatsapp_params['contact_name'] = parameters.get('contact_name', '')
         whatsapp_params['vcard'] = parameters.get('vcard', '')
 
     # Reply options
-    if parameters.get('replyToMessage'):
+    if parameters.get('reply_to_message'):
         whatsapp_params['is_reply'] = True
-        whatsapp_params['reply_message_id'] = parameters.get('replyMessageId', '')
+        whatsapp_params['reply_message_id'] = parameters.get('reply_message_id', '')
 
     # Call WhatsApp handler
     return await whatsapp_send_handler(whatsapp_params)

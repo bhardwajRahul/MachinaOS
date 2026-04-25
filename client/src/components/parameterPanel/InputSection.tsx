@@ -267,7 +267,7 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
 
           if (sourceHints.hasInitialDataBlob === true) {
             try {
-              const initialData = sourceNode?.data?.initialData || '{}';
+              const initialData = sourceNode?.data?.initial_data || '{}';
               outputSchema = typeof initialData === 'string' ? JSON.parse(initialData) : initialData;
             } catch (e) {
               outputSchema = {};

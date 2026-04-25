@@ -53,7 +53,7 @@ async def load_whatsapp_group_members(params: dict[str, Any]) -> list[dict[str, 
 
     from services.whatsapp_service import handle_whatsapp_group_info as _wa_group_info
 
-    group_id = params.get("group_id") or params.get("groupId") or ""
+    group_id = params.get("group_id") or ""
     if not group_id:
         return []
     response = await _wa_group_info(group_id)

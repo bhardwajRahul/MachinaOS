@@ -21,7 +21,7 @@ class TextService:
 
         try:
             text = parameters.get('text', 'Hello World')
-            include_timestamp = parameters.get('includeTimestamp', True)
+            include_timestamp = parameters.get('include_timestamp', True)
 
             result_data = {
                 "text": text,

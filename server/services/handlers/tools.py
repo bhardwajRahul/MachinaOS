@@ -307,7 +307,7 @@ async def _execute_delegated_agent(args: Dict[str, Any],
 
     # Inject API key - delegated agents bypass NodeExecutor._inject_api_keys,
     # so we must resolve the key here from the credential store
-    if not child_params.get('api_key') and not child_params.get('apiKey'):
+    if not child_params.get('api_key'):
         from constants import detect_ai_provider
         provider = detect_ai_provider(node_type, child_params)
         key = await ai_service.auth.get_api_key(provider, "default")

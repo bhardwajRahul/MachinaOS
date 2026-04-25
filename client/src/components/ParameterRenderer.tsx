@@ -1161,7 +1161,14 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
           try {
             const res = await sendRequest<{ options: Array<{ value: any; label?: string }> }>(
               'load_options',
-              { method, params: { node_id: selectedNode.id, ...allParamsResolved } },
+              {
+                method,
+                params: {
+                  node_id: selectedNode.id,
+                  node_type: nodeType,
+                  ...allParamsResolved,
+                },
+              },
             );
             rawOptions = res?.options ?? [];
           } catch (err) {

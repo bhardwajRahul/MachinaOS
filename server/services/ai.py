@@ -275,7 +275,7 @@ def _resolve_max_tokens(flattened: dict, model: str, provider: str) -> int:
     registry = get_model_registry()
     model_max = registry.get_max_output_tokens(model, provider)
 
-    user_val = flattened.get('max_tokens') or flattened.get('maxTokens')
+    user_val = flattened.get('max_tokens')
     if user_val:
         user_int = int(user_val)
         if user_int > model_max:
@@ -1345,17 +1345,17 @@ class AIService:
             flattened = {**parameters, **options}
 
             # Extract parameters with camelCase/snake_case support for LangChain
-            api_key = flattened.get('api_key') or flattened.get('apiKey')
+            api_key = flattened.get('api_key')
             model = flattened.get('model', 'gpt-3.5-turbo')
             # Strip [FREE] prefix if present (added by OpenRouter model list for display)
             if model.startswith('[FREE] '):
                 model = model[7:]
             prompt = flattened.get('prompt', 'Hello')
 
-            # System prompt/message - support multiple naming conventions
-            system_prompt = (flattened.get('system_prompt') or
-                           flattened.get('systemMessage') or
-                           flattened.get('systemPrompt') or '')
+            # Schema-canonical name on chat-model `_base.py` is
+            # `system_prompt`; agent paths use `system_message` and are
+            # handled separately in execute_agent / execute_chat_agent.
+            system_prompt = flattened.get('system_prompt', '')
 
             if not api_key:
                 raise ValueError("API key is required")
@@ -2057,7 +2057,7 @@ class AIService:
             options = parameters.get('options', {})
             flattened = {**parameters, **options}
 
-            api_key = flattened.get('api_key') or flattened.get('apiKey')
+            api_key = flattened.get('api_key')
             provider = parameters.get('provider', 'openai')
             model = parameters.get('model', '')
             # Strip [FREE] prefix if present (added by OpenRouter model list for display)

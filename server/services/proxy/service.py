@@ -224,24 +224,25 @@ class ProxyService:
         if not runtime.config.enabled:
             raise ProviderError(runtime.config.name, "Provider is disabled")
 
-        # Build geo target. proxy_city / proxy_state are not declared
-        # Pydantic fields today; left as-is for any caller that hand-
-        # passes them.
+        # Build geo target. proxy_city / proxy_state / proxy_session_id
+        # are not declared Pydantic fields today; reading them returns
+        # None unless a caller hand-passes them via the same
+        # snake_case convention as the rest of the schema.
         geo = GeoTarget(
             country=parameters.get("proxy_country") or
                     (rule.required_country if rule else None) or
                     self._settings.proxy_default_country,
-            city=parameters.get("proxyCity"),
-            state=parameters.get("proxyState"),
+            city=parameters.get("proxy_city"),
+            state=parameters.get("proxy_state"),
         )
 
         # Determine session type
-        session_type_str = parameters.get("session_type") or parameters.get("proxySessionType", "rotating")
+        session_type_str = parameters.get("session_type", "rotating")
         session_type = SessionType(session_type_str) if session_type_str else SessionType.ROTATING
         if rule:
             session_type = rule.session_type
 
-        session_id = parameters.get("proxySessionId")
+        session_id = parameters.get("proxy_session_id")
 
         # Format proxy URL
         proxy_url = runtime.provider.format_proxy_url(

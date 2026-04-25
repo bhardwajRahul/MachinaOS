@@ -109,10 +109,10 @@ class RLMService:
             custom_tools = ToolBridgeAdapter.bridge(tool_data, context, loop=running_loop)
 
             # === RLM-specific parameters ===
-            max_iterations = int(flattened.get('maxIterations', DEFAULT_MAX_ITERATIONS))
+            max_iterations = int(flattened.get('max_iterations', DEFAULT_MAX_ITERATIONS))
             max_depth = int(flattened.get('max_depth', DEFAULT_MAX_DEPTH))
-            max_budget = flattened.get('maxBudget')
-            max_timeout = flattened.get('maxTimeout')
+            max_budget = flattened.get('max_budget')
+            max_timeout = flattened.get('max_timeout')
             max_tokens = flattened.get('max_tokens')
             verbose = flattened.get('verbose', DEFAULT_VERBOSE)
 

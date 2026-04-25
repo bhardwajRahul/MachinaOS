@@ -50,7 +50,7 @@ class ChatModelExtractor:
             params = tool_info.get('parameters', {})
             provider = params.get('provider', '')
             model = params.get('model', '')
-            api_key = params.get('api_key') or params.get('apiKey')
+            api_key = params.get('api_key')
 
             if not api_key and auth:
                 api_key = await auth.get_api_key(provider)

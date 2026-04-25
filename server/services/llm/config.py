@@ -147,7 +147,7 @@ def resolve_max_tokens(params: dict, model: str, provider: str) -> int:
     registry = get_model_registry()
     model_max = registry.get_max_output_tokens(model, provider)
 
-    user_val = params.get("max_tokens") or params.get("maxTokens")
+    user_val = params.get("max_tokens")
     if user_val:
         user_int = int(user_val)
         if user_int > model_max:

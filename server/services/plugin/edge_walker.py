@@ -223,7 +223,7 @@ async def _append_skill_entries(
         skill_data.append({
             "node_id": source_node_id,
             "node_type": skill_type,
-            "skill_name": skill_params.get("skillName", skill_type),
+            "skill_name": skill_params.get("skill_name", skill_type),
             "parameters": skill_params,
             "label": source_node.get("data", {}).get("label", skill_type),
         })
