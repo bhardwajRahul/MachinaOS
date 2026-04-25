@@ -55,9 +55,9 @@ async def list_schemas():
 async def get_node_input(node_type: str, response: Response):
     """Return the JSON Schema for a node type's input parameters.
 
-    Wave 6 Phase 1: parallels the output endpoint above. 404 when no
-    Pydantic model is registered for the type — frontend falls back to
-    the legacy nodeDefinitions/* properties array until Phase 3 lands.
+    Parallels the output endpoint above. 404 when no Pydantic model is
+    registered for the type — the frontend's ``lib/nodeSpec.ts`` adapter
+    treats a missing input schema as an empty parameter set.
     """
 
     schema = get_node_input_schema(node_type)

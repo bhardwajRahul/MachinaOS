@@ -2001,7 +2001,7 @@ deploy_workflow() -> Sets up triggers, returns immediately
 
 ### AI Chat Model System (5-Layer Architecture)
 - **Visual Components**: Circular node design with real-time status indicators (green/yellow/red)
-- **Node Definitions**: Factory pattern using `createBaseChatModel()` with provider configurations
+- **Node Definitions**: Backend NodeSpec (`server/nodes/models/<provider>.py`) is the single source of truth; the frontend renders via `lib/nodeSpec.ts` + `adapters/nodeSpecToDescription.ts`
 - **Parameter System**: Universal renderer with drag-and-drop template variables (`{{variable}}`)
 - **API Key Management**: Secure localStorage with base64 encryption and LangChain validation
 - **Execution Engine**: Routes AI nodes to Python Flask backend with auto-injection of API keys
@@ -2152,42 +2152,8 @@ Extended thinking and reasoning capabilities for supported AI models. When enabl
 | **Groq** | qwen3-32b | `reasoningFormat` ('parsed' or 'hidden') | format | 'parsed' returns reasoning, 'hidden' returns only final answer |
 | **Cerebras** | qwen-3-235b | `reasoningFormat` ('parsed' or 'hidden') | format | Same format-based reasoning as Groq Qwen |
 
-#### Frontend Parameters (`client/src/factories/baseChatModelFactory.ts`)
-```typescript
-STANDARD_PARAMETERS = {
-  thinkingEnabled: {
-    displayName: 'Thinking/Reasoning Mode',
-    name: 'thinkingEnabled',
-    type: 'boolean',
-    default: false,
-    description: 'Enable extended thinking for supported models'
-  },
-  thinkingBudget: {
-    displayName: 'Thinking Budget (Tokens)',
-    name: 'thinkingBudget',
-    type: 'number',
-    default: 2048,
-    typeOptions: { minValue: 1024, maxValue: 16000 },
-    displayOptions: { show: { thinkingEnabled: [true] } }
-  },
-  reasoningEffort: {
-    displayName: 'Reasoning Effort',
-    name: 'reasoningEffort',
-    type: 'options',
-    options: ['minimal', 'low', 'medium', 'high'],
-    default: 'medium',
-    displayOptions: { show: { thinkingEnabled: [true] } }
-  },
-  reasoningFormat: {
-    displayName: 'Reasoning Format',
-    name: 'reasoningFormat',
-    type: 'options',
-    options: ['parsed', 'hidden'],
-    default: 'parsed',
-    displayOptions: { show: { thinkingEnabled: [true] } }
-  }
-}
-```
+#### Thinking/Reasoning Parameters
+The thinking/reasoning fields (`thinkingEnabled`, `thinkingBudget`, `reasoningEffort`, `reasoningFormat`) live in the backend NodeSpec for each chat model (`server/nodes/models/<provider>.py`) and are surfaced through `AIChatModelParams` in `server/models/nodes.py`. The frontend renders them automatically via the universal parameter panel.
 
 #### Backend Implementation (`server/services/ai.py`)
 The AI service extracts thinking content from LangChain response objects:

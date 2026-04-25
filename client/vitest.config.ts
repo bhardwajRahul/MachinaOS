@@ -19,7 +19,6 @@ export default defineConfig({
       reporter: ['text', 'html'],
       include: [
         'src/adapters/**',
-        'src/factories/**',
         'src/types/**',
         'src/hooks/useApiKeys.ts',
         'src/components/CredentialsModal.tsx',

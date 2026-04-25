@@ -1,15 +1,15 @@
 """Per-node display metadata.
 
-Receives the UI-only fields (``displayName``, ``icon``, ``group``,
-``subtitle``, ``description``) that today live in the frontend
-``client/src/nodeDefinitions/*.ts`` files. Wave 6 Phase 3 migrates each
-node-definition file's display metadata into this dict; until then
-NodeSpec falls back to the node type id for missing entries.
+Holds the UI-only fields (``displayName``, ``icon``, ``group``,
+``subtitle``, ``description``) for every node type. This dict is the
+single source of truth for everything the parameter panel + palette
+need to render a node header — the frontend consumes it via the
+NodeSpec endpoints (see ``server/routers/schemas.py`` and
+``server/nodes/README.md``). Missing entries fall back to the node
+type id.
 
-Single source of truth for everything the parameter panel + palette
-needs to render a node header. Kept as a plain dict (not Pydantic) for
-fast iteration during the migration — switch to a TypedDict / Pydantic
-model once the schema stabilises.
+Kept as a plain dict (not Pydantic) for fast iteration — switch to a
+TypedDict / Pydantic model once the schema stabilises.
 """
 
 from typing import Any, Literal, Optional, TypedDict
