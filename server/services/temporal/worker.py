@@ -19,6 +19,7 @@ import asyncio
 from typing import Optional
 
 import aiohttp
+from opentelemetry import trace
 from temporalio.client import Client
 from temporalio.runtime import LoggingConfig, Runtime, TelemetryConfig
 from temporalio.worker import Worker
@@ -31,6 +32,7 @@ from .activities import (
 )
 
 logger = get_logger(__name__)
+tracer = trace.get_tracer(__name__)
 
 
 def create_runtime() -> Runtime:
@@ -81,60 +83,55 @@ class TemporalWorkerManager:
         return self._worker_task is not None and not self._worker_task.done()
 
     async def start(self) -> None:
-        """Start the Temporal worker in the background."""
-        if self.is_running:
-            logger.warning("Temporal worker already running")
-            return
+        """Start the Temporal worker in the background.
 
-        # Create shared aiohttp session with connection pooling
-        self._session = await create_shared_session(self.pool_size)
+        Span emitted via OTel for cold-start benchmarking — exposes the
+        wall-clock cost of session creation, activity instantiation, and
+        worker registration.
+        """
+        with tracer.start_as_current_span("temporal.worker_start") as span:
+            if self.is_running:
+                span.set_attribute("already_running", True)
+                logger.warning("Temporal worker already running")
+                return
 
-        # Create activity instance with shared session
-        self._activities = NodeExecutionActivities(self._session)
+            # Create shared aiohttp session with connection pooling
+            self._session = await create_shared_session(self.pool_size)
 
-        # Wave 11.F: register per-plugin activities alongside the
-        # legacy generic execute_node_activity. Workers pick up both.
-        # The legacy activity stays so existing workflows that call
-        # "execute_node_activity" keep working; plugin activities are
-        # indexed by ``node.{type}.v{version}`` for future per-node
-        # dispatch.
-        activities: list = [self._activities.execute_node_activity]
-        try:
-            import nodes  # populate plugin-class registry
-            from services.temporal.plugin_activities import collect_plugin_activities
-            plugin_activities = collect_plugin_activities()
-            activities.extend(plugin_activities)
-            logger.info(
-                "Registered %d plugin activities on queue %s",
-                len(plugin_activities), self.task_queue,
+            # Create activity instance with shared session
+            self._activities = NodeExecutionActivities(self._session)
+
+            # MachinaWorkflow.run() schedules every node via the single
+            # ``"execute_node_activity"`` name (see services/temporal/workflow.py).
+            # The Wave 11.F per-plugin activities (``node.{type}.v{version}``)
+            # added a ~1.6s registration cost at every worker startup but were
+            # never scheduled by the orchestrator — pure dead code on the hot
+            # path. Removed. If per-node task-queue dispatch is revived, gate
+            # behind a Settings flag and wire it into the orchestrator first.
+            self._worker = Worker(
+                self.client,
+                task_queue=self.task_queue,
+                workflows=[MachinaWorkflow],
+                activities=[self._activities.execute_node_activity],
+                # Allow concurrent activity execution for parallel branches
+                max_concurrent_activities=self.pool_size,
+                max_concurrent_workflow_tasks=10,
             )
-        except Exception as e:
-            logger.warning(f"Plugin activity registration failed: {e}")
+            span.set_attribute("task_queue", self.task_queue)
+            span.set_attribute("pool_size", self.pool_size)
 
-        # Create worker with class-based activity
-        # For class-based activities, pass the bound method (instance.method)
-        self._worker = Worker(
-            self.client,
-            task_queue=self.task_queue,
-            workflows=[MachinaWorkflow],
-            activities=activities,
-            # Allow concurrent activity execution for parallel branches
-            max_concurrent_activities=self.pool_size,
-            max_concurrent_workflow_tasks=10,
-        )
+            print(f"[Temporal] Worker started (queue={self.task_queue}, pool={self.pool_size})", flush=True)
+            logger.info(
+                "Starting Temporal worker",
+                task_queue=self.task_queue,
+                pool_size=self.pool_size,
+            )
 
-        print(f"[Temporal] Worker started (queue={self.task_queue}, pool={self.pool_size})", flush=True)
-        logger.info(
-            "Starting Temporal worker",
-            task_queue=self.task_queue,
-            pool_size=self.pool_size,
-        )
-
-        # Run worker in background task
-        self._worker_task = asyncio.create_task(
-            self._run_worker(),
-            name="temporal-worker",
-        )
+            # Run worker in background task
+            self._worker_task = asyncio.create_task(
+                self._run_worker(),
+                name="temporal-worker",
+            )
 
     async def _run_worker(self) -> None:
         """Run the worker (background task)."""

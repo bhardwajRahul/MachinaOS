@@ -8,9 +8,12 @@ import asyncio
 import orjson
 from typing import Set, Dict, Any, Optional, List
 from fastapi import WebSocket
+from opentelemetry import trace
+
 from core.logging import get_logger
 
 logger = get_logger(__name__)
+tracer = trace.get_tracer(__name__)
 
 
 class StatusBroadcaster:
@@ -120,28 +123,35 @@ class StatusBroadcaster:
         logger.info(f"[StatusBroadcaster] Client disconnected. Total: {len(self._connections)}")
 
     async def _refresh_all_services(self):
-        """Refresh all service statuses concurrently and broadcast updates.
+        """Spawn per-service refresh tasks; each broadcasts as soon as
+        its own status is ready.
 
-        Runs as a background task so the WebSocket handshake is never
-        blocked by slow network calls.  Uses asyncio.gather with
-        return_exceptions so one failure does not prevent others.
+        Uses ``asyncio.TaskGroup`` (Python 3.11+) for structured
+        concurrency: every refresh runs as an independent task and
+        publishes its own ``<service>_status`` message the moment its
+        cache slot is populated. The slowest service (e.g. Telegram's
+        10 s ``getMe`` cold-DNS path) no longer gates the others — the
+        credentials/status UI hydrates incrementally.
+
+        Each ``_refresh_*`` already swallows its own exceptions, so
+        TaskGroup never sees one. Kept inside try/except* defensively
+        in case a future refactor lets one escape.
+
+        Wrapped in an OTel span so the cycle's wall-clock duration is
+        emitted via the configured span exporter (ConsoleSpanExporter
+        in dev for benchmarking, OTLP in prod).
         """
-        results = await asyncio.gather(
-            self._refresh_whatsapp_status(),
-            self._refresh_twitter_status(),
-            self._refresh_google_status(),
-            self._refresh_telegram_status(),
-            self._auto_reconnect_android_relay(),
-            return_exceptions=True,
-        )
-        for r in results:
-            if isinstance(r, Exception):
-                logger.warning("[StatusBroadcaster] Service refresh failed: %s", r)
-
-        try:
-            await self.broadcast({"type": "full_status", "data": self._status})
-        except Exception as e:
-            logger.warning("[StatusBroadcaster] Failed to broadcast refreshed status: %s", e)
+        with tracer.start_as_current_span("broadcaster.refresh_all_services"):
+            try:
+                async with asyncio.TaskGroup() as tg:
+                    tg.create_task(self._refresh_whatsapp_status())
+                    tg.create_task(self._refresh_twitter_status())
+                    tg.create_task(self._refresh_google_status())
+                    tg.create_task(self._refresh_telegram_status())
+                    tg.create_task(self._auto_reconnect_android_relay())
+            except* Exception as eg:
+                for exc in eg.exceptions:
+                    logger.warning("[StatusBroadcaster] Service refresh task failed: %s", exc)
 
     async def broadcast(self, message: Dict[str, Any]):
         """Broadcast a message to all connected clients using TaskGroup.
@@ -257,93 +267,117 @@ class StatusBroadcaster:
         """Fetch fresh WhatsApp status from Go service and update cache.
 
         Called on client connect to ensure initial_status has accurate data.
-        Silently fails if WhatsApp service is unavailable.
+        Silently fails if WhatsApp service is unavailable. Span emitted
+        via OTel for cold-start benchmarking.
         """
-        try:
-            from services.whatsapp_service import get_client
-            import time
+        with tracer.start_as_current_span("broadcaster.refresh_whatsapp") as span:
+            try:
+                from services.whatsapp_service import get_client
+                import time
 
-            client = await get_client()
-            status_data = await client.call("status")
+                client = await get_client()
+                status_data = await client.call("status")
 
-            self._status["whatsapp"] = {
-                "connected": status_data.get("connected", False),
-                "has_session": status_data.get("has_session", False),
-                "running": status_data.get("running", False),
-                "pairing": status_data.get("pairing", False),
-                "device_id": status_data.get("device_id"),
-                "qr": None,
-                "timestamp": time.time()
-            }
-            logger.debug(f"[StatusBroadcaster] Refreshed WhatsApp status: connected={status_data.get('connected')}")
-        except Exception as e:
-            # Don't fail client connection if WhatsApp service is down
-            logger.debug(f"[StatusBroadcaster] Could not refresh WhatsApp status: {e}")
+                self._status["whatsapp"] = {
+                    "connected": status_data.get("connected", False),
+                    "has_session": status_data.get("has_session", False),
+                    "running": status_data.get("running", False),
+                    "pairing": status_data.get("pairing", False),
+                    "device_id": status_data.get("device_id"),
+                    "qr": None,
+                    "timestamp": time.time()
+                }
+                logger.debug(f"[StatusBroadcaster] Refreshed WhatsApp status: connected={status_data.get('connected')}")
+                await self.broadcast({
+                    "type": "whatsapp_status",
+                    "data": self._status["whatsapp"],
+                })
+                span.set_attribute("connected", bool(status_data.get("connected", False)))
+            except Exception as e:
+                span.record_exception(e)
+                # Don't fail client connection if WhatsApp service is down
+                logger.debug(f"[StatusBroadcaster] Could not refresh WhatsApp status: {e}")
 
     async def _refresh_twitter_status(self):
         """Fetch Twitter status from stored OAuth tokens in database.
 
         Called on client connect to check if user is authenticated with Twitter.
         Uses OAuth token system (matches REST endpoint and node handlers).
+        Span emitted via OTel for cold-start benchmarking.
         """
-        try:
-            from core.container import container
-            auth_service = container.auth_service()
+        with tracer.start_as_current_span("broadcaster.refresh_twitter") as span:
+            try:
+                from core.container import container
+                auth_service = container.auth_service()
 
-            # Get tokens from OAuth system (NOT api_key system)
-            tokens = await auth_service.get_oauth_tokens("twitter", customer_id="owner")
-            if not tokens or not tokens.get("access_token"):
-                self._status["twitter"] = {
-                    "connected": False,
-                    "username": None,
-                    "user_id": None,
-                    "name": None,
-                    "profile_image_url": None
-                }
-                return
+                # Get tokens from OAuth system (NOT api_key system)
+                tokens = await auth_service.get_oauth_tokens("twitter", customer_id="owner")
+                if not tokens or not tokens.get("access_token"):
+                    self._status["twitter"] = {
+                        "connected": False,
+                        "username": None,
+                        "user_id": None,
+                        "name": None,
+                        "profile_image_url": None
+                    }
+                else:
+                    # User info is stored in the OAuth token record
+                    email = tokens.get("email", "")  # Stored as "@username"
+                    name = tokens.get("name", "")
+                    username = email.lstrip("@") if email.startswith("@") else email
 
-            # User info is stored in the OAuth token record
-            email = tokens.get("email", "")  # Stored as "@username"
-            name = tokens.get("name", "")
-            username = email.lstrip("@") if email.startswith("@") else email
+                    self._status["twitter"] = {
+                        "connected": True,
+                        "username": username or None,
+                        "user_id": None,
+                        "name": name or None,
+                        "profile_image_url": None
+                    }
+                    logger.debug(f"[StatusBroadcaster] Twitter status: connected as @{username}")
 
-            self._status["twitter"] = {
-                "connected": True,
-                "username": username or None,
-                "user_id": None,
-                "name": name or None,
-                "profile_image_url": None
-            }
-            logger.debug(f"[StatusBroadcaster] Twitter status: connected as @{username}")
-        except Exception as e:
-            logger.debug(f"[StatusBroadcaster] Could not refresh Twitter status: {e}")
+                await self.broadcast({
+                    "type": "twitter_status",
+                    "data": self._status["twitter"],
+                })
+                span.set_attribute("connected", bool(self._status["twitter"]["connected"]))
+            except Exception as e:
+                span.record_exception(e)
+                logger.debug(f"[StatusBroadcaster] Could not refresh Twitter status: {e}")
 
     async def _refresh_google_status(self):
         """Fetch Google Workspace status from stored OAuth tokens.
 
         Called on client connect to check if user is authenticated with Google.
+        Span emitted via OTel for cold-start benchmarking.
         """
-        try:
-            from core.container import container
-            auth_service = container.auth_service()
+        with tracer.start_as_current_span("broadcaster.refresh_google") as span:
+            try:
+                from core.container import container
+                auth_service = container.auth_service()
 
-            tokens = await auth_service.get_oauth_tokens("google", customer_id="owner")
-            if not tokens or not tokens.get("access_token"):
-                self._status["google"] = {
-                    "connected": False,
-                    "email": None,
-                    "name": None,
-                }
-                return
+                tokens = await auth_service.get_oauth_tokens("google", customer_id="owner")
+                if not tokens or not tokens.get("access_token"):
+                    self._status["google"] = {
+                        "connected": False,
+                        "email": None,
+                        "name": None,
+                    }
+                else:
+                    self._status["google"] = {
+                        "connected": True,
+                        "email": tokens.get("email"),
+                        "name": tokens.get("name"),
+                    }
+                    logger.debug(f"[StatusBroadcaster] Google status: connected as {tokens.get('email')}")
 
-            self._status["google"] = {
-                "connected": True,
-                "email": tokens.get("email"),
-                "name": tokens.get("name"),
-            }
-            logger.debug(f"[StatusBroadcaster] Google status: connected as {tokens.get('email')}")
-        except Exception as e:
-            logger.debug(f"[StatusBroadcaster] Could not refresh Google status: {e}")
+                await self.broadcast({
+                    "type": "google_status",
+                    "data": self._status["google"],
+                })
+                span.set_attribute("connected", bool(self._status["google"]["connected"]))
+            except Exception as e:
+                span.record_exception(e)
+                logger.debug(f"[StatusBroadcaster] Could not refresh Google status: {e}")
 
     async def _refresh_telegram_status(self):
         """Refresh Telegram status from stored credentials and auto-reconnect.
@@ -352,49 +386,66 @@ class StatusBroadcaster:
         inside TelegramService; this function just decides whether to
         attempt an auto-reconnect and mirrors the resulting status into
         the broadcaster cache.
+
+        Span emitted via OTel for cold-start benchmarking. This is the
+        canonical "is the broadcaster fast?" metric — Telegram's getMe
+        on cold DNS is the historical bottleneck (10s read_timeout).
         """
-        try:
-            from services.telegram_service import get_telegram_service
-            service = get_telegram_service()
+        with tracer.start_as_current_span("broadcaster.refresh_telegram") as span:
+            try:
+                from services.telegram_service import get_telegram_service
+                service = get_telegram_service()
 
-            def _snapshot(connected: bool, has_token: bool) -> Dict[str, Any]:
-                s = service.get_status()
-                return {
-                    "connected": connected,
-                    "bot_id": s.get("bot_id") if connected else None,
-                    "bot_username": s.get("bot_username") if connected else None,
-                    "bot_name": s.get("bot_name") if connected else None,
-                    "owner_chat_id": s.get("owner_chat_id") if connected else None,
-                    "has_stored_token": has_token,
-                }
+                def _snapshot(connected: bool, has_token: bool) -> Dict[str, Any]:
+                    s = service.get_status()
+                    return {
+                        "connected": connected,
+                        "bot_id": s.get("bot_id") if connected else None,
+                        "bot_username": s.get("bot_username") if connected else None,
+                        "bot_name": s.get("bot_name") if connected else None,
+                        "owner_chat_id": s.get("owner_chat_id") if connected else None,
+                        "has_stored_token": has_token,
+                    }
 
-            if service.connected:
-                self._status["telegram"] = _snapshot(True, True)
-                return
+                if service.connected:
+                    self._status["telegram"] = _snapshot(True, True)
+                    span.set_attribute("path", "already_connected")
+                elif not await service.has_stored_token():
+                    self._status["telegram"] = _snapshot(False, False)
+                    span.set_attribute("path", "no_token")
+                else:
+                    span.set_attribute("path", "auto_reconnect")
+                    logger.info("[StatusBroadcaster] Auto-reconnecting Telegram bot...")
+                    result = await service.connect()  # service reads token from DB
+                    ok = bool(result.get("success"))
+                    self._status["telegram"] = _snapshot(ok, True)
+                    span.set_attribute("reconnect_ok", ok)
+                    if ok:
+                        bot_username = self._status["telegram"].get("bot_username")
+                        logger.info(f"[StatusBroadcaster] Telegram auto-reconnected: @{bot_username}")
+                    else:
+                        logger.warning(f"[StatusBroadcaster] Telegram auto-reconnect failed: {result.get('error')}")
 
-            if not await service.has_stored_token():
-                self._status["telegram"] = _snapshot(False, False)
-                return
-
-            logger.info("[StatusBroadcaster] Auto-reconnecting Telegram bot...")
-            result = await service.connect()  # service reads token from DB
-            ok = bool(result.get("success"))
-            self._status["telegram"] = _snapshot(ok, True)
-            if ok:
-                bot_username = self._status["telegram"].get("bot_username")
-                logger.info(f"[StatusBroadcaster] Telegram auto-reconnected: @{bot_username}")
-            else:
-                logger.warning(f"[StatusBroadcaster] Telegram auto-reconnect failed: {result.get('error')}")
-
-        except Exception as e:
-            logger.debug(f"[StatusBroadcaster] Could not refresh Telegram status: {e}")
+                await self.broadcast({
+                    "type": "telegram_status",
+                    "data": self._status["telegram"],
+                })
+                span.set_attribute("connected", bool(self._status["telegram"]["connected"]))
+            except Exception as e:
+                span.record_exception(e)
+                logger.debug(f"[StatusBroadcaster] Could not refresh Telegram status: {e}")
 
     async def _auto_reconnect_android_relay(self):
         """Auto-reconnect to Android relay if there's a stored pairing session.
 
         Called on client connect to re-establish relay connection after server restart.
         The stored session contains relay URL, API key, and paired device info.
+        Span emitted via OTel for cold-start benchmarking.
         """
+        with tracer.start_as_current_span("broadcaster.refresh_android") as span:
+            await self._auto_reconnect_android_relay_body(span)
+
+    async def _auto_reconnect_android_relay_body(self, span):
         try:
             # Check if already connected
             from services.android.manager import get_current_relay_client
@@ -412,6 +463,11 @@ class StatusBroadcaster:
                     "session_token": existing.session_token
                 }
                 logger.debug("[StatusBroadcaster] Android relay already connected")
+                await self.broadcast({
+                    "type": "android_status",
+                    "data": self._status["android"],
+                })
+                span.set_attribute("path", "already_connected")
                 return
 
             # Check for stored session
@@ -420,6 +476,7 @@ class StatusBroadcaster:
 
             session = await database.get_android_relay_session()
             if not session:
+                span.set_attribute("path", "no_session")
                 logger.debug("[StatusBroadcaster] No stored Android relay session")
                 return
 
@@ -429,9 +486,11 @@ class StatusBroadcaster:
             session.get("device_name")
 
             if not relay_url or not api_key:
+                span.set_attribute("path", "session_missing_creds")
                 logger.debug("[StatusBroadcaster] Stored session missing relay URL or API key")
                 return
 
+            span.set_attribute("path", "auto_reconnect")
             logger.info("[StatusBroadcaster] Auto-reconnecting to Android relay...",
                        relay_url=relay_url, device_id=device_id)
 
@@ -454,12 +513,19 @@ class StatusBroadcaster:
                     "qr_data": client.qr_data,
                     "session_token": client.session_token
                 }
+                await self.broadcast({
+                    "type": "android_status",
+                    "data": self._status["android"],
+                })
+                span.set_attribute("reconnect_ok", True)
             else:
+                span.set_attribute("reconnect_ok", False)
                 logger.warning(f"[StatusBroadcaster] Failed to reconnect Android relay: {error}")
                 # Clear the stored session since reconnect failed
                 await database.clear_android_relay_session()
 
         except Exception as e:
+            span.record_exception(e)
             logger.debug(f"[StatusBroadcaster] Could not auto-reconnect Android relay: {e}")
 
     async def update_whatsapp_status(

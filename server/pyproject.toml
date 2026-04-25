@@ -27,6 +27,10 @@ dependencies = [
     "structlog>=24.1.0",
     "orjson>=3.9.0",
 
+    # Tracing / benchmarking (OpenTelemetry — industry standard)
+    "opentelemetry-api>=1.27.0",
+    "opentelemetry-sdk>=1.27.0",
+
     # YAML parsing (for SKILL.md files)
     "pyyaml>=6.0",
 
