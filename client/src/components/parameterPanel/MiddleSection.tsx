@@ -24,8 +24,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Zap, Pencil, Sparkles, TerminalSquare } from 'lucide-react';
+import { Zap, Pencil, Sparkles, TerminalSquare, Trash2, RotateCcw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { ActionButton } from '@/components/ui/action-button';
 import ParameterRenderer from '../ParameterRenderer';
 import ToolSchemaEditor from './ToolSchemaEditor';
 import MasterSkillEditor from './MasterSkillEditor';
@@ -563,15 +564,11 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
             {isMemoryNode && (
               <div className="mt-3 flex justify-end border-t border-border pt-3">
                 <Button
-                  variant="outline"
+                  variant="destructive"
                   size="sm"
                   onClick={() => setShowClearMemoryDialog(true)}
-                  className="border-dracula-red/50 bg-dracula-red/15 text-dracula-red hover:bg-dracula-red/25"
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="3 6 5 6 21 6" />
-                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                  </svg>
+                  <Trash2 className="h-3.5 w-3.5" />
                   Clear Memory
                 </Button>
               </div>
@@ -580,18 +577,14 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
             {/* Reset Skill Button - Only for built-in skill nodes */}
             {isSkillNode && (
               <div className="mt-3 flex justify-end border-t border-border pt-3">
-                <Button
-                  variant="outline"
-                  size="sm"
+                <ActionButton
+                  tone="orange"
                   onClick={() => setShowResetSkillDialog(true)}
-                  className="border-dracula-orange/50 bg-dracula-orange/15 text-dracula-orange hover:bg-dracula-orange/25"
+                  className="h-8"
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="1 4 1 10 7 10" />
-                    <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
-                  </svg>
+                  <RotateCcw className="h-3.5 w-3.5" />
                   Reset to Default
-                </Button>
+                </ActionButton>
               </div>
             )}
           </div>
@@ -625,9 +618,9 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
               <AlertDialogFooter>
                 <AlertDialogCancel disabled={isProcessing}>Cancel</AlertDialogCancel>
                 <AlertDialogAction
+                  variant="destructive"
                   disabled={isProcessing}
                   onClick={handleClearMemory}
-                  className="bg-dracula-red text-white hover:bg-dracula-red/90"
                 >
                   {isProcessing ? 'Clearing...' : 'Clear Memory'}
                 </AlertDialogAction>
@@ -652,7 +645,6 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
                 <AlertDialogAction
                   disabled={isProcessing}
                   onClick={handleResetSkill}
-                  className="bg-dracula-orange text-white hover:bg-dracula-orange/90"
                 >
                   {isProcessing ? 'Resetting...' : 'Reset to Default'}
                 </AlertDialogAction>
@@ -811,7 +803,10 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
                         >
                           <div
                             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md"
-                            style={{ backgroundColor: skill.color + '20' }}
+                            // skill.color is per-skill metadata (SKILL.md frontmatter); the
+                            // tinted icon background uses CSS color-mix so the math lives in
+                            // CSS, not as JS string concat at the call site.
+                            style={{ backgroundColor: `color-mix(in srgb, ${skill.color} 12%, transparent)` }}
                           >
                             {(() => {
                               const LibIcon = resolveLibraryIcon(skill.icon);
