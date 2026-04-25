@@ -7,6 +7,7 @@
  * no shell pipes, works in all terminals including Git Bash on Windows).
  */
 import { readFileSync, existsSync, copyFileSync } from 'fs';
+import { Socket } from 'net';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
@@ -51,6 +52,49 @@ export function getPlatformName() {
 export const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 /**
+ * TCP port readiness probe — same primitive used by the wait-on package,
+ * Vercel CLI dev scripts, and most production multi-service launchers.
+ * Resolves true the moment the port accepts a TCP connection, false on
+ * timeout / error. Zero new dependencies (Node built-in net.Socket).
+ */
+export function probeTcpPort(port, host = '127.0.0.1', timeoutMs = 500) {
+  return new Promise((resolveOuter) => {
+    const socket = new Socket();
+    let done = false;
+    const finish = (ok) => {
+      if (done) return;
+      done = true;
+      socket.destroy();
+      resolveOuter(ok);
+    };
+    socket.setTimeout(timeoutMs);
+    socket.once('connect', () => finish(true));
+    socket.once('timeout', () => finish(false));
+    socket.once('error', () => finish(false));
+    socket.connect(port, host);
+  });
+}
+
+/**
+ * Poll a TCP port until it accepts connections or maxWaitMs elapses.
+ * Use to detect when a child service (uvicorn, vite, temporal, etc.) is
+ * ready to accept traffic — significantly more reliable and faster than
+ * grepping stdout for ready-message patterns, which trail actual readiness
+ * by hundreds of ms due to line-buffered stdout flush.
+ */
+export async function waitForTcpPort(
+  port,
+  { intervalMs = 250, maxWaitMs = 60000, host = '127.0.0.1' } = {}
+) {
+  const start = Date.now();
+  while (Date.now() - start < maxWaitMs) {
+    if (await probeTcpPort(port, host)) return true;
+    await sleep(intervalMs);
+  }
+  return false;
+}
+
+/**
  * Normalize path for cross-platform comparison.
  */
 export function normalizePath(p) {
@@ -68,7 +112,13 @@ export function loadEnvConfig() {
 
   const env = {};
   if (existsSync(envPath)) {
-    for (const line of readFileSync(envPath, 'utf-8').split('\n')) {
+    // Normalize CRLF -> LF before splitting so the regex anchors work
+    // on Windows-edited .env files. Without this, `.` (which excludes
+    // line terminators including \r) made `(.*)$` fail to match every
+    // line that ended with \r, silently returning undefined for every
+    // env var and forcing the fallback values to apply.
+    const text = readFileSync(envPath, 'utf-8').replace(/\r\n?/g, '\n');
+    for (const line of text.split('\n')) {
       const match = line.match(/^([^#=]+)=(.*)$/);
       if (match) {
         let value = match[2].trim();
@@ -85,10 +135,32 @@ export function loadEnvConfig() {
   const backendPort = parseInt(env.PYTHON_BACKEND_PORT) || 3010;
   const whatsappPort = parseInt(env.WHATSAPP_RPC_PORT) || 9400;
   const nodejsPort = parseInt(env.NODEJS_EXECUTOR_PORT) || 3020;
+  // Temporal server gRPC port — parsed from TEMPORAL_SERVER_ADDRESS in
+  // .env / .env.template (e.g. "localhost:7233"). Strict: throws on
+  // missing/malformed value so misconfiguration surfaces at startup
+  // instead of silently degrading to a wrong port.
+  const temporalAddress = env.TEMPORAL_SERVER_ADDRESS;
+  if (!temporalAddress) {
+    throw new Error(
+      'TEMPORAL_SERVER_ADDRESS is not set in .env. Required for service ready detection.',
+    );
+  }
+  const temporalPort = parseInt(temporalAddress.split(':').pop());
+  if (!Number.isFinite(temporalPort) || temporalPort <= 0) {
+    throw new Error(
+      `TEMPORAL_SERVER_ADDRESS='${temporalAddress}' has no valid port (expected "host:port").`,
+    );
+  }
 
   return {
     raw: env,
-    ports: { client: clientPort, backend: backendPort, whatsapp: whatsappPort, nodejs: nodejsPort },
+    ports: {
+      client: clientPort,
+      backend: backendPort,
+      whatsapp: whatsappPort,
+      nodejs: nodejsPort,
+      temporal: temporalPort,
+    },
     allPorts: [clientPort, backendPort, whatsappPort, nodejsPort],
     clientPort,
     backendPort,

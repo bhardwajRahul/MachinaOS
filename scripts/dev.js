@@ -14,6 +14,7 @@ import {
   ensureEnvFile,
   killPort,
   createLogger,
+  waitForTcpPort,
 } from './utils.js';
 
 const START_TIME = Date.now();
@@ -90,18 +91,6 @@ async function main() {
   services.push('"pnpm run temporal:start"');
   // Worker runs embedded in the backend (main.py TemporalWorkerManager)
 
-  // Ready-detection patterns for each service
-  const readyPatterns = [
-    { name: 'Client',   pattern: /ready in|VITE.*ready|Client:\s*http/i },
-    { name: 'Backend',  pattern: /Application startup complete|Uvicorn running/i },
-  ];
-  if (!skipWhatsApp) {
-    readyPatterns.push({ name: 'WhatsApp', pattern: /listening on|WhatsApp.*ready|API.*started|:9400/i });
-  }
-  readyPatterns.push({ name: 'Temporal', pattern: /\[Temporal\] Worker started|temporal.*server.*started/i });
-  const readySet = new Set();
-  const totalExpected = readyPatterns.length;
-
   // No --kill-others: uvicorn hot-reloads (exit code 1) would cascade-kill frontend
   const proc = spawn('pnpm', ['exec', 'concurrently', '--raw', ...services], {
     cwd: ROOT,
@@ -110,22 +99,36 @@ async function main() {
     env: { ...process.env, FORCE_COLOR: '1' }
   });
 
-  proc.stdout.on('data', (data) => {
-    process.stdout.write(data);
-    const text = data.toString();
-    for (const { name, pattern } of readyPatterns) {
-      if (!readySet.has(name) && pattern.test(text)) {
-        readySet.add(name);
-        log(`${name} ready`);
-        if (readySet.size === totalExpected) {
-          log(`All services ready -- http://localhost:${config.clientPort}`);
-          console.log('');
-        }
-      }
+  // Pass-through stdout/stderr so each service's logs reach the terminal.
+  proc.stdout.on('data', (data) => process.stdout.write(data));
+  proc.stderr.on('data', (data) => process.stderr.write(data));
+
+  // Detect ready state by probing TCP ports (the same primitive used by
+  // the wait-on package, Vercel CLI dev scripts, etc.). Replaces the
+  // previous stdout regex-matching, which trailed actual readiness by
+  // ~2s due to line-buffered stdout flush + Temporal worker startup
+  // gating the "Worker started" log line.
+  const readyTargets = [
+    { name: 'Client',   port: config.clientPort },
+    { name: 'Backend',  port: config.backendPort },
+  ];
+  if (!skipWhatsApp) {
+    readyTargets.push({ name: 'WhatsApp', port: config.ports.whatsapp });
+  }
+  readyTargets.push({ name: 'Temporal', port: config.ports.temporal });
+
+  Promise.all(
+    readyTargets.map(async ({ name, port }) => {
+      const ok = await waitForTcpPort(port);
+      log(ok ? `${name} ready (port ${port})` : `${name} did not become ready (port ${port})`);
+      return ok;
+    })
+  ).then((results) => {
+    if (results.every(Boolean)) {
+      log(`All services ready -- http://localhost:${config.clientPort}`);
+      console.log('');
     }
   });
-
-  proc.stderr.on('data', (data) => process.stderr.write(data));
 
   process.on('SIGINT', () => proc.kill('SIGINT'));
   process.on('SIGTERM', () => proc.kill('SIGTERM'));

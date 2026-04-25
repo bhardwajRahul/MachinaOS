@@ -15,6 +15,7 @@ import {
   ensureEnvFile,
   killPort,
   createLogger,
+  waitForTcpPort,
 } from './utils.js';
 
 const START_TIME = Date.now();
@@ -108,30 +109,33 @@ async function main() {
   if (!temporalRunning) services.push('"pnpm run temporal:start"');
   // Worker runs embedded in the backend (main.py TemporalWorkerManager)
 
-  // Ready-detection patterns for each service
-  const readyPatterns = [
-    { name: 'Client',   pattern: /ready in|VITE.*ready|Client:\s*http/i },
-    { name: 'Backend',  pattern: /Application startup complete|Uvicorn running/i },
+  // Ready-detection via TCP port probes (same primitive used by the
+  // wait-on package and most production multi-service launchers).
+  // Replaces stdout regex-grep, which trailed actual readiness by ~2s
+  // due to line-buffered stdout flush. See scripts/utils.js:waitForTcpPort.
+  const readyTargets = [
+    { name: 'Client',  port: config.clientPort },
+    { name: 'Backend', port: config.backendPort },
   ];
   if (!skipWhatsApp) {
-    readyPatterns.push({ name: 'WhatsApp', pattern: /listening on|WhatsApp.*ready|API.*started|:9400/i });
+    readyTargets.push({ name: 'WhatsApp', port: config.ports.whatsapp });
   }
   if (!temporalRunning) {
-    readyPatterns.push({ name: 'Temporal', pattern: /\[Temporal\] Worker started|temporal.*server.*started/i });
+    readyTargets.push({ name: 'Temporal', port: config.ports.temporal });
   }
-  const readySet = new Set();
-  const totalExpected = readyPatterns.length;
 
-  function checkReady(text) {
-    for (const { name, pattern } of readyPatterns) {
-      if (!readySet.has(name) && pattern.test(text)) {
-        readySet.add(name);
-        log(`${name} ready`);
-        if (readySet.size === totalExpected) {
-          log(`All services ready`);
-        }
+  function startReadyProbes() {
+    Promise.all(
+      readyTargets.map(async ({ name, port }) => {
+        const ok = await waitForTcpPort(port);
+        log(ok ? `${name} ready (port ${port})` : `${name} did not become ready (port ${port})`);
+        return ok;
+      })
+    ).then((results) => {
+      if (results.every(Boolean)) {
+        log('All services ready');
       }
-    }
+    });
   }
 
   if (isVerbose) {
@@ -143,11 +147,10 @@ async function main() {
       env: { ...process.env, FORCE_COLOR: '1' },
     });
 
-    proc.stdout.on('data', (data) => {
-      process.stdout.write(data);
-      checkReady(data.toString());
-    });
+    proc.stdout.on('data', (data) => process.stdout.write(data));
     proc.stderr.on('data', (data) => process.stderr.write(data));
+
+    startReadyProbes();
 
     process.on('SIGINT', () => proc.kill('SIGINT'));
     process.on('SIGTERM', () => proc.kill('SIGTERM'));
@@ -176,12 +179,12 @@ async function main() {
       env: { ...process.env, FORCE_COLOR: '1' },
     });
 
-    // Show only essential output: errors, ready messages, warnings
-    const essential = /error|fatal|exception|failed|started|ready|listening|running|address already in use|application startup complete|\[Temporal\]/i;
+    // Show only essential output: errors and warnings (ready signals
+    // come from TCP probes via startReadyProbes(), not stdout grep).
+    const essential = /error|fatal|exception|failed|address already in use/i;
 
     proc.stdout.on('data', (data) => {
       const text = data.toString();
-      checkReady(text);
       for (const line of text.split('\n')) {
         const trimmed = line.trim();
         if (trimmed && essential.test(trimmed)) {
@@ -192,6 +195,8 @@ async function main() {
 
     // Always show stderr
     proc.stderr.on('data', (data) => process.stderr.write(data));
+
+    startReadyProbes();
 
     process.on('SIGINT', () => proc.kill('SIGINT'));
     process.on('SIGTERM', () => proc.kill('SIGTERM'));
