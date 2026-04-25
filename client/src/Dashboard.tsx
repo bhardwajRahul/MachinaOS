@@ -101,10 +101,12 @@ const createNodeTypes = (): Record<string, React.ComponentType<any>> => {
   return types;
 };
 
-// Create node types once at module load time
-const moduleNodeTypes = createNodeTypes();
-
-// Edge types configuration - enables conditional edge rendering
+// Edge types configuration - enables conditional edge rendering.
+// nodeTypes is built inside the component (see useMemo below) so the
+// build runs after PersistQueryClientProvider has hydrated the cache
+// from localStorage. A module-scope build runs at import time when
+// the cache is always empty, which forces React Flow to remount every
+// canvas node when prefetch lands (the "canvas-wide snap" symptom).
 const moduleEdgeTypes = {
   conditional: ConditionalEdge,
 };
@@ -267,7 +269,7 @@ const DashboardContent: React.FC = () => {
   } = useWorkflowManagement();
 
   const { collapsedSections, searchQuery, setSearchQuery, toggleSection } = useComponentPalette();
-  const { saveNodeParameters, getAllNodeParameters, executeWorkflow, deployWorkflow, cancelDeployment, nodeStatuses, deploymentStatus, workflowLock, isConnected, sendRequest } = useWebSocket();
+  const { saveNodeParameters, getAllNodeParameters, executeWorkflow, deployWorkflow, cancelDeployment, nodeStatuses, deploymentStatus, workflowLock, isConnected, isReady, sendRequest } = useWebSocket();
   const applyUIDefaults = useAppStore((state) => state.applyUIDefaults);
 
   // Workflows list: server-owned data, cached by TanStack Query.
@@ -392,9 +394,14 @@ const DashboardContent: React.FC = () => {
   // completes, bumping `specsReady` flips the React Flow nodeTypes ref
   // so spec.componentKind dispatch becomes effective (Wave 10.D step 2).
   const hasPrefetchedSpecs = React.useRef(false);
-  const [specsReady, setSpecsReady] = React.useState(false);
+  // Seed from the persisted cache. With PersistQueryClientProvider in
+  // place the cache is hydrated from localStorage before the first
+  // render, so a warm start can skip the cold→warm remount entirely.
+  const [specsReady, setSpecsReady] = React.useState(
+    () => listCachedNodeSpecs().length > 0,
+  );
   React.useEffect(() => {
-    if (!isConnected || hasPrefetchedSpecs.current) return;
+    if (!isReady || hasPrefetchedSpecs.current) return;
     if (!featureFlags.nodeSpecBackend) {
       // When the backend is disabled, mark ready so the legacy fallback
       // dispatch runs without waiting on a never-completing prefetch.
@@ -403,7 +410,7 @@ const DashboardContent: React.FC = () => {
     }
     hasPrefetchedSpecs.current = true;
     void prefetchAllNodeSpecs(sendRequest).finally(() => setSpecsReady(true));
-  }, [isConnected, sendRequest]);
+  }, [isReady, sendRequest]);
 
   // Update nodes with execution status classes
   const styledNodes = React.useMemo(() => {
@@ -542,19 +549,12 @@ const DashboardContent: React.FC = () => {
 
   const proOptions = React.useMemo(() => ({ hideAttribution: true }), []);
 
-  // Wave 10.D step 2: nodeTypes dispatch map. Cold cache uses the
-  // module-scope fallback (agents/skills/teamMonitor already correct via
-  // hardcoded guards in createNodeTypes); post-prefetch we rebuild and
-  // only swap the reference if any mapping genuinely differs, so React
-  // Flow doesn't remount every canvas node for a no-op rebuild.
-  const nodeTypes = React.useMemo(() => {
-    if (!specsReady) return moduleNodeTypes;
-    const fresh = createNodeTypes();
-    for (const key of Object.keys(fresh)) {
-      if (fresh[key] !== moduleNodeTypes[key]) return fresh;
-    }
-    return moduleNodeTypes;
-  }, [specsReady]);
+  // Wave 10.D step 2: nodeTypes dispatch map. Built once per hydration
+  // pass — `specsReady` is seeded from the persisted cache, so warm
+  // starts get a populated map on the first render and no canvas-wide
+  // remount when prefetch lands. Cold first-ever visit still rebuilds
+  // when prefetch finishes (one-time cost per browser).
+  const nodeTypes = React.useMemo(() => createNodeTypes(), [specsReady]);
   const edgeTypes = moduleEdgeTypes;
 
   // Execute entire workflow from start node to end

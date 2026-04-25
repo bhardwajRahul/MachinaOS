@@ -12,7 +12,8 @@
  * See C:\\Users\\Tgroh\\.claude\\plans\\typed-splashing-crown.md.
  */
 
-import { useQuery, type UseQueryResult } from '@tanstack/react-query';
+import { useEffect, useSyncExternalStore } from 'react';
+import { hashKey, useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { nodeSpecToDescription, type NodeSpec } from '../adapters/nodeSpecToDescription';
 import type { INodeTypeDescription } from '../types/INodeProperties';
 import { featureFlags } from './featureFlags';
@@ -73,37 +74,45 @@ export function getCachedNodeSpec(nodeType: string): NodeSpec | null {
 }
 
 /**
- * Reactive spec subscription — tRPC `wsLink` / TanStack-Query+WS pattern.
+ * Reactive spec subscription via the QueryCache as an external store.
  *
- * The `queryFn` sends a WS request whose Promise resolves via the
- * correlated response. TanStack auto-fires on mount, so cold-cache
- * renders are self-healing — no dependency on `prefetchAllNodeSpecs`
- * running first. When the prefetch does run (same queryKey), it warms
- * the cache and this hook reads from it instantly.
+ * Previous implementation opened a `useQuery` observer per call site;
+ * with ~80 palette items + N canvas nodes that produced 80+N observers,
+ * each woken up on every cache write. The slice-subscription pattern
+ * here re-renders only consumers of the *specific* spec key that
+ * changed — observer count drops to zero. Pattern documented at
+ * https://react.dev/reference/react/useSyncExternalStore and called
+ * out by TanStack's docs as the canonical escape hatch from useQuery.
  *
- * References:
- *   - TkDodo: https://tkdodo.eu/blog/using-web-sockets-with-react-query
- *   - tRPC wsLink: https://trpc.io/docs/client/links/wsLink
+ * Cache population is owned by `prefetchAllNodeSpecs` (boot once) and
+ * the persisted localStorage hydration set up in lib/queryPersist.ts;
+ * a missing key triggers a one-shot lazy fetch via useEffect rather
+ * than a long-lived observer.
  */
 export function useNodeSpec(nodeType: string | undefined | null): NodeSpec | null {
-  const { sendRequest, isConnected } = useWebSocket();
-  const { data } = useQuery<NodeSpec | null>({
-    queryKey: nodeSpecQueryKey(nodeType ?? '__none__'),
-    queryFn: async () => {
-      if (!nodeType) return null;
-      try {
-        const response = await sendRequest('get_node_spec', { node_type: nodeType });
-        return (response?.spec ?? null) as NodeSpec | null;
-      } catch {
-        return null;
-      }
-    },
-    enabled: !!nodeType && isConnected,
-    // Node specs only change with a backend deploy; dev restarts are
-    // covered by the WS reconnect handler which invalidates ['nodeSpec'].
-    staleTime: STALE_TIME.FOREVER,
-  });
-  return data ?? null;
+  const { sendRequest, isReady } = useWebSocket();
+  const key = nodeSpecQueryKey(nodeType ?? '__none__');
+
+  const targetHash = hashKey(key);
+  const subscribe = (onChange: () => void) => {
+    const unsub = queryClient.getQueryCache().subscribe((event) => {
+      if (event.query.queryHash === targetHash) onChange();
+    });
+    return unsub;
+  };
+
+  const getSnapshot = () =>
+    queryClient.getQueryData<NodeSpec | null>(key) ?? null;
+
+  const data = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+
+  useEffect(() => {
+    if (!nodeType || !isReady) return;
+    if (queryClient.getQueryData(key) !== undefined) return;
+    void fetchNodeSpec(nodeType, sendRequest);
+  }, [nodeType, isReady, sendRequest]);
+
+  return data;
 }
 
 /**
@@ -114,14 +123,14 @@ export function useNodeSpec(nodeType: string | undefined | null): NodeSpec | nul
  * status-check pattern: check data first, error second, loading last.
  */
 export function useNodeGroups(): UseQueryResult<Record<string, NodeGroupEntry>> {
-  const { sendRequest, isConnected } = useWebSocket();
+  const { sendRequest, isReady } = useWebSocket();
   return useQuery<Record<string, NodeGroupEntry>>({
     queryKey: nodeGroupsQueryKey,
     queryFn: async () => {
       const response = await sendRequest('get_node_groups', {});
       return (response?.groups ?? {}) as Record<string, NodeGroupEntry>;
     },
-    enabled: isConnected,
+    enabled: isReady,
     staleTime: STALE_TIME.FOREVER,
   });
 }
