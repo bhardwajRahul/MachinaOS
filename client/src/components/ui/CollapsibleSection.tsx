@@ -1,6 +1,11 @@
 import React from 'react';
-import * as Collapsible from '@radix-ui/react-collapsible';
-import { useAppTheme } from '../../hooks/useAppTheme';
+import { ChevronDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 
 interface CollapsibleSectionProps {
   title: string | React.ReactNode;
@@ -13,75 +18,31 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
   title,
   isCollapsed,
   onToggle,
-  children
+  children,
 }) => {
-  const theme = useAppTheme();
+  const open = !isCollapsed;
   return (
-    <Collapsible.Root open={!isCollapsed} onOpenChange={() => onToggle()}>
-      <div style={{
-        backgroundColor: theme.colors.background,
-        borderRadius: theme.borderRadius.lg,
-        overflow: 'hidden',
-        border: `1px solid ${theme.colors.border}`,
-      }}>
-        <Collapsible.Trigger 
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            width: '100%',
-            padding: `${theme.spacing.md} ${theme.spacing.lg}`,
-            backgroundColor: theme.colors.backgroundAlt,
-            border: 'none',
-            cursor: 'pointer',
-            fontFamily: 'system-ui, sans-serif',
-            fontSize: theme.fontSize.base,
-            color: theme.colors.text,
-            transition: `all ${theme.transitions.fast}`,
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = theme.colors.backgroundPanel;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = theme.colors.backgroundAlt;
-          }}
-        >
+    <Collapsible open={open} onOpenChange={() => onToggle()}>
+      <div className="overflow-hidden rounded-lg border border-border bg-background">
+        <CollapsibleTrigger className="flex w-full cursor-pointer items-center justify-between gap-2 border-none bg-muted px-4 py-3 text-base text-foreground transition-colors hover:bg-card">
           {typeof title === 'string' ? (
-            <>
-              <span style={{ fontWeight: theme.fontWeight.medium }}>{title}</span>
-              <span style={{
-                transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
-                transition: `transform ${theme.transitions.fast}`,
-                fontSize: '12px',
-                color: theme.colors.textSecondary,
-              }}>
-                ▼
-              </span>
-            </>
+            <span className="font-medium">{title}</span>
           ) : (
-            <>
-              {title}
-              <span style={{
-                transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
-                transition: `transform ${theme.transitions.fast}`,
-                fontSize: '12px',
-                color: theme.colors.textSecondary,
-                marginLeft: 'auto',
-              }}>
-                ▼
-              </span>
-            </>
+            <div className="flex flex-1 items-center">{title}</div>
           )}
-        </Collapsible.Trigger>
+          <ChevronDown
+            className={cn(
+              'h-3 w-3 shrink-0 text-muted-foreground transition-transform',
+              isCollapsed && '-rotate-90'
+            )}
+          />
+        </CollapsibleTrigger>
 
-        <Collapsible.Content style={{
-          padding: isCollapsed ? 0 : theme.spacing.md,
-          transition: `padding ${theme.transitions.fast}`,
-        }}>
+        <CollapsibleContent className={cn('transition-[padding]', open && 'p-3')}>
           {children}
-        </Collapsible.Content>
+        </CollapsibleContent>
       </div>
-    </Collapsible.Root>
+    </Collapsible>
   );
 };
 
