@@ -12,6 +12,7 @@ Handles WebSocket connections from frontend clients for ALL operations:
 
 import time
 import asyncio
+import uuid
 import weakref
 from typing import Dict, Any, Callable, Awaitable, Optional, Set
 from datetime import datetime
@@ -381,13 +382,24 @@ async def handle_get_credential_catalogue(data: Dict[str, Any], websocket: WebSo
 
 @ws_handler("node_id", "node_type")
 async def handle_execute_node(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
-    """Execute a workflow node with per-workflow status scoping (n8n pattern)."""
+    """Execute a workflow node with per-workflow status scoping (n8n pattern).
+
+    Generates an `execution_id` correlation token (uuid4 hex) and propagates
+    it through every broadcast for this run plus the response payload.
+    Frontend uses it for idempotent dedup -- two executions with identical
+    output payloads were previously collapsing because the dedup key was
+    JSON.stringify(outputs). This is the standard request-id / trace-id
+    pattern (OpenTelemetry, AWS X-Ray, etc.).
+    """
     workflow_service = container.workflow_service()
     broadcaster = get_status_broadcaster()
     node_id, node_type = data["node_id"], data["node_type"]
     workflow_id = data.get("workflow_id")  # Per-workflow isolation
+    execution_id = uuid.uuid4().hex
 
-    await broadcaster.update_node_status(node_id, "executing", workflow_id=workflow_id)
+    await broadcaster.update_node_status(
+        node_id, "executing", {"execution_id": execution_id}, workflow_id=workflow_id,
+    )
     result = await workflow_service.execute_node(
         node_id=node_id, node_type=node_type,
         parameters=data.get("parameters", {}),
@@ -398,18 +410,24 @@ async def handle_execute_node(data: Dict[str, Any], websocket: WebSocket) -> Dic
     )
 
     if result.get("success"):
-        await broadcaster.update_node_status(node_id, "success", result.get("result"), workflow_id=workflow_id)
-        await broadcaster.update_node_output(node_id, result.get("result"), workflow_id=workflow_id)
+        success_payload = {**(result.get("result") or {}), "execution_id": execution_id}
+        await broadcaster.update_node_status(node_id, "success", success_payload, workflow_id=workflow_id)
+        await broadcaster.update_node_output(node_id, success_payload, workflow_id=workflow_id)
     elif result.get("error") == "Cancelled by user":
         # Cancelled trigger nodes go back to idle, not error
-        await broadcaster.update_node_status(node_id, "idle", {"message": "Cancelled"}, workflow_id=workflow_id)
+        await broadcaster.update_node_status(
+            node_id, "idle", {"message": "Cancelled", "execution_id": execution_id}, workflow_id=workflow_id,
+        )
     else:
-        await broadcaster.update_node_status(node_id, "error", {"error": result.get("error")}, workflow_id=workflow_id)
+        await broadcaster.update_node_status(
+            node_id, "error", {"error": result.get("error"), "execution_id": execution_id}, workflow_id=workflow_id,
+        )
 
     # Explicitly pass through success status (don't let decorator default to True)
     ws_result = {
         "success": result.get("success", False),
         "node_id": node_id,
+        "execution_id": execution_id,
         "result": result.get("result"),
         "error": result.get("error"),
         "execution_time": result.get("execution_time"),

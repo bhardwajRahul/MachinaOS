@@ -16,6 +16,15 @@ export interface ExecutionResult {
   error?: string;
   data?: any;
   nodeData: INodeExecutionData[][];
+  /**
+   * Backend-issued correlation token (uuid4 hex) that identifies a
+   * single run end-to-end. Carried through every node_status broadcast
+   * for the run plus the execute_node response payload, so dedup logic
+   * in OutputSection compares execution_id rather than the brittle
+   * JSON.stringify(outputs). Optional for results constructed before
+   * a backend response is available (e.g. catch-block error stubs).
+   */
+  executionId?: string;
 }
 
 // WebSocket execution function type (passed from components using useWebSocket)
@@ -106,7 +115,8 @@ export class ExecutionService {
           executionTime: result.execution_time || executionTime,
           outputs: outputData,
           data: outputData,
-          nodeData: nodeExecutionData
+          nodeData: nodeExecutionData,
+          executionId: result.execution_id,
         };
       } else {
         const errorOutputData = result.result || {
@@ -130,7 +140,8 @@ export class ExecutionService {
           error: result.error,
           outputs: errorOutputData,
           data: errorOutputData,
-          nodeData: errorData
+          nodeData: errorData,
+          executionId: result.execution_id,
         };
       }
 

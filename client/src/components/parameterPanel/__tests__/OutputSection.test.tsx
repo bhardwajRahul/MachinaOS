@@ -212,6 +212,74 @@ describe('OutputSection', () => {
     expect(screen.getByTestId('result-count').textContent).toBe('0');
   });
 
+  it('dedups by executionId when both sides carry one (correlation-id pattern)', () => {
+    setNodeStatus({
+      'n-1': {
+        status: 'success',
+        data: { ok: true, execution_id: 'exec-abc' },
+      },
+    });
+
+    const existing = [
+      {
+        success: true,
+        nodeId: 'n-1',
+        nodeType: 'http',
+        nodeName: 'HTTP',
+        timestamp: 't1',
+        executionTime: 10,
+        outputs: { ok: true },
+        nodeData: [[{ json: { ok: true } }]],
+        executionId: 'exec-abc',
+      },
+    ];
+
+    render(
+      <OutputSection
+        selectedNode={{ id: 'n-1', type: 'http' } as any}
+        executionResults={existing as any}
+        onClearResults={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId('result-count').textContent).toBe('1');
+  });
+
+  it('keeps two distinct results when execution_ids differ even if outputs match', () => {
+    setNodeStatus({
+      'n-1': {
+        status: 'success',
+        data: { ok: true, execution_id: 'exec-second' },
+      },
+    });
+
+    const existing = [
+      {
+        success: true,
+        nodeId: 'n-1',
+        nodeType: 'http',
+        nodeName: 'HTTP',
+        timestamp: 't1',
+        executionTime: 10,
+        outputs: { ok: true },
+        nodeData: [[{ json: { ok: true } }]],
+        executionId: 'exec-first',
+      },
+    ];
+
+    render(
+      <OutputSection
+        selectedNode={{ id: 'n-1', type: 'http' } as any}
+        executionResults={existing as any}
+        onClearResults={vi.fn()}
+      />,
+    );
+
+    // Two distinct runs with identical payloads -- correlation-id keeps
+    // them separate where the old JSON-stringify dedup would collapse.
+    expect(screen.getByTestId('result-count').textContent).toBe('2');
+  });
+
   it('invokes onClearResults when the clear button is pressed', async () => {
     const onClear = vi.fn();
     render(

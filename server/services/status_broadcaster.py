@@ -1001,17 +1001,34 @@ class StatusBroadcaster:
         return self._status["nodes"].get(node_id)
 
     async def clear_node_status(self, node_id: str) -> bool:
-        """Clear a node's status and output from the cache."""
-        if node_id in self._status["nodes"]:
-            del self._status["nodes"][node_id]
-            logger.info(f"[StatusBroadcaster] Cleared node status: {node_id}")
-            # Broadcast that node status was cleared
-            await self.broadcast({
-                "type": "node_status_cleared",
-                "node_id": node_id
-            })
-            return True
-        return False
+        """Reset a node's status to idle.
+
+        Intentionally does NOT delete the dict entry. The previous behavior
+        deleted the slot, which created a race window: an in-flight
+        execution's subsequent `success` broadcast would re-create the
+        entry, leaving the UI stuck on a stale "completed" indicator on a
+        node the user just cancelled. Resetting to idle preserves entry
+        identity (so subsequent broadcasts update it normally) while
+        clearing the visible state.
+        """
+        had_status = node_id in self._status["nodes"]
+        previous_workflow = (
+            self._status["nodes"][node_id].get("workflow_id") if had_status else None
+        )
+        self._status["nodes"][node_id] = {
+            "status": "idle",
+            "data": {},
+            "timestamp": asyncio.get_event_loop().time(),
+            "workflow_id": previous_workflow,
+            "cleared": True,
+        }
+        logger.info(f"[StatusBroadcaster] Reset node status to idle: {node_id}")
+        await self.broadcast({
+            "type": "node_status_cleared",
+            "node_id": node_id,
+            "workflow_id": previous_workflow,
+        })
+        return had_status
 
     def get_variable(self, name: str) -> Any:
         """Get a variable value."""

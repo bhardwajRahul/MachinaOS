@@ -23,11 +23,15 @@ const OutputSection: React.FC<OutputSectionProps> = ({
     return null;
   }
 
-  // Combine local execution results with WebSocket nodeStatuses from workflow execution
+  // Combine local execution results with WebSocket nodeStatuses from
+  // workflow execution. Dedup uses the backend-issued `execution_id`
+  // correlation token: the request-response and the broadcast for the
+  // same run carry the same id, so we can fold them into one entry.
+  // The previous implementation hashed outputs via JSON.stringify, which
+  // collapsed two distinct executions whose payloads happened to match.
   const combinedResults = React.useMemo(() => {
     const results = [...executionResults];
 
-    // Check if there's output from workflow execution in nodeStatuses.
     // WebSocket node_output messages store data in the `output` field,
     // while node_status messages use `data`. Check both so the formatted
     // response renderer (getMainResponse → ReactMarkdown) receives the
@@ -35,10 +39,21 @@ const OutputSection: React.FC<OutputSectionProps> = ({
     const nodeStatus = nodeStatuses[selectedNode.id];
     const statusData = nodeStatus?.data || nodeStatus?.output;
     if (nodeStatus && statusData && (nodeStatus.status === 'success' || nodeStatus.status === 'error')) {
-      const alreadyExists = results.some(r =>
-        r.nodeId === selectedNode.id &&
-        JSON.stringify(r.outputs) === JSON.stringify(statusData)
-      );
+      const broadcastExecutionId: string | undefined = statusData?.execution_id;
+      const alreadyExists = results.some((r) => {
+        // Preferred: correlate by backend-issued execution_id token.
+        if (broadcastExecutionId && r.executionId) {
+          return r.executionId === broadcastExecutionId;
+        }
+        // Backward-compat fallback for results constructed before the
+        // execution_id field was wired (or for synthetic catch-block
+        // entries): structural equality on outputs, scoped to this
+        // node id. Same shape used by the pre-correlation-id code.
+        return (
+          r.nodeId === selectedNode.id &&
+          JSON.stringify(r.outputs) === JSON.stringify(statusData)
+        );
+      });
 
       if (!alreadyExists) {
         const wsResult: ExecutionResult = {
@@ -50,7 +65,8 @@ const OutputSection: React.FC<OutputSectionProps> = ({
           executionTime: 0,
           outputs: statusData,
           nodeData: [[{ json: statusData }]],
-          error: nodeStatus.status === 'error' ? statusData?.error : undefined
+          error: nodeStatus.status === 'error' ? statusData?.error : undefined,
+          executionId: broadcastExecutionId,
         };
         results.unshift(wsResult);
       }
