@@ -12,6 +12,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import ApiKeyInput from '../../ui/ApiKeyInput';
 import { useCredentialPanel } from '../useCredentialPanel';
 import { ProviderDefaultsSection, LlmUsageSection, ApiUsageSection } from '../sections';
+import { NodeIcon } from '../../../assets/icons';
 import type { ProviderConfig } from '../types';
 
 const ApiKeyPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = ({ config, visible }) => {
@@ -45,13 +46,18 @@ const ApiKeyPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = ({ c
         <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0 pb-3">
           <div className="flex items-center gap-3">
             <div
-              className="flex h-12 w-12 items-center justify-center rounded-lg"
-              // config.color is per-provider brand metadata (data-driven,
-              // same carve-out as canvas nodeColor); CSS color-mix keeps
-              // the math in CSS rather than as JS string concat.
-              style={{ backgroundColor: `color-mix(in srgb, ${config.color} 8%, transparent)` }}
+              className="rounded-lg bg-tint-soft"
+              // currentColor is the provider's brand color;
+              // `bg-tint-soft` mixes it against transparent at the
+              // canonical alpha (--tint-soft). The icon picks up the
+              // same color via NodeIcon.
+              style={{ color: config.color }}
             >
-              <config.icon className="h-6 w-6" />
+              <NodeIcon
+                icon={config.iconRef}
+                color={config.color}
+                className="h-12 w-12 text-2xl"
+              />
             </div>
             <CardTitle className="text-lg">{config.name}</CardTitle>
           </div>

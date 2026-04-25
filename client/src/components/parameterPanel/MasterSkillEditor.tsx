@@ -48,7 +48,8 @@ import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { useWebSocket } from '../../contexts/WebSocketContext';
-import { resolveIcon, resolveLibraryIcon, isImageIcon } from '../../assets/icons';
+import { NodeIcon } from '../../assets/icons';
+import { cn } from '@/lib/utils';
 import { useFolderSkills } from '../../hooks/useFolderSkills';
 
 // Skill configuration stored in node parameters
@@ -103,17 +104,11 @@ interface MasterSkillEditorProps {
   nodeId?: string;  // For persisting skillsConfig to database
 }
 
-// Wave 10.B: shared icon dispatch — library components (`lobehub:*`),
-// filesystem SVGs (`asset:*`), data/http URIs, then emoji/text.
-const renderSkillIcon = (icon: string, size: number = 16) => {
-  const LibIcon = resolveLibraryIcon(icon);
-  if (LibIcon) return <LibIcon size={size} />;
-  const resolved = resolveIcon(icon);
-  if (resolved && isImageIcon(resolved)) {
-    return <img src={resolved} alt="icon" style={{ width: size, height: size, objectFit: 'contain' }} />;
-  }
-  return <span style={{ fontSize: size }}>{resolved ?? ''}</span>;
-};
+// All skill-icon rendering routes through the shared <NodeIcon>
+// primitive — see `assets/icons/NodeIcon.tsx`. Sizing comes from
+// the wrapper's Tailwind classes (`h-4 w-4 text-base`); brand color
+// flows via `color` and is picked up by lucide icons through
+// currentColor (image / lobehub `.Color` icons ignore it).
 
 const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
   skillsConfig,
@@ -624,11 +619,15 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
                       }
                       setSelectedSkillName(skill.skillName);
                     }}
-                    className="cursor-pointer border-l-[3px] px-3 py-2 transition-colors"
-                    style={{
-                      backgroundColor: isSelected ? `${skill.color}15` : 'transparent',
-                      borderLeftColor: isSelected ? skill.color : 'transparent',
-                    }}
+                    className={cn(
+                      'cursor-pointer border-l-[3px] px-3 py-2 transition-colors',
+                      isSelected ? 'bg-tint-soft' : 'border-l-transparent',
+                    )}
+                    // currentColor is the skill's brand color when
+                    // selected; `bg-tint-soft` mixes it at the
+                    // canonical alpha (--tint-soft) and the left
+                    // border picks up the same color.
+                    style={isSelected ? { color: skill.color, borderLeftColor: skill.color } : undefined}
                   >
                     <div className="flex w-full items-center gap-2">
                       <Checkbox
@@ -638,7 +637,7 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
                         }}
                         onClick={(e) => e.stopPropagation()}
                       />
-                      {renderSkillIcon(skill.icon || '', 16)}
+                      <NodeIcon icon={skill.icon} color={skill.color} className="h-4 w-4 text-base" />
                       <span
                         className="flex-1 overflow-hidden text-sm whitespace-nowrap text-ellipsis"
                         style={{
@@ -703,17 +702,17 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
               alignItems: 'center',
               gap: theme.spacing.md
             }}>
-              <div style={{
-                width: 40,
-                height: 40,
-                borderRadius: theme.borderRadius.md,
-                backgroundColor: `${pendingSkillData.color}20`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                border: `2px dashed ${pendingSkillData.color}`
-              }}>
-                {pendingSkillData.icon ? renderSkillIcon(pendingSkillData.icon, 20) : <Plus className="h-5 w-5" style={{ color: pendingSkillData.color }} />}
+              <div
+                className="flex h-10 w-10 items-center justify-center rounded-md border-2 border-dashed bg-tint-soft"
+                // currentColor is the new skill's brand color;
+                // `bg-tint-soft` mixes it against transparent at the
+                // canonical alpha (--tint-soft); the dashed border
+                // and inner glyph pick up the same color.
+                style={{ color: pendingSkillData.color }}
+              >
+                {pendingSkillData.icon
+                  ? <NodeIcon icon={pendingSkillData.icon} color={pendingSkillData.color} className="h-5 w-5 text-xl" />
+                  : <Plus className="h-5 w-5" />}
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{
@@ -842,7 +841,7 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
               alignItems: 'center',
               gap: theme.spacing.md
             }}>
-              {renderSkillIcon(selectedSkillInfo.icon || '', 24)}
+              <NodeIcon icon={selectedSkillInfo.icon} color={selectedSkillInfo.color} className="h-6 w-6 text-2xl" />
               <div style={{ flex: 1 }}>
                 {isEditingUserSkill ? (
                   <Input

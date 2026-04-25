@@ -12,7 +12,7 @@ import { Handle, Position, NodeProps } from 'reactflow';
 import { NodeData } from '../types/NodeTypes';
 import { useAppStore } from '../store/useAppStore';
 import { resolveNodeDescription, useNodeSpec } from '../lib/nodeSpec';
-import { resolveIcon, resolveLibraryIcon } from '../assets/icons';
+import { NodeIcon } from '../assets/icons';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { useWhatsAppStatus, useNodeStatus } from '../contexts/WebSocketContext';
 import EditableNodeLabel from './ui/EditableNodeLabel';
@@ -110,26 +110,11 @@ const TriggerNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
     }
   };
 
-  // Wave 10.B: schema-driven icon dispatch. `useNodeSpec` subscribes
-  // to the NodeSpec cache so the icon populates when prefetch lands.
+  // Schema-driven icon dispatch. `useNodeSpec` subscribes to the
+  // NodeSpec cache so the icon populates when prefetch lands.
+  // <NodeIcon> resolves the ref and tints lucide icons via currentColor.
   const iconSpec = useNodeSpec(type);
-  const getTriggerIcon = () => {
-    const raw = (iconSpec?.icon as string | undefined) ?? (definition?.icon as string | undefined) ?? '';
-    const LibIcon = resolveLibraryIcon(raw);
-    if (LibIcon) return <LibIcon size={28} />;
-    const icon = resolveIcon(raw);
-    if (!icon) return null;
-    if (icon.startsWith('http') || icon.startsWith('data:') || icon.startsWith('/')) {
-      return (
-        <img
-          src={icon}
-          alt="icon"
-          style={{ width: '28px', height: '28px', objectFit: 'contain', borderRadius: '4px' }}
-        />
-      );
-    }
-    return icon;
-  };
+  const iconRef = (iconSpec?.icon as string | undefined) ?? (definition?.icon as string | undefined);
 
   // Get the node color from definition or use default trigger color
   const nodeColor = definition?.defaults?.color || '#f59e0b';
@@ -206,7 +191,7 @@ const TriggerNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
         )}
 
         {/* Trigger Icon */}
-        {getTriggerIcon()}
+        <NodeIcon icon={iconRef} color={nodeColor} className="h-7 w-7 text-3xl" />
 
         {/* Parameters Button */}
         <button

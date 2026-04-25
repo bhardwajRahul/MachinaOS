@@ -7,7 +7,7 @@ import { useWebSocket } from './contexts/WebSocketContext';
 import { ExecutionService, ExecutionResult } from './services/executionService';
 import { useAppTheme } from './hooks/useAppTheme';
 import { ActionButton } from './components/ui/action-button';
-import { resolveIcon, resolveLibraryIcon, isImageIcon } from './assets/icons';
+import { NodeIcon } from './assets/icons';
 
 const ParameterPanel: React.FC = () => {
   const theme = useAppTheme();
@@ -133,26 +133,15 @@ const ParameterPanel: React.FC = () => {
 
 
 
-  // Wave 10.B: schema-driven icon dispatch. Library-backed React
-  // components (`lobehub:<brand>`) resolve first, then the string
-  // resolver handles `asset:<key>`, URLs, data URIs, and plain
-  // emoji/text.
-  const renderIcon = (icon: string | undefined) => {
-    const LibIcon = resolveLibraryIcon(icon);
-    if (LibIcon) return <LibIcon size={20} />;
-    const resolved = resolveIcon(icon);
-    if (!resolved) return null;
-    if (isImageIcon(resolved)) {
-      return <img src={resolved} alt="icon" style={{ width: 20, height: 20, objectFit: 'contain' }} />;
-    }
-    return <span>{resolved}</span>;
-  };
-
   // Header actions with node name and buttons in middle area
   const headerActions = (
     <div className="flex items-center gap-4">
       <div className="flex items-center gap-2 text-[15px] font-semibold text-foreground">
-        {renderIcon(nodeDefinition.icon)}
+        <NodeIcon
+          icon={nodeDefinition.icon}
+          color={nodeDefinition.defaults?.color}
+          className="h-5 w-5 text-xl"
+        />
         <span>{nodeDefinition.displayName}</span>
         {hasUnsavedChanges && <span style={{ color: theme.accent.orange }}>*</span>}
       </div>

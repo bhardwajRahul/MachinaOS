@@ -15,6 +15,7 @@ import { useCredentialPanel } from '../useCredentialPanel';
 import { useProviderStatus } from '../hooks';
 import { StatusCard, ActionBar } from '../primitives';
 import { RateLimitSection } from '../sections';
+import { NodeIcon } from '../../../assets/icons';
 import type { ActionDef } from '../primitives/ActionBar';
 import type { ProviderConfig } from '../types';
 
@@ -62,7 +63,14 @@ const QrPairingPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = (
         onDelete={() => panel.actions.remove(field.key)}
         placeholder={field.placeholder} loading={panel.loading === 'save'} isStored={panel.stored}
       />}
-      {config.statusRows && <StatusCard icon={<config.icon size={parseInt(theme.iconSize.md)} />} title={config.name} rows={config.statusRows} status={status} />}
+      {config.statusRows && (
+        <StatusCard
+          icon={<NodeIcon icon={config.iconRef} color={config.color} className="h-6 w-6 text-2xl" />}
+          title={config.name}
+          rows={config.statusRows}
+          status={status}
+        />
+      )}
       <div className="flex min-h-[300px] flex-1 flex-col items-center justify-center rounded-lg bg-muted p-5">
         <QRCodeDisplay value={qrData} isConnected={connected} size={280}
           connectedTitle={qr.connectedTitle} connectedSubtitle={qr.connectedSubtitle(status)}

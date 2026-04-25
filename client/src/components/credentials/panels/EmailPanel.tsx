@@ -33,6 +33,7 @@ import {
 } from '@/components/ui/select';
 import { useAppTheme } from '../../../hooks/useAppTheme';
 import { useApiKeys } from '../../../hooks/useApiKeys';
+import { NodeIcon } from '../../../assets/icons';
 import { StatusCard } from '../primitives';
 import {
   AUTH_NOTES,
@@ -153,12 +154,10 @@ const EmailPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = ({ co
     }
   };
 
-  const iconSize = parseInt(theme.iconSize.md);
-
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 p-5">
       <StatusCard
-        icon={<config.icon size={iconSize} />}
+        icon={<NodeIcon icon={config.iconRef} color={config.color} className="h-6 w-6 text-2xl" />}
         title={config.name}
         status={{ stored, address }}
         rows={[

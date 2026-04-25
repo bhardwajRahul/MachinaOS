@@ -17,10 +17,6 @@
  * in Phase 8, this module becomes the canonical resolver.
  */
 
-import React from 'react';
-
-import { resolveIcon, resolveLibraryIcon, isImageIcon } from '../../assets/icons';
-
 import type {
   ProviderConfig,
   CategoryGroup,
@@ -39,96 +35,6 @@ import type {
   ServerQrDef,
   CatalogueResponse,
 } from '../../hooks/useCatalogueQuery';
-
-// ============================================================================
-// Wave 10.B: icon resolution now routes through the shared resolvers in
-// `assets/icons/`. Backend `icon_ref` uses the same three-format contract
-// as node icons:
-//   "lobehub:<brand>" → React component (provider brand icon)
-//   "asset:<key>"     → <img> with filesystem-registered SVG data URI
-//   emoji / plain text → <span>
-// ============================================================================
-
-// IconProps mirrors lucide-react's prop shape: both size (px) and
-// className are accepted and forwarded. Call sites prefer className so
-// sizing flows from Tailwind tokens (h-6 w-6) instead of pixel literals.
-interface IconProps {
-  size?: number;
-  className?: string;
-}
-
-// Fallback for providers whose icon_ref cannot be resolved — renders a
-// circle with the provider initial, so the palette never shows nothing.
-// `size` is a px hint used only when the parent doesn't constrain via
-// className; the wrapper sizes itself from className when present.
-const fallbackIcon = (initial: string): React.FC<IconProps> => {
-  const Comp: React.FC<IconProps> = ({ size = 16, className }) =>
-    React.createElement(
-      'div',
-      {
-        className,
-        style: className
-          ? undefined
-          : {
-              width: size,
-              height: size,
-              borderRadius: '50%',
-              background: 'rgba(128,128,128,0.2)',
-              color: 'currentColor',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: Math.max(10, size * 0.55),
-              fontWeight: 600,
-            },
-      },
-      initial,
-    );
-  return Comp;
-};
-
-export function resolveIconRef(iconRef: string | undefined, providerId: string): React.FC<IconProps> {
-  const initial = (providerId[0] ?? '?').toUpperCase();
-  if (!iconRef) return fallbackIcon(initial);
-
-  const LibIcon = resolveLibraryIcon(iconRef);
-  if (LibIcon) {
-    const Comp: React.FC<IconProps> = ({ size, className }) =>
-      React.createElement(LibIcon, { size, className });
-    return Comp;
-  }
-
-  const resolved = resolveIcon(iconRef);
-  if (resolved && isImageIcon(resolved)) {
-    const Comp: React.FC<IconProps> = ({ size = 16, className }) =>
-      React.createElement('img', {
-        src: resolved,
-        alt: '',
-        className,
-        width: className ? undefined : size,
-        height: className ? undefined : size,
-        style: className ? undefined : { display: 'block' },
-      });
-    return Comp;
-  }
-
-  if (resolved) {
-    const Comp: React.FC<IconProps> = ({ size = 16, className }) =>
-      React.createElement(
-        'span',
-        {
-          className,
-          style: className
-            ? undefined
-            : { fontSize: size, lineHeight: 1, display: 'inline-block' },
-        },
-        resolved,
-      );
-    return Comp;
-  }
-
-  return fallbackIcon(initial);
-}
 
 // ============================================================================
 // Status-row / action / QR rehydrators
@@ -239,7 +145,7 @@ export function rehydrateProvider(entry: ServerProviderConfig): ProviderConfig {
     categoryLabel: entry.category_label,
     color: entry.color,
     kind: entry.kind as PanelKind,
-    icon: resolveIconRef(entry.icon_ref, entry.id),
+    iconRef: entry.icon_ref ?? '',
     fields: buildFields(entry.fields),
     ws: entry.ws,
     statusHook: entry.status_hook,

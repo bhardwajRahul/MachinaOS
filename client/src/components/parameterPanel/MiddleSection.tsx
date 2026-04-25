@@ -39,7 +39,7 @@ import { folderSkillsQueryKey, type AvailableSkill } from '../../hooks/useFolder
 import { dracula } from '../../styles/theme';
 import { queryKeys, STALE_TIME } from '../../lib/queryConfig';
 import { INodeTypeDescription, INodeProperties } from '../../types/INodeProperties';
-import { resolveIcon, resolveLibraryIcon, isImageIcon } from '../../assets/icons';
+import { NodeIcon } from '../../assets/icons';
 import { ExecutionResult } from '../../services/executionService';
 import { Edge } from 'reactflow';
 import { shouldShowParameter } from '../../utils/parameterVisibility';
@@ -802,21 +802,18 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
                           style={{ borderLeft: `3px solid ${skill.color}` }}
                         >
                           <div
-                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md"
-                            // skill.color is per-skill metadata (SKILL.md frontmatter); the
-                            // tinted icon background uses CSS color-mix so the math lives in
-                            // CSS, not as JS string concat at the call site.
-                            style={{ backgroundColor: `color-mix(in srgb, ${skill.color} 12%, transparent)` }}
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-tint-soft"
+                            // currentColor is the skill's brand color
+                            // (SKILL.md frontmatter); `bg-tint-soft`
+                            // mixes it against transparent at the
+                            // canonical alpha (--tint-soft).
+                            style={{ color: skill.color }}
                           >
-                            {(() => {
-                              const LibIcon = resolveLibraryIcon(skill.icon);
-                              if (LibIcon) return <LibIcon size={20} />;
-                              const resolved = resolveIcon(skill.icon);
-                              if (resolved && isImageIcon(resolved)) {
-                                return <img src={resolved} alt={skill.name} className="h-5 w-5" />;
-                              }
-                              return <span className="text-lg">{resolved ?? ''}</span>;
-                            })()}
+                            <NodeIcon
+                              icon={skill.icon}
+                              color={skill.color}
+                              className="h-5 w-5 text-lg"
+                            />
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="mb-0.5 text-sm font-semibold text-foreground">

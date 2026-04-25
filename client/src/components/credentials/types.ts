@@ -4,8 +4,6 @@
  * ALL conditional logic lives in config — panel components are pure renderers.
  */
 
-import type { FC } from 'react';
-
 // ============================================================================
 // Panel kinds — one renderer branch per kind
 // ============================================================================
@@ -83,11 +81,12 @@ export interface ProviderConfig {
   /** Theme color key (resolved via theme.colors[color] at render). */
   color: string;
   kind: PanelKind;
-  /** Provider icon. lucide-react icons + the in-house brand icons both
-   *  accept `size` and `className`; call sites prefer `className` so
-   *  sizing flows from Tailwind tokens (`h-6 w-6`) instead of hardcoded
-   *  pixel values. */
-  icon: FC<{ size?: number; className?: string }>;
+  /** Provider icon ref string (e.g. `lobehub:Claude`, `lucide:Mail`,
+   *  `asset:gmail`, emoji). Resolved at render time by `<NodeIcon>` so
+   *  the same dispatch path (lib component / image / text) is used for
+   *  every icon in the app. Sizing flows from the wrapper's Tailwind
+   *  classes (`h-6 w-6`) — no pixel literals at call sites. */
+  iconRef: string;
 
   /** Credential input fields. */
   fields?: FieldDef[];

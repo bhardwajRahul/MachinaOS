@@ -17,7 +17,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { queryClient } from '../../lib/queryClient';
 import { getCachedNodeSpec } from '../../lib/nodeSpec';
-import { resolveIcon, resolveLibraryIcon, isImageIcon } from '../../assets/icons';
+import { NodeIcon } from '../../assets/icons';
 import { resolveNodeDescription } from '../../lib/nodeSpec';
 
 // ---------------------------------------------------------------------------
@@ -93,28 +93,13 @@ interface NodeData {
   name: string;
   type: string;
   icon: string;
+  /** Source node's brand color (`defaults.color`) — passed to NodeIcon
+   *  so lucide icons inherit it via currentColor. */
+  color?: string;
   inputData?: any;
   outputSchema: Record<string, any>;
   hasExecutionData: boolean;
 }
-
-// Wave 10.B: shared icon dispatch — library components (`lobehub:*`),
-// filesystem SVGs (`asset:*`), data/http URIs, then emoji/text.
-const renderNodeIcon = (icon: string, size: number = 16) => {
-  const LibIcon = resolveLibraryIcon(icon);
-  if (LibIcon) return <LibIcon size={size} />;
-  const resolved = resolveIcon(icon);
-  if (resolved && isImageIcon(resolved)) {
-    return (
-      <img
-        src={resolved}
-        alt="icon"
-        style={{ width: size, height: size, objectFit: 'contain' }}
-      />
-    );
-  }
-  return <span className="text-sm">{resolved ?? ''}</span>;
-};
 
 // ---------------------------------------------------------------------------
 // Reusable draggable-variable card.
@@ -336,6 +321,7 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
           name: displayName,
           type: nodeType,
           icon: nodeDef?.icon || '',
+          color: nodeDef?.defaults?.color,
           inputData,
           outputSchema,
           hasExecutionData,
@@ -556,7 +542,7 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                 className="flex cursor-pointer items-center justify-between bg-muted px-3 py-2 transition-colors hover:bg-card"
               >
                 <div className="flex items-center gap-2">
-                  {renderNodeIcon(node.icon, 18)}
+                  <NodeIcon icon={node.icon} color={node.color} className="h-5 w-5 text-lg" />
                   <span className="text-sm font-semibold text-foreground">{node.name}</span>
                 </div>
                 <div className="flex items-center gap-2">

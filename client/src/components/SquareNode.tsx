@@ -7,7 +7,7 @@ import { useAppTheme } from '../hooks/useAppTheme';
 import EditableNodeLabel from './ui/EditableNodeLabel';
 import { useWebSocket, useWhatsAppStatus, useNodeStatus } from '../contexts/WebSocketContext';
 import { getCachedNodeSpec, isNodeInBackendGroup, resolveNodeDescription, useNodeSpec } from '../lib/nodeSpec';
-import { resolveIcon, resolveLibraryIcon } from '../assets/icons';
+import { NodeIcon } from '../assets/icons';
 import { AI_MODEL_PROVIDER_MAP } from '../lib/aiModelProviders';
 
 // Nodes with 'tool' in their group can connect to AI Agent/Zeenie tool handles
@@ -237,27 +237,12 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
   };
 
 
-  // Wave 10.B: schema-driven icon dispatch. `useNodeSpec` subscribes
-  // to the NodeSpec cache so the icon populates when prefetch lands
-  // without waiting for a parent re-render.
+  // Schema-driven icon dispatch. `useNodeSpec` subscribes to the
+  // NodeSpec cache so the icon populates when prefetch lands without
+  // waiting for a parent re-render. <NodeIcon> resolves the ref and
+  // tints lucide icons with the node's brand color via currentColor.
   const iconSpec = useNodeSpec(type);
-  const getServiceIcon = () => {
-    const raw = (iconSpec?.icon as string | undefined) ?? (definition?.icon as string | undefined) ?? '';
-    const LibIcon = resolveLibraryIcon(raw);
-    if (LibIcon) return <LibIcon size={28} />;
-    const icon = resolveIcon(raw);
-    if (!icon) return null;
-    if (icon.startsWith('http') || icon.startsWith('data:') || icon.startsWith('/')) {
-      return (
-        <img
-          src={icon}
-          alt="icon"
-          style={{ width: '28px', height: '28px', objectFit: 'contain', borderRadius: '4px' }}
-        />
-      );
-    }
-    return icon;
-  };
+  const iconRef = (iconSpec?.icon as string | undefined) ?? (definition?.icon as string | undefined);
 
   // Get the node color from definition or use default
   const nodeColor = definition?.defaults?.color || '#1A73E8';
@@ -331,7 +316,7 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
 
 
         {/* Service Icon */}
-        {getServiceIcon()}
+        <NodeIcon icon={iconRef} color={nodeColor} className="h-7 w-7 text-3xl" />
 
         {/* Parameters Button */}
         <button

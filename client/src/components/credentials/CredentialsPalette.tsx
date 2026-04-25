@@ -38,6 +38,7 @@ import { Search, X } from 'lucide-react';
 
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { NodeIcon } from '../../assets/icons';
 import type { ProviderConfig, CategoryGroup } from './types';
 
 // ============================================================================
@@ -145,7 +146,6 @@ interface RowProps {
 }
 
 const ProviderRow = memo<RowProps>(function ProviderRow({ provider, selected, onSelect }) {
-  const Icon = provider.icon;
   const handleClick = useCallback(() => onSelect(provider.id), [onSelect, provider.id]);
 
   return (
@@ -159,9 +159,11 @@ const ProviderRow = memo<RowProps>(function ProviderRow({ provider, selected, on
           : 'border-transparent bg-transparent'
       )}
     >
-      <div className="flex h-6 w-6 shrink-0 items-center justify-center text-foreground">
-        <Icon size={14} />
-      </div>
+      <NodeIcon
+        icon={provider.iconRef}
+        color={provider.color}
+        className="h-3.5 w-3.5 shrink-0 text-sm"
+      />
       <span className="flex-1 truncate">{provider.name}</span>
       {provider.stored && (
         <span aria-label="Credential stored" className="h-2 w-2 rounded-full bg-success" />

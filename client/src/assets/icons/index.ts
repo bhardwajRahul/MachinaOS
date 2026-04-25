@@ -146,3 +146,6 @@ export const resolveLibraryIcon = (icon: string | undefined | null): LibraryIcon
   return resolver ? resolver(icon.slice(sep + 1)) : null;
 };
 
+// Single icon-rendering primitive — see NodeIcon.tsx. Re-exported here
+// so consumers import everything from `assets/icons`.
+export { NodeIcon, type NodeIconProps } from './NodeIcon';

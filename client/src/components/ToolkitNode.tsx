@@ -16,7 +16,7 @@ import { Handle, Position, NodeProps } from 'reactflow';
 import { NodeData } from '../types/NodeTypes';
 import { useAppStore } from '../store/useAppStore';
 import { resolveNodeDescription } from '../lib/nodeSpec';
-import { resolveIcon, resolveLibraryIcon } from '../assets/icons';
+import { NodeIcon } from '../assets/icons';
 import { useNodeSpec } from '../lib/nodeSpec';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { useWebSocket } from '../contexts/WebSocketContext';
@@ -62,25 +62,10 @@ const ToolkitNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
   // Get the node color from definition or use Android green
   const nodeColor = definition?.defaults?.color || '#3DDC84';
 
-  // Wave 10.B: schema-driven icon dispatch with reactive subscription.
+  // Schema-driven icon dispatch with reactive subscription.
+  // <NodeIcon> resolves the ref and tints lucide icons via currentColor.
   const iconSpec = useNodeSpec(type);
-  const getIcon = () => {
-    const raw = (iconSpec?.icon as string | undefined) ?? (definition?.icon as string | undefined);
-    const LibIcon = resolveLibraryIcon(raw);
-    if (LibIcon) return <LibIcon size={28} />;
-    const icon = resolveIcon(raw);
-    if (!icon) return null;
-    if (icon.startsWith('http') || icon.startsWith('data:') || icon.startsWith('/')) {
-      return (
-        <img
-          src={icon}
-          alt="icon"
-          style={{ width: '28px', height: '28px', objectFit: 'contain', borderRadius: '4px' }}
-        />
-      );
-    }
-    return icon;
-  };
+  const iconRef = (iconSpec?.icon as string | undefined) ?? (definition?.icon as string | undefined);
 
   // Get status indicator color
   const getStatusIndicatorColor = () => {
@@ -137,7 +122,7 @@ const ToolkitNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
         }}
       >
         {/* Service Icon */}
-        {getIcon()}
+        <NodeIcon icon={iconRef} color={nodeColor} className="h-7 w-7 text-3xl" />
 
         {/* Parameters Button */}
         <button

@@ -2,7 +2,7 @@ import React, { memo, useCallback } from 'react';
 import { nodePropsEqual } from './nodeMemoEquality';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { resolveNodeDescription } from '../lib/nodeSpec';
-import { resolveIcon, resolveLibraryIcon } from '../assets/icons';
+import { NodeIcon } from '../assets/icons';
 import { useNodeSpec } from '../lib/nodeSpec';
 import { NodeData } from '../types/NodeTypes';
 import { INodeInputDefinition, INodeOutputDefinition, NodeConnectionType } from '../types/INodeProperties';
@@ -96,24 +96,6 @@ const GenericNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
 
   const nodeInputs = getNodeInputs();
   const nodeOutputs = getNodeOutputs();
-
-  // Wave 10.B: schema-driven icon dispatch. No fallback.
-  const renderIcon = (rawIcon: string | undefined) => {
-    const LibIcon = resolveLibraryIcon(rawIcon);
-    if (LibIcon) return <LibIcon size={24} />;
-    const icon = resolveIcon(rawIcon);
-    if (!icon) return null;
-    if (icon.startsWith('http') || icon.startsWith('data:') || icon.startsWith('/')) {
-      return (
-        <img
-          src={icon}
-          alt="icon"
-          style={{ width: '24px', height: '24px', objectFit: 'contain', borderRadius: '4px' }}
-        />
-      );
-    }
-    return icon;
-  };
 
   // Helper functions for color management
   const getNodeColor = () => definition.defaults.color || '#9E9E9E';
@@ -232,9 +214,11 @@ const GenericNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
         zIndex: 10,
         paddingRight: '4px'
       }}>
-        <span className="flex items-center text-2xl">
-          {renderIcon(iconSpec?.icon ?? definition.icon)}
-        </span>
+        <NodeIcon
+          icon={iconSpec?.icon ?? definition.icon}
+          color={getNodeColor()}
+          className="h-6 w-6 text-2xl"
+        />
         <EditableNodeLabel
           nodeId={id}
           label={data?.label}

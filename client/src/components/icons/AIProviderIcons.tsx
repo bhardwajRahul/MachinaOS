@@ -60,18 +60,21 @@ export const AI_PROVIDER_ICONS: Record<string, React.FC<{ size?: number }>> = {
   mistral: MistralIcon,
 };
 
-// Centralized provider metadata (icon, theme color, display label)
-// Colors use dracula/solarized palette for consistency with the rest of the UI
-export const AI_PROVIDER_META: Record<string, { Icon: React.FC<{ size?: number }>; color: string; label: string }> = {
-  openai:     { Icon: OpenAIIcon,     color: dracula.green,      label: 'OpenAI' },
-  anthropic:  { Icon: ClaudeIcon,     color: dracula.orange,     label: 'Anthropic' },
-  gemini:     { Icon: GeminiIcon,     color: solarized.blue,     label: 'Gemini' },
-  groq:       { Icon: GroqIcon,       color: dracula.red,        label: 'Groq' },
-  cerebras:   { Icon: CerebrasIcon,   color: dracula.orange,     label: 'Cerebras' },
-  openrouter: { Icon: OpenRouterIcon, color: solarized.violet,   label: 'OpenRouter' },
-  deepseek:   { Icon: DeepSeekIcon,   color: dracula.cyan,       label: 'DeepSeek' },
-  kimi:       { Icon: KimiIcon,       color: dracula.purple,     label: 'Kimi' },
-  mistral:    { Icon: MistralIcon,    color: dracula.pink,       label: 'Mistral' },
+// Centralized provider metadata (icon ref, theme color, display label).
+// `iconRef` uses the prefix-dispatch contract resolved by `<NodeIcon>` —
+// `lobehub:<brand>` picks the package's `.Color` (or `.Avatar`)
+// component. `Icon` stays as a pre-built FC for the remaining direct
+// consumers (e.g. ApiKeyStep onboarding cards).
+export const AI_PROVIDER_META: Record<string, { iconRef: string; Icon: React.FC<{ size?: number }>; color: string; label: string }> = {
+  openai:     { iconRef: 'lobehub:OpenAI',     Icon: OpenAIIcon,     color: dracula.green,    label: 'OpenAI' },
+  anthropic:  { iconRef: 'lobehub:Claude',     Icon: ClaudeIcon,     color: dracula.orange,   label: 'Anthropic' },
+  gemini:     { iconRef: 'lobehub:Gemini',     Icon: GeminiIcon,     color: solarized.blue,   label: 'Gemini' },
+  groq:       { iconRef: 'lobehub:Groq',       Icon: GroqIcon,       color: dracula.red,      label: 'Groq' },
+  cerebras:   { iconRef: 'lobehub:Cerebras',   Icon: CerebrasIcon,   color: dracula.orange,   label: 'Cerebras' },
+  openrouter: { iconRef: 'lobehub:OpenRouter', Icon: OpenRouterIcon, color: solarized.violet, label: 'OpenRouter' },
+  deepseek:   { iconRef: 'lobehub:DeepSeek',   Icon: DeepSeekIcon,   color: dracula.cyan,     label: 'DeepSeek' },
+  kimi:       { iconRef: 'lobehub:Kimi',       Icon: KimiIcon,       color: dracula.purple,   label: 'Kimi' },
+  mistral:    { iconRef: 'lobehub:Mistral',    Icon: MistralIcon,    color: dracula.pink,     label: 'Mistral' },
 };
 
 // Get icon component by provider ID

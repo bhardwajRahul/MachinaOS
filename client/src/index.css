@@ -97,6 +97,15 @@
     --node-workflow:        27 100% 71%;
     --node-workflow-soft:   27 100% 71% / 0.08;
     --node-workflow-border: 27 100% 71% / 0.3;
+
+    /* Brand-color tint alphas — same scale as the node-X-soft / -border
+     * variants above, but exposed as standalone variables so utilities
+     * can mix them against `currentColor` (data-driven brand colors
+     * like provider.color / definition.defaults.color, which can't use
+     * the role tokens). Themes redefine these in their own scope to
+     * change the canonical alphas without touching call sites. */
+    --tint-soft:   8%;
+    --tint-border: 30%;
   }
 
   .dark {
@@ -287,6 +296,23 @@
 .react-flow__connection-line {
   stroke: hsl(var(--muted-foreground));
   stroke-width: 2;
+}
+
+/* ============================================================================
+ * Brand-color tint utilities — for sites where the color is data-driven
+ * (provider.color, definition.defaults.color, skill.color) and can't
+ * use a node-X token. Apply alongside `style={{ color: brandColor }}`
+ * (or any class that sets the foreground color); these utilities mix
+ * `currentColor` against `transparent` at the canonical alphas defined
+ * in :root (`--tint-soft`, `--tint-border`).
+ * ============================================================================ */
+
+.bg-tint-soft {
+  background-color: color-mix(in srgb, currentColor var(--tint-soft), transparent);
+}
+
+.border-tint {
+  border-color: color-mix(in srgb, currentColor var(--tint-border), transparent);
 }
 
 /* ============================================================================

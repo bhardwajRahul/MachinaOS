@@ -8,7 +8,7 @@ import { useAppTheme } from '../hooks/useAppTheme';
 import { useNodeStatus } from '../contexts/WebSocketContext';
 import { dracula } from '../styles/theme';
 import { useNodeSpec } from '../lib/nodeSpec';
-import { resolveIcon, resolveLibraryIcon } from '../assets/icons';
+import { NodeIcon } from '../assets/icons';
 
 // LangGraph phase icons and labels. Colors reference the dracula token
 // constants so a future palette change in tokens.css propagates without
@@ -34,21 +34,6 @@ interface SpecHandle {
   label?: string;
   role?: string;
 }
-
-// Wave 10.B: schema-driven icon dispatch via the shared resolver.
-// No frontend fallback — if resolution returns null the node's plugin
-// metadata is missing an icon, which surfaces as a visible gap rather
-// than a masking emoji.
-const renderIcon = (icon?: string): React.ReactNode => {
-  const LibIcon = resolveLibraryIcon(icon);
-  if (LibIcon) return <LibIcon size={28} />;
-  const resolved = resolveIcon(icon);
-  if (!resolved) return null;
-  if (resolved.startsWith('http') || resolved.startsWith('data:') || resolved.startsWith('/')) {
-    return <img src={resolved} alt="icon" style={{ width: 28, height: 28, objectFit: 'contain' }} />;
-  }
-  return <span style={{ fontSize: '28px' }}>{resolved}</span>;
-};
 
 const REACT_POSITION: Record<SpecHandle['position'], Position> = {
   top: Position.Top,
@@ -200,9 +185,10 @@ const AIAgentNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
         title="Edit Parameters"
       >⚙️</button>
 
-      {/* Icon */}
-      <div style={{ lineHeight: '1', marginBottom: theme.spacing.xs, color: accentColor }}>
-        {renderIcon(spec?.icon)}
+      {/* Icon — `color` on the wrapper feeds currentColor to lucide;
+          NodeIcon stretches to fill via `h-7 w-7 text-3xl`. */}
+      <div style={{ marginBottom: theme.spacing.xs, color: accentColor }}>
+        <NodeIcon icon={spec?.icon} className="h-7 w-7 text-3xl" />
       </div>
 
       {/* Title */}

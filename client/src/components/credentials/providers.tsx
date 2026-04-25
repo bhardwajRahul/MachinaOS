@@ -1,35 +1,17 @@
 /**
  * Provider configs — every credential provider as a plain config object.
  *
- * Icons: reuse existing asset modules and node-definition exports.
- * Google Maps + Android use emoji (matching the convention of locationNodes
- * and androidServiceNodes, which already use '🗺️' and '🔋' etc.).
- * Colors: theme token keys (resolved at render by the consumer).
- * Status rows: pure data (ok/trueText/falseText), theme colors resolved in StatusCard.
+ * Icons are declared as `iconRef` strings using the prefix-dispatch
+ * contract resolved by `<NodeIcon>`:
+ *   - `lobehub:<brand>` → React component from @lobehub/icons
+ *   - `asset:<key>`     → SVG via the filesystem registry
+ *   - emoji / text      → rendered as-is
+ * Colors are theme token keys, resolved at render by the consumer.
+ * Status rows are pure data — theme colors are resolved in StatusCard.
  */
 
 import { AI_PROVIDER_META } from '../icons/AIProviderIcons';
-import { resolveIconRef } from './catalogueAdapter';
 import type { ProviderConfig, CategoryGroup } from './types';
-
-// ============================================================================
-// Wave 10.B: icon resolution unified with the backend-driven catalogue —
-// every provider icon goes through `resolveIconRef`, which dispatches
-// `lobehub:<brand>` → React component, `asset:<key>` → SVG via the
-// filesystem registry, and emoji/text as a styled <span>.
-// ============================================================================
-
-const BraveIcon = resolveIconRef('asset:brave', 'brave');
-const SerperIcon = resolveIconRef('asset:google', 'serper');
-const PerplexityIcon = resolveIconRef('asset:perplexity', 'perplexity');
-const TelegramBotIcon = resolveIconRef('asset:telegram', 'telegram');
-const GWorkspaceIcon = resolveIconRef('asset:gmail', 'google');
-const EmailCredIcon = resolveIconRef('asset:read', 'email');
-const ApifyIconC = resolveIconRef('asset:apify', 'apify');
-const WhatsAppIcon = resolveIconRef('asset:whatsapp', 'whatsapp');
-const XIcon = resolveIconRef('asset:x', 'twitter');
-const GoogleMapsIcon = resolveIconRef('🗺️', 'maps');
-const AndroidIcon = resolveIconRef('📱', 'android');
 
 // ============================================================================
 // AI PROVIDERS — derived from centralized AI_PROVIDER_META
@@ -43,7 +25,7 @@ const AI_PLACEHOLDERS: Record<string, string> = {
 
 const aiProviders: ProviderConfig[] = Object.entries(AI_PROVIDER_META).map(([id, meta]) => ({
   id, name: meta.label, category: 'ai', categoryLabel: 'AI Providers',
-  color: meta.color, kind: 'apiKey' as const, icon: meta.Icon, hasDefaults: true,
+  color: meta.color, kind: 'apiKey' as const, iconRef: meta.iconRef, hasDefaults: true,
   fields: [{ key: 'apiKey', label: 'API Key', secret: true, placeholder: AI_PLACEHOLDERS[id], required: true }],
 }));
 
@@ -58,7 +40,7 @@ export const PROVIDERS: ProviderConfig[] = [
   {
     id: 'whatsapp_personal', name: 'WhatsApp Personal',
     category: 'social', categoryLabel: 'Social Media',
-    color: 'categoryWhatsapp', kind: 'qrPairing', icon: WhatsAppIcon,
+    color: 'categoryWhatsapp', kind: 'qrPairing', iconRef: 'asset:whatsapp',
     statusHook: 'whatsapp', hasRateLimits: true,
     statusRows: [
       { label: 'Status',  ok: s => !!s?.connected,   trueText: 'Connected', falseText: 'Disconnected' },
@@ -85,7 +67,7 @@ export const PROVIDERS: ProviderConfig[] = [
   {
     id: 'twitter', name: 'Twitter/X',
     category: 'social', categoryLabel: 'Social Media',
-    color: 'categoryTrigger', kind: 'oauth', icon: XIcon,
+    color: 'categoryTrigger', kind: 'oauth', iconRef: 'asset:x',
     statusHook: 'twitter', usageService: 'twitter',
     ws: { login: 'twitter_oauth_login', logout: 'twitter_logout', status: 'twitter_oauth_status' },
     fields: [
@@ -100,7 +82,7 @@ export const PROVIDERS: ProviderConfig[] = [
   {
     id: 'telegram', name: 'Telegram Bot',
     category: 'social', categoryLabel: 'Social Media',
-    color: 'categoryChat', kind: 'oauth', icon: TelegramBotIcon, statusHook: 'telegram',
+    color: 'categoryChat', kind: 'oauth', iconRef: 'asset:telegram', statusHook: 'telegram',
     ws: { login: 'telegram_connect', logout: 'telegram_disconnect', status: 'telegram_status' },
     fields: [{ key: 'telegram_bot_token', label: 'Bot Token', secret: true, placeholder: '123456789:ABCdefGHIjklMNOpqrSTUvwxYZ', required: true }],
     instructions: 'Get a bot token from @BotFather on Telegram. After connecting, send any message to your bot to register as the owner.',
@@ -110,7 +92,7 @@ export const PROVIDERS: ProviderConfig[] = [
   {
     id: 'gmail', name: 'Google Workspace',
     category: 'productivity', categoryLabel: 'Productivity',
-    color: 'categoryAI', kind: 'oauth', icon: GWorkspaceIcon,
+    color: 'categoryAI', kind: 'oauth', iconRef: 'asset:gmail',
     statusHook: 'google', usageService: 'google_workspace',
     ws: { login: 'google_oauth_login', logout: 'google_logout', status: 'google_oauth_status' },
     fields: [
@@ -125,14 +107,14 @@ export const PROVIDERS: ProviderConfig[] = [
   {
     id: 'email_himalaya', name: 'Email (IMAP/SMTP)',
     category: 'email', categoryLabel: 'Email',
-    color: 'categoryChat', kind: 'email', icon: EmailCredIcon,
+    color: 'categoryChat', kind: 'email', iconRef: 'asset:read',
   },
 
   // ── Android Device (QR pairing) ──────────────────────────────────────
   {
     id: 'android_remote', name: 'Android Device',
     category: 'android', categoryLabel: 'Android',
-    color: 'categoryAndroid', kind: 'qrPairing', icon: AndroidIcon,
+    color: 'categoryAndroid', kind: 'qrPairing', iconRef: '📱',
     statusHook: 'android',
     fields: [{ key: 'android_remote', label: 'API Key', secret: true, placeholder: 'Enter Android Relay API key...', required: true }],
     statusRows: [
@@ -159,23 +141,23 @@ export const PROVIDERS: ProviderConfig[] = [
 
   // ── Search ───────────────────────────────────────────────────────────
   { id: 'brave_search', name: 'Brave Search', category: 'search', categoryLabel: 'Search',
-    color: 'categoryLocation', kind: 'apiKey', icon: BraveIcon,
+    color: 'categoryLocation', kind: 'apiKey', iconRef: 'asset:brave',
     fields: [{ key: 'apiKey', label: 'API Key', secret: true, placeholder: 'BSA...', required: true }] },
   { id: 'perplexity', name: 'Perplexity', category: 'search', categoryLabel: 'Search',
-    color: 'categoryUtil', kind: 'apiKey', icon: PerplexityIcon,
+    color: 'categoryUtil', kind: 'apiKey', iconRef: 'asset:perplexity',
     fields: [{ key: 'apiKey', label: 'API Key', secret: true, placeholder: 'pplx-...', required: true }] },
 
   // ── Scrapers ─────────────────────────────────────────────────────────
   { id: 'apify', name: 'Apify', category: 'scrapers', categoryLabel: 'Scrapers',
-    color: 'categoryAI', kind: 'apiKey', icon: ApifyIconC, validateAs: 'apify',
+    color: 'categoryAI', kind: 'apiKey', iconRef: 'asset:apify', validateAs: 'apify',
     fields: [{ key: 'apiKey', label: 'API Key', secret: true, placeholder: 'apify_api_...', required: true }] },
   { id: 'serper', name: 'Serper', category: 'scrapers', categoryLabel: 'Scrapers',
-    color: 'categoryAI', kind: 'apiKey', icon: SerperIcon,
+    color: 'categoryAI', kind: 'apiKey', iconRef: 'asset:google',
     fields: [{ key: 'apiKey', label: 'API Key', secret: true, required: true }] },
 
   // ── Services ─────────────────────────────────────────────────────────
   { id: 'google_maps', name: 'Google Maps', category: 'services', categoryLabel: 'Services',
-    color: 'categoryLocation', kind: 'apiKey', icon: GoogleMapsIcon,
+    color: 'categoryLocation', kind: 'apiKey', iconRef: '🗺️',
     validateAs: 'google_maps', usageService: 'google_maps',
     fields: [{ key: 'apiKey', label: 'API Key', secret: true, placeholder: 'AIza...', required: true }] },
 ];

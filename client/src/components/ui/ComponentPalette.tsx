@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Search } from 'lucide-react';
-import { resolveIcon, resolveLibraryIcon, isImageIcon } from '../../assets/icons';
+import { NodeIcon } from '../../assets/icons';
 import { useNodeGroups, listCachedNodeSpecs, NodeGroupEntry } from '../../lib/nodeSpec';
 import { nodeSpecToDescription } from '../../adapters/nodeSpecToDescription';
 
@@ -154,28 +154,25 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
                       <div className="flex w-full items-center justify-between">
                         <div className="flex items-center gap-2.5">
                           <span
-                            className="flex h-7 w-7 items-center justify-center rounded-md text-base"
-                            style={{ backgroundColor: `${config.color}20` }}
+                            className="flex h-7 w-7 items-center justify-center rounded-md bg-tint-soft"
+                            // currentColor is the category's brand color;
+                            // `bg-tint-soft` mixes it against transparent
+                            // at the canonical alpha (--tint-soft). The
+                            // icon picks up the same color via NodeIcon.
+                            style={{ color: config.color }}
                           >
-                            {(() => {
-                              const LibIcon = resolveLibraryIcon(config.icon);
-                              if (LibIcon) return <LibIcon size={16} />;
-                              const resolved = resolveIcon(config.icon);
-                              if (resolved && isImageIcon(resolved)) {
-                                return <img src={resolved} alt="" className="h-4 w-4 object-contain" />;
-                              }
-                              return resolved || '📦';
-                            })()}
+                            <NodeIcon
+                              icon={config.icon}
+                              color={config.color}
+                              className="h-4 w-4 text-base"
+                              fallback={<span>📦</span>}
+                            />
                           </span>
                           <span className="text-sm font-semibold text-foreground">
                             {config.label}
                           </span>
                         </div>
-                        <Badge
-                          variant="secondary"
-                          className="text-xs font-medium"
-                          style={{ backgroundColor: `${config.color}15`, color: 'hsl(var(--muted-foreground))' }}
-                        >
+                        <Badge variant="secondary" className="text-xs font-medium">
                           {components?.length || 0}
                         </Badge>
                       </div>

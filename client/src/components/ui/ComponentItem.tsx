@@ -3,7 +3,7 @@ import { GripVertical } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
 import { INodeTypeDescription } from '../../types/INodeProperties';
-import { resolveIcon, resolveLibraryIcon, isImageIcon as isImage } from '../../assets/icons';
+import { NodeIcon } from '../../assets/icons';
 import { useNodeSpec } from '../../lib/nodeSpec';
 
 interface ComponentItemProps {
@@ -14,16 +14,13 @@ interface ComponentItemProps {
 const ComponentItem: React.FC<ComponentItemProps> = ({ definition: localDefinition, onDragStart }) => {
   const [isDragging, setIsDragging] = useState(false);
 
-  // Wave 10.B: subscribe to the backend NodeSpec cache so the palette
-  // icon populates the moment prefetch lands. Icon + color come from
-  // the spec; display fields fall back to the bundled definition.
+  // Subscribe to the backend NodeSpec cache so the palette icon
+  // populates the moment prefetch lands. Icon + color come from the
+  // spec; display fields fall back to the bundled definition.
   const spec = useNodeSpec(localDefinition.name);
   const definition = localDefinition;
   const iconRaw = spec?.icon ?? definition.icon;
-
-  const LibIcon = resolveLibraryIcon(iconRaw);
-  const resolvedIcon = LibIcon ? null : resolveIcon(iconRaw);
-  const iconIsImage = !!resolvedIcon && isImage(resolvedIcon);
+  const brandColor = spec?.color ?? definition.defaults?.color;
 
   return (
     <Card
@@ -41,14 +38,13 @@ const ComponentItem: React.FC<ComponentItemProps> = ({ definition: localDefiniti
         isDragging && 'opacity-50',
       )}
     >
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted text-lg ring-1 ring-foreground/10">
-        {LibIcon ? (
-          <LibIcon size={20} />
-        ) : iconIsImage ? (
-          <img src={resolvedIcon!} alt="" className="h-5 w-5 object-contain" />
-        ) : (
-          <span>{resolvedIcon || '📦'}</span>
-        )}
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted ring-1 ring-foreground/10">
+        <NodeIcon
+          icon={iconRaw}
+          color={brandColor}
+          className="h-5 w-5 text-lg"
+          fallback={<span>📦</span>}
+        />
       </div>
 
       <div className="min-w-0 flex-1">
