@@ -128,12 +128,14 @@ const AIAgentNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
   };
 
   const hasRightOutputs = rightOutputs.length > 0;
+  const hasLeftLabels = hasMainInput || leftInputs.length > 0;
 
   return (
     <div
       style={{
         position: 'relative',
         padding: theme.spacing.lg,
+        paddingLeft: hasLeftLabels ? '72px' : theme.spacing.lg,
         paddingRight: hasRightOutputs ? '72px' : theme.spacing.lg,
         minWidth: `${width}px`,
         minHeight: `${height}px`,

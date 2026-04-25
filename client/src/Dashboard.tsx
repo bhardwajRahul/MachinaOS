@@ -1253,6 +1253,7 @@ const DashboardContent: React.FC = () => {
                   onToggleSection={toggleSection}
                   onDragStart={handleComponentDragStart}
                   proMode={proMode}
+                  specsReady={specsReady}
                 />
               )}
             </div>

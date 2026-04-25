@@ -24,6 +24,7 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
   onToggleSection,
   onDragStart,
   proMode = false,  // Default to simple mode
+  specsReady = false,
 }) => {
   const theme = useAppTheme();
   const { isVisible } = useNodeAllowlist();
@@ -54,8 +55,9 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
     const definitions = listCachedNodeSpecs().map(nodeSpecToDescription);
 
     const filteredDefinitions = definitions.filter((definition) => {
-      // Filter by backend allowlist (server/config/node_allowlist.json)
-      if (!isVisible(definition.name)) return false;
+      // Filter by backend allowlist (server/config/node_allowlist.json).
+      // Applied only in normal mode; dev mode shows every node.
+      if (!proMode && !isVisible(definition.name)) return false;
 
       // Filter by search query
       if (searchQuery.trim()) {
@@ -97,7 +99,7 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
     });
 
     return categories;
-  }, [searchQuery, proMode, groupIndex, isVisible]);
+  }, [searchQuery, proMode, groupIndex, isVisible, specsReady]);
 
   const totalComponents = Object.values(categorizedComponents).reduce(
     (acc, components) => acc + components.length, 
