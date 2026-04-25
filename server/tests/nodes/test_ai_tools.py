@@ -183,7 +183,7 @@ class TestDuckDuckGoSearch:
         with patch.dict("sys.modules", {"ddgs": fake_module}):
             result = await tools_mod._execute_duckduckgo_search(
                 {"query": "python"},
-                {"provider": "duckduckgo", "maxResults": 2},
+                {"provider": "duckduckgo", "max_results": 2},
             )
 
         assert result["query"] == "python"
@@ -211,7 +211,7 @@ class TestDuckDuckGoSearch:
         with patch.dict("sys.modules", {"ddgs": fake_module}):
             result = await tools_mod._execute_duckduckgo_search(
                 {"query": "q"},
-                {"maxResults": 5},
+                {"max_results": 5},
             )
 
         assert result["results"] == [{"title": "only-title", "snippet": "", "url": ""}]

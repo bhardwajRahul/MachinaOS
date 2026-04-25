@@ -74,7 +74,7 @@ class TestAIAgent:
     async def test_memory_connection_forwarded_with_auto_session(self, harness):
         """simpleMemory wired to input-memory -> memory_data forwarded.
 
-        When the memory node's sessionId is empty, the session falls back to
+        When the memory node's session_id is empty, the session falls back to
         the agent's own node_id (documented auto-derivation).
         """
         agent_id = "agent-1"
@@ -82,11 +82,11 @@ class TestAIAgent:
 
         harness.database.get_node_parameters = AsyncMock(
             return_value={
-                "sessionId": "",           # triggers auto-derivation
-                "windowSize": 7,
-                "memoryContent": "# Conversation History\n\n### **Human** (t)\nhi\n",
-                "longTermEnabled": True,
-                "retrievalCount": 5,
+                "session_id": "",           # triggers auto-derivation
+                "window_size": 7,
+                "memory_content": "# Conversation History\n\n### **Human** (t)\nhi\n",
+                "long_term_enabled": True,
+                "retrieval_count": 5,
             }
         )
 
@@ -116,7 +116,7 @@ class TestAIAgent:
         agent_id = "agent-x"
         mem_id = "mem-x"
         harness.database.get_node_parameters = AsyncMock(
-            return_value={"sessionId": "shared-session", "windowSize": 3, "memoryContent": ""}
+            return_value={"session_id": "shared-session", "window_size": 3, "memory_content": ""}
         )
 
         nodes = [_node(agent_id, "aiAgent"), _node(mem_id, "simpleMemory")]
@@ -136,7 +136,7 @@ class TestAIAgent:
         tool_id = "calc-1"
 
         harness.database.get_node_parameters = AsyncMock(
-            return_value={"toolName": "calculator"}
+            return_value={"tool_name": "calculator"}
         )
 
         nodes = [_node(agent_id, "aiAgent"), _node(tool_id, "calculatorTool", "Calc")]
@@ -167,7 +167,7 @@ class TestAIAgent:
 
         harness.database.get_node_parameters = AsyncMock(
             return_value={
-                "skillsConfig": {
+                "skills_config": {
                     "python-skill": {"enabled": True, "instructions": "Use python."},
                     "shell-skill": {"enabled": False, "instructions": "ignored"},
                 }

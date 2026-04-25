@@ -48,8 +48,6 @@ class FileHandlerNode(ActionNode):
     type = "fileHandler"
     display_name = "File Handler"
     subtitle = "Wrap Content Metadata"
-    icon = "lucide:Folder"
-    color = "#bd93f9"
     group = ("text",)
     description = "Wrap text content with file-type / file-name metadata"
     component_kind = "square"
@@ -68,17 +66,14 @@ class FileHandlerNode(ActionNode):
         from core.container import container
 
         text_service = container.text_service()
-        # TextService.execute_file_handler uses camelCase keys by
-        # historical contract (the result dict it emits is served to
-        # the frontend with camelCase field names too). Translate our
-        # snake_case Params to the service's expected shape.
+        # Pass schema-canonical snake_case through to the service. The
+        # service's *output* dict still carries camelCase keys
+        # (`fileName` / `fileType`) by historical wire contract -- the
+        # frontend reads them that way -- but parameters in are now
+        # snake_case end-to-end.
         response = await text_service.execute_file_handler(
             ctx.node_id,
-            {
-                "fileType": params.file_type,
-                "fileName": params.file_name,
-                "content": params.content,
-            },
+            params.model_dump(),
         )
         if response.get("success"):
             return response.get("result") or response
