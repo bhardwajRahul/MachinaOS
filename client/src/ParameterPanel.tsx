@@ -207,6 +207,12 @@ const ParameterPanel: React.FC = () => {
       maxWidth="95vw"
       maxHeight="95vh"
       headerActions={headerActions}
+      // ParameterPanelLayout already manages its own scroll regions
+      // (params wrapper, console accordion). Opt out of the body's
+      // auto-scroll so tall accordion content (Connected Skills,
+      // Token Usage) scrolls inside the panel instead of being
+      // clipped by a competing outer scroller.
+      scrollableBody={false}
     >
       {/* Modular Three Panel Layout */}
       <ParameterPanelLayout

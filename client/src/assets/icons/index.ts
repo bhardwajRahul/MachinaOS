@@ -28,6 +28,7 @@
 
 import * as React from 'react';
 import * as Lobehub from '@lobehub/icons';
+import * as Lucide from 'lucide-react';
 
 type RawSvg = string;
 
@@ -104,6 +105,7 @@ const indexLibrary = (lib: Record<string, unknown>): Record<string, string> =>
   Object.fromEntries(Object.keys(lib).map((name) => [name.toLowerCase(), name]));
 
 const lobehubIndex = indexLibrary(Lobehub as Record<string, unknown>);
+const lucideIndex = indexLibrary(Lucide as Record<string, unknown>);
 
 const ICON_LIBRARIES: Readonly<Record<string, LibraryResolver>> = {
   lobehub: (brand) => {
@@ -111,6 +113,22 @@ const ICON_LIBRARIES: Readonly<Record<string, LibraryResolver>> = {
     if (!exportName) return null;
     const entry = (Lobehub as Record<string, any>)[exportName];
     return entry?.Color ?? entry?.Avatar ?? null;
+  },
+  // Lucide ships ~1,500 PascalCase forwardRef'd icon components. Same
+  // prefix-dispatch contract as lobehub: backend plugins declare
+  // `lucide:Battery` and every consumer already chains
+  // resolveLibraryIcon -> resolveIcon, so they light up automatically.
+  // Keeps generic UI symbols (battery, wifi, folder, search, ...)
+  // declarative without per-icon SVG drops.
+  lucide: (name) => {
+    const exportName = lucideIndex[name.toLowerCase()];
+    if (!exportName) return null;
+    const entry = (Lucide as Record<string, any>)[exportName];
+    // Lucide icons are forwardRef objects ({ $$typeof, render }); the
+    // package also exports a `createLucideIcon` factory function that
+    // is not directly renderable. Filter to renderable values only.
+    if (entry && typeof entry === 'object' && '$$typeof' in entry) return entry;
+    return null;
   },
   // Add `simpleicons` / other NPM icon packages here as needed:
   // simpleicons: (brand) => import('simple-icons').si[brand]?.svg ...

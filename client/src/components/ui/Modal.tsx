@@ -32,6 +32,18 @@ interface ModalProps {
   headerActions?: React.ReactNode;
   /** When true, modal height fits content up to maxHeight instead of fixed at maxHeight. */
   autoHeight?: boolean;
+  /**
+   * Body scroll behavior. Default `true` — the body renders an
+   * `overflow-y-auto` wrapper for simple short content (alerts,
+   * onboarding, pricing config). Set `false` for layouts that declare
+   * their own internal scroll regions (parameter panel) so the body
+   * uses `overflow-hidden flex-col` instead and there is a single
+   * stable scroll context. Without this opt-out, tall accordion
+   * content (e.g. Connected Skills under the AI agent panel) gets
+   * clipped between the outer body scroller and the inner
+   * `flex h-full min-h-0` chain.
+   */
+  scrollableBody?: boolean;
   /** Optional extra classes for the content panel. */
   className?: string;
 }
@@ -45,6 +57,7 @@ const Modal: React.FC<ModalProps> = ({
   maxHeight = '80vh',
   headerActions,
   autoHeight = false,
+  scrollableBody = true,
   className,
 }) => {
   const showHeader = Boolean(title || headerActions);
@@ -86,7 +99,23 @@ const Modal: React.FC<ModalProps> = ({
             <DialogTitle className="sr-only">{title || 'Dialog'}</DialogTitle>
           )}
           <DialogDescription className="sr-only">{title || 'Modal dialog'}</DialogDescription>
-          <div className="h-full flex-1 overflow-y-auto">{children}</div>
+          {/* Body. Default `scrollableBody` keeps the legacy
+              `overflow-y-auto` wrapper for short-content callers
+              (alerts, onboarding, pricing config). Layouts that declare
+              their own internal scroll regions (parameter panel, etc.)
+              opt out so the body uses `overflow-hidden flex-col` and
+              the inner `flex h-full min-h-0` chain owns a single,
+              stable scroll context — this is what lets tall accordion
+              content (Connected Skills) scroll inside the parameter
+              panel without getting clipped. */}
+          <div
+            className={cn(
+              'flex h-full min-h-0 flex-1 flex-col',
+              scrollableBody ? 'overflow-y-auto' : 'overflow-hidden',
+            )}
+          >
+            {children}
+          </div>
         </DialogPrimitive.Content>
       </DialogPortal>
     </Dialog>
