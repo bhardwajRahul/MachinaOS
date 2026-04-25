@@ -251,7 +251,7 @@ class TestPhase3dCoverage:
         # Location
         "gmaps_create", "gmaps_locations", "gmaps_nearby_places",
         # Scheduler / triggers
-        "cronScheduler", "timer", "gmailReceive",
+        "cronScheduler", "timer", "googleGmailReceive",
         # Chat / text
         "chatSend", "chatHistory", "textGenerator", "fileHandler",
         # Android (16)
@@ -302,7 +302,7 @@ class TestPhase3dIICoverage:
         # Email
         "emailSend", "emailRead", "emailReceive",
         # Google Workspace
-        "gmail", "calendar", "drive", "sheets", "tasks", "contacts",
+        "googleGmail", "googleCalendar", "googleDrive", "googleSheets", "googleTasks", "googleContacts",
         # Document / RAG
         "documentParser", "textChunker", "embeddingGenerator",
         "vectorStore", "fileDownloader",
@@ -335,7 +335,7 @@ class TestPhase3dIICoverage:
             assert "search" in groups and "tool" in groups
 
     def test_google_workspace_grouped_google(self):
-        for t in ["gmail", "calendar", "drive", "sheets", "tasks", "contacts"]:
+        for t in ["googleGmail", "googleCalendar", "googleDrive", "googleSheets", "googleTasks", "googleContacts"]:
             assert "google" in get_node_spec(t)["group"]
 
     def test_apify_actor_actor_id_field(self):
@@ -515,13 +515,13 @@ class TestDisplayOptionsEnrichment:
         assert "document" in media["displayOptions"]["show"]["message_type"]
 
     def test_gmail_fields_gated_on_operation(self):
-        spec = get_node_spec("gmail")
+        spec = get_node_spec("googleGmail")
         assert spec["inputs"]["properties"]["to"]["displayOptions"]["show"]["operation"] == ["send"]
         assert spec["inputs"]["properties"]["query"]["displayOptions"]["show"]["operation"] == ["search"]
         assert spec["inputs"]["properties"]["message_id"]["displayOptions"]["show"]["operation"] == ["read"]
 
     def test_calendar_event_id_gated_on_update_delete(self):
-        spec = get_node_spec("calendar")
+        spec = get_node_spec("googleCalendar")
         event_id = spec["inputs"]["properties"]["event_id"]
         assert event_id["displayOptions"]["show"]["operation"] == ["update", "delete"]
 
@@ -533,22 +533,22 @@ class TestDisplayOptionsEnrichment:
         assert "text" not in media["displayOptions"]["show"]["message_type"]
 
     def test_gmail_receive_label_carries_load_options(self):
-        spec = get_node_spec("gmailReceive")
+        spec = get_node_spec("googleGmailReceive")
         label = spec["inputs"]["properties"]["label_filter"]
         assert label["loadOptionsMethod"] == "gmailLabels"
 
     def test_calendar_calendar_id_carries_load_options(self):
-        spec = get_node_spec("calendar")
+        spec = get_node_spec("googleCalendar")
         cal = spec["inputs"]["properties"]["calendar_id"]
         assert cal["loadOptionsMethod"] == "googleCalendarList"
 
     def test_drive_folder_id_carries_load_options(self):
-        spec = get_node_spec("drive")
+        spec = get_node_spec("googleDrive")
         folder = spec["inputs"]["properties"]["folder_id"]
         assert folder["loadOptionsMethod"] == "googleDriveFolders"
 
     def test_tasks_tasklist_id_carries_load_options(self):
-        spec = get_node_spec("tasks")
+        spec = get_node_spec("googleTasks")
         tl = spec["inputs"]["properties"]["tasklist_id"]
         assert tl["loadOptionsMethod"] == "googleTasklists"
 
@@ -945,7 +945,7 @@ class TestWave10GContractInvariants:
         behind `displayOptions.show.operation` so the panel isn't a
         flat dump of every op's fields."""
         from services.node_input_schemas import get_node_input_schema
-        for t in ("gmail", "drive", "sheets", "tasks", "contacts"):
+        for t in ("googleGmail", "googleDrive", "googleSheets", "googleTasks", "googleContacts"):
             schema = get_node_input_schema(t)
             assert schema, f"{t}: no input schema"
             props = schema.get("properties") or {}

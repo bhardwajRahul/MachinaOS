@@ -78,9 +78,9 @@ class TestGmail:
             "labelIds": ["SENT"],
         }
 
-        with _patch_creds("gmail"), _patch_build("gmail", service):
+        with _patch_creds("googleGmail"), _patch_build("googleGmail", service):
             result = await harness.execute(
-                "gmail",
+                "googleGmail",
                 {
                     "operation": "send",
                     "to": "bob@example.com",
@@ -104,9 +104,9 @@ class TestGmail:
 
     async def test_send_missing_recipient_errors(self, harness):
         service = MagicMock(name="GmailService")
-        with _patch_creds("gmail"), _patch_build("gmail", service):
+        with _patch_creds("googleGmail"), _patch_build("googleGmail", service):
             result = await harness.execute(
-                "gmail",
+                "googleGmail",
                 {
                     "operation": "send",
                     # no to
@@ -146,9 +146,9 @@ class TestGmail:
             _make_msg("m2"),
         ]
 
-        with _patch_creds("gmail"), _patch_build("gmail", service):
+        with _patch_creds("googleGmail"), _patch_build("googleGmail", service):
             result = await harness.execute(
-                "gmail",
+                "googleGmail",
                 {
                     "operation": "search",
                     "query": "from:alice",
@@ -166,9 +166,9 @@ class TestGmail:
         assert payload["messages"][1]["subject"] == "Subject m2"
 
     async def test_unknown_operation_returns_error(self, harness):
-        with _patch_creds("gmail"), _patch_build("gmail", MagicMock()):
+        with _patch_creds("googleGmail"), _patch_build("googleGmail", MagicMock()):
             result = await harness.execute(
-                "gmail",
+                "googleGmail",
                 {"operation": "bogus"},
             )
 
@@ -177,10 +177,10 @@ class TestGmail:
 
     async def test_missing_credentials_short_circuits(self, harness):
         with _patch_creds(
-            "gmail", side_effect=ValueError("Google Workspace not connected")
-        ), _patch_build("gmail", MagicMock()):
+            "googleGmail", side_effect=ValueError("Google Workspace not connected")
+        ), _patch_build("googleGmail", MagicMock()):
             result = await harness.execute(
-                "gmail",
+                "googleGmail",
                 {
                     "operation": "send",
                     "to": "bob@example.com",
@@ -226,14 +226,14 @@ class TestGmailReceive:
         async def _instant_sleep(_seconds):
             return None
 
-        with _patch_creds("gmail"), _patch_build("gmail", service), patch(
+        with _patch_creds("googleGmail"), _patch_build("googleGmail", service), patch(
             "asyncio.sleep", new=_instant_sleep
         ), patch("services.status_broadcaster.get_status_broadcaster") as gsb, patch(
             "services.event_waiter.dispatch", return_value=1
         ):
             gsb.return_value = MagicMock(update_node_status=AsyncMock())
             result = await harness.execute(
-                "gmailReceive",
+                "googleGmailReceive",
                 {
                     "filter_query": "is:unread",
                     "label_filter": "INBOX",
@@ -268,14 +268,14 @@ class TestGmailReceive:
         async def _instant_sleep(_seconds):
             return None
 
-        with _patch_creds("gmail"), _patch_build("gmail", service), patch(
+        with _patch_creds("googleGmail"), _patch_build("googleGmail", service), patch(
             "asyncio.sleep", new=_instant_sleep
         ), patch("services.status_broadcaster.get_status_broadcaster") as gsb, patch(
             "services.event_waiter.dispatch", return_value=1
         ):
             gsb.return_value = MagicMock(update_node_status=AsyncMock())
             result = await harness.execute(
-                "gmailReceive",
+                "googleGmailReceive",
                 {
                     "filter_query": "is:unread",
                     "label_filter": "INBOX",
@@ -293,10 +293,10 @@ class TestGmailReceive:
 
     async def test_missing_credentials_returns_error(self, harness):
         with _patch_creds(
-            "gmail", side_effect=ValueError("Google Workspace not connected")
+            "googleGmail", side_effect=ValueError("Google Workspace not connected")
         ):
             result = await harness.execute(
-                "gmailReceive",
+                "googleGmailReceive",
                 {
                     "filter_query": "is:unread",
                     "poll_interval": 30,
@@ -325,9 +325,9 @@ class TestCalendar:
             "created": "2026-04-14T10:00:00Z",
         }
 
-        with _patch_creds("calendar"), _patch_build("calendar", service):
+        with _patch_creds("googleCalendar"), _patch_build("googleCalendar", service):
             result = await harness.execute(
-                "calendar",
+                "googleCalendar",
                 {
                     "operation": "create",
                     "title": "Standup",
@@ -350,9 +350,9 @@ class TestCalendar:
 
     async def test_delete_missing_event_id_errors(self, harness):
         service = MagicMock(name="CalendarService")
-        with _patch_creds("calendar"), _patch_build("calendar", service):
+        with _patch_creds("googleCalendar"), _patch_build("googleCalendar", service):
             result = await harness.execute(
-                "calendar",
+                "googleCalendar",
                 {"operation": "delete"},
             )
 
@@ -360,9 +360,9 @@ class TestCalendar:
         assert "event id" in result["error"].lower()
 
     async def test_unknown_operation_returns_error(self, harness):
-        with _patch_creds("calendar"), _patch_build("calendar", MagicMock()):
+        with _patch_creds("googleCalendar"), _patch_build("googleCalendar", MagicMock()):
             result = await harness.execute(
-                "calendar",
+                "googleCalendar",
                 {"operation": "archive"},
             )
 
@@ -371,10 +371,10 @@ class TestCalendar:
 
     async def test_missing_credentials_short_circuits(self, harness):
         with _patch_creds(
-            "calendar", side_effect=ValueError("Google Workspace not connected")
-        ), _patch_build("calendar", MagicMock()):
+            "googleCalendar", side_effect=ValueError("Google Workspace not connected")
+        ), _patch_build("googleCalendar", MagicMock()):
             result = await harness.execute(
-                "calendar",
+                "googleCalendar",
                 {
                     "operation": "create",
                     "title": "x",
@@ -412,9 +412,9 @@ class TestDrive:
             "nextPageToken": None,
         }
 
-        with _patch_creds("drive"), _patch_build("drive", service):
+        with _patch_creds("googleDrive"), _patch_build("googleDrive", service):
             result = await harness.execute(
-                "drive",
+                "googleDrive",
                 {
                     "operation": "list",
                     "max_results": 50,
@@ -445,9 +445,9 @@ class TestDrive:
             "webViewLink": "https://drive/shared",
         }
 
-        with _patch_creds("drive"), _patch_build("drive", service):
+        with _patch_creds("googleDrive"), _patch_build("googleDrive", service):
             result = await harness.execute(
-                "drive",
+                "googleDrive",
                 {
                     "operation": "share",
                     "file_id": "file-x",
@@ -464,9 +464,9 @@ class TestDrive:
 
     async def test_upload_missing_source_errors(self, harness):
         service = MagicMock(name="DriveService")
-        with _patch_creds("drive"), _patch_build("drive", service):
+        with _patch_creds("googleDrive"), _patch_build("googleDrive", service):
             result = await harness.execute(
-                "drive",
+                "googleDrive",
                 {
                     "operation": "upload",
                     "filename": "x.txt",
@@ -478,9 +478,9 @@ class TestDrive:
         assert "file_url" in result["error"].lower() or "file_content" in result["error"].lower()
 
     async def test_unknown_operation_returns_error(self, harness):
-        with _patch_creds("drive"), _patch_build("drive", MagicMock()):
+        with _patch_creds("googleDrive"), _patch_build("googleDrive", MagicMock()):
             result = await harness.execute(
-                "drive",
+                "googleDrive",
                 {"operation": "trash"},
             )
 
@@ -502,9 +502,9 @@ class TestSheets:
             "values": [["a", "b"], ["c", "d"]],
         }
 
-        with _patch_creds("sheets"), _patch_build("sheets", service):
+        with _patch_creds("googleSheets"), _patch_build("googleSheets", service):
             result = await harness.execute(
-                "sheets",
+                "googleSheets",
                 {
                     "operation": "read",
                     "spreadsheet_id": "sheet-123",
@@ -528,9 +528,9 @@ class TestSheets:
             "updatedCells": 3,
         }
 
-        with _patch_creds("sheets"), _patch_build("sheets", service):
+        with _patch_creds("googleSheets"), _patch_build("googleSheets", service):
             result = await harness.execute(
-                "sheets",
+                "googleSheets",
                 {
                     "operation": "write",
                     "spreadsheet_id": "sheet-123",
@@ -549,9 +549,9 @@ class TestSheets:
 
     async def test_read_missing_range_errors(self, harness):
         service = MagicMock(name="SheetsService")
-        with _patch_creds("sheets"), _patch_build("sheets", service):
+        with _patch_creds("googleSheets"), _patch_build("googleSheets", service):
             result = await harness.execute(
-                "sheets",
+                "googleSheets",
                 {
                     "operation": "read",
                     "spreadsheet_id": "sheet-123",
@@ -563,9 +563,9 @@ class TestSheets:
         assert "range" in result["error"].lower()
 
     async def test_unknown_operation_returns_error(self, harness):
-        with _patch_creds("sheets"), _patch_build("sheets", MagicMock()):
+        with _patch_creds("googleSheets"), _patch_build("googleSheets", MagicMock()):
             result = await harness.execute(
-                "sheets",
+                "googleSheets",
                 {"operation": "clear"},
             )
 
@@ -590,9 +590,9 @@ class TestTasks:
             "selfLink": "https://tasks/task-1",
         }
 
-        with _patch_creds("tasks"), _patch_build("tasks", service):
+        with _patch_creds("googleTasks"), _patch_build("googleTasks", service):
             result = await harness.execute(
-                "tasks",
+                "googleTasks",
                 {
                     "operation": "create",
                     "title": "Buy milk",
@@ -624,9 +624,9 @@ class TestTasks:
             "completed": "2026-04-15T12:00:00Z",
         }
 
-        with _patch_creds("tasks"), _patch_build("tasks", service):
+        with _patch_creds("googleTasks"), _patch_build("googleTasks", service):
             result = await harness.execute(
-                "tasks",
+                "googleTasks",
                 {"operation": "complete", "task_id": "task-9"},
             )
 
@@ -637,9 +637,9 @@ class TestTasks:
 
     async def test_delete_missing_task_id_errors(self, harness):
         service = MagicMock(name="TasksService")
-        with _patch_creds("tasks"), _patch_build("tasks", service):
+        with _patch_creds("googleTasks"), _patch_build("googleTasks", service):
             result = await harness.execute(
-                "tasks",
+                "googleTasks",
                 {"operation": "delete"},
             )
 
@@ -647,9 +647,9 @@ class TestTasks:
         assert "task id" in result["error"].lower()
 
     async def test_unknown_operation_returns_error(self, harness):
-        with _patch_creds("tasks"), _patch_build("tasks", MagicMock()):
+        with _patch_creds("googleTasks"), _patch_build("googleTasks", MagicMock()):
             result = await harness.execute(
-                "tasks",
+                "googleTasks",
                 {"operation": "star"},
             )
 
@@ -674,9 +674,9 @@ class TestContacts:
             "photos": [],
         }
 
-        with _patch_creds("contacts"), _patch_build("contacts", service):
+        with _patch_creds("googleContacts"), _patch_build("googleContacts", service):
             result = await harness.execute(
-                "contacts",
+                "googleContacts",
                 {
                     "operation": "create",
                     "first_name": "Alice",
@@ -709,9 +709,9 @@ class TestContacts:
             ]
         }
 
-        with _patch_creds("contacts"), _patch_build("contacts", service):
+        with _patch_creds("googleContacts"), _patch_build("googleContacts", service):
             result = await harness.execute(
-                "contacts",
+                "googleContacts",
                 {
                     "operation": "search",
                     "query": "bob",
@@ -725,9 +725,9 @@ class TestContacts:
 
     async def test_create_missing_first_name_errors(self, harness):
         service = MagicMock(name="PeopleService")
-        with _patch_creds("contacts"), _patch_build("contacts", service):
+        with _patch_creds("googleContacts"), _patch_build("googleContacts", service):
             result = await harness.execute(
-                "contacts",
+                "googleContacts",
                 {
                     "operation": "create",
                     # no first_name
@@ -739,9 +739,9 @@ class TestContacts:
         assert "first name" in result["error"].lower()
 
     async def test_unknown_operation_returns_error(self, harness):
-        with _patch_creds("contacts"), _patch_build("contacts", MagicMock()):
+        with _patch_creds("googleContacts"), _patch_build("googleContacts", MagicMock()):
             result = await harness.execute(
-                "contacts",
+                "googleContacts",
                 {"operation": "merge"},
             )
 
@@ -750,10 +750,10 @@ class TestContacts:
 
     async def test_missing_credentials_short_circuits(self, harness):
         with _patch_creds(
-            "contacts", side_effect=ValueError("Google Workspace not connected")
-        ), _patch_build("contacts", MagicMock()):
+            "googleContacts", side_effect=ValueError("Google Workspace not connected")
+        ), _patch_build("googleContacts", MagicMock()):
             result = await harness.execute(
-                "contacts",
+                "googleContacts",
                 {
                     "operation": "create",
                     "first_name": "Alice",
