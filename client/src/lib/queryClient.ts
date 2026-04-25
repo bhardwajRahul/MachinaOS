@@ -46,3 +46,27 @@ queryClient.setQueryDefaults(['nodeGroups'], {
   staleTime: STALE_TIME.FOREVER,
   gcTime: GC_TIME.FOREVER,
 });
+
+// Credential values are persisted via PersistQueryClient (see
+// queryPersist.ts whitelist). Same hydration trap as nodeSpec: the
+// per-call FOREVER staleTime did not prevent gcTime: 5min eviction, so
+// credential panel form fields silently went blank after idle. Anchor
+// the contract at the prefix root.
+queryClient.setQueryDefaults(['credentialValues'], {
+  staleTime: STALE_TIME.FOREVER,
+  gcTime: GC_TIME.FOREVER,
+});
+
+// Skill content is immutable per backend deploy (DB seeded from SKILL.md
+// once); Master Skill editor reads via fetchQuery and consumers depend
+// on the cache surviving panel close/reopen cycles. Not persisted to
+// localStorage -- in-memory FOREVER is sufficient.
+queryClient.setQueryDefaults(['skillContent'], {
+  staleTime: STALE_TIME.FOREVER,
+  gcTime: GC_TIME.FOREVER,
+});
+
+// credentialCatalogue is intentionally NOT given a setQueryDefaults
+// override. It has its own IDB warm-start path in useCatalogueQuery.ts
+// and the per-call `gcTime: 10 * 60_000` there is a deliberate bounded-
+// memory cap (IDB hydrate restores it on next mount).

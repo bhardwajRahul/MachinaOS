@@ -59,7 +59,15 @@ export const queryPersistMaxAge = 24 * 60 * 60 * 1000;
  * so a future regression to the staleTime config does not silently
  * start persisting noisy keys.
  */
-const PERSISTED_KEY_PREFIXES = ['nodeSpec', 'nodeGroups', 'pluginCatalogue'];
+const PERSISTED_KEY_PREFIXES = [
+  'nodeSpec',
+  'nodeGroups',
+  // credentialValues: panel form fields prefilled across reloads.
+  'credentialValues',
+  // credentialCatalogue is NOT here -- it has its own IDB warm-start in
+  // useCatalogueQuery.ts (idb-keyval) so localStorage persistence would
+  // duplicate the bytes for no benefit. skillContent stays in-memory only.
+];
 
 export function shouldPersistQuery(query: Query): boolean {
   const key = query.queryKey;
