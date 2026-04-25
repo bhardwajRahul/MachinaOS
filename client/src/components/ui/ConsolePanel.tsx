@@ -191,20 +191,39 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
   const isResizing = verticalResize.isResizing;
   const handleResizeStart = verticalResize.start;
 
-  const horizontalResize = usePanelResize({
-    axis: 'x',
-    cursor: 'ew-resize',
-    getStartValue: () => chatWidthPercent,
-    onMove: (delta) => {
+  // Horizontal split (chat sidebar / main pane) -- matches the original
+  // absolute-position approach from main: chat-width % is derived from
+  // the mouse's offset within the container on every move, not from a
+  // delta against a captured start value. The delta-based variant
+  // closed over the live `chatWidthPercent` and compounded each move,
+  // making the slider race and feel non-linear.
+  const [isHorizontalResizing, setIsHorizontalResizing] = useState(false);
+  const handleHorizontalResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsHorizontalResizing(true);
+  }, []);
+  useEffect(() => {
+    if (!isHorizontalResizing) return;
+    const handleMove = (e: MouseEvent) => {
       const container = containerRef.current;
       if (!container) return;
       const rect = container.getBoundingClientRect();
-      const newPercent = ((delta / rect.width) * 100) + chatWidthPercent;
-      setPref('chatWidthPercent', Math.min(80, Math.max(20, newPercent)));
-    },
-  });
-  const isHorizontalResizing = horizontalResize.isResizing;
-  const handleHorizontalResizeStart = horizontalResize.start;
+      const pct = ((e.clientX - rect.left) / rect.width) * 100;
+      setPref('chatWidthPercent', Math.min(80, Math.max(20, pct)));
+    };
+    const handleUp = () => setIsHorizontalResizing(false);
+    document.addEventListener('mousemove', handleMove);
+    document.addEventListener('mouseup', handleUp);
+    document.body.style.cursor = 'ew-resize';
+    document.body.style.userSelect = 'none';
+    return () => {
+      document.removeEventListener('mousemove', handleMove);
+      document.removeEventListener('mouseup', handleUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isHorizontalResizing, setPref]);
 
   // Clamp font size on first mount so out-of-band saved values can't escape
   // the [min, max] band.
