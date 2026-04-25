@@ -115,8 +115,29 @@ class TelegramService:
         if not token:
             return {"success": False, "error": "Bot token required"}
         async with self._lock:
+            # Idempotent: if already connected, return success without
+            # tearing down. The previous disconnect-then-rebuild logic
+            # caused a race when multiple WebSocket clients triggered
+            # _refresh_telegram_status concurrently — the first one
+            # connected the bot, the second saw _connected=True inside
+            # the lock and tore down the working bot, leaving a 1-2s
+            # window where in-flight send_message calls hung on a closed
+            # httpx transport until the 10s read_timeout fired.
+            #
+            # Genuine reconnect (e.g. new token) should call disconnect()
+            # explicitly first, then connect().
             if self._connected:
-                await self._disconnect_internal()
+                logger.debug(
+                    f"[Telegram] connect() called while already connected to "
+                    f"@{self._bot_info.get('username')}, returning success",
+                )
+                return {
+                    "success": True,
+                    "bot": self._bot_info,
+                    "message": (
+                        f"Already connected to @{self._bot_info.get('username')}"
+                    ),
+                }
 
             try:
                 logger.info("[Telegram] Connecting with bot token...")
