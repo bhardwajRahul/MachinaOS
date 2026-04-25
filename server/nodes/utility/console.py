@@ -159,17 +159,21 @@ class ConsoleNode(ActionNode):
                 log_value = input_data
             case "field":
                 if field_path:
-                    # Try dot-path navigation against input_data first.
-                    navigated = _navigate_field_path(input_data, field_path)
-                    if navigated is not None:
-                        log_value = navigated
-                    elif not any(c in field_path for c in "./["):
-                        # No path syntax → the user dragged a variable
-                        # into the field and the resolver replaced it
-                        # with a scalar value. Log directly.
-                        log_value = field_path
+                    # Decide between navigation and resolved-scalar by
+                    # checking whether the first segment of field_path
+                    # matches a top-level key in input_data. If yes,
+                    # treat as a path; if no, the resolver already
+                    # replaced {{...}} with a scalar value and we log
+                    # it as-is. Content-based check is more robust than
+                    # structural heuristics — handles arbitrary text
+                    # content including strings with dots / slashes /
+                    # brackets that the previous structural check
+                    # misclassified as path expressions.
+                    first_segment = field_path.split(".")[0].split("[")[0]
+                    if first_segment and first_segment in input_data:
+                        log_value = _navigate_field_path(input_data, field_path)
                     else:
-                        log_value = None
+                        log_value = field_path
                 else:
                     log_value = input_data
             case "expression":
