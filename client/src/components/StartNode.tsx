@@ -14,8 +14,8 @@ const StartNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectabl
   const defaultLabel = 'Start';
 
   const handleLabelChange = useCallback(
-    (newLabel: string) => updateNodeData(id, { ...data, label: newLabel }),
-    [id, data, updateNodeData]
+    (newLabel: string) => updateNodeData(id, { label: newLabel }),
+    [id, updateNodeData]
   );
 
   const handleLabelActivate = useCallback(

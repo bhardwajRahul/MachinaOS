@@ -8,17 +8,17 @@ import { NodeData } from '../types/NodeTypes';
 import { INodeInputDefinition, INodeOutputDefinition, NodeConnectionType } from '../types/INodeProperties';
 import { useAppStore } from '../store/useAppStore';
 import { useAppTheme } from '../hooks/useAppTheme';
-import { useWebSocket } from '../contexts/WebSocketContext';
+import { useNodeStatus } from '../contexts/WebSocketContext';
 import EditableNodeLabel from './ui/EditableNodeLabel';
 
 const GenericNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectable, selected }) => {
   const theme = useAppTheme();
   const { setSelectedNode, setRenamingNodeId, updateNodeData } = useAppStore();
-  const { getNodeStatus } = useWebSocket();
   const isDisabled = data?.disabled === true;
 
-  // Get execution status from WebSocket
-  const nodeStatus = getNodeStatus(id);
+  // Per-id slice subscription so an unrelated node's status update
+  // does not re-render this generic node.
+  const nodeStatus = useNodeStatus(id);
   const executionStatus = nodeStatus?.status || 'idle';
   const isExecuting = executionStatus === 'executing' || executionStatus === 'waiting';
 
@@ -30,8 +30,8 @@ const GenericNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
 
   const defaultLabel = definition?.displayName || type || '';
   const handleLabelChange = useCallback(
-    (newLabel: string) => updateNodeData(id, { ...data, label: newLabel }),
-    [id, data, updateNodeData]
+    (newLabel: string) => updateNodeData(id, { label: newLabel }),
+    [id, updateNodeData]
   );
   const handleLabelActivate = useCallback(
     () => setRenamingNodeId(id),

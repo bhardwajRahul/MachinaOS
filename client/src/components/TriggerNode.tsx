@@ -14,7 +14,7 @@ import { useAppStore } from '../store/useAppStore';
 import { resolveNodeDescription, useNodeSpec } from '../lib/nodeSpec';
 import { resolveIcon, resolveLibraryIcon } from '../assets/icons';
 import { useAppTheme } from '../hooks/useAppTheme';
-import { useWebSocket, useWhatsAppStatus } from '../contexts/WebSocketContext';
+import { useWhatsAppStatus, useNodeStatus } from '../contexts/WebSocketContext';
 import EditableNodeLabel from './ui/EditableNodeLabel';
 
 const TriggerNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectable, selected }) => {
@@ -23,9 +23,9 @@ const TriggerNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
   const [isConfigured, setIsConfigured] = useState(false);
   const isDisabled = data?.disabled === true;
 
-  // Get node status from WebSocket context
-  const { getNodeStatus } = useWebSocket();
-  const nodeStatus = getNodeStatus(id);
+  // Per-id slice subscription so unrelated node-status broadcasts do
+  // not re-render this trigger.
+  const nodeStatus = useNodeStatus(id);
   const executionStatus = nodeStatus?.status || 'idle';
 
   // Check if this is a WhatsApp trigger
@@ -48,9 +48,12 @@ const TriggerNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
   }, [data]);
 
   const defaultLabel = definition?.displayName || type || '';
+  // updateNodeData already merges partial updates onto existing node.data,
+  // so passing only { label } avoids depending on the full data object
+  // (which gets a fresh ref every parent render).
   const handleLabelChange = useCallback(
-    (newLabel: string) => updateNodeData(id, { ...data, label: newLabel }),
-    [id, data, updateNodeData]
+    (newLabel: string) => updateNodeData(id, { label: newLabel }),
+    [id, updateNodeData]
   );
   const handleLabelActivate = useCallback(
     () => setRenamingNodeId(id),

@@ -5,7 +5,7 @@ import { NodeData } from '../types/NodeTypes';
 import { useAppStore } from '../store/useAppStore';
 import { useAppTheme } from '../hooks/useAppTheme';
 import EditableNodeLabel from './ui/EditableNodeLabel';
-import { useWebSocket, useWhatsAppStatus } from '../contexts/WebSocketContext';
+import { useWebSocket, useWhatsAppStatus, useNodeStatus } from '../contexts/WebSocketContext';
 import { getCachedNodeSpec, isNodeInBackendGroup, resolveNodeDescription, useNodeSpec } from '../lib/nodeSpec';
 import { resolveIcon, resolveLibraryIcon } from '../assets/icons';
 import { AI_MODEL_PROVIDER_MAP } from '../lib/aiModelProviders';
@@ -34,9 +34,13 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
   const { setSelectedNode, setRenamingNodeId, updateNodeData } = useAppStore();
   const isDisabled = data?.disabled === true;
 
-  // Get Android status, node status, and API key status from WebSocket context
-  const { androidStatus, getNodeStatus, getApiKeyStatus } = useWebSocket();
-  const nodeStatus = getNodeStatus(id);
+  // Get Android status + API key status from the broad WebSocket
+  // context, but subscribe to node status via the per-id slice selector
+  // so an unrelated node's status update does NOT re-render this node.
+  // Reference: zustand slice subscription pattern, see
+  // https://github.com/pmndrs/zustand#selecting-multiple-state-slices
+  const { androidStatus, getApiKeyStatus } = useWebSocket();
+  const nodeStatus = useNodeStatus(id);
   const executionStatus = nodeStatus?.status || 'idle';
 
   // Minimum glow duration state - keeps glow visible for at least 500ms
@@ -112,9 +116,13 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
 
 
   const defaultLabel = definition?.displayName || type || '';
+  // useAppStore.updateNodeData performs `{ ...node.data, ...newData }`
+  // so we only need to pass the changed field. Dropping `data` from deps
+  // keeps the callback ref stable across parent re-renders, which lets
+  // the React.memo wrapper actually short-circuit.
   const handleLabelChange = useCallback(
-    (newLabel: string) => updateNodeData(id, { ...data, label: newLabel }),
-    [id, data, updateNodeData]
+    (newLabel: string) => updateNodeData(id, { label: newLabel }),
+    [id, updateNodeData]
   );
   const handleLabelActivate = useCallback(
     () => setRenamingNodeId(id),
