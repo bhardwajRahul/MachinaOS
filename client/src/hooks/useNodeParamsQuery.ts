@@ -26,11 +26,11 @@ export const nodeParamsQueryKey = (nodeId: string) =>
 export function useNodeParamsQuery(
   nodeId: string | null | undefined,
 ): UseQueryResult<NodeParametersResponse | null, Error> {
-  const { getNodeParameters, isConnected } = useWebSocket();
+  const { getNodeParameters, isReady } = useWebSocket();
   return useQuery<NodeParametersResponse | null, Error>({
     queryKey: nodeId ? nodeParamsQueryKey(nodeId) : ['nodeParams', 'none'],
     queryFn: () => (nodeId ? getNodeParameters(nodeId) : Promise.resolve(null)),
-    enabled: !!nodeId && isConnected,
+    enabled: !!nodeId && isReady,
     staleTime: 60_000,
   });
 }

@@ -18,6 +18,11 @@ import { queryClient } from '../lib/queryClient';
 import { queryKeys } from '../lib/queryConfig';
 import { CATALOGUE_QUERY_KEY } from '../hooks/useCatalogueQuery';
 import { nodeParamsQueryKey } from '../hooks/useNodeParamsQuery';
+import {
+  useNodeStatusStore,
+  useNodeStatusForId,
+  useCurrentWorkflowStatuses,
+} from '../stores/nodeStatusStore';
 
 // Generate unique request ID
 const generateRequestId = (): string => {
@@ -244,6 +249,13 @@ export interface FullStatus {
 interface WebSocketContextValue {
   // Connection state
   isConnected: boolean;
+  /**
+   * `true` once the socket is open AND the post-open init burst has
+   * settled (api-key probes, terminal/chat/console history). Queries
+   * that depend on backend-served data should gate on this rather
+   * than `isConnected` so they fire once instead of racing the burst.
+   */
+  isReady: boolean;
   reconnecting: boolean;
 
   // Status data
@@ -429,6 +441,14 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const currentWorkflowId = currentWorkflow?.id;
 
   const [isConnected, setIsConnected] = useState(false);
+  // `isReady` flips true only AFTER the init burst inside `ws.onopen`
+  // completes (api-key probes, terminal/chat/console history). Queries
+  // that depend on backend-served catalogue data (NodeSpec catalogue,
+  // node groups, node parameters, user settings, credential panels)
+  // gate on `isReady` instead of `isConnected` so they fire once,
+  // post-burst, instead of racing the serial awaits and arriving in
+  // arbitrary order.
+  const [isReady, setIsReady] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
   const [androidStatus, setAndroidStatus] = useState<AndroidStatus>(defaultAndroidStatus);
   const [whatsappStatus, setWhatsappStatus] = useState<WhatsAppStatus>(defaultWhatsAppStatus);
@@ -441,8 +461,12 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [consoleLogs, setConsoleLogs] = useState<ConsoleLogEntry[]>([]);
   const [terminalLogs, setTerminalLogs] = useState<TerminalLogEntry[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  // Per-workflow node statuses: workflow_id -> node_id -> NodeStatus (n8n pattern)
-  const [allNodeStatuses, setAllNodeStatuses] = useState<Record<string, Record<string, NodeStatus>>>({});
+  // Per-workflow node statuses live in a dedicated Zustand store
+  // (`stores/nodeStatusStore.ts`). The store is built on
+  // useSyncExternalStore so consumers can subscribe to a single
+  // node's slot without re-rendering on unrelated status updates.
+  // The derived `nodeStatuses` and `getNodeStatus` exposed below read
+  // through to the store for backward compatibility.
   const [nodeParameters, setNodeParameters] = useState<Record<string, NodeParameters>>({});
   // Per-workflow variables: workflow_id -> variable_name -> value (n8n pattern)
   const [allVariables, setAllVariables] = useState<Record<string, Record<string, any>>>({});
@@ -464,6 +488,9 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   useEffect(() => {
     const previousWorkflowId = currentWorkflowIdRef.current;
     currentWorkflowIdRef.current = currentWorkflowId;
+    // Mirror into the node-status store so its slice selectors stay
+    // scoped to the same workflow as the rest of the app.
+    useNodeStatusStore.getState().setCurrentWorkflowId(currentWorkflowId);
 
     // No need to clear node statuses - they are now stored per-workflow (n8n pattern)
     // Each workflow's statuses are isolated in allNodeStatuses[workflow_id]
@@ -569,7 +596,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
                 if (!groupedStatuses[wfId]) groupedStatuses[wfId] = {};
                 groupedStatuses[wfId][nodeId] = nodeStatus;
               }
-              setAllNodeStatuses(prev => ({ ...prev, ...groupedStatuses }));
+              useNodeStatusStore.getState().mergeStatuses(groupedStatuses);
             }
             if (data.node_parameters) {
               setNodeParameters(data.node_parameters);
@@ -731,13 +758,11 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             // Flatten the structure: merge inner data with outer data for easier access
             const flattenedData = { ...data, ...innerData, workflow_id: statusWorkflowId };
 
-            setAllNodeStatuses((prev: Record<string, Record<string, NodeStatus>>) => ({
-              ...prev,
-              [statusWorkflowId]: {
-                ...(prev[statusWorkflowId] || {}),
-                [node_id]: flattenedData
-              }
-            }));
+            useNodeStatusStore.getState().setStatus(
+              statusWorkflowId,
+              node_id,
+              flattenedData,
+            );
           }
           break;
 
@@ -745,17 +770,14 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           // Per-workflow node output storage (n8n pattern)
           if (node_id) {
             const outputWorkflowId = message.workflow_id || 'unknown';
-            setAllNodeStatuses((prev: Record<string, Record<string, NodeStatus>>) => ({
-              ...prev,
-              [outputWorkflowId]: {
-                ...(prev[outputWorkflowId] || {}),
-                [node_id]: {
-                  ...(prev[outputWorkflowId]?.[node_id] || {}),
-                  output,
-                  workflow_id: outputWorkflowId
-                }
-              }
-            }));
+            const store = useNodeStatusStore.getState();
+            const previous =
+              store.allStatuses[outputWorkflowId]?.[node_id] || ({} as NodeStatus);
+            store.setStatus(outputWorkflowId, node_id, {
+              ...previous,
+              output,
+              workflow_id: outputWorkflowId,
+            });
           }
           break;
 
@@ -764,22 +786,15 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           if (node_id || message.node_id) {
             const clearedNodeId = node_id || message.node_id;
             const clearWorkflowId = message.workflow_id;
-            setAllNodeStatuses((prev: Record<string, Record<string, NodeStatus>>) => {
-              // If workflow_id specified, only clear from that workflow
-              if (clearWorkflowId && prev[clearWorkflowId]) {
-                const workflowStatuses = { ...prev[clearWorkflowId] };
-                delete workflowStatuses[clearedNodeId];
-                return { ...prev, [clearWorkflowId]: workflowStatuses };
+            const store = useNodeStatusStore.getState();
+            if (clearWorkflowId) {
+              store.clearStatus(clearWorkflowId, clearedNodeId);
+            } else {
+              // Clear from every workflow's slot
+              for (const wfId of Object.keys(store.allStatuses)) {
+                store.clearStatus(wfId, clearedNodeId);
               }
-              // Otherwise clear from all workflows
-              const newStatuses: Record<string, Record<string, NodeStatus>> = {};
-              for (const [wfId, nodes] of Object.entries(prev)) {
-                const filteredNodes = { ...nodes };
-                delete filteredNodes[clearedNodeId];
-                newStatuses[wfId] = filteredNodes;
-              }
-              return newStatuses;
-            });
+            }
           }
           break;
 
@@ -1101,13 +1116,13 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setIsConnected(true);
         setReconnecting(false);
 
-        // Reconnect invalidation (TkDodo / tRPC wsLink pattern):
-        // any WS-backed TanStack query should refetch after a drop so
-        // state can't silently diverge from the server. Node specs and
-        // group metadata are keyed explicitly; other WS-backed queries
-        // can opt in by sharing these key prefixes.
-        queryClient.invalidateQueries({ queryKey: ['nodeSpec'] });
-        queryClient.invalidateQueries({ queryKey: ['nodeGroups'] });
+        // NodeSpec + NodeGroups are immutable for the life of a page —
+        // they only change on a backend redeploy, and a redeploy
+        // bumps the build version which busts the persisted cache on
+        // the next hard refresh (see lib/queryPersist.ts). Reconnects
+        // alone (transient network drops, server restarts mid-deploy)
+        // do not invalidate them, so canvas / palette icons no longer
+        // flash back to fallback on every reconnect.
 
         // Start ping interval
         pingIntervalRef.current = setInterval(() => {
@@ -1258,6 +1273,12 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         } catch {
           // Ignore errors loading console logs
         }
+
+        // Init burst complete — flip `isReady` so queries that gate on
+        // it (catalogue, node specs, node parameters, user settings,
+        // credential panels) fire once against a stable socket instead
+        // of racing the serial init awaits above.
+        setIsReady(true);
       };
 
       ws.onmessage = handleMessage;
@@ -1265,7 +1286,25 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       ws.onclose = (event) => {
         console.log('[WebSocket] Disconnected:', event.code, event.reason);
         setIsConnected(false);
+        setIsReady(false);
         wsRef.current = null;
+
+        // Reject every in-flight request so TanStack Query's retry +
+        // any awaiters fail fast on the dead socket instead of waiting
+        // for the 30s REQUEST_TIMEOUT. Trigger-node waiters that deliberately
+        // had no timeout are still cleared — the next reconnect will
+        // re-register them when the user re-runs the trigger.
+        if (pendingRequestsRef.current.size > 0) {
+          for (const [, pending] of pendingRequestsRef.current) {
+            if (pending.timeout) clearTimeout(pending.timeout);
+            try {
+              pending.reject(new Error('WebSocket closed'));
+            } catch {
+              // Ignore — caller may have already settled.
+            }
+          }
+          pendingRequestsRef.current.clear();
+        }
 
         // Clear ping interval
         if (pingIntervalRef.current) {
@@ -1301,14 +1340,17 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, []);
 
-  // Get node status for current workflow (n8n pattern)
-  // IMPORTANT: Use currentWorkflowId state directly (not ref) to ensure reactivity on workflow switch
+  // Get node status for current workflow (n8n pattern). Reads from the
+  // node-status Zustand store which is the source of truth post Phase
+  // 2.2; non-reactive snapshot read so this callback identity stays
+  // stable across status writes. Components that need reactivity
+  // should use the `useNodeStatus(id)` slice hook instead.
   const getNodeStatus = useCallback((nodeId: string) => {
-    if (!currentWorkflowId) {
-      return undefined;
-    }
-    return allNodeStatuses[currentWorkflowId]?.[nodeId];
-  }, [allNodeStatuses, currentWorkflowId]);
+    if (!currentWorkflowId) return undefined;
+    return useNodeStatusStore
+      .getState()
+      .allStatuses[currentWorkflowId]?.[nodeId];
+  }, [currentWorkflowId]);
 
   // Get API key status
   const getApiKeyStatus = useCallback((provider: string) => {
@@ -1326,13 +1368,9 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   // Also clears the backend node_outputs storage
   const clearNodeStatus = useCallback(async (nodeId: string) => {
     const workflowId = currentWorkflowIdRef.current;
-    // Clear local state for current workflow
-    setAllNodeStatuses((prev: Record<string, Record<string, NodeStatus>>) => {
-      if (!workflowId || !prev[workflowId]) return prev;
-      const workflowStatuses = { ...prev[workflowId] };
-      delete workflowStatuses[nodeId];
-      return { ...prev, [workflowId]: workflowStatuses };
-    });
+    if (workflowId) {
+      useNodeStatusStore.getState().clearStatus(workflowId, nodeId);
+    }
     // Clear backend storage
     try {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -1381,13 +1419,12 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, []);
 
-  // Derive current workflow's node statuses (n8n pattern)
-  // This provides a flat Record<nodeId, NodeStatus> for the current workflow
-  // IMPORTANT: Use currentWorkflowId state directly, not ref, to ensure re-render on workflow switch
-  const nodeStatuses = useMemo(() => {
-    if (!currentWorkflowId) return {};
-    return allNodeStatuses[currentWorkflowId] || {};
-  }, [allNodeStatuses, currentWorkflowId]);
+  // Derive current workflow's node statuses (n8n pattern). Subscribes
+  // to the Zustand store so context consumers still re-render on
+  // status changes; per-node consumers should prefer the `useNodeStatus`
+  // slice hook (`useNodeStatusForId`) which only re-renders for its
+  // specific slot.
+  const nodeStatuses = useCurrentWorkflowStatuses();
 
   // Derive current workflow's variables (n8n pattern)
   // This provides a flat Record<varName, value> for the current workflow
@@ -2228,6 +2265,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       wsRef.current.close(1000, 'User logged out');
       wsRef.current = null;
       setIsConnected(false);
+      setIsReady(false);
     }
   }, [isAuthenticated]);
 
@@ -2243,9 +2281,16 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     };
   }, []);
 
-  const value: WebSocketContextValue = {
+  // Memoized provider value: spreading a fresh object each render forces
+  // every useContext consumer to re-render on any state change. Wrapping
+  // in useMemo with the actual state deps keeps consumers stable when
+  // unrelated slices change. Async methods are useCallback-wrapped
+  // upstream, so their identities are stable across renders.
+  // Reference: https://overreacted.io/before-you-memo/
+  const value: WebSocketContextValue = useMemo(() => ({
     // Connection state
     isConnected,
+    isReady,
     reconnecting,
 
     // Status data
@@ -2341,8 +2386,37 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
     // Memory and Skill Operations
     clearMemory: clearMemoryAsync,
-    resetSkill: resetSkillAsync
-  };
+    resetSkill: resetSkillAsync,
+  }), [
+    isConnected, isReady, reconnecting,
+    androidStatus, setAndroidStatus,
+    whatsappStatus, twitterStatus, googleStatus, telegramStatus,
+    whatsappMessages, lastWhatsAppMessage,
+    apiKeyStatuses,
+    consoleLogs, terminalLogs, chatMessages,
+    nodeStatuses, nodeParameters,
+    variables, workflowStatus, deploymentStatus, workflowLock,
+    compactionStats, updateCompactionStats,
+    getNodeStatus, getApiKeyStatus, getVariable,
+    requestStatus, clearNodeStatus,
+    clearWhatsAppMessages, clearConsoleLogs, clearTerminalLogs, clearChatMessages,
+    sendChatMessageAsync, sendRequest,
+    getNodeParametersAsync, getAllNodeParametersAsync,
+    saveNodeParametersAsync, deleteNodeParametersAsync,
+    executeNodeAsync, executeWorkflowAsync, getNodeOutputAsync,
+    cancelEventWaitAsync,
+    deployWorkflowAsync, cancelDeploymentAsync, getDeploymentStatusAsync,
+    executeAiNodeAsync, getAiModelsAsync,
+    validateApiKeyAsync, getStoredApiKeyAsync, saveApiKeyAsync, deleteApiKeyAsync,
+    getAndroidDevicesAsync, executeAndroidActionAsync,
+    validateMapsKeyAsync, validateApifyKeyAsync,
+    getWhatsAppStatusAsync, getWhatsAppQRAsync, sendWhatsAppMessageAsync,
+    startWhatsAppConnectionAsync, restartWhatsAppConnectionAsync,
+    getWhatsAppGroupsAsync, getWhatsAppChannelsAsync, getWhatsAppGroupInfoAsync,
+    getWhatsAppRateLimitConfigAsync, setWhatsAppRateLimitConfigAsync,
+    getWhatsAppRateLimitStatsAsync, unpauseWhatsAppRateLimitAsync,
+    clearMemoryAsync, resetSkillAsync,
+  ]);
 
   return (
     <WebSocketContext.Provider value={value}>
@@ -2369,10 +2443,12 @@ export const useAndroidStatus = (): AndroidStatus & { isConnected: boolean } => 
   };
 };
 
-// Hook specifically for node status
+// Hook specifically for node status. Subscribes directly to the
+// node-status Zustand store so a single node's consumers re-render
+// only when *that node's* slot changes — not on every status tick
+// for every other node on the canvas.
 export const useNodeStatus = (nodeId: string): NodeStatus | undefined => {
-  const { getNodeStatus } = useWebSocket();
-  return getNodeStatus(nodeId);
+  return useNodeStatusForId(nodeId);
 };
 
 // Hook specifically for workflow status

@@ -20,7 +20,7 @@ export type UserSettings = Record<string, any>;
 export const USER_SETTINGS_QUERY_KEY = ['userSettings'] as const;
 
 export function useUserSettingsQuery(): UseQueryResult<UserSettings, Error> {
-  const { sendRequest, isConnected } = useWebSocket();
+  const { sendRequest, isReady } = useWebSocket();
   return useQuery<UserSettings, Error>({
     queryKey: USER_SETTINGS_QUERY_KEY,
     queryFn: async () => {
@@ -30,7 +30,7 @@ export function useUserSettingsQuery(): UseQueryResult<UserSettings, Error> {
       );
       return response?.settings ?? {};
     },
-    enabled: isConnected,
+    enabled: isReady,
     staleTime: 60_000,
   });
 }

@@ -234,7 +234,7 @@ export type UseCatalogueQueryResult = UseQueryResult<CatalogueResponse, Error> &
  */
 export function useCatalogueQuery(): UseCatalogueQueryResult {
   const queryClient = useQueryClient();
-  const { sendRequest, isConnected } = useWebSocket();
+  const { sendRequest, isReady } = useWebSocket();
   const hydratedFromIdbRef = useRef(false);
 
   // Warm start: on first mount, hydrate the TanStack Query cache from IDB.
@@ -290,7 +290,7 @@ export function useCatalogueQuery(): UseCatalogueQueryResult {
     gcTime: 10 * 60_000,
     // Only fetch once the WebSocket is actually connected. Prevents a
     // failed fetch during the initial reconnect window.
-    enabled: isConnected,
+    enabled: isReady,
     // Placeholder so the first render can show the warm-start data.
     placeholderData: (prev) => prev,
   });
