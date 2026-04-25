@@ -53,7 +53,7 @@ class RLMService:
         try:
             # === Parameter extraction (same pattern as execute_chat_agent) ===
             prompt = parameters.get('prompt', '')
-            system_message = parameters.get('systemMessage', '')
+            system_message = parameters.get('system_message', '')
 
             # Skill injection (reuse ai.py:833 _build_skill_system_prompt)
             # Collected as supplementary context -- appended to RLM prompt, never replaces it
@@ -71,7 +71,7 @@ class RLMService:
 
             # Provider/model/API key resolution (same as lines 1998-2014)
             from services.ai import is_model_valid_for_provider, get_default_model_async
-            api_key = flattened.get('api_key') or flattened.get('apiKey')
+            api_key = flattened.get('api_key')
             provider = parameters.get('provider', 'openai')
             model = parameters.get('model', '')
 
@@ -110,10 +110,10 @@ class RLMService:
 
             # === RLM-specific parameters ===
             max_iterations = int(flattened.get('maxIterations', DEFAULT_MAX_ITERATIONS))
-            max_depth = int(flattened.get('maxDepth', DEFAULT_MAX_DEPTH))
+            max_depth = int(flattened.get('max_depth', DEFAULT_MAX_DEPTH))
             max_budget = flattened.get('maxBudget')
             max_timeout = flattened.get('maxTimeout')
-            max_tokens = flattened.get('maxTokens')
+            max_tokens = flattened.get('max_tokens')
             verbose = flattened.get('verbose', DEFAULT_VERBOSE)
 
             # === Run RLM in thread pool (RLM is synchronous) ===

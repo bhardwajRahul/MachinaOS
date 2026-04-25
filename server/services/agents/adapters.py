@@ -137,7 +137,7 @@ class SubAgentAdapter:
             while name in seen:
                 name = f"{name}_{len(seen)}"
             seen.add(name)
-            system_prompt = params.get("systemMessage", "")
+            system_prompt = params.get("system_message", "")
             subagents.append({
                 "name": name,
                 "description": f"Delegate tasks to {label}",

@@ -66,9 +66,9 @@ class TextService:
         start_time = time.time()
 
         try:
-            file_type = parameters.get('fileType', 'generic')
+            file_type = parameters.get('file_type', 'generic')
             file_content = parameters.get('content', '')
-            file_name = parameters.get('fileName', 'untitled.txt')
+            file_name = parameters.get('file_name', 'untitled.txt')
 
             # Basic file processing
             result_data = {

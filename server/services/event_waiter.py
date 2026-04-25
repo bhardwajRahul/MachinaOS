@@ -361,15 +361,13 @@ def build_chat_filter(params: Dict) -> Callable[[Dict], bool]:
     """Build filter function for chat messages from console input.
 
     Args:
-        params: Node parameters with 'session_id' field (camelCase
-            'sessionId' also accepted for legacy imports).
+        params: Node parameters with 'session_id' field (Pydantic
+            schema-canonical name).
 
     Returns:
         Filter function that checks if event session_id matches
     """
-    # The chatTrigger Pydantic model emits 'session_id' in JSON Schema;
-    # accept both for backward compat with pre-migration workflows.
-    session_id = params.get('session_id') or params.get('sessionId', 'default')
+    session_id = params.get('session_id', 'default')
 
     def matches(data: Dict) -> bool:
         event_session = data.get('session_id', 'default')
@@ -520,12 +518,14 @@ def build_telegram_filter(params: Dict) -> Callable[[Dict], bool]:
     Returns:
         Filter function that checks if event matches criteria
     """
-    # New-style senderFilter (takes precedence)
-    sender_filter = params.get('senderFilter', '')
+    # New-style sender_filter (takes precedence)
+    sender_filter = params.get('sender_filter', '')
 
-    # Legacy fallback: reconstruct from old params if senderFilter absent
+    # Legacy fallback: reconstruct from old params if sender_filter absent.
+    # `chat_type_filter` was the pre-Wave-11 schema field name (already
+    # snake_case in the DB), so the read here matches.
     if not sender_filter:
-        chat_type_filter = params.get('chatTypeFilter', 'all')
+        chat_type_filter = params.get('chat_type_filter', 'all')
         old_chat_id = params.get('chat_id', '')
         old_from_user = params.get('from_user', '')
         old_keywords = params.get('keywords', '')
@@ -541,11 +541,11 @@ def build_telegram_filter(params: Dict) -> Callable[[Dict], bool]:
         else:
             sender_filter = 'all'
 
-    content_type_filter = params.get('contentTypeFilter', 'all')
+    content_type_filter = params.get('content_type_filter', 'all')
     chat_id_filter = params.get('chat_id', '')
     from_user_filter = params.get('from_user', '')
     keywords = [k.strip().lower() for k in params.get('keywords', '').split(',') if k.strip()]
-    ignore_bots = params.get('ignoreBots', True)
+    ignore_bots = params.get('ignore_bots', True)
     owner_chat_id = params.get('_owner_chat_id')
 
     logger.debug(f"[TelegramFilter] Built: sender={sender_filter}, content_type={content_type_filter}, owner_chat_id={owner_chat_id}")

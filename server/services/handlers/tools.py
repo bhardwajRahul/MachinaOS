@@ -172,7 +172,7 @@ async def _execute_duckduckgo_search(
     query = str(args.get("query", "")).strip()
     if not query:
         return {"error": "No search query provided"}
-    max_results = int(config.get("maxResults", args.get("max_results", 5)))
+    max_results = int(config.get("max_results", args.get("max_results", 5)))
     provider = config.get("provider", "duckduckgo")
     from ddgs import DDGS
     raw = list(DDGS().text(query, max_results=max_results))
@@ -323,8 +323,11 @@ async def _execute_delegated_agent(args: Dict[str, Any],
         if models:
             child_params['model'] = models[0]
 
-    # Task goes into systemMessage (directive), context data goes into prompt
-    child_params['systemMessage'] = task_description
+    # Task goes into system_message (directive), context data goes into prompt.
+    # Schema-canonical key is snake_case; drop any pre-migration camelCase
+    # mirror so the saved-params dict downstream uses the canonical key.
+    child_params['system_message'] = task_description
+    child_params.pop('systemMessage', None)
     child_params['prompt'] = task_context if task_context else task_description
 
     # Create execution context for child agent

@@ -207,7 +207,7 @@ class ProxyService:
         rule = self._match_routing_rule(domain)
 
         # Determine provider
-        explicit_provider = parameters.get("proxyProvider")
+        explicit_provider = parameters.get("proxy_provider")
         if explicit_provider and explicit_provider in self._providers:
             runtime = self._providers[explicit_provider]
         elif rule and rule.preferred_providers:
@@ -224,9 +224,11 @@ class ProxyService:
         if not runtime.config.enabled:
             raise ProviderError(runtime.config.name, "Provider is disabled")
 
-        # Build geo target
+        # Build geo target. proxy_city / proxy_state are not declared
+        # Pydantic fields today; left as-is for any caller that hand-
+        # passes them.
         geo = GeoTarget(
-            country=parameters.get("proxyCountry") or
+            country=parameters.get("proxy_country") or
                     (rule.required_country if rule else None) or
                     self._settings.proxy_default_country,
             city=parameters.get("proxyCity"),
@@ -234,7 +236,7 @@ class ProxyService:
         )
 
         # Determine session type
-        session_type_str = parameters.get("sessionType") or parameters.get("proxySessionType", "rotating")
+        session_type_str = parameters.get("session_type") or parameters.get("proxySessionType", "rotating")
         session_type = SessionType(session_type_str) if session_type_str else SessionType.ROTATING
         if rule:
             session_type = rule.session_type

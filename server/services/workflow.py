@@ -515,9 +515,9 @@ class WorkflowService:
         if output is None and node_id.startswith('start-'):
             import json
             params = await self.database.get_node_parameters(node_id)
-            if params and 'initialData' in params:
+            if params and 'initial_data' in params:
                 try:
-                    output = json.loads(params.get('initialData', '{}'))
+                    output = json.loads(params.get('initial_data', '{}'))
                 except Exception:
                     output = {}
 

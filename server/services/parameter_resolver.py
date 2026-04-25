@@ -94,10 +94,10 @@ class ParameterResolver:
         """Get initial data from start node parameters."""
         import json
         params = await self.database.get_node_parameters(node_id)
-        if not params or 'initialData' not in params:
+        if not params or 'initial_data' not in params:
             return {}
 
-        initial_data = params.get('initialData', '{}')
+        initial_data = params.get('initial_data', '{}')
         try:
             return json.loads(initial_data) if isinstance(initial_data, str) else initial_data
         except Exception:

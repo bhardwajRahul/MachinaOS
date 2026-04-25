@@ -128,12 +128,11 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
   const [connectedAgentId, setConnectedAgentId] = useState<string | null>(null);
 
   // Clear memory handler. Schema-canonical keys are snake_case
-  // (post-Wave-11 plugin Pydantic models); accept legacy camelCase
-  // on the read side for old workflow imports.
+  // (post-Wave-11 plugin Pydantic models).
   const handleClearMemory = async () => {
     setIsProcessing(true);
     try {
-      const sessionId = parameters.session_id || parameters.sessionId || 'default';
+      const sessionId = parameters.session_id || 'default';
       const result = await clearMemory(sessionId, clearLongTermMemory);
       if (result.success && result.default_content) {
         onParameterChange('memory_content', result.default_content);
@@ -185,15 +184,11 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
 
   // Apply the global memory_window_size default to new Memory nodes. Only
   // fires when a Memory node is opened AND the node hasn't had window_size
-  // set yet (brand-new instance). Plugin schema field is snake_case;
-  // legacy camelCase is also recognized so we don't overwrite a value
-  // saved before the migration.
+  // set yet (brand-new instance). Plugin schema field is snake_case.
   useEffect(() => {
     if (!isMemoryNode) return;
     const globalWindowSize = userSettings?.memory_window_size;
-    const alreadySet =
-      parameters.window_size !== undefined || parameters.windowSize !== undefined;
-    if (globalWindowSize !== undefined && !alreadySet) {
+    if (globalWindowSize !== undefined && parameters.window_size === undefined) {
       onParameterChange('window_size', globalWindowSize);
     }
     // Same dep set as the previous imperative effect — only wake up on
@@ -221,13 +216,12 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
 
   const connectedMemorySessionId = useMemo<string | null>(() => {
     if (!memoryEdgeSourceId) return null;
-    // Schema-canonical session_id; legacy camelCase fallback so older
-    // workflow imports keep showing the user-configured value rather
-    // than silently falling back to nodeId.
-    const configured: string =
-      memoryParamsData?.session_id || memoryParamsData?.sessionId || '';
+    // Schema-canonical session_id (Pydantic snake_case). Falls back to
+    // the agent's nodeId when sessionId is the default placeholder so
+    // each agent gets its own bucket.
+    const configured: string = memoryParamsData?.session_id || '';
     return configured && configured !== 'default' ? configured : nodeId;
-  }, [memoryEdgeSourceId, memoryParamsData?.session_id, memoryParamsData?.sessionId, nodeId]);
+  }, [memoryEdgeSourceId, memoryParamsData?.session_id, nodeId]);
 
   const compactionStatsQuery = useQuery<{
     session_id: string;
@@ -332,7 +326,7 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
     if (masterSkillEdgeSources.length === 0) return [];
     const folders = new Set<string>();
     for (const id of masterSkillEdgeSources) {
-      const folder = masterSkillParams[id]?.skillFolder;
+      const folder = masterSkillParams[id]?.skill_folder;
       folders.add(typeof folder === 'string' && folder.length > 0 ? folder : 'assistant');
     }
     return Array.from(folders);
@@ -408,7 +402,7 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
       const sourceNode = nodes.find((n: any) => n.id === edge.source);
       if (sourceNode?.type === 'masterSkill') {
         const params = masterSkillParams[edge.source];
-        const skillsConfig = params?.skillsConfig || {};
+        const skillsConfig = params?.skills_config || {};
 
         // Wave 10.G.3: the previous `SKILL_NODE_TYPES.find(...)` loop
         // was dead code. After Wave 10 `skillNodes.ts` exports only
@@ -497,10 +491,10 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
         {isMasterSkillNode ? (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: theme.spacing.lg, overflow: 'hidden' }}>
             <MasterSkillEditor
-              skillsConfig={parameters.skillsConfig || {}}
-              onConfigChange={(config) => onParameterChange('skillsConfig', config)}
-              skillFolder={parameters.skillFolder || 'assistant'}
-              onSkillFolderChange={(folder) => onParameterChange('skillFolder', folder)}
+              skillsConfig={parameters.skills_config || {}}
+              onConfigChange={(config) => onParameterChange('skills_config', config)}
+              skillFolder={parameters.skill_folder || 'assistant'}
+              onSkillFolderChange={(folder) => onParameterChange('skill_folder', folder)}
               nodeId={nodeId}
             />
           </div>
@@ -565,8 +559,8 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
             {isToolNode && (
               <ToolSchemaEditor
                 nodeId={nodeId}
-                toolName={parameters.toolName || nodeDefinition.name}
-                toolDescription={parameters.toolDescription || nodeDefinition.description || ''}
+                toolName={parameters.tool_name || nodeDefinition.name}
+                toolDescription={parameters.tool_description || nodeDefinition.description || ''}
               />
             )}
 
@@ -616,7 +610,7 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
                   This will reset the conversation history to its initial state. This action cannot be undone.
                 </AlertDialogDescription>
               </AlertDialogHeader>
-              {(parameters.long_term_enabled ?? parameters.longTermEnabled) && (
+              {parameters.long_term_enabled && (
                 <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground">
                   <Checkbox
                     checked={clearLongTermMemory}
@@ -821,7 +815,6 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
                           >
                             <NodeIcon
                               icon={skill.icon}
-                              color={skill.color}
                               className="h-5 w-5 text-lg"
                             />
                           </div>

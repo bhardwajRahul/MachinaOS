@@ -383,7 +383,7 @@ class DeploymentManager:
         node_id = node['id']
         params = await self.database.get_node_parameters(node_id) or {}
 
-        initial_data_str = params.get('initialData', '{}')
+        initial_data_str = params.get('initial_data', '{}')
         try:
             initial_data = json.loads(initial_data_str) if initial_data_str else {}
         except json.JSONDecodeError:
@@ -860,23 +860,23 @@ class DeploymentManager:
                 interval = params.get('interval', 30)
                 return f"Every {interval} seconds"
             case 'minutes':
-                interval = params.get('intervalMinutes', 5)
+                interval = params.get('interval_minutes', 5)
                 return f"Every {interval} minutes"
             case 'hours':
-                interval = params.get('intervalHours', 1)
+                interval = params.get('interval_hours', 1)
                 return f"Every {interval} hours"
             case 'days':
-                time_str = params.get('dailyTime', '09:00')
+                time_str = params.get('daily_time', '09:00')
                 return f"Daily at {time_str}"
             case 'weeks':
                 weekday = params.get('weekday', '1')
-                time_str = params.get('weeklyTime', '09:00')
+                time_str = params.get('weekly_time', '09:00')
                 days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
                 day_name = days[int(weekday)] if str(weekday).isdigit() else weekday
                 return f"Weekly on {day_name} at {time_str}"
             case 'months':
-                day = params.get('monthDay', '1')
-                time_str = params.get('monthlyTime', '09:00')
+                day = params.get('month_day', '1')
+                time_str = params.get('monthly_time', '09:00')
                 return f"Monthly on day {day} at {time_str}"
             case 'once':
                 return "Once (no repeat)"

@@ -61,7 +61,7 @@ async def handle_trigger_node(
                     "execution_time": time.time() - start_time,
                     "timestamp": datetime.now().isoformat()
                 }
-            sender_filter = parameters.get('senderFilter', 'all')
+            sender_filter = parameters.get('sender_filter', 'all')
             logger.info("Telegram trigger starting",
                        node_id=node_id, sender_filter=sender_filter,
                        owner_detected=service.owner_chat_id is not None,

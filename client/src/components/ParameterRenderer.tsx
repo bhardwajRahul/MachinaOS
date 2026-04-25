@@ -1017,8 +1017,10 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
 
   useEffect(() => {
     const loadStoredKeyForProvider = async () => {
-      // Only run for apiKey or model parameters
-      if (parameter.name !== 'apiKey' && parameter.name !== 'model') return;
+      // Only run for api_key or model parameters. Schema-canonical
+      // name from the chat-model `_base.py` Pydantic model is
+      // `api_key` (snake_case).
+      if (parameter.name !== 'api_key' && parameter.name !== 'model') return;
 
       // Don't run while parameters are still loading from database
       if (isLoadingParameters) return;
@@ -1051,8 +1053,8 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
         const hasKey = await hasStoredKey(provider);
 
         if (hasKey) {
-          // Auto-load API key for apiKey parameter - always update when provider changes
-          if (parameter.name === 'apiKey' && isActualProviderChange) {
+          // Auto-load API key for api_key parameter - always update when provider changes
+          if (parameter.name === 'api_key' && isActualProviderChange) {
             const storedKey = await getStoredApiKey(provider);
             if (storedKey) {
               onChange(storedKey);
@@ -1099,7 +1101,7 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
           }
         } else {
           // No stored key for this provider - clear the fields
-          if (parameter.name === 'apiKey') {
+          if (parameter.name === 'api_key') {
             onChange('');
           }
           if (parameter.name === 'model') {
@@ -1613,7 +1615,7 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
           );
         }
 
-        if (loadMethod === 'whatsappGroupMembers' || parameter.name === 'senderNumber') {
+        if (loadMethod === 'whatsappGroupMembers' || parameter.name === 'sender_number') {
           const groupId = resolvedParameters?.group_id || allParameters?.group_id || '';
           const storedSenderName = allParameters?.sender_name || '';
           return (
@@ -1637,13 +1639,8 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
         // show the auto-derived session id (the connected agent's node
         // id) as the placeholder so the user can see what default the
         // backend will use without typing anything. Schema-canonical
-        // name is `session_id` (Pydantic snake_case); the legacy
-        // `sessionId` is matched too so pre-migration workflows keep
-        // rendering the placeholder.
-        if (
-          (parameter.name === 'session_id' || parameter.name === 'sessionId') &&
-          connectedAgentId
-        ) {
+        // name is `session_id` (Pydantic snake_case).
+        if (parameter.name === 'session_id' && connectedAgentId) {
           const effectivePlaceholder = connectedAgentId;
 
           return (
@@ -1925,9 +1922,9 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
 
         const isUploadedFile = currentValue && typeof currentValue === 'object' && currentValue.type === 'upload';
 
-        // Determine file accept type based on context (e.g., messageType for WhatsApp)
+        // Determine file accept type based on context (e.g., message_type for WhatsApp)
         const getFileAcceptType = () => {
-          const messageType = allParameters?.messageType;
+          const messageType = allParameters?.message_type;
           if (messageType) {
             switch (messageType) {
               case 'image':
@@ -1975,7 +1972,7 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
                 onBlur={(e) => e.target.style.borderColor = theme.colors.border}
               />
               <input
-                key={`file-input-${allParameters?.messageType || 'default'}`}
+                key={`file-input-${allParameters?.message_type || 'default'}`}
                 ref={fileInputRef}
                 type="file"
                 onChange={handleFileUpload}

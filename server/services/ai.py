@@ -1375,13 +1375,13 @@ class AIService:
 
             # Build thinking config from parameters
             thinking_config = None
-            if flattened.get('thinkingEnabled'):
+            if flattened.get('thinking_enabled'):
                 thinking_config = NativeThinkingConfig(
                     enabled=True,
-                    budget=int(flattened.get('thinkingBudget', 2048)),
-                    effort=flattened.get('reasoningEffort', 'medium'),
-                    level=flattened.get('thinkingLevel', 'medium'),
-                    format=flattened.get('reasoningFormat', 'parsed'),
+                    budget=int(flattened.get('thinking_budget', 2048)),
+                    effort=flattened.get('reasoning_effort', 'medium'),
+                    level=flattened.get('thinking_level', 'medium'),
+                    format=flattened.get('reasoning_format', 'parsed'),
                 )
 
             # Check for proxy URL (stored as {provider}_proxy credential)
@@ -1541,7 +1541,7 @@ class AIService:
         try:
             # Extract top-level parameters (always visible in UI)
             prompt = parameters.get('prompt', 'Hello')
-            system_message = parameters.get('systemMessage', 'You are a helpful assistant')
+            system_message = parameters.get('system_message', 'You are a helpful assistant')
 
             # Inject skills: personality skills get full instructions, others get brief descriptions
             skill_prompt, has_personality = _build_skill_system_prompt(skill_data, log_prefix="[AIAgent]")
@@ -1555,8 +1555,7 @@ class AIService:
             options = parameters.get('options', {})
             flattened = {**parameters, **options}
 
-            # Extract parameters with camelCase/snake_case support
-            api_key = flattened.get('api_key') or flattened.get('apiKey')
+            api_key = flattened.get('api_key')
             provider = parameters.get('provider', 'openai')
             model = parameters.get('model', '')
             # Strip [FREE] prefix if present (added by OpenRouter model list for display)
@@ -1582,13 +1581,13 @@ class AIService:
 
             # Build thinking config from parameters
             thinking_config = None
-            if flattened.get('thinkingEnabled'):
+            if flattened.get('thinking_enabled'):
                 thinking_config = ThinkingConfig(
                     enabled=True,
-                    budget=int(flattened.get('thinkingBudget', 2048)),
-                    effort=flattened.get('reasoningEffort', 'medium'),
-                    level=flattened.get('thinkingLevel', 'medium'),
-                    format=flattened.get('reasoningFormat', 'parsed'),
+                    budget=int(flattened.get('thinking_budget', 2048)),
+                    effort=flattened.get('reasoning_effort', 'medium'),
+                    level=flattened.get('thinking_level', 'medium'),
+                    format=flattened.get('reasoning_format', 'parsed'),
                 )
                 logger.debug(f"[LangGraph] Thinking enabled: budget={thinking_config.budget}, effort={thinking_config.effort}")
 
@@ -1995,7 +1994,7 @@ class AIService:
         try:
             # Extract parameters
             prompt = parameters.get('prompt', 'Hello')
-            system_message = parameters.get('systemMessage', 'You are a helpful assistant')
+            system_message = parameters.get('system_message', 'You are a helpful assistant')
 
             # Inject skills: personality skills get full instructions, others get brief descriptions
             skill_prompt, has_personality = _build_skill_system_prompt(skill_data, log_prefix="[ChatAgent]")
@@ -2084,13 +2083,13 @@ class AIService:
 
             # Build thinking config from parameters
             thinking_config = None
-            if flattened.get('thinkingEnabled'):
+            if flattened.get('thinking_enabled'):
                 thinking_config = ThinkingConfig(
                     enabled=True,
-                    budget=int(flattened.get('thinkingBudget', 2048)),
-                    effort=flattened.get('reasoningEffort', 'medium'),
-                    level=flattened.get('thinkingLevel', 'medium'),
-                    format=flattened.get('reasoningFormat', 'parsed'),
+                    budget=int(flattened.get('thinking_budget', 2048)),
+                    effort=flattened.get('reasoning_effort', 'medium'),
+                    level=flattened.get('thinking_level', 'medium'),
+                    format=flattened.get('reasoning_format', 'parsed'),
                 )
 
             temperature = _resolve_temperature(flattened, model, provider, bool(thinking_config and thinking_config.enabled))
@@ -2611,12 +2610,12 @@ class AIService:
             else:
                 # Fall back to dynamic generation from node params
                 tool_name = (
-                    node_params.get('toolName') or
+                    node_params.get('tool_name') or
                     DEFAULT_TOOL_NAMES.get(node_type) or
                     f"tool_{node_label}".replace(' ', '_').replace('-', '_').lower()
                 )
                 tool_description = (
-                    node_params.get('toolDescription') or
+                    node_params.get('tool_description') or
                     DEFAULT_TOOL_DESCRIPTIONS.get(node_type) or
                     f"Execute {node_label} node"
                 )

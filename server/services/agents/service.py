@@ -64,7 +64,7 @@ class DeepAgentService:
             # === Parameter extraction + skill injection ===
             from services.ai import _build_skill_system_prompt
             prompt = parameters.get('prompt', '')
-            system_message = parameters.get('systemMessage', 'You are a helpful assistant')
+            system_message = parameters.get('system_message', 'You are a helpful assistant')
 
             skill_prompt, has_personality = _build_skill_system_prompt(skill_data, log_prefix="[DeepAgent]")
             if skill_prompt:
@@ -85,7 +85,7 @@ class DeepAgentService:
             if not model or not is_model_valid_for_provider(model, provider):
                 model = await get_default_model_async(provider, database)
 
-            api_key = flattened.get('api_key') or flattened.get('apiKey')
+            api_key = flattened.get('api_key')
             if not api_key and self.auth:
                 api_key = await self.auth.get_api_key(provider)
             if not api_key:
@@ -93,13 +93,13 @@ class DeepAgentService:
 
             max_tokens = _resolve_max_tokens(flattened, model, provider)
             thinking_config = None
-            if flattened.get('thinkingEnabled'):
+            if flattened.get('thinking_enabled'):
                 thinking_config = ThinkingConfig(
                     enabled=True,
-                    budget=int(flattened.get('thinkingBudget', 2048)),
-                    effort=flattened.get('reasoningEffort', 'medium'),
-                    level=flattened.get('thinkingLevel', 'medium'),
-                    format=flattened.get('reasoningFormat', 'parsed'),
+                    budget=int(flattened.get('thinking_budget', 2048)),
+                    effort=flattened.get('reasoning_effort', 'medium'),
+                    level=flattened.get('thinking_level', 'medium'),
+                    format=flattened.get('reasoning_format', 'parsed'),
                 )
             temperature = _resolve_temperature(flattened, model, provider, bool(thinking_config and thinking_config.enabled))
             proxy_url = await self.auth.get_api_key(f"{provider}_proxy") if self.auth else None
@@ -170,7 +170,7 @@ class DeepAgentService:
             from langchain.agents import create_agent
             from deepagents.middleware.patch_tool_calls import PatchToolCallsMiddleware
 
-            max_turns = int(parameters.get('maxTurns', DEFAULT_MAX_TURNS))
+            max_turns = int(parameters.get('max_turns', DEFAULT_MAX_TURNS))
 
             await broadcast_status("executing", {
                 "message": f"Running Deep Agent ({provider}/{model})...",

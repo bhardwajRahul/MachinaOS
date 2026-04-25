@@ -152,31 +152,22 @@ async def _build_memory_entry(
     memory_params = await database.get_node_parameters(memory_node_id) or {}
     # Plugin Pydantic models emit JSON Schema property names in
     # snake_case (post-Wave-11; see simple_memory.py "now that aliases
-    # are gone"). Reads also accept the pre-migration camelCase keys so
-    # legacy workflow imports keep working until users re-save.
-    configured_session = memory_params.get("session_id") or memory_params.get("sessionId", "")
+    # are gone"). Reads canonicalize on snake_case -- the saved-params
+    # dict is the schema's domain.
+    configured_session = memory_params.get("session_id", "")
     if configured_session and configured_session != "default":
         session_id = configured_session
     else:
         session_id = agent_node_id
-    default_content = "# Conversation History\n\n*No messages yet.*\n"
     entry = {
         "node_id": memory_node_id,
         "session_id": session_id,
-        "window_size": int(memory_params.get("window_size") or memory_params.get("windowSize", 10)),
-        "memory_content": (
-            memory_params.get("memory_content")
-            or memory_params.get("memoryContent")
-            or default_content
+        "window_size": int(memory_params.get("window_size", 10)),
+        "memory_content": memory_params.get(
+            "memory_content", "# Conversation History\n\n*No messages yet.*\n",
         ),
-        "long_term_enabled": (
-            memory_params.get("long_term_enabled")
-            if "long_term_enabled" in memory_params
-            else memory_params.get("longTermEnabled", False)
-        ),
-        "retrieval_count": int(
-            memory_params.get("retrieval_count") or memory_params.get("retrievalCount", 3)
-        ),
+        "long_term_enabled": memory_params.get("long_term_enabled", False),
+        "retrieval_count": int(memory_params.get("retrieval_count", 3)),
     }
     logger.debug(
         f"{log_prefix} Connected memory node: session={session_id} "
@@ -199,7 +190,7 @@ async def _append_skill_entries(
     if skill_type == "masterSkill":
         from services.skill_loader import get_skill_loader
 
-        skills_config = skill_params.get("skillsConfig", {})
+        skills_config = skill_params.get("skills_config", {})
         logger.debug(f"{log_prefix} Master Skill found with {len(skills_config)} configured skills")
         skill_loader = get_skill_loader()
 

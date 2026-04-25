@@ -313,33 +313,33 @@ class TriggerManager:
             second, minute = f'*/{interval}', '*'
 
         elif frequency == 'minutes':
-            interval = str(parameters.get('intervalMinutes', 5))
+            interval = str(parameters.get('interval_minutes', 5))
             minute = f'*/{interval}' if interval != '1' else '*'
 
         elif frequency == 'hours':
-            interval = str(parameters.get('intervalHours', 1))
+            interval = str(parameters.get('interval_hours', 1))
             minute = '0'
             hour = f'*/{interval}' if interval != '1' else '*'
 
         elif frequency == 'days':
-            time_str = parameters.get('dailyTime', '09:00')
+            time_str = parameters.get('daily_time', '09:00')
             parts = time_str.split(':')
             hour = parts[0] if parts else '9'
             minute = parts[1] if len(parts) > 1 else '0'
 
         elif frequency == 'weeks':
-            time_str = parameters.get('weeklyTime', '09:00')
+            time_str = parameters.get('weekly_time', '09:00')
             parts = time_str.split(':')
             hour = parts[0] if parts else '9'
             minute = parts[1] if len(parts) > 1 else '0'
             weekday = parameters.get('weekday', '1')
 
         elif frequency == 'months':
-            time_str = parameters.get('monthlyTime', '09:00')
+            time_str = parameters.get('monthly_time', '09:00')
             parts = time_str.split(':')
             hour = parts[0] if parts else '9'
             minute = parts[1] if len(parts) > 1 else '0'
-            day = parameters.get('monthDay', '1')
+            day = parameters.get('month_day', '1')
 
         elif frequency == 'once':
             return None
