@@ -5,8 +5,29 @@
  * Conditions are evaluated against the source node's output at runtime.
  */
 import React, { useState, useEffect, useCallback } from 'react';
-import * as Dialog from '@radix-ui/react-dialog';
-import { useAppTheme } from '../hooks/useAppTheme';
+import { GitBranch } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Card } from '@/components/ui/card';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   EdgeCondition,
   ConditionOperator,
@@ -31,6 +52,22 @@ interface EdgeConditionEditorProps {
   sourceNodeName?: string;
 }
 
+const parseValue = (val: string, type?: string): any => {
+  if (type === 'number') {
+    const num = parseFloat(val);
+    return isNaN(num) ? val : num;
+  }
+  if (type === 'boolean') return val.toLowerCase() === 'true';
+  if (type === 'array') {
+    try {
+      return JSON.parse(val);
+    } catch {
+      return val.split(',').map(s => s.trim());
+    }
+  }
+  return val;
+};
+
 const EdgeConditionEditor: React.FC<EdgeConditionEditorProps> = ({
   isOpen,
   onClose,
@@ -40,8 +77,6 @@ const EdgeConditionEditor: React.FC<EdgeConditionEditorProps> = ({
   availableFields = [],
   sourceNodeName,
 }) => {
-  const theme = useAppTheme();
-
   // Form state
   const [field, setField] = useState(condition?.field || '');
   const [operator, setOperator] = useState<ConditionOperator>(condition?.operator || 'eq');
@@ -66,7 +101,6 @@ const EdgeConditionEditor: React.FC<EdgeConditionEditorProps> = ({
   const operatorsByCategory = getOperatorsByCategory();
 
   const handleSave = useCallback(() => {
-    // If no field specified, remove condition
     if (!field.trim()) {
       onSave(undefined, edgeLabel.trim() || undefined);
       onClose();
@@ -94,349 +128,147 @@ const EdgeConditionEditor: React.FC<EdgeConditionEditorProps> = ({
     onClose();
   }, [onSave, onClose]);
 
-  // Parse value based on expected type
-  const parseValue = (val: string, type?: string): any => {
-    if (type === 'number') {
-      const num = parseFloat(val);
-      return isNaN(num) ? val : num;
-    }
-    if (type === 'boolean') {
-      return val.toLowerCase() === 'true';
-    }
-    if (type === 'array') {
-      try {
-        return JSON.parse(val);
-      } catch {
-        return val.split(',').map(s => s.trim());
-      }
-    }
-    return val;
-  };
-
-  const inputStyle: React.CSSProperties = {
-    width: '100%',
-    padding: `${theme.spacing.sm} ${theme.spacing.md}`,
-    fontSize: theme.fontSize.base,
-    border: `1px solid ${theme.colors.border}`,
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: theme.colors.background,
-    color: theme.colors.text,
-    fontFamily: 'system-ui, sans-serif',
-    outline: 'none',
-  };
-
-  const selectStyle: React.CSSProperties = {
-    ...inputStyle,
-    cursor: 'pointer',
-  };
-
-  const labelStyle: React.CSSProperties = {
-    display: 'block',
-    marginBottom: theme.spacing.xs,
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.medium,
-    color: theme.colors.textSecondary,
-  };
-
-  const sectionStyle: React.CSSProperties = {
-    marginBottom: theme.spacing.lg,
-  };
-
-  const buttonBaseStyle: React.CSSProperties = {
-    padding: `${theme.spacing.sm} ${theme.spacing.lg}`,
-    borderRadius: theme.borderRadius.md,
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.medium,
-    cursor: 'pointer',
-    border: 'none',
-    transition: theme.transitions.fast,
-  };
-
   return (
-    <Dialog.Root open={isOpen}>
-      <Dialog.Portal>
-        <Dialog.Overlay
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            backdropFilter: 'blur(2px)',
-            zIndex: 1100,
-          }}
-        />
-        <Dialog.Content
-          style={{
-            position: 'fixed',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            backgroundColor: theme.colors.background,
-            borderRadius: theme.borderRadius.lg,
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-            width: '420px',
-            maxHeight: '85vh',
-            display: 'flex',
-            flexDirection: 'column',
-            fontFamily: 'system-ui, sans-serif',
-            overflow: 'hidden',
-            zIndex: 1101,
-          }}
-        >
-          {/* Header */}
-          <div
-            style={{
-              padding: `${theme.spacing.lg} ${theme.spacing.xl}`,
-              borderBottom: `1px solid ${theme.colors.border}`,
-              backgroundColor: theme.colors.backgroundPanel,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}
-          >
-            <Dialog.Title
-              style={{
-                margin: 0,
-                fontSize: theme.fontSize.lg,
-                fontWeight: theme.fontWeight.semibold,
-                color: theme.colors.text,
-                display: 'flex',
-                alignItems: 'center',
-                gap: theme.spacing.sm,
-              }}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={theme.dracula.cyan} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M16 3h5v5"/>
-                <path d="M21 3l-7 7"/>
-                <path d="M8 21H3v-5"/>
-                <path d="M3 21l7-7"/>
-              </svg>
-              Edge Condition
-            </Dialog.Title>
-            <Dialog.Close
-              onClick={onClose}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                fontSize: '20px',
-                cursor: 'pointer',
-                color: theme.colors.textSecondary,
-                padding: theme.spacing.xs,
-                borderRadius: theme.borderRadius.sm,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: '32px',
-                height: '32px',
-              }}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18"/>
-                <line x1="6" y1="6" x2="18" y2="18"/>
-              </svg>
-            </Dialog.Close>
-          </div>
-
-          <Dialog.Description style={{ display: 'none' }}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-h-[85vh] w-[420px] overflow-hidden p-0">
+        <DialogHeader className="border-b border-border bg-muted px-5 py-4">
+          <DialogTitle className="flex items-center gap-2">
+            <GitBranch className="h-4 w-4 text-accent" />
+            Edge Condition
+          </DialogTitle>
+          <DialogDescription className="sr-only">
             Configure condition for edge branching
-          </Dialog.Description>
+          </DialogDescription>
+        </DialogHeader>
 
-          {/* Content */}
-          <div style={{ padding: theme.spacing.xl, overflowY: 'auto' }}>
-            {/* Source node info */}
-            {sourceNodeName && (
-              <div
-                style={{
-                  marginBottom: theme.spacing.lg,
-                  padding: theme.spacing.md,
-                  backgroundColor: theme.colors.backgroundPanel,
-                  borderRadius: theme.borderRadius.md,
-                  fontSize: theme.fontSize.sm,
-                  color: theme.colors.textSecondary,
-                }}
-              >
-                Condition evaluates output from: <strong style={{ color: theme.colors.text }}>{sourceNodeName}</strong>
-              </div>
-            )}
+        {/* Content */}
+        <div className="space-y-4 overflow-y-auto px-5 py-5">
+          {sourceNodeName && (
+            <Card className="bg-muted px-3 py-2 text-sm text-muted-foreground">
+              Condition evaluates output from:{' '}
+              <strong className="text-foreground">{sourceNodeName}</strong>
+            </Card>
+          )}
 
-            {/* Field input */}
-            <div style={sectionStyle}>
-              <label style={labelStyle}>Field Path</label>
-              <input
-                type="text"
-                value={field}
-                onChange={(e) => setField(e.target.value)}
-                placeholder="e.g., result.status, items.0.name"
-                style={inputStyle}
-                list="available-fields"
-              />
-              {availableFields.length > 0 && (
-                <datalist id="available-fields">
-                  {availableFields.map((f) => (
-                    <option key={f} value={f} />
-                  ))}
-                </datalist>
-              )}
-              <div style={{ marginTop: theme.spacing.xs, fontSize: theme.fontSize.xs, color: theme.colors.textMuted }}>
-                Use dot notation for nested fields (e.g., result.data.value)
-              </div>
-            </div>
-
-            {/* Operator select */}
-            <div style={sectionStyle}>
-              <label style={labelStyle}>Operator</label>
-              <select
-                value={operator}
-                onChange={(e) => setOperator(e.target.value as ConditionOperator)}
-                style={selectStyle}
-              >
-                {Object.entries(operatorsByCategory).map(([category, ops]) => (
-                  <optgroup key={category} label={category}>
-                    {ops.map((op) => (
-                      <option key={op} value={op}>
-                        {OPERATORS[op].label}
-                      </option>
-                    ))}
-                  </optgroup>
+          {/* Field input */}
+          <div className="space-y-1.5">
+            <Label htmlFor="edge-field">Field Path</Label>
+            <Input
+              id="edge-field"
+              type="text"
+              value={field}
+              onChange={(e) => setField(e.target.value)}
+              placeholder="e.g., result.status, items.0.name"
+              list="available-fields"
+            />
+            {availableFields.length > 0 && (
+              <datalist id="available-fields">
+                {availableFields.map((f) => (
+                  <option key={f} value={f} />
                 ))}
-              </select>
-              <div style={{ marginTop: theme.spacing.xs, fontSize: theme.fontSize.xs, color: theme.colors.textMuted }}>
-                {operatorMeta.description}
-              </div>
-            </div>
-
-            {/* Value input (conditional) */}
-            {operatorMeta.requiresValue && (
-              <div style={sectionStyle}>
-                <label style={labelStyle}>
-                  Value
-                  {operatorMeta.valueType === 'array' && (
-                    <span style={{ fontWeight: 'normal', marginLeft: theme.spacing.sm }}>
-                      (comma-separated or JSON array)
-                    </span>
-                  )}
-                </label>
-                <input
-                  type={operatorMeta.valueType === 'number' ? 'number' : 'text'}
-                  value={value}
-                  onChange={(e) => setValue(e.target.value)}
-                  placeholder={
-                    operatorMeta.valueType === 'array'
-                      ? 'e.g., value1, value2 or ["a", "b"]'
-                      : 'Enter comparison value'
-                  }
-                  style={inputStyle}
-                />
-              </div>
+              </datalist>
             )}
+            <p className="text-xs text-muted-foreground">
+              Use dot notation for nested fields (e.g., result.data.value)
+            </p>
+          </div>
 
-            {/* Edge label */}
-            <div style={sectionStyle}>
-              <label style={labelStyle}>Edge Label (optional)</label>
-              <input
-                type="text"
-                value={edgeLabel}
-                onChange={(e) => setEdgeLabel(e.target.value)}
-                placeholder="Auto-generated from condition"
-                style={inputStyle}
+          {/* Operator select */}
+          <div className="space-y-1.5">
+            <Label htmlFor="edge-operator">Operator</Label>
+            <Select value={operator} onValueChange={(v) => setOperator(v as ConditionOperator)}>
+              <SelectTrigger id="edge-operator">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(operatorsByCategory).map(([category, ops]) => (
+                  <SelectGroup key={category}>
+                    <SelectLabel>{category}</SelectLabel>
+                    {ops.map((op) => (
+                      <SelectItem key={op} value={op}>
+                        {OPERATORS[op].label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">{operatorMeta.description}</p>
+          </div>
+
+          {/* Value input (conditional) */}
+          {operatorMeta.requiresValue && (
+            <div className="space-y-1.5">
+              <Label htmlFor="edge-value">
+                Value
+                {operatorMeta.valueType === 'array' && (
+                  <span className="ml-2 font-normal">(comma-separated or JSON array)</span>
+                )}
+              </Label>
+              <Input
+                id="edge-value"
+                type={operatorMeta.valueType === 'number' ? 'number' : 'text'}
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                placeholder={
+                  operatorMeta.valueType === 'array'
+                    ? 'e.g., value1, value2 or ["a", "b"]'
+                    : 'Enter comparison value'
+                }
               />
-              <div style={{ marginTop: theme.spacing.xs, fontSize: theme.fontSize.xs, color: theme.colors.textMuted }}>
-                Displayed on the workflow canvas
-              </div>
             </div>
+          )}
 
-            {/* Error message */}
-            {error && (
-              <div
-                style={{
-                  padding: theme.spacing.md,
-                  backgroundColor: `${theme.colors.error}20`,
-                  border: `1px solid ${theme.colors.error}40`,
-                  borderRadius: theme.borderRadius.md,
-                  color: theme.colors.error,
-                  fontSize: theme.fontSize.sm,
-                  marginBottom: theme.spacing.lg,
-                }}
-              >
-                {error}
-              </div>
-            )}
-
-            {/* Preview */}
-            {field && (
-              <div
-                style={{
-                  padding: theme.spacing.md,
-                  backgroundColor: theme.colors.backgroundPanel,
-                  borderRadius: theme.borderRadius.md,
-                  marginBottom: theme.spacing.lg,
-                }}
-              >
-                <div style={{ fontSize: theme.fontSize.xs, color: theme.colors.textMuted, marginBottom: theme.spacing.xs }}>
-                  Preview:
-                </div>
-                <div style={{ fontSize: theme.fontSize.sm, color: theme.dracula.cyan, fontFamily: 'monospace' }}>
-                  if output.{field} {OPERATORS[operator].label.toLowerCase()}
-                  {operatorMeta.requiresValue && value && ` "${value}"`}
-                </div>
-              </div>
-            )}
+          {/* Edge label */}
+          <div className="space-y-1.5">
+            <Label htmlFor="edge-label">Edge Label (optional)</Label>
+            <Input
+              id="edge-label"
+              type="text"
+              value={edgeLabel}
+              onChange={(e) => setEdgeLabel(e.target.value)}
+              placeholder="Auto-generated from condition"
+            />
+            <p className="text-xs text-muted-foreground">Displayed on the workflow canvas</p>
           </div>
 
-          {/* Footer */}
-          <div
-            style={{
-              padding: theme.spacing.lg,
-              borderTop: `1px solid ${theme.colors.border}`,
-              backgroundColor: theme.colors.backgroundPanel,
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-            }}
-          >
-            {/* Remove condition button (left side) */}
-            {condition && (
-              <button
-                onClick={handleRemoveCondition}
-                style={{
-                  ...buttonBaseStyle,
-                  backgroundColor: `${theme.colors.error}20`,
-                  color: theme.colors.error,
-                  border: `1px solid ${theme.colors.error}40`,
-                }}
-              >
-                Remove Condition
-              </button>
-            )}
-            {!condition && <div />}
+          {/* Error message */}
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
 
-            {/* Save/Cancel buttons (right side) */}
-            <div style={{ display: 'flex', gap: theme.spacing.sm }}>
-              <button
-                onClick={onClose}
-                style={{
-                  ...buttonBaseStyle,
-                  backgroundColor: 'transparent',
-                  color: theme.colors.textSecondary,
-                  border: `1px solid ${theme.colors.border}`,
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                style={{
-                  ...buttonBaseStyle,
-                  backgroundColor: theme.dracula.cyan,
-                  color: theme.dracula.background,
-                }}
-              >
-                Save Condition
-              </button>
-            </div>
+          {/* Preview */}
+          {field && (
+            <Card className="bg-muted p-3">
+              <div className="mb-1 text-xs text-muted-foreground">Preview:</div>
+              <div className="font-mono text-sm text-accent">
+                if output.{field} {OPERATORS[operator].label.toLowerCase()}
+                {operatorMeta.requiresValue && value && ` "${value}"`}
+              </div>
+            </Card>
+          )}
+        </div>
+
+        {/* Footer */}
+        <DialogFooter className="flex flex-row items-center justify-between border-t border-border bg-muted px-5 py-4 sm:justify-between">
+          {condition ? (
+            <Button variant="destructive" onClick={handleRemoveCondition}>
+              Remove Condition
+            </Button>
+          ) : (
+            <div />
+          )}
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave}>Save Condition</Button>
           </div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
 

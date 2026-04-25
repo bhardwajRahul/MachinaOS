@@ -37,8 +37,8 @@ import fuzzysort from 'fuzzysort';
 import { Search, X } from 'lucide-react';
 
 import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
 import type { ProviderConfig, CategoryGroup } from './types';
-import { useAppTheme } from '../../hooks/useAppTheme';
 
 // ============================================================================
 // Props
@@ -142,45 +142,29 @@ interface RowProps {
   provider: ProviderConfig;
   selected: boolean;
   onSelect: (id: string) => void;
-  theme: ReturnType<typeof useAppTheme>;
 }
 
-const ProviderRow = memo<RowProps>(function ProviderRow({ provider, selected, onSelect, theme }) {
+const ProviderRow = memo<RowProps>(function ProviderRow({ provider, selected, onSelect }) {
   const Icon = provider.icon;
   const handleClick = useCallback(() => onSelect(provider.id), [onSelect, provider.id]);
-
-  const bg = selected ? `${theme.dracula.purple}18` : 'transparent';
-  const border = selected ? `1px solid ${theme.dracula.purple}60` : '1px solid transparent';
 
   return (
     <Command.Item
       value={provider.id}
       onSelect={handleClick}
-      className="machinaos-palette-row"
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: theme.spacing.md,
-        padding: `${theme.spacing.sm} ${theme.spacing.md}`,
-        cursor: 'pointer',
-        borderRadius: theme.borderRadius.sm,
-        background: bg,
-        border,
-        color: theme.colors.text,
-        fontSize: theme.fontSize.sm,
-      }}
+      className={cn(
+        'machinaos-palette-row flex cursor-pointer items-center gap-3 rounded-sm border px-3 py-2 text-sm text-foreground',
+        selected
+          ? 'border-node-agent-border bg-node-agent-soft'
+          : 'border-transparent bg-transparent'
+      )}
     >
       <div className="flex h-6 w-6 shrink-0 items-center justify-center text-foreground">
-        <Icon size={parseInt(theme.iconSize.sm)} />
+        <Icon size={14} />
       </div>
-      <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
-        {provider.name}
-      </span>
+      <span className="flex-1 truncate">{provider.name}</span>
       {provider.stored && (
-        <span
-          aria-label="Credential stored"
-          className="h-2 w-2 rounded-full bg-success"
-        />
+        <span aria-label="Credential stored" className="h-2 w-2 rounded-full bg-success" />
       )}
     </Command.Item>
   );
@@ -193,32 +177,13 @@ const ProviderRow = memo<RowProps>(function ProviderRow({ provider, selected, on
 interface HeaderProps {
   label: string;
   count: number;
-  theme: ReturnType<typeof useAppTheme>;
 }
 
-const GroupHeader = memo<HeaderProps>(function GroupHeader({ label, count, theme }) {
+const GroupHeader = memo<HeaderProps>(function GroupHeader({ label, count }) {
   return (
-    <div
-      style={{
-        position: 'sticky',
-        top: 0,
-        zIndex: 1,
-        padding: `${theme.spacing.xs} ${theme.spacing.md}`,
-        background: theme.colors.background,
-        borderBottom: `1px solid ${theme.colors.border}`,
-        fontSize: theme.fontSize.xs,
-        fontWeight: theme.fontWeight.semibold,
-        color: theme.colors.textSecondary,
-        textTransform: 'uppercase',
-        letterSpacing: '0.04em',
-        display: 'flex',
-        justifyContent: 'space-between',
-      }}
-    >
+    <div className="sticky top-0 z-[1] flex justify-between border-b border-border bg-background px-3 py-1 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
       <span>{label}</span>
-      <span style={{ color: theme.colors.textSecondary, opacity: 0.6 }}>
-        {count}
-      </span>
+      <span className="text-muted-foreground/60">{count}</span>
     </div>
   );
 });
@@ -235,8 +200,6 @@ const CredentialsPalette: React.FC<CredentialsPaletteProps> = ({
   height = '100%',
   placeholder = 'Search providers…',
 }) => {
-  const theme = useAppTheme();
-
   // Pre-indexed fuzzysort entries — rebuilt only when `providers` reference changes.
   const prepared = useMemo(() => buildPrepared(providers), [providers]);
 
@@ -278,7 +241,7 @@ const CredentialsPalette: React.FC<CredentialsPaletteProps> = ({
       // cmdk disables built-in filtering so we can use fuzzysort instead.
       shouldFilter={false}
       label="Credential providers"
-      style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%' }}
+      className="flex h-full w-full flex-col"
     >
       <div className="border-b border-border p-2">
         <div className="relative">
@@ -318,7 +281,6 @@ const CredentialsPalette: React.FC<CredentialsPaletteProps> = ({
               <GroupHeader
                 label={grouped.groups[idx].label}
                 count={grouped.groupCounts[idx]}
-                theme={theme}
               />
             )}
             itemContent={(idx) => {
@@ -329,7 +291,6 @@ const CredentialsPalette: React.FC<CredentialsPaletteProps> = ({
                   provider={p}
                   selected={p.id === selectedId}
                   onSelect={onSelect}
-                  theme={theme}
                 />
               );
             }}
