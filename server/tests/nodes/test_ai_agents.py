@@ -439,7 +439,7 @@ class TestSimpleMemory:
     async def test_happy_path_empty_session(self, harness, _reset_memory_store):
         result = await harness.execute(
             "simpleMemory",
-            {"session_id": "sess-a", "memory_type": "buffer"},
+            {"session_id": "sess-a"},
         )
 
         harness.assert_envelope(result, success=True)
@@ -447,10 +447,10 @@ class TestSimpleMemory:
         assert payload["session_id"] == "sess-a"
         assert payload["messages"] == []
         assert payload["message_count"] == 0
-        assert payload["memory_type"] == "buffer"
-        assert payload["window_size"] is None
+        # window_size always defaults to 100 now (no buffer/window split)
+        assert payload["window_size"] == 100
 
-    async def test_window_mode_returns_last_n_messages(self, harness, _reset_memory_store):
+    async def test_window_size_returns_last_n_messages(self, harness, _reset_memory_store):
         ms = _reset_memory_store
         for i in range(5):
             ms.add_message("sess-b", "human", f"h{i}")
@@ -458,7 +458,7 @@ class TestSimpleMemory:
 
         result = await harness.execute(
             "simpleMemory",
-            {"session_id": "sess-b", "memory_type": "window", "window_size": 2},
+            {"session_id": "sess-b", "window_size": 2},
         )
 
         harness.assert_envelope(result, success=True)
@@ -469,26 +469,10 @@ class TestSimpleMemory:
         contents = [m["content"] for m in payload["messages"]]
         assert contents == ["h4", "a4"]
 
-    async def test_clear_on_run_empties_session(self, harness, _reset_memory_store):
-        ms = _reset_memory_store
-        ms.add_message("sess-c", "human", "old")
-        ms.add_message("sess-c", "ai", "older")
-        assert len(ms._sessions["sess-c"].messages) == 2
-
-        result = await harness.execute(
-            "simpleMemory",
-            {"session_id": "sess-c", "clear_on_run": True},
-        )
-
-        harness.assert_envelope(result, success=True)
-        assert result["result"]["message_count"] == 0
-        # Session still exists but emptied
-        assert ms._sessions["sess-c"].messages == []
-
     async def test_default_session_when_omitted(self, harness, _reset_memory_store):
         result = await harness.execute("simpleMemory", {})
 
         harness.assert_envelope(result, success=True)
+        # Empty session_id resolves to "default" sentinel
         assert result["result"]["session_id"] == "default"
-        assert result["result"]["memory_type"] == "buffer"
-        assert result["result"]["window_size"] is None
+        assert result["result"]["window_size"] == 100

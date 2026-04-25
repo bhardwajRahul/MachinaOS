@@ -105,7 +105,6 @@ class SimpleMemoryOutput(_OutputBase):
     session_id: Optional[str] = None
     messages: Optional[list] = None
     message_count: Optional[int] = None
-    memory_type: Optional[str] = None
     window_size: Optional[int] = None
 
 
