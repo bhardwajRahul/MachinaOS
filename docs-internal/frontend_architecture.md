@@ -208,6 +208,18 @@ Single source of truth: [src/index.css](../client/src/index.css).
   --dracula-green: 135 94% 65%;
   --dracula-purple: 265 89% 78%;
   /* ...pink, cyan, red, orange, yellow */
+
+  /* Node-type role tokens — base + soft (tinted bg) + border (tinted outline).
+   * Themes redefine these in their own scope; call sites use bg-node-X /
+   * bg-node-X-soft / border-node-X-border directly with no opacity arithmetic. */
+  --node-agent:        265 89% 78%;
+  --node-agent-soft:   265 89% 78% / 0.08;
+  --node-agent-border: 265 89% 78% / 0.3;
+  --node-model:        191 97% 77%;   /* + -soft / -border */
+  --node-skill:        135 94% 65%;   /* + -soft / -border */
+  --node-tool:         135 94% 65%;   /* + -soft / -border */
+  --node-trigger:      326 100% 74%;  /* + -soft / -border */
+  --node-workflow:     27 100% 71%;   /* + -soft / -border */
 }
 
 [data-theme="dark"] {
@@ -242,7 +254,29 @@ Rules:
      root.dataset.theme = isDarkMode ? 'dark' : 'light';
    }, [isDarkMode]);
    ```
-4. `styles/theme.ts` (`theme.dracula.*`, `theme.colors.*`) is still exported for legacy call sites. New code should prefer Tailwind classes (`bg-primary`, `text-dracula-green`) or `hsl(var(--...))` inline.
+4. `styles/theme.ts` (`theme.dracula.*`, `theme.colors.*`) is still exported for the canvas node components and `EdgeConditionEditor`. New code should prefer Tailwind classes (`bg-primary`, `text-dracula-green`, `bg-node-agent-soft`) or `hsl(var(--...))` inline.
+
+### Token tier — pick the most specific that fits
+
+| Tier | Tokens | Use for |
+|---|---|---|
+| **shadcn semantic** | `background`, `foreground`, `card`, `popover`, `primary`, `secondary`, `muted`, `accent`, `destructive`, `success`, `warning`, `info`, `border`, `input`, `ring` | App-wide chrome, status colors, generic actions. Each rotates per theme. |
+| **Node-type role** | `node-agent`, `node-model`, `node-skill`, `node-tool`, `node-trigger`, `node-workflow` (+ paired `-soft` and `-border` variants) | Anywhere a node type's identity should drive color: palette icons, parameter-panel sections, draggable variable cards, status badges, edge label tints. |
+| **Dracula raw** | `dracula-green`, `dracula-purple`, `dracula-pink`, `dracula-cyan`, `dracula-red`, `dracula-orange`, `dracula-yellow` | Action-button palette (`<ActionButton tone="green">`). Constant across themes by design. Avoid in new code unless you specifically need that. |
+
+### No opacity arithmetic at call sites
+
+`bg-primary/10` and `border-node-agent/30` are forbidden in new code. Themes own the exact tint per role:
+
+```tsx
+// ❌ Don't
+<Card className="bg-node-agent/10 border-node-agent/30" />
+
+// ✅ Do — themes can redefine --node-agent-soft / -border independently
+<Card className="bg-node-agent-soft border-node-agent-border" />
+```
+
+Add a new `-soft` / `-border` (or other named) variant to `--node-X` if a unique opacity is needed; never inline the math at the call site.
 
 ## Component primitives
 
@@ -476,3 +510,5 @@ The `MACHINAOS_INSTALLING=true` env var suppresses the recursive project postins
 ## Migration history (for context)
 
 This architecture is the post-migration state. Pre-migration was antd + `styled-components` + a custom theme.ts-driven palette. See [ui_migration_plan.md](./ui_migration_plan.md) for the phase-by-phase transition and the 17 commits that executed it.
+
+**`useAppTheme()` is grandfathered** for the canvas node components (`AIAgentNode`, `SquareNode`, `TriggerNode`, `StartNode`, `ToolkitNode`, `TeamMonitorNode`, `BaseChatModelNode`, `ModelNode`, `GenericNode`) and `EdgeConditionEditor` only — they interpolate per-definition `nodeColor` into gradients, borders, and React Flow `<Handle>` styles. Every other surface uses Tailwind + the token tiers above.

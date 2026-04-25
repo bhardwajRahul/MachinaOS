@@ -375,7 +375,42 @@ LOG_FORMAT=text     # text or json
 - **Cleanup in finally blocks** - Ensure resources are released even on error
 - **No orphan prevention hacks** - Trust the existing lifecycle management
 
-### 7. Cache System Architecture (n8n Pattern)
+### 7. Frontend Design + Theme System (strict)
+
+**Always use the existing design and theme systems.** Tribal styling reintroduced anywhere defeats the migration. The following rules are non-negotiable for any new or edited frontend file:
+
+1. **Compose shadcn primitives** from [client/src/components/ui/](./client/src/components/ui/) — `Button`, `Badge`, `Alert`, `AlertDialog`, `Dialog`, `DropdownMenu`, `Select`, `Popover`, `Tooltip`, `Tabs`, `Card`, `Input`, `Textarea`, `Switch`, `Checkbox`, `Slider`, `Label`, `Form`, `Collapsible`, `Accordion`, `Skeleton`, `Sonner`. **Do not hand-roll** modals, dropdowns, menus, toasts, dialogs, or buttons when a primitive exists. Add `npx shadcn@latest add <name>` if the primitive is missing.
+2. **Action buttons → `<ActionButton tone="...">`** ([client/src/components/ui/action-button.tsx](./client/src/components/ui/action-button.tsx)). Never re-introduce the `actionButtonStyle()` / hand-built colored buttons.
+3. **Style with Tailwind classes**, not `style={{...}}`. Inline `style` is allowed only for genuinely dynamic values (React Flow `<Handle>` positioning, runtime-computed coordinates, dynamic per-definition `nodeColor` on canvas nodes).
+4. **Use the token tier table** in [docs-internal/frontend_architecture.md](./docs-internal/frontend_architecture.md#tokens--theming):
+   - Generic chrome / status → shadcn semantic tokens (`bg-card`, `text-muted-foreground`, `border-border`, `text-success`, `bg-destructive`, `text-warning`, `text-info`, `bg-accent`, etc.)
+   - Node-type-themed surfaces → `--node-X` role tokens (`bg-node-agent`, `bg-node-model-soft`, `border-node-skill-border`, `text-node-trigger`, `text-node-workflow`, `bg-node-tool-soft`)
+   - Action-button palette → `<ActionButton tone="green|purple|pink|cyan|orange|yellow|red">` only
+5. **No opacity arithmetic at call sites.** `bg-primary/10`, `border-node-agent/30`, `${color}25` template literals are forbidden. If a unique tint is needed, add a new variant to the theme (e.g., `--node-X-soft`, `--node-X-border`) and use it by name.
+6. **No theme-locked names in non-decorative code.** Avoid `bg-dracula-purple`, `text-dracula-cyan`, etc. unless the constant accent is intentional (action-button palette). Prefer the role token (`bg-node-agent`) so future themes redefine without code edits.
+7. **No `useAppTheme()` in new files.** It is grandfathered for the canvas node components and `EdgeConditionEditor` only because they interpolate per-definition `nodeColor`. Every other surface uses Tailwind + the tokens above.
+8. **Icons → `lucide-react`.** Inline SVGs are reserved for non-iconographic graphics (charts, decorative shapes). Replace any `<svg>...</svg>` icon you encounter while editing.
+
+When in doubt, read [docs-internal/frontend_architecture.md](./docs-internal/frontend_architecture.md) before introducing new patterns.
+
+### 8. Naming Conventions (strict)
+
+| Layer | Convention | Examples |
+|---|---|---|
+| Python identifier (function, variable, module, file) | `snake_case` | `get_user_settings`, `auth_service`, `node_allowlist.py` |
+| JSON config key (read by Python) | `snake_case` | `enabled_nodes`, `default_llm_provider`, `compaction_ratio` |
+| WebSocket message type (Python ↔ TS wire) | `snake_case` | `get_node_allowlist`, `save_user_settings`, `validate_api_key` |
+| Database column / SQLModel field | `snake_case` | `created_at`, `auto_save_interval`, `examples_loaded` |
+| Python class | `PascalCase` | `NodeAllowlistService`, `WorkflowExecutor` |
+| TypeScript identifier | `camelCase` | `useNodeAllowlist`, `enabledNodes`, `isVisible` |
+| TypeScript file (React hook) | `camelCase` starting with `use` | `useNodeAllowlist.ts`, `useWebSocket.ts` |
+| Node type identifier | stored verbatim — **do not transform** | `aiAgent`, `httpRequest`, `openaiChatModel` (currently camelCase in this repo) |
+
+**Crossing the wire**: payload keys between Python and TS are always `snake_case` (Python writes the payload). The TS hook receives `snake_case` keys and binds them to local `camelCase` variables; do not auto-transform across languages with a serializer.
+
+Do not invent kebab-case or PascalCase variants for any of the rows above. The existing codebase is internally consistent — match it.
+
+### 9. Cache System Architecture (n8n Pattern)
 The cache system follows n8n's pattern with automatic fallback:
 
 ```
@@ -531,74 +566,26 @@ AI model nodes route through `SquareNode` via `Dashboard.tsx`'s `COMPONENT_BY_KI
 - `src/store/useAppStore.ts` - Zustand application state with localStorage persistence for UI settings
 
 ### Theme System
-- `src/styles/theme.ts` - Unified theme with Solarized + Dracula color palettes
-- `src/hooks/useAppTheme.ts` - Dynamic theme hook for dark/light mode
-- `src/contexts/ThemeContext.tsx` - Theme context with `isDarkMode` and `toggleTheme`
-- `src/index.css` - Global CSS including dark mode scrollbar styles
 
-#### Color Palettes
-The theme system uses two complementary color palettes:
+Single source of truth: [client/src/index.css](./client/src/index.css). All tokens are HSL channel triplets (no `hsl()` wrapper) so Tailwind composes alpha via `bg-primary/50`, `text-foreground/80`, etc.
 
-**Solarized** (backgrounds and text):
-- `theme.colors.*` - Dynamic colors based on light/dark mode
-- `theme.accent.*` - Solarized accent colors (blue, cyan, green, yellow, orange, red, magenta, violet)
+**Token tiers** (pick the most specific that fits):
 
-**Dracula** (vibrant action colors):
-- `theme.dracula.green` (#50fa7b) - Run/Success actions
-- `theme.dracula.purple` (#bd93f9) - Start/Save actions
-- `theme.dracula.pink` (#ff79c6) - Cancel/Stop actions
-- `theme.dracula.cyan` (#8be9fd) - Info/Alternative actions
-- `theme.dracula.red` (#ff5555) - Error/Danger states
-- `theme.dracula.orange` (#ffb86c) - Settings/Warning
-- `theme.dracula.yellow` (#f1fa8c) - Credentials/Highlight
+1. **shadcn semantic tokens** — `background`, `foreground`, `card`, `popover`, `primary`, `secondary`, `muted`, `accent`, `destructive`, `success`, `warning`, `info`, `border`, `input`, `ring`. Each rotates per theme.
+2. **Node-type role tokens** — `--node-agent`, `--node-model`, `--node-skill`, `--node-tool`, `--node-trigger`, `--node-workflow`. Each exposes three variants:
+   - `bg-node-X` / `text-node-X` — solid (icons, badges, accents)
+   - `bg-node-X-soft` — tinted surface (cards, tinted backgrounds)
+   - `border-node-X-border` — tinted outline
+   Themes redefine these in their own scope without touching call sites. **Never use opacity arithmetic at the call site** (`bg-node-agent/10`); add a new `-soft` / `-border` variant if you need a different opacity.
+3. **Dracula raw accents** — `--dracula-green/purple/pink/cyan/red/orange/yellow`. Same value across light + dark themes; reserved for the action-button palette (`<ActionButton tone="green">` etc.). Avoid in new code unless you specifically need the constant accent across themes.
 
-#### UI Components Using Dracula Theme
-- **TopToolbar Action Buttons**: Run (green), Start (purple), Stop (pink), Save (cyan)
-- **TopToolbar Icon Buttons**: Settings (orange), Credentials (yellow), Theme Toggle (yellow/purple)
-- **TopToolbar File Button**: Cyan text with medium font size and semibold weight, colorful dropdown menu items
-- **ParameterPanel Buttons**: Run (green), Save (purple), Cancel (pink)
-- **React Flow Edges**: Default (cyan), Selected/Executing (purple), Completed (green), Error (red), Pending (cyan)
-- **Node Execution Glow**: Purple glow animation during execution
+**Action buttons** — use [ActionButton](./client/src/components/ui/action-button.tsx) (CVA primitive with `tone` variants: `green | purple | pink | cyan | orange | yellow | red`). Replaces the old `actionButtonStyle()` helper.
 
-#### File Operations Menu Styling
-The File dropdown menu uses per-item Dracula colors:
-```typescript
-// In TopToolbar.tsx
-{[
-  { label: 'New Workflow', icon: '...', action: onNew, color: theme.dracula.green },
-  { label: 'Open', icon: '...', action: onOpen, color: theme.accent.blue },
-  { label: 'Export', icon: '...', action: onExportFile, color: theme.accent.cyan },
-  { label: 'Import', icon: '...', action: onImportJSON, color: theme.accent.cyan },
-  { label: 'Copy as JSON', icon: '...', action: onExportJSON, color: theme.dracula.purple },
-].map(...)}
+**shadcn primitives** — full set under `client/src/components/ui/` (Button, Badge, Alert, Dialog, DropdownMenu, Select, Popover, Tooltip, Tabs, Card, Input, Textarea, Switch, Checkbox, Slider, Label, Form, Sonner, Skeleton, Collapsible, Accordion, AlertDialog). New code composes these with Tailwind classes.
 
-// File button style
-const textButtonStyle: React.CSSProperties = {
-  color: theme.dracula.cyan,
-  border: `1px solid ${theme.dracula.cyan}40`,
-  fontSize: theme.fontSize.md,
-  fontWeight: theme.fontWeight.semibold,
-  ...
-};
-```
+**`useAppTheme()`** ([src/styles/theme.ts](./client/src/styles/theme.ts), [src/hooks/useAppTheme.ts](./client/src/hooks/useAppTheme.ts)) is grandfathered for the canvas node components (`AIAgentNode`, `SquareNode`, `TriggerNode`, `StartNode`, `ToolkitNode`, `TeamMonitorNode`, `BaseChatModelNode`, `ModelNode`, `GenericNode`) and `EdgeConditionEditor` — they interpolate per-definition `nodeColor` into gradients, borders, and React Flow `<Handle>` styles. Every other surface uses Tailwind + the tokens above.
 
-#### Button Style Pattern
-Action buttons use a consistent pattern with Dracula colors:
-```typescript
-const actionButtonStyle = (color: string, isDisabled = false) => ({
-  backgroundColor: isDisabled ? `${theme.colors.primary}15` : `${color}25`,
-  color: isDisabled ? theme.colors.primary : color,
-  border: `1px solid ${isDisabled ? `${theme.colors.primary}40` : `${color}60`}`,
-});
-```
-
-#### Edge Styles
-React Flow edges use dynamic Dracula colors via `getEdgeStyles(theme.dracula)`:
-- Default edges: `theme.dracula.cyan`
-- Selected/executing: `theme.dracula.purple` with glow animation
-- Completed: `theme.dracula.green`
-- Error: `theme.dracula.red`
-- Pending: `theme.dracula.cyan` with dash animation
+**Theme switching** — `[data-theme="dark"]` + Tailwind's `.dark` class, both set by `App.tsx`'s `useEffect` on `isDarkMode`. See [docs-internal/frontend_architecture.md](./docs-internal/frontend_architecture.md#tokens--theming) for the full token table and migration patterns.
 
 ### WebSocket-First Architecture
 The project uses WebSocket as the primary communication method between frontend and backend, replacing most REST API calls:
