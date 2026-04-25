@@ -313,12 +313,16 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
   // Unique folders selected across the connected MasterSkill nodes;
   // each folder is fetched via `scan_skill_folder` so the per-child
   // SKILL.md frontmatter (icon / color / description) flows from the
-  // backend instead of being hardcoded in the frontend.
+  // backend instead of being hardcoded in the frontend. Default to
+  // `'assistant'` when a master-skill node has no `skillFolder` value
+  // saved yet, mirroring MasterSkillEditor's UI default — otherwise
+  // freshly-toggled child skills render with no icon/color metadata.
   const masterSkillFolders = useMemo<string[]>(() => {
+    if (masterSkillEdgeSources.length === 0) return [];
     const folders = new Set<string>();
     for (const id of masterSkillEdgeSources) {
       const folder = masterSkillParams[id]?.skillFolder;
-      if (typeof folder === 'string' && folder.length > 0) folders.add(folder);
+      folders.add(typeof folder === 'string' && folder.length > 0 ? folder : 'assistant');
     }
     return Array.from(folders);
   }, [masterSkillEdgeSources, masterSkillParams]);
