@@ -374,6 +374,8 @@ components/credentials/CredentialsModal.tsx
 
 **Slice-subscribed cache entries MUST set `gcTime: GC_TIME.FOREVER`.** Slice subscribers don't register as TanStack observers, so without this override the cache entry is garbage-collected after the default `gcTime` (5 min) and every consumer reads `undefined`. The user-visible regression is "canvas nodes lose their icons / handles after idle." Applies to `fetchNodeSpec`, `fetchNodeGroups`, and the `useNodeGroups` `useQuery`; the persistor in `lib/queryPersist.ts` only handles cross-reload survival.
 
+**Anchor cache contracts at the prefix root via `setQueryDefaults`, not per-call options.** `PersistQueryClientProvider` hydrates entries from localStorage with the QueryClient's *default* options, so per-call `staleTime: FOREVER` does not stop `gcTime: 5min` eviction on hydration. Every persisted prefix must have a matching `queryClient.setQueryDefaults(['<prefix>'], { staleTime: FOREVER, gcTime: FOREVER })` declaration in [client/src/lib/queryClient.ts](../client/src/lib/queryClient.ts). The current canonical set is `['nodeSpec']`, `['nodeGroups']`, `['credentialValues']`, `['skillContent']`. The persistor whitelist in [client/src/lib/queryPersist.ts](../client/src/lib/queryPersist.ts) must mirror it; a string in the whitelist that doesn't match a real query key (the prior `'pluginCatalogue'` typo) is silently dead. `credentialCatalogue` is intentionally NOT in either list -- it has its own `idb-keyval` warm-start.
+
 **Component rules:**
 - `PanelRenderer` lazy-loads each panel type so the initial JS payload doesn't grow linearly with provider count.
 - Panels are config-driven: `StatusCard`, `ActionBar`, `FieldRenderer`, `OAuthConnect` consume `ProviderConfig` fields rather than hand-coding per-provider JSX.
@@ -395,6 +397,8 @@ See [ui_migration_plan.md](./ui_migration_plan.md) Phase 6.
 - `useEffect` fetch-on-mount is banned for anything the backend can push. Subscribe to the context slice instead.
 - All modifying operations go through WebSocket — REST is reserved for auth + webhooks.
 - No polling. If a component wants fresh data, call `sendRequest` once (or use TanStack Query with `staleTime: Infinity` + manual `invalidate`).
+- **`sendRequest` queues during disconnect with backpressure.** When the socket is not open, the request enqueues with an `AbortController`-backed per-request timeout (default 30s) and replays on reconnect inside `ws.onopen` before `setIsReady(true)`. Queue caps at 200 with FIFO eviction (rejects oldest with `backpressure: too many queued requests`). Intentional close (`event.code === 1000`) drops the queue; transient closes preserve it. Eliminates indefinite spinners during the 3-second reconnect window. Implementation: `pendingSendQueueRef` + `drainPendingSends` in `WebSocketContext.tsx`.
+- **`currentWorkflowId` lives in `useAppStore` only.** Non-React listeners (WS handlers) read it via `useAppStore.getState().currentWorkflow?.id` -- the documented Zustand escape hatch (https://github.com/pmndrs/zustand#read-state-without-subscription). The previous `currentWorkflowIdRef` mirror inside WebSocketContext was a one-render-late copy that misrouted broadcasts during workflow switches. The push to `nodeStatusStore.setCurrentWorkflowId` is driven from a single `useEffect` in `Dashboard.tsx`.
 
 ## Ownership boundary: TanStack Query vs Zustand vs WebSocketContext
 

@@ -142,6 +142,20 @@ Broadcasts are sent to all connected clients without a request-response correlat
 | `compaction_starting` | Memory compaction begins | `{session_id, node_id}` |
 | `compaction_completed` | Memory compaction ends | `{session_id, success, tokens_before, tokens_after}` |
 
+## Execution correlation IDs
+
+Each `execute_node` request generates a `uuid4().hex` token at handler entry (`server/routers/websocket.py`, `handle_execute_node`). The token is:
+
+- propagated through every `node_status` broadcast for the run (`executing` -> `success` / `error` / `idle`),
+- propagated through the matching `node_output` broadcast,
+- returned in the `execute_node` response payload as `execution_id`.
+
+The frontend's `ExecutionResult` type carries the token as `executionId`. `OutputSection` dedups by `executionId` directly; the previous JSON-stringified output equality check collapsed two distinct executions whose payloads happened to match. The token also lets future replay / retry / observability work attach metadata to a single run -- same role as a request id in HTTP middleware or a trace id in OpenTelemetry. When neither side carries an `executionId` (legacy results, catch-block stubs), `OutputSection` falls back to structural equality on `outputs`.
+
+## `clear_node_status` is an idle reset, not a delete
+
+`StatusBroadcaster.clear_node_status(node_id)` resets the slot to `{status: "idle", data: {}, cleared: true}` instead of `del`'ing the dict entry. The previous implementation deleted the slot, which created a race window: an in-flight execution's subsequent `success` broadcast re-created the entry and the UI was stuck showing "completed" on a node the user just cancelled. Resetting to idle preserves entry identity (so subsequent broadcasts update it normally) and the `cleared: true` flag lets callers tell apart "never ran" from "explicitly cleared."
+
 ## Android Two-State Connection Model
 
 Android support uses a two-state model because a relay WebSocket can be connected without a device being paired. The UI needs both signals.
