@@ -1,11 +1,14 @@
 """AI service for managing language models with LangGraph state machine support."""
 
+from __future__ import annotations
+
+import functools
 import re
 import time
 import httpx
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, Any, List, Optional, Callable, Type, TypedDict, Annotated, Sequence
+from typing import Dict, Any, List, Optional, Callable, Type, TypedDict, Annotated, Sequence, TYPE_CHECKING
 import operator
 
 _ai_t0 = time.perf_counter()
@@ -16,41 +19,107 @@ def _ailog(msg):
     print(f"           ai.py: {msg} ({elapsed:.0f}ms)", flush=True)
 
 
+# ---------------------------------------------------------------------------
+# LangChain imports — split by cost.
+#
+# The heavy ones (``langchain_anthropic`` ~800ms, ``langchain_groq`` ~270ms,
+# ``langchain_cerebras`` if installed) are deferred via a lazy provider-class
+# resolver. They are only needed when an AI agent actually runs through the
+# LangChain agent path; the native LLM SDK (``services/llm/``) handles
+# ``execute_chat()`` without LangChain entirely.
+#
+# The light ones (``langchain_openai``, ``langchain_core.messages``,
+# ``langgraph``, ``langchain_core.tools``, ``pydantic``) total ~17ms and are
+# tightly coupled to module-level type annotations / dataclasses, so we keep
+# them eager. Saves ~1.05s of cold-start time without touching type hints.
+#
+# Type-only imports go behind ``TYPE_CHECKING`` so static analyzers see them
+# without paying the runtime cost.
+# ---------------------------------------------------------------------------
+
 _ailog("importing langchain_openai...")
 from langchain_openai import ChatOpenAI
-_ailog("importing langchain_anthropic...")
-from langchain_anthropic import ChatAnthropic
-_ailog("importing langchain_groq...")
-from langchain_groq import ChatGroq
 _ailog("importing langchain_core.messages...")
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, BaseMessage, ToolMessage
-
-# Lazy import for Google GenAI (google-generativeai init hangs on Windows/Python 3.13)
-_ChatGoogleGenerativeAI = None
-
-def _get_google_genai_class():
-    global _ChatGoogleGenerativeAI
-    if _ChatGoogleGenerativeAI is None:
-        from langchain_google_genai import ChatGoogleGenerativeAI
-        _ChatGoogleGenerativeAI = ChatGoogleGenerativeAI
-    return _ChatGoogleGenerativeAI
-
-# Conditional import for Cerebras (requires Python <3.13)
-CEREBRAS_IMPORT_ERROR = None
-try:
-    _ailog("importing langchain_cerebras...")
-    from langchain_cerebras import ChatCerebras
-    CEREBRAS_AVAILABLE = True
-except ImportError as e:
-    ChatCerebras = None
-    CEREBRAS_AVAILABLE = False
-    CEREBRAS_IMPORT_ERROR = str(e)
 _ailog("importing langgraph + pydantic...")
 from langchain_core.tools import StructuredTool
 from langgraph.graph import StateGraph, END
 from pydantic import BaseModel, Field, create_model
-_ailog("all LangChain imports done")
+_ailog("eager LangChain imports done")
 import json
+
+if TYPE_CHECKING:
+    from langchain_anthropic import ChatAnthropic  # noqa: F401
+    from langchain_groq import ChatGroq  # noqa: F401
+    from langchain_cerebras import ChatCerebras  # noqa: F401
+
+
+@functools.cache
+def _get_chat_anthropic() -> Type:
+    """Lazy import: ``langchain_anthropic`` is ~800ms cold."""
+    from langchain_anthropic import ChatAnthropic
+    return ChatAnthropic
+
+
+@functools.cache
+def _get_chat_groq() -> Type:
+    """Lazy import: ``langchain_groq`` adds ~270ms cold."""
+    from langchain_groq import ChatGroq
+    return ChatGroq
+
+
+@functools.cache
+def _get_chat_cerebras() -> Optional[Type]:
+    """Lazy import: ``langchain_cerebras`` is optional (Python <3.13).
+
+    Returns the class if importable, ``None`` otherwise. Cached so the
+    ImportError path runs once.
+    """
+    try:
+        from langchain_cerebras import ChatCerebras
+        return ChatCerebras
+    except ImportError:
+        return None
+
+
+# Lazy import for Google GenAI (google-generativeai init hangs on Windows/Python 3.13)
+@functools.cache
+def _get_google_genai_class() -> Type:
+    from langchain_google_genai import ChatGoogleGenerativeAI
+    return ChatGoogleGenerativeAI
+
+
+def _is_cerebras_available() -> bool:
+    """Whether the langchain-cerebras package is importable."""
+    return _get_chat_cerebras() is not None
+
+
+# Backwards-compat shims (PEP 562 module-level __getattr__) for code that
+# historically read these as module-level constants. The "import" cost is paid
+# only on first access. ``PROVIDER_CONFIGS`` resolves through ``get_provider_configs()``
+# so any external `from services.ai import PROVIDER_CONFIGS` keeps working
+# without triggering the heavy LangChain imports until first use.
+def __getattr__(name: str):
+    if name == "ChatAnthropic":
+        return _get_chat_anthropic()
+    if name == "ChatGroq":
+        return _get_chat_groq()
+    if name == "ChatCerebras":
+        return _get_chat_cerebras()
+    if name == "CEREBRAS_AVAILABLE":
+        return _is_cerebras_available()
+    if name == "CEREBRAS_IMPORT_ERROR":
+        # Reproduce the error string without re-raising; helpful for log messages.
+        if _get_chat_cerebras() is not None:
+            return None
+        try:
+            __import__("langchain_cerebras")
+            return None
+        except ImportError as e:
+            return str(e)
+    if name == "PROVIDER_CONFIGS":
+        return get_provider_configs()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 from core.config import Settings
 from core.logging import get_logger, log_execution_time, log_api_call
@@ -227,17 +296,24 @@ def _bearer_headers(api_key: str) -> dict:
     return {'Authorization': f'Bearer {api_key}'}
 
 
-# Map of provider -> (model_class, header_fn) for providers with custom LangChain classes.
-# Providers NOT in this map use ChatOpenAI + _bearer_headers (OpenAI-compatible).
-_PROVIDER_CLASS_MAP: Dict[str, tuple] = {
-    'openai': (ChatOpenAI, _openai_headers),
-    'anthropic': (ChatAnthropic, _anthropic_headers),
-    'gemini': (None, _gemini_headers),  # Lazy-loaded via _get_google_genai_class()
-    'openrouter': (ChatOpenAI, _openrouter_headers),
-    'groq': (ChatGroq, _groq_headers),
-}
-if CEREBRAS_AVAILABLE:
-    _PROVIDER_CLASS_MAP['cerebras'] = (ChatCerebras, _cerebras_headers)
+# Map of provider -> (model_class_factory, header_fn) for providers with custom
+# LangChain classes. Factories let us defer the heavy ``langchain_anthropic`` /
+# ``langchain_groq`` / ``langchain_cerebras`` imports until an agent actually
+# runs. Providers NOT in this map use ChatOpenAI + _bearer_headers
+# (OpenAI-compatible). ``model_class_factory`` returns the resolved class
+# (or None for gemini, whose lazy resolver lives at the call site).
+def _build_provider_class_map() -> Dict[str, tuple]:
+    mapping: Dict[str, tuple] = {
+        'openai': (ChatOpenAI, _openai_headers),
+        'anthropic': (_get_chat_anthropic(), _anthropic_headers),
+        'gemini': (None, _gemini_headers),  # resolved via _get_google_genai_class()
+        'openrouter': (ChatOpenAI, _openrouter_headers),
+        'groq': (_get_chat_groq(), _groq_headers),
+    }
+    cerebras_class = _get_chat_cerebras()
+    if cerebras_class is not None:
+        mapping['cerebras'] = (cerebras_class, _cerebras_headers)
+    return mapping
 
 
 # =============================================================================
@@ -318,20 +394,25 @@ def _resolve_temperature(flattened: dict, model: str, provider: str, thinking_en
     return max(temp_range[0], min(temp_range[1], user_temp))
 
 
-# Provider configurations - built from config/llm_defaults.json
-# Custom model_class/header_fn from _PROVIDER_CLASS_MAP; everything else from JSON.
+# Provider configurations - built from config/llm_defaults.json on first use.
+# Building the map triggers the heavy LangChain imports (~1.05s of
+# langchain_anthropic + langchain_groq), so we defer it until a caller asks
+# for a config (i.e. an AI agent actually runs). The native LLM SDK path
+# (services/llm/) bypasses this entirely.
 def _build_provider_configs() -> Dict[str, ProviderConfig]:
-    """Build PROVIDER_CONFIGS from llm_defaults.json + _PROVIDER_CLASS_MAP."""
+    """Build PROVIDER_CONFIGS from llm_defaults.json + provider-class map."""
     providers = _LLM_DEFAULTS.get("providers", {})
     configs: Dict[str, ProviderConfig] = {}
+    class_map = _build_provider_class_map()
+    cerebras_available = _is_cerebras_available()
 
     for name, prov in providers.items():
         # Skip cerebras if not available
-        if name == 'cerebras' and not CEREBRAS_AVAILABLE:
-            logger.warning(f"Cerebras provider not available: {CEREBRAS_IMPORT_ERROR or 'langchain-cerebras import failed'}")
+        if name == 'cerebras' and not cerebras_available:
+            logger.warning("Cerebras provider not available: langchain-cerebras package not installed (Python <3.13 only)")
             continue
 
-        model_class, header_fn = _PROVIDER_CLASS_MAP.get(name, (ChatOpenAI, _bearer_headers))
+        model_class, header_fn = class_map.get(name, (ChatOpenAI, _bearer_headers))
         configs[name] = ProviderConfig(
             name=name,
             model_class=model_class,
@@ -349,13 +430,21 @@ def _build_provider_configs() -> Dict[str, ProviderConfig]:
     return configs
 
 
-PROVIDER_CONFIGS: Dict[str, ProviderConfig] = _build_provider_configs()
+@functools.cache
+def get_provider_configs() -> Dict[str, ProviderConfig]:
+    """Return PROVIDER_CONFIGS, building on first call (cached thereafter).
+
+    Lazy build defers the LangChain agent-class imports until the first
+    AI agent execution — saves ~1.0s of cold-start time on the
+    chat-only path used by ``execute_chat()``.
+    """
+    return _build_provider_configs()
 
 
 def detect_provider_from_model(model: str) -> str:
     """Detect AI provider from model name using registry patterns."""
     model_lower = model.lower()
-    for provider_name, config in PROVIDER_CONFIGS.items():
+    for provider_name, config in get_provider_configs().items():
         if any(pattern in model_lower for pattern in config.detection_patterns):
             return provider_name
     return 'openai'  # default
@@ -366,7 +455,7 @@ def is_model_valid_for_provider(model: str, provider: str) -> bool:
     # OpenRouter is a proxy supporting all models (provider/model format) - always valid
     if provider == 'openrouter':
         return True
-    config = PROVIDER_CONFIGS.get(provider)
+    config = get_provider_configs().get(provider)
     if not config:
         return True
     model_lower = model.lower()
@@ -375,7 +464,7 @@ def is_model_valid_for_provider(model: str, provider: str) -> bool:
 
 def get_default_model(provider: str) -> str:
     """Get default model for a provider from JSON config."""
-    config = PROVIDER_CONFIGS.get(provider)
+    config = get_provider_configs().get(provider)
     return config.default_model if config else 'gpt-4o-mini'
 
 
@@ -1166,7 +1255,7 @@ class AIService:
         Returns:
             Configured LangChain chat model instance
         """
-        config = PROVIDER_CONFIGS.get(provider)
+        config = get_provider_configs().get(provider)
         if not config:
             # Provide helpful error for Cerebras if import failed
             if provider == 'cerebras' and not CEREBRAS_AVAILABLE:
@@ -1303,7 +1392,7 @@ class AIService:
         if provider == 'cerebras' and not CEREBRAS_AVAILABLE:
             raise ValueError(f"Cerebras provider not available: {CEREBRAS_IMPORT_ERROR or 'langchain-cerebras package not installed'}")
 
-        config = PROVIDER_CONFIGS.get(provider)
+        config = get_provider_configs().get(provider)
         if not config:
             raise ValueError(f"Unsupported provider: {provider}")
 
