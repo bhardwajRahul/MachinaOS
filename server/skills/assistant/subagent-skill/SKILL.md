@@ -5,8 +5,7 @@ metadata:
   author: machina
   version: "2.0"
   category: assistant
-  icon: "lucide:Bot"
-  color: "#8B5CF6"
+
 ---
 
 # Sub-Agent Management Skill

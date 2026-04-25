@@ -593,7 +593,7 @@
     },
     {
       "id": "gmail-1772074604463",
-      "type": "gmail",
+      "type": "googleGmail",
       "position": {
         "x": 1820,
         "y": 720
@@ -612,7 +612,7 @@
     },
     {
       "id": "calendar-1772074605773",
-      "type": "calendar",
+      "type": "googleCalendar",
       "position": {
         "x": 1620,
         "y": 720
@@ -631,7 +631,7 @@
     },
     {
       "id": "drive-1772074607205",
-      "type": "drive",
+      "type": "googleDrive",
       "position": {
         "x": 1420,
         "y": 720
@@ -650,7 +650,7 @@
     },
     {
       "id": "sheets-1772074608160",
-      "type": "sheets",
+      "type": "googleSheets",
       "position": {
         "x": 1720,
         "y": 720
@@ -669,7 +669,7 @@
     },
     {
       "id": "tasks-1772074609131",
-      "type": "tasks",
+      "type": "googleTasks",
       "position": {
         "x": 1520,
         "y": 720
@@ -688,7 +688,7 @@
     },
     {
       "id": "contacts-1772074610122",
-      "type": "contacts",
+      "type": "googleContacts",
       "position": {
         "x": 1320,
         "y": 720

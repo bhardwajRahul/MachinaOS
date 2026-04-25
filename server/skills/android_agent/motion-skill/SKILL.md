@@ -6,8 +6,7 @@ metadata:
   author: machina
   version: "1.0"
   category: android
-  icon: "lucide:TrendingUp"
-  color: "#14B8A6"
+
 ---
 
 # Motion Detection Tool

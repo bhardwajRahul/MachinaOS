@@ -53,7 +53,7 @@ class GmailReceiveOutput(BaseModel):
 
 
 class GmailReceiveNode(TriggerNode):
-    type = "gmailReceive"
+    type = "googleGmailReceive"
     display_name = "Gmail Receive"
     subtitle = "Inbound Email"
     group = ("google", "trigger")

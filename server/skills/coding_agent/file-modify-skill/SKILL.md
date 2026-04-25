@@ -6,8 +6,7 @@ metadata:
   author: machina
   version: "1.0"
   category: filesystem
-  icon: "lucide:Edit"
-  color: "#50fa7b"
+
 ---
 
 # File Modify Tool

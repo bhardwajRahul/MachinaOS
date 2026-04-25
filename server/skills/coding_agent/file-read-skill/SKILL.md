@@ -6,8 +6,7 @@ metadata:
   author: machina
   version: "1.0"
   category: filesystem
-  icon: "lucide:FileType"
-  color: "#8be9fd"
+
 ---
 
 # File Read Tool

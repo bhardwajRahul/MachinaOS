@@ -88,8 +88,6 @@ metadata:
   author: your-name
   version: "1.0"
   category: general
-  icon: "🔧"
-  color: "#6366F1"
 ---
 
 # My New Skill
@@ -112,8 +110,8 @@ Provide usage guidelines, examples, and constraints.
 |-------|----------|-------------|
 | `name` | Yes | Lowercase, hyphens only. Must match pattern `^[a-z0-9]+(-[a-z0-9]+)*$` |
 | `description` | Yes | One-line summary shown in skill lists and to the LLM |
-| `allowed-tools` | No | Space-delimited list of tool names the skill can use |
-| `metadata` | No | Arbitrary key-value pairs (icon, color, category, version, author) |
+| `allowed-tools` | No | Space-delimited list of tool names. The first that resolves to a known node is the skill's visual source — its icon/color come from `server/nodes/visuals.json` via the `_visuals` handler. |
+| `metadata` | No | Arbitrary key-value pairs (author, version, category). **Do NOT set `icon` or `color`** — those are resolved automatically from the target node so the skill always mirrors the canvas. |
 
 ### Name Format Rules
 

@@ -98,7 +98,7 @@ def _format_contact(person: Dict[str, Any]) -> Dict[str, Any]:
 
 
 class ContactsNode(ActionNode):
-    type = "contacts"
+    type = "googleContacts"
     display_name = "Contacts"
     subtitle = "Contact Management"
     group = ("google", "tool")

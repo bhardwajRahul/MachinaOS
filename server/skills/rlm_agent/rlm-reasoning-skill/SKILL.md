@@ -5,8 +5,7 @@ metadata:
   author: machina
   version: "1.0"
   category: reasoning
-  icon: "lucide:Brain"
-  color: "#FF8C00"
+
 ---
 
 # RLM Recursive Reasoning Skill

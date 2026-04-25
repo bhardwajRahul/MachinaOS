@@ -126,11 +126,12 @@ class SkillLoader:
     def _parse_skill_metadata(self, skill_md_path: Path) -> Optional[SkillMetadata]:
         """Parse SKILL.md frontmatter to extract metadata.
 
-        Args:
-            skill_md_path: Path to SKILL.md file
-
-        Returns:
-            SkillMetadata or None if parsing fails
+        Icon and color are NOT read from the SKILL.md frontmatter —
+        they are resolved from the target node's visuals.json entry
+        via the central :mod:`nodes._visuals` handler. The first
+        entry in ``allowed-tools`` that resolves to a known node
+        becomes the visual source. This guarantees skills mirror
+        their teaching node's icon / color without per-file drift.
         """
         content = skill_md_path.read_text(encoding='utf-8')
 
@@ -164,11 +165,32 @@ class SkillLoader:
         if 'allowed-tools' in frontmatter:
             allowed_tools = frontmatter['allowed-tools'].split()
 
+        # Resolve icon + color from the target node via central handler.
+        # `allowed-tools` uses snake_case; node `type` is camelCase.
+        from nodes._visuals import get_icon, get_color
+        meta_in = dict(frontmatter.get('metadata') or {})
+        for tok in allowed_tools:
+            cam = tok if "_" not in tok else (
+                tok.split("_")[0] + "".join(p.title() for p in tok.split("_")[1:])
+            )
+            for candidate in (cam, tok):
+                icon = get_icon(candidate)
+                color = get_color(candidate)
+                if icon or color:
+                    if icon:
+                        meta_in['icon'] = icon
+                    if color:
+                        meta_in['color'] = color
+                    break
+            else:
+                continue
+            break
+
         return SkillMetadata(
             name=name,
             description=description,
             allowed_tools=allowed_tools,
-            metadata=frontmatter.get('metadata', {})
+            metadata=meta_in,
         )
 
     def load_skill(self, name: str) -> Optional[Skill]:

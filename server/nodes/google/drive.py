@@ -94,7 +94,7 @@ _FILE_TYPE_QUERY = {
 
 
 class DriveNode(ActionNode):
-    type = "drive"
+    type = "googleDrive"
     display_name = "Drive"
     subtitle = "File Operations"
     group = ("google", "tool")

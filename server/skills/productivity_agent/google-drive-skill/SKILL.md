@@ -1,13 +1,12 @@
 ---
-name: drive-skill
+name: google-drive-skill
 description: Upload, download, list, and share Google Drive files. Supports folders, file search, and permission management.
-allowed-tools: google_drive
+allowed-tools: "google_drive"
 metadata:
   author: machina
   version: "1.0"
   category: productivity
-  icon: "asset:drive"
-  color: "#0F9D58"
+
 ---
 
 # Google Drive Skill

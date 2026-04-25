@@ -6,8 +6,7 @@ metadata:
   author: machina
   version: "1.0"
   category: android
-  icon: "lucide:Thermometer"
-  color: "#84CC16"
+
 ---
 
 # Environmental Sensors Tool

@@ -77,7 +77,7 @@ def _coerce_values(raw: Any) -> List[List[Any]]:
 
 
 class SheetsNode(ActionNode):
-    type = "sheets"
+    type = "googleSheets"
     display_name = "Sheets"
     subtitle = "Spreadsheet Ops"
     group = ("google", "tool")

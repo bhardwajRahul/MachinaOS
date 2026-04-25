@@ -90,7 +90,7 @@ def _iso_or_shortcut(value: Optional[str], default_offset_days: int = 0) -> str:
 
 
 class CalendarNode(ActionNode):
-    type = "calendar"
+    type = "googleCalendar"
     display_name = "Calendar"
     subtitle = "Event Management"
     group = ("google", "tool")

@@ -1,13 +1,12 @@
 ---
 name: bash-skill
 description: Linux/macOS Bash commands and patterns for process management, file operations, and system administration.
-allowed-tools: process_manager shell_execute
+allowed-tools: "process_manager shell"
 metadata:
   author: machina
   version: "1.0"
   category: terminal
-  icon: "lucide:Terminal"
-  color: "#4EAA25"
+
 ---
 
 # Bash Skill (Linux / macOS)

@@ -6,8 +6,7 @@ metadata:
   author: machina
   version: "1.0"
   category: android
-  icon: "lucide:Camera"
-  color: "#EC4899"
+
 ---
 
 # Camera Control Tool

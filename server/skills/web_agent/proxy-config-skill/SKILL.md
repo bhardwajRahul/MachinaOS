@@ -1,13 +1,12 @@
 ---
 name: proxy-config-skill
 description: Configure residential proxy providers and make proxied HTTP requests with geo-targeting.
-allowed-tools: proxy_config proxy_request proxy_status python_code
+allowed-tools: "proxy_config proxy_request proxy_status python_executor"
 metadata:
   author: machina
   version: "3.0"
   category: integration
-  icon: "lucide:Shield"
-  color: "#8B5CF6"
+
 ---
 
 # Proxy Configuration Skill

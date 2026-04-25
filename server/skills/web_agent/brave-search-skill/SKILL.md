@@ -6,8 +6,7 @@ metadata:
   author: machina
   version: "1.0"
   category: search
-  icon: "asset:brave"
-  color: "#FB542B"
+
 ---
 
 # Brave Search Skill

@@ -6,8 +6,7 @@ metadata:
   author: machina
   version: "1.0"
   category: android
-  icon: "lucide:Smartphone"
-  color: "#06B6D4"
+
 ---
 
 # App List Tool

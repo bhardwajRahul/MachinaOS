@@ -1,13 +1,12 @@
 ---
 name: python-skill
 description: Execute Python code for calculations, data processing, and automation. Access to math, json, datetime, collections, and more.
-allowed-tools: python_code
+allowed-tools: "python_executor"
 metadata:
   author: machina
   version: "1.0"
   category: code
-  icon: "asset:python"
-  color: "#3776AB"
+
 ---
 
 # Python Code Execution Tool

@@ -1,13 +1,12 @@
 ---
-name: tasks-skill
+name: google-tasks-skill
 description: Create, list, and complete Google Tasks. Supports task lists, due dates, and notes.
-allowed-tools: google_tasks
+allowed-tools: "google_tasks"
 metadata:
   author: machina
   version: "1.0"
   category: productivity
-  icon: "asset:tasks"
-  color: "#4285F4"
+
 ---
 
 # Google Tasks Skill

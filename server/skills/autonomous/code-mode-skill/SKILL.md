@@ -1,13 +1,12 @@
 ---
 name: code-mode-skill
 description: Generate Python code instead of sequential tool calls (81-98% token savings)
-allowed-tools: python_code javascript_code
+allowed-tools: "python_executor javascript_executor"
 metadata:
   author: machina
   version: "1.0"
   category: autonomous
-  icon: "lucide:Laptop"
-  color: "#10B981"
+
 ---
 # Code Mode Pattern
 

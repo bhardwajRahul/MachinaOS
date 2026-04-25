@@ -6,8 +6,7 @@ metadata:
   author: machina
   version: "1.0"
   category: android
-  icon: "lucide:Signal"
-  color: "#3B82F6"
+
 ---
 
 # WiFi Automation Tool

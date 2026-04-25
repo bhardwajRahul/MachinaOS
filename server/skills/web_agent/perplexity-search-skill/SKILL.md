@@ -6,8 +6,7 @@ metadata:
   author: machina
   version: "1.0"
   category: search
-  icon: "asset:perplexity"
-  color: "#20808D"
+
 ---
 
 # Perplexity Search Skill

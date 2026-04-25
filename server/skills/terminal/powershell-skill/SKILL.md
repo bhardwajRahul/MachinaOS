@@ -1,13 +1,12 @@
 ---
 name: powershell-skill
 description: Windows PowerShell commands and patterns for process management, file operations, and system administration.
-allowed-tools: process_manager shell_execute
+allowed-tools: "process_manager shell"
 metadata:
   author: machina
   version: "1.0"
   category: terminal
-  icon: "lucide:Laptop"
-  color: "#012456"
+
 ---
 
 # PowerShell Skill (Windows)

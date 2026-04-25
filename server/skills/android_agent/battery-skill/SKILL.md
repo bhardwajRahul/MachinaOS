@@ -6,8 +6,7 @@ metadata:
   author: machina
   version: "1.0"
   category: android
-  icon: "lucide:Battery"
-  color: "#22C55E"
+
 ---
 
 # Battery Monitor Tool

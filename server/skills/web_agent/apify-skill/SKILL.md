@@ -1,13 +1,12 @@
 ---
 name: apify-skill
 description: Run web scrapers and extract data from websites and social media platforms using Apify actors. Supports Instagram, TikTok, Twitter/X, LinkedIn, Facebook, YouTube, Google Search, and general web crawling.
-allowed-tools: apify_run_actor
+allowed-tools: "apify_actor"
 metadata:
   author: machina
   version: "1.0"
   category: web
-  icon: "asset:apify"
-  color: "#FF9012"
+
 ---
 
 # Apify Web Scraping Skill

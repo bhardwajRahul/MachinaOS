@@ -1,13 +1,12 @@
 ---
-name: contacts-skill
+name: google-contacts-skill
 description: Create, list, and search Google Contacts. Supports names, emails, phone numbers, and organizations.
-allowed-tools: google_contacts
+allowed-tools: "google_contacts"
 metadata:
   author: machina
   version: "1.0"
   category: productivity
-  icon: "asset:contacts"
-  color: "#4285F4"
+
 ---
 
 # Google Contacts Skill

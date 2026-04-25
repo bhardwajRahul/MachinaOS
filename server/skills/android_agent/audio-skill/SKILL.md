@@ -6,8 +6,7 @@ metadata:
   author: machina
   version: "1.0"
   category: android
-  icon: "lucide:Volume2"
-  color: "#F97316"
+
 ---
 
 # Audio Automation Tool

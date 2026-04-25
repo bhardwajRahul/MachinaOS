@@ -6,8 +6,7 @@ metadata:
   author: machina
   version: "1.0"
   category: messaging
-  icon: "asset:whatsapp-send"
-  color: "#25D366"
+
 ---
 
 # WhatsApp Send Tool

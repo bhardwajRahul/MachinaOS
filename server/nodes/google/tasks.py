@@ -68,7 +68,7 @@ class TasksOutput(BaseModel):
 
 
 class TasksNode(ActionNode):
-    type = "tasks"
+    type = "googleTasks"
     display_name = "Tasks"
     subtitle = "Task Management"
     group = ("google", "tool")

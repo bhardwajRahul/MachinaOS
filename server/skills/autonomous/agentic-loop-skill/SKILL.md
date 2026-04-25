@@ -1,13 +1,12 @@
 ---
 name: agentic-loop-skill
 description: Autonomous decision loop with reflection and iteration
-allowed-tools: delegate_to_ai_agent python_code check_delegated_tasks
+allowed-tools: "delegate_to_ai_agent python_executor check_delegated_tasks"
 metadata:
   author: machina
   version: "1.0"
   category: autonomous
-  icon: "lucide:RotateCw"
-  color: "#8B5CF6"
+
 ---
 # Agentic Loop Pattern
 

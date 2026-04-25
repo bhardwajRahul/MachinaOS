@@ -327,7 +327,7 @@
     },
     {
       "id": "gmail-1772286542794",
-      "type": "gmail",
+      "type": "googleGmail",
       "position": {
         "x": -40,
         "y": 1520
@@ -346,7 +346,7 @@
     },
     {
       "id": "sheets-1772286546873",
-      "type": "sheets",
+      "type": "googleSheets",
       "position": {
         "x": -140,
         "y": 1520

@@ -1,13 +1,12 @@
 ---
 name: shell-skill
 description: Execute short-lived shell commands in a sandboxed environment. No PATH access -- use process_manager for npm/python/node commands.
-allowed-tools: shell_execute
+allowed-tools: "shell"
 metadata:
   author: machina
   version: "3.0"
   category: execution
-  icon: "lucide:Laptop"
-  color: "#ff79c6"
+
 ---
 
 # Shell Tool

@@ -93,7 +93,7 @@ class GmailOutput(BaseModel):
 
 
 class GmailNode(ActionNode):
-    type = "gmail"
+    type = "googleGmail"
     display_name = "Gmail"
     subtitle = "Email Operations"
     group = ("google", "tool")

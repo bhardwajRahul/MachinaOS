@@ -6,8 +6,7 @@ metadata:
   author: machina
   version: "1.0"
   category: search
-  icon: "asset:google"
-  color: "#4285F4"
+
 ---
 
 # Serper Search Skill

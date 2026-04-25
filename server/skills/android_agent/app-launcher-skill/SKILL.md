@@ -6,8 +6,7 @@ metadata:
   author: machina
   version: "1.0"
   category: android
-  icon: "lucide:Rocket"
-  color: "#8B5CF6"
+
 ---
 
 # App Launcher Tool

@@ -1,13 +1,12 @@
 ---
 name: wsl-skill
 description: Windows Subsystem for Linux (WSL) commands for running Linux tools on Windows.
-allowed-tools: process_manager shell_execute
+allowed-tools: "process_manager shell"
 metadata:
   author: machina
   version: "1.0"
   category: terminal
-  icon: "lucide:Package"
-  color: "#E95420"
+
 ---
 
 # WSL Skill (Windows Subsystem for Linux)

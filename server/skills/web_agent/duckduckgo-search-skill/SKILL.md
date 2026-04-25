@@ -1,13 +1,12 @@
 ---
 name: duckduckgo-search-skill
 description: Search the web using DuckDuckGo for free, privacy-focused results with no API key required.
-allowed-tools: web_search
+allowed-tools: "duckduckgo_search"
 metadata:
   author: machina
   version: "2.0"
   category: search
-  icon: "asset:duckduckgo"
-  color: "#DE5833"
+
 ---
 
 # DuckDuckGo Search Skill

@@ -799,13 +799,13 @@ NODE_OUTPUT_SCHEMAS: dict[str, type[BaseModel]] = {
     "socialReceive": SocialReceiveOutput,
     "socialSend": SocialSendOutput,
     # google workspace
-    "gmail": GmailOutput,
-    "gmailReceive": GmailReceiveOutput,
-    "calendar": CalendarOutput,
-    "drive": DriveOutput,
-    "sheets": SheetsOutput,
-    "tasks": TasksOutput,
-    "contacts": ContactsOutput,
+    "googleGmail": GmailOutput,
+    "googleGmailReceive": GmailReceiveOutput,
+    "googleCalendar": CalendarOutput,
+    "googleDrive": DriveOutput,
+    "googleSheets": SheetsOutput,
+    "googleTasks": TasksOutput,
+    "googleContacts": ContactsOutput,
     # search
     **{t: SearchOutput for t in _SEARCH_TYPES},
     # location

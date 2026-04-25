@@ -1,13 +1,12 @@
 ---
 name: javascript-skill
 description: Execute JavaScript code for calculations, data processing, and JSON manipulation. Full ES6+ support with Node.js runtime.
-allowed-tools: javascript_code
+allowed-tools: "javascript_executor"
 metadata:
   author: machina
   version: "1.0"
   category: code
-  icon: "asset:javascript"
-  color: "#F7DF1E"
+
 ---
 
 # JavaScript Code Execution Tool

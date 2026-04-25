@@ -1,13 +1,12 @@
 ---
 name: crawlee-scraper-skill
 description: Read and extract content from any web page URL.
-allowed-tools: web_reader
+allowed-tools: "crawlee_scraper"
 metadata:
   author: machina
   version: "1.0"
   category: web
-  icon: "lucide:Bug"
-  color: "#00D1B2"
+
 ---
 
 # Web Reader Skill

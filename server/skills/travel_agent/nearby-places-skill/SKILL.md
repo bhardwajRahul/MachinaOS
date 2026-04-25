@@ -1,13 +1,12 @@
 ---
 name: nearby-places-skill
 description: Search for nearby places like restaurants, cafes, stores, and services using Google Places API. Find places by type and location.
-allowed-tools: show_nearby_places
+allowed-tools: "gmaps_nearby_places"
 metadata:
   author: machina
   version: "1.0"
   category: location
-  icon: "lucide:Map"
-  color: "#34A853"
+
 ---
 
 # Nearby Places Tool

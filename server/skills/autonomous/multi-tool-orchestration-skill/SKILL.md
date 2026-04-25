@@ -1,13 +1,12 @@
 ---
 name: multi-tool-orchestration-skill
 description: Coordinate multiple tools together for complex multi-step tasks
-allowed-tools: delegate_to_ai_agent python_code javascript_code web_search http_request calculator current_time
+allowed-tools: "delegate_to_ai_agent python_executor javascript_executor duckduckgo_search http_request calculator_tool current_time_tool"
 metadata:
   author: machina
   version: "1.0"
   category: autonomous
-  icon: "lucide:Shuffle"
-  color: "#6366F1"
+
 ---
 # Multi-Tool Orchestration Pattern
 

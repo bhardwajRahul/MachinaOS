@@ -5,8 +5,7 @@ metadata:
   author: machina
   version: "1.0"
   category: assistant
-  icon: "lucide:Bot"
-  color: "#3DDC84"
+
 ---
 
 # Android Device Assistant

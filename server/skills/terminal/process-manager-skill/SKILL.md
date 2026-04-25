@@ -6,8 +6,7 @@ metadata:
   author: machina
   version: "3.0"
   category: execution
-  icon: "lucide:Settings"
-  color: "#ffb86c"
+
 ---
 
 # Process Manager Tool

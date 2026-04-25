@@ -6,8 +6,7 @@ metadata:
   author: machina
   version: "2.0"
   category: automation
-  icon: "lucide:FileText"
-  color: "#bd93f9"
+
 ---
 
 # Task Planning with write_todos

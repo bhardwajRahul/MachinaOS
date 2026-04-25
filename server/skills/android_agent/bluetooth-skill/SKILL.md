@@ -6,8 +6,7 @@ metadata:
   author: machina
   version: "1.0"
   category: android
-  icon: "lucide:Smartphone"
-  color: "#0EA5E9"
+
 ---
 
 # Bluetooth Automation Tool

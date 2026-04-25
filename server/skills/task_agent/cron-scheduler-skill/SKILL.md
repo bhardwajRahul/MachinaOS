@@ -6,8 +6,7 @@ metadata:
   author: machina
   version: "1.0"
   category: automation
-  icon: "lucide:Calendar"
-  color: "#8B5CF6"
+
 ---
 
 # Cron Scheduler Tool

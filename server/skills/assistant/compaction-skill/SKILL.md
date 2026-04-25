@@ -6,8 +6,7 @@ metadata:
   author: machina
   version: "1.0"
   category: memory
-  icon: "lucide:Package"
-  color: "#8B5CF6"
+
 ---
 
 # Memory Compaction Skill

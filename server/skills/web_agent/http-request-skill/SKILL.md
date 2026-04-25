@@ -6,8 +6,7 @@ metadata:
   author: machina
   version: "1.0"
   category: integration
-  icon: "lucide:Globe"
-  color: "#EF4444"
+
 ---
 
 # HTTP Request Tool

@@ -1,13 +1,12 @@
 ---
 name: geocoding-skill
 description: Convert addresses to coordinates (geocoding) or coordinates to addresses (reverse geocoding) using Google Maps API.
-allowed-tools: add_locations
+allowed-tools: "gmaps_locations"
 metadata:
   author: machina
   version: "1.0"
   category: location
-  icon: "lucide:MapPin"
-  color: "#4285F4"
+
 ---
 
 # Geocoding Tool

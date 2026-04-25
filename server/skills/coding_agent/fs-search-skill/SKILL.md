@@ -6,8 +6,7 @@ metadata:
   author: machina
   version: "1.0"
   category: filesystem
-  icon: "lucide:Search"
-  color: "#f1fa8c"
+
 ---
 
 # FS Search Tool

@@ -6,8 +6,7 @@ metadata:
   author: machina
   version: "2.0"
   category: social
-  icon: "asset:x"
-  color: "#000000"
+
 ---
 
 # Twitter Search Tool
