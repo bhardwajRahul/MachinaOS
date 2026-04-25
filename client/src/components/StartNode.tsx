@@ -1,64 +1,27 @@
-import React, { memo, useState, useEffect, useRef, useCallback } from 'react';
+import React, { memo, useCallback } from 'react';
 import { nodePropsEqual } from './nodeMemoEquality';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { NodeData } from '../types/NodeTypes';
 import { useAppStore } from '../store/useAppStore';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { PlayCircle } from 'lucide-react';
+import EditableNodeLabel from './ui/EditableNodeLabel';
 
 const StartNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectable, selected }) => {
-  const { setSelectedNode, renamingNodeId, setRenamingNodeId, updateNodeData } = useAppStore();
+  const { setSelectedNode, setRenamingNodeId, updateNodeData } = useAppStore();
   const theme = useAppTheme();
-
-  // Inline rename state
-  const [isRenaming, setIsRenaming] = useState(false);
-  const [editLabel, setEditLabel] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const defaultLabel = 'Start';
 
-  // Sync with global renaming state
-  useEffect(() => {
-    if (renamingNodeId === id) {
-      setIsRenaming(true);
-      setEditLabel(data?.label || defaultLabel);
-    } else {
-      setIsRenaming(false);
-    }
-  }, [renamingNodeId, id, data?.label]);
+  const handleLabelChange = useCallback(
+    (newLabel: string) => updateNodeData(id, { ...data, label: newLabel }),
+    [id, data, updateNodeData]
+  );
 
-  // Focus and select input when entering rename mode
-  useEffect(() => {
-    if (isRenaming && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select();
-    }
-  }, [isRenaming]);
-
-  // Handle save rename
-  const handleSaveRename = useCallback(() => {
-    const newLabel = editLabel.trim();
-    const originalLabel = data?.label || defaultLabel;
-
-    // Only save if label changed and is not empty
-    if (newLabel && newLabel !== originalLabel) {
-      updateNodeData(id, { ...data, label: newLabel });
-    }
-
-    setIsRenaming(false);
-    setRenamingNodeId(null);
-  }, [editLabel, data, id, updateNodeData, setRenamingNodeId]);
-
-  // Handle cancel rename
-  const handleCancelRename = useCallback(() => {
-    setIsRenaming(false);
-    setRenamingNodeId(null);
-  }, [setRenamingNodeId]);
-
-  // Handle double-click to rename
-  const handleLabelDoubleClick = useCallback(() => {
-    setRenamingNodeId(id);
-  }, [id, setRenamingNodeId]);
+  const handleLabelActivate = useCallback(
+    () => setRenamingNodeId(id),
+    [id, setRenamingNodeId]
+  );
 
   const handleParametersClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -194,55 +157,13 @@ const StartNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectabl
       </div>
 
       {/* Name Below Square */}
-      {isRenaming ? (
-        <input
-          ref={inputRef}
-          type="text"
-          value={editLabel}
-          onChange={(e) => setEditLabel(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              handleSaveRename();
-            } else if (e.key === 'Escape') {
-              handleCancelRename();
-            }
-            e.stopPropagation();
-          }}
-          onBlur={handleSaveRename}
-          onClick={(e) => e.stopPropagation()}
-          style={{
-            marginTop: '8px',
-            width: '100%',
-            maxWidth: '120px',
-            padding: '2px 4px',
-            fontSize: '12px',
-            fontWeight: '500',
-            color: theme.colors.text,
-            backgroundColor: theme.colors.backgroundElevated,
-            border: `1px solid ${theme.dracula.purple}`,
-            borderRadius: theme.borderRadius.sm,
-            outline: 'none',
-            textAlign: 'center',
-          }}
-        />
-      ) : (
-        <div
-          onDoubleClick={handleLabelDoubleClick}
-          style={{
-            marginTop: '8px',
-            fontSize: '12px',
-            fontWeight: '500',
-            color: theme.colors.text,
-            lineHeight: '1.2',
-            textAlign: 'center',
-            maxWidth: '120px',
-            cursor: 'text',
-          }}
-          title="Double-click to rename"
-        >
-          {data?.label || defaultLabel}
-        </div>
-      )}
+      <EditableNodeLabel
+        nodeId={id}
+        label={data?.label}
+        defaultLabel={defaultLabel}
+        onLabelChange={handleLabelChange}
+        onActivate={handleLabelActivate}
+      />
 
     </div>
   );

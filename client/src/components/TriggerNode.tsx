@@ -6,7 +6,7 @@
  *
  * Used for: cronScheduler, webhookTrigger, whatsappReceive, start
  */
-import React, { memo, useState, useEffect, useRef, useCallback } from 'react';
+import React, { memo, useState, useEffect, useCallback } from 'react';
 import { nodePropsEqual } from './nodeMemoEquality';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { NodeData } from '../types/NodeTypes';
@@ -15,17 +15,13 @@ import { resolveNodeDescription, useNodeSpec } from '../lib/nodeSpec';
 import { resolveIcon, resolveLibraryIcon } from '../assets/icons';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { useWebSocket, useWhatsAppStatus } from '../contexts/WebSocketContext';
+import EditableNodeLabel from './ui/EditableNodeLabel';
 
 const TriggerNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectable, selected }) => {
   const theme = useAppTheme();
-  const { setSelectedNode, renamingNodeId, setRenamingNodeId, updateNodeData } = useAppStore();
+  const { setSelectedNode, setRenamingNodeId, updateNodeData } = useAppStore();
   const [isConfigured, setIsConfigured] = useState(false);
   const isDisabled = data?.disabled === true;
-
-  // Inline rename state
-  const [isRenaming, setIsRenaming] = useState(false);
-  const [editLabel, setEditLabel] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
 
   // Get node status from WebSocket context
   const { getNodeStatus } = useWebSocket();
@@ -51,48 +47,15 @@ const TriggerNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
     setIsConfigured(hasRequiredParams);
   }, [data]);
 
-  // Sync with global renaming state
-  useEffect(() => {
-    if (renamingNodeId === id) {
-      setIsRenaming(true);
-      setEditLabel(data?.label || definition?.displayName || type || '');
-    } else {
-      setIsRenaming(false);
-    }
-  }, [renamingNodeId, id, data?.label, definition?.displayName, type]);
-
-  // Focus and select input when entering rename mode
-  useEffect(() => {
-    if (isRenaming && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select();
-    }
-  }, [isRenaming]);
-
-  // Handle save rename
-  const handleSaveRename = useCallback(() => {
-    const newLabel = editLabel.trim();
-    const originalLabel = data?.label || definition?.displayName || type || '';
-
-    // Only save if label changed and is not empty
-    if (newLabel && newLabel !== originalLabel) {
-      updateNodeData(id, { ...data, label: newLabel });
-    }
-
-    setIsRenaming(false);
-    setRenamingNodeId(null);
-  }, [editLabel, data, definition?.displayName, type, id, updateNodeData, setRenamingNodeId]);
-
-  // Handle cancel rename
-  const handleCancelRename = useCallback(() => {
-    setIsRenaming(false);
-    setRenamingNodeId(null);
-  }, [setRenamingNodeId]);
-
-  // Handle double-click to rename
-  const handleLabelDoubleClick = useCallback(() => {
-    setRenamingNodeId(id);
-  }, [id, setRenamingNodeId]);
+  const defaultLabel = definition?.displayName || type || '';
+  const handleLabelChange = useCallback(
+    (newLabel: string) => updateNodeData(id, { ...data, label: newLabel }),
+    [id, data, updateNodeData]
+  );
+  const handleLabelActivate = useCallback(
+    () => setRenamingNodeId(id),
+    [id, setRenamingNodeId]
+  );
 
   const handleParametersClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -377,55 +340,13 @@ const TriggerNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
       </div>
 
       {/* Trigger Name Below Node */}
-      {isRenaming ? (
-        <input
-          ref={inputRef}
-          type="text"
-          value={editLabel}
-          onChange={(e) => setEditLabel(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              handleSaveRename();
-            } else if (e.key === 'Escape') {
-              handleCancelRename();
-            }
-            e.stopPropagation();
-          }}
-          onBlur={handleSaveRename}
-          onClick={(e) => e.stopPropagation()}
-          style={{
-            marginTop: theme.spacing.sm,
-            width: '100%',
-            maxWidth: '120px',
-            padding: '2px 4px',
-            fontSize: theme.fontSize.sm,
-            fontWeight: theme.fontWeight.medium,
-            color: theme.colors.text,
-            backgroundColor: theme.colors.backgroundElevated,
-            border: `1px solid ${theme.dracula.purple}`,
-            borderRadius: theme.borderRadius.sm,
-            outline: 'none',
-            textAlign: 'center',
-          }}
-        />
-      ) : (
-        <div
-          onDoubleClick={handleLabelDoubleClick}
-          style={{
-            marginTop: theme.spacing.sm,
-            fontSize: theme.fontSize.sm,
-            fontWeight: theme.fontWeight.medium,
-            color: theme.colors.text,
-            lineHeight: '1.2',
-            textAlign: 'center',
-            maxWidth: '120px',
-            cursor: 'text',
-          }}
-          title="Double-click to rename"
-        >
-          {data?.label || definition?.displayName}
-        </div>
-      )}
+      <EditableNodeLabel
+        nodeId={id}
+        label={data?.label}
+        defaultLabel={defaultLabel}
+        onLabelChange={handleLabelChange}
+        onActivate={handleLabelActivate}
+      />
 
     </div>
   );

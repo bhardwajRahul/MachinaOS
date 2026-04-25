@@ -10,7 +10,7 @@
  *   - Input handle at BOTTOM (receives Android service nodes)
  */
 
-import React, { memo, useState, useEffect, useRef, useCallback } from 'react';
+import React, { memo, useCallback } from 'react';
 import { nodePropsEqual } from './nodeMemoEquality';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { NodeData } from '../types/NodeTypes';
@@ -20,18 +20,14 @@ import { resolveIcon, resolveLibraryIcon } from '../assets/icons';
 import { useNodeSpec } from '../lib/nodeSpec';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { useWebSocket } from '../contexts/WebSocketContext';
+import EditableNodeLabel from './ui/EditableNodeLabel';
 
 // Toolkit node types that render rectangular (wider than tall)
 const TOOLKIT_NODE_TYPES = ['androidTool'];
 
 const ToolkitNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectable, selected }) => {
   const theme = useAppTheme();
-  const { setSelectedNode, renamingNodeId, setRenamingNodeId, updateNodeData } = useAppStore();
-
-  // Inline rename state
-  const [isRenaming, setIsRenaming] = useState(false);
-  const [editLabel, setEditLabel] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
+  const { setSelectedNode, setRenamingNodeId, updateNodeData } = useAppStore();
 
   // Get node status from WebSocket context
   const { getNodeStatus } = useWebSocket();
@@ -47,47 +43,15 @@ const ToolkitNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
   // Execution state
   const isExecuting = executionStatus === 'executing' || executionStatus === 'waiting';
 
-  // Sync with global renaming state
-  useEffect(() => {
-    if (renamingNodeId === id) {
-      setIsRenaming(true);
-      setEditLabel(data?.label || definition?.displayName || type || '');
-    } else {
-      setIsRenaming(false);
-    }
-  }, [renamingNodeId, id, data?.label, definition?.displayName, type]);
-
-  // Focus and select input when entering rename mode
-  useEffect(() => {
-    if (isRenaming && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select();
-    }
-  }, [isRenaming]);
-
-  // Handle save rename
-  const handleSaveRename = useCallback(() => {
-    const newLabel = editLabel.trim();
-    const originalLabel = data?.label || definition?.displayName || type || '';
-
-    if (newLabel && newLabel !== originalLabel) {
-      updateNodeData(id, { ...data, label: newLabel });
-    }
-
-    setIsRenaming(false);
-    setRenamingNodeId(null);
-  }, [editLabel, data, definition?.displayName, type, id, updateNodeData, setRenamingNodeId]);
-
-  // Handle cancel rename
-  const handleCancelRename = useCallback(() => {
-    setIsRenaming(false);
-    setRenamingNodeId(null);
-  }, [setRenamingNodeId]);
-
-  // Handle double-click to rename
-  const handleLabelDoubleClick = useCallback(() => {
-    setRenamingNodeId(id);
-  }, [id, setRenamingNodeId]);
+  const defaultLabel = definition?.displayName || type || '';
+  const handleLabelChange = useCallback(
+    (newLabel: string) => updateNodeData(id, { ...data, label: newLabel }),
+    [id, data, updateNodeData]
+  );
+  const handleLabelActivate = useCallback(
+    () => setRenamingNodeId(id),
+    [id, setRenamingNodeId]
+  );
 
   // Handle parameters click
   const handleParametersClick = (e: React.MouseEvent) => {
@@ -304,48 +268,13 @@ const ToolkitNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
       </div>
 
       {/* Node Name Below */}
-      {isRenaming ? (
-        <input
-          ref={inputRef}
-          type="text"
-          value={editLabel}
-          onChange={(e) => setEditLabel(e.target.value)}
-          onBlur={handleSaveRename}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') handleSaveRename();
-            if (e.key === 'Escape') handleCancelRename();
-          }}
-          style={{
-            marginTop: theme.spacing.sm,
-            fontSize: theme.fontSize.sm,
-            fontWeight: theme.fontWeight.medium,
-            color: theme.colors.text,
-            backgroundColor: theme.colors.background,
-            border: `1px solid ${theme.colors.focus}`,
-            borderRadius: theme.borderRadius.sm,
-            padding: '2px 6px',
-            textAlign: 'center',
-            width: '100px',
-            outline: 'none',
-          }}
-        />
-      ) : (
-        <div
-          onDoubleClick={handleLabelDoubleClick}
-          style={{
-            marginTop: theme.spacing.sm,
-            fontSize: theme.fontSize.sm,
-            fontWeight: theme.fontWeight.medium,
-            color: theme.colors.text,
-            lineHeight: '1.2',
-            textAlign: 'center',
-            maxWidth: '120px',
-            cursor: 'text',
-          }}
-        >
-          {data?.label || definition?.displayName}
-        </div>
-      )}
+      <EditableNodeLabel
+        nodeId={id}
+        label={data?.label}
+        defaultLabel={defaultLabel}
+        onLabelChange={handleLabelChange}
+        onActivate={handleLabelActivate}
+      />
     </div>
   );
 };
