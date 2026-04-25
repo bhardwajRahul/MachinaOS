@@ -97,8 +97,6 @@ class DriveNode(ActionNode):
     type = "drive"
     display_name = "Drive"
     subtitle = "File Operations"
-    icon = "asset:drive"
-    color = "#0F9D58"
     group = ("google", "tool")
     description = "Google Drive upload / download / list / share files"
     component_kind = "square"

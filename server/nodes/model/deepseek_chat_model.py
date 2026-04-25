@@ -20,8 +20,6 @@ class DeepseekChatModelNode(ChatModelBase):
     type = "deepseekChatModel"
     display_name = "DeepSeek"
     subtitle = "Chat Model"
-    icon = "lobehub:deepseek"
-    color = "#8be9fd"
     group = ("model",)
     description = "DeepSeek V3 models (deepseek-chat, deepseek-reasoner with always-on CoT)"
 

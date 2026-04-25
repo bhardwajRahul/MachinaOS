@@ -36,8 +36,6 @@ class TwitterReceiveNode(TriggerNode):
     type = "twitterReceive"
     display_name = "Twitter Receive"
     subtitle = "Mentions / DMs"
-    icon = "asset:x"
-    color = "#1DA1F2"
     group = ("social", "trigger")
     description = "Trigger workflow on Twitter mentions, search results, or timeline updates (polling-based)"
     component_kind = "trigger"

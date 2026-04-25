@@ -6,8 +6,6 @@ class OrchestratorAgentNode(SpecializedAgentBase):
     type = "orchestrator_agent"
     display_name = "Orchestrator Agent"
     subtitle = "Agent Coordination"
-    icon = "lucide:Music2"
-    color = "#8be9fd"
     group = ("agent",)
     description = "Team lead that delegates to connected specialized agents"
     handles = team_lead_agent_handles()

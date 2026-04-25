@@ -237,8 +237,6 @@ class ApifyActorNode(ActionNode):
     type = "apifyActor"
     display_name = "Apify Actor"
     subtitle = "Web Scraper"
-    icon = "asset:apify"
-    color = "#ff79c6"
     group = ("api", "scraper", "tool")
     description = "Run Apify actors for Instagram, TikTok, Twitter, LinkedIn, etc."
     component_kind = "square"

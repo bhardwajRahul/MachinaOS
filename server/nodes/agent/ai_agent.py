@@ -88,8 +88,6 @@ class AIAgentNode(ActionNode):
     type = "aiAgent"
     display_name = "AI Agent"
     subtitle = "LangGraph Agent"
-    icon = "lucide:Bot"
-    color = "#bd93f9"
     group = ("agent",)
     description = "LangGraph agent with tool calling, memory, and iterative reasoning"
     component_kind = "agent"

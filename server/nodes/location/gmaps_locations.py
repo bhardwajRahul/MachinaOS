@@ -53,8 +53,6 @@ class GmapsLocationsNode(ActionNode):
     type = "gmaps_locations"
     display_name = "Geocoding"
     subtitle = "Address \u2192 LatLng"
-    icon = "lucide:Earth"
-    color = "#50fa7b"
     group = ("location", "service", "tool")
     description = "Google Maps Geocoding service"
     component_kind = "square"

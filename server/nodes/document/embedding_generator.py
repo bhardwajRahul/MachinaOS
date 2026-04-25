@@ -51,8 +51,6 @@ class EmbeddingGeneratorNode(ActionNode):
     type = "embeddingGenerator"
     display_name = "Embedding Generator"
     subtitle = "Vectorize"
-    icon = "lucide:Brain"
-    color = "#bd93f9"
     group = ("document",)
     description = "Generate vector embeddings from text chunks"
     component_kind = "square"

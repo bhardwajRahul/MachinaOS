@@ -76,8 +76,6 @@ class BraveSearchNode(ActionNode):
     type = "braveSearch"
     display_name = "Brave Search"
     subtitle = "Web Search"
-    icon = "asset:brave"
-    color = "#FB542B"
     group = ("search", "tool")
     description = "Search the web using Brave Search API"
     component_kind = "square"

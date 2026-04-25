@@ -74,8 +74,6 @@ class SerperSearchNode(ActionNode):
     type = "serperSearch"
     display_name = "Serper Search"
     subtitle = "Google SERP"
-    icon = "asset:google"
-    color = "#ff79c6"
     group = ("search", "tool")
     description = "Search the web using Google via Serper API (web/news/images/places)"
     component_kind = "square"

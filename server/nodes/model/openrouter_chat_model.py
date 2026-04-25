@@ -20,8 +20,6 @@ class OpenRouterChatModelNode(ChatModelBase):
     type = "openrouterChatModel"
     display_name = "OpenRouter"
     subtitle = "Chat Model"
-    icon = "lobehub:openrouter"
-    color = "#6366F1"
     group = ("model",)
     description = "OpenRouter unified API - access OpenAI, Claude, Gemini, Llama, and more"
 

@@ -148,8 +148,6 @@ class TelegramSendNode(ActionNode):
     type = "telegramSend"
     display_name = "Telegram Send"
     subtitle = "Send Message"
-    icon = "asset:telegram"
-    color = "#0088CC"
     group = ("social", "tool")
     description = "Send text, photo, document, location, or contact via Telegram bot"
     component_kind = "square"

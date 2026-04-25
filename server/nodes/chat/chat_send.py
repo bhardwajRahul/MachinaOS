@@ -38,8 +38,6 @@ class ChatSendNode(ActionNode):
     type = "chatSend"
     display_name = "Chat Send"
     subtitle = "Send to Chat"
-    icon = "asset:chat"
-    color = "#8be9fd"
     group = ("chat",)
     description = "Send messages to chat conversations"
     component_kind = "square"

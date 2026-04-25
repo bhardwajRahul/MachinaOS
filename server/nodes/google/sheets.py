@@ -80,8 +80,6 @@ class SheetsNode(ActionNode):
     type = "sheets"
     display_name = "Sheets"
     subtitle = "Spreadsheet Ops"
-    icon = "asset:sheets"
-    color = "#0F9D58"
     group = ("google", "tool")
     description = "Google Sheets read / write / append spreadsheet data"
     component_kind = "square"

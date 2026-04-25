@@ -320,8 +320,6 @@ class WhatsAppDbNode(ActionNode):
     type = "whatsappDb"
     display_name = "WhatsApp DB"
     subtitle = "Query DB"
-    icon = "asset:whatsapp-db"
-    color = "#25D366"
     group = ("whatsapp", "tool")
     description = "Query WhatsApp database (chat history, contacts, groups, channels)"
     component_kind = "square"

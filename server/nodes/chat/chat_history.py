@@ -34,8 +34,6 @@ class ChatHistoryNode(ActionNode):
     type = "chatHistory"
     display_name = "Chat History"
     subtitle = "Retrieve Messages"
-    icon = "asset:chat"
-    color = "#8be9fd"
     group = ("chat",)
     description = "Retrieve chat conversation history"
     component_kind = "square"

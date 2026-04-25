@@ -97,8 +97,6 @@ class TelegramReceiveNode(TriggerNode):
     type = "telegramReceive"
     display_name = "Telegram Receive"
     subtitle = "Inbound Message"
-    icon = "asset:telegram"
-    color = "#0088CC"
     group = ("social", "trigger")
     description = "Trigger workflow when Telegram message is received"
     component_kind = "trigger"

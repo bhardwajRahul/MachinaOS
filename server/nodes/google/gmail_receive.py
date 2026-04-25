@@ -56,8 +56,6 @@ class GmailReceiveNode(TriggerNode):
     type = "gmailReceive"
     display_name = "Gmail Receive"
     subtitle = "Inbound Email"
-    icon = "asset:gmail"
-    color = "#EA4335"
     group = ("google", "trigger")
     description = "Polling trigger for incoming Gmail emails"
     component_kind = "trigger"

@@ -28,8 +28,6 @@ class FileReadNode(ActionNode):
     type = "fileRead"
     display_name = "File Read"
     subtitle = "Read Contents"
-    icon = "lucide:FileType"
-    color = "#8be9fd"
     group = ("filesystem", "tool")
     description = "Read file contents with line numbers and pagination"
     component_kind = "square"

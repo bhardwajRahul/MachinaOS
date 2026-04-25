@@ -301,8 +301,6 @@ class BrowserNode(ActionNode):
     type = "browser"
     display_name = "Browser"
     subtitle = "Browser Automation"
-    icon = "asset:chrome"
-    color = "#ff79c6"
     group = ("browser", "tool")
     description = "Interactive browser automation via agent-browser CLI"
     component_kind = "square"

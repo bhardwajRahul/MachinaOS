@@ -342,8 +342,6 @@ class SocialSendNode(ActionNode):
     type = "socialSend"
     display_name = "Social Send"
     subtitle = "Send Message"
-    icon = "asset:social"
-    color = "#bd93f9"
     group = ("social", "tool")
     description = "Unified send action for any social platform"
     component_kind = "agent"   # multi-handle layout uses AIAgentNode component

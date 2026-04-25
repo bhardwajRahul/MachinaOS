@@ -81,8 +81,6 @@ class ChatAgentNode(ActionNode):
     type = "chatAgent"
     display_name = "Zeenie"
     subtitle = "Personal Assistant"
-    icon = "lucide:Sparkles"
-    color = "#8be9fd"
     group = ("agent",)
     description = "Conversational AI agent with skills and memory"
     component_kind = "agent"

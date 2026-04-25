@@ -41,8 +41,6 @@ class ProcessManagerNode(ActionNode):
     type = "processManager"
     display_name = "Process Manager"
     subtitle = "Long-Running Subprocess"
-    icon = "lucide:Settings"
-    color = "#bd93f9"
     group = ("utility", "tool")
     description = "Start, stop, restart, and manage long-running processes"
     component_kind = "square"

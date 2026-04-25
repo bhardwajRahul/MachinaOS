@@ -19,8 +19,6 @@ class GroqChatModelNode(ChatModelBase):
     type = "groqChatModel"
     display_name = "Groq"
     subtitle = "Chat Model"
-    icon = "lobehub:groq"
-    color = "#F55036"
     group = ("model",)
     description = "Groq ultra-fast LLM inference (Llama, Qwen3, GPT-OSS)"
 

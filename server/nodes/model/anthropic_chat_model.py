@@ -20,8 +20,6 @@ class AnthropicChatModelNode(ChatModelBase):
     type = "anthropicChatModel"
     display_name = "Claude"
     subtitle = "Chat Model"
-    icon = "lobehub:claude"
-    color = "#FF6B35"
     group = ("model",)
     description = "Anthropic Claude models for conversation and analysis"
 

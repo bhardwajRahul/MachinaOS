@@ -5,7 +5,5 @@ class CodingAgentNode(SpecializedAgentBase):
     type = "coding_agent"
     display_name = "Coding Agent"
     subtitle = "Code Execution"
-    icon = "lucide:Laptop"
-    color = "#8be9fd"
     group = ("agent",)
     description = "AI agent for code execution"

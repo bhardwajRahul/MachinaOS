@@ -143,10 +143,20 @@ class BaseNode:
     @classmethod
     def _metadata_dict(cls) -> Dict[str, Any]:
         """Project class attributes onto the :data:`NodeMetadata` TypedDict
-        expected by the existing node_spec emitter."""
+        expected by the existing node_spec emitter.
+
+        ``icon`` and ``color`` are sourced from
+        ``server/nodes/visuals.json`` via the central handler — node
+        plugins don't declare them on the class. A subclass MAY still
+        override by setting the class attribute, in which case the
+        explicit value wins.
+        """
+        from nodes._visuals import get_icon, get_color
+        icon = cls.icon or get_icon(cls.type)
+        color = cls.color or get_color(cls.type)
         meta: Dict[str, Any] = {
             "displayName": cls.display_name or cls.type,
-            "icon": cls.icon,
+            "icon": icon,
             "group": list(cls.group),
             "description": cls.description,
             "version": cls.version,
@@ -154,8 +164,8 @@ class BaseNode:
         }
         if cls.subtitle:
             meta["subtitle"] = cls.subtitle
-        if cls.color:
-            meta["color"] = cls.color
+        if color:
+            meta["color"] = color
         if cls.handles:
             meta["handles"] = list(cls.handles)
         if cls.credentials:

@@ -169,8 +169,6 @@ class TwitterSendNode(ActionNode):
     type = "twitterSend"
     display_name = "Twitter Send"
     subtitle = "Tweet / Reply"
-    icon = "asset:x"
-    color = "#1DA1F2"
     group = ("social", "tool")
     description = "Post tweets, reply, retweet, like, or delete tweets on Twitter/X"
     component_kind = "square"

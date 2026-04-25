@@ -93,8 +93,6 @@ class CalendarNode(ActionNode):
     type = "calendar"
     display_name = "Calendar"
     subtitle = "Event Management"
-    icon = "asset:calendar"
-    color = "#4285F4"
     group = ("google", "tool")
     description = "Google Calendar create / list / update / delete events"
     component_kind = "square"

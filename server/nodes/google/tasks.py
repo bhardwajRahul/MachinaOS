@@ -71,8 +71,6 @@ class TasksNode(ActionNode):
     type = "tasks"
     display_name = "Tasks"
     subtitle = "Task Management"
-    icon = "asset:tasks"
-    color = "#4285F4"
     group = ("google", "tool")
     description = "Google Tasks create / list / complete / update / delete"
     component_kind = "square"

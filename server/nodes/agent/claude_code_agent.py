@@ -41,8 +41,6 @@ class ClaudeCodeAgentNode(ActionNode):
     type = "claude_code_agent"
     display_name = "Claude Code"
     subtitle = "Agentic Coding"
-    icon = "lobehub:Claude"
-    color = "#8be9fd"
     group = ("agent",)
     description = "Claude Code CLI as a specialized agent"
     component_kind = "agent"

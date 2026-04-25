@@ -39,8 +39,6 @@ class ChatTriggerNode(TriggerNode):
     type = "chatTrigger"
     display_name = "Chat Trigger"
     subtitle = "Console Chat"
-    icon = "asset:chat"
-    color = "#ffb86c"
     group = ("utility", "trigger")
     description = "Trigger workflow when user sends a chat message from the console input"
     component_kind = "trigger"

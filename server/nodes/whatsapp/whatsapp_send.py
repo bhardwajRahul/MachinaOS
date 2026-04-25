@@ -242,8 +242,6 @@ class WhatsAppSendNode(ActionNode):
     type = "whatsappSend"
     display_name = "WhatsApp Send"
     subtitle = "Send Message"
-    icon = "asset:whatsapp-send"
-    color = "#25D366"
     group = ("whatsapp", "tool")
     description = "Send WhatsApp messages (text, media, location, contact, sticker)"
     component_kind = "square"

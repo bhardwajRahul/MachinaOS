@@ -31,8 +31,6 @@ class TimerNode(ActionNode):
     type = "timer"
     display_name = "Timer"
     subtitle = "Delay Trigger"
-    icon = "lucide:Timer"
-    color = "#ffb86c"
     group = ("scheduler",)
     description = "Timer-based trigger with configurable delay"
     component_kind = "square"  # has input handle

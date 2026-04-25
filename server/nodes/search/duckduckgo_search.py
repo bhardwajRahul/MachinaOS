@@ -39,8 +39,6 @@ class DuckDuckGoSearchNode(ToolNode):
     type = "duckduckgoSearch"
     display_name = "DuckDuckGo Search"
     subtitle = "Free Web Search"
-    icon = "asset:duckduckgo"
-    color = "#f1fa8c"
     group = ("tool", "ai", "search")
     description = "DuckDuckGo web search (free, no API key required)"
     component_kind = "tool"

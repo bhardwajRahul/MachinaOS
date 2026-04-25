@@ -101,8 +101,6 @@ class ContactsNode(ActionNode):
     type = "contacts"
     display_name = "Contacts"
     subtitle = "Contact Management"
-    icon = "asset:contacts"
-    color = "#4285F4"
     group = ("google", "tool")
     description = "Google Contacts create / list / search / get / update / delete"
     component_kind = "square"

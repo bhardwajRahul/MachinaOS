@@ -96,8 +96,6 @@ class GmailNode(ActionNode):
     type = "gmail"
     display_name = "Gmail"
     subtitle = "Email Operations"
-    icon = "asset:gmail"
-    color = "#EA4335"
     group = ("google", "tool")
     description = "Google Gmail send / search / read (dual-purpose workflow + AI tool)"
     component_kind = "square"

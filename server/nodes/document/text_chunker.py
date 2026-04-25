@@ -29,8 +29,6 @@ class TextChunkerNode(ActionNode):
     type = "textChunker"
     display_name = "Text Chunker"
     subtitle = "Chunk Text"
-    icon = "lucide:Scissors"
-    color = "#bd93f9"
     group = ("document",)
     description = "Split text into overlapping chunks for embedding"
     component_kind = "square"

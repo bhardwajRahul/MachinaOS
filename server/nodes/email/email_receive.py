@@ -39,8 +39,6 @@ class EmailReceiveNode(TriggerNode):
     type = "emailReceive"
     display_name = "Email Receive"
     subtitle = "IMAP Polling"
-    icon = "asset:receive"
-    color = "#8be9fd"
     group = ("email", "trigger")
     description = "Polling trigger for new emails via IMAP"
     component_kind = "trigger"

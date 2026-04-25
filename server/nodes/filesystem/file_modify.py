@@ -35,8 +35,6 @@ class FileModifyNode(ActionNode):
     type = "fileModify"
     display_name = "File Modify"
     subtitle = "Write/Edit"
-    icon = "lucide:Edit"
-    color = "#8be9fd"
     group = ("filesystem", "tool")
     description = "Write new files or edit existing files"
     component_kind = "square"

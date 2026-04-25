@@ -34,8 +34,6 @@ class MasterSkillNode(ActionNode):
     type = "masterSkill"
     display_name = "Master Skill"
     subtitle = "Skill Aggregator"
-    icon = "lucide:Target"
-    color = "#f1fa8c"
     group = ("tool",)
     description = "Aggregate multiple skills with enable/disable toggles"
     component_kind = "tool"

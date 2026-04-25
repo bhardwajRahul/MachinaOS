@@ -216,8 +216,8 @@ async def _pinecone_op(operation: str, params: Dict[str, Any], collection: str) 
         return {"stored_count": len(embeddings)}
 
     if operation == 'query':
-        query_emb = params.get('queryEmbedding', [])
-        top_k = int(params.get('topK', 5))
+        query_emb = params.get('query_embedding', [])
+        top_k = int(params.get('top_k', 5))
         if not query_emb:
             return {"matches": []}
         results = await asyncio.to_thread(
@@ -243,8 +243,6 @@ class VectorStoreNode(ActionNode):
     type = "vectorStore"
     display_name = "Vector Store"
     subtitle = "Store/Query"
-    icon = "lucide:Database"
-    color = "#bd93f9"
     group = ("document",)
     description = "Store and query vector embeddings"
     component_kind = "square"

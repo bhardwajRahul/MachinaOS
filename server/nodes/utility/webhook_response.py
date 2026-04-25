@@ -28,8 +28,6 @@ class WebhookResponseNode(ActionNode):
     type = "webhookResponse"
     display_name = "Webhook Response"
     subtitle = "HTTP Reply"
-    icon = "lucide:CornerDownLeft"
-    color = "#bd93f9"
     group = ("utility",)
     description = "Send custom response back to webhook caller with configurable status code, body, and headers"
     component_kind = "square"

@@ -113,8 +113,6 @@ class HttpScraperNode(ActionNode):
     type = "httpScraper"
     display_name = "HTTP Scraper"
     subtitle = "Page Pagination"
-    icon = "lucide:Search"
-    color = "#bd93f9"
     group = ("document",)
     description = "Scrape links from web pages with date/page pagination support"
     component_kind = "square"

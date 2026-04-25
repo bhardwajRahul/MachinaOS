@@ -21,8 +21,6 @@ class GeminiChatModelNode(ChatModelBase):
     type = "geminiChatModel"
     display_name = "Gemini"
     subtitle = "Chat Model"
-    icon = "lobehub:gemini"
-    color = "#4285F4"
     group = ("model",)
     description = "Google Gemini models for multimodal AI capabilities"
 

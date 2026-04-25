@@ -72,8 +72,6 @@ class PerplexitySearchNode(ActionNode):
     type = "perplexitySearch"
     display_name = "Perplexity Search"
     subtitle = "AI Search"
-    icon = "asset:perplexity"
-    color = "#ff79c6"
     group = ("search", "tool")
     description = "AI-powered search using Perplexity Sonar with citations"
     component_kind = "square"

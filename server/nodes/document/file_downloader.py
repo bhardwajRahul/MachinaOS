@@ -40,8 +40,6 @@ class FileDownloaderNode(ActionNode):
     type = "fileDownloader"
     display_name = "File Downloader"
     subtitle = "Parallel DL"
-    icon = "lucide:Download"
-    color = "#bd93f9"
     group = ("document",)
     description = "Download files from URLs in parallel"
     component_kind = "square"

@@ -28,8 +28,6 @@ class OpenAIChatModelNode(ChatModelBase):
     type = "openaiChatModel"
     display_name = "OpenAI"
     subtitle = "Chat Model"
-    icon = "lobehub:openai"
-    color = "#00A67E"
     group = ("model",)
     description = "OpenAI GPT models for chat completion and generation"
 

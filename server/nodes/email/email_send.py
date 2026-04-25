@@ -35,8 +35,6 @@ class EmailSendNode(ActionNode):
     type = "emailSend"
     display_name = "Email Send"
     subtitle = "SMTP Outbound"
-    icon = "asset:send"
-    color = "#8be9fd"
     group = ("email", "tool")
     description = "Send emails via SMTP (Gmail, Outlook, Yahoo, iCloud, ProtonMail, Fastmail, custom)"
     component_kind = "square"

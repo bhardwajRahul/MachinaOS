@@ -127,8 +127,6 @@ class TwitterUserNode(ActionNode):
     type = "twitterUser"
     display_name = "Twitter User"
     subtitle = "User Profiles"
-    icon = "asset:x"
-    color = "#1DA1F2"
     group = ("social", "tool")
     description = "Look up Twitter/X user profiles, followers, and following"
     component_kind = "square"

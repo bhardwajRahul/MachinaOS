@@ -76,8 +76,6 @@ class TwitterSearchNode(ActionNode):
     type = "twitterSearch"
     display_name = "Twitter Search"
     subtitle = "Search Tweets"
-    icon = "asset:x"
-    color = "#1DA1F2"
     group = ("social", "tool")
     description = "Search recent tweets on Twitter/X using the Search API"
     component_kind = "square"

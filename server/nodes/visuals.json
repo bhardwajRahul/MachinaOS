@@ -1,0 +1,427 @@
+{
+  "aiAgent": {
+    "icon": "🤖",
+    "color": "#bd93f9"
+  },
+  "ai_employee": {
+    "icon": "👥",
+    "color": "#bd93f9"
+  },
+  "airplaneModeControl": {
+    "icon": "✈️"
+  },
+  "android_agent": {
+    "icon": "📱",
+    "color": "#50fa7b"
+  },
+  "anthropicChatModel": {
+    "icon": "lobehub:claude",
+    "color": "#FF6B35"
+  },
+  "apifyActor": {
+    "icon": "asset:apify",
+    "color": "#ff79c6"
+  },
+  "appLauncher": {
+    "icon": "🚀"
+  },
+  "appList": {
+    "icon": "📋"
+  },
+  "audioAutomation": {
+    "icon": "🔊"
+  },
+  "autonomous_agent": {
+    "icon": "🎯",
+    "color": "#bd93f9"
+  },
+  "batteryMonitor": {
+    "icon": "🔋"
+  },
+  "bluetoothAutomation": {
+    "icon": "🔵"
+  },
+  "braveSearch": {
+    "icon": "asset:brave",
+    "color": "#FB542B"
+  },
+  "browser": {
+    "icon": "asset:chrome",
+    "color": "#ff79c6"
+  },
+  "calculatorTool": {
+    "icon": "🔢",
+    "color": "#f1fa8c"
+  },
+  "calendar": {
+    "icon": "asset:calendar",
+    "color": "#4285F4"
+  },
+  "cameraControl": {
+    "icon": "📷"
+  },
+  "cerebrasChatModel": {
+    "icon": "lobehub:cerebras",
+    "color": "#ffb86c"
+  },
+  "chatAgent": {
+    "icon": "🧞",
+    "color": "#8be9fd"
+  },
+  "chatHistory": {
+    "icon": "asset:chat",
+    "color": "#8be9fd"
+  },
+  "chatSend": {
+    "icon": "asset:chat",
+    "color": "#8be9fd"
+  },
+  "chatTrigger": {
+    "icon": "💬",
+    "color": "#ffb86c"
+  },
+  "claude_code_agent": {
+    "icon": "lobehub:Claude",
+    "color": "#8be9fd"
+  },
+  "coding_agent": {
+    "icon": "💻",
+    "color": "#8be9fd"
+  },
+  "console": {
+    "icon": "🖥️",
+    "color": "#8be9fd"
+  },
+  "consumer_agent": {
+    "icon": "🛒",
+    "color": "#bd93f9"
+  },
+  "contacts": {
+    "icon": "asset:contacts",
+    "color": "#4285F4"
+  },
+  "crawleeScraper": {
+    "icon": "🕷",
+    "color": "#ff79c6"
+  },
+  "cronScheduler": {
+    "icon": "⏰",
+    "color": "#ffb86c"
+  },
+  "currentTimeTool": {
+    "icon": "🕐",
+    "color": "#f1fa8c"
+  },
+  "deep_agent": {
+    "icon": "🧠",
+    "color": "#50fa7b"
+  },
+  "deepseekChatModel": {
+    "icon": "lobehub:deepseek",
+    "color": "#8be9fd"
+  },
+  "deviceStateAutomation": {
+    "icon": "⚙️"
+  },
+  "documentParser": {
+    "icon": "📄",
+    "color": "#bd93f9"
+  },
+  "drive": {
+    "icon": "asset:drive",
+    "color": "#0F9D58"
+  },
+  "duckduckgoSearch": {
+    "icon": "asset:duckduckgo",
+    "color": "#f1fa8c"
+  },
+  "emailRead": {
+    "icon": "asset:read",
+    "color": "#8be9fd"
+  },
+  "emailReceive": {
+    "icon": "asset:receive",
+    "color": "#8be9fd"
+  },
+  "emailSend": {
+    "icon": "asset:send",
+    "color": "#8be9fd"
+  },
+  "embeddingGenerator": {
+    "icon": "🧠",
+    "color": "#bd93f9"
+  },
+  "environmentalSensors": {
+    "icon": "🌡️"
+  },
+  "fileDownloader": {
+    "icon": "⬇️",
+    "color": "#bd93f9"
+  },
+  "fileHandler": {
+    "icon": "📁",
+    "color": "#bd93f9"
+  },
+  "fileModify": {
+    "icon": "✏️",
+    "color": "#8be9fd"
+  },
+  "fileRead": {
+    "icon": "📄",
+    "color": "#8be9fd"
+  },
+  "fsSearch": {
+    "icon": "🔍",
+    "color": "#8be9fd"
+  },
+  "geminiChatModel": {
+    "icon": "lobehub:gemini",
+    "color": "#4285F4"
+  },
+  "gmail": {
+    "icon": "asset:gmail",
+    "color": "#EA4335"
+  },
+  "gmailReceive": {
+    "icon": "asset:gmail",
+    "color": "#EA4335"
+  },
+  "gmaps_create": {
+    "icon": "🗺️",
+    "color": "#50fa7b"
+  },
+  "gmaps_locations": {
+    "icon": "🌍",
+    "color": "#50fa7b"
+  },
+  "gmaps_nearby_places": {
+    "icon": "🔍",
+    "color": "#50fa7b"
+  },
+  "groqChatModel": {
+    "icon": "lobehub:groq",
+    "color": "#F55036"
+  },
+  "httpRequest": {
+    "icon": "🌐",
+    "color": "#bd93f9"
+  },
+  "httpScraper": {
+    "icon": "🔍",
+    "color": "#bd93f9"
+  },
+  "javascriptExecutor": {
+    "icon": "asset:javascript"
+  },
+  "kimiChatModel": {
+    "icon": "lobehub:kimi",
+    "color": "#bd93f9"
+  },
+  "location": {
+    "icon": "📍"
+  },
+  "masterSkill": {
+    "icon": "🎯",
+    "color": "#f1fa8c"
+  },
+  "mediaControl": {
+    "icon": "🎵"
+  },
+  "mistralChatModel": {
+    "icon": "lobehub:mistral",
+    "color": "#ffb86c"
+  },
+  "motionDetection": {
+    "icon": "📳"
+  },
+  "networkMonitor": {
+    "icon": "📡"
+  },
+  "openaiChatModel": {
+    "icon": "lobehub:openai",
+    "color": "#00A67E"
+  },
+  "openrouterChatModel": {
+    "icon": "lobehub:openrouter",
+    "color": "#6366F1"
+  },
+  "orchestrator_agent": {
+    "icon": "🎼",
+    "color": "#8be9fd"
+  },
+  "payments_agent": {
+    "icon": "💳",
+    "color": "#50fa7b"
+  },
+  "perplexitySearch": {
+    "icon": "asset:perplexity",
+    "color": "#ff79c6"
+  },
+  "processManager": {
+    "icon": "⚙️",
+    "color": "#bd93f9"
+  },
+  "productivity_agent": {
+    "icon": "⏰",
+    "color": "#8be9fd"
+  },
+  "proxyConfig": {
+    "icon": "🔧",
+    "color": "#ffb86c"
+  },
+  "proxyRequest": {
+    "icon": "🛡",
+    "color": "#ffb86c"
+  },
+  "proxyStatus": {
+    "icon": "📊",
+    "color": "#ffb86c"
+  },
+  "pythonExecutor": {
+    "icon": "asset:python"
+  },
+  "rlm_agent": {
+    "icon": "🧠",
+    "color": "#ffb86c"
+  },
+  "screenControlAutomation": {
+    "icon": "💡"
+  },
+  "serperSearch": {
+    "icon": "asset:google",
+    "color": "#ff79c6"
+  },
+  "sheets": {
+    "icon": "asset:sheets",
+    "color": "#0F9D58"
+  },
+  "shell": {
+    "icon": "💻",
+    "color": "#8be9fd"
+  },
+  "simpleMemory": {
+    "icon": "🧠",
+    "color": "#f1fa8c"
+  },
+  "socialReceive": {
+    "icon": "asset:social",
+    "color": "#bd93f9"
+  },
+  "socialSend": {
+    "icon": "asset:social",
+    "color": "#bd93f9"
+  },
+  "social_agent": {
+    "icon": "📱",
+    "color": "#50fa7b"
+  },
+  "start": {
+    "icon": "▶",
+    "color": "#bd93f9"
+  },
+  "systemInfo": {
+    "icon": "📱"
+  },
+  "taskManager": {
+    "icon": "📋",
+    "color": "#f1fa8c"
+  },
+  "taskTrigger": {
+    "icon": "📨",
+    "color": "#ffb86c"
+  },
+  "task_agent": {
+    "icon": "📋",
+    "color": "#bd93f9"
+  },
+  "tasks": {
+    "icon": "asset:tasks",
+    "color": "#4285F4"
+  },
+  "teamMonitor": {
+    "icon": "📊",
+    "color": "#bd93f9"
+  },
+  "telegramReceive": {
+    "icon": "asset:telegram",
+    "color": "#0088CC"
+  },
+  "telegramSend": {
+    "icon": "asset:telegram",
+    "color": "#0088CC"
+  },
+  "textChunker": {
+    "icon": "✂️",
+    "color": "#bd93f9"
+  },
+  "textGenerator": {
+    "icon": "📝",
+    "color": "#bd93f9"
+  },
+  "timer": {
+    "icon": "⏱️",
+    "color": "#ffb86c"
+  },
+  "tool_agent": {
+    "icon": "🔧",
+    "color": "#f1fa8c"
+  },
+  "travel_agent": {
+    "icon": "✈️",
+    "color": "#ffb86c"
+  },
+  "twitterReceive": {
+    "icon": "asset:x",
+    "color": "#1DA1F2"
+  },
+  "twitterSearch": {
+    "icon": "asset:x",
+    "color": "#1DA1F2"
+  },
+  "twitterSend": {
+    "icon": "asset:x",
+    "color": "#1DA1F2"
+  },
+  "twitterUser": {
+    "icon": "asset:x",
+    "color": "#1DA1F2"
+  },
+  "typescriptExecutor": {
+    "icon": "asset:typescript"
+  },
+  "vectorStore": {
+    "icon": "🗄️",
+    "color": "#bd93f9"
+  },
+  "web_agent": {
+    "icon": "🌐",
+    "color": "#ff79c6"
+  },
+  "webhookResponse": {
+    "icon": "↩️",
+    "color": "#bd93f9"
+  },
+  "webhookTrigger": {
+    "icon": "🪝",
+    "color": "#ffb86c"
+  },
+  "whatsappDb": {
+    "icon": "asset:whatsapp-db",
+    "color": "#25D366"
+  },
+  "whatsappReceive": {
+    "icon": "asset:whatsapp-receive",
+    "color": "#25D366"
+  },
+  "whatsappSend": {
+    "icon": "asset:whatsapp-send",
+    "color": "#25D366"
+  },
+  "wifiAutomation": {
+    "icon": "📶"
+  },
+  "writeTodos": {
+    "icon": "📝",
+    "color": "#bd93f9"
+  }
+}

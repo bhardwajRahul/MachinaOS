@@ -42,8 +42,6 @@ class GmapsCreateNode(ActionNode):
     type = "gmaps_create"
     display_name = "Map Create"
     subtitle = "Google Map"
-    icon = "lucide:Map"
-    color = "#50fa7b"
     group = ("location", "service")
     description = "Google Maps creation with center, zoom, and map type"
     component_kind = "square"

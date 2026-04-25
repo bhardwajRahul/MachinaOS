@@ -13,7 +13,6 @@ class PythonExecutorNode(CodeExecutorBase):
     type = "pythonExecutor"
     display_name = "Python Executor"
     subtitle = "Run Python"
-    icon = "asset:python"
     description = "Execute Python code for calculations, data processing, and automation"
 
     @Operation("execute")

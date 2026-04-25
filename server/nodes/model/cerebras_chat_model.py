@@ -19,8 +19,6 @@ class CerebrasChatModelNode(ChatModelBase):
     type = "cerebrasChatModel"
     display_name = "Cerebras"
     subtitle = "Chat Model"
-    icon = "lobehub:cerebras"
-    color = "#ffb86c"
     group = ("model",)
     description = "Cerebras ultra-fast inference on custom AI hardware"
 

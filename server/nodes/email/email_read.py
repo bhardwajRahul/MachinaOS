@@ -101,8 +101,6 @@ class EmailReadNode(ActionNode):
     type = "emailRead"
     display_name = "Email Read"
     subtitle = "IMAP Read/Manage"
-    icon = "asset:read"
-    color = "#8be9fd"
     group = ("email", "tool")
     description = "Read and manage emails via IMAP - list, search, read, move, delete, flag"
     component_kind = "square"

@@ -96,8 +96,6 @@ class WhatsAppReceiveNode(TriggerNode):
     type = "whatsappReceive"
     display_name = "WhatsApp Receive"
     subtitle = "Inbound Message"
-    icon = "asset:whatsapp-receive"
-    color = "#25D366"
     group = ("whatsapp", "trigger")
     description = "Trigger workflow when WhatsApp message is received"
     component_kind = "trigger"

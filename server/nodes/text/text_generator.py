@@ -29,8 +29,6 @@ class TextGeneratorNode(ActionNode):
     type = "textGenerator"
     display_name = "Text Generator"
     subtitle = "Static / AI Text"
-    icon = "lucide:FileText"
-    color = "#bd93f9"
     group = ("text",)
     description = "Generate text using static, AI, file, or API source"
     component_kind = "square"

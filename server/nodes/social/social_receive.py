@@ -97,8 +97,6 @@ class SocialReceiveNode(ActionNode):
     type = "socialReceive"
     display_name = "Social Receive"
     subtitle = "Normalize Message"
-    icon = "asset:social"
-    color = "#bd93f9"
     group = ("social",)
     description = "Normalizes messages from platform triggers into unified format"
     component_kind = "agent"   # multi-handle layout uses AIAgentNode
