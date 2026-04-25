@@ -271,11 +271,15 @@ async def handle_get_node_spec(
 async def handle_list_node_specs(
     data: Dict[str, Any], websocket: WebSocket
 ) -> Dict[str, Any]:
-    """Return the sorted list of node types that have a NodeSpec.
-    Editor calls this on boot to prefetch the whole set."""
-    from services.node_spec import list_node_types_with_spec
+    """Return the sorted list of node types that have a NodeSpec, plus
+    a content-hash revision the editor uses to invalidate its persisted
+    spec cache when the backend catalogue changes between deploys."""
+    from services.node_spec import list_node_types_with_spec, node_spec_revision
 
-    return {"node_types": list_node_types_with_spec()}
+    return {
+        "node_types": list_node_types_with_spec(),
+        "revision": node_spec_revision(),
+    }
 
 
 @ws_handler("method")

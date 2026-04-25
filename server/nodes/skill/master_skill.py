@@ -43,7 +43,13 @@ class MasterSkillNode(ActionNode):
         {"name": "output-skill", "kind": "output", "position": "top",
          "label": "Skill", "role": "skill"},
     )
-    ui_hints = {"isToolPanel": True, "isMasterSkillEditor": True, "hideRunButton": True}
+    ui_hints = {
+        "isToolPanel": True,
+        "isMasterSkillEditor": True,
+        "hideRunButton": True,
+        "hideInputSection": True,
+        "hideOutputSection": True,
+    }
     annotations = {"destructive": False, "readonly": True, "open_world": False}
     task_queue = TaskQueue.DEFAULT
 

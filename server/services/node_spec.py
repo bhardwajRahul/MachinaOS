@@ -24,6 +24,8 @@ This module is the single point that fuses the three sources of truth:
 Wave 6 Phase 1 — see C:\\Users\\Tgroh\\.claude\\plans\\typed-splashing-crown.md.
 """
 
+import hashlib
+import json
 from typing import Any, Optional
 
 from models.node_metadata import fallback_metadata, get_node_metadata
@@ -38,6 +40,7 @@ from services.node_output_schemas import (
 
 
 _spec_cache: dict[str, dict[str, Any]] = {}
+_revision_cache: Optional[str] = None
 
 
 def get_node_spec(node_type: str) -> Optional[dict[str, Any]]:
@@ -103,6 +106,30 @@ def list_node_types_with_spec() -> list[str]:
         | set(NODE_OUTPUT_SCHEMAS.keys())
         | set(NODE_METADATA.keys())
     )
+
+
+def node_spec_revision() -> str:
+    """Content hash of the full NodeSpec catalogue.
+
+    The frontend persists NodeSpec entries in localStorage with
+    ``staleTime: Infinity``; without a revision the persisted cache
+    survives backend deploys that change icons, uiHints, or handles
+    (e.g. masterSkill gaining ``hideInputSection``). The revision is
+    sent alongside ``list_node_specs`` so the editor can detect drift
+    on connect and evict stale entries before refetching.
+
+    Computed once per process and cached — restart busts. Hashes the
+    fully-assembled spec dict for every known type, sorted, so the
+    output is stable regardless of dict-iteration order. First 16 hex
+    chars are plenty to avoid collisions for our scale.
+    """
+    global _revision_cache
+    if _revision_cache is not None:
+        return _revision_cache
+    catalogue = {nt: get_node_spec(nt) for nt in list_node_types_with_spec()}
+    payload = json.dumps(catalogue, sort_keys=True, default=str).encode("utf-8")
+    _revision_cache = hashlib.sha256(payload).hexdigest()[:16]
+    return _revision_cache
 
 
 def list_node_groups() -> dict[str, dict[str, Any]]:

@@ -54,15 +54,37 @@ export async function fetchNodeSpec(
   });
 }
 
+const NODESPEC_REVISION_STORAGE_KEY = 'machina-nodespec-revision';
+
 /**
  * Prefetch every node type the backend knows about, in a single idle
  * burst at editor boot. Non-blocking — failures are swallowed so a flaky
  * WS doesn't block UI. Matches Activepieces' summary+lazy pattern.
+ *
+ * Self-busts the persisted spec cache when the backend catalogue
+ * changes. The backend returns a content-hash `revision` derived from
+ * the full NodeSpec catalogue (icons, uiHints, handles, schemas);
+ * without this, persisted entries with `staleTime: FOREVER` survive
+ * server deploys and the editor keeps rendering pre-deploy shapes
+ * (e.g. masterSkill missing its `hideInputSection` hint). On revision
+ * mismatch we evict the relevant prefixes before refetching so the
+ * persistor overwrites stale localStorage entries on the next sync.
  */
 export async function prefetchAllNodeSpecs(sendRequest: SendRequest): Promise<void> {
   try {
     const response = await sendRequest('list_node_specs', {});
     const nodeTypes: string[] = response?.node_types ?? [];
+    const revision: string | undefined = response?.revision;
+
+    if (revision && typeof window !== 'undefined') {
+      const lastSeen = window.localStorage.getItem(NODESPEC_REVISION_STORAGE_KEY);
+      if (lastSeen !== revision) {
+        queryClient.removeQueries({ queryKey: ['nodeSpec'] });
+        queryClient.removeQueries({ queryKey: ['nodeGroups'] });
+        window.localStorage.setItem(NODESPEC_REVISION_STORAGE_KEY, revision);
+      }
+    }
+
     await Promise.all(nodeTypes.map(t => fetchNodeSpec(t, sendRequest)));
   } catch {
     // Prefetch is best-effort — logged by the WS layer, not us.
