@@ -53,6 +53,7 @@ import {
   generateWorkflowId
 } from './utils/workflow';
 import { importWorkflowFromFile } from './utils/workflowExport';
+import { buildCanvasStyles } from './styles/canvasAnimations';
 
 import 'reactflow/dist/style.css';
 
@@ -111,97 +112,6 @@ const createNodeTypes = (): Record<string, React.ComponentType<any>> => {
 const moduleEdgeTypes = {
   conditional: ConditionalEdge,
 };
-
-// Edge styles generator using theme colors - supports light and dark modes
-const getEdgeStyles = (colors: {
-  edgeDefault: string;
-  edgeSelected: string;
-  edgeExecuting: string;
-  edgeCompleted: string;
-  edgeError: string;
-}, isDark: boolean) => `
-  /* Base style for ALL edges */
-  .react-flow__edge path {
-    stroke: ${colors.edgeDefault} !important;
-    stroke-width: 2px;
-  }
-
-  .react-flow__edge.selected path {
-    stroke: ${colors.edgeSelected} !important;
-    stroke-width: 4px !important;
-  }
-
-  /* Executing edge - subtle blue in light mode, cyan in dark mode */
-  .react-flow__edge.executing path {
-    stroke: ${isDark ? colors.edgeExecuting : '#2563eb'} !important;
-    stroke-width: 3px !important;
-    stroke-dasharray: 8 4;
-    animation: dashFlow 0.5s linear infinite;
-  }
-
-  /* Completed edge - subtle green in both modes */
-  .react-flow__edge.completed path {
-    stroke: ${isDark ? colors.edgeCompleted : '#16a34a'} !important;
-    stroke-width: 2px !important;
-  }
-
-  /* Error edge - keep red for visibility */
-  .react-flow__edge.error path {
-    stroke: ${colors.edgeError} !important;
-    stroke-width: 3px !important;
-  }
-
-  /* Pending edge - animated dash in both modes */
-  .react-flow__edge.pending path {
-    stroke: ${isDark ? colors.edgeDefault : '#6b7280'} !important;
-    stroke-width: 2px !important;
-    stroke-dasharray: 8 4;
-    animation: dashFlow 0.5s linear infinite;
-  }
-
-  /* Memory connection active */
-  .react-flow__edge.memory-active path {
-    stroke: ${isDark ? '#ff79c6' : '#db2777'} !important;
-    stroke-width: 3px !important;
-  }
-
-  /* Tool connection active */
-  .react-flow__edge.tool-active path {
-    stroke: ${isDark ? '#ffb86c' : '#ea580c'} !important;
-    stroke-width: 3px !important;
-  }
-
-  @keyframes dashFlow {
-    0% { stroke-dashoffset: 24; }
-    100% { stroke-dashoffset: 0; }
-  }
-
-  /* Executing node - visible glow in both modes */
-  .react-flow__node.executing {
-    filter: ${isDark
-      ? `drop-shadow(0 0 8px ${colors.edgeExecuting}) drop-shadow(0 0 16px ${colors.edgeExecuting}80)`
-      : 'drop-shadow(0 0 10px rgba(37, 99, 235, 0.8)) drop-shadow(0 0 20px rgba(37, 99, 235, 0.6))'};
-    animation: ${isDark ? 'nodeGlowDark' : 'nodeGlowLight'} 1.2s ease-in-out infinite;
-  }
-
-  @keyframes nodeGlowDark {
-    0%, 100% {
-      filter: drop-shadow(0 0 8px ${colors.edgeExecuting}) drop-shadow(0 0 16px ${colors.edgeExecuting}80);
-    }
-    50% {
-      filter: drop-shadow(0 0 14px ${colors.edgeExecuting}) drop-shadow(0 0 24px ${colors.edgeExecuting});
-    }
-  }
-
-  @keyframes nodeGlowLight {
-    0%, 100% {
-      filter: drop-shadow(0 0 10px rgba(37, 99, 235, 0.8)) drop-shadow(0 0 20px rgba(37, 99, 235, 0.6));
-    }
-    50% {
-      filter: drop-shadow(0 0 16px rgba(37, 99, 235, 1)) drop-shadow(0 0 30px rgba(37, 99, 235, 0.8));
-    }
-  }
-`;
 
 const initialNodes: Node[] = [];
 const initialEdges: Edge[] = [];
@@ -422,25 +332,34 @@ const DashboardContent: React.FC = () => {
     void prefetchAllNodeSpecs(sendRequest).finally(() => setSpecsReady(true));
   }, [isReady, sendRequest]);
 
-  // Workflow-level "pending" class only. The executing / completed /
-  // error classes used to be painted here too, which forced the entire
-  // nodes array to re-derive on every per-node status broadcast and
-  // triggered a full canvas re-render. Each node component now reads
-  // its own status via the `useNodeStatus(id)` slice selector and
-  // paints its own border/glow, so this useMemo only needs to know
-  // about workflow-run progress (executionOrder + executedNodes), not
-  // individual node statuses.
+  // Paint executing / completed / error / pending classes on the React
+  // Flow node wrapper so the canvas-wide CSS rules at the top of this
+  // file (.react-flow__node.executing, etc.) match -- in particular the
+  // nodeGlowDark / nodeGlowLight outer-glow keyframes that per-node
+  // inline `pulse` animations cannot replicate. Re-deriving on every
+  // nodeStatuses broadcast is cheap because node components are
+  // React.memo + useNodeStatus(id) slice-subscribed, so only nodes
+  // whose className actually changed will re-render.
   const styledNodes = React.useMemo(() => {
     return nodes.map(node => {
-      const className =
+      const status = nodeStatuses[node.id]?.status;
+      let className = '';
+      if (status === 'executing' || status === 'waiting') {
+        className = 'executing';
+      } else if (status === 'success') {
+        className = 'completed';
+      } else if (status === 'error') {
+        className = 'error';
+      } else if (
         isExecuting &&
         executionOrder.includes(node.id) &&
         !executedNodes.has(node.id)
-          ? 'pending'
-          : '';
+      ) {
+        className = 'pending';
+      }
       return { ...node, className };
     });
-  }, [nodes, isExecuting, executionOrder, executedNodes]);
+  }, [nodes, nodeStatuses, isExecuting, executionOrder, executedNodes]);
 
   // Update edges with execution status classes
   const styledEdges = React.useMemo(() => {
@@ -1127,7 +1046,7 @@ const DashboardContent: React.FC = () => {
 
   return (
     <>
-      <style>{getEdgeStyles(theme.colors, isDarkMode)}</style>
+      <style>{buildCanvasStyles(theme.colors, isDarkMode)}</style>
       <div style={{
         width: '100%',
         height: '100vh',
