@@ -92,32 +92,18 @@ class TemporalWorkerManager:
         # Create activity instance with shared session
         self._activities = NodeExecutionActivities(self._session)
 
-        # Wave 11.F: register per-plugin activities alongside the
-        # legacy generic execute_node_activity. Workers pick up both.
-        # The legacy activity stays so existing workflows that call
-        # "execute_node_activity" keep working; plugin activities are
-        # indexed by ``node.{type}.v{version}`` for future per-node
-        # dispatch.
-        activities: list = [self._activities.execute_node_activity]
-        try:
-            import nodes  # populate plugin-class registry
-            from services.temporal.plugin_activities import collect_plugin_activities
-            plugin_activities = collect_plugin_activities()
-            activities.extend(plugin_activities)
-            logger.info(
-                "Registered %d plugin activities on queue %s",
-                len(plugin_activities), self.task_queue,
-            )
-        except Exception as e:
-            logger.warning(f"Plugin activity registration failed: {e}")
-
-        # Create worker with class-based activity
-        # For class-based activities, pass the bound method (instance.method)
+        # MachinaWorkflow.run() schedules every node via the single
+        # ``"execute_node_activity"`` name (see services/temporal/workflow.py).
+        # The Wave 11.F per-plugin activities (``node.{type}.v{version}``)
+        # added a ~1.6s registration cost at every worker startup but were
+        # never scheduled by the orchestrator — pure dead code on the hot
+        # path. Removed. If per-node task-queue dispatch is revived, gate
+        # behind a Settings flag and wire it into the orchestrator first.
         self._worker = Worker(
             self.client,
             task_queue=self.task_queue,
             workflows=[MachinaWorkflow],
-            activities=activities,
+            activities=[self._activities.execute_node_activity],
             # Allow concurrent activity execution for parallel branches
             max_concurrent_activities=self.pool_size,
             max_concurrent_workflow_tasks=10,
