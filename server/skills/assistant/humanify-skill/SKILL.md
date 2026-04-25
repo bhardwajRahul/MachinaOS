@@ -5,6 +5,8 @@ metadata:
   author: machina
   version: "1.0"
   category: formatting
+  icon: "✨"
+  color: "#F59E0B"
 
 ---
 

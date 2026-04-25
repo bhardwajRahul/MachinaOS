@@ -5,6 +5,8 @@ metadata:
   author: machina
   version: "1.0"
   category: reasoning
+  icon: "🧠"
+  color: "#FF8C00"
 
 ---
 

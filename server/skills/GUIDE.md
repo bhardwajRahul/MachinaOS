@@ -111,7 +111,7 @@ Provide usage guidelines, examples, and constraints.
 | `name` | Yes | Lowercase, hyphens only. Must match pattern `^[a-z0-9]+(-[a-z0-9]+)*$` |
 | `description` | Yes | One-line summary shown in skill lists and to the LLM |
 | `allowed-tools` | No | Space-delimited list of tool names. The first that resolves to a known node is the skill's visual source — its icon/color come from `server/nodes/visuals.json` via the `_visuals` handler. |
-| `metadata` | No | Arbitrary key-value pairs (author, version, category). **Do NOT set `icon` or `color`** — those are resolved automatically from the target node so the skill always mirrors the canvas. |
+| `metadata` | No | Arbitrary key-value pairs (author, version, category). **Don't set `icon`/`color` for skills that target a node** — those are resolved from the target node's `visuals.json` entry so the skill always mirrors the canvas. Skills with no node target (personality skills, memory operators, autonomous patterns) **may** set inline `icon` and `color` — they're the only visual source for those. |
 
 ### Name Format Rules
 

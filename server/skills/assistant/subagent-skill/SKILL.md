@@ -5,6 +5,8 @@ metadata:
   author: machina
   version: "2.0"
   category: assistant
+  icon: "🤖"
+  color: "#8B5CF6"
 
 ---
 
