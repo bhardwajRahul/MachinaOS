@@ -129,6 +129,12 @@ class Database:
                     ))
                     logger.info("Added default_llm_model column to user_settings")
 
+                if "auto_add_skill_for_tools" not in columns:
+                    await conn.execute(text(
+                        "ALTER TABLE user_settings ADD COLUMN auto_add_skill_for_tools BOOLEAN DEFAULT 1"
+                    ))
+                    logger.info("Added auto_add_skill_for_tools column to user_settings")
+
                 # Migrate token_usage_metrics table - add cost columns
                 result = await conn.execute(text("PRAGMA table_info(token_usage_metrics)"))
                 columns = {row[1] for row in result.fetchall()}
@@ -1555,6 +1561,7 @@ class Database:
                     "onboarding_step": settings.onboarding_step,
                     "default_llm_provider": settings.default_llm_provider,
                     "default_llm_model": settings.default_llm_model,
+                    "auto_add_skill_for_tools": settings.auto_add_skill_for_tools,
                     "created_at": settings.created_at.isoformat() if settings.created_at else None,
                     "updated_at": settings.updated_at.isoformat() if settings.updated_at else None
                 }
@@ -1598,6 +1605,8 @@ class Database:
                         existing.default_llm_provider = settings_data["default_llm_provider"]
                     if "default_llm_model" in settings_data:
                         existing.default_llm_model = settings_data["default_llm_model"]
+                    if "auto_add_skill_for_tools" in settings_data:
+                        existing.auto_add_skill_for_tools = settings_data["auto_add_skill_for_tools"]
                 else:
                     # Create new settings
                     existing = UserSettings(
@@ -1614,6 +1623,7 @@ class Database:
                         onboarding_step=settings_data.get("onboarding_step", 0),
                         default_llm_provider=settings_data.get("default_llm_provider"),
                         default_llm_model=settings_data.get("default_llm_model"),
+                        auto_add_skill_for_tools=settings_data.get("auto_add_skill_for_tools", True),
                     )
                     session.add(existing)
 

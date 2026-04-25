@@ -259,6 +259,7 @@ class UserSettings(SQLModel, table=True):
     onboarding_step: int = Field(default=0)  # Last completed onboarding step (for resuming)
     default_llm_provider: Optional[str] = Field(default=None, max_length=50)  # Global default AI provider
     default_llm_model: Optional[str] = Field(default=None, max_length=200)  # Global default AI model
+    auto_add_skill_for_tools: bool = Field(default=True)  # When a tool node connects to an AI agent's input-tools, auto-enable the matching skill
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         sa_column=Column(DateTime(timezone=True), server_default=func.now())

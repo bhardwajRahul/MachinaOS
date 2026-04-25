@@ -225,6 +225,16 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 disabled={isSaving}
               />
             </Row>
+            <Row
+              label="Auto-add Skill for Connected Tools"
+              description="When a tool node is connected to an AI agent, automatically enable the matching skill in the agent's Master Skill (creating one if needed). Disconnecting the tool disables the skill."
+            >
+              <Switch
+                checked={settings.autoAddSkillForTools}
+                onCheckedChange={(checked) => handleChange('autoAddSkillForTools', checked)}
+                disabled={isSaving}
+              />
+            </Row>
           </Section>
 
           {/* Auto-save */}
