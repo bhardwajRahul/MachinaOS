@@ -13,7 +13,7 @@ class TypeScriptExecutorNode(CodeExecutorBase):
     type = "typescriptExecutor"
     display_name = "TypeScript Executor"
     subtitle = "Run TS"
-    icon = "📘"
+    icon = "asset:typescript"
     description = "Execute TypeScript code via persistent Node.js server with type safety"
 
     @Operation("execute")

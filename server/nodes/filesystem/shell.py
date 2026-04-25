@@ -29,7 +29,7 @@ class ShellNode(ActionNode):
     type = "shell"
     display_name = "Shell"
     subtitle = "Run Command"
-    icon = "$_"
+    icon = "💻"
     color = "#8be9fd"
     group = ("filesystem", "tool")
     description = "Execute shell commands (sandboxed; no system PATH)"

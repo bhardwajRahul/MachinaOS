@@ -13,7 +13,7 @@ class JavaScriptExecutorNode(CodeExecutorBase):
     type = "javascriptExecutor"
     display_name = "JavaScript Executor"
     subtitle = "Run JS"
-    icon = "📜"
+    icon = "asset:javascript"
     description = "Execute JavaScript code via persistent Node.js server"
 
     @Operation("execute")

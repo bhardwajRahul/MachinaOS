@@ -31,7 +31,7 @@ class TimerNode(ActionNode):
     type = "timer"
     display_name = "Timer"
     subtitle = "Delay Trigger"
-    icon = "⏰"
+    icon = "⏱️"
     color = "#ffb86c"
     group = ("scheduler",)
     description = "Timer-based trigger with configurable delay"
