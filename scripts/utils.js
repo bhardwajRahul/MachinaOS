@@ -9,6 +9,7 @@
 import { readFileSync, existsSync, copyFileSync } from 'fs';
 import { Socket } from 'net';
 import { resolve, dirname } from 'path';
+import { performance, PerformanceObserver } from 'node:perf_hooks';
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
 
@@ -81,17 +82,50 @@ export function probeTcpPort(port, host = '127.0.0.1', timeoutMs = 500) {
  * ready to accept traffic — significantly more reliable and faster than
  * grepping stdout for ready-message patterns, which trail actual readiness
  * by hundreds of ms due to line-buffered stdout flush.
+ *
+ * Emits a Node ``performance.measure`` entry named ``tcp.wait.<name>``
+ * (or ``tcp.wait.<port>`` if no name) so callers that installed a
+ * ``PerformanceObserver`` (see ``installPerfMeasureLogger``) get
+ * structured benchmark output without per-callsite timing scaffolding.
  */
 export async function waitForTcpPort(
   port,
-  { intervalMs = 250, maxWaitMs = 60000, host = '127.0.0.1' } = {}
+  { intervalMs = 250, maxWaitMs = 60000, host = '127.0.0.1', name } = {}
 ) {
+  const measureName = `tcp.wait.${name ?? port}`;
+  const startMark = `${measureName}.start.${performance.now()}`;
+  performance.mark(startMark);
   const start = Date.now();
-  while (Date.now() - start < maxWaitMs) {
-    if (await probeTcpPort(port, host)) return true;
-    await sleep(intervalMs);
+  try {
+    while (Date.now() - start < maxWaitMs) {
+      if (await probeTcpPort(port, host)) return true;
+      await sleep(intervalMs);
+    }
+    return false;
+  } finally {
+    performance.measure(measureName, startMark);
+    performance.clearMarks(startMark);
   }
-  return false;
+}
+
+/**
+ * Install a ``PerformanceObserver`` that logs every ``performance.measure``
+ * entry through the supplied logger. This is the Node stdlib equivalent
+ * of the OpenTelemetry "tracer + console exporter" pattern: instrumented
+ * code calls ``performance.mark/measure``; one observer at the script
+ * boundary turns those entries into structured log lines.
+ *
+ * Returns the observer so the caller can ``disconnect()`` if needed
+ * (rarely — observers are usually script-lifetime).
+ */
+export function installPerfMeasureLogger(log, { prefix = '[perf]' } = {}) {
+  const observer = new PerformanceObserver((items) => {
+    for (const entry of items.getEntries()) {
+      log(`${prefix} ${entry.name} ${Math.round(entry.duration)}ms`);
+    }
+  });
+  observer.observe({ entryTypes: ['measure'] });
+  return observer;
 }
 
 /**

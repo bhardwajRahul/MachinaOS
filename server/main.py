@@ -38,13 +38,19 @@ from core.container import container
 _startup_log("Importing settings + logging...")
 from core.config import Settings
 from core.logging import configure_logging, get_logger, setup_websocket_logging, shutdown_websocket_logging
+from core.tracing import init_tracing
 _startup_log("Importing routers...")
 from routers import workflow, database, maps, nodejs_compat, android, websocket, webhook, auth, twitter, google, credentials, schemas
 _startup_log("All imports complete")
 
-# Initialize settings and logging
+# Initialize settings, logging, and tracing.
+# init_tracing() registers the OpenTelemetry TracerProvider with a
+# ConsoleSpanExporter so every span emitted via
+# ``trace.get_tracer(__name__).start_as_current_span(...)`` shows up in
+# stdout for cold-start benchmarking.
 settings = Settings()
 configure_logging(settings)
+init_tracing()
 logger = get_logger(__name__)
 
 # Suppress noisy loggers

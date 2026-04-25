@@ -16,10 +16,16 @@ import {
   killPort,
   createLogger,
   waitForTcpPort,
+  installPerfMeasureLogger,
 } from './utils.js';
 
 const START_TIME = Date.now();
 const log = createLogger(START_TIME);
+
+// One PerformanceObserver per process — every performance.measure entry
+// (including those from waitForTcpPort) is logged as a structured
+// "[perf] <name> <ms>" line. Standard Node lib only.
+installPerfMeasureLogger(log);
 
 const args = process.argv.slice(2);
 const isVerbose = args.includes('--verbose') || args.includes('-v');
@@ -127,7 +133,9 @@ async function main() {
   function startReadyProbes() {
     Promise.all(
       readyTargets.map(async ({ name, port }) => {
-        const ok = await waitForTcpPort(port);
+        // Pass `name` so the perf observer emits ``tcp.wait.<service>``
+        // entries instead of port-numbered ones.
+        const ok = await waitForTcpPort(port, { name: name.toLowerCase() });
         log(ok ? `${name} ready (port ${port})` : `${name} did not become ready (port ${port})`);
         return ok;
       })
