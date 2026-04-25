@@ -137,8 +137,8 @@ async def test_execute_chat_native_with_thinking(ai_service):
                 "api_key": "sk-ant-test",
                 "model": "claude-sonnet-4-6",
                 "prompt": "Think about this",
-                "thinkingEnabled": True,
-                "thinkingBudget": 4096,
+                "thinking_enabled": True,
+                "thinking_budget": 4096,
             },
         )
 

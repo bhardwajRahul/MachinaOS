@@ -111,12 +111,16 @@ class TestValidateApiKey:
         patched_container.broadcaster.update_api_key_status.assert_awaited_once()
 
     @patch("services.ai.PROVIDER_CONFIGS", {})
+    @patch.object(ws_module, "_SPECIAL_PROVIDER_VALIDATORS", {})
     async def test_validate_skips_model_fetch_for_non_llm(
         self, patched_container, fake_ws
     ):
+        # Pick a provider that's neither in PROVIDER_CONFIGS (LLM) nor in
+        # _SPECIAL_PROVIDER_VALIDATORS (Google Maps / Apify probe). The
+        # handler should fall through to the empty-models path.
         result = await _call(
             ws_module.handle_validate_api_key,
-            {"provider": "google_maps", "api_key": "AIza-test"},
+            {"provider": "anonymous_provider", "api_key": "any-test"},
             fake_ws,
         )
 

@@ -8,7 +8,10 @@ from services.llm.protocol import LLMProvider
 
 
 def test_native_providers_set():
-    assert NATIVE_PROVIDERS == {"anthropic", "openai", "gemini", "openrouter", "xai"}
+    assert NATIVE_PROVIDERS == {
+        "anthropic", "openai", "gemini", "openrouter", "xai",
+        "deepseek", "kimi", "mistral",
+    }
 
 
 def test_is_native_provider():

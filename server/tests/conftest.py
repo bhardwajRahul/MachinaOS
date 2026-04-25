@@ -62,6 +62,7 @@ _make_submodule(
     {
         "get_logger": MagicMock(return_value=MagicMock()),
         "log_execution_time": _stub_log_execution_time,
+        "log_api_call": MagicMock(),
     },
 )
 _make_submodule("core", "container", {"container": MagicMock()})
