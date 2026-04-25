@@ -1,14 +1,25 @@
 import React, { useState, useEffect } from 'react';
+import {
+  Database,
+  Link as LinkIcon,
+  ChevronDown,
+  CheckCircle2,
+  AlertTriangle,
+  ArrowDown,
+  Info,
+  Loader2,
+} from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { Node, Edge } from 'reactflow';
 import { useDragVariable } from '../../hooks/useDragVariable';
-import { useAppTheme } from '../../hooks/useAppTheme';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 import { queryClient } from '../../lib/queryClient';
 import { getCachedNodeSpec } from '../../lib/nodeSpec';
 import { resolveIcon, resolveLibraryIcon, isImageIcon } from '../../assets/icons';
-
 import { resolveNodeDescription } from '../../lib/nodeSpec';
+
 // ---------------------------------------------------------------------------
 // Backend-driven node output schema lookup.
 //
@@ -19,10 +30,6 @@ import { resolveNodeDescription } from '../../lib/nodeSpec';
 // `get_node_output_schema` WS handler. Results are cached per node
 // type in the shared TanStack Query client (in-memory only, matching
 // n8n's approach — schemas are small and the cache is cheap).
-//
-// Kept as a plain async helper (not a hook) because InputSection
-// iterates over connected edges synchronously during render build-up
-// and then needs to populate schemas for each unique node type once.
 // ---------------------------------------------------------------------------
 
 type NodeOutputSchema = Record<string, any> | null;
@@ -51,8 +58,7 @@ async function fetchNodeOutputSchema(
 /**
  * Flatten a JSON-Schema-7 "object" shape into the plain
  * { field: 'primitive-type-name' | nestedObject } map the variable
- * panel expects. Only the fields the UI actually needs; other JSON
- * Schema keywords (minLength, pattern, etc.) are ignored.
+ * panel expects.
  */
 function jsonSchemaToShape(schema: Record<string, any> | null | undefined): Record<string, any> | null {
   if (!schema || typeof schema !== 'object') return null;
@@ -68,7 +74,6 @@ function jsonSchemaToShape(schema: Record<string, any> | null | undefined): Reco
     } else if (prop.type === 'array') {
       out[key] = 'array';
     } else if (typeof prop.type === 'string') {
-      // string | number | integer | boolean | null
       out[key] = prop.type === 'integer' ? 'number' : prop.type;
     } else {
       out[key] = 'any';
@@ -83,8 +88,8 @@ interface InputSectionProps {
 }
 
 interface NodeData {
-  id: string;           // Unique key (includes handle suffix for multi-output)
-  sourceNodeId: string; // Original node ID for template variable resolution
+  id: string;
+  sourceNodeId: string;
   name: string;
   type: string;
   icon: string;
@@ -108,11 +113,66 @@ const renderNodeIcon = (icon: string, size: number = 16) => {
       />
     );
   }
-  return <span style={{ fontSize: size - 2 }}>{resolved ?? ''}</span>;
+  return <span className="text-sm">{resolved ?? ''}</span>;
 };
 
+// ---------------------------------------------------------------------------
+// Reusable draggable-variable card.
+//
+// Encapsulates the dragstart wiring + visual chrome that was repeated 4x in
+// the original render loop. Hover is pure Tailwind (`hover:` classes) so we
+// no longer mutate currentTarget.style on mouse enter/leave.
+// ---------------------------------------------------------------------------
+
+interface DraggableVarProps {
+  templateName: string;
+  templatePath: string;       // e.g. "key" or "items[0].sub"
+  value: any;                 // the actual value being dragged
+  onDragStart: (e: React.DragEvent, sourceNodeId: string, path: string, value: any) => void;
+  sourceNodeId: string;
+  showLabel?: boolean;        // show "key: type" subtitle
+  labelKey?: string;
+  className?: string;
+}
+
+const DraggableVar: React.FC<DraggableVarProps> = ({
+  templateName,
+  templatePath,
+  value,
+  onDragStart,
+  sourceNodeId,
+  showLabel,
+  labelKey,
+  className,
+}) => (
+  <div
+    draggable
+    onDragStart={(e) => onDragStart(e, sourceNodeId, templatePath, value)}
+    className={cn(
+      'mb-2 cursor-grab rounded-md border border-border bg-card p-2 transition-colors',
+      'hover:border-info hover:bg-info/10',
+      className
+    )}
+  >
+    <div className="flex items-center justify-between gap-2">
+      <div className="min-w-0 flex-1">
+        <div className="font-mono text-sm font-medium text-info truncate">
+          {`{{${templateName}.${templatePath}}}`}
+        </div>
+        {showLabel && (
+          <div className="text-xs text-muted-foreground">
+            {labelKey}: {typeof value}
+          </div>
+        )}
+      </div>
+      <ArrowDown className="h-3.5 w-3.5 shrink-0 text-info" />
+    </div>
+  </div>
+);
+
+// ---------------------------------------------------------------------------
+
 const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) => {
-  const theme = useAppTheme();
   const { currentWorkflow } = useAppStore();
   const { getNodeOutput, sendRequest } = useWebSocket();
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
@@ -132,52 +192,36 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
       const nodes = currentWorkflow.nodes || [];
       const edges = currentWorkflow.edges || [];
 
-      // Helper to check if a handle is a config/auxiliary handle (not main data flow)
+      // Helper to check if a handle is a config/auxiliary handle
       const isConfigHandle = (handle: string | null | undefined): boolean => {
         if (!handle) return false;
-        // Config handles follow pattern: input-<type> where type is not 'main', 'chat', or 'task'
-        // Examples: input-memory, input-tools, input-model, input-skill
-        // Non-config (primary data) handles: input-main, input-chat, input-task
-        // Note: input-task is for taskTrigger node output which should be visible as draggable variables
         if (handle.startsWith('input-') && handle !== 'input-main' && handle !== 'input-chat' && handle !== 'input-task' && handle !== 'input-teammates') {
           return true;
         }
         return false;
       };
 
-      // Helper to check if a node is a config/auxiliary node (connects to config handles)
+      // Helper to check if a node is a config/auxiliary node
       const isConfigNode = (nodeType: string | undefined): boolean => {
         if (!nodeType) return false;
         const definition = resolveNodeDescription(nodeType);
         if (!definition) return false;
-        // Config nodes typically have 'memory' or 'tool' in their group
         const groups = definition.group || [];
         return groups.includes('memory') || groups.includes('tool');
       };
 
-      // Get current node info
       const currentNode = nodes.find((node: Node) => node.id === nodeId);
       const currentNodeType = currentNode?.type;
-
-      // Wave 10.G.3: read `uiHints.hasSkills` declared by the node's
-      // own plugin module (server/nodes/agents.py via _STD_AGENT_HINTS).
-      // Retired the hardcoded AGENT_WITH_SKILLS_TYPES list.
       const agentSpec = currentNodeType ? getCachedNodeSpec(currentNodeType) : null;
       const isAgentWithSkills = (agentSpec?.uiHints as any)?.hasSkills === true;
 
-      // Collect all edges to process (direct + inherited from parent for config nodes)
       interface EdgeWithLabel { edge: Edge; label?: string; targetHandleLabel?: string }
       const edgesToProcess: EdgeWithLabel[] = [];
 
       // 1. Add direct incoming edges to main data handles
-      // Skip config handle connections (memory, tools, skill) for agent nodes - they're shown in Middle Section
       const directEdges = edges.filter((edge: Edge) => edge.target === nodeId);
       directEdges.forEach(edge => {
-        // Skip config handle edges for agent nodes - they have dedicated UI in Middle Section
-        if (isAgentWithSkills && isConfigHandle(edge.targetHandle)) {
-          return;
-        }
-        // Extract target handle name for display (e.g., "input-skill" -> "skill")
+        if (isAgentWithSkills && isConfigHandle(edge.targetHandle)) return;
         let targetHandleLabel: string | undefined;
         if (edge.targetHandle && edge.targetHandle.startsWith('input-') && edge.targetHandle !== 'input-main') {
           targetHandleLabel = edge.targetHandle.replace('input-', '');
@@ -185,24 +229,18 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
         edgesToProcess.push({ edge, targetHandleLabel });
       });
 
-      // 2. If current node is a config node (memory, tool), inherit parent node's main inputs
+      // 2. If current node is a config node, inherit parent node's main inputs
       if (isConfigNode(currentNodeType)) {
         const outgoingEdges = edges.filter((edge: Edge) => edge.source === nodeId);
-
         for (const outEdge of outgoingEdges) {
-          // Check if connected to a config handle on the target
           if (isConfigHandle(outEdge.targetHandle)) {
             const targetNode = nodes.find((node: Node) => node.id === outEdge.target);
             if (!targetNode) continue;
-
             const targetDef = resolveNodeDescription(targetNode.type || '');
             const targetName = targetDef?.displayName || targetNode.type;
-
-            // Find nodes connected to the parent's main input (non-config handles)
             const parentInputEdges = edges.filter(
               (e: Edge) => e.target === targetNode.id && !isConfigHandle(e.targetHandle)
             );
-
             for (const parentEdge of parentInputEdges) {
               edgesToProcess.push({ edge: parentEdge, label: `via ${targetName}` });
             }
@@ -215,7 +253,6 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
         const nodeType = sourceNode?.type || '';
         const nodeDef = resolveNodeDescription(nodeType);
 
-        // Determine output key from sourceHandle (edge-aware for multi-output nodes)
         let outputKey = 'output_0';
         if (edge.sourceHandle && edge.sourceHandle.startsWith('output-')) {
           const handleName = edge.sourceHandle.replace('output-', '');
@@ -223,8 +260,6 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
         }
 
         let executionData = await getNodeOutput(edge.source, outputKey);
-
-        // Fallback to output_0 if specific handle output not found
         if (!executionData && outputKey !== 'output_0') {
           executionData = await getNodeOutput(edge.source, 'output_0');
         }
@@ -245,17 +280,6 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
           }
         } else {
           hasExecutionData = false;
-
-          // Schema precedence (mirrors n8n VirtualSchema.vue — see
-          // docs-internal/schema_source_of_truth_rfc.md):
-          //   1. real run data (handled above in the `if` branch)
-          //   2. user-authored blob (plugin declares `hasInitialDataBlob`)
-          //   3. backend-declared schema via get_node_output_schema
-          //   4. `{ data: 'any' }` empty fallback
-          //
-          // Wave 10.G.5: every dispatch decision reads from the node's
-          // own NodeSpec — no `nodeType === 'start'` / 'socialReceive'
-          // string checks.
           const sourceSpec = nodeType ? getCachedNodeSpec(nodeType) : null;
           const sourceHints = (sourceSpec?.uiHints as Record<string, any>) ?? {};
 
@@ -271,12 +295,6 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
             if (backendSchema) {
               outputSchema = backendSchema;
 
-              // Multi-output dispatch: when the source node declares
-              // multiple output handles and the downstream edge picked
-              // a specific one, slice the matching nested sub-shape.
-              // Generalises socialReceive's 4-way fan-out to any node
-              // whose spec declares >1 output handle — all driven by
-              // handle topology, not node-type string.
               const outputHandleCount = (sourceSpec?.handles ?? []).filter(h => h.kind === 'output').length;
               if (outputHandleCount > 1 && edge.sourceHandle?.startsWith('output-')) {
                 const handleName = edge.sourceHandle.replace('output-', '');
@@ -295,47 +313,37 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
 
         const baseName = sourceNode?.data?.label || nodeDef?.displayName || nodeType;
 
-        // Build display name with handle info for multi-output and multi-input nodes
         let displayName = baseName;
         let handleSuffix = '';
-
-        // Add source handle (output) info: "Node → message"
         if (edge.sourceHandle && edge.sourceHandle.startsWith('output-')) {
           const handleName = edge.sourceHandle.replace('output-', '');
           handleSuffix = handleName;
           displayName = `${baseName} → ${handleName}`;
         }
-
-        // Add target handle (input) info: "Node (skill)" or "Node → message (skill)"
         if (targetHandleLabel) {
           displayName = `${displayName} (${targetHandleLabel})`;
           handleSuffix = handleSuffix ? `${handleSuffix}-${targetHandleLabel}` : targetHandleLabel;
         }
-
-        // Add inherited label: "Node (via Parent)"
         if (label) {
           displayName = `${displayName} (${label})`;
         }
 
-        // Use unique key combining source node ID, source handle, and target handle
-        // to avoid duplicate keys when multiple edges connect the same nodes
         const uniqueId = handleSuffix ? `${edge.source}-${handleSuffix}` : edge.source;
 
         return {
           id: uniqueId,
-          sourceNodeId: edge.source, // Keep original node ID for template variable resolution
+          sourceNodeId: edge.source,
           name: displayName,
           type: nodeType,
           icon: nodeDef?.icon || '',
           inputData,
           outputSchema,
-          hasExecutionData
+          hasExecutionData,
         };
       });
 
       const nodeDataResults = await Promise.all(nodeDataPromises);
       setConnectedNodes(nodeDataResults);
-      // Auto-expand all nodes initially
       setExpandedNodes(new Set(nodeDataResults.map(n => n.id)));
       setLoading(false);
     };
@@ -343,210 +351,110 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
     fetchConnectedNodes();
   }, [nodeId, currentWorkflow, getNodeOutput]);
 
-  const toggleNode = (nodeId: string) => {
+  const toggleNode = (id: string) => {
     setExpandedNodes(prev => {
       const next = new Set(prev);
-      if (next.has(nodeId)) {
-        next.delete(nodeId);
-      } else {
-        next.add(nodeId);
-      }
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
 
-  // Render draggable property
-  // NOTE: sourceNodeId is the unique node ID, used for template variable resolution
-  const renderDraggableProperty = (key: string, value: any, sourceNodeId: string, path: string = '', depth: number = 0, maxArrayItems: number = 3) => {
+  // ---------------------------------------------------------------------------
+  // Recursive render of a property (primitive | object | array).
+  // ---------------------------------------------------------------------------
+
+  const renderDraggableProperty = (
+    key: string,
+    value: any,
+    sourceNodeId: string,
+    path: string = '',
+    depth: number = 0,
+    maxArrayItems: number = 3,
+  ): React.ReactNode => {
     const currentPath = path ? `${path}.${key}` : key;
     const isObject = typeof value === 'object' && value !== null && !Array.isArray(value);
     const isArray = Array.isArray(value);
+    const templateName = getTemplateVariableName(sourceNodeId);
+    const indentClass = depth > 0 ? 'ml-4' : '';
 
-    // Handle arrays - show indexed items
+    // Arrays
     if (isArray && value.length > 0) {
-      const templateName = getTemplateVariableName(sourceNodeId);
       const itemsToShow = Math.min(value.length, maxArrayItems);
-
       return (
-        <div key={currentPath} style={{ marginLeft: depth > 0 ? 16 : 0, marginBottom: 8 }}>
-          <div style={{
-            fontSize: theme.fontSize.xs,
-            fontWeight: theme.fontWeight.medium,
-            color: theme.colors.textMuted,
-            marginBottom: 4,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-          }}>
+        <div key={currentPath} className={cn('mb-2', indentClass)}>
+          <div className="mb-1 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
             {key}
-            <span style={{
-              fontSize: '10px',
-              color: theme.dracula.purple,
-              padding: '1px 6px',
-              backgroundColor: theme.dracula.purple + '20',
-              borderRadius: theme.borderRadius.sm,
-            }}>
+            <Badge variant="secondary" className="bg-node-agent-soft px-1.5 text-[10px] text-node-agent">
               [{value.length} items]
-            </span>
+            </Badge>
           </div>
           <div>
-            {/* Render first N array items with their index */}
             {value.slice(0, itemsToShow).map((item: any, index: number) => {
               const indexedPath = `${key}[${index}]`;
               const fullIndexedPath = path ? `${path}.${indexedPath}` : indexedPath;
 
               if (typeof item === 'object' && item !== null) {
-                // Object item - render its properties with indexed path
                 return (
-                  <div key={`${currentPath}[${index}]`} style={{
-                    marginLeft: 8,
-                    marginBottom: 8,
-                    padding: theme.spacing.xs,
-                    backgroundColor: theme.colors.backgroundElevated,
-                    borderRadius: theme.borderRadius.sm,
-                    border: `1px dashed ${theme.colors.border}`,
-                  }}>
-                    <div style={{
-                      fontSize: theme.fontSize.xs,
-                      fontWeight: theme.fontWeight.medium,
-                      color: theme.dracula.cyan,
-                      marginBottom: 4,
-                    }}>
-                      [{index}]
-                    </div>
+                  <div
+                    key={`${currentPath}[${index}]`}
+                    className="mb-2 ml-2 rounded-sm border border-dashed border-border bg-muted p-1"
+                  >
+                    <div className="mb-1 text-xs font-medium text-info">[{index}]</div>
                     {Object.entries(item).map(([itemKey, itemValue]) => {
                       const itemPath = `${fullIndexedPath}.${itemKey}`;
-                      // For nested objects within array items, render as draggable
                       if (typeof itemValue === 'object' && itemValue !== null && !Array.isArray(itemValue)) {
                         return (
-                          <div key={itemPath} style={{ marginLeft: 8, marginBottom: 4 }}>
-                            <div style={{
-                              fontSize: theme.fontSize.xs,
-                              color: theme.colors.textMuted,
-                              marginBottom: 2,
-                            }}>
-                              {itemKey}:
-                            </div>
+                          <div key={itemPath} className="mb-1 ml-2">
+                            <div className="mb-0.5 text-xs text-muted-foreground">{itemKey}:</div>
                             {Object.entries(itemValue as Record<string, any>).map(([nestedKey, nestedValue]) => (
-                              <div
+                              <DraggableVar
                                 key={`${itemPath}.${nestedKey}`}
-                                draggable
-                                onDragStart={(e) => handleVariableDragStart(e, sourceNodeId, `${itemPath}.${nestedKey}`, nestedValue)}
-                                style={{
-                                  marginBottom: 4,
-                                  marginLeft: 8,
-                                  padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
-                                  backgroundColor: theme.colors.backgroundAlt,
-                                  border: `1px solid ${theme.colors.focus}`,
-                                  borderRadius: theme.borderRadius.sm,
-                                  cursor: 'grab',
-                                  fontSize: theme.fontSize.xs,
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.backgroundColor = theme.colors.focusRing;
-                                  e.currentTarget.style.borderColor = theme.dracula.cyan;
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.backgroundColor = theme.colors.backgroundAlt;
-                                  e.currentTarget.style.borderColor = theme.colors.focus;
-                                }}
-                              >
-                                <span style={{ color: theme.colors.templateVariable, fontFamily: 'monospace' }}>
-                                  {`{{${templateName}.${itemPath}.${nestedKey}}}`}
-                                </span>
-                              </div>
+                                templateName={templateName}
+                                templatePath={`${itemPath}.${nestedKey}`}
+                                value={nestedValue}
+                                onDragStart={handleVariableDragStart}
+                                sourceNodeId={sourceNodeId}
+                                className="mb-1 ml-2 p-1"
+                              />
                             ))}
                           </div>
                         );
                       }
-                      // Primitive value in array item
                       return (
-                        <div
+                        <DraggableVar
                           key={itemPath}
-                          draggable
-                          onDragStart={(e) => handleVariableDragStart(e, sourceNodeId, itemPath, itemValue)}
-                          style={{
-                            marginBottom: 4,
-                            marginLeft: 8,
-                            padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
-                            backgroundColor: theme.colors.backgroundAlt,
-                            border: `1px solid ${theme.colors.focus}`,
-                            borderRadius: theme.borderRadius.sm,
-                            cursor: 'grab',
-                            fontSize: theme.fontSize.xs,
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = theme.colors.focusRing;
-                            e.currentTarget.style.borderColor = theme.dracula.cyan;
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor = theme.colors.backgroundAlt;
-                            e.currentTarget.style.borderColor = theme.colors.focus;
-                          }}
-                        >
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <div>
-                              <span style={{ color: theme.colors.templateVariable, fontFamily: 'monospace' }}>
-                                {`{{${templateName}.${itemPath}}}`}
-                              </span>
-                              <span style={{ color: theme.colors.textMuted, marginLeft: 8 }}>
-                                {itemKey}: {typeof itemValue}
-                              </span>
-                            </div>
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={theme.colors.templateVariable} strokeWidth="2">
-                              <line x1="12" y1="5" x2="12" y2="19"/>
-                              <polyline points="19 12 12 19 5 12"/>
-                            </svg>
-                          </div>
-                        </div>
+                          templateName={templateName}
+                          templatePath={itemPath}
+                          value={itemValue}
+                          onDragStart={handleVariableDragStart}
+                          sourceNodeId={sourceNodeId}
+                          showLabel
+                          labelKey={itemKey}
+                          className="mb-1 ml-2 p-1"
+                        />
                       );
                     })}
                   </div>
                 );
-              } else {
-                // Primitive array item
-                return (
-                  <div
-                    key={`${currentPath}[${index}]`}
-                    draggable
-                    onDragStart={(e) => handleVariableDragStart(e, sourceNodeId, fullIndexedPath, item)}
-                    style={{
-                      marginBottom: 4,
-                      marginLeft: 8,
-                      padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
-                      backgroundColor: theme.colors.backgroundAlt,
-                      border: `1px solid ${theme.colors.focus}`,
-                      borderRadius: theme.borderRadius.sm,
-                      cursor: 'grab',
-                      fontSize: theme.fontSize.xs,
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = theme.colors.focusRing;
-                      e.currentTarget.style.borderColor = theme.dracula.cyan;
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = theme.colors.backgroundAlt;
-                      e.currentTarget.style.borderColor = theme.colors.focus;
-                    }}
-                  >
-                    <span style={{ color: theme.colors.templateVariable, fontFamily: 'monospace' }}>
-                      {`{{${templateName}.${fullIndexedPath}}}`}
-                    </span>
-                    <span style={{ color: theme.colors.textMuted, marginLeft: 8 }}>
-                      [{index}]: {typeof item}
-                    </span>
-                  </div>
-                );
               }
+              // Primitive array item
+              return (
+                <DraggableVar
+                  key={`${currentPath}[${index}]`}
+                  templateName={templateName}
+                  templatePath={fullIndexedPath}
+                  value={item}
+                  onDragStart={handleVariableDragStart}
+                  sourceNodeId={sourceNodeId}
+                  showLabel
+                  labelKey={`[${index}]`}
+                  className="mb-1 ml-2 p-1"
+                />
+              );
             })}
-            {/* Show "and N more" if array has more items */}
             {value.length > maxArrayItems && (
-              <div style={{
-                marginLeft: 8,
-                fontSize: theme.fontSize.xs,
-                color: theme.colors.textMuted,
-                fontStyle: 'italic',
-              }}>
+              <div className="ml-2 text-xs italic text-muted-foreground">
                 ... and {value.length - maxArrayItems} more items
               </div>
             )}
@@ -555,32 +463,22 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
       );
     }
 
-    // Handle empty arrays
+    // Empty array
     if (isArray && value.length === 0) {
       return (
-        <div key={currentPath} style={{ marginLeft: depth > 0 ? 16 : 0, marginBottom: 8 }}>
-          <div style={{
-            fontSize: theme.fontSize.xs,
-            color: theme.colors.textMuted,
-          }}>
-            {key}: <span style={{ fontStyle: 'italic' }}>empty array</span>
+        <div key={currentPath} className={cn('mb-2', indentClass)}>
+          <div className="text-xs text-muted-foreground">
+            {key}: <span className="italic">empty array</span>
           </div>
         </div>
       );
     }
 
-    // Handle objects
+    // Object
     if (isObject) {
       return (
-        <div key={currentPath} style={{ marginLeft: depth > 0 ? 16 : 0, marginBottom: 8 }}>
-          <div style={{
-            fontSize: theme.fontSize.xs,
-            fontWeight: theme.fontWeight.medium,
-            color: theme.colors.textMuted,
-            marginBottom: 4,
-          }}>
-            {key}:
-          </div>
+        <div key={currentPath} className={cn('mb-2', indentClass)}>
+          <div className="mb-1 text-xs font-medium text-muted-foreground">{key}:</div>
           <div>
             {Object.entries(value as Record<string, any>).map(([subKey, subValue]) =>
               renderDraggableProperty(subKey, subValue, sourceNodeId, currentPath, depth + 1)
@@ -590,98 +488,30 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
       );
     }
 
-    const templateName = getTemplateVariableName(sourceNodeId);
+    // Primitive (top-level draggable)
     return (
-      <div
+      <DraggableVar
         key={currentPath}
-        draggable
-        onDragStart={(e) => handleVariableDragStart(e, sourceNodeId, currentPath, value)}
-        style={{
-          marginBottom: 8,
-          marginLeft: depth > 0 ? 16 : 0,
-          padding: theme.spacing.sm,
-          backgroundColor: theme.colors.backgroundAlt,
-          border: `1px solid ${theme.colors.focus}`,
-          borderRadius: theme.borderRadius.md,
-          cursor: 'grab',
-          transition: theme.transitions.fast,
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.backgroundColor = theme.colors.focusRing;
-          e.currentTarget.style.borderColor = theme.dracula.cyan;
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.backgroundColor = theme.colors.backgroundAlt;
-          e.currentTarget.style.borderColor = theme.colors.focus;
-        }}
-      >
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}>
-          <div>
-            <div style={{
-              fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
-              fontSize: theme.fontSize.sm,
-              fontWeight: theme.fontWeight.medium,
-              color: theme.colors.templateVariable,
-              marginBottom: 2,
-            }}>
-              {`{{${templateName}.${currentPath}}}`}
-            </div>
-            <div style={{
-              fontSize: theme.fontSize.xs,
-              color: theme.colors.textSecondary,
-            }}>
-              {key}: {typeof value}
-            </div>
-          </div>
-          {/* Drag icon */}
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={theme.colors.templateVariable} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19"/>
-            <polyline points="19 12 12 19 5 12"/>
-          </svg>
-        </div>
-      </div>
+        templateName={templateName}
+        templatePath={currentPath}
+        value={value}
+        onDragStart={handleVariableDragStart}
+        sourceNodeId={sourceNodeId}
+        showLabel
+        labelKey={key}
+        className={indentClass}
+      />
     );
   };
 
-  if (!visible) {
-    return null;
-  }
+  if (!visible) return null;
 
   // Loading state
   if (loading) {
     return (
-      <div style={{
-        width: '100%',
-        height: '100%',
-        backgroundColor: theme.colors.backgroundPanel,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: theme.spacing.xxl,
-      }}>
-        <div style={{
-          width: 32,
-          height: 32,
-          border: `3px solid ${theme.colors.border}`,
-          borderTopColor: theme.dracula.cyan,
-          borderRadius: '50%',
-          animation: 'spin 1s linear infinite',
-          marginBottom: theme.spacing.lg,
-        }} />
-        <style>
-          {`@keyframes spin { to { transform: rotate(360deg); } }`}
-        </style>
-        <div style={{
-          fontSize: theme.fontSize.sm,
-          color: theme.colors.textSecondary,
-        }}>
-          Loading input data...
-        </div>
+      <div className="flex h-full w-full flex-col items-center justify-center bg-card p-12">
+        <Loader2 className="mb-4 h-8 w-8 animate-spin text-info" />
+        <div className="text-sm text-muted-foreground">Loading input data...</div>
       </div>
     );
   }
@@ -689,34 +519,10 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
   // Empty state
   if (connectedNodes.length === 0) {
     return (
-      <div style={{
-        width: '100%',
-        height: '100%',
-        backgroundColor: theme.colors.backgroundPanel,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: theme.spacing.xxl,
-      }}>
-        {/* Link icon */}
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke={theme.colors.textMuted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: theme.spacing.lg }}>
-          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
-        </svg>
-        <div style={{
-          fontSize: theme.fontSize.base,
-          fontWeight: theme.fontWeight.medium,
-          color: theme.colors.textSecondary,
-          marginBottom: theme.spacing.xs,
-        }}>
-          No connected inputs
-        </div>
-        <div style={{
-          fontSize: theme.fontSize.sm,
-          color: theme.colors.textMuted,
-          textAlign: 'center',
-        }}>
+      <div className="flex h-full w-full flex-col items-center justify-center bg-card p-12">
+        <LinkIcon className="mb-4 h-12 w-12 stroke-1 text-muted-foreground" />
+        <div className="mb-1 text-base font-medium text-foreground">No connected inputs</div>
+        <div className="text-center text-sm text-muted-foreground">
           Connect nodes to see input data and available variables
         </div>
       </div>
@@ -724,202 +530,75 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
   }
 
   return (
-    <div style={{
-      width: '100%',
-      height: '100%',
-      backgroundColor: theme.colors.backgroundPanel,
-      display: 'flex',
-      flexDirection: 'column',
-      overflow: 'hidden',
-    }}>
+    <div className="flex h-full w-full flex-col overflow-hidden bg-card">
       {/* Header */}
-      <div style={{
-        padding: `${theme.spacing.md} ${theme.spacing.lg}`,
-        borderBottom: `1px solid ${theme.colors.border}`,
-        backgroundColor: theme.colors.background,
-        display: 'flex',
-        alignItems: 'center',
-        gap: theme.spacing.sm,
-        flexShrink: 0,
-      }}>
-        {/* Database icon */}
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={theme.colors.textSecondary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <ellipse cx="12" cy="5" rx="9" ry="3"/>
-          <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
-          <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
-        </svg>
-        <span style={{
-          fontSize: theme.fontSize.sm,
-          fontWeight: theme.fontWeight.semibold,
-          color: theme.colors.text,
-        }}>
-          Input Data & Variables
-        </span>
-        <span style={{
-          fontSize: theme.fontSize.xs,
-          fontWeight: theme.fontWeight.medium,
-          color: theme.dracula.cyan,
-          padding: `2px ${theme.spacing.sm}`,
-          backgroundColor: theme.dracula.cyan + '20',
-          borderRadius: theme.borderRadius.sm,
-        }}>
-          {connectedNodes.length}
-        </span>
+      <div className="flex shrink-0 items-center gap-2 border-b border-border bg-background px-4 py-3">
+        <Database className="h-4 w-4 text-muted-foreground" />
+        <span className="text-sm font-semibold text-foreground">Input Data &amp; Variables</span>
+        <Badge variant="info">{connectedNodes.length}</Badge>
       </div>
 
       {/* Content */}
-      <div style={{
-        flex: 1,
-        overflow: 'auto',
-        padding: theme.spacing.md,
-      }}>
+      <div className="flex-1 overflow-auto p-3">
         {connectedNodes.map((node) => {
           const isExpanded = expandedNodes.has(node.id);
-
           return (
-            <div key={node.id} style={{
-              marginBottom: theme.spacing.md,
-              backgroundColor: theme.colors.background,
-              border: `1px solid ${theme.colors.border}`,
-              borderLeft: `3px solid ${node.hasExecutionData ? theme.dracula.green : theme.dracula.orange}`,
-              borderRadius: theme.borderRadius.md,
-              overflow: 'hidden',
-            }}>
+            <div
+              key={node.id}
+              className={cn(
+                'mb-3 overflow-hidden rounded-md border border-border bg-background border-l-[3px]',
+                node.hasExecutionData ? 'border-l-success' : 'border-l-warning'
+              )}
+            >
               {/* Node Header */}
               <div
                 onClick={() => toggleNode(node.id)}
-                style={{
-                  padding: `${theme.spacing.sm} ${theme.spacing.md}`,
-                  backgroundColor: theme.colors.backgroundAlt,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  transition: theme.transitions.fast,
-                }}
+                className="flex cursor-pointer items-center justify-between bg-muted px-3 py-2 transition-colors hover:bg-card"
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.sm }}>
+                <div className="flex items-center gap-2">
                   {renderNodeIcon(node.icon, 18)}
-                  <span style={{
-                    fontSize: theme.fontSize.sm,
-                    fontWeight: theme.fontWeight.semibold,
-                    color: theme.colors.text,
-                  }}>
-                    {node.name}
-                  </span>
+                  <span className="text-sm font-semibold text-foreground">{node.name}</span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.sm }}>
-                  {/* Status badge */}
-                  <span style={{
-                    fontSize: '10px',
-                    fontWeight: theme.fontWeight.medium,
-                    color: node.hasExecutionData ? theme.dracula.green : theme.dracula.orange,
-                    padding: `2px ${theme.spacing.xs}`,
-                    backgroundColor: node.hasExecutionData ? theme.dracula.green + '20' : theme.dracula.orange + '20',
-                    borderRadius: theme.borderRadius.sm,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 4,
-                  }}>
+                <div className="flex items-center gap-2">
+                  <Badge variant={node.hasExecutionData ? 'success' : 'warning'}>
                     {node.hasExecutionData ? (
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill={theme.dracula.green} stroke="none">
-                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                      </svg>
+                      <CheckCircle2 className="h-3 w-3" />
                     ) : (
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill={theme.dracula.orange} stroke="none">
-                        <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
-                      </svg>
+                      <AlertTriangle className="h-3 w-3" />
                     )}
                     {node.hasExecutionData ? 'LIVE' : 'SCHEMA'}
-                  </span>
-                  {/* Expand arrow */}
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke={theme.colors.textSecondary}
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    style={{
-                      transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                      transition: 'transform 0.2s ease',
-                    }}
-                  >
-                    <polyline points="6 9 12 15 18 9"/>
-                  </svg>
+                  </Badge>
+                  <ChevronDown
+                    className={cn(
+                      'h-3 w-3 text-muted-foreground transition-transform',
+                      isExpanded && 'rotate-180'
+                    )}
+                  />
                 </div>
               </div>
 
               {/* Node Content */}
               {isExpanded && (
-                <div style={{
-                  padding: theme.spacing.md,
-                  borderTop: `1px solid ${theme.colors.border}`,
-                }}>
-                  {/* Schema info banner */}
+                <div className="border-t border-border p-3">
                   {!node.hasExecutionData && (
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: theme.spacing.sm,
-                      padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
-                      marginBottom: theme.spacing.md,
-                      backgroundColor: theme.dracula.cyan + '10',
-                      border: `1px solid ${theme.dracula.cyan}40`,
-                      borderRadius: theme.borderRadius.sm,
-                      fontSize: theme.fontSize.xs,
-                      color: theme.dracula.cyan,
-                    }}>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill={theme.dracula.cyan} stroke="none">
-                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
-                      </svg>
+                    <div className="mb-3 flex items-center gap-2 rounded-sm border border-info bg-info/10 px-2 py-1 text-xs text-info">
+                      <Info className="h-3 w-3" />
                       Schema view - Execute this node to see actual input data
                     </div>
                   )}
 
-                  {/* Live data preview */}
                   {node.hasExecutionData && (
-                    <div style={{ marginBottom: theme.spacing.md }}>
-                      <div style={{
-                        fontSize: theme.fontSize.xs,
-                        fontWeight: theme.fontWeight.medium,
-                        color: theme.colors.textMuted,
-                        marginBottom: theme.spacing.xs,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em',
-                      }}>
+                    <div className="mb-3">
+                      <div className="mb-1 text-xs font-medium tracking-wider text-muted-foreground uppercase">
                         Received Data
                       </div>
-                      <pre style={{
-                        margin: 0,
-                        padding: theme.spacing.sm,
-                        fontSize: theme.fontSize.xs,
-                        fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
-                        backgroundColor: theme.colors.backgroundElevated,
-                        border: `1px solid ${theme.colors.border}`,
-                        borderRadius: theme.borderRadius.sm,
-                        overflow: 'auto',
-                        maxHeight: '120px',
-                        whiteSpace: 'pre-wrap',
-                        wordBreak: 'break-word',
-                        color: theme.dracula.foreground,
-                      }}>
+                      <pre className="m-0 max-h-[120px] overflow-auto rounded-sm border border-border bg-muted p-2 font-mono text-xs whitespace-pre-wrap break-words text-foreground">
                         {JSON.stringify(node.inputData, null, 2)}
                       </pre>
                     </div>
                   )}
 
-                  {/* Draggable variables */}
-                  <div style={{
-                    fontSize: theme.fontSize.xs,
-                    fontWeight: theme.fontWeight.medium,
-                    color: theme.colors.textMuted,
-                    marginBottom: theme.spacing.sm,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
-                  }}>
+                  <div className="mb-2 text-xs font-medium tracking-wider text-muted-foreground uppercase">
                     Drag Variables to Parameters
                   </div>
                   <div>
@@ -928,15 +607,10 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                           renderDraggableProperty(key, value, node.sourceNodeId || node.id)
                         )
                       : (
-                        <div style={{
-                          fontSize: theme.fontSize.sm,
-                          color: theme.colors.textMuted,
-                          fontStyle: 'italic',
-                        }}>
+                        <div className="text-sm italic text-muted-foreground">
                           No variables available
                         </div>
-                      )
-                    }
+                      )}
                   </div>
                 </div>
               )}
@@ -946,24 +620,8 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
       </div>
 
       {/* Footer hint */}
-      <div style={{
-        padding: `${theme.spacing.sm} ${theme.spacing.lg}`,
-        borderTop: `1px solid ${theme.colors.border}`,
-        backgroundColor: theme.colors.background,
-        fontSize: theme.fontSize.xs,
-        color: theme.colors.textMuted,
-        textAlign: 'center',
-        flexShrink: 0,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: theme.spacing.xs,
-      }}>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="10"/>
-          <line x1="12" y1="16" x2="12" y2="12"/>
-          <line x1="12" y1="8" x2="12.01" y2="8"/>
-        </svg>
+      <div className="flex shrink-0 items-center justify-center gap-1 border-t border-border bg-background px-4 py-2 text-center text-xs text-muted-foreground">
+        <Info className="h-3 w-3" />
         Drag variables into parameter fields to use them
       </div>
     </div>
