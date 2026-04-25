@@ -11,10 +11,9 @@ Related docs:
 - [rlm_service.md](rlm_service.md) - Recursive Language Model agent execution
 - [proxy_service.md](proxy_service.md) - residential proxy provider management
 - [workflow-schema.md](workflow-schema.md) - workflow JSON schema and node catalog
-- [current_system_architecture_analysis.md](current_system_architecture_analysis.md) - current frontend, backend, serving, and extension model audit
-- [production_scale_architecture_research.md](production_scale_architecture_research.md) - source-backed research for a 1000+ node production architecture
-- [config_driven_node_platform.md](config_driven_node_platform.md) - target config-driven node and panel platform design
 - [frontend_architecture.md](frontend_architecture.md) - current frontend architecture (React 19 + Vite + Tailwind v4 + shadcn/ui + Radix + RHF/zod + TanStack Query + Zustand). Tokens, primitives, state, forms, credentials exemplar.
+- [plugin_system.md](plugin_system.md) - Wave 11 class-based plugin architecture (target state for the config-driven research that lived in deleted planning docs)
+- [schema_source_of_truth_rfc.md](schema_source_of_truth_rfc.md) - backend NodeSpec / icon / palette wire format
 - [ui_migration_plan.md](ui_migration_plan.md) - antd → shadcn/ui migration plan and completion log
 
 ---
