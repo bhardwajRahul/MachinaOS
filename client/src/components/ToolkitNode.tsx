@@ -10,7 +10,8 @@
  *   - Input handle at BOTTOM (receives Android service nodes)
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { memo, useState, useEffect, useRef, useCallback } from 'react';
+import { nodePropsEqual } from './nodeMemoEquality';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { NodeData } from '../types/NodeTypes';
 import { useAppStore } from '../store/useAppStore';
@@ -349,4 +350,4 @@ const ToolkitNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
   );
 };
 
-export default ToolkitNode;
+export default memo(ToolkitNode, nodePropsEqual);

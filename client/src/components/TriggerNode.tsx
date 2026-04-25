@@ -6,7 +6,8 @@
  *
  * Used for: cronScheduler, webhookTrigger, whatsappReceive, start
  */
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { memo, useState, useEffect, useRef, useCallback } from 'react';
+import { nodePropsEqual } from './nodeMemoEquality';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { NodeData } from '../types/NodeTypes';
 import { useAppStore } from '../store/useAppStore';
@@ -430,4 +431,4 @@ const TriggerNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
   );
 };
 
-export default TriggerNode;
+export default memo(TriggerNode, nodePropsEqual);

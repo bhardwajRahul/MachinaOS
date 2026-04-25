@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { memo, useState, useEffect, useRef, useCallback } from 'react';
+import { nodePropsEqual } from './nodeMemoEquality';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { NodeData } from '../types/NodeTypes';
 import { useAppStore } from '../store/useAppStore';
@@ -247,4 +248,4 @@ const StartNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectabl
   );
 };
 
-export default StartNode;
+export default memo(StartNode, nodePropsEqual);
