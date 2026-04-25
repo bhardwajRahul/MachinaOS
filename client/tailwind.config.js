@@ -63,6 +63,28 @@ export default {
           "current-line": "hsl(var(--dracula-current-line))",
           comment: "hsl(var(--dracula-comment))",
         },
+        // Role-based node tokens — base + soft (tinted bg) + border
+        // (tinted outline). Themes redefine the underlying CSS vars.
+        // Call sites use bg-node-X-soft / border-node-X-border directly,
+        // never with /N opacity arithmetic.
+        "node-agent":           "hsl(var(--node-agent))",
+        "node-agent-soft":      "hsl(var(--node-agent-soft))",
+        "node-agent-border":    "hsl(var(--node-agent-border))",
+        "node-model":           "hsl(var(--node-model))",
+        "node-model-soft":      "hsl(var(--node-model-soft))",
+        "node-model-border":    "hsl(var(--node-model-border))",
+        "node-skill":           "hsl(var(--node-skill))",
+        "node-skill-soft":      "hsl(var(--node-skill-soft))",
+        "node-skill-border":    "hsl(var(--node-skill-border))",
+        "node-tool":            "hsl(var(--node-tool))",
+        "node-tool-soft":       "hsl(var(--node-tool-soft))",
+        "node-tool-border":     "hsl(var(--node-tool-border))",
+        "node-trigger":         "hsl(var(--node-trigger))",
+        "node-trigger-soft":    "hsl(var(--node-trigger-soft))",
+        "node-trigger-border":  "hsl(var(--node-trigger-border))",
+        "node-workflow":        "hsl(var(--node-workflow))",
+        "node-workflow-soft":   "hsl(var(--node-workflow-soft))",
+        "node-workflow-border": "hsl(var(--node-workflow-border))",
       },
       borderRadius: {
         lg: "var(--radius)",

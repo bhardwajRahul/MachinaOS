@@ -12,11 +12,11 @@ const features = [
 const WelcomeStep: React.FC = () => {
   return (
     <div className="py-2 text-center">
-      <Rocket className="mx-auto mb-2 h-10 w-10 text-dracula-purple" />
+      <Rocket className="mx-auto mb-2 h-10 w-10 text-node-agent" />
 
       <h3 className="m-0 mb-1 text-xl font-semibold">Welcome to MachinaOs</h3>
 
-      <p className="text-[15px] font-semibold text-dracula-purple">
+      <p className="text-[15px] font-semibold text-node-agent">
         Visual workflow automation powered by AI agents
       </p>
 
@@ -30,14 +30,10 @@ const WelcomeStep: React.FC = () => {
         {features.map(({ Icon, label, desc }) => (
           <Card
             key={label}
-            className="text-center"
-            style={{
-              backgroundColor: 'hsl(var(--dracula-purple) / 0.08)',
-              borderColor: 'hsl(var(--dracula-purple) / 0.3)',
-            }}
+            className="text-center bg-node-agent-soft border-node-agent-border"
           >
             <CardContent className="flex flex-col items-center gap-1 p-3">
-              <Icon className="h-5 w-5 text-dracula-purple" />
+              <Icon className="h-5 w-5 text-node-agent" />
               <span className="block text-sm font-semibold">{label}</span>
               <span className="text-xs text-muted-foreground">{desc}</span>
             </CardContent>

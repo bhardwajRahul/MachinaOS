@@ -65,6 +65,38 @@
     --dracula-selection: 232 14% 31%;     /* #44475a */
     --dracula-current-line: 232 14% 25%;  /* #383a4a */
     --dracula-comment: 225 27% 51%;       /* #6272a4 */
+
+    /* Node-type semantic tokens — role-based. Themes redefine these in
+     * their own scope without touching call sites.
+     *
+     * Each role exposes three variants so call sites never use opacity
+     * arithmetic (`bg-node-agent/10`) — themes own the exact tints:
+     *   --node-X         base solid color (badges, icons)
+     *   --node-X-soft    tinted surface (card backgrounds)
+     *   --node-X-border  tinted outline (card / chip borders) */
+    --node-agent:           265 89% 78%;
+    --node-agent-soft:      265 89% 78% / 0.08;
+    --node-agent-border:    265 89% 78% / 0.3;
+
+    --node-model:           191 97% 77%;
+    --node-model-soft:      191 97% 77% / 0.08;
+    --node-model-border:    191 97% 77% / 0.3;
+
+    --node-skill:           135 94% 65%;
+    --node-skill-soft:      135 94% 65% / 0.08;
+    --node-skill-border:    135 94% 65% / 0.3;
+
+    --node-tool:            135 94% 65%;
+    --node-tool-soft:       135 94% 65% / 0.08;
+    --node-tool-border:     135 94% 65% / 0.3;
+
+    --node-trigger:         326 100% 74%;
+    --node-trigger-soft:    326 100% 74% / 0.08;
+    --node-trigger-border:  326 100% 74% / 0.3;
+
+    --node-workflow:        27 100% 71%;
+    --node-workflow-soft:   27 100% 71% / 0.08;
+    --node-workflow-border: 27 100% 71% / 0.3;
   }
 
   .dark {
@@ -165,6 +197,28 @@
   --color-dracula-selection: hsl(var(--dracula-selection));
   --color-dracula-current-line: hsl(var(--dracula-current-line));
   --color-dracula-comment: hsl(var(--dracula-comment));
+
+  /* Node-type tokens — base + soft (tinted bg) + border (tinted outline).
+   * Use bg-node-X / bg-node-X-soft / border-node-X-border directly,
+   * never with /N opacity arithmetic. */
+  --color-node-agent:           hsl(var(--node-agent));
+  --color-node-agent-soft:      hsl(var(--node-agent-soft));
+  --color-node-agent-border:    hsl(var(--node-agent-border));
+  --color-node-model:           hsl(var(--node-model));
+  --color-node-model-soft:      hsl(var(--node-model-soft));
+  --color-node-model-border:    hsl(var(--node-model-border));
+  --color-node-skill:           hsl(var(--node-skill));
+  --color-node-skill-soft:      hsl(var(--node-skill-soft));
+  --color-node-skill-border:    hsl(var(--node-skill-border));
+  --color-node-tool:            hsl(var(--node-tool));
+  --color-node-tool-soft:       hsl(var(--node-tool-soft));
+  --color-node-tool-border:     hsl(var(--node-tool-border));
+  --color-node-trigger:         hsl(var(--node-trigger));
+  --color-node-trigger-soft:    hsl(var(--node-trigger-soft));
+  --color-node-trigger-border:  hsl(var(--node-trigger-border));
+  --color-node-workflow:        hsl(var(--node-workflow));
+  --color-node-workflow-soft:   hsl(var(--node-workflow-soft));
+  --color-node-workflow-border: hsl(var(--node-workflow-border));
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
