@@ -368,7 +368,7 @@ class NodeExecutor:
         outputs = {}
         source_nodes = []
 
-        logger.info(f"[_get_connected_outputs_with_info] node_id={node_id}, edges={len(edges)}, session={session_id}")
+        logger.debug(f"[_get_connected_outputs_with_info] node_id={node_id}, edges={len(edges)}, session={session_id}")
 
         for edge in edges:
             logger.debug(f"[_get_connected_outputs_with_info] Checking edge: source={edge.get('source')}, target={edge.get('target')}, sourceHandle={edge.get('sourceHandle')}, targetHandle={edge.get('targetHandle')}")
@@ -384,17 +384,17 @@ class NodeExecutor:
                 else:
                     output_key = "output_0"
 
-                logger.info(f"[_get_connected_outputs_with_info] Found edge from {source_id} to {node_id}, sourceHandle={source_handle}, using output_key={output_key}")
+                logger.debug(f"[_get_connected_outputs_with_info] Found edge from {source_id} to {node_id}, sourceHandle={source_handle}, using output_key={output_key}")
                 output = await get_output(session_id, source_id, output_key)
-                logger.info(f"[_get_connected_outputs_with_info] First lookup (key={output_key}): {'FOUND' if output else 'NOT_FOUND'}")
+                logger.debug(f"[_get_connected_outputs_with_info] First lookup (key={output_key}): {'FOUND' if output else 'NOT_FOUND'}")
 
                 # Fallback to output_0 if specific handle output not found
                 if output is None and output_key != "output_0":
-                    logger.info(f"[_get_connected_outputs_with_info] output_key {output_key} not found, falling back to output_0")
+                    logger.debug(f"[_get_connected_outputs_with_info] output_key {output_key} not found, falling back to output_0")
                     output = await get_output(session_id, source_id, "output_0")
-                    logger.info(f"[_get_connected_outputs_with_info] Fallback lookup (output_0): {'FOUND' if output else 'NOT_FOUND'}")
+                    logger.debug(f"[_get_connected_outputs_with_info] Fallback lookup (output_0): {'FOUND' if output else 'NOT_FOUND'}")
 
-                logger.info(f"[_get_connected_outputs_with_info] Final output from {source_id}: {'FOUND' if output else 'NOT FOUND'}")
+                logger.debug(f"[_get_connected_outputs_with_info] Final output from {source_id}: {'FOUND' if output else 'NOT FOUND'}")
                 if output:
                     source = next((n for n in nodes if n.get('id') == source_id), {})
                     source_type = source.get('type', 'unknown')
