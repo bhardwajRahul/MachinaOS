@@ -191,7 +191,7 @@ const TriggerNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
         )}
 
         {/* Trigger Icon */}
-        <NodeIcon icon={iconRef} color={nodeColor} className="h-7 w-7 text-3xl" />
+        <NodeIcon icon={iconRef} className="h-7 w-7 text-3xl" />
 
         {/* Parameters Button */}
         <button

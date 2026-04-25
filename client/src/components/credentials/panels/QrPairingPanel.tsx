@@ -65,7 +65,7 @@ const QrPairingPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = (
       />}
       {config.statusRows && (
         <StatusCard
-          icon={<NodeIcon icon={config.iconRef} color={config.color} className="h-6 w-6 text-2xl" />}
+          icon={<NodeIcon icon={config.iconRef} className="h-6 w-6 text-2xl" />}
           title={config.name}
           rows={config.statusRows}
           status={status}

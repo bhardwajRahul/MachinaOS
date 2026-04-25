@@ -163,7 +163,6 @@ const ComponentPalette: React.FC<ComponentPaletteProps> = ({
                           >
                             <NodeIcon
                               icon={config.icon}
-                              color={config.color}
                               className="h-4 w-4 text-base"
                               fallback={<span>📦</span>}
                             />

@@ -637,7 +637,7 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
                         }}
                         onClick={(e) => e.stopPropagation()}
                       />
-                      <NodeIcon icon={skill.icon} color={skill.color} className="h-4 w-4 text-base" />
+                      <NodeIcon icon={skill.icon} className="h-4 w-4 text-base" />
                       <span
                         className="flex-1 overflow-hidden text-sm whitespace-nowrap text-ellipsis"
                         style={{
@@ -711,7 +711,7 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
                 style={{ color: pendingSkillData.color }}
               >
                 {pendingSkillData.icon
-                  ? <NodeIcon icon={pendingSkillData.icon} color={pendingSkillData.color} className="h-5 w-5 text-xl" />
+                  ? <NodeIcon icon={pendingSkillData.icon} className="h-5 w-5 text-xl" />
                   : <Plus className="h-5 w-5" />}
               </div>
               <div style={{ flex: 1 }}>
@@ -841,7 +841,7 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
               alignItems: 'center',
               gap: theme.spacing.md
             }}>
-              <NodeIcon icon={selectedSkillInfo.icon} color={selectedSkillInfo.color} className="h-6 w-6 text-2xl" />
+              <NodeIcon icon={selectedSkillInfo.icon} className="h-6 w-6 text-2xl" />
               <div style={{ flex: 1 }}>
                 {isEditingUserSkill ? (
                   <Input

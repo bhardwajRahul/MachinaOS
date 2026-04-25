@@ -15,12 +15,11 @@ const ComponentItem: React.FC<ComponentItemProps> = ({ definition: localDefiniti
   const [isDragging, setIsDragging] = useState(false);
 
   // Subscribe to the backend NodeSpec cache so the palette icon
-  // populates the moment prefetch lands. Icon + color come from the
-  // spec; display fields fall back to the bundled definition.
+  // populates the moment prefetch lands. Icon ref comes from the spec;
+  // display fields fall back to the bundled definition.
   const spec = useNodeSpec(localDefinition.name);
   const definition = localDefinition;
   const iconRaw = spec?.icon ?? definition.icon;
-  const brandColor = spec?.color ?? definition.defaults?.color;
 
   return (
     <Card
@@ -41,7 +40,6 @@ const ComponentItem: React.FC<ComponentItemProps> = ({ definition: localDefiniti
       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted ring-1 ring-foreground/10">
         <NodeIcon
           icon={iconRaw}
-          color={brandColor}
           className="h-5 w-5 text-lg"
           fallback={<span>📦</span>}
         />

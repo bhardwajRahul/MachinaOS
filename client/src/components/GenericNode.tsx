@@ -216,7 +216,6 @@ const GenericNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnecta
       }}>
         <NodeIcon
           icon={iconSpec?.icon ?? definition.icon}
-          color={getNodeColor()}
           className="h-6 w-6 text-2xl"
         />
         <EditableNodeLabel

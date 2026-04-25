@@ -55,7 +55,6 @@ const ApiKeyPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = ({ c
             >
               <NodeIcon
                 icon={config.iconRef}
-                color={config.color}
                 className="h-12 w-12 text-2xl"
               />
             </div>

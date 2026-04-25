@@ -139,7 +139,6 @@ const ParameterPanel: React.FC = () => {
       <div className="flex items-center gap-2 text-[15px] font-semibold text-foreground">
         <NodeIcon
           icon={nodeDefinition.icon}
-          color={nodeDefinition.defaults?.color}
           className="h-5 w-5 text-xl"
         />
         <span>{nodeDefinition.displayName}</span>

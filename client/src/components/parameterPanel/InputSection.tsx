@@ -93,9 +93,6 @@ interface NodeData {
   name: string;
   type: string;
   icon: string;
-  /** Source node's brand color (`defaults.color`) — passed to NodeIcon
-   *  so lucide icons inherit it via currentColor. */
-  color?: string;
   inputData?: any;
   outputSchema: Record<string, any>;
   hasExecutionData: boolean;
@@ -321,7 +318,6 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
           name: displayName,
           type: nodeType,
           icon: nodeDef?.icon || '',
-          color: nodeDef?.defaults?.color,
           inputData,
           outputSchema,
           hasExecutionData,
@@ -542,7 +538,7 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
                 className="flex cursor-pointer items-center justify-between bg-muted px-3 py-2 transition-colors hover:bg-card"
               >
                 <div className="flex items-center gap-2">
-                  <NodeIcon icon={node.icon} color={node.color} className="h-5 w-5 text-lg" />
+                  <NodeIcon icon={node.icon} className="h-5 w-5 text-lg" />
                   <span className="text-sm font-semibold text-foreground">{node.name}</span>
                 </div>
                 <div className="flex items-center gap-2">

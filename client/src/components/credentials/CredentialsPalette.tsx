@@ -161,7 +161,6 @@ const ProviderRow = memo<RowProps>(function ProviderRow({ provider, selected, on
     >
       <NodeIcon
         icon={provider.iconRef}
-        color={provider.color}
         className="h-3.5 w-3.5 shrink-0 text-sm"
       />
       <span className="flex-1 truncate">{provider.name}</span>
