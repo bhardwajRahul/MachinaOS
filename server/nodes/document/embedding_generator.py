@@ -51,7 +51,7 @@ class EmbeddingGeneratorNode(ActionNode):
     type = "embeddingGenerator"
     display_name = "Embedding Generator"
     subtitle = "Vectorize"
-    icon = "🧮"
+    icon = "🧠"
     color = "#bd93f9"
     group = ("document",)
     description = "Generate vector embeddings from text chunks"

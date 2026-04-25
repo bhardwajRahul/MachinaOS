@@ -6,7 +6,7 @@ metadata:
   author: machina
   version: "2.0"
   category: web
-  icon: "🌐"
+  icon: "asset:chrome"
   color: "#8be9fd"
 ---
 

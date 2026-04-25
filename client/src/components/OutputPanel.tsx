@@ -368,7 +368,7 @@ const OutputPanel: React.FC<OutputPanelProps> = ({ nodeId }) => {
                 fontWeight: theme.fontWeight.medium,
                 color: theme.colors.text
               }}>
-                📦 {node.nodeName}
+                {node.nodeName}
               </span>
               <span style={{
                 fontSize: theme.fontSize.xs,

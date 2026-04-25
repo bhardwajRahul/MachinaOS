@@ -27,7 +27,7 @@ class CurrentTimeToolNode(ToolNode):
     type = "currentTimeTool"
     display_name = "Current Time"
     subtitle = "Date / Time"
-    icon = "🕒"
+    icon = "🕐"
     color = "#f1fa8c"
     group = ("tool", "ai")
     description = "Get current date/time with timezone support"

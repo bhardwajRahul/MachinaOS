@@ -6,7 +6,7 @@ metadata:
   author: machina
   version: "1.0"
   category: productivity
-  icon: "📊"
+  icon: "asset:sheets"
   color: "#0F9D58"
 ---
 

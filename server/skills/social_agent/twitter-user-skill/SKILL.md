@@ -6,7 +6,7 @@ metadata:
   author: machina
   version: "2.0"
   category: social
-  icon: "👤"
+  icon: "asset:x"
   color: "#000000"
 ---
 

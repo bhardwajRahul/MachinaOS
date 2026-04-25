@@ -34,6 +34,8 @@ import { useAppStore } from '../../store/useAppStore';
 import { useWebSocket, CompactionStats } from '../../contexts/WebSocketContext';
 import { useUserSettingsQuery } from '../../hooks/useUserSettingsQuery';
 import { nodeParamsQueryKey, type NodeParametersResponse } from '../../hooks/useNodeParamsQuery';
+import { folderSkillsQueryKey, type AvailableSkill } from '../../hooks/useFolderSkills';
+import { dracula } from '../../styles/theme';
 import { queryKeys, STALE_TIME } from '../../lib/queryConfig';
 import { INodeTypeDescription, INodeProperties } from '../../types/INodeProperties';
 import { resolveIcon, resolveLibraryIcon, isImageIcon } from '../../assets/icons';
@@ -308,6 +310,54 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
     return out;
   }, [masterSkillEdgeSources, masterSkillParamsQueries]);
 
+  // Unique folders selected across the connected MasterSkill nodes;
+  // each folder is fetched via `scan_skill_folder` so the per-child
+  // SKILL.md frontmatter (icon / color / description) flows from the
+  // backend instead of being hardcoded in the frontend.
+  const masterSkillFolders = useMemo<string[]>(() => {
+    const folders = new Set<string>();
+    for (const id of masterSkillEdgeSources) {
+      const folder = masterSkillParams[id]?.skillFolder;
+      if (typeof folder === 'string' && folder.length > 0) folders.add(folder);
+    }
+    return Array.from(folders);
+  }, [masterSkillEdgeSources, masterSkillParams]);
+
+  const folderSkillsQueries = useQueries({
+    queries: masterSkillFolders.map((folder) => ({
+      queryKey: folderSkillsQueryKey(folder),
+      queryFn: async (): Promise<AvailableSkill[]> => {
+        const response = await sendRequest<{
+          success: boolean;
+          skills?: Array<{
+            name: string;
+            description: string;
+            metadata?: Record<string, any>;
+          }>;
+        }>('scan_skill_folder', { folder });
+        if (!response?.success || !response.skills) return [];
+        return response.skills.map((s) => ({
+          type: s.name,
+          skillName: s.name,
+          displayName: s.name,
+          icon: s.metadata?.icon ?? '',
+          color: s.metadata?.color ?? dracula.purple,
+          description: s.description ?? '',
+        }));
+      },
+      staleTime: STALE_TIME.MEDIUM,
+      enabled: !!folder,
+    })),
+  });
+
+  const skillMetadataByName = useMemo<Record<string, AvailableSkill>>(() => {
+    const out: Record<string, AvailableSkill> = {};
+    for (const q of folderSkillsQueries) {
+      for (const s of q.data ?? []) out[s.skillName] = s;
+    }
+    return out;
+  }, [folderSkillsQueries]);
+
   const connectedSkills = useMemo<ConnectedSkill[]>(() => {
     const nodes = currentWorkflow?.nodes || [];
     const skills: ConnectedSkill[] = [];
@@ -322,7 +372,7 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
         type: nodeType,
         icon: def?.icon || '',
         description: def?.description || '',
-        color: (def?.defaults?.color as string) || '#6366F1',
+        color: (def?.defaults?.color as string) || dracula.purple,
       });
     }
     return skills;
@@ -353,20 +403,25 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
         // defs — render them with the masterSkill fallback inline.
         for (const [skillName, config] of Object.entries(skillsConfig as Record<string, any>)) {
           if (!config?.enabled) continue;
+          // Pull icon / color / description from the backend's
+          // SKILL.md frontmatter (via `scan_skill_folder`) so each
+          // child skill renders with its authored branding instead
+          // of a hardcoded frontend placeholder.
+          const meta = skillMetadataByName[skillName];
           skills.push({
             id: `${edge.source}_${skillName}`,
-            name: skillName,
+            name: meta?.displayName || skillName,
             type: 'masterSkill',
-            icon: '🎯',
-            description: 'Skill from Master Skill node',
-            color: '#9333EA',
+            icon: meta?.icon || '',
+            description: meta?.description || '',
+            color: meta?.color || dracula.purple,
           });
         }
       }
     }
 
     return skills;
-  }, [connectedSkills, masterSkillParams, currentWorkflow, nodeId]);
+  }, [connectedSkills, masterSkillParams, currentWorkflow, nodeId, skillMetadataByName]);
 
   // Extract console output from execution results
   const getConsoleOutput = (): string => {

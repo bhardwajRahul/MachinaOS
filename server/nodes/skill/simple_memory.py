@@ -48,7 +48,7 @@ class SimpleMemoryNode(ActionNode):
     type = "simpleMemory"
     display_name = "Simple Memory"
     subtitle = "Conversation History"
-    icon = "💾"
+    icon = "🧠"
     color = "#f1fa8c"
     group = ("tool", "memory")
     description = "Markdown-based conversation memory with optional vector DB"

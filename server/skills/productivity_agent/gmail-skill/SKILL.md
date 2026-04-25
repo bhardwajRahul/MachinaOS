@@ -6,7 +6,7 @@ metadata:
   author: machina
   version: "1.0"
   category: productivity
-  icon: "📧"
+  icon: "asset:gmail"
   color: "#EA4335"
 ---
 

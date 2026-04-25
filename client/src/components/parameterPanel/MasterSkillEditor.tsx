@@ -48,16 +48,8 @@ import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import { useWebSocket } from '../../contexts/WebSocketContext';
-import { DUCKDUCKGO_ICON, BRAVE_SEARCH_ICON, SERPER_ICON, PERPLEXITY_ICON } from '../../assets/icons/search';
 import { resolveIcon, resolveLibraryIcon, isImageIcon } from '../../assets/icons';
-
-// Override icons for skills that have branded SVGs
-const SKILL_ICON_OVERRIDES: Record<string, string> = {
-  'duckduckgo-search-skill': DUCKDUCKGO_ICON,
-  'brave-search-skill': BRAVE_SEARCH_ICON,
-  'serper-search-skill': SERPER_ICON,
-  'perplexity-search-skill': PERPLEXITY_ICON,
-};
+import { useFolderSkills } from '../../hooks/useFolderSkills';
 
 // Skill configuration stored in node parameters
 // Key is skillName (folder name like 'whatsapp-skill')
@@ -169,27 +161,7 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
   const availableFolders = foldersQuery.data ?? [];
   const foldersLoaded = !foldersQuery.isLoading;
 
-  const folderSkillsQuery = useQuery<AvailableSkill[], Error>({
-    queryKey: ['folderSkills', skillFolder],
-    queryFn: async () => {
-      const response = await sendRequest<{
-        success: boolean;
-        skills: Array<{ name: string; description: string; metadata?: Record<string, any> }>;
-        error?: string;
-      }>('scan_skill_folder', { folder: skillFolder });
-      if (!response?.success || !response.skills) return [];
-      return response.skills.map(s => ({
-        type: s.name,
-        skillName: s.name,
-        displayName: s.name.split('-').map(w => w[0].toUpperCase() + w.slice(1)).join(' '),
-        icon: SKILL_ICON_OVERRIDES[s.name] || s.metadata?.icon || '',
-        color: s.metadata?.color || '#6366F1',
-        description: s.description || '',
-      }));
-    },
-    enabled: !!skillFolder,
-    staleTime: 60_000,
-  });
+  const folderSkillsQuery = useFolderSkills(skillFolder);
   const folderSkills = folderSkillsQuery.data ?? [];
   const folderLoading = folderSkillsQuery.isLoading;
 

@@ -6,7 +6,7 @@ metadata:
   author: machina
   version: "1.0"
   category: search
-  icon: "🦁"
+  icon: "asset:brave"
   color: "#FB542B"
 ---
 

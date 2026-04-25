@@ -6,7 +6,7 @@ metadata:
   author: machina
   version: "2.0"
   category: search
-  icon: "🦆"
+  icon: "asset:duckduckgo"
   color: "#DE5833"
 ---
 
