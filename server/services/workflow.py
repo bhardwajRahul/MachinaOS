@@ -58,7 +58,12 @@ class WorkflowService:
         self.database = database
         self.settings = settings
 
-        # In-memory output storage (fast access during execution)
+        # In-memory output storage (fast access during execution).
+        # Single-threaded asyncio: synchronous dict ops between awaits
+        # are atomic, so store_node_output / clear_all_outputs need no
+        # lock. The one real concurrency hazard is the DB-fallback
+        # re-cache in get_node_output, which yields between read and
+        # write -- handled with dict.setdefault (atomic at the GIL).
         self._outputs: Dict[str, Dict[str, Any]] = {}
 
         # Initialize NodeExecutor
@@ -474,9 +479,11 @@ class WorkflowService:
     ) -> None:
         """Store node execution output."""
         key = f"{session_id}_{node_id}"
-        if key not in self._outputs:
-            self._outputs[key] = {}
-        self._outputs[key][output_name] = data
+        # setdefault is atomic at the GIL level; this single statement
+        # replaces the old check-then-set + indexed assignment with two
+        # ops that are individually atomic and together race-free since
+        # there is no await between them.
+        self._outputs.setdefault(key, {})[output_name] = data
         logger.debug(f"[store_node_output] Stored in memory: key={key}, output_name={output_name}, _outputs keys={list(self._outputs.keys())}")
         await self.database.save_node_output(node_id, session_id, output_name, data)
 
@@ -496,9 +503,13 @@ class WorkflowService:
             output = await self.database.get_node_output(node_id, session_id, output_name)
             logger.debug(f"[get_node_output] DB lookup result: {'FOUND' if output else 'NOT_FOUND'}")
             if output:
-                if key not in self._outputs:
-                    self._outputs[key] = {}
-                self._outputs[key][output_name] = output
+                # The await above yielded control; another coroutine may
+                # have written a fresher value via store_node_output. Use
+                # nested setdefault so we never overwrite an existing
+                # in-memory entry with a possibly stale DB read. Then
+                # re-read the slot to return whichever value won.
+                self._outputs.setdefault(key, {}).setdefault(output_name, output)
+                output = self._outputs[key][output_name]
 
         # Special handling for start nodes
         if output is None and node_id.startswith('start-'):
@@ -528,7 +539,7 @@ class WorkflowService:
         """Clear all outputs for a session."""
         keys = [k for k in self._outputs if k.startswith(f"{session_id}_")]
         for k in keys:
-            del self._outputs[k]
+            self._outputs.pop(k, None)
         await self.database.clear_session_outputs(session_id)
 
     # =========================================================================
