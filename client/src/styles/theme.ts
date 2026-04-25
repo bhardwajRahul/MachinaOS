@@ -256,7 +256,7 @@ export const theme = {
 
   // Node sizes (fixed per industry standard)
   nodeSize: {
-    square: '60px',          // SquareNode, BaseChatModelNode, ModelNode
+    square: '60px',          // SquareNode
     squareIcon: '28px',      // Icon inside square node
     toolkitWidth: '120px',   // ToolkitNode width (rectangular, wider)
     toolkitHeight: '50px',   // ToolkitNode height (shorter)
