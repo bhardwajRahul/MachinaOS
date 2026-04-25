@@ -455,6 +455,7 @@ The frontend uses a layered cache + slice-subscription model so cold refreshes a
 - Reads via `useSyncExternalStore` against `queryClient.getQueryCache().subscribe(...)` filtered by `hashKey(['nodeSpec', type])`. Per-spec observer count is **0**; only the matching slot triggers a re-render.
 - Lazy fetch is one-shot via `useEffect`, gated on `isReady` (see below).
 - **Do not re-introduce `useQuery(['nodeSpec', type])`** anywhere -- N consumers would create N observers, all woken on every cache write.
+- **Critical: any cache entry consumed via `useSyncExternalStore` MUST set `gcTime: GC_TIME.FOREVER`** ([lib/queryConfig.ts](./client/src/lib/queryConfig.ts)). Slice subscribers don't register as observers, so without this override TanStack garbage-collects the entry after `GC_TIME.DEFAULT` (5 min) and every consumer reads `undefined`. Symptom: canvas nodes lose their icons + handles after idling on the page. Applies to `fetchNodeSpec`, `fetchNodeGroups`, `useNodeGroups`. The persistor in `lib/queryPersist.ts` only handles cross-reload survival, not in-session GC.
 
 ### `nodeStatusStore` for high-frequency state ([client/src/stores/nodeStatusStore.ts](./client/src/stores/nodeStatusStore.ts))
 - Per-workflow node statuses live in a Zustand store (built on `useSyncExternalStore`). `useNodeStatus(id)` is a slice selector -- only the affected node's consumers re-render on a status tick.
