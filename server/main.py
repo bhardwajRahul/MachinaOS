@@ -237,7 +237,16 @@ async def lifespan(app: FastAPI):
             while True:
                 attempt += 1
                 client = await temporal_client_wrapper.connect(retries=1, delay=0)
-                if client is not None:
+                if client is None:
+                    # Surface every failed attempt to stdout so users can see
+                    # the retry loop is still alive when "Temporal is up" but
+                    # the Python client can't connect (server-up != client-up).
+                    _startup_log(
+                        f"[Temporal] Connect attempt {attempt} failed for "
+                        f"{settings.temporal_server_address} (ns={settings.temporal_namespace}); "
+                        "retrying in 3s"
+                    )
+                else:
                     try:
                         temporal_executor = TemporalExecutor(
                             client=client,
@@ -261,6 +270,9 @@ async def lifespan(app: FastAPI):
                         )
                         return
                     except Exception as exc:
+                        _startup_log(
+                            f"[Temporal] Executor/worker setup failed (attempt {attempt}): {exc}; will retry"
+                        )
                         logger.error(
                             "Temporal executor/worker setup failed; will retry",
                             error=str(exc),

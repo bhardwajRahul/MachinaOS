@@ -675,8 +675,16 @@ class StatusBroadcaster:
         Returns True if this transition broadcast `executing=False` (i.e.
         the counter went 1->0). When the counter reaches zero and
         `clear_stuck_nodes` is set, any node currently marked
-        `executing`/`waiting` for this workflow is reset to `idle` --
-        protects the UI from glow leaks on crash paths.
+        `executing` for this workflow is reset to `idle` -- protects the
+        UI from glow leaks on crash paths.
+
+        Crucially does NOT clear `waiting` nodes -- in deployed workflows
+        with multiple triggers, every non-firing trigger sits in
+        `waiting` for the lifetime of the deployment (its collector loop
+        is still registered with event_waiter). Sweeping `waiting` on
+        every run completion would visually de-indicate those listeners
+        even though they're still alive. Explicit user cancels go through
+        `_clear_stuck_node_statuses(include_waiting=True)` instead.
         """
         if not workflow_id:
             return False
@@ -693,15 +701,33 @@ class StatusBroadcaster:
                 executing=False, workflow_id=workflow_id,
             )
             if clear_stuck_nodes:
+                # include_waiting=False (default) -- don't touch deployment
+                # trigger listeners, only sweep genuinely stuck `executing`
+                # nodes from a crashed run.
                 await self._clear_stuck_node_statuses(workflow_id)
         return went_idle
 
-    async def _clear_stuck_node_statuses(self, workflow_id: str) -> int:
-        """Reset any nodes still marked executing/waiting for this workflow."""
+    async def _clear_stuck_node_statuses(
+        self,
+        workflow_id: str,
+        include_waiting: bool = False,
+    ) -> int:
+        """Reset stuck nodes for a workflow.
+
+        Default: only `executing` nodes are cleared. This is the right
+        behavior at run-completion boundaries because deployed trigger
+        nodes legitimately sit in `waiting` for the entire deployment
+        lifecycle and must not be wiped between runs.
+
+        Set `include_waiting=True` for explicit user cancels (toolbar
+        Stop, cancel_execution) where the user wants every indicator to
+        go quiet.
+        """
+        statuses = ("executing", "waiting") if include_waiting else ("executing",)
         stuck = [
             (nid, info) for nid, info in self._status["nodes"].items()
             if info.get("workflow_id") == workflow_id
-            and info.get("status") in ("executing", "waiting")
+            and info.get("status") in statuses
         ]
         for node_id, _info in stuck:
             try:

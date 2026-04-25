@@ -480,7 +480,12 @@ async def handle_cancel_execution(data: Dict[str, Any], websocket: WebSocket) ->
         async with broadcaster._workflow_active_lock:
             broadcaster._workflow_active_runs.pop(workflow_id, None)
         await broadcaster.update_workflow_status(executing=False, workflow_id=workflow_id)
-        cleared = await broadcaster._clear_stuck_node_statuses(workflow_id)
+        # Explicit user cancel -- include `waiting` so the user sees every
+        # indicator go quiet. (Default sweep on run-end skips `waiting` to
+        # protect deployment trigger listeners.)
+        cleared = await broadcaster._clear_stuck_node_statuses(
+            workflow_id, include_waiting=True,
+        )
 
     return {
         "node_id": node_id,

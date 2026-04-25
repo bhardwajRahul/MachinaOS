@@ -248,16 +248,41 @@ class WorkflowService:
         if use_temporal is None:
             use_temporal = self.settings.temporal_enabled
 
+        # Routing visibility — always logged at INFO so silent fallback to
+        # parallel/sequential is diagnosable without grepping warnings.
+        # If `chosen_path` is anything other than "temporal" while Temporal
+        # is enabled, that's the bug.
+        executor_wired = self._temporal_executor is not None
+        if use_temporal and executor_wired:
+            chosen = "temporal"
+        elif use_parallel and self.settings.redis_enabled:
+            chosen = "parallel"
+        else:
+            chosen = "sequential"
+        logger.info(
+            "[execute_workflow] routing decision: %s "
+            "(temporal_enabled=%s, executor_wired=%s, parallel=%s, redis=%s)",
+            chosen, use_temporal, executor_wired,
+            use_parallel, self.settings.redis_enabled,
+            extra={"workflow_id": workflow_id},
+        )
+
         # Use Temporal if enabled and executor is configured
         if use_temporal and self._temporal_executor is not None:
             return await self._execute_temporal(nodes, edges, session_id, status_callback, start_time, workflow_id)
 
-        # Log warning if Temporal was requested but not available
+        # Loud error if Temporal was requested but the executor never finished
+        # wiring. Previously a WARNING; bumped to ERROR because a silent
+        # fallthrough during a deployed-trigger run looks identical to a
+        # successful Temporal run from the user's perspective.
         if use_temporal and self._temporal_executor is None:
-            logger.warning(
+            logger.error(
                 "Temporal execution requested but executor not configured. "
-                "Falling back to parallel/sequential execution. "
-                "Check TEMPORAL_ENABLED and Temporal server connection."
+                "Falling back to %s execution. Check 'Temporal Worker started' "
+                "appeared in startup logs and that the Python client successfully "
+                "connected (server-up != client-connected).",
+                chosen,
+                extra={"workflow_id": workflow_id},
             )
 
         # Use parallel executor if enabled and Redis available
