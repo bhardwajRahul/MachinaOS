@@ -359,13 +359,62 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
     })),
   });
 
-  const skillMetadataByName = useMemo<Record<string, AvailableSkill>>(() => {
+  const folderSkillMetadataByName = useMemo<Record<string, AvailableSkill>>(() => {
     const out: Record<string, AvailableSkill> = {};
     for (const q of folderSkillsQueries) {
       for (const s of q.data ?? []) out[s.skillName] = s;
     }
     return out;
   }, [folderSkillsQueries]);
+
+  // Names of currently-enabled skills inside connected Master Skill
+  // nodes that are NOT covered by the folder-scoped query above (e.g.
+  // a skill the user enabled when the masterSkill was on folder A but
+  // then moved to folder B). Backend `lookup_skill_metadata` queries
+  // the global registry by name so we can resolve their metadata
+  // regardless of folder.
+  const orphanSkillNames = useMemo<string[]>(() => {
+    const names = new Set<string>();
+    for (const id of masterSkillEdgeSources) {
+      const cfg = (masterSkillParams[id]?.skills_config ?? {}) as Record<string, any>;
+      for (const [skillName, c] of Object.entries(cfg)) {
+        if (c?.enabled && !folderSkillMetadataByName[skillName]) {
+          names.add(skillName);
+        }
+      }
+    }
+    return Array.from(names).sort();
+  }, [masterSkillEdgeSources, masterSkillParams, folderSkillMetadataByName]);
+
+  const orphanSkillsQuery = useQuery<Record<string, AvailableSkill>, Error>({
+    queryKey: ['skillMetadataLookup', orphanSkillNames.join(',')],
+    queryFn: async () => {
+      const response = await sendRequest<{
+        success: boolean;
+        skills?: Array<{ name: string; description: string; metadata?: Record<string, any> }>;
+      }>('lookup_skill_metadata', { names: orphanSkillNames });
+      if (!response?.success || !response.skills) return {};
+      const out: Record<string, AvailableSkill> = {};
+      for (const s of response.skills) {
+        out[s.name] = {
+          type: s.name,
+          skillName: s.name,
+          displayName: s.name,
+          icon: s.metadata?.icon ?? '',
+          color: s.metadata?.color ?? dracula.purple,
+          description: s.description ?? '',
+        };
+      }
+      return out;
+    },
+    enabled: orphanSkillNames.length > 0,
+    staleTime: STALE_TIME.MEDIUM,
+  });
+
+  const skillMetadataByName = useMemo<Record<string, AvailableSkill>>(
+    () => ({ ...folderSkillMetadataByName, ...(orphanSkillsQuery.data ?? {}) }),
+    [folderSkillMetadataByName, orphanSkillsQuery.data],
+  );
 
   const connectedSkills = useMemo<ConnectedSkill[]>(() => {
     const nodes = currentWorkflow?.nodes || [];
@@ -818,11 +867,11 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
                               className="h-5 w-5 text-lg"
                             />
                           </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="mb-0.5 text-sm font-semibold text-foreground">
+                          <div className="min-w-0 flex-1 overflow-hidden">
+                            <div className="mb-0.5 truncate text-sm font-semibold text-foreground">
                               {skill.name}
                             </div>
-                            <div className="line-clamp-2 text-xs text-muted-foreground">
+                            <div className="line-clamp-2 break-words text-xs text-muted-foreground">
                               {skill.description}
                             </div>
                           </div>

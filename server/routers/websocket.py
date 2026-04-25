@@ -14,7 +14,7 @@ import time
 import asyncio
 import uuid
 import weakref
-from typing import Dict, Any, Callable, Awaitable, Optional, Set
+from typing import Dict, Any, Callable, Awaitable, List, Optional, Set
 from datetime import datetime
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -2622,6 +2622,44 @@ async def handle_scan_skill_folder(data: Dict[str, Any], websocket: WebSocket) -
 
 
 @ws_handler()
+async def handle_lookup_skill_metadata(
+    data: Dict[str, Any], websocket: WebSocket
+) -> Dict[str, Any]:
+    """Look up SKILL.md metadata for a list of skill names across every
+    folder (and the user-skills DB).
+
+    The Master Skill editor lets users keep a skill enabled even after
+    switching the node's `skill_folder`, so the AI agent's Connected
+    Skills panel needs to resolve metadata for skills outside the
+    currently-selected folder. `scan_skill_folder` is folder-scoped;
+    this handler is name-scoped and queries the shared registry.
+    """
+    from services.skill_loader import get_skill_loader
+
+    names = data.get("names") or []
+    if not isinstance(names, list):
+        return {"success": False, "error": "names must be a list", "skills": []}
+
+    skill_loader = get_skill_loader()
+    # Ensure the registry is hydrated -- skip the DB pass since we only
+    # need the filesystem-derived metadata for the icon/color/desc fields.
+    if not skill_loader._registry:
+        skill_loader.scan_skills()
+
+    skills: List[Dict[str, Any]] = []
+    for name in names:
+        meta = skill_loader._registry.get(name)
+        if meta:
+            skills.append({
+                "name": meta.name,
+                "description": meta.description,
+                "metadata": meta.metadata,
+            })
+
+    return {"success": True, "skills": skills}
+
+
+@ws_handler()
 async def handle_get_user_skills(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
     """Get all user-created skills."""
     database = container.database()
@@ -3385,6 +3423,7 @@ MESSAGE_HANDLERS: Dict[str, MessageHandler] = {
     "save_skill_content": handle_save_skill_content,
     "scan_skill_folder": handle_scan_skill_folder,
     "list_skill_folders": handle_list_skill_folders,
+    "lookup_skill_metadata": handle_lookup_skill_metadata,
 
     # Memory and Skill Clear/Reset
     "clear_memory": handle_clear_memory,

@@ -263,6 +263,34 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
     fetchSkillContent(selectedSkillName);
   }, [selectedSkillName, isCreatingNew, fetchSkillContent, getCachedSkillContent, availableSkills]);
 
+  // Background prefetch: as soon as the folder's skills are known,
+  // queue up `get_skill_content` for each in parallel so the per-skill
+  // round-trip is already cached when the user clicks a checkbox.
+  // Without this, the first toggle of each skill awaits the WS call
+  // inside handleToggleSkill, which the user perceives as "slow toggle"
+  // -- the checkbox visually lags by the network round-trip.
+  // queryClient.prefetchQuery is a no-op when the data is already
+  // cached, so subsequent panel opens are free.
+  useEffect(() => {
+    if (availableSkills.length === 0) return;
+    for (const skill of availableSkills) {
+      if (skill.isUserSkill) continue;
+      if (getCachedSkillContent(skill.skillName) !== undefined) continue;
+      queryClient.prefetchQuery({
+        queryKey: ['skillContent', skill.skillName],
+        queryFn: async () => {
+          const response = await sendRequest<{
+            instructions: string;
+            success: boolean;
+            error?: string;
+          }>('get_skill_content', { skill_name: skill.skillName });
+          return (response?.success && response.instructions) || '';
+        },
+        staleTime: Infinity,
+      });
+    }
+  }, [availableSkills, queryClient, sendRequest, getCachedSkillContent]);
+
   // When selecting a user skill, load its data into pendingSkillData for editing
   useEffect(() => {
     if (isCreatingNew || !selectedSkillName) {
