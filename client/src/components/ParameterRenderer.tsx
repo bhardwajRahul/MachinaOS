@@ -1637,18 +1637,30 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
 
         // Special case for the session-id parameter on a Memory node:
         // show the auto-derived session id (the connected agent's node
-        // id) as the placeholder so the user can see what default the
-        // backend will use without typing anything. Schema-canonical
-        // name is `session_id` (Pydantic snake_case).
+        // id) as the placeholder so the user can see what the backend
+        // will actually use. Schema-canonical name is `session_id`
+        // (Pydantic snake_case).
+        //
+        // The schema's `session_id: str = Field(default="default")`
+        // means freshly-created nodes carry the literal string
+        // "default" as the saved value, which would hide the
+        // placeholder. The backend's `_build_memory_entry` already
+        // treats `""` and `"default"` identically (auto-derive to the
+        // connected agent's node id), so we mirror that contract on
+        // display: when the value is the auto-derive sentinel, the
+        // input renders empty and the placeholder shows the resolved
+        // agent id instead.
         if (parameter.name === 'session_id' && connectedAgentId) {
-          const effectivePlaceholder = connectedAgentId;
+          const isAutoDeriveSentinel =
+            !currentValue || currentValue === 'default';
+          const displayValue = isAutoDeriveSentinel ? '' : currentValue;
 
           return (
             <input
               type="text"
-              value={currentValue || ''}
+              value={displayValue}
               onChange={(e) => onChange(e.target.value)}
-              placeholder={effectivePlaceholder}
+              placeholder={connectedAgentId}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
