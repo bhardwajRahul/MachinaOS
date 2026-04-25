@@ -189,7 +189,7 @@ const DashboardContent: React.FC = () => {
   } = useWorkflowManagement();
 
   const { collapsedSections, searchQuery, setSearchQuery, toggleSection } = useComponentPalette();
-  const { saveNodeParameters, getAllNodeParameters, executeWorkflow, deployWorkflow, cancelDeployment, nodeStatuses, deploymentStatus, workflowLock, isConnected, isReady, sendRequest } = useWebSocket();
+  const { saveNodeParameters, getAllNodeParameters, executeWorkflow, deployWorkflow, cancelDeployment, cancelExecution, getWorkflowStatus, nodeStatuses, deploymentStatus, workflowLock, isConnected, isReady, sendRequest } = useWebSocket();
   const applyUIDefaults = useAppStore((state) => state.applyUIDefaults);
 
   // Workflows list: server-owned data, cached by TanStack Query.
@@ -200,6 +200,12 @@ const DashboardContent: React.FC = () => {
   // Only show as "running" or "locked" if it applies to the currently viewed workflow
   const isCurrentWorkflowDeployed = deploymentStatus.isRunning &&
     deploymentStatus.workflow_id === currentWorkflow?.id;
+  // Backend is the source of truth: per-workflow `isExecuting` is set by
+  // the `workflow_status` handler whenever ANY active run exists for the
+  // current workflow (ad-hoc node, whole-workflow run, deployed trigger
+  // run, or deployment registration).  The toolbar Start/Stop button
+  // tracks this unified signal so it stays Stop while nodes glow.
+  const isCurrentWorkflowActive = isExecuting || isCurrentWorkflowDeployed;
   const isCurrentWorkflowLocked = workflowLock.locked &&
     workflowLock.workflow_id === currentWorkflow?.id;
   const [globalModelDefaults, setGlobalModelDefaults] = React.useState<{ provider: string; model: string } | null>(null);
@@ -274,6 +280,26 @@ const DashboardContent: React.FC = () => {
   React.useEffect(() => {
     localStorage.setItem('workflow_settings', JSON.stringify(settings));
   }, [settings]);
+
+  // Resync per-workflow execution status whenever the WS connection becomes
+  // ready or the current workflow changes.  Closes the gap where a mid-run
+  // reconnect or a workflow switch left the toolbar Start/Stop button stale
+  // because broadcasts only fire on transitions, not on join.
+  React.useEffect(() => {
+    if (!isReady || !currentWorkflow?.id) return;
+    const wfId = currentWorkflow.id;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { executing } = await getWorkflowStatus(wfId);
+        if (cancelled) return;
+        useAppStore.getState().setWorkflowExecuting(wfId, executing);
+      } catch {
+        // Silent: the next broadcast will resync; this is opportunistic.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isReady, currentWorkflow?.id, getWorkflowStatus]);
 
   // Load UI defaults from database on initial WebSocket connection
   const hasLoadedUIDefaults = React.useRef(false);
@@ -637,20 +663,28 @@ const DashboardContent: React.FC = () => {
     }
   };
 
-  // Cancel running deployment for current workflow
+  // Stop click handler — routes to the right cancel based on what's actually
+  // running.  If the workflow is deployed, cancel the deployment (existing
+  // path).  Otherwise cancel any in-flight ad-hoc execution(s).  Falls
+  // through silently if neither is true.
   const handleCancelDeployment = async () => {
+    const workflowId = currentWorkflow?.id;
+    if (!workflowId) return;
     try {
-      const workflowId = currentWorkflow?.id;
-      console.log('[Dashboard] Cancelling deployment for workflow:', workflowId);
-      const result = await cancelDeployment(workflowId);
-
-      if (result.success) {
-        console.log('[Dashboard] Deployment cancelled:', result);
-      } else {
-        console.error('[Dashboard] Failed to cancel deployment:', result.message);
+      if (isCurrentWorkflowDeployed) {
+        console.log('[Dashboard] Cancelling deployment for workflow:', workflowId);
+        const result = await cancelDeployment(workflowId);
+        if (!result?.success) {
+          console.error('[Dashboard] Failed to cancel deployment:', result?.message);
+        }
+        return;
+      }
+      if (isExecuting) {
+        console.log('[Dashboard] Cancelling ad-hoc execution for workflow:', workflowId);
+        await cancelExecution(workflowId);
       }
     } catch (error: any) {
-      console.error('[Dashboard] Cancel deployment error:', error);
+      console.error('[Dashboard] Cancel error:', error);
     }
   };
 
@@ -1066,7 +1100,7 @@ const DashboardContent: React.FC = () => {
           isRunning={isExecuting}
           onDeploy={handleDeploy}
           onCancelDeployment={handleCancelDeployment}
-          isDeploying={isCurrentWorkflowDeployed}
+          isDeploying={isCurrentWorkflowActive}
           hasUnsavedChanges={hasUnsavedChanges}
           sidebarVisible={sidebarVisible}
           onToggleSidebar={toggleSidebar}

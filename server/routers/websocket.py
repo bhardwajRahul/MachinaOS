@@ -400,28 +400,43 @@ async def handle_execute_node(data: Dict[str, Any], websocket: WebSocket) -> Dic
     await broadcaster.update_node_status(
         node_id, "executing", {"execution_id": execution_id}, workflow_id=workflow_id,
     )
-    result = await workflow_service.execute_node(
-        node_id=node_id, node_type=node_type,
-        parameters=data.get("parameters", {}),
-        nodes=data.get("nodes", []), edges=data.get("edges", []),
-        session_id=data.get("session_id", "default"),
-        workflow_id=workflow_id,
-        outputs=data.get("outputs", {}),  # Upstream node outputs for data flow
-    )
+    # Mark this workflow active so the toolbar Start->Stop reflects ad-hoc runs.
+    # finally: ensures the counter rolls back even on crash.
+    await broadcaster.workflow_run_started(workflow_id)
+    result: Dict[str, Any]
+    try:
+        result = await workflow_service.execute_node(
+            node_id=node_id, node_type=node_type,
+            parameters=data.get("parameters", {}),
+            nodes=data.get("nodes", []), edges=data.get("edges", []),
+            session_id=data.get("session_id", "default"),
+            workflow_id=workflow_id,
+            outputs=data.get("outputs", {}),  # Upstream node outputs for data flow
+        )
 
-    if result.get("success"):
-        success_payload = {**(result.get("result") or {}), "execution_id": execution_id}
-        await broadcaster.update_node_status(node_id, "success", success_payload, workflow_id=workflow_id)
-        await broadcaster.update_node_output(node_id, success_payload, workflow_id=workflow_id)
-    elif result.get("error") == "Cancelled by user":
-        # Cancelled trigger nodes go back to idle, not error
+        if result.get("success"):
+            success_payload = {**(result.get("result") or {}), "execution_id": execution_id}
+            await broadcaster.update_node_status(node_id, "success", success_payload, workflow_id=workflow_id)
+            await broadcaster.update_node_output(node_id, success_payload, workflow_id=workflow_id)
+        elif result.get("error") == "Cancelled by user":
+            # Cancelled trigger nodes go back to idle, not error
+            await broadcaster.update_node_status(
+                node_id, "idle", {"message": "Cancelled", "execution_id": execution_id}, workflow_id=workflow_id,
+            )
+        else:
+            await broadcaster.update_node_status(
+                node_id, "error", {"error": result.get("error"), "execution_id": execution_id}, workflow_id=workflow_id,
+            )
+    except Exception:
+        # Mark the node as errored so the UI doesn't keep glowing on crash
         await broadcaster.update_node_status(
-            node_id, "idle", {"message": "Cancelled", "execution_id": execution_id}, workflow_id=workflow_id,
+            node_id, "error",
+            {"error": "execution crashed", "execution_id": execution_id},
+            workflow_id=workflow_id,
         )
-    else:
-        await broadcaster.update_node_status(
-            node_id, "error", {"error": result.get("error"), "execution_id": execution_id}, workflow_id=workflow_id,
-        )
+        raise
+    finally:
+        await broadcaster.workflow_run_ended(workflow_id)
 
     # Explicitly pass through success status (don't let decorator default to True)
     ws_result = {
@@ -439,12 +454,50 @@ async def handle_execute_node(data: Dict[str, Any], websocket: WebSocket) -> Dic
     return ws_result
 
 
-@ws_handler("node_id")
+@ws_handler()
 async def handle_cancel_execution(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
-    """Cancel node execution."""
+    """Cancel ad-hoc node execution(s).
+
+    Two modes:
+      * `node_id` — reset that single node to idle (legacy single-node cancel).
+      * `workflow_id` only — reset every node in this workflow that's
+        currently `executing` or `waiting`, and reset the active-run counter.
+        Used by the toolbar Stop button when no deployment is active.
+
+    Either argument is sufficient; if both are present the node-specific
+    reset still happens and the workflow-level cleanup runs as well.
+    """
     broadcaster = get_status_broadcaster()
-    await broadcaster.update_node_status(data["node_id"], "idle")
-    return {"node_id": data["node_id"], "message": "Execution cancelled"}
+    workflow_id = data.get("workflow_id")
+    node_id = data.get("node_id")
+
+    if node_id:
+        await broadcaster.update_node_status(node_id, "idle", workflow_id=workflow_id)
+
+    cleared = 0
+    if workflow_id:
+        # Reset run counter to zero (broadcasts executing=false + clears stuck nodes)
+        async with broadcaster._workflow_active_lock:
+            broadcaster._workflow_active_runs.pop(workflow_id, None)
+        await broadcaster.update_workflow_status(executing=False, workflow_id=workflow_id)
+        cleared = await broadcaster._clear_stuck_node_statuses(workflow_id)
+
+    return {
+        "node_id": node_id,
+        "workflow_id": workflow_id,
+        "cleared_nodes": cleared,
+        "message": "Execution cancelled",
+    }
+
+
+@ws_handler()
+async def handle_get_workflow_status(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Return cached per-workflow execution status for resync (reconnect / workflow switch)."""
+    broadcaster = get_status_broadcaster()
+    workflow_id = data.get("workflow_id")
+    if not workflow_id:
+        return {"success": False, "error": "workflow_id required"}
+    return {"workflow_id": workflow_id, "data": broadcaster.get_workflow_status(workflow_id)}
 
 
 @ws_handler()
@@ -726,8 +779,8 @@ async def handle_execute_workflow(data: Dict[str, Any], websocket: WebSocket) ->
     if not nodes:
         return {"success": False, "error": "No nodes provided"}
 
-    # Broadcast workflow starting status
-    await broadcaster.update_workflow_status(executing=True, current_node=None, progress=0)
+    # Mark this workflow active so the toolbar Start->Stop reflects whole-workflow runs
+    await broadcaster.workflow_run_started(workflow_id)
 
     # Create status callback with workflow_id for per-workflow scoping (n8n pattern)
     async def status_callback(node_id: str, status: str, node_data: Optional[Dict] = None):
@@ -736,23 +789,25 @@ async def handle_execute_workflow(data: Dict[str, Any], websocket: WebSocket) ->
             position = node_data.get("position", 0) if node_data else 0
             total = node_data.get("total", 1) if node_data else 1
             progress = int((position / total) * 100) if total > 0 else 0
-            await broadcaster.update_workflow_status(executing=True, current_node=node_id, progress=progress)
+            await broadcaster.update_workflow_status(
+                executing=True,
+                current_node=node_id,
+                progress=progress,
+                workflow_id=workflow_id,
+            )
 
-    # Execute the workflow with workflow_id for per-workflow status scoping
-    result = await workflow_service.execute_workflow(
-        nodes=nodes,
-        edges=edges,
-        session_id=session_id,
-        status_callback=status_callback,
-        workflow_id=workflow_id,
-    )
-
-    # Broadcast workflow completed status
-    await broadcaster.update_workflow_status(
-        executing=False,
-        current_node=None,
-        progress=100 if result.get("success") else 0
-    )
+    result: Dict[str, Any]
+    try:
+        result = await workflow_service.execute_workflow(
+            nodes=nodes,
+            edges=edges,
+            session_id=session_id,
+            status_callback=status_callback,
+            workflow_id=workflow_id,
+        )
+    finally:
+        # Always release the active-run counter so the button never gets stuck
+        await broadcaster.workflow_run_ended(workflow_id)
 
     return {
         "success": result.get("success", False),
@@ -1116,19 +1171,27 @@ async def handle_execute_ai_node(data: Dict[str, Any], websocket: WebSocket) -> 
     workflow_id = data.get("workflow_id")  # Per-workflow isolation for tool node glowing
 
     await broadcaster.update_node_status(node_id, "executing", workflow_id=workflow_id)
-    result = await workflow_service.execute_node(
-        node_id=node_id, node_type=node_type,
-        parameters=data.get("parameters", {}),
-        nodes=data.get("nodes", []), edges=data.get("edges", []),
-        session_id=data.get("session_id", "default"),
-        workflow_id=workflow_id,
-    )
+    await broadcaster.workflow_run_started(workflow_id)
+    result: Dict[str, Any]
+    try:
+        result = await workflow_service.execute_node(
+            node_id=node_id, node_type=node_type,
+            parameters=data.get("parameters", {}),
+            nodes=data.get("nodes", []), edges=data.get("edges", []),
+            session_id=data.get("session_id", "default"),
+            workflow_id=workflow_id,
+        )
 
-    if result.get("success"):
-        await broadcaster.update_node_status(node_id, "success", result.get("result"), workflow_id=workflow_id)
-        await broadcaster.update_node_output(node_id, result.get("result"), workflow_id=workflow_id)
-    else:
-        await broadcaster.update_node_status(node_id, "error", {"error": result.get("error")}, workflow_id=workflow_id)
+        if result.get("success"):
+            await broadcaster.update_node_status(node_id, "success", result.get("result"), workflow_id=workflow_id)
+            await broadcaster.update_node_output(node_id, result.get("result"), workflow_id=workflow_id)
+        else:
+            await broadcaster.update_node_status(node_id, "error", {"error": result.get("error")}, workflow_id=workflow_id)
+    except Exception:
+        await broadcaster.update_node_status(node_id, "error", {"error": "execution crashed"}, workflow_id=workflow_id)
+        raise
+    finally:
+        await broadcaster.workflow_run_ended(workflow_id)
 
     return {"success": result.get("success", False), "node_id": node_id, "result": result.get("result"), "error": result.get("error"),
             "execution_time": result.get("execution_time"), "timestamp": time.time()}
@@ -3297,6 +3360,7 @@ MESSAGE_HANDLERS: Dict[str, MessageHandler] = {
     "execute_node": handle_execute_node,
     "execute_workflow": handle_execute_workflow,
     "cancel_execution": handle_cancel_execution,
+    "get_workflow_status": handle_get_workflow_status,
     "get_node_output": handle_get_node_output,
     "clear_node_output": handle_clear_node_output,
 

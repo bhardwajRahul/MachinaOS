@@ -20,6 +20,17 @@ class StatusBroadcaster:
         self._connections: Set[WebSocket] = set()
         self._lock = asyncio.Lock()
 
+        # Per-workflow active-run counter. Counts every concurrent
+        # execution path (ad-hoc node run, whole-workflow run, deployed
+        # trigger spawn, ...). The counter going 0->1 emits a
+        # `workflow_status` broadcast with executing=true; 1->0 emits
+        # executing=false. Prevents flapping while multiple runs overlap.
+        self._workflow_active_runs: Dict[str, int] = {}
+        self._workflow_active_lock = asyncio.Lock()
+
+        # Per-workflow status cache for snapshot/resync
+        self._workflow_statuses: Dict[str, Dict[str, Any]] = {}
+
         # Current state for all status types
         self._status: Dict[str, Any] = {
             "android": {
@@ -599,19 +610,120 @@ class StatusBroadcaster:
         self,
         executing: bool,
         current_node: Optional[str] = None,
-        progress: Optional[float] = None
+        progress: Optional[float] = None,
+        workflow_id: Optional[str] = None,
     ):
-        """Update workflow execution status and broadcast."""
+        """Update workflow execution status and broadcast.
+
+        When `workflow_id` is provided the broadcast is scoped per-workflow
+        so the frontend can drive its per-workflow Start/Stop button. The
+        legacy global slot is kept up to date for backward compatibility.
+        """
+        payload = {
+            "executing": executing,
+            "current_node": current_node,
+            "progress": progress,
+            "workflow_id": workflow_id,
+        }
+        # Update legacy global slot
         self._status["workflow"] = {
             "executing": executing,
             "current_node": current_node,
-            "progress": progress
+            "progress": progress,
         }
+        # Update per-workflow cache for snapshot/resync
+        if workflow_id:
+            self._workflow_statuses[workflow_id] = {
+                "executing": executing,
+                "current_node": current_node,
+                "progress": progress,
+            }
 
         await self.broadcast({
             "type": "workflow_status",
-            "data": self._status["workflow"]
+            "workflow_id": workflow_id,
+            "data": payload,
         })
+
+    async def workflow_run_started(self, workflow_id: Optional[str]) -> bool:
+        """Mark a new active run for `workflow_id`.
+
+        Returns True if this transition broadcast `executing=True` (i.e.
+        the counter went 0->1). Subsequent overlapping runs return False
+        but still increment the counter so the matching `workflow_run_ended`
+        decrements properly.
+        """
+        if not workflow_id:
+            return False
+        async with self._workflow_active_lock:
+            prev = self._workflow_active_runs.get(workflow_id, 0)
+            self._workflow_active_runs[workflow_id] = prev + 1
+            went_active = prev == 0
+        if went_active:
+            await self.update_workflow_status(
+                executing=True, workflow_id=workflow_id,
+            )
+        return went_active
+
+    async def workflow_run_ended(
+        self,
+        workflow_id: Optional[str],
+        clear_stuck_nodes: bool = True,
+    ) -> bool:
+        """Mark an active run finished for `workflow_id`.
+
+        Returns True if this transition broadcast `executing=False` (i.e.
+        the counter went 1->0). When the counter reaches zero and
+        `clear_stuck_nodes` is set, any node currently marked
+        `executing`/`waiting` for this workflow is reset to `idle` --
+        protects the UI from glow leaks on crash paths.
+        """
+        if not workflow_id:
+            return False
+        async with self._workflow_active_lock:
+            prev = self._workflow_active_runs.get(workflow_id, 0)
+            new_count = max(0, prev - 1)
+            if new_count == 0:
+                self._workflow_active_runs.pop(workflow_id, None)
+            else:
+                self._workflow_active_runs[workflow_id] = new_count
+            went_idle = prev > 0 and new_count == 0
+        if went_idle:
+            await self.update_workflow_status(
+                executing=False, workflow_id=workflow_id,
+            )
+            if clear_stuck_nodes:
+                await self._clear_stuck_node_statuses(workflow_id)
+        return went_idle
+
+    async def _clear_stuck_node_statuses(self, workflow_id: str) -> int:
+        """Reset any nodes still marked executing/waiting for this workflow."""
+        stuck = [
+            (nid, info) for nid, info in self._status["nodes"].items()
+            if info.get("workflow_id") == workflow_id
+            and info.get("status") in ("executing", "waiting")
+        ]
+        for node_id, _info in stuck:
+            try:
+                await self.clear_node_status(node_id)
+            except Exception as e:
+                logger.warning(
+                    "[StatusBroadcaster] Failed to clear stuck node %s: %s",
+                    node_id, e,
+                )
+        return len(stuck)
+
+    def get_workflow_status(self, workflow_id: str) -> Dict[str, Any]:
+        """Return cached per-workflow execution status (for resync)."""
+        cached = self._workflow_statuses.get(workflow_id)
+        if cached:
+            return {**cached, "workflow_id": workflow_id}
+        return {
+            "executing": False,
+            "current_node": None,
+            "progress": None,
+            "workflow_id": workflow_id,
+        }
 
     async def update_deployment_status(
         self,

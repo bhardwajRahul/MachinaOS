@@ -329,6 +329,8 @@ interface WebSocketContextValue {
   deployWorkflow: (workflowId: string, nodes: any[], edges: any[], sessionId?: string) => Promise<any>;
   cancelDeployment: (workflowId?: string) => Promise<any>;
   getDeploymentStatus: (workflowId?: string) => Promise<{ isRunning: boolean; activeRuns: number; settings?: any; workflow_id?: string }>;
+  cancelExecution: (workflowId: string, nodeId?: string) => Promise<any>;
+  getWorkflowStatus: (workflowId: string) => Promise<{ executing: boolean }>;
 
   // AI Operations
   executeAiNode: (nodeId: string, nodeType: string, parameters: Record<string, any>, model: string, workflowId: string, nodes: any[], edges: any[]) => Promise<any>;
@@ -871,9 +873,21 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           }
           break;
 
-        case 'workflow_status':
+        case 'workflow_status': {
+          // Backend broadcasts this for both ad-hoc executions (execute_node /
+          // execute_workflow) and explicit cancels. The active-run counter
+          // logic in StatusBroadcaster guarantees that we receive an
+          // `executing=true` once when work starts and an `executing=false`
+          // once when the last concurrent run finishes -- safe to fan out
+          // directly to per-workflow Zustand state without dedup.
           setWorkflowStatus(data || defaultWorkflowStatus);
+          const wfId = message.workflow_id || data?.workflow_id;
+          if (wfId && data && typeof data.executing === 'boolean') {
+            const { setWorkflowExecuting } = useAppStore.getState();
+            setWorkflowExecuting(wfId, data.executing);
+          }
           break;
+        }
 
         case 'deployment_status':
           // Handle deployment status updates (event-driven, no iterations)
@@ -1916,6 +1930,40 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, [sendRequest]);
 
+  // Cancel any active ad-hoc execution(s) for a workflow.  The backend
+  // resets every node currently glowing for this workflow_id and clears
+  // its active-run counter.  Distinct from cancelDeployment, which only
+  // touches deployed workflows.
+  const cancelExecutionAsync = useCallback(async (workflowId: string, nodeId?: string): Promise<any> => {
+    try {
+      const response = await sendRequest<any>('cancel_execution', {
+        workflow_id: workflowId,
+        node_id: nodeId,
+      });
+      // Optimistic local clear so the UI reflects the action immediately.
+      const { setWorkflowExecuting } = useAppStore.getState();
+      setWorkflowExecuting(workflowId, false);
+      return response;
+    } catch (error) {
+      console.error('[WebSocket] Failed to cancel execution:', error);
+      throw error;
+    }
+  }, [sendRequest]);
+
+  // Snapshot per-workflow execution status from the backend's active-run
+  // counter cache.  Called on reconnect / workflow switch so the toolbar
+  // button reflects current truth even if we missed broadcasts.
+  const getWorkflowStatusAsync = useCallback(async (workflowId: string): Promise<{ executing: boolean }> => {
+    try {
+      const response = await sendRequest<any>('get_workflow_status', { workflow_id: workflowId });
+      const data = response?.data || {};
+      return { executing: !!data.executing };
+    } catch (error) {
+      console.error('[WebSocket] Failed to get workflow status:', error);
+      return { executing: false };
+    }
+  }, [sendRequest]);
+
   // =========================================================================
   // AI Operations
   // =========================================================================
@@ -2511,6 +2559,8 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     deployWorkflow: deployWorkflowAsync,
     cancelDeployment: cancelDeploymentAsync,
     getDeploymentStatus: getDeploymentStatusAsync,
+    cancelExecution: cancelExecutionAsync,
+    getWorkflowStatus: getWorkflowStatusAsync,
 
     // AI Operations
     executeAiNode: executeAiNodeAsync,
@@ -2567,6 +2617,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     executeNodeAsync, executeWorkflowAsync, getNodeOutputAsync,
     cancelEventWaitAsync,
     deployWorkflowAsync, cancelDeploymentAsync, getDeploymentStatusAsync,
+    cancelExecutionAsync, getWorkflowStatusAsync,
     executeAiNodeAsync, getAiModelsAsync,
     validateApiKeyAsync, getStoredApiKeyAsync, saveApiKeyAsync, deleteApiKeyAsync,
     getAndroidDevicesAsync, executeAndroidActionAsync,
