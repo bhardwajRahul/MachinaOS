@@ -27,3 +27,22 @@ export const queryClient = new QueryClient({
     },
   },
 });
+
+// Per-prefix query defaults. Use setQueryDefaults so the options apply
+// to ANY query that matches the prefix regardless of how it entered the
+// cache -- including queries hydrated by PersistQueryClientProvider
+// from localStorage, which would otherwise inherit the global default
+// gcTime: 5min and get evicted after that interval. Nodespec /
+// nodegroups data is immutable per backend deploy (the persistor's
+// __APP_VERSION__ buster handles cross-deploy invalidation), so we keep
+// it forever in memory. Without this, slice-subscribed consumers
+// (useNodeSpec via useSyncExternalStore) read `undefined` after the
+// 5-minute window and every canvas node loses its icon and handles.
+queryClient.setQueryDefaults(['nodeSpec'], {
+  staleTime: STALE_TIME.FOREVER,
+  gcTime: GC_TIME.FOREVER,
+});
+queryClient.setQueryDefaults(['nodeGroups'], {
+  staleTime: STALE_TIME.FOREVER,
+  gcTime: GC_TIME.FOREVER,
+});
