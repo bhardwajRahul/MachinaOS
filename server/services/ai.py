@@ -1896,10 +1896,13 @@ class AIService:
                         except Exception as e:
                             logger.warning(f"[LangGraph Memory] Failed to archive to vector store: {e}")
 
-                # Save updated markdown to node parameters
+                # Save updated markdown to node parameters. Schema-
+                # canonical key is snake_case; drop any pre-migration
+                # camelCase mirror so the saved params stay clean.
                 memory_node_id = memory_data['node_id']
                 current_params = await self.database.get_node_parameters(memory_node_id) or {}
-                current_params['memoryContent'] = updated_content
+                current_params['memory_content'] = updated_content
+                current_params.pop('memoryContent', None)
                 await self.database.save_node_parameters(memory_node_id, current_params)
                 logger.info(f"[LangGraph Memory] Saved markdown to memory node '{memory_node_id}'")
 
@@ -2335,10 +2338,13 @@ class AIService:
                         except Exception as e:
                             logger.warning(f"[ChatAgent Memory] Failed to archive to vector store: {e}")
 
-                # Save updated markdown to node parameters
+                # Save updated markdown to node parameters. Schema-
+                # canonical key is snake_case; drop any pre-migration
+                # camelCase mirror so the saved params stay clean.
                 memory_node_id = memory_data['node_id']
                 current_params = await self.database.get_node_parameters(memory_node_id) or {}
-                current_params['memoryContent'] = updated_content
+                current_params['memory_content'] = updated_content
+                current_params.pop('memoryContent', None)
                 await self.database.save_node_parameters(memory_node_id, current_params)
                 logger.info(f"[ChatAgent Memory] Saved markdown to memory node '{memory_node_id}'")
 

@@ -1633,8 +1633,17 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
           );
         }
 
-        // Special case for sessionId parameter - show auto-derived session ID in placeholder
-        if (parameter.name === 'sessionId' && connectedAgentId) {
+        // Special case for the session-id parameter on a Memory node:
+        // show the auto-derived session id (the connected agent's node
+        // id) as the placeholder so the user can see what default the
+        // backend will use without typing anything. Schema-canonical
+        // name is `session_id` (Pydantic snake_case); the legacy
+        // `sessionId` is matched too so pre-migration workflows keep
+        // rendering the placeholder.
+        if (
+          (parameter.name === 'session_id' || parameter.name === 'sessionId') &&
+          connectedAgentId
+        ) {
           const effectivePlaceholder = connectedAgentId;
 
           return (

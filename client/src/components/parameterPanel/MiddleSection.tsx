@@ -127,14 +127,16 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
   // For Memory nodes: track the connected agent's ID for auto-session display
   const [connectedAgentId, setConnectedAgentId] = useState<string | null>(null);
 
-  // Clear memory handler
+  // Clear memory handler. Schema-canonical keys are snake_case
+  // (post-Wave-11 plugin Pydantic models); accept legacy camelCase
+  // on the read side for old workflow imports.
   const handleClearMemory = async () => {
     setIsProcessing(true);
     try {
-      const sessionId = parameters.sessionId || 'default';
+      const sessionId = parameters.session_id || parameters.sessionId || 'default';
       const result = await clearMemory(sessionId, clearLongTermMemory);
       if (result.success && result.default_content) {
-        onParameterChange('memoryContent', result.default_content);
+        onParameterChange('memory_content', result.default_content);
       }
     } finally {
       setIsProcessing(false);
@@ -182,13 +184,17 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
   const { data: userSettings } = useUserSettingsQuery();
 
   // Apply the global memory_window_size default to new Memory nodes. Only
-  // fires when a Memory node is opened AND the node hasn't had windowSize
-  // set yet (brand-new instance).
+  // fires when a Memory node is opened AND the node hasn't had window_size
+  // set yet (brand-new instance). Plugin schema field is snake_case;
+  // legacy camelCase is also recognized so we don't overwrite a value
+  // saved before the migration.
   useEffect(() => {
     if (!isMemoryNode) return;
     const globalWindowSize = userSettings?.memory_window_size;
-    if (globalWindowSize !== undefined && parameters.windowSize === undefined) {
-      onParameterChange('windowSize', globalWindowSize);
+    const alreadySet =
+      parameters.window_size !== undefined || parameters.windowSize !== undefined;
+    if (globalWindowSize !== undefined && !alreadySet) {
+      onParameterChange('window_size', globalWindowSize);
     }
     // Same dep set as the previous imperative effect — only wake up on
     // node change, not on every parameter edit.
@@ -215,9 +221,13 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
 
   const connectedMemorySessionId = useMemo<string | null>(() => {
     if (!memoryEdgeSourceId) return null;
-    const configured: string = memoryParamsData?.sessionId || '';
+    // Schema-canonical session_id; legacy camelCase fallback so older
+    // workflow imports keep showing the user-configured value rather
+    // than silently falling back to nodeId.
+    const configured: string =
+      memoryParamsData?.session_id || memoryParamsData?.sessionId || '';
     return configured && configured !== 'default' ? configured : nodeId;
-  }, [memoryEdgeSourceId, memoryParamsData?.sessionId, nodeId]);
+  }, [memoryEdgeSourceId, memoryParamsData?.session_id, memoryParamsData?.sessionId, nodeId]);
 
   const compactionStatsQuery = useQuery<{
     session_id: string;
@@ -606,7 +616,7 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
                   This will reset the conversation history to its initial state. This action cannot be undone.
                 </AlertDialogDescription>
               </AlertDialogHeader>
-              {parameters.longTermEnabled && (
+              {(parameters.long_term_enabled ?? parameters.longTermEnabled) && (
                 <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground">
                   <Checkbox
                     checked={clearLongTermMemory}

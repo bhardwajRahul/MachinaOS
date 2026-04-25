@@ -250,7 +250,10 @@ class DeepAgentService:
 
                 if database:
                     params = await database.get_node_parameters(memory_data['node_id']) or {}
-                    params['memoryContent'] = updated
+                    # Schema-canonical key. Drop any pre-migration
+                    # camelCase mirror so the saved params stay clean.
+                    params['memory_content'] = updated
+                    params.pop('memoryContent', None)
                     await database.save_node_parameters(memory_data['node_id'], params)
 
             log_execution_time(logger, "deep_agent", start_time, time.time())

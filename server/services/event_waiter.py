@@ -361,12 +361,15 @@ def build_chat_filter(params: Dict) -> Callable[[Dict], bool]:
     """Build filter function for chat messages from console input.
 
     Args:
-        params: Node parameters with 'sessionId' field
+        params: Node parameters with 'session_id' field (camelCase
+            'sessionId' also accepted for legacy imports).
 
     Returns:
         Filter function that checks if event session_id matches
     """
-    session_id = params.get('sessionId', 'default')
+    # The chatTrigger Pydantic model emits 'session_id' in JSON Schema;
+    # accept both for backward compat with pre-migration workflows.
+    session_id = params.get('session_id') or params.get('sessionId', 'default')
 
     def matches(data: Dict) -> bool:
         event_session = data.get('session_id', 'default')
