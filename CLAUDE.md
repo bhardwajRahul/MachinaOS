@@ -380,12 +380,13 @@ LOG_FORMAT=text     # text or json
 **Always use the existing design and theme systems.** Tribal styling reintroduced anywhere defeats the migration. The following rules are non-negotiable for any new or edited frontend file:
 
 1. **Compose shadcn primitives** from [client/src/components/ui/](./client/src/components/ui/) — `Button`, `Badge`, `Alert`, `AlertDialog`, `Dialog`, `DropdownMenu`, `Select`, `Popover`, `Tooltip`, `Tabs`, `Card`, `Input`, `Textarea`, `Switch`, `Checkbox`, `Slider`, `Label`, `Form`, `Collapsible`, `Accordion`, `Skeleton`, `Sonner`. **Do not hand-roll** modals, dropdowns, menus, toasts, dialogs, or buttons when a primitive exists. Add `npx shadcn@latest add <name>` if the primitive is missing.
-2. **Action buttons → `<ActionButton tone="...">`** ([client/src/components/ui/action-button.tsx](./client/src/components/ui/action-button.tsx)). Never re-introduce the `actionButtonStyle()` / hand-built colored buttons.
+2. **Action buttons → `<ActionButton intent="...">`** ([client/src/components/ui/action-button.tsx](./client/src/components/ui/action-button.tsx)). The `intent` prop is a semantic role (`run | stop | save | config | secret | tools`), never a palette color. Never re-introduce the `actionButtonStyle()` / hand-built colored buttons.
 3. **Style with Tailwind classes**, not `style={{...}}`. Inline `style` is allowed only for genuinely dynamic values (React Flow `<Handle>` positioning, runtime-computed coordinates, dynamic per-definition `nodeColor` on canvas nodes).
 4. **Use the token tier table** in [docs-internal/frontend_architecture.md](./docs-internal/frontend_architecture.md#tokens--theming):
    - Generic chrome / status → shadcn semantic tokens (`bg-card`, `text-muted-foreground`, `border-border`, `text-success`, `bg-destructive`, `text-warning`, `text-info`, `bg-accent`, etc.)
    - Node-type-themed surfaces → `--node-X` role tokens (`bg-node-agent`, `bg-node-model-soft`, `border-node-skill-border`, `text-node-trigger`, `text-node-workflow`, `bg-node-tool-soft`)
-   - Action-button palette → `<ActionButton tone="green|purple|pink|cyan|orange|yellow|red">` only
+   - Toolbar / panel actions → `--action-X` semantic role tokens (`bg-action-run-soft`, `text-action-stop`, `border-action-config-border`, etc.) for icon-only buttons + dropdown items; `<ActionButton intent="...">` for the standard "soft tinted button" pill
+   - **No palette names in components.** `bg-dracula-green` etc. are forbidden in non-decorative code; always go through `--action-X` or `--node-X`
 5. **No opacity arithmetic at call sites.** `bg-primary/10`, `border-node-agent/30`, `${color}25` template literals are forbidden. If a unique tint is needed, add a new variant to the theme (e.g., `--node-X-soft`, `--node-X-border`) and use it by name.
 6. **No theme-locked names in non-decorative code.** Avoid `bg-dracula-purple`, `text-dracula-cyan`, etc. unless the constant accent is intentional (action-button palette). Prefer the role token (`bg-node-agent`) so future themes redefine without code edits.
 7. **No `useAppTheme()` in new files.** It is grandfathered for the canvas node components and `EdgeConditionEditor` only because they interpolate per-definition `nodeColor`. Every other surface uses Tailwind + the tokens above.
@@ -580,9 +581,12 @@ Single source of truth: [client/src/index.css](./client/src/index.css). All toke
    - `bg-node-X-soft` — tinted surface (cards, tinted backgrounds)
    - `border-node-X-border` — tinted outline
    Themes redefine these in their own scope without touching call sites. **Never use opacity arithmetic at the call site** (`bg-node-agent/10`); add a new `-soft` / `-border` variant if you need a different opacity.
-3. **Dracula raw accents** — `--dracula-green/purple/pink/cyan/red/orange/yellow`. Same value across light + dark themes; reserved for the action-button palette (`<ActionButton tone="green">` etc.). Avoid in new code unless you specifically need the constant accent across themes.
+3. **Action role tokens** — `--action-run`, `--action-stop`, `--action-save`, `--action-config`, `--action-secret`, `--action-tools`. Same `base / -soft / -border` triplet as `--node-X` (e.g. `bg-action-run-soft text-action-run border-action-run-border`). Used for toolbar icon buttons, File menu items, and as the underlying tokens behind `<ActionButton>`'s `intent` variants. Themes redefine these without touching call sites.
+4. **Dracula raw accents** — `--dracula-green/purple/pink/cyan/red/orange/yellow`. Same value across light + dark themes. Used as the underlying palette that `--action-X` and `--node-X` reference; do not consume directly in components — go through the semantic role token instead.
 
-**Action buttons** — use [ActionButton](./client/src/components/ui/action-button.tsx) (CVA primitive with `tone` variants: `green | purple | pink | cyan | orange | yellow | red`). Replaces the old `actionButtonStyle()` helper.
+**Action buttons** — use [ActionButton](./client/src/components/ui/action-button.tsx) (CVA primitive with semantic `intent` variants: `run | stop | save | config | secret | tools`). Each intent reads the matching `--action-X` triplet. Replaces the old `actionButtonStyle()` helper.
+
+**Canvas-wide animations** — [client/src/styles/canvasAnimations.ts](./client/src/styles/canvasAnimations.ts) owns the `@keyframes` + `.react-flow__edge.{status}` + `.react-flow__node.{status}` rules injected once into Dashboard's `<style>` tag. Three named groups (`KEYFRAMES`, `edgeStatusStyles`, `nodeStatusStyles`) -- adding a new keyframe or status visual is a single-file change. Per-node inline animations (border pulse on `isExecuting`, etc.) live in their components and read theme tokens directly.
 
 **shadcn primitives** — full set under `client/src/components/ui/` (Button, Badge, Alert, Dialog, DropdownMenu, Select, Popover, Tooltip, Tabs, Card, Input, Textarea, Switch, Checkbox, Slider, Label, Form, Sonner, Skeleton, Collapsible, Accordion, AlertDialog). New code composes these with Tailwind classes.
 

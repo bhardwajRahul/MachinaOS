@@ -254,7 +254,7 @@ Rules:
      root.dataset.theme = isDarkMode ? 'dark' : 'light';
    }, [isDarkMode]);
    ```
-4. `styles/theme.ts` (`theme.dracula.*`, `theme.colors.*`) is still exported for the canvas node components and `EdgeConditionEditor`. New code should prefer Tailwind classes (`bg-primary`, `text-dracula-green`, `bg-node-agent-soft`) or `hsl(var(--...))` inline.
+4. `styles/theme.ts` (`theme.dracula.*`, `theme.colors.*`) is still exported for the canvas node components and `EdgeConditionEditor`. New code should prefer Tailwind classes (`bg-primary`, `bg-action-run-soft`, `bg-node-agent-soft`) or `hsl(var(--...))` inline. Palette names (`text-dracula-green`) are forbidden in components -- go through the matching `--action-X` or `--node-X` semantic role token.
 
 ### Token tier — pick the most specific that fits
 
@@ -262,7 +262,8 @@ Rules:
 |---|---|---|
 | **shadcn semantic** | `background`, `foreground`, `card`, `popover`, `primary`, `secondary`, `muted`, `accent`, `destructive`, `success`, `warning`, `info`, `border`, `input`, `ring` | App-wide chrome, status colors, generic actions. Each rotates per theme. |
 | **Node-type role** | `node-agent`, `node-model`, `node-skill`, `node-tool`, `node-trigger`, `node-workflow` (+ paired `-soft` and `-border` variants) | Anywhere a node type's identity should drive color: palette icons, parameter-panel sections, draggable variable cards, status badges, edge label tints. |
-| **Dracula raw** | `dracula-green`, `dracula-purple`, `dracula-pink`, `dracula-cyan`, `dracula-red`, `dracula-orange`, `dracula-yellow` | Action-button palette (`<ActionButton tone="green">`). Constant across themes by design. Avoid in new code unless you specifically need that. |
+| **Action role** | `action-run`, `action-stop`, `action-save`, `action-config`, `action-secret`, `action-tools` (+ paired `-soft` and `-border` variants) | Toolbar icon buttons, File menu items, and the underlying tokens behind `<ActionButton intent="...">`. Semantic role names (run / stop / save / ...), never palette colors. Themes redefine without touching call sites. |
+| **Dracula raw** | `dracula-green`, `dracula-purple`, `dracula-pink`, `dracula-cyan`, `dracula-red`, `dracula-orange`, `dracula-yellow` | Constant across themes by design. Used as the underlying palette that `--action-X` and `--node-X` reference; do not consume directly in components. |
 
 ### No opacity arithmetic at call sites
 
@@ -479,7 +480,8 @@ The DIY widget registry (RHF + zod + a tester+rank dispatch) is modeled on n8n's
 
 | File | When to use |
 |---|---|
-| [client/src/components/ui/action-button.tsx](../client/src/components/ui/action-button.tsx) | Colored "soft" toolbar button (Run / Save / Cancel / Reset / Stop). One `tone` prop drives bg/border/text against a fixed dracula palette via static Tailwind classes. Replaces the `actionButtonStyle(color, isDisabled)` style helper that was copy-pasted across 4 files. |
+| [client/src/components/ui/action-button.tsx](../client/src/components/ui/action-button.tsx) | Colored "soft" toolbar button (Run / Save / Cancel / Reset / Stop). One semantic `intent` prop (`run | stop | save | config | secret | tools`) drives bg/border/text against the matching `--action-X` triplet via static Tailwind classes. Replaces the `actionButtonStyle(color, isDisabled)` style helper that was copy-pasted across 4 files. |
+| [client/src/styles/canvasAnimations.ts](../client/src/styles/canvasAnimations.ts) | Canvas-wide CSS injected once into Dashboard's `<style>` tag. Three named groups (`KEYFRAMES`, `edgeStatusStyles`, `nodeStatusStyles`) for the React Flow edge/node status visuals -- adding a new keyframe or status class is a single-file change. |
 | [client/src/components/ui/alert-dialog.tsx](../client/src/components/ui/alert-dialog.tsx) | Confirmation / destructive-action modals. **Never hand-roll a `position: fixed; background: rgba(0,0,0,0.5)` backdrop** — use `<AlertDialog open onOpenChange>` with `AlertDialogHeader` / `AlertDialogDescription` / `AlertDialogFooter`. Focus trap, escape-to-close, and `role="alertdialog"` come from Radix. MiddleSection Clear Memory + Reset Skill dialogs are the canonical consumers (Wave 3 commit `61bf23c`). |
 | [client/src/components/ui/sonner.tsx](../client/src/components/ui/sonner.tsx) | The `<Toaster />` mount — call `import { toast } from 'sonner'` directly at use sites; do not wrap. |
 | [client/src/components/ui/Modal.tsx](../client/src/components/ui/Modal.tsx) | Composition primitive on top of shadcn `<Dialog>`. Owns the recurring "title bar with centered headerActions and a close button + size-constrained content panel" 8 panels share. Not an antd facade. For destructive confirmations prefer `AlertDialog` above. |
