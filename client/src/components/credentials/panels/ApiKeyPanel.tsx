@@ -10,17 +10,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import ApiKeyInput from '../../ui/ApiKeyInput';
-import { useAppTheme } from '../../../hooks/useAppTheme';
 import { useCredentialPanel } from '../useCredentialPanel';
 import { ProviderDefaultsSection, LlmUsageSection, ApiUsageSection } from '../sections';
 import type { ProviderConfig } from '../types';
 
 const ApiKeyPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = ({ config, visible }) => {
-  const theme = useAppTheme();
   const panel = useCredentialPanel(config, visible);
-  const color = (theme.colors as any)[config.color] ?? config.color;
   const field = config.fields?.[0];
-  const iconSize = parseInt(theme.iconSize.md);
 
   const [inputValue, setInputValue] = useState('');
   // Direct local flag — same pattern as main repo's validKeys[id].
@@ -50,9 +46,12 @@ const ApiKeyPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = ({ c
           <div className="flex items-center gap-3">
             <div
               className="flex h-12 w-12 items-center justify-center rounded-lg"
-              style={{ backgroundColor: `${color}15` }}
+              // config.color is per-provider brand metadata (data-driven,
+              // same carve-out as canvas nodeColor); CSS color-mix keeps
+              // the math in CSS rather than as JS string concat.
+              style={{ backgroundColor: `color-mix(in srgb, ${config.color} 8%, transparent)` }}
             >
-              <config.icon size={iconSize} />
+              <config.icon className="h-6 w-6" />
             </div>
             <CardTitle className="text-lg">{config.name}</CardTitle>
           </div>

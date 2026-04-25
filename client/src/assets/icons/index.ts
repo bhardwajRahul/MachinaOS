@@ -95,7 +95,10 @@ export const isImageIcon = (resolved: string): boolean =>
  * `ICON_LIBRARIES` — no per-brand hardcoding, names come from the
  * package's own exports.
  */
-export type LibraryIcon = React.FC<{ size?: number }>;
+// Both lucide and lobehub icon components accept `size` (px) and
+// `className` (Tailwind sizing). Widening here lets call sites compose
+// with `h-6 w-6` instead of pixel literals.
+export type LibraryIcon = React.FC<{ size?: number; className?: string }>;
 
 type LibraryResolver = (brand: string) => LibraryIcon | null;
 

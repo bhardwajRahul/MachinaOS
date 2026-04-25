@@ -31,7 +31,6 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
-import { useAppTheme } from '../../../hooks/useAppTheme';
 import { useWebSocket, type RateLimitConfig, type RateLimitStats } from '../../../contexts/WebSocketContext';
 
 const formSchema = z.object({
@@ -64,7 +63,6 @@ const numberOnChange =
   };
 
 const RateLimitSection: React.FC = () => {
-  const theme = useAppTheme();
   const { getWhatsAppRateLimitConfig, setWhatsAppRateLimitConfig, unpauseWhatsAppRateLimit } = useWebSocket();
   const [stats, setStats] = useState<RateLimitStats | null>(null);
   const [loading, setLoading] = useState(false);
@@ -290,17 +288,8 @@ const RateLimitSection: React.FC = () => {
                 <Button
                   type="submit"
                   disabled={!isDirty || loading}
-                  variant="outline"
+                  variant={isDirty ? 'default' : 'outline'}
                   className="w-full"
-                  style={
-                    isDirty
-                      ? {
-                          backgroundColor: `${theme.dracula.green}25`,
-                          borderColor: `${theme.dracula.green}60`,
-                          color: theme.dracula.green,
-                        }
-                      : undefined
-                  }
                 >
                   {loading && <Loader2 className="h-4 w-4 animate-spin" />}
                   Save Changes

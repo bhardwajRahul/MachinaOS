@@ -38,7 +38,6 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
-import { useAppTheme } from '../../../hooks/useAppTheme';
 import { useApiKeys, type ProviderDefaults, type ModelConstraints } from '../../../hooks/useApiKeys';
 
 const formSchema = z.object({
@@ -58,7 +57,6 @@ interface Props {
 }
 
 const ProviderDefaultsSection: React.FC<Props> = ({ providerId }) => {
-  const theme = useAppTheme();
   const { getProviderDefaults, saveProviderDefaults, getStoredModels, getModelConstraints, isConnected } = useApiKeys();
 
   const [models, setModels] = useState<string[]>([]);
@@ -128,16 +126,6 @@ const ProviderDefaultsSection: React.FC<Props> = ({ providerId }) => {
   const canThink = constraints?.supports_thinking;
   const fixedTemp = constraints?.is_reasoning_model && tempMin === tempMax;
 
-  const chipStyle = useMemo(
-    () =>
-      (bg: string): React.CSSProperties => ({
-        backgroundColor: `${bg}20`,
-        borderColor: `${bg}50`,
-        color: bg,
-      }),
-    [],
-  );
-
   const numberOnChange =
     (field: { onChange: (v: number | undefined) => void }) =>
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -192,23 +180,23 @@ const ProviderDefaultsSection: React.FC<Props> = ({ providerId }) => {
                 {constraints && (
                   <div className="flex flex-wrap items-center gap-1.5">
                     {maxOut != null && (
-                      <Badge style={chipStyle(theme.dracula.green)}>
+                      <Badge variant="success">
                         Max Output: {maxOut.toLocaleString()}
                       </Badge>
                     )}
                     {constraints.context_length != null && (
-                      <Badge style={chipStyle(theme.dracula.cyan)}>
+                      <Badge variant="info">
                         Context: {constraints.context_length.toLocaleString()}
                       </Badge>
                     )}
-                    <Badge style={chipStyle(theme.dracula.purple)}>
+                    <Badge variant="secondary">
                       Temp: {tempMin}-{tempMax}
                     </Badge>
                     {canThink && (
-                      <Badge style={chipStyle(theme.dracula.orange)}>Thinking: {thinkType}</Badge>
+                      <Badge variant="warning">Thinking: {thinkType}</Badge>
                     )}
                     {constraints.is_reasoning_model && (
-                      <Badge style={chipStyle(theme.dracula.pink)}>Reasoning</Badge>
+                      <Badge variant="outline">Reasoning</Badge>
                     )}
                   </div>
                 )}
@@ -360,17 +348,8 @@ const ProviderDefaultsSection: React.FC<Props> = ({ providerId }) => {
                 <Button
                   type="submit"
                   disabled={!isDirty || loading}
-                  variant="outline"
+                  variant={isDirty ? 'default' : 'outline'}
                   className="w-full"
-                  style={
-                    isDirty
-                      ? {
-                          backgroundColor: `${theme.dracula.green}25`,
-                          borderColor: `${theme.dracula.green}60`,
-                          color: theme.dracula.green,
-                        }
-                      : undefined
-                  }
                 >
                   {loading && <Loader2 className="h-4 w-4 animate-spin" />}
                   Save Defaults

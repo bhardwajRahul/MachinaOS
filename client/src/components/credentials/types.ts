@@ -83,7 +83,11 @@ export interface ProviderConfig {
   /** Theme color key (resolved via theme.colors[color] at render). */
   color: string;
   kind: PanelKind;
-  icon: FC<{ size: number }>;
+  /** Provider icon. lucide-react icons + the in-house brand icons both
+   *  accept `size` and `className`; call sites prefer `className` so
+   *  sizing flows from Tailwind tokens (`h-6 w-6`) instead of hardcoded
+   *  pixel values. */
+  icon: FC<{ size?: number; className?: string }>;
 
   /** Credential input fields. */
   fields?: FieldDef[];

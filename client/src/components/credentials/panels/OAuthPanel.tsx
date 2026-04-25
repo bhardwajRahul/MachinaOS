@@ -4,7 +4,6 @@
  */
 
 import React from 'react';
-import { useAppTheme } from '../../../hooks/useAppTheme';
 import { useCredentialPanel } from '../useCredentialPanel';
 import { useProviderStatus } from '../hooks';
 import { OAuthConnect } from '../primitives';
@@ -12,7 +11,6 @@ import { ApiUsageSection } from '../sections';
 import type { ProviderConfig } from '../types';
 
 const OAuthPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = ({ config, visible }) => {
-  const theme = useAppTheme();
   const panel = useCredentialPanel(config, visible);
   const status = useProviderStatus(config.statusHook);
   const connected = !!status?.connected;
@@ -22,7 +20,7 @@ const OAuthPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = ({ co
       <OAuthConnect
         config={config} form={panel.form} connected={connected}
         stored={panel.stored} loading={panel.loading} error={panel.error}
-        icon={<config.icon size={parseInt(theme.iconSize.md)} />}
+        icon={<config.icon className="h-6 w-6" />}
         onSaveCredentials={() => {
           const missing = config.fields?.find(f => f.required && !panel.form.getFieldValue(f.key)?.trim());
           if (missing) { panel.setError(`${missing.label} is required`); return; }
