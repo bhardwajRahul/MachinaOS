@@ -14,24 +14,28 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { z } from 'zod';
-import { useWebSocket, ConsoleLogEntry } from '../../contexts/WebSocketContext';
-import { useAppTheme } from '../../hooks/useAppTheme';
-import { useTheme } from '../../contexts/ThemeContext';
-import { Input } from '@/components/ui/input';
 import Prism from 'prismjs';
 import 'prismjs/components/prism-json';
-
+import { ChevronDown, Send } from 'lucide-react';
+import { useWebSocket, ConsoleLogEntry } from '../../contexts/WebSocketContext';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 import { resolveNodeDescription } from '../../lib/nodeSpec';
+
 // ---------------------------------------------------------------------------
-// Inline reusable bits (kept colocated per the colocation principle — none of
-// these have a second consumer in the codebase).
+// Persisted prefs (localStorage)
 // ---------------------------------------------------------------------------
 
-/**
- * Single zod schema owns the validated shape of every persisted preference
- * the console panel keeps in localStorage. Adding a pref means one edit
- * here (default value + range), not three (state + load + save).
- */
 const consolePrefsSchema = z.object({
   panelHeight: z.number().min(80).max(2000).default(250),
   chatWidthPercent: z.number().min(20).max(80).default(50),
@@ -60,12 +64,15 @@ function saveConsolePrefs(prefs: ConsolePrefs): void {
   } catch { /* ignore */ }
 }
 
-/**
- * Imperative drag-resize wrapped as a hook. Returns a `start` handler to
- * spread on the resize handle plus a boolean for "resizing now" so the
- * cursor / userSelect overlay can be synced. Two consumers in this file
- * (vertical panel height + horizontal chat/console split).
- */
+// Font size band — matches the previous theme.fontSize.xs..xl*2 derivation.
+const MIN_FONT_SIZE = 10;
+const MAX_FONT_SIZE = 32;
+const DEFAULT_FONT_SIZE = 12;
+
+// ---------------------------------------------------------------------------
+// Drag-resize hook
+// ---------------------------------------------------------------------------
+
 function usePanelResize(opts: {
   axis: 'y' | 'x';
   cursor: 'ns-resize' | 'ew-resize';
@@ -107,11 +114,7 @@ function usePanelResize(opts: {
   return { start, isResizing };
 }
 
-// Schema-driven: a node is a chat target / console sink if its definition
-// sets the matching uiHints flag. Legacy name list kept until every node
-// is annotated.
-const LEGACY_CHAT_TRIGGER_TYPES = ['chatTrigger'];
-const LEGACY_CONSOLE_NODE_TYPES = ['console'];
+// ---------------------------------------------------------------------------
 
 interface ConsolePanelProps {
   isOpen: boolean;
@@ -119,7 +122,7 @@ interface ConsolePanelProps {
   defaultHeight?: number;
   minHeight?: number;
   maxHeight?: number;
-  nodes?: Node[];  // Workflow nodes for dropdown selection
+  nodes?: Node[];
 }
 
 const ConsolePanel: React.FC<ConsolePanelProps> = ({
@@ -128,24 +131,17 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
   // defaultHeight + maxHeight props are no longer read — defaults live in
   // consolePrefsSchema; max is computed from window.innerHeight at resize.
   // Kept on the prop type for backwards compatibility with existing callers.
-  minHeight = 100,
-  nodes = []
+  minHeight = 80,
+  nodes = [],
 }) => {
-  const theme = useAppTheme();
-  const { isDarkMode } = useTheme();
   const { consoleLogs, clearConsoleLogs, terminalLogs, clearTerminalLogs, sendChatMessage, chatMessages, clearChatMessages } = useWebSocket();
 
-  // Font size bounds derived from theme
-  const minFontSize = parseInt(theme.fontSize.xs);
-  const maxFontSize = parseInt(theme.fontSize.xl) * 2;
-  const defaultFontSize = parseInt(theme.fontSize.sm);
-
-  // Filter nodes via uiHints first, legacy name list as fallback.
+  // Workflow nodes that participate in this panel.
   const chatTriggerNodes = useMemo(() =>
     nodes.filter(n => {
       const def = n.type ? resolveNodeDescription(n.type) : undefined;
       return def?.uiHints?.isChatTrigger
-        ?? LEGACY_CHAT_TRIGGER_TYPES.includes(n.type || '');
+        ?? (n.type ? ['chatTrigger'].includes(n.type) : false);
     }),
     [nodes]
   );
@@ -153,40 +149,35 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
     nodes.filter(n => {
       const def = n.type ? resolveNodeDescription(n.type) : undefined;
       return def?.uiHints?.isConsoleSink
-        ?? LEGACY_CONSOLE_NODE_TYPES.includes(n.type || '');
+        ?? (n.type ? ['console'].includes(n.type) : false);
     }),
     [nodes]
   );
 
-  // Selected node states (stored as node ID, empty string means "all")
   const [selectedChatTriggerId, setSelectedChatTriggerId] = useState<string>('');
   const [selectedConsoleId, setSelectedConsoleId] = useState<string>('');
   const [filter, setFilter] = useState('');
   const [terminalFilter, setTerminalFilter] = useState('');
   const [terminalLogLevel, setTerminalLogLevel] = useState<'all' | 'error' | 'warning' | 'info' | 'debug'>('all');
-  // Persisted prefs (validated by zod, written through to localStorage).
-  // One `setPref` updater replaces three pairs of useState + useEffect.
+
   const [prefs, setPrefs] = useState<ConsolePrefs>(loadConsolePrefs);
   const setPref = useCallback(<K extends keyof ConsolePrefs>(key: K, value: ConsolePrefs[K]) => {
-    setPrefs((prev) => {
+    setPrefs(prev => {
       const next = { ...prev, [key]: value };
       saveConsolePrefs(next);
       return next;
     });
   }, []);
   const { autoScroll, prettyPrint, consoleTab, panelHeight, chatWidthPercent, fontSize: consoleFontSize } = prefs;
+
   const logsEndRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
 
-  // Chat input state — transient, stays as plain useState.
   const [chatInput, setChatInput] = useState('');
   const [isSending, setIsSending] = useState(false);
-
-  // Container ref for the horizontal resize math (needs the live width).
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Vertical resize: drag handle adjusts panelHeight against the viewport cap.
   const verticalResize = usePanelResize({
     axis: 'y',
     cursor: 'ns-resize',
@@ -200,8 +191,6 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
   const isResizing = verticalResize.isResizing;
   const handleResizeStart = verticalResize.start;
 
-  // Horizontal resize: drag handle adjusts chat/console split against the
-  // container width (re-read each move so window resizes don't desync).
   const horizontalResize = usePanelResize({
     axis: 'x',
     cursor: 'ew-resize',
@@ -218,24 +207,21 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
   const handleHorizontalResizeStart = horizontalResize.start;
 
   // Clamp font size on first mount so out-of-band saved values can't escape
-  // the [min, max] derived from the active theme.
+  // the [min, max] band.
   useEffect(() => {
-    if (consoleFontSize < minFontSize || consoleFontSize > maxFontSize) {
-      setPref('fontSize', defaultFontSize);
+    if (consoleFontSize < MIN_FONT_SIZE || consoleFontSize > MAX_FONT_SIZE) {
+      setPref('fontSize', DEFAULT_FONT_SIZE);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Filter console logs based on search input and selected console node
+  // ------------------------------ Filtering ------------------------------
+
   const filteredLogs = useMemo(() => {
     let logs = consoleLogs;
-
-    // Filter by selected console node (if one is selected)
     if (selectedConsoleId) {
       logs = logs.filter(log => log.node_id === selectedConsoleId);
     }
-
-    // Filter by search text
     if (filter) {
       const lowerFilter = filter.toLowerCase();
       logs = logs.filter(log =>
@@ -244,22 +230,16 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
         log.node_id.toLowerCase().includes(lowerFilter)
       );
     }
-
     return logs;
   }, [consoleLogs, filter, selectedConsoleId]);
 
-  // Filter terminal logs based on search input and log level
   const filteredTerminalLogs = useMemo(() => {
     let filtered = terminalLogs;
-
-    // Filter by log level
     if (terminalLogLevel !== 'all') {
       const levelPriority: Record<string, number> = { error: 0, warning: 1, info: 2, debug: 3 };
       const selectedPriority = levelPriority[terminalLogLevel] ?? 2;
       filtered = filtered.filter(log => (levelPriority[log.level] ?? 2) <= selectedPriority);
     }
-
-    // Filter by search text
     if (terminalFilter) {
       const lowerFilter = terminalFilter.toLowerCase();
       filtered = filtered.filter(log =>
@@ -267,40 +247,33 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
         (log.source?.toLowerCase().includes(lowerFilter))
       );
     }
-
     return filtered;
   }, [terminalLogs, terminalFilter, terminalLogLevel]);
 
-  // Auto-scroll to bottom when new logs arrive
+  // ------------------------------ Auto-scroll ------------------------------
+
   useEffect(() => {
     if (autoScroll && isOpen && logsEndRef.current) {
       logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [filteredLogs.length, autoScroll, isOpen]);
 
-  // Auto-scroll chat when new messages arrive
   useEffect(() => {
     if (isOpen && chatEndRef.current) {
       chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [chatMessages?.length, isOpen]);
 
-  const handleClearConsole = useCallback(() => {
-    clearConsoleLogs();
-  }, [clearConsoleLogs]);
+  // ------------------------------ Actions ------------------------------
 
-  const handleClearChat = useCallback(() => {
-    clearChatMessages();
-  }, [clearChatMessages]);
+  const handleClearConsole = useCallback(() => clearConsoleLogs(), [clearConsoleLogs]);
+  const handleClearChat = useCallback(() => clearChatMessages(), [clearChatMessages]);
 
-  // Handle chat message send
   const handleSendChat = useCallback(async () => {
     const message = chatInput.trim();
     if (!message || isSending) return;
-
     setIsSending(true);
     try {
-      // Pass selected chatTrigger node ID if one is selected (empty string means broadcast to all)
       await sendChatMessage(message, selectedChatTriggerId || undefined);
       setChatInput('');
     } catch (error) {
@@ -310,7 +283,6 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
     }
   }, [chatInput, isSending, sendChatMessage, selectedChatTriggerId]);
 
-  // Handle Enter key in chat input
   const handleChatKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -318,16 +290,14 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
     }
   }, [handleSendChat]);
 
+  // ------------------------------ Formatting ------------------------------
+
   const formatTimestamp = useCallback((timestamp: string) => {
     try {
       const date = new Date(timestamp);
       const timeStr = date.toLocaleTimeString('en-US', {
-        hour12: false,
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
+        hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit',
       });
-      // Add milliseconds manually
       const ms = date.getMilliseconds().toString().padStart(3, '0');
       return `${timeStr}.${ms}`;
     } catch {
@@ -335,28 +305,24 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
     }
   }, []);
 
-  const getFormatColor = useCallback((format: ConsoleLogEntry['format']) => {
+  // Returns a Tailwind text class for the log entry body. Themes that change
+  // semantic tokens automatically rotate these.
+  const getFormatTextClass = useCallback((format: ConsoleLogEntry['format']): string => {
     switch (format) {
       case 'json':
       case 'json_compact':
-        return isDarkMode ? theme.dracula.cyan : '#0891b2';
-      case 'text':
-        return isDarkMode ? theme.dracula.foreground : theme.colors.text;
+        return 'text-info';
       case 'table':
-        return isDarkMode ? theme.dracula.green : '#059669';
+        return 'text-success';
+      case 'text':
       default:
-        return theme.colors.text;
+        return 'text-foreground';
     }
-  }, [isDarkMode, theme]);
+  }, []);
 
-  // Format text for pretty printing - converts escaped newlines and formats JSON
   const formatForDisplay = useCallback((text: string): { formatted: string; isJson: boolean } => {
     if (!prettyPrint) return { formatted: text, isJson: false };
-
-    // Convert escaped newlines to actual newlines
     let formatted = text.replace(/\\n/g, '\n').replace(/\\t/g, '\t');
-
-    // Try to parse and pretty-print JSON
     const trimmed = formatted.trim();
     if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
         (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
@@ -364,292 +330,17 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
         const parsed = JSON.parse(trimmed);
         formatted = JSON.stringify(parsed, null, 2);
         return { formatted, isJson: true };
-      } catch {
-        // Not valid JSON, return with converted newlines
-      }
+      } catch { /* not valid JSON */ }
     }
-
     return { formatted, isJson: false };
   }, [prettyPrint]);
 
-  // Highlight JSON with Prism
-  const highlightJson = useCallback((code: string): string => {
-    return Prism.highlight(code, Prism.languages.json, 'json');
-  }, []);
+  const highlightJson = useCallback(
+    (code: string): string => Prism.highlight(code, Prism.languages.json, 'json'),
+    []
+  );
 
-
-  // Resize handle style
-  const resizeHandleStyle: React.CSSProperties = {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: '6px',
-    cursor: 'ns-resize',
-    backgroundColor: isResizing
-      ? (isDarkMode ? theme.dracula.purple : theme.colors.primary)
-      : 'transparent',
-    transition: isResizing ? 'none' : 'background-color 0.15s ease',
-    zIndex: 10
-  };
-
-  // Panel header with toggle
-  const panelHeaderStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '6px 12px',
-    backgroundColor: isDarkMode ? theme.dracula.currentLine : theme.colors.backgroundPanel,
-    borderTop: `1px solid ${theme.colors.border}`,
-    cursor: 'pointer',
-    userSelect: 'none'
-  };
-
-  const headerLeftStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px'
-  };
-
-  const titleStyle: React.CSSProperties = {
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.semibold,
-    color: theme.colors.text,
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px'
-  };
-
-  const badgeStyle: React.CSSProperties = {
-    backgroundColor: isDarkMode ? `${theme.dracula.purple}40` : `${theme.colors.primary}20`,
-    color: isDarkMode ? theme.dracula.purple : theme.colors.primary,
-    padding: '1px 6px',
-    borderRadius: '10px',
-    fontSize: theme.fontSize.xs,
-    fontWeight: theme.fontWeight.medium
-  };
-
-  const contentStyle: React.CSSProperties = {
-    height: isOpen ? `${panelHeight}px` : '0px',
-    maxHeight: 'calc(100vh - 90px)', // toolbar (~48px) + panel header (~42px)
-    overflow: 'hidden',
-    backgroundColor: isDarkMode ? theme.dracula.background : theme.colors.background,
-    transition: (isResizing || isHorizontalResizing) ? 'none' : 'height 0.2s ease-in-out',
-    display: 'flex',
-    flexDirection: 'row'  // Side by side
-  };
-
-  const chatSectionStyle: React.CSSProperties = {
-    width: `${chatWidthPercent}%`,
-    display: 'flex',
-    flexDirection: 'column',
-    overflow: 'hidden',
-    position: 'relative'
-  };
-
-  const consoleSectionStyle: React.CSSProperties = {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    overflow: 'hidden'
-  };
-
-  const horizontalResizeHandleStyle: React.CSSProperties = {
-    width: '6px',
-    cursor: 'ew-resize',
-    backgroundColor: isHorizontalResizing
-      ? (isDarkMode ? theme.dracula.purple : theme.colors.primary)
-      : (isDarkMode ? theme.dracula.selection : theme.colors.border),
-    transition: isHorizontalResizing ? 'none' : 'background-color 0.15s ease',
-    flexShrink: 0
-  };
-
-  const sectionHeaderStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '6px 12px',
-    backgroundColor: isDarkMode ? theme.dracula.currentLine : theme.colors.backgroundPanel,
-    borderBottom: `1px solid ${isDarkMode ? theme.dracula.selection : theme.colors.border}`,
-    minHeight: '32px'
-  };
-
-  const sectionTitleStyle: React.CSSProperties = {
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.semibold,
-    color: theme.colors.text,
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px'
-  };
-
-  const buttonStyle: React.CSSProperties = {
-    background: 'none',
-    border: 'none',
-    cursor: 'pointer',
-    padding: '2px 6px',
-    borderRadius: theme.borderRadius.sm,
-    fontSize: theme.fontSize.xs,
-    fontFamily: theme.fontFamily.sans,
-    color: theme.colors.textSecondary,
-    transition: theme.transitions.fast
-  };
-
-  const clearButtonStyle: React.CSSProperties = {
-    ...buttonStyle,
-    backgroundColor: isDarkMode ? `${theme.dracula.red}20` : `${theme.colors.error}15`,
-    color: isDarkMode ? theme.dracula.red : theme.colors.error
-  };
-
-  const filterInputStyle: React.CSSProperties = {
-    padding: '2px 6px',
-    fontSize: theme.fontSize.xs,
-    fontFamily: theme.fontFamily.sans,
-    backgroundColor: isDarkMode ? theme.dracula.background : theme.colors.background,
-    border: `1px solid ${theme.colors.border}`,
-    borderRadius: theme.borderRadius.sm,
-    color: theme.colors.text,
-    width: '100px',
-    outline: 'none'
-  };
-
-  // Shared select/dropdown style using theme
-  const selectStyle: React.CSSProperties = {
-    padding: '2px 4px',
-    fontSize: theme.fontSize.xs,
-    fontFamily: theme.fontFamily.sans,
-    backgroundColor: isDarkMode ? theme.dracula.currentLine : theme.colors.background,
-    color: theme.colors.text,
-    border: `1px solid ${isDarkMode ? theme.dracula.selection : theme.colors.border}`,
-    borderRadius: theme.borderRadius.sm,
-    cursor: 'pointer',
-    outline: 'none',
-    maxWidth: '120px'
-  };
-
-  const logEntryStyle: React.CSSProperties = {
-    display: 'flex',
-    padding: '4px 12px',
-    borderBottom: `1px solid ${isDarkMode ? theme.dracula.selection : theme.colors.border}`,
-    gap: '12px',
-    alignItems: 'flex-start'
-  };
-
-  const timestampStyle: React.CSSProperties = {
-    color: isDarkMode ? theme.dracula.comment : theme.colors.textMuted,
-    fontSize: theme.fontSize.xs,
-    whiteSpace: 'nowrap',
-    minWidth: '90px'
-  };
-
-  const labelStyle: React.CSSProperties = {
-    color: isDarkMode ? theme.dracula.yellow : theme.colors.warning,
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.medium,
-    minWidth: '80px',
-    maxWidth: '120px',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap'
-  };
-
-  const nodeInfoStyle: React.CSSProperties = {
-    color: isDarkMode ? theme.dracula.pink : theme.colors.categoryTrigger,
-    fontSize: theme.fontSize.xs,
-    fontFamily: theme.fontFamily.mono,
-    minWidth: '80px',
-    maxWidth: '120px',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-    opacity: 0.85
-  };
-
-  const emptyStyle: React.CSSProperties = {
-    padding: '24px',
-    textAlign: 'center',
-    color: theme.colors.textMuted,
-    fontSize: theme.fontSize.xs,
-    flex: 1,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center'
-  };
-
-  const chevronStyle: React.CSSProperties = {
-    transform: isOpen ? 'rotate(0deg)' : 'rotate(180deg)',
-    transition: 'transform 0.2s ease',
-    color: theme.colors.textSecondary
-  };
-
-  // Chat styles
-  const chatMessagesStyle: React.CSSProperties = {
-    flex: 1,
-    overflow: 'auto',
-    padding: '12px 16px',
-    fontFamily: theme.fontFamily.sans,
-    fontSize: consoleFontSize,
-  };
-
-  const chatInputContainerStyle: React.CSSProperties = {
-    display: 'flex',
-    gap: '10px',
-    padding: '10px 16px',
-    borderTop: `1px solid ${isDarkMode ? theme.dracula.selection : theme.colors.border}`,
-    backgroundColor: isDarkMode ? theme.dracula.currentLine : theme.colors.backgroundPanel
-  };
-
-  const chatInputStyle: React.CSSProperties = {
-    flex: 1,
-    padding: '8px 12px',
-    fontSize: theme.fontSize.sm,
-    fontFamily: theme.fontFamily.sans,
-    backgroundColor: isDarkMode ? theme.dracula.background : theme.colors.background,
-    border: `1px solid ${isDarkMode ? theme.dracula.selection : theme.colors.border}`,
-    borderRadius: '8px',
-    color: theme.colors.text,
-    outline: 'none'
-  };
-
-  const sendButtonStyle: React.CSSProperties = {
-    padding: '6px 12px',
-    fontSize: theme.fontSize.xs,
-    fontFamily: theme.fontFamily.sans,
-    fontWeight: theme.fontWeight.medium,
-    backgroundColor: isDarkMode ? theme.dracula.green : theme.colors.success,
-    color: isDarkMode ? theme.dracula.background : 'white',
-    border: 'none',
-    borderRadius: '6px',
-    cursor: isSending ? 'not-allowed' : 'pointer',
-    opacity: isSending ? 0.7 : 1,
-    transition: 'all 0.15s ease'
-  };
-
-  const chatMessageStyle = (isUser: boolean): React.CSSProperties => ({
-    padding: '8px 12px',
-    marginBottom: '8px',
-    borderRadius: isUser ? '12px 12px 4px 12px' : '12px 12px 12px 4px',
-    backgroundColor: isUser
-      ? (isDarkMode ? `${theme.dracula.purple}40` : `${theme.colors.primary}20`)
-      : (isDarkMode ? theme.dracula.selection : theme.colors.backgroundPanel),
-    maxWidth: '80%',
-    marginLeft: isUser ? 'auto' : '0',
-    marginRight: isUser ? '0' : 'auto',
-    wordBreak: 'break-word',
-    boxShadow: isDarkMode ? 'none' : '0 1px 2px rgba(0,0,0,0.05)'
-  });
-
-  const chatMessageTextStyle: React.CSSProperties = {
-    fontSize: theme.fontSize.sm,
-    color: theme.colors.text,
-    margin: 0
-  };
-
-  const chatMessageTimeStyle: React.CSSProperties = {
-    fontSize: theme.fontSize.xs,
-    color: theme.colors.textMuted,
-    marginTop: '2px'
-  };
+  // ------------------------------ Render ------------------------------
 
   return (
     <div
@@ -657,313 +348,292 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
       onWheel={e => {
         // Prevent scroll from propagating to the canvas/page when the cursor
         // is over the panel header, resize handle, or non-scrollable areas.
-        // Scrollable children (chat messages, console logs) handle their own scroll.
         const target = e.target as HTMLElement;
         const scrollable = target.closest('[data-scrollable]');
         if (!scrollable) e.stopPropagation();
       }}
     >
-      {/* Prism syntax highlighting styles for JSON */}
-
-      {/* Resize Handle - Only visible when open */}
+      {/* Top resize handle - only visible when open */}
       {isOpen && (
         <div
-          style={resizeHandleStyle}
           onMouseDown={handleResizeStart}
-          onMouseEnter={e => {
-            if (!isResizing) {
-              e.currentTarget.style.backgroundColor = isDarkMode
-                ? `${theme.dracula.purple}40`
-                : `${theme.colors.primary}30`;
-            }
-          }}
-          onMouseLeave={e => {
-            if (!isResizing) {
-              e.currentTarget.style.backgroundColor = 'transparent';
-            }
-          }}
+          className={cn(
+            'absolute top-0 right-0 left-0 z-10 h-1.5 cursor-ns-resize transition-colors',
+            isResizing ? 'bg-node-agent transition-none' : 'hover:bg-node-agent-soft'
+          )}
         />
       )}
 
-      {/* Panel Header - Always visible */}
+      {/* Panel Header */}
       <div
-        style={panelHeaderStyle}
         onClick={onToggle}
+        className="flex cursor-pointer items-center justify-between border-t border-border bg-card px-3 py-1.5 select-none"
       >
-        <div style={headerLeftStyle}>
-          <span style={chevronStyle}>
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
-              <path d="M2 4L6 8L10 4" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </span>
-          <span style={titleStyle}>
+        <div className="flex items-center gap-2">
+          <ChevronDown
+            className={cn(
+              'h-3 w-3 text-muted-foreground transition-transform',
+              !isOpen && 'rotate-180'
+            )}
+          />
+          <span className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
             Chat / Console
             {(consoleLogs.length > 0 || (chatMessages && chatMessages.length > 0)) && (
-              <span style={badgeStyle}>
+              <Badge variant="secondary" className="text-xs">
                 {consoleLogs.length + (chatMessages?.length || 0)}
-              </span>
+              </Badge>
             )}
           </span>
         </div>
       </div>
 
-      {/* Panel Content - Resizable Split */}
-      <div ref={containerRef} style={contentStyle}>
-        {/* Chat Section - Left */}
-        <div style={chatSectionStyle}>
-          <div style={sectionHeaderStyle}>
+      {/* Panel Content - resizable horizontal split */}
+      <div
+        ref={containerRef}
+        style={{ height: isOpen ? `${panelHeight}px` : '0px' }}
+        className={cn(
+          'flex flex-row overflow-hidden bg-background',
+          'max-h-[calc(100vh-90px)]',
+          (isResizing || isHorizontalResizing) ? '[transition:none]' : 'transition-[height] duration-200 ease-in-out'
+        )}
+      >
+        {/* ===================== Chat Section (left) ===================== */}
+        <div
+          style={{ width: `${chatWidthPercent}%` }}
+          className="relative flex flex-col overflow-hidden"
+        >
+          {/* Header */}
+          <div className="flex min-h-[32px] items-center justify-between border-b border-border bg-card px-3 py-1.5">
             <div className="flex items-center gap-2">
-              <span style={sectionTitleStyle}>
+              <span className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
                 Chat
                 {chatMessages && chatMessages.length > 0 && (
-                  <span style={{
-                    ...badgeStyle,
-                    backgroundColor: isDarkMode ? `${theme.dracula.green}40` : `${theme.colors.success}20`,
-                    color: isDarkMode ? theme.dracula.green : theme.colors.success
-                  }}>
-                    {chatMessages.length}
-                  </span>
+                  <Badge variant="success" className="text-xs">{chatMessages.length}</Badge>
                 )}
               </span>
-              {/* ChatTrigger node selector dropdown */}
               {chatTriggerNodes.length > 0 && (
-                <select
-                  value={selectedChatTriggerId}
-                  onChange={e => setSelectedChatTriggerId(e.target.value)}
-                  onClick={e => e.stopPropagation()}
-                  style={selectStyle}
-                  title="Select chatTrigger node to target"
+                <Select
+                  value={selectedChatTriggerId || '__all__'}
+                  onValueChange={(v) => setSelectedChatTriggerId(v === '__all__' ? '' : v)}
                 >
-                  <option value="">All Triggers</option>
-                  {chatTriggerNodes.map(node => (
-                    <option key={node.id} value={node.id}>
-                      {node.data?.label || node.id}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger
+                    className="h-6 max-w-[120px] text-xs"
+                    onClick={(e) => e.stopPropagation()}
+                    title="Select chatTrigger node to target"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">All Triggers</SelectItem>
+                    {chatTriggerNodes.map(node => (
+                      <SelectItem key={node.id} value={node.id}>
+                        {node.data?.label || node.id}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               )}
             </div>
             {chatMessages && chatMessages.length > 0 && (
-              <button
-                style={clearButtonStyle}
+              <Button
+                variant="outline"
+                size="xs"
                 onClick={handleClearChat}
-                onMouseEnter={e => {
-                  e.currentTarget.style.backgroundColor = isDarkMode ? `${theme.dracula.red}35` : `${theme.colors.error}25`;
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.backgroundColor = isDarkMode ? `${theme.dracula.red}20` : `${theme.colors.error}15`;
-                }}
+                className="border-destructive/40 text-destructive hover:bg-destructive/10"
               >
                 Clear
-              </button>
+              </Button>
             )}
           </div>
-          <div data-scrollable style={chatMessagesStyle}>
+
+          {/* Messages */}
+          <div
+            data-scrollable
+            style={{ fontSize: consoleFontSize }}
+            className="flex-1 overflow-auto px-4 py-3"
+          >
             {(!chatMessages || chatMessages.length === 0) ? (
-              <div style={emptyStyle}>
+              <div className="flex h-full items-center justify-center p-6 text-center text-xs text-muted-foreground">
                 Send a message to trigger chatTrigger nodes
               </div>
             ) : (
               <div className="flex flex-col gap-1">
-                {chatMessages.map((msg, index) => (
-                  <div key={`${msg.timestamp}-${index}`} style={chatMessageStyle(msg.role === 'user')}>
-                    {msg.role === 'user' ? (
-                      <pre style={{
-                        ...chatMessageTextStyle,
-                        margin: 0,
-                        whiteSpace: 'pre-wrap',
-                        wordBreak: 'break-word',
-                        lineHeight: 1.15,
-                        fontFamily: 'inherit',
-                        fontSize: 'inherit'
-                      }}>
-                        {msg.message}
-                      </pre>
-                    ) : (
-                      <div className="chat-markdown" style={{ ...chatMessageTextStyle, lineHeight: 1.4 }}>
-                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
+                {chatMessages.map((msg, index) => {
+                  const isUser = msg.role === 'user';
+                  return (
+                    <div
+                      key={`${msg.timestamp}-${index}`}
+                      className={cn(
+                        'max-w-[80%] px-3 py-2 break-words',
+                        isUser
+                          ? 'mr-0 ml-auto rounded-l-xl rounded-tr-xl rounded-br-sm bg-node-agent-soft'
+                          : 'mr-auto ml-0 rounded-r-xl rounded-tl-xl rounded-bl-sm bg-card'
+                      )}
+                    >
+                      {isUser ? (
+                        <pre className="m-0 leading-tight font-[inherit] text-[length:inherit] whitespace-pre-wrap break-words text-foreground">
                           {msg.message}
-                        </ReactMarkdown>
+                        </pre>
+                      ) : (
+                        <div className="chat-markdown text-sm leading-snug text-foreground">
+                          <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
+                            {msg.message}
+                          </ReactMarkdown>
+                        </div>
+                      )}
+                      <div className="mt-0.5 text-xs text-muted-foreground">
+                        {formatTimestamp(msg.timestamp)}
                       </div>
-                    )}
-                    <div style={chatMessageTimeStyle}>
-                      {formatTimestamp(msg.timestamp)}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
                 <div ref={chatEndRef} />
               </div>
             )}
           </div>
-          <div style={chatInputContainerStyle}>
-            <input
+
+          {/* Input */}
+          <div className="flex items-center gap-2 border-t border-border bg-card px-4 py-2.5">
+            <Input
               ref={chatInputRef}
               type="text"
               placeholder="Type a message..."
               value={chatInput}
-              onChange={e => setChatInput(e.target.value)}
+              onChange={(e) => setChatInput(e.target.value)}
               onKeyDown={handleChatKeyDown}
-              style={chatInputStyle}
               disabled={isSending}
+              className="flex-1"
             />
-            <button
-              style={sendButtonStyle}
+            <Button
+              variant="default"
+              size="sm"
               onClick={handleSendChat}
               disabled={isSending || !chatInput.trim()}
             >
+              <Send className="h-3.5 w-3.5" />
               {isSending ? '...' : 'Send'}
-            </button>
+            </Button>
           </div>
         </div>
 
-        {/* Horizontal Resize Handle */}
+        {/* Horizontal resize handle */}
         <div
-          style={horizontalResizeHandleStyle}
           onMouseDown={handleHorizontalResizeStart}
-          onMouseEnter={e => {
-            if (!isHorizontalResizing) {
-              e.currentTarget.style.backgroundColor = isDarkMode
-                ? `${theme.dracula.purple}60`
-                : `${theme.colors.primary}40`;
-            }
-          }}
-          onMouseLeave={e => {
-            if (!isHorizontalResizing) {
-              e.currentTarget.style.backgroundColor = isDarkMode
-                ? theme.dracula.selection
-                : theme.colors.border;
-            }
-          }}
+          className={cn(
+            'w-1.5 shrink-0 cursor-ew-resize transition-colors',
+            isHorizontalResizing
+              ? 'bg-node-agent transition-none'
+              : 'bg-border hover:bg-node-agent-soft'
+          )}
         />
 
-        {/* Console/Terminal Section - Right */}
-        <div style={consoleSectionStyle}>
-          <div style={sectionHeaderStyle}>
-            {/* Tab Buttons */}
+        {/* ===================== Console / Terminal Section (right) ===================== */}
+        <div className="flex flex-1 flex-col overflow-hidden">
+          {/* Header with tabs + filters */}
+          <div className="flex min-h-[32px] items-center justify-between border-b border-border bg-card px-3 py-1.5">
+            {/* Tab buttons */}
             <div className="flex items-center gap-1">
               <button
                 onClick={() => setPref('consoleTab', 'console')}
-                style={{
-                  ...buttonStyle,
-                  padding: '3px 8px',
-                  backgroundColor: consoleTab === 'console'
-                    ? (isDarkMode ? `${theme.dracula.purple}40` : `${theme.colors.primary}20`)
-                    : 'transparent',
-                  color: consoleTab === 'console'
-                    ? (isDarkMode ? theme.dracula.purple : theme.colors.primary)
-                    : theme.colors.textSecondary,
-                  fontWeight: consoleTab === 'console' ? '600' : '400',
-                  borderRadius: '4px'
-                }}
+                className={cn(
+                  'flex items-center gap-1 rounded-sm px-2 py-0.5 text-xs transition-colors',
+                  consoleTab === 'console'
+                    ? 'bg-node-agent-soft font-semibold text-node-agent'
+                    : 'text-muted-foreground hover:bg-muted'
+                )}
               >
                 Console
                 {consoleLogs.length > 0 && (
-                  <span style={{ ...badgeStyle, marginLeft: '4px', padding: '0 4px' }}>{consoleLogs.length}</span>
+                  <Badge variant="secondary" className="ml-1 px-1 text-xs">{consoleLogs.length}</Badge>
                 )}
               </button>
               <button
                 onClick={() => setPref('consoleTab', 'terminal')}
-                style={{
-                  ...buttonStyle,
-                  padding: '3px 8px',
-                  backgroundColor: consoleTab === 'terminal'
-                    ? (isDarkMode ? `${theme.dracula.cyan}40` : `${theme.colors.info}20`)
-                    : 'transparent',
-                  color: consoleTab === 'terminal'
-                    ? (isDarkMode ? theme.dracula.cyan : theme.colors.info)
-                    : theme.colors.textSecondary,
-                  fontWeight: consoleTab === 'terminal' ? '600' : '400',
-                  borderRadius: '4px'
-                }}
+                className={cn(
+                  'flex items-center gap-1 rounded-sm px-2 py-0.5 text-xs transition-colors',
+                  consoleTab === 'terminal'
+                    ? 'bg-node-model-soft font-semibold text-node-model'
+                    : 'text-muted-foreground hover:bg-muted'
+                )}
               >
                 Terminal
                 {terminalLogs.length > 0 && (
-                  <span style={{
-                    ...badgeStyle,
-                    marginLeft: '4px',
-                    padding: '0 4px',
-                    backgroundColor: isDarkMode ? `${theme.dracula.cyan}40` : `${theme.colors.info}20`,
-                    color: isDarkMode ? theme.dracula.cyan : theme.colors.info
-                  }}>{terminalLogs.length}</span>
+                  <Badge variant="info" className="ml-1 px-1 text-xs">{terminalLogs.length}</Badge>
                 )}
               </button>
             </div>
+
             <div className="flex items-center gap-1.5">
               {consoleTab === 'terminal' && (
-                <select
+                <Select
                   value={terminalLogLevel}
-                  onChange={e => setTerminalLogLevel(e.target.value as 'all' | 'error' | 'warning' | 'info' | 'debug')}
-                  onClick={e => e.stopPropagation()}
-                  style={selectStyle}
+                  onValueChange={(v) => setTerminalLogLevel(v as 'all' | 'error' | 'warning' | 'info' | 'debug')}
                 >
-                  <option value="all">All Levels</option>
-                  <option value="error">Error</option>
-                  <option value="warning">Warning+</option>
-                  <option value="info">Info+</option>
-                  <option value="debug">Debug+</option>
-                </select>
+                  <SelectTrigger
+                    className="h-6 max-w-[120px] text-xs"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Levels</SelectItem>
+                    <SelectItem value="error">Error</SelectItem>
+                    <SelectItem value="warning">Warning+</SelectItem>
+                    <SelectItem value="info">Info+</SelectItem>
+                    <SelectItem value="debug">Debug+</SelectItem>
+                  </SelectContent>
+                </Select>
               )}
-              {/* Console node selector dropdown */}
               {consoleTab === 'console' && consoleNodes.length > 0 && (
-                <select
-                  value={selectedConsoleId}
-                  onChange={e => setSelectedConsoleId(e.target.value)}
-                  onClick={e => e.stopPropagation()}
-                  style={selectStyle}
-                  title="Filter logs by Console node"
+                <Select
+                  value={selectedConsoleId || '__all__'}
+                  onValueChange={(v) => setSelectedConsoleId(v === '__all__' ? '' : v)}
                 >
-                  <option value="">All Consoles</option>
-                  {consoleNodes.map(node => (
-                    <option key={node.id} value={node.id}>
-                      {node.data?.label || node.id}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger
+                    className="h-6 max-w-[120px] text-xs"
+                    onClick={(e) => e.stopPropagation()}
+                    title="Filter logs by Console node"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">All Consoles</SelectItem>
+                    {consoleNodes.map(node => (
+                      <SelectItem key={node.id} value={node.id}>
+                        {node.data?.label || node.id}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               )}
-              <input
+              <Input
                 type="text"
                 placeholder="Filter..."
                 value={consoleTab === 'console' ? filter : terminalFilter}
-                onChange={e => consoleTab === 'console' ? setFilter(e.target.value) : setTerminalFilter(e.target.value)}
-                style={filterInputStyle}
-                onClick={e => e.stopPropagation()}
+                onChange={(e) => consoleTab === 'console' ? setFilter(e.target.value) : setTerminalFilter(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                className="h-6 w-[100px] text-xs"
               />
-              <label
-                style={{
-                  ...buttonStyle,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '3px',
-                  cursor: 'pointer'
-                }}
-              >
-                <input
-                  type="checkbox"
+              <label className="flex cursor-pointer items-center gap-1 rounded-sm px-1.5 py-0.5 text-xs text-muted-foreground">
+                <Checkbox
                   checked={autoScroll}
-                  onChange={e => setPref('autoScroll', e.target.checked)}
-                  className="h-3 w-3 cursor-pointer"
+                  onCheckedChange={(checked) => setPref('autoScroll', checked === true)}
+                  className="h-3 w-3"
                 />
                 Auto
               </label>
               {consoleTab === 'console' && (
                 <label
-                  style={{
-                    ...buttonStyle,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '3px',
-                    cursor: 'pointer',
-                    backgroundColor: prettyPrint
-                      ? (isDarkMode ? `${theme.dracula.cyan}30` : `${theme.colors.info}20`)
-                      : 'transparent'
-                  }}
+                  className={cn(
+                    'flex cursor-pointer items-center gap-1 rounded-sm px-1.5 py-0.5 text-xs text-muted-foreground transition-colors',
+                    prettyPrint && 'bg-node-model-soft text-node-model'
+                  )}
                   title="Format JSON and convert escaped newlines"
                 >
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={prettyPrint}
-                    onChange={e => setPref('prettyPrint', e.target.checked)}
-                    className="h-3 w-3 cursor-pointer"
+                    onCheckedChange={(checked) => setPref('prettyPrint', checked === true)}
+                    className="h-3 w-3"
                   />
                   Pretty
                 </label>
@@ -975,44 +645,56 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
                   const v = Number(e.target.value);
                   if (!Number.isNaN(v)) setPref('fontSize', v);
                 }}
-                min={minFontSize}
-                max={maxFontSize}
+                min={MIN_FONT_SIZE}
+                max={MAX_FONT_SIZE}
                 className="h-7 w-14 text-xs"
               />
               {((consoleTab === 'console' && consoleLogs.length > 0) || (consoleTab === 'terminal' && terminalLogs.length > 0)) && (
-                <button
-                  style={clearButtonStyle}
+                <Button
+                  variant="outline"
+                  size="xs"
                   onClick={consoleTab === 'console' ? handleClearConsole : clearTerminalLogs}
-                  onMouseEnter={e => {
-                    e.currentTarget.style.backgroundColor = isDarkMode ? `${theme.dracula.red}35` : `${theme.colors.error}25`;
-                  }}
-                  onMouseLeave={e => {
-                    e.currentTarget.style.backgroundColor = isDarkMode ? `${theme.dracula.red}20` : `${theme.colors.error}15`;
-                  }}
+                  className="border-destructive/40 text-destructive hover:bg-destructive/10"
                 >
                   Clear
-                </button>
+                </Button>
               )}
             </div>
           </div>
-          <div data-scrollable style={{ flex: 1, overflow: 'auto', fontFamily: theme.fontFamily.mono, fontSize: consoleFontSize }}>
+
+          {/* Logs body */}
+          <div
+            data-scrollable
+            style={{ fontSize: consoleFontSize }}
+            className="flex-1 overflow-auto font-mono"
+          >
             {consoleTab === 'console' ? (
-              // Console Logs Tab
               filteredLogs.length === 0 ? (
-                <div style={emptyStyle}>
+                <div className="flex h-full items-center justify-center p-6 text-center text-xs text-muted-foreground">
                   {consoleLogs.length === 0
                     ? 'Add a Console node to see debug output'
                     : 'No logs match the filter'}
                 </div>
               ) : (
                 filteredLogs.slice().reverse().map((log, index) => (
-                  <div key={`${log.node_id}-${log.timestamp}-${index}`} style={logEntryStyle}>
-                    <span style={timestampStyle}>{formatTimestamp(log.timestamp)}</span>
-                    <span style={labelStyle} title={log.label || log.node_id}>
+                  <div
+                    key={`${log.node_id}-${log.timestamp}-${index}`}
+                    className="flex items-start gap-3 border-b border-border px-3 py-1"
+                  >
+                    <span className="min-w-[90px] text-xs whitespace-nowrap text-muted-foreground">
+                      {formatTimestamp(log.timestamp)}
+                    </span>
+                    <span
+                      className="min-w-[80px] max-w-[120px] truncate text-sm font-medium text-warning"
+                      title={log.label || log.node_id}
+                    >
                       {log.label || log.node_id}
                     </span>
                     {log.source_node_label && (
-                      <span style={nodeInfoStyle} title={`Source: ${log.source_node_type} (${log.source_node_id})`}>
+                      <span
+                        className="min-w-[80px] max-w-[120px] truncate font-mono text-xs text-node-trigger opacity-85"
+                        title={`Source: ${log.source_node_type} (${log.source_node_id})`}
+                      >
                         {log.source_node_label}
                       </span>
                     )}
@@ -1021,52 +703,36 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
                       if (isJson && prettyPrint) {
                         return (
                           <pre
-                            className="console-json-output m-0 flex-1 overflow-auto whitespace-pre-wrap break-words"
+                            className="code-editor-container m-0 flex-1 overflow-auto whitespace-pre-wrap break-words"
                             dangerouslySetInnerHTML={{ __html: highlightJson(formatted) }}
                           />
                         );
                       } else if (!isJson && prettyPrint) {
-                        // Render markdown when Pretty Print is enabled for non-JSON text
                         return (
-                          <div
-                            className="chat-markdown"
-                            style={{
-                              flex: 1,
-                              overflow: 'auto',
-                              color: getFormatColor(log.format),
-                              lineHeight: 1.4,
-                            }}
-                          >
-                            <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{formatted}</ReactMarkdown>
+                          <div className={cn('chat-markdown flex-1 overflow-auto leading-snug', getFormatTextClass(log.format))}>
+                            <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
+                              {formatted}
+                            </ReactMarkdown>
                           </div>
                         );
-                      } else {
-                        return (
-                          <pre
-                            style={{
-                              margin: 0,
-                              flex: 1,
-                              overflow: 'auto',
-                              color: getFormatColor(log.format),
-                              whiteSpace: 'pre-wrap',
-                              wordBreak: 'break-word',
-                              lineHeight: 1.15,
-                              fontFamily: 'inherit',
-                              fontSize: 'inherit'
-                            }}
-                          >
-                            {formatted}
-                          </pre>
-                        );
                       }
+                      return (
+                        <pre
+                          className={cn(
+                            'm-0 flex-1 overflow-auto leading-tight font-[inherit] text-[length:inherit] whitespace-pre-wrap break-words',
+                            getFormatTextClass(log.format)
+                          )}
+                        >
+                          {formatted}
+                        </pre>
+                      );
                     })()}
                   </div>
                 ))
               )
             ) : (
-              // Terminal Logs Tab
               filteredTerminalLogs.length === 0 ? (
-                <div style={emptyStyle}>
+                <div className="flex h-full items-center justify-center p-6 text-center text-xs text-muted-foreground">
                   {terminalLogs.length === 0
                     ? 'Server logs will appear here'
                     : 'No logs match the filter'}
@@ -1074,37 +740,22 @@ const ConsolePanel: React.FC<ConsolePanelProps> = ({
               ) : (
                 <div className="min-w-max">
                   {filteredTerminalLogs.slice().reverse().map((log, index) => (
-                    <div key={`${log.timestamp}-${index}`} style={{
-                      padding: '3px 12px',
-                      borderBottom: `1px solid ${isDarkMode ? theme.dracula.selection : theme.colors.border}`,
-                      backgroundColor: log.level === 'error'
-                        ? (isDarkMode ? `${theme.dracula.red}10` : `${theme.colors.error}05`)
-                        : log.level === 'warning'
-                          ? (isDarkMode ? `${theme.dracula.orange}10` : `${theme.colors.warning}05`)
-                          : 'transparent',
-                      whiteSpace: 'nowrap'
-                    }}>
-                      <span style={{
-                        color: isDarkMode ? theme.dracula.comment : theme.colors.textMuted,
-                        fontSize: theme.fontSize.xs
-                      }}>{formatTimestamp(log.timestamp)}</span>
-                      {log.source && (
-                        <span style={{
-                          color: isDarkMode ? theme.dracula.cyan : theme.colors.info,
-                          fontSize: theme.fontSize.xs,
-                          marginLeft: theme.spacing.sm
-                        }}>
-                          [{log.source}]
-                        </span>
+                    <div
+                      key={`${log.timestamp}-${index}`}
+                      className={cn(
+                        'border-b border-border px-3 py-0.5 whitespace-nowrap',
+                        log.level === 'error' && 'bg-destructive/10',
+                        log.level === 'warning' && 'bg-warning/10'
                       )}
-                      <span style={{
-                        color: theme.colors.text,
-                        fontSize: theme.fontSize.sm,
-                        marginLeft: theme.spacing.sm
-                      }}>
+                    >
+                      <span className="text-xs text-muted-foreground">{formatTimestamp(log.timestamp)}</span>
+                      {log.source && (
+                        <span className="ml-2 text-xs text-info">[{log.source}]</span>
+                      )}
+                      <span className="ml-2 text-sm text-foreground">
                         {log.message}
                         {log.details && (
-                          <span style={{ color: isDarkMode ? theme.dracula.comment : theme.colors.textMuted, marginLeft: theme.spacing.sm }}>
+                          <span className="ml-2 text-muted-foreground">
                             {typeof log.details === 'string' ? log.details : JSON.stringify(log.details)}
                           </span>
                         )}
