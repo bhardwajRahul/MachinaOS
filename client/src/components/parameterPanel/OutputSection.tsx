@@ -1,6 +1,5 @@
 import React from 'react';
 import OutputPanel from '../output/OutputPanel';
-import { useAppTheme } from '../../hooks/useAppTheme';
 import { ExecutionResult } from '../../services/executionService';
 import { Node } from 'reactflow';
 import { useWebSocket } from '../../contexts/WebSocketContext';
@@ -18,7 +17,6 @@ const OutputSection: React.FC<OutputSectionProps> = ({
   onClearResults,
   visible = true
 }) => {
-  const theme = useAppTheme();
   const { nodeStatuses } = useWebSocket();
 
   if (!visible) {
@@ -62,15 +60,7 @@ const OutputSection: React.FC<OutputSectionProps> = ({
   }, [executionResults, nodeStatuses, selectedNode.id, selectedNode.type]);
 
   return (
-    <div style={{
-      backgroundColor: theme.colors.backgroundPanel,
-      display: 'flex',
-      flexDirection: 'column',
-      width: '100%',
-      height: '100%',
-      overflow: 'hidden',
-      position: 'relative'
-    }}>
+    <div className="relative flex h-full w-full flex-col overflow-hidden bg-card">
       <OutputPanel
         results={combinedResults}
         onClear={onClearResults}

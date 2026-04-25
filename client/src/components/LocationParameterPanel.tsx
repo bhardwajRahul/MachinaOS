@@ -3,11 +3,9 @@ import Modal from './ui/Modal';
 import LocationPanelLayout from './parameterPanel/LocationPanelLayout';
 import { useParameterPanel } from '../hooks/useParameterPanel';
 import { ExecutionService } from '../services/executionService';
-import { useAppTheme } from '../hooks/useAppTheme';
 import { ActionButton } from './ui/action-button';
 
 const LocationParameterPanel: React.FC = () => {
-  const theme = useAppTheme();
   const {
     selectedNode,
     nodeDefinition,
@@ -67,7 +65,7 @@ const LocationParameterPanel: React.FC = () => {
       <div className="flex items-center gap-2 text-[15px] font-semibold text-foreground">
         <span>{nodeDefinition.icon}</span>
         <span>{nodeDefinition.displayName}</span>
-        {hasUnsavedChanges && <span style={{ color: theme.accent.orange }}>*</span>}
+        {hasUnsavedChanges && <span className="text-warning">*</span>}
       </div>
       <div className="flex items-center gap-2">
         {canExecute && (

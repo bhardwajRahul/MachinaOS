@@ -437,3 +437,35 @@ html {
 .dark .chat-markdown hr {
   border-top-color: hsl(var(--dracula-selection));
 }
+
+/* ============================================================================
+ * Prism syntax-highlighting palette — used by react-simple-code-editor.
+ * Token roles map to existing dracula tokens; future themes can override
+ * each --prism-* var in their own scope.
+ * ============================================================================ */
+
+:root {
+  --prism-comment:     var(--dracula-comment);
+  --prism-string:      var(--dracula-yellow);
+  --prism-keyword:     var(--dracula-pink);
+  --prism-function:    var(--dracula-green);
+  --prism-number:      var(--dracula-purple);
+  --prism-operator:    var(--dracula-pink);
+  --prism-class-name:  var(--dracula-cyan);
+  --prism-builtin:     var(--dracula-cyan);
+  --prism-boolean:     var(--dracula-purple);
+  --prism-punctuation: var(--foreground);
+}
+
+.code-editor-container .token.comment     { color: hsl(var(--prism-comment)); }
+.code-editor-container .token.string      { color: hsl(var(--prism-string)); }
+.code-editor-container .token.keyword     { color: hsl(var(--prism-keyword)); }
+.code-editor-container .token.function    { color: hsl(var(--prism-function)); }
+.code-editor-container .token.number      { color: hsl(var(--prism-number)); }
+.code-editor-container .token.operator    { color: hsl(var(--prism-operator)); }
+.code-editor-container .token.class-name  { color: hsl(var(--prism-class-name)); }
+.code-editor-container .token.builtin     { color: hsl(var(--prism-builtin)); }
+.code-editor-container .token.boolean     { color: hsl(var(--prism-boolean)); }
+.code-editor-container .token.punctuation { color: hsl(var(--prism-punctuation)); }
+.code-editor-container textarea           { outline: none !important; caret-color: hsl(var(--foreground)); }
+.code-editor-container textarea::placeholder { color: hsl(var(--muted-foreground)); }

@@ -7,7 +7,6 @@ import { Eye, EyeOff, Save, Trash2, CheckCircle, Loader2 } from 'lucide-react';
 
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { useAppTheme } from '../../hooks/useAppTheme';
 
 interface ApiKeyInputProps {
   value: string;
@@ -34,7 +33,6 @@ const ApiKeyInput: React.FC<ApiKeyInputProps> = ({
   saveLabel = 'Validate',
   savedLabel = 'Valid',
 }) => {
-  const theme = useAppTheme();
   const [visible, setVisible] = useState(false);
 
   return (
@@ -59,14 +57,9 @@ const ApiKeyInput: React.FC<ApiKeyInputProps> = ({
       </div>
 
       <Button
-        variant="outline"
+        variant="default"
         onClick={onSave}
         disabled={!value.trim() || disabled || loading}
-        style={{
-          backgroundColor: `${theme.dracula.green}25`,
-          borderColor: `${theme.dracula.green}60`,
-          color: theme.dracula.green,
-        }}
       >
         {loading ? (
           <Loader2 className="h-4 w-4 animate-spin" />
@@ -80,15 +73,10 @@ const ApiKeyInput: React.FC<ApiKeyInputProps> = ({
 
       {isStored && onDelete && (
         <Button
-          variant="outline"
+          variant="destructive"
           size="icon"
           onClick={onDelete}
           disabled={disabled}
-          style={{
-            backgroundColor: `${theme.dracula.pink}25`,
-            borderColor: `${theme.dracula.pink}60`,
-            color: theme.dracula.pink,
-          }}
         >
           <Trash2 className="h-4 w-4" />
         </Button>

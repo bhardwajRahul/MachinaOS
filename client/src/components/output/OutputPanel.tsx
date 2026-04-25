@@ -130,10 +130,7 @@ export default function OutputPanel({ results, onClear, selectedNode }: Props) {
         <div className="space-y-0">
           {response && (
             <Section label="Response" defaultOpen>
-              <div
-                className="prose prose-sm dark:prose-invert max-w-none"
-                style={{ whiteSpace: 'pre-wrap' }}
-              >
+              <div className="prose prose-sm max-w-none whitespace-pre-wrap dark:prose-invert">
                 <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
                   {fmt(typeof response === 'string' ? response : JSON.stringify(response, null, 2))}
                 </ReactMarkdown>
@@ -143,10 +140,7 @@ export default function OutputPanel({ results, onClear, selectedNode }: Props) {
 
           {thinking && (
             <Section label="Thinking">
-              <div
-                className="prose prose-sm dark:prose-invert max-w-none max-h-[300px] overflow-auto"
-                style={{ whiteSpace: 'pre-wrap' }}
-              >
+              <div className="prose prose-sm max-h-[300px] max-w-none overflow-auto whitespace-pre-wrap dark:prose-invert">
                 <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
                   {fmt(thinking)}
                 </ReactMarkdown>

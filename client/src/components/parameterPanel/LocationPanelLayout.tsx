@@ -28,10 +28,10 @@ const LocationPanelLayout: React.FC<LocationPanelLayoutProps> = ({
   showInputSection = true
 }) => {
   return (
-    <div style={{ display: 'flex', height: '100%', minHeight: 0 }}>
+    <div className="flex h-full min-h-0">
       {/* Left: Input Nodes JSON Data */}
       {showInputSection && (
-        <div style={{ flex: 1, height: '100%', overflow: 'hidden' }}>
+        <div className="h-full flex-1 overflow-hidden">
           <InputSection
             nodeId={selectedNode.id}
             visible={showInputSection}
@@ -40,7 +40,7 @@ const LocationPanelLayout: React.FC<LocationPanelLayoutProps> = ({
       )}
 
       {/* Middle: Parameter Content */}
-      <div style={{ flex: 1, height: '100%', overflow: 'hidden' }}>
+      <div className="h-full flex-1 overflow-hidden">
         <MiddleSection
           nodeId={selectedNode.id}
           nodeDefinition={nodeDefinition}
@@ -50,7 +50,7 @@ const LocationPanelLayout: React.FC<LocationPanelLayoutProps> = ({
       </div>
 
       {/* Right: Maps Section */}
-      <div style={{ flex: 1, height: '100%', overflow: 'hidden' }}>
+      <div className="h-full flex-1 overflow-hidden">
         <MapsSection
           selectedNode={selectedNode}
           nodeDefinition={nodeDefinition}

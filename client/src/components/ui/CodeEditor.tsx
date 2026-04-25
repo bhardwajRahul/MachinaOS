@@ -5,7 +5,6 @@ import 'prismjs/components/prism-python';
 import 'prismjs/components/prism-javascript';
 import 'prismjs/components/prism-typescript';
 import 'prismjs/components/prism-markdown';
-import { useAppTheme } from '../../hooks/useAppTheme';
 
 interface CodeEditorProps {
   value: string;
@@ -20,10 +19,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   language = 'python',
   placeholder
 }) => {
-  const theme = useAppTheme();
-
   const handleChange = (newValue: string) => {
-    console.log('[CodeEditor] Value changed, length:', newValue.length);
     onChange(newValue);
   };
 
@@ -33,27 +29,8 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   };
 
   return (
-    <div style={{
-      height: '100%',
-      borderRadius: theme.borderRadius.md,
-      overflow: 'auto',
-      border: `1px solid ${theme.colors.border}`
-    }}>
-      <style>{`
-        .code-editor-container .token.comment { color: ${theme.dracula.comment}; }
-        .code-editor-container .token.string { color: ${theme.dracula.yellow}; }
-        .code-editor-container .token.keyword { color: ${theme.dracula.pink}; }
-        .code-editor-container .token.function { color: ${theme.dracula.green}; }
-        .code-editor-container .token.number { color: ${theme.dracula.purple}; }
-        .code-editor-container .token.operator { color: ${theme.dracula.pink}; }
-        .code-editor-container .token.class-name { color: ${theme.dracula.cyan}; }
-        .code-editor-container .token.builtin { color: ${theme.dracula.cyan}; }
-        .code-editor-container .token.boolean { color: ${theme.dracula.purple}; }
-        .code-editor-container .token.punctuation { color: ${theme.colors.text}; }
-        .code-editor-container textarea { outline: none !important; caret-color: ${theme.colors.text}; }
-        .code-editor-container textarea::placeholder { color: ${theme.colors.textMuted}; }
-      `}</style>
-      <div className="code-editor-container" style={{ height: '100%' }}>
+    <div className="h-full overflow-auto rounded-md border border-border">
+      <div className="code-editor-container h-full bg-muted text-foreground">
         <Editor
           value={value || ''}
           onValueChange={handleChange}
@@ -62,15 +39,16 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           padding={12}
           tabSize={4}
           insertSpaces={true}
+          // Underlying textarea cannot use Tailwind classes for these
+          // properties; font + sizing must live on the editor's style
+          // prop. Colors come from .code-editor-container in index.css.
           style={{
             fontFamily: "'Consolas', 'Monaco', 'Fira Code', monospace",
             fontSize: 13,
             lineHeight: 1.5,
-            backgroundColor: theme.colors.backgroundAlt,
-            color: theme.colors.text,
             minHeight: '100%',
             height: 'auto',
-            overflow: 'visible'
+            overflow: 'visible',
           }}
         />
       </div>

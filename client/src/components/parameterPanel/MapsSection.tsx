@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import MapsPreviewPanel from '../maps/MapsPreviewPanel';
-import { useAppTheme } from '../../hooks/useAppTheme';
 import { Node } from 'reactflow';
 import { INodeTypeDescription } from '../../types/INodeProperties';
 import {
@@ -26,7 +25,6 @@ const MapsSection: React.FC<MapsSectionProps> = ({
   onParameterChange,
   visible = true
 }) => {
-  const theme = useAppTheme();
   const { getStoredApiKey, isConnected } = useApiKeys();
   const [apiKey, setApiKey] = useState<string | undefined>(() => {
     // Initialize with env variable if available
@@ -68,13 +66,7 @@ const MapsSection: React.FC<MapsSectionProps> = ({
   const handleLocationUpdate = createLocationUpdateHandler(locationParams, onParameterChange);
 
   return (
-    <div style={{
-      backgroundColor: theme.colors.backgroundPanel,
-      display: 'flex',
-      flexDirection: 'column',
-      width: '100%',
-      height: '100%'
-    }}>
+    <div className="flex h-full w-full flex-col bg-card">
       <MapsPreviewPanel
         lat={lat}
         lng={lng}

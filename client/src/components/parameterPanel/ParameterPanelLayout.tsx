@@ -41,10 +41,10 @@ const ParameterPanelLayout: React.FC<ParameterPanelLayoutProps> = ({
   isLoadingParameters = false
 }) => {
   return (
-    <div style={{ display: 'flex', height: '100%', minHeight: 0 }}>
+    <div className="flex h-full min-h-0">
       {/* Left: Input Nodes JSON Data */}
       {showInputSection && (
-        <div style={{ flex: 0.7, height: '100%', overflow: 'hidden' }}>
+        <div className="h-full flex-[0.7] overflow-hidden">
           <InputSection
             nodeId={selectedNode.id}
             visible={showInputSection}
@@ -53,7 +53,7 @@ const ParameterPanelLayout: React.FC<ParameterPanelLayoutProps> = ({
       )}
 
       {/* Middle: Parameter Content */}
-      <div style={{ flex: 1.6, height: '100%', overflow: 'hidden', minWidth: 0 }}>
+      <div className="h-full min-w-0 flex-[1.6] overflow-hidden">
         <MiddleSection
           nodeId={selectedNode.id}
           nodeDefinition={nodeDefinition}
@@ -66,7 +66,7 @@ const ParameterPanelLayout: React.FC<ParameterPanelLayoutProps> = ({
 
       {/* Right: Current Node Output */}
       {showOutputSection && (
-        <div style={{ flex: 0.7, height: '100%', overflow: 'hidden' }}>
+        <div className="h-full flex-[0.7] overflow-hidden">
           <OutputSection
             selectedNode={selectedNode}
             executionResults={executionResults}
