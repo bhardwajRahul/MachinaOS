@@ -155,7 +155,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
       </div>
       <div className="flex items-center gap-2">
         <ActionButton
-          tone="orange"
+          intent="config"
           onClick={handleReset}
           disabled={isSaving}
           title="Reset to default settings"
@@ -164,7 +164,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
           Reset
         </ActionButton>
         <ActionButton
-          tone="green"
+          intent="run"
           onClick={handleSave}
           disabled={isSaving}
           title="Save settings"
@@ -172,7 +172,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
           <Save className="h-3 w-3" />
           {isSaving ? 'Saving...' : 'Save'}
         </ActionButton>
-        <ActionButton tone="pink" onClick={onClose} title="Close settings">
+        <ActionButton intent="stop" onClick={onClose} title="Close settings">
           <X className="h-3 w-3" />
           Close
         </ActionButton>

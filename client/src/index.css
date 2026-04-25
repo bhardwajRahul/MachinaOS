@@ -106,6 +106,37 @@
      * change the canonical alphas without touching call sites. */
     --tint-soft:   8%;
     --tint-border: 30%;
+
+    /* Toolbar / action role tokens — semantic names so call sites read
+     * `bg-action-run` instead of a palette color. Themes redefine these
+     * in their own scope; no component imports a palette name directly.
+     * Each role exposes the base + a -soft (tinted bg) + a -border
+     * (tinted outline) variant so opacity arithmetic stays out of the
+     * call site (mirrors the --node-X / --node-X-soft / -border
+     * convention). */
+    --action-run:           135 94% 65%;        /* primary CTA: deploy / run */
+    --action-run-soft:      135 94% 65% / 0.15;
+    --action-run-border:    135 94% 65% / 0.6;
+
+    --action-stop:          326 100% 74%;       /* destructive: stop / cancel / logout */
+    --action-stop-soft:     326 100% 74% / 0.15;
+    --action-stop-border:   326 100% 74% / 0.6;
+
+    --action-save:          191 97% 77%;        /* commit / save / panel toggle */
+    --action-save-soft:     191 97% 77% / 0.15;
+    --action-save-border:   191 97% 77% / 0.6;
+
+    --action-config:        27 100% 71%;        /* settings / config / warning */
+    --action-config-soft:   27 100% 71% / 0.15;
+    --action-config-border: 27 100% 71% / 0.6;
+
+    --action-secret:        65 92% 76%;         /* credentials / theme toggle */
+    --action-secret-soft:   65 92% 76% / 0.15;
+    --action-secret-border: 65 92% 76% / 0.6;
+
+    --action-tools:         265 89% 78%;        /* component palette / creative */
+    --action-tools-soft:    265 89% 78% / 0.15;
+    --action-tools-border:  265 89% 78% / 0.6;
   }
 
   .dark {
@@ -228,6 +259,28 @@
   --color-node-workflow:        hsl(var(--node-workflow));
   --color-node-workflow-soft:   hsl(var(--node-workflow-soft));
   --color-node-workflow-border: hsl(var(--node-workflow-border));
+
+  /* Toolbar / action role tokens — same triplet pattern as --node-X.
+   * Use bg-action-X-soft + text-action-X + border-action-X-border for
+   * the standard "soft tinted button" look (see ActionButton CVA). */
+  --color-action-run:           hsl(var(--action-run));
+  --color-action-run-soft:      hsl(var(--action-run-soft));
+  --color-action-run-border:    hsl(var(--action-run-border));
+  --color-action-stop:          hsl(var(--action-stop));
+  --color-action-stop-soft:     hsl(var(--action-stop-soft));
+  --color-action-stop-border:   hsl(var(--action-stop-border));
+  --color-action-save:          hsl(var(--action-save));
+  --color-action-save-soft:     hsl(var(--action-save-soft));
+  --color-action-save-border:   hsl(var(--action-save-border));
+  --color-action-config:        hsl(var(--action-config));
+  --color-action-config-soft:   hsl(var(--action-config-soft));
+  --color-action-config-border: hsl(var(--action-config-border));
+  --color-action-secret:        hsl(var(--action-secret));
+  --color-action-secret-soft:   hsl(var(--action-secret-soft));
+  --color-action-secret-border: hsl(var(--action-secret-border));
+  --color-action-tools:         hsl(var(--action-tools));
+  --color-action-tools-soft:    hsl(var(--action-tools-soft));
+  --color-action-tools-border:  hsl(var(--action-tools-border));
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);

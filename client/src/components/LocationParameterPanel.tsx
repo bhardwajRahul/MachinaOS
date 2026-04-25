@@ -70,7 +70,7 @@ const LocationParameterPanel: React.FC = () => {
       <div className="flex items-center gap-2">
         {canExecute && (
           <ActionButton
-            tone="green"
+            intent="run"
             onClick={handleRun}
             disabled={isExecuting}
             title={isExecuting ? 'Execution in progress...' : 'Execute this node'}
@@ -78,10 +78,10 @@ const LocationParameterPanel: React.FC = () => {
             {isExecuting ? 'Running...' : 'Run'}
           </ActionButton>
         )}
-        <ActionButton tone="purple" onClick={handleSave} disabled={!hasUnsavedChanges}>
+        <ActionButton intent="tools" onClick={handleSave} disabled={!hasUnsavedChanges}>
           Save
         </ActionButton>
-        <ActionButton tone="pink" onClick={handleCancel}>
+        <ActionButton intent="stop" onClick={handleCancel}>
           Cancel
         </ActionButton>
       </div>

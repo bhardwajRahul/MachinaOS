@@ -631,7 +631,7 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
             {isSkillNode && (
               <div className="mt-3 flex justify-end border-t border-border pt-3">
                 <ActionButton
-                  tone="orange"
+                  intent="config"
                   onClick={() => setShowResetSkillDialog(true)}
                   className="h-8"
                 >

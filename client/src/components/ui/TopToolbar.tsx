@@ -164,6 +164,7 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
           onClick={onToggleSidebar}
           aria-pressed={sidebarVisible}
           title={sidebarVisible ? 'Hide sidebar' : 'Show sidebar'}
+          className="border-action-save-border bg-action-save-soft text-action-save hover:bg-action-save/25 aria-pressed:bg-action-save/30"
         >
           {sidebarVisible ? <PanelLeftClose /> : <PanelLeftOpen />}
         </Button>
@@ -173,7 +174,11 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
         {/* File menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm">
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-action-save-border bg-action-save-soft text-action-save hover:bg-action-save/25"
+            >
               <FileText />
               File
               <ChevronDown />
@@ -183,25 +188,25 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
             <DropdownMenuLabel className="text-xs uppercase tracking-wider text-muted-foreground">
               File Operations
             </DropdownMenuLabel>
-            <DropdownMenuItem onSelect={onNew}>
+            <DropdownMenuItem onSelect={onNew} className="text-action-run focus:text-action-run">
               <FilePlus />
               New Workflow
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={onOpen}>
+            <DropdownMenuItem onSelect={onOpen} className="text-action-save focus:text-action-save">
               <FolderOpen />
               Open
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={onExportFile}>
+            <DropdownMenuItem onSelect={onExportFile} className="text-action-save focus:text-action-save">
               <Download />
               Export
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={onImportJSON}>
+            <DropdownMenuItem onSelect={onImportJSON} className="text-action-save focus:text-action-save">
               <Upload />
               Import
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={onExportJSON}>
+            <DropdownMenuItem onSelect={onExportJSON} className="text-action-tools focus:text-action-tools">
               <Clipboard />
               Copy as JSON
             </DropdownMenuItem>
@@ -279,7 +284,7 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
           </Select>
           {globalSelectValue && (
             <ActionButton
-              tone="orange"
+              intent="config"
               onClick={() => globalModelState.global_provider && globalModelState.global_model && onOverrideAllAgents?.(globalModelState.global_provider, globalModelState.global_model)}
               title="Override all agent nodes in this workflow to use the selected model"
               className="h-8 px-3 text-xs"
@@ -329,11 +334,23 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
 
         <Divider />
 
-        <Button variant="outline" size="icon-sm" onClick={onOpenSettings} title="Settings">
+        <Button
+          variant="outline"
+          size="icon-sm"
+          onClick={onOpenSettings}
+          title="Settings"
+          className="border-action-config-border bg-action-config-soft text-action-config hover:bg-action-config/25"
+        >
           <SettingsIcon />
         </Button>
 
-        <Button variant="outline" size="icon-sm" onClick={onOpenCredentials} title="API Credentials">
+        <Button
+          variant="outline"
+          size="icon-sm"
+          onClick={onOpenCredentials}
+          title="API Credentials"
+          className="border-action-secret-border bg-action-secret-soft text-action-secret hover:bg-action-secret/25"
+        >
           <KeyRound />
         </Button>
 
@@ -342,6 +359,7 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
           size="icon-sm"
           onClick={toggleTheme}
           title={isDarkMode ? 'Switch to Light mode' : 'Switch to Dark mode'}
+          className="border-action-secret-border bg-action-secret-soft text-action-secret hover:bg-action-secret/25"
         >
           {isDarkMode ? <Sun /> : <Moon />}
         </Button>
@@ -352,7 +370,7 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
             size="icon-sm"
             onClick={logout}
             title={`Logout ${user.display_name}`}
-            className="border-destructive/40 text-destructive hover:bg-destructive/10"
+            className="border-action-stop-border bg-action-stop-soft text-action-stop hover:bg-action-stop/25"
           >
             <LogOut />
           </Button>
@@ -363,7 +381,7 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
         {/* Start / Stop */}
         {!isDeploying ? (
           <ActionButton
-            tone="green"
+            intent="run"
             onClick={onDeploy}
             disabled={isRunning}
             title="Start workflow"
@@ -373,7 +391,7 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
           </ActionButton>
         ) : (
           <ActionButton
-            tone="pink"
+            intent="stop"
             onClick={onCancelDeployment}
             title="Stop workflow"
           >
@@ -383,7 +401,7 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
         )}
 
         <ActionButton
-          tone="cyan"
+          intent="save"
           onClick={() => typeof onSave === 'function' && onSave()}
           disabled={!hasUnsavedChanges}
           title={hasUnsavedChanges ? 'Save changes' : 'No changes to save'}
@@ -416,6 +434,7 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
           onClick={onToggleComponentPalette}
           aria-pressed={componentPaletteVisible}
           title={componentPaletteVisible ? 'Hide components' : 'Show components'}
+          className="border-action-tools-border bg-action-tools-soft text-action-tools hover:bg-action-tools/25 aria-pressed:bg-action-tools/30"
         >
           {componentPaletteVisible ? <PanelRightClose /> : <PanelRightOpen />}
         </Button>

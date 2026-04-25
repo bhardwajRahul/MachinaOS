@@ -147,7 +147,7 @@ const ParameterPanel: React.FC = () => {
       <div className="flex items-center gap-2">
         {canExecute && !hideRunButton && (
           <ActionButton
-            tone="green"
+            intent="run"
             onClick={handleRun}
             disabled={isExecuting}
             title={isExecuting ? 'Execution in progress...' : 'Execute this node'}
@@ -158,7 +158,7 @@ const ParameterPanel: React.FC = () => {
             {isExecuting ? 'Running...' : 'Run'}
           </ActionButton>
         )}
-        <ActionButton tone="purple" onClick={handleSave} disabled={!hasUnsavedChanges}>
+        <ActionButton intent="tools" onClick={handleSave} disabled={!hasUnsavedChanges}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
             <polyline points="17 21 17 13 7 13 7 21" />
@@ -167,7 +167,7 @@ const ParameterPanel: React.FC = () => {
           Save
         </ActionButton>
         <ActionButton
-          tone="pink"
+          intent="stop"
           onClick={async () => {
             if (isWaiting && selectedNode) {
               const result = await cancelEventWait(selectedNode.id, nodeStatus?.data?.waiter_id);
