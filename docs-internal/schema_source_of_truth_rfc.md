@@ -206,9 +206,9 @@ register_node(
     type="myNode",
     metadata={
         "displayName": "My Node",
-        "icon": "asset:my_icon",          # or "lobehub:<brand>" or emoji
+        # icon + color resolved via server/nodes/visuals.json — add an
+        # entry: {"myNode": {"icon": "asset:my_icon", "color": "#8be9fd"}}
         "group": ["tool"],
-        "color": "#8be9fd",
         "componentKind": "square",
         "handles": [...],                 # full topology
         "description": "...",
@@ -221,38 +221,57 @@ register_node(
 
 Zero edits elsewhere.
 
-### 10.B — Icon wire format + resolver
+### 10.B — Icon + color: central registry + handler
 
-Backend icons follow n8n's prefix-dispatch convention. The resolver at
-[client/src/assets/icons/index.ts](../client/src/assets/icons/index.ts)
-handles every source:
+Every node's icon and color live in **one** file:
+[server/nodes/visuals.json](../server/nodes/visuals.json) —
+`{nodeType: {icon, color, skill?}}`. The handler at
+[server/nodes/_visuals.py](../server/nodes/_visuals.py) exposes
+`get_icon` / `get_color`; `BaseNode._metadata_dict` consults it at
+registration time. Node plugin classes don't carry inline `icon = ...`
+or `color = ...` declarations — a subclass MAY override by setting
+the class attr (explicit value wins) but normal authoring goes
+through visuals.json.
+
+Wire format (resolver at
+[client/src/assets/icons/index.ts](../client/src/assets/icons/index.ts)):
 
 | Prefix | Source | Example |
 |---|---|---|
 | `asset:<key>` | Filesystem SVG; Vite `import.meta.glob` over `client/src/assets/icons/**/*.svg`. Key is filename minus `.svg`. | `asset:gmail` |
-| `<lib>:<brand>` | NPM icon package. `ICON_LIBRARIES` dispatch table with `lobehub` registered. Case-insensitive brand lookup — names come from the package's own exports. | `lobehub:claude` |
+| `<lib>:<brand>` | NPM icon package. `ICON_LIBRARIES` dispatch table with `lobehub` registered. | `lobehub:Claude` |
 | `data:` / `http(s)://` / `/…` | URL passthrough | — |
-| plain text | emoji / short label | `🤖` |
+| plain text | emoji | `🤖` |
 
-Frontend consumers call `resolveLibraryIcon(icon)` first (returns a React
-component) then `resolveIcon(icon)` (returns string / data URI). Consumers
-use the `useNodeSpec(type)` reactive hook so icons populate the moment the
-prefetch lands. **No frontend fallbacks**: a missing icon is a backend bug,
-not something to mask.
+Frontend renders via the single
+[`<NodeIcon>`](../client/src/assets/icons/NodeIcon.tsx) primitive —
+one resolver, four branches (lib component / image / text / fallback).
+It does **not** apply parent color: lobehub `.Color` SVGs use
+`currentColor` for parts of the brand artwork, so wrapping them in
+`style={{ color: brandColor }}` would mono-tint multi-color brand
+marks. Sites that need a tinted backdrop set `style={{ color: brandColor }}`
+on the parent + `bg-tint-soft` / `border-tint`; NodeIcon sits inside
+without contributing to the cascade.
 
 Group-palette metadata follows the same pattern via
-[server/nodes/groups.py](../server/nodes/groups.py): 25 palette groups each
-declaring `{label, icon, color, visibility}`. Retires the frontend's
-`CATEGORY_ICONS` / `labelMap` / `colorMap` / `SIMPLE_MODE_CATEGORIES` tables.
+[server/nodes/groups.py](../server/nodes/groups.py): palette groups
+declare `{label, icon, color, visibility}`. Retires the frontend's
+`CATEGORY_ICONS` / `labelMap` / `colorMap` / `SIMPLE_MODE_CATEGORIES`.
 
-**SKILL.md frontmatter uses the same convention.** `metadata.icon` in every
-`server/skills/<folder>/<skill>/SKILL.md` follows the prefix-dispatch
-contract above. Branded skills (search providers, productivity / social
-integrations) use `asset:<key>` against a bundled SVG; generic skills can
-stay on emoji. The frontend's previous `SKILL_ICON_OVERRIDES` table in
-`MasterSkillEditor.tsx` was deleted -- never re-introduce per-skill icon
-hardcoding on the frontend. To brand a skill, update its SKILL.md and
-ensure a matching SVG exists under `client/src/assets/icons/`.
+**SKILL.md icon/color is auto-resolved from the target node.**
+`SkillLoader._parse_skill_metadata` reads `allowed-tools`, finds the
+first token that resolves to a node in visuals.json, and inherits
+that node's icon and color. Skills with a node target carry no
+inline `metadata.icon` / `metadata.color`. **Orphan skills**
+(personality, memory operators, autonomous patterns — no node
+target) keep inline values inside `metadata` since the resolver
+returns nothing for them. The `allowed-tools` field is snake_case
+(matching Python conventions); node `type` is camelCase (workflow
+JSON contract); the lookup converts at the boundary.
+
+`visuals.json` entries optionally carry a `skill` field pointing at
+the teaching skill folder — a reverse map for the frontend to find
+the skill from a node (e.g. a future "teach this node" button).
 
 ### 10.G — Parameter panel fully spec-driven
 

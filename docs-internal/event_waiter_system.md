@@ -50,7 +50,7 @@ TRIGGER_REGISTRY: Dict[str, TriggerConfig] = {
     'chatTrigger':      TriggerConfig('chatTrigger',      'chat_message_received',    'Chat Message'),
     'taskTrigger':      TriggerConfig('taskTrigger',      'task_completed',           'Task Completed'),
     'twitterReceive':   TriggerConfig('twitterReceive',   'twitter_event_received',   'Twitter Event'),
-    'gmailReceive':     TriggerConfig('gmailReceive',     'gmail_email_received',     'Gmail Email'),
+    'googleGmailReceive':     TriggerConfig('googleGmailReceive',     'gmail_email_received',     'Gmail Email'),
     'telegramReceive':  TriggerConfig('telegramReceive',  'telegram_message_received','Telegram Message'),
 }
 ```
@@ -68,7 +68,7 @@ FILTER_BUILDERS = {
     'chatTrigger':      build_chat_filter,
     'taskTrigger':      build_task_completed_filter,
     'twitterReceive':   build_twitter_filter,
-    'gmailReceive':     build_gmail_filter,
+    'googleGmailReceive':     build_gmail_filter,
     'telegramReceive':  build_telegram_filter,
 }
 ```
@@ -141,7 +141,7 @@ Some triggers do not fit the push model because the upstream service has no webh
 | `taskTrigger` | Event (push via delegation) | `event_waiter.py` |
 | `telegramReceive` | Event (push via long-polling) | `event_waiter.py` + `TelegramService` |
 | `twitterReceive` | **Polling** | `deployment/triggers.py` + `asyncio.Queue` |
-| `gmailReceive` | **Polling** | `deployment/triggers.py` + `asyncio.Queue` |
+| `googleGmailReceive` | **Polling** | `deployment/triggers.py` + `asyncio.Queue` |
 | `cronScheduler` | APScheduler | `deployment/triggers.py` |
 
 Polling triggers are routed in `DeploymentManager._create_poll_coroutine()` and use `TriggerManager.setup_polling_trigger()` with a custom poll function and an `asyncio.Queue`. See [workflow-schema.md](workflow-schema.md) for the full trigger list.

@@ -1,12 +1,12 @@
-# Drive (`drive`)
+# Drive (`googleDrive`)
 
 | Field | Value |
 |------|-------|
 | **Category** | google_workspace / tool (dual-purpose) |
 | **Backend handler** | [`server/services/handlers/drive.py::handle_google_drive`](../../../server/services/handlers/drive.py) |
 | **Tests** | [`server/tests/nodes/test_google_workspace.py`](../../../server/tests/nodes/test_google_workspace.py) |
-| **Skill (if any)** | [`server/skills/productivity_agent/drive-skill/SKILL.md`](../../../server/skills/productivity_agent/drive-skill/SKILL.md) |
-| **Dual-purpose tool** | yes - tool name `drive` |
+| **Skill (if any)** | [`server/skills/productivity_agent/google-drive-skill/SKILL.md`](../../../server/skills/productivity_agent/google-drive-skill/SKILL.md) |
+| **Dual-purpose tool** | yes - tool name `googleDrive` |
 
 ## Purpose
 
@@ -152,6 +152,6 @@ flowchart TD
 
 ## Related
 
-- **Skills using this as a tool**: [`drive-skill/SKILL.md`](../../../server/skills/productivity_agent/drive-skill/SKILL.md)
-- **Companion nodes**: [`gmail`](./gmail.md), [`calendar`](./calendar.md), [`sheets`](./sheets.md), [`tasks`](./tasks.md), [`contacts`](./contacts.md)
+- **Skills using this as a tool**: [`drive-skill/SKILL.md`](../../../server/skills/productivity_agent/google-drive-skill/SKILL.md)
+- **Companion nodes**: [`googleGmail`](./googleGmail.md), [`googleCalendar`](./googleCalendar.md), [`googleSheets`](./googleSheets.md), [`googleTasks`](./googleTasks.md), [`googleContacts`](./googleContacts.md)
 - **Architecture docs**: `CLAUDE.md` -> "Google Workspace Nodes".

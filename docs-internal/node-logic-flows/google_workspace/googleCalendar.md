@@ -1,12 +1,12 @@
-# Calendar (`calendar`)
+# Calendar (`googleCalendar`)
 
 | Field | Value |
 |------|-------|
 | **Category** | google_workspace / tool (dual-purpose) |
 | **Backend handler** | [`server/services/handlers/calendar.py::handle_google_calendar`](../../../server/services/handlers/calendar.py) |
 | **Tests** | [`server/tests/nodes/test_google_workspace.py`](../../../server/tests/nodes/test_google_workspace.py) |
-| **Skill (if any)** | [`server/skills/productivity_agent/calendar-skill/SKILL.md`](../../../server/skills/productivity_agent/calendar-skill/SKILL.md) |
-| **Dual-purpose tool** | yes - tool name `calendar` |
+| **Skill (if any)** | [`server/skills/productivity_agent/google-calendar-skill/SKILL.md`](../../../server/skills/productivity_agent/google-calendar-skill/SKILL.md) |
+| **Dual-purpose tool** | yes - tool name `googleCalendar` |
 
 ## Purpose
 
@@ -149,6 +149,6 @@ flowchart TD
 
 ## Related
 
-- **Skills using this as a tool**: [`calendar-skill/SKILL.md`](../../../server/skills/productivity_agent/calendar-skill/SKILL.md)
-- **Companion nodes**: [`gmail`](./gmail.md), [`drive`](./drive.md), [`sheets`](./sheets.md), [`tasks`](./tasks.md), [`contacts`](./contacts.md)
+- **Skills using this as a tool**: [`calendar-skill/SKILL.md`](../../../server/skills/productivity_agent/google-calendar-skill/SKILL.md)
+- **Companion nodes**: [`googleGmail`](./googleGmail.md), [`googleDrive`](./googleDrive.md), [`googleSheets`](./googleSheets.md), [`googleTasks`](./googleTasks.md), [`googleContacts`](./googleContacts.md)
 - **Architecture docs**: `CLAUDE.md` -> "Google Workspace Nodes".

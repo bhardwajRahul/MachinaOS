@@ -15,8 +15,8 @@ calendar, drive, sheets, tasks, contacts.
 
 ## What is unique to this node
 
-- **Intended tool set**: `gmail`, `calendar`, `drive`, `sheets`, `tasks`,
-  `contacts`, plus scheduling tools (`timer`, `cronScheduler`).
+- **Intended tool set**: `googleGmail`, `googleCalendar`, `googleDrive`, `googleSheets`, `googleTasks`,
+  `googleContacts`, plus scheduling tools (`timer`, `cronScheduler`).
 - **Intended skills**: `server/skills/productivity_agent/` (gmail-skill,
   calendar-skill, drive-skill, sheets-skill, tasks-skill, contacts-skill).
 - **Frontend theming**: cyan dracula accent.

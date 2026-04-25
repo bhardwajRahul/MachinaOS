@@ -506,10 +506,13 @@ The frontend uses a layered cache + slice-subscription model so cold refreshes a
 - Applies to `SquareNode`, `AIAgentNode`, `TriggerNode`, `GenericNode`, `ToolkitNode`, `StartNode`, `TeamMonitorNode`. Add new node components the same way.
 - Reference: https://reactflow.dev/learn/advanced-use/performance
 
-### Icon convention -- `asset:<key>` strings, never inline data URIs
-- Backend `NodeMetadata.icon` and SKILL.md frontmatter `icon` fields use the n8n-style prefix scheme: `asset:<key>` (filesystem SVG), `<lib>:<brand>` (e.g. `lobehub:claude`), `data:` / URL passthrough, or plain emoji.
-- Frontend resolver: [client/src/assets/icons/index.ts](./client/src/assets/icons/index.ts) `resolveIcon` + `resolveLibraryIcon`. The asset registry is keyed by SVG filename (without `.svg`) and built eagerly at module load via `import.meta.glob`.
-- **Do not** ship inline data URIs from the backend, do not maintain frontend override tables (the `SKILL_ICON_OVERRIDES` table was removed for this reason). Drop a new SVG into `client/src/assets/icons/<category>/<key>.svg` and reference it as `asset:<key>` from the backend plugin -- nothing else.
+### Icon + color — central `visuals.json` registry, single source of truth
+- Every node's icon and color live in [server/nodes/visuals.json](./server/nodes/visuals.json) — `{nodeType: {icon, color, skill?}}`. The `skill` field optionally points at the teaching skill folder (reverse map for the "teach this node" case).
+- The handler at [server/nodes/_visuals.py](./server/nodes/_visuals.py) exposes `get_icon(node_type)` / `get_color(node_type)`. `BaseNode._metadata_dict` consults it at registration time. Node plugin classes do **not** declare `icon = ...` or `color = ...` themselves (a subclass MAY override by setting the class attr — explicit value wins).
+- Wire format (used by the frontend resolver at [client/src/assets/icons/index.ts](./client/src/assets/icons/index.ts)): `asset:<key>` (filesystem SVG, keyed by filename without `.svg`, auto-indexed via `import.meta.glob`), `<lib>:<brand>` (NPM icon package, e.g. `lobehub:Claude`), `data:` / URL passthrough, or plain emoji.
+- Frontend renders via the single `<NodeIcon icon className />` primitive in [client/src/assets/icons/NodeIcon.tsx](./client/src/assets/icons/NodeIcon.tsx). It dispatches lib-component / `<img>` / text branches and **does not apply parent color** — that would mono-tint lobehub `.Color` brand SVGs (their paths use `currentColor`). Sites that want a tinted backdrop set `style={{ color: brandColor }}` on the parent + `bg-tint-soft` / `border-tint`.
+- SKILL.md icon/color is resolved by `SkillLoader._parse_skill_metadata` from the first node in `allowed-tools` via the same handler. Skills with a node target carry no inline icon/color. **Orphan skills** (personality, memory operators, autonomous patterns — no node target) keep inline `metadata.icon` and `metadata.color` since the resolver returns nothing for them.
+- **Do not** ship inline data URIs from the backend, do not maintain frontend override tables, do not declare `icon`/`color` on a node class (use visuals.json), do not declare them in SKILL.md when the skill targets a node.
 
 ## Key Files & Components
 

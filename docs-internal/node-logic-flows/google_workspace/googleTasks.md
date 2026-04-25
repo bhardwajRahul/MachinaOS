@@ -1,17 +1,17 @@
-# Tasks (`tasks`)
+# Tasks (`googleTasks`)
 
 | Field | Value |
 |------|-------|
 | **Category** | google_workspace / tool (dual-purpose) |
 | **Backend handler** | [`server/services/handlers/tasks.py::handle_google_tasks`](../../../server/services/handlers/tasks.py) |
 | **Tests** | [`server/tests/nodes/test_google_workspace.py`](../../../server/tests/nodes/test_google_workspace.py) |
-| **Skill (if any)** | [`server/skills/productivity_agent/tasks-skill/SKILL.md`](../../../server/skills/productivity_agent/tasks-skill/SKILL.md) |
-| **Dual-purpose tool** | yes - tool name `tasks` |
+| **Skill (if any)** | [`server/skills/productivity_agent/google-tasks-skill/SKILL.md`](../../../server/skills/productivity_agent/google-tasks-skill/SKILL.md) |
+| **Dual-purpose tool** | yes - tool name `googleTasks` |
 
 ## Purpose
 
 Consolidated Google Tasks node for managing personal to-do items. Uses Google
-Tasks API v1 (`tasklists` + `tasks` collections). One node, five operations
+Tasks API v1 (`tasklists` + `googleTasks` collections). One node, five operations
 switched via the `operation` parameter.
 
 ## Inputs (handles)
@@ -153,6 +153,6 @@ flowchart TD
 
 ## Related
 
-- **Skills using this as a tool**: [`tasks-skill/SKILL.md`](../../../server/skills/productivity_agent/tasks-skill/SKILL.md)
-- **Companion nodes**: [`gmail`](./gmail.md), [`calendar`](./calendar.md), [`drive`](./drive.md), [`sheets`](./sheets.md), [`contacts`](./contacts.md)
+- **Skills using this as a tool**: [`tasks-skill/SKILL.md`](../../../server/skills/productivity_agent/google-tasks-skill/SKILL.md)
+- **Companion nodes**: [`googleGmail`](./googleGmail.md), [`googleCalendar`](./googleCalendar.md), [`googleDrive`](./googleDrive.md), [`googleSheets`](./googleSheets.md), [`googleContacts`](./googleContacts.md)
 - **Architecture docs**: `CLAUDE.md` -> "Google Workspace Nodes".

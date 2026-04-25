@@ -11,7 +11,7 @@
 ## Purpose
 
 AI agent pre-configured for travel planning. Typical tool connections:
-`gmaps_locations`, `gmaps_nearby_places`, `calendar`, `braveSearch`.
+`gmaps_locations`, `gmaps_nearby_places`, `googleCalendar`, `braveSearch`.
 
 ## What is unique to this node
 

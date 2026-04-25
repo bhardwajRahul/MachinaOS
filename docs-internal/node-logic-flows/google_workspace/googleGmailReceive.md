@@ -1,4 +1,4 @@
-# Gmail Receive (`gmailReceive`)
+# Gmail Receive (`googleGmailReceive`)
 
 | Field | Value |
 |------|-------|
@@ -124,5 +124,5 @@ flowchart TD
 
 ## Related
 
-- **Companion nodes**: [`gmail`](./gmail.md) (send/search/read operations)
+- **Companion nodes**: [`googleGmail`](./googleGmail.md) (send/search/read operations)
 - **Architecture docs**: `CLAUDE.md` -> "Polling Triggers (Gmail, Twitter)" and "Event-Driven Trigger Node System".

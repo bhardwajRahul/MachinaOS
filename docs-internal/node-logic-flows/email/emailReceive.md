@@ -13,7 +13,7 @@
 Polling-based trigger that fires when a new email lands in a watched IMAP
 folder. The first poll establishes a baseline (so existing mail is not
 replayed), then subsequent polls diff message IDs to detect arrivals.
-Mirrors the `gmailReceive` pattern but works against any IMAP provider via
+Mirrors the `googleGmailReceive` pattern but works against any IMAP provider via
 Himalaya.
 
 ## Inputs (handles)
@@ -24,7 +24,7 @@ None. Triggers have no inputs.
 
 | Name | Type | Default | Required | displayOptions.show | Description |
 |------|------|---------|----------|---------------------|-------------|
-| `provider` | options | `gmail` | no | - | Preset key in `email_providers.json` |
+| `provider` | options | `googleGmail` | no | - | Preset key in `email_providers.json` |
 | `folder` | string | `INBOX` | no | - | IMAP folder to watch |
 | `poll_interval` | number | `60` | no | - | Seconds between polls. Clamped to `[min_interval, max_interval]` from config (30-3600) |
 | `filter_query` | string | `""` | no | - | Reserved, currently not applied during polling |

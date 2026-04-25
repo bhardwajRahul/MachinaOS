@@ -43,12 +43,13 @@ class AcmeOutput(BaseModel):
     count: int = 0
 
 
-# 4. The node.
+# 4. The node. (Icon + color are NOT declared here — add an entry
+#    {"acmeSearch": {"icon": "asset:acme", "color": "#abcdef"}} to
+#    server/nodes/visuals.json instead. BaseNode resolves both via
+#    the central handler at server/nodes/_visuals.py.)
 class AcmeSearchNode(ActionNode):
     type = "acmeSearch"
     display_name = "Acme Search"
-    icon = "asset:acme"
-    color = "#abcdef"
     group = ("search", "tool")
     description = "Search Acme's web index"
     component_kind = "square"

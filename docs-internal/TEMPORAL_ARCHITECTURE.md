@@ -255,7 +255,7 @@ CONFIG_HANDLES = {"input-tools", "input-memory", "input-model", "input-skill", "
 TRIGGER_NODE_TYPES = frozenset([
     "start", "cronScheduler", "webhookTrigger", "whatsappReceive",
     "workflowTrigger", "chatTrigger", "taskTrigger",
-    "twitterReceive", "gmailReceive", "telegramReceive",
+    "twitterReceive", "googleGmailReceive", "telegramReceive",
 ])
 
 # Android service types (connect to androidTool)

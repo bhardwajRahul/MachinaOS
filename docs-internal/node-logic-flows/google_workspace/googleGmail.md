@@ -1,12 +1,12 @@
-# Gmail (`gmail`)
+# Gmail (`googleGmail`)
 
 | Field | Value |
 |------|-------|
 | **Category** | google_workspace / tool (dual-purpose) |
 | **Backend handler** | [`server/services/handlers/gmail.py::handle_google_gmail`](../../../server/services/handlers/gmail.py) |
 | **Tests** | [`server/tests/nodes/test_google_workspace.py`](../../../server/tests/nodes/test_google_workspace.py) |
-| **Skill (if any)** | [`server/skills/productivity_agent/gmail-skill/SKILL.md`](../../../server/skills/productivity_agent/gmail-skill/SKILL.md) |
-| **Dual-purpose tool** | yes - tool name `gmail` |
+| **Skill (if any)** | [`server/skills/productivity_agent/google-gmail-skill/SKILL.md`](../../../server/skills/productivity_agent/google-gmail-skill/SKILL.md) |
+| **Dual-purpose tool** | yes - tool name `googleGmail` |
 
 ## Purpose
 
@@ -113,9 +113,9 @@ flowchart TD
 
 ## Side Effects
 
-- **Database writes**: one row per API call in `api_usage_metrics` via `database.save_api_usage_metric` with `service='gmail'`, `operation=<action>`, `endpoint=<action>`, `resource_count`, `cost` (always 0 for Google APIs).
+- **Database writes**: one row per API call in `api_usage_metrics` via `database.save_api_usage_metric` with `service='googleGmail'`, `operation=<action>`, `endpoint=<action>`, `resource_count`, `cost` (always 0 for Google APIs).
 - **Broadcasts**: none from the handler itself; `NodeExecutor` emits standard `node_status`.
-- **External API calls**: Gmail API v1 via `googleapiclient.discovery.build("gmail", "v1", creds)` - `users().messages().send/list/get`. Proactive token refresh hits `https://oauth2.googleapis.com/token`.
+- **External API calls**: Gmail API v1 via `googleapiclient.discovery.build("googleGmail", "v1", creds)` - `users().messages().send/list/get`. Proactive token refresh hits `https://oauth2.googleapis.com/token`.
 - **File I/O**: none.
 - **Subprocess**: none.
 
@@ -136,6 +136,6 @@ flowchart TD
 
 ## Related
 
-- **Skills using this as a tool**: [`gmail-skill/SKILL.md`](../../../server/skills/productivity_agent/gmail-skill/SKILL.md)
-- **Companion nodes**: [`gmailReceive`](./gmailReceive.md), [`calendar`](./calendar.md), [`drive`](./drive.md), [`sheets`](./sheets.md), [`tasks`](./tasks.md), [`contacts`](./contacts.md)
+- **Skills using this as a tool**: [`gmail-skill/SKILL.md`](../../../server/skills/productivity_agent/google-gmail-skill/SKILL.md)
+- **Companion nodes**: [`googleGmailReceive`](./googleGmailReceive.md), [`googleCalendar`](./googleCalendar.md), [`googleDrive`](./googleDrive.md), [`googleSheets`](./googleSheets.md), [`googleTasks`](./googleTasks.md), [`googleContacts`](./googleContacts.md)
 - **Architecture docs**: `CLAUDE.md` -> "Google Workspace Nodes" and "Encrypted Credentials System".

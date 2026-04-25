@@ -126,13 +126,13 @@ Work as both workflow nodes and AI tools. Defined in `searchNodes.ts`:
 
 ### Google Workspace Nodes (7 nodes)
 Consolidated operation-based nodes sharing one OAuth connection. See [new_service_integration.md](new_service_integration.md):
-- `gmail` - send / search / read (dual-purpose)
-- `gmailReceive` - Polling trigger for incoming emails
-- `calendar` - create / list / update / delete
-- `drive` - upload / download / list / share
-- `sheets` - read / write / append
-- `tasks` - create / list / complete / update / delete
-- `contacts` - create / list / search / get / update / delete
+- `googleGmail` - send / search / read (dual-purpose)
+- `googleGmailReceive` - Polling trigger for incoming emails
+- `googleCalendar` - create / list / update / delete
+- `googleDrive` - upload / download / list / share
+- `googleSheets` - read / write / append
+- `googleTasks` - create / list / complete / update / delete
+- `googleContacts` - create / list / search / get / update / delete
 
 ### WhatsApp Nodes (3 nodes)
 - `whatsappSend` - Dual-purpose: send text/media/location/contact to contacts, groups, channels

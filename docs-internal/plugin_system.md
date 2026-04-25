@@ -252,7 +252,7 @@ A multi-op node declares multiple methods, each decorated with
 `parameters.operation` to choose which to run.
 
 ```python
-@Operation("send", cost={"service": "gmail", "action": "send", "count": 1})
+@Operation("send", cost={"service": "googleGmail", "action": "send", "count": 1})
 async def send(self, ctx: NodeContext, params: GmailParams) -> Any: ...
 
 @Operation("search")
