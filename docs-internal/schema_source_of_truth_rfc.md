@@ -245,6 +245,15 @@ Group-palette metadata follows the same pattern via
 declaring `{label, icon, color, visibility}`. Retires the frontend's
 `CATEGORY_ICONS` / `labelMap` / `colorMap` / `SIMPLE_MODE_CATEGORIES` tables.
 
+**SKILL.md frontmatter uses the same convention.** `metadata.icon` in every
+`server/skills/<folder>/<skill>/SKILL.md` follows the prefix-dispatch
+contract above. Branded skills (search providers, productivity / social
+integrations) use `asset:<key>` against a bundled SVG; generic skills can
+stay on emoji. The frontend's previous `SKILL_ICON_OVERRIDES` table in
+`MasterSkillEditor.tsx` was deleted -- never re-introduce per-skill icon
+hardcoding on the frontend. To brand a skill, update its SKILL.md and
+ensure a matching SVG exists under `client/src/assets/icons/`.
+
 ### 10.G — Parameter panel fully spec-driven
 
 - `ParameterRenderer.tsx` gains `case 'code'` + `case 'dateTime'` + generic

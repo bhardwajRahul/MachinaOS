@@ -334,6 +334,10 @@ components/credentials/CredentialsModal.tsx
 - **idb-keyval** cache seeds first paint — opened modal renders from IndexedDB in <50 ms before the WS roundtrip completes.
 - **`requestIdleCallback`** writes back to IDB so saves don't block first paint.
 
+**App-wide query persistence ([client/src/lib/queryPersist.ts](../client/src/lib/queryPersist.ts)):** the QueryClient is wrapped in `<PersistQueryClientProvider>` ([main.tsx](../client/src/main.tsx)) with a localStorage persister + `__APP_VERSION__` buster + 24h SWR window. Only queries with key prefixes `nodeSpec` / `nodeGroups` / `pluginCatalogue` are dehydrated -- high-frequency / per-session queries stay in-memory. Hard refresh paints from cached specs **before** the WebSocket connects, so canvas nodes never flash placeholder icons. The credentials catalogue uses its own dedicated `idb-keyval` warm-start (above) because its payload is large enough that localStorage's 5-10MB cap is a real constraint.
+
+**`useNodeSpec` is a slice subscription, not a `useQuery`** ([client/src/lib/nodeSpec.ts](../client/src/lib/nodeSpec.ts)): reads via `useSyncExternalStore` filtered by `hashKey(['nodeSpec', type])`. Per-spec observer count is **0**; only the matching slot triggers a re-render. Lazy fetch is one-shot via `useEffect` gated on `isReady`. Do not re-introduce `useQuery(['nodeSpec', type])` -- N consumers create N observers, all woken on every cache write.
+
 **Component rules:**
 - `PanelRenderer` lazy-loads each panel type so the initial JS payload doesn't grow linearly with provider count.
 - Panels are config-driven: `StatusCard`, `ActionBar`, `FieldRenderer`, `OAuthConnect` consume `ProviderConfig` fields rather than hand-coding per-provider JSX.
@@ -365,7 +369,8 @@ This is the rule that keeps the data layer schema-driven instead of imperatively
 | **TanStack Query** | Anything the server has authoritative state for. List / single-record / settings reads. Mutations that change server state. | `useWorkflowsQuery`, `useNodeParamsQuery`, `useUserSettingsQuery`, `useCatalogueQuery`, `useSaveWorkflowMutation`, `useSaveNodeParamsMutation`, `useSaveUserSettingsMutation` |
 | **Zustand** | UI-only state that survives navigation. The active edit buffer for the current workflow. Sidebar/panel visibility flags. | `useAppStore.currentWorkflow` (mutable buffer), `sidebarVisible`, `proMode`, `renamingNodeId`, `useCredentialRegistry.selectedId` |
 | **`useState` / `useReducer`** | Per-component transient state. Form-field drafts. Hover/focus. | text-input drafts, dropdown-open, inline-edit toggles |
-| **`WebSocketContext`** | Raw WS connection, `sendRequest`, push-only broadcast slices (node status, workflow progress, android status). | `nodeStatuses`, `androidStatus`, `consoleLogs`, broadcast streams |
+| **`WebSocketContext`** | Raw WS connection, `sendRequest`, push-only broadcast slices (workflow progress, android/whatsapp/twitter status, console/terminal logs). The provider value is `useMemo`'d so unrelated state changes do not re-render every consumer. Exposes `isOpen` (socket open) and `isReady` (post init-burst) -- gate catalogue/spec queries on `isReady` to avoid racing the serial init awaits. | `androidStatus`, `consoleLogs`, broadcast streams |
+| **`stores/nodeStatusStore.ts`** (Zustand) | Per-workflow node-execution statuses -- moved out of WebSocketContext so a status tick does not cascade through the React tree. `useNodeStatus(id)` is a slice selector; only the affected node's consumers re-render. Mirror this pattern for any new high-frequency push state. | `allStatuses[workflowId][nodeId]`, `currentWorkflowId` |
 
 **Hard rules:**
 - A list of server records (`workflows`, `nodeParameters`, `userSettings`, `credentialCatalogue`, `userSkills`, node output schemas) lives in TanStack Query. Never duplicate it in Zustand. Phase-1 follow-up commit `c3a7aa4` removed `savedWorkflows` from `useAppStore` for exactly this reason; Wave 3 commit `7706afb` did the same for `userSkills` in MasterSkillEditor.

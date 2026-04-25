@@ -442,6 +442,39 @@ The project was completely refactored from schema-based node definitions to expl
 - **Code Cleanup**: Removed dead code, unused files, and legacy methods
 - **Android Integration**: 16 Android service nodes with ADB-based device automation
 
+## Frontend Performance Architecture
+
+The frontend uses a layered cache + slice-subscription model so cold refreshes are instant and high-frequency status broadcasts do not cascade through the React tree. The patterns below are canonical -- follow them when adding new server-state queries, status broadcasts, or canvas node components.
+
+### TanStack Query persistence ([client/src/lib/queryPersist.ts](./client/src/lib/queryPersist.ts))
+- App is wrapped in `<PersistQueryClientProvider>` ([main.tsx](./client/src/main.tsx)) with a localStorage persister + `__APP_VERSION__` buster + 24h SWR window (RFC 5861).
+- Only queries with key prefixes `nodeSpec` / `nodeGroups` / `pluginCatalogue` are dehydrated (see `shouldPersistQuery`). High-frequency / per-session queries stay in-memory.
+- Hard refresh paints from cached specs **before** the WS connects, so canvas nodes never flash placeholder icons.
+
+### `useNodeSpec` is a slice subscription, not a `useQuery` ([client/src/lib/nodeSpec.ts](./client/src/lib/nodeSpec.ts))
+- Reads via `useSyncExternalStore` against `queryClient.getQueryCache().subscribe(...)` filtered by `hashKey(['nodeSpec', type])`. Per-spec observer count is **0**; only the matching slot triggers a re-render.
+- Lazy fetch is one-shot via `useEffect`, gated on `isReady` (see below).
+- **Do not re-introduce `useQuery(['nodeSpec', type])`** anywhere -- N consumers would create N observers, all woken on every cache write.
+
+### `nodeStatusStore` for high-frequency state ([client/src/stores/nodeStatusStore.ts](./client/src/stores/nodeStatusStore.ts))
+- Per-workflow node statuses live in a Zustand store (built on `useSyncExternalStore`). `useNodeStatus(id)` is a slice selector -- only the affected node's consumers re-render on a status tick.
+- Mirror this pattern when adding any new high-frequency push state. Do **not** put it on `WebSocketContext.value` -- that's a context fan-out trap.
+
+### `isOpen` vs `isReady` -- gate every catalogue/spec query on `isReady` ([WebSocketContext.tsx](./client/src/contexts/WebSocketContext.tsx))
+- `isOpen` flips when the socket opens. `isReady` flips only after the 8-step init burst (api-key probes, terminal/chat/console history) settles.
+- Queries that depend on backend-served catalogue data (`useCatalogueQuery`, `useNodeParamsQuery`, `useUserSettingsQuery`, `useNodeGroups`, `useNodeSpec` lazy fetch, prefetch effect) gate on `isReady` so they fire once, post-burst, instead of racing the serial init awaits.
+- `WebSocketContext.value` is `useMemo`'d -- consumers only re-render when an actual field they read changes. Pending requests are rejected on `ws.onclose` so retries fire immediately on the new socket instead of waiting the 30s `REQUEST_TIMEOUT`.
+
+### React.memo every canvas node component ([client/src/components/nodeMemoEquality.ts](./client/src/components/nodeMemoEquality.ts))
+- React Flow's documented requirement. Use the shared `nodePropsEqual` comparator -- it skips drag-state props (`xPos` / `yPos` / `dragging`) so the memo isn't defeated during drag.
+- Applies to `SquareNode`, `AIAgentNode`, `TriggerNode`, `GenericNode`, `ToolkitNode`, `StartNode`, `TeamMonitorNode`. Add new node components the same way.
+- Reference: https://reactflow.dev/learn/advanced-use/performance
+
+### Icon convention -- `asset:<key>` strings, never inline data URIs
+- Backend `NodeMetadata.icon` and SKILL.md frontmatter `icon` fields use the n8n-style prefix scheme: `asset:<key>` (filesystem SVG), `<lib>:<brand>` (e.g. `lobehub:claude`), `data:` / URL passthrough, or plain emoji.
+- Frontend resolver: [client/src/assets/icons/index.ts](./client/src/assets/icons/index.ts) `resolveIcon` + `resolveLibraryIcon`. The asset registry is keyed by SVG filename (without `.svg`) and built eagerly at module load via `import.meta.glob`.
+- **Do not** ship inline data URIs from the backend, do not maintain frontend override tables (the `SKILL_ICON_OVERRIDES` table was removed for this reason). Drop a new SVG into `client/src/assets/icons/<category>/<key>.svg` and reference it as `asset:<key>` from the backend plugin -- nothing else.
+
 ## Key Files & Components
 
 ### Core Types
@@ -476,11 +509,7 @@ authoring model.
 - `src/ParameterPanel.tsx` - Main parameter configuration modal
 
 ### AI Chat Model Components
-- `src/components/base/BaseChatModelNode.tsx` - Unified circular node design for all AI providers
-- `src/components/ClaudeChatModelNode.tsx` - Anthropic Claude model component
-- `src/components/OpenAIChatModelNode.tsx` - OpenAI GPT model component
-- `src/components/GeminiChatModelNode.tsx` - Google Gemini model component
-- `src/components/ModelNode.tsx` - Generic AI model node with provider detection
+AI model nodes route through `SquareNode` via `Dashboard.tsx`'s `COMPONENT_BY_KIND['model']` lookup. Per-provider visual data (icon, color, displayName) comes from the backend `NodeSpec` declared in `server/nodes/model/<provider>_chat_model.py`. The pre-Wave-11 per-provider wrappers (`BaseChatModelNode`, `OpenAIChatModelNode`, `ClaudeChatModelNode`, `GeminiChatModelNode`, `ModelNode`) were deleted -- nothing imported them after the migration.
 - `src/services/apiKeyManager.ts` - Secure API key storage and validation with LangChain
 
 ### Specialized UI
@@ -2088,10 +2117,7 @@ def create_model(self, provider: str, api_key: str, model: str,
 ## AI Chat Model Implementation Details
 
 ### Component Architecture
-1. **BaseChatModelNode** (`src/components/base/BaseChatModelNode.tsx`): Unified circular design with provider props
-2. **Provider Components**: Thin wrappers passing provider-specific configuration to base component
-3. **ModelNode** (`src/components/ModelNode.tsx`): Generic component with automatic provider detection
-4. **Factory Pattern**: `createBaseChatModel()` generates standardized node definitions from configs
+AI chat model nodes (`openaiChatModel`, `anthropicChatModel`, `geminiChatModel`, etc.) render through `SquareNode` via the spec-driven `COMPONENT_BY_KIND['model']` dispatch in `Dashboard.tsx`. Per-provider visual config (icon, color, displayName, parameter schema) comes from the backend `NodeSpec` declared in `server/nodes/model/<provider>_chat_model.py`. Provider icons use `lobehub:<brand>` strings resolved by `resolveLibraryIcon` against `@lobehub/icons`; brand-specific SVGs (deepseek/kimi/mistral) live under `client/src/assets/icons/llm/` and are addressed via `asset:<key>`. There are no per-provider wrapper components anymore — adding a new provider takes a single Python file under `server/nodes/model/`.
 
 ### API Key Management (`src/services/apiKeyManager.ts`)
 - **Validation**: Uses LangChain for real API testing with provider-specific chat models
@@ -3310,220 +3336,40 @@ See **[Onboarding Service](./docs-internal/onboarding.md)** for full documentati
 
 ## AI Chat Model Development Guide
 
-### Adding New AI Providers
+### Adding a new AI provider (post-Wave-11)
 
-Follow these steps to add a new AI provider. OpenRouter is used as a
-complete example. **Note (Wave 11+)**: node metadata is authored on the
-backend as a plugin under `server/nodes/model/<provider>_chat_model.py`.
-The frontend snippets below are kept as historical reference — the
-current entry point is the backend plugin + the shared
-`ChatModelBase.chat()` path. See
-[docs-internal/plugin_system.md](./docs-internal/plugin_system.md) and
-[server/nodes/README.md](./server/nodes/README.md).
-
-#### Step 1: Frontend Node Definition (pre-Wave-11 — now lives on backend)
-
-Historical: provider config used to live in `client/src/nodeDefinitions/aiModelNodes.ts`:
-
-```typescript
-const openrouterConfig: ChatModelConfig = {
-  providerId: 'openrouter',
-  displayName: 'OpenRouter',
-  icon: '🔀',
-  color: '#6366F1',
-  description: 'OpenRouter unified API - access OpenAI, Claude, Gemini, Llama, and more',
-  models: [], // Models fetched dynamically via API
-  parameters: [
-    STANDARD_PARAMETERS.temperature,
-    STANDARD_PARAMETERS.maxTokens,
-    STANDARD_PARAMETERS.topP,
-    STANDARD_PARAMETERS.frequencyPenalty,
-    STANDARD_PARAMETERS.presencePenalty,
-    {
-      displayName: 'Timeout',
-      name: 'timeout',
-      type: 'number',
-      default: 60000,
-      typeOptions: { minValue: 1000, maxValue: 180000 },
-      description: 'Timeout for the request in milliseconds'
-    },
-    {
-      displayName: 'Max Retries',
-      name: 'maxRetries',
-      type: 'number',
-      default: 2,
-      typeOptions: { minValue: 0, maxValue: 5 },
-      description: 'Maximum number of retries'
-    }
-  ]
-};
-
-// Add to exports
-export const aiModelNodes = {
-  // ... existing configs
-  openrouterChatModel: createBaseChatModel(openrouterConfig)
-};
-
-export { openrouterConfig };
-```
-
-#### Step 2: Backend Provider Configuration
-
-Add to `server/services/ai.py`:
+A new chat-model provider is **one Python file** under `server/nodes/model/<provider>_chat_model.py`. The plugin auto-registers via `BaseNode.__init_subclass__`; the frontend renders it through `SquareNode` from the emitted NodeSpec without a single TS change.
 
 ```python
-# Header function for API authentication
-def _openrouter_headers(api_key: str) -> dict:
-    return {
-        'Authorization': f'Bearer {api_key}',
-        'HTTP-Referer': 'http://localhost:3000',
-        'X-Title': 'MachinaOS'
-    }
-
-# Add to PROVIDER_CONFIGS dict
-'openrouter': ProviderConfig(
-    name='openrouter',
-    model_class=ChatOpenAI,  # OpenRouter uses OpenAI-compatible API
-    api_key_param='api_key',
-    max_tokens_param='max_tokens',
-    detection_patterns=('openrouter',),
-    default_model='openai/gpt-4o-mini',
-    models_endpoint='https://openrouter.ai/api/v1/models',
-    models_header_fn=_openrouter_headers
-),
-```
-
-Add model fetching in `fetch_models` method:
-
-```python
-elif provider == 'openrouter':
-    response = await client.get(
-        'https://openrouter.ai/api/v1/models',
-        headers=_openrouter_headers(api_key)
+# server/nodes/model/openrouter_chat_model.py
+class OpenRouterChatModel(ChatModelBase):
+    type = "openrouterChatModel"
+    metadata = NodeMetadata(
+        display_name="OpenRouter",
+        icon="lobehub:openrouter",   # asset:<key>, lobehub:<brand>, or emoji
+        color="#6366F1",
+        component_kind="model",       # routes to SquareNode in Dashboard.tsx
     )
-    response.raise_for_status()
-    data = response.json()
 
-    models = []
-    for model in data.get('data', []):
-        model_id = model.get('id', '')
-        pricing = model.get('pricing', {})
-        is_free = pricing.get('prompt') == '0' and pricing.get('completion') == '0'
-
-        # Add [FREE] prefix for free models
-        display_id = f'[FREE] {model_id}' if is_free else model_id
-        models.append(display_id)
-
-    return sorted(models, key=lambda x: (not x.startswith('[FREE]'), x))
+    class Params(ChatModelBase.Params):
+        # provider-specific overrides; everything else inherits from ChatModelBase
+        ...
 ```
 
-Add to `create_model` method for custom base_url:
+The native chat path lives in `server/services/llm/providers/<provider>.py` (Protocol-based, see [Native LLM SDK](./docs-internal/native_llm_sdk.md)). The LangChain agent path uses `ChatOpenAI` with a custom `base_url` from `server/config/llm_defaults.json` -- no Python branching needed for OpenAI-compatible APIs.
 
-```python
-if provider == 'openrouter':
-    # Strip [FREE] prefix before API call
-    actual_model = model.replace('[FREE] ', '')
-    kwargs['model'] = actual_model
-    kwargs['base_url'] = 'https://openrouter.ai/api/v1'
-    kwargs['default_headers'] = {
-        'HTTP-Referer': 'http://localhost:3000',
-        'X-Title': 'MachinaOS'
-    }
-```
+Credentials live in `server/nodes/model/_credentials.py` (one `Credential` subclass per provider) and surface in the Credentials Modal automatically. There is no `nodeDefinitions/` to edit, no `ModelNode.tsx` to update, no `Dashboard.tsx` switch to extend.
 
-#### Step 3: Provider Detection
-
-Add to `server/constants.py`:
-
-```python
-AI_CHAT_MODEL_TYPES = (
-    'openaiChatModel', 'anthropicChatModel', 'geminiChatModel', 'openrouterChatModel'
-)
-
-def detect_ai_provider(node_type: str, parameters: dict = None) -> str:
-    if node_type == 'aiAgent':
-        return (parameters or {}).get('provider', 'openai')
-    elif 'openrouter' in node_type.lower():
-        return 'openrouter'
-    elif 'anthropic' in node_type.lower():
-        return 'anthropic'
-    elif 'gemini' in node_type.lower():
-        return 'gemini'
-    else:
-        return 'openai'
-```
-
-#### Step 4: Frontend Credential Mapping
-
-Add to `client/src/components/ModelNode.tsx`:
-
-```typescript
-const CREDENTIAL_TO_PROVIDER: Record<string, string> = {
-  'openaiApi': 'openai',
-  'anthropicApi': 'anthropic',
-  'googleAiApi': 'gemini',
-  'openrouterApi': 'openrouter'  // Add this
-};
-
-// Add fallback detection
-if (type?.includes('openrouter')) return 'openrouter';
-
-// Add icon fallback
-if (type?.includes('openrouter')) return '🔀';
-```
-
-#### Step 5: Dashboard Node Type Mapping
-
-Add to `client/src/Dashboard.tsx`:
-
-```typescript
-} else if (type === 'openaiChatModel' || type === 'anthropicChatModel' ||
-           type === 'geminiChatModel' || type === 'openrouterChatModel') {
-  types[type] = SquareNode;  // AI chat models use square design
-}
-```
-
-#### Step 6: Add Credentials Modal Entry
-
-Add to `client/src/components/CredentialsModal.tsx`:
-
-```typescript
-{
-  id: 'openrouter',
-  name: 'OpenRouter',
-  icon: '🔀',
-  fields: [{ name: 'apiKey', label: 'API Key', type: 'password', required: true }]
-}
-```
-
-#### Step 7: Pydantic Validation (Optional)
-
-Add to `server/models/nodes.py`:
-
-```python
-class AIChatModelParams(BaseNodeParams):
-    type: Literal["openaiChatModel", "anthropicChatModel", "geminiChatModel", "openrouterChatModel"]
-```
-
-### Key Implementation Files
+### Key implementation files
 
 | File | Purpose |
-|------|---------|
-| `client/src/factories/baseChatModelFactory.ts` | Factory function for node definitions |
-| `client/src/components/ModelNode.tsx` | Credential mapping and icon detection |
-| `client/src/components/CredentialsModal.tsx` | API key entry UI |
-| `client/src/Dashboard.tsx` | Node type to component mapping |
-| `server/services/ai.py` | AI service: native SDK chat (via services/llm), LangChain agents (LangGraph) |
-| `server/services/llm/` | Native LLM provider layer: factory, protocol types, per-provider SDKs |
-| `server/constants.py` | Provider detection function |
-| `server/models/nodes.py` | Pydantic validation (optional) |
-
-### Special Considerations for OpenRouter
-
-- **OpenAI-Compatible API**: Uses LangChain's `ChatOpenAI` with custom `base_url`
-- **Model ID Format**: `provider/model-name` (e.g., `openai/gpt-4o`, `anthropic/claude-3.5-sonnet`)
-- **Free Models**: API returns pricing info; models with `0` cost get `[FREE]` prefix
-- **Dropdown Grouping**: Frontend uses `<optgroup>` for Free/Paid model separation
+|---|---|
+| `server/nodes/model/<provider>_chat_model.py` | Plugin entry — metadata + Params + auto-registers |
+| `server/nodes/model/_credentials.py` | `Credential` subclass per provider |
+| `server/config/llm_defaults.json` | base_url + supported_params + temperature constraints (no hardcoded URLs in Python) |
+| `server/services/llm/providers/<provider>.py` | Native SDK provider (Protocol-based) |
+| `server/services/ai.py` | Routing: native chat path + LangChain agent path |
+| `client/src/Dashboard.tsx` | Generic `COMPONENT_BY_KIND` dispatch — no per-provider entry needed |
 
 ## Simple Memory System
 
