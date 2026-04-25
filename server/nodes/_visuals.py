@@ -64,3 +64,18 @@ def get_color(node_type: str) -> str:
     if not entry:
         return ""
     return str(entry.get("color", ""))
+
+
+def get_skill(node_type: str) -> str:
+    """Return the teaching skill folder name registered for ``node_type``.
+
+    Many tool / utility nodes have a paired skill in ``server/skills/``
+    that documents how an AI agent should use them. The ``skill`` field
+    in ``visuals.json`` is the reverse lookup consumed by
+    ``services.auto_skill`` to decide what to do when a tool node is
+    connected to an AI agent.
+    """
+    entry = _VISUALS.get(node_type)
+    if not entry:
+        return ""
+    return str(entry.get("skill", ""))

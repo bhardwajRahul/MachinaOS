@@ -43,6 +43,7 @@ import { workflowApi } from './services/workflowApi';
 import { useDragAndDrop } from './hooks/useDragAndDrop';
 import { useComponentPalette } from './hooks/useComponentPalette';
 import { useReactFlowNodes } from './hooks/useReactFlowNodes';
+import { useAutoSkillEdges } from './hooks/useAutoSkillEdges';
 import { useCopyPaste } from './hooks/useCopyPaste';
 import { useWebSocket } from './contexts/WebSocketContext';
 import { useNodeStatusStore } from './stores/nodeStatusStore';
@@ -210,7 +211,15 @@ const DashboardContent: React.FC = () => {
     workflowLock.workflow_id === currentWorkflow?.id;
   const [globalModelDefaults, setGlobalModelDefaults] = React.useState<{ provider: string; model: string } | null>(null);
   const { onDragOver, onDrop, handleComponentDragStart } = useDragAndDrop({ nodes, setNodes, saveNodeParameters, globalModelDefaults });
-  const { onConnect, onNodesDelete, onEdgesDelete } = useReactFlowNodes({ setNodes, setEdges });
+  const { onConnect: baseOnConnect, onNodesDelete, onEdgesDelete: baseOnEdgesDelete } = useReactFlowNodes({ setNodes, setEdges });
+  const { onConnect, onEdgesDelete } = useAutoSkillEdges({
+    baseOnConnect,
+    baseOnEdgesDelete,
+    nodes,
+    edges,
+    setNodes,
+    setEdges,
+  });
   const { copySelectedNodes, pasteNodes } = useCopyPaste({ nodes, edges, setNodes, setEdges, saveNodeParameters });
 
   // Override all agent nodes to use the global model. Agent membership is

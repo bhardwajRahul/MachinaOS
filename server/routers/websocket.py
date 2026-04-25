@@ -2623,6 +2623,30 @@ async def handle_save_skill_content(data: Dict[str, Any], websocket: WebSocket) 
     return {"success": False, "error": f"Skill '{skill_name}' not found"}
 
 
+@ws_handler("action", "source_type", "target_type", "target_handle")
+async def handle_evaluate_auto_skill(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
+    """Decide what to do when a tool->agent edge is connected/disconnected.
+
+    Owns the auto-add-skill policy: visuals.json reverse map +
+    plugin-registry agent classification + canonical SkillConfig
+    shape. Frontend forwards minimal edge details and the current
+    Master Skill state; this returns a standard workflow-ops batch
+    (see docs-internal/workflow_ops_protocol.md).
+    """
+    from services import auto_skill
+
+    result = auto_skill.evaluate(
+        action=data["action"],
+        source_type=data["source_type"],
+        target_type=data["target_type"],
+        target_handle=data["target_handle"],
+        target_node_id=data.get("target_node_id"),
+        master_skill_id=data.get("master_skill_id"),
+        master_skill_config=data.get("master_skill_config"),
+    )
+    return {"success": True, **result}
+
+
 @ws_handler()
 async def handle_list_skill_folders(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
     """List top-level subdirectories under server/skills/.
@@ -3487,6 +3511,7 @@ MESSAGE_HANDLERS: Dict[str, MessageHandler] = {
     "save_skill_content": handle_save_skill_content,
     "scan_skill_folder": handle_scan_skill_folder,
     "list_skill_folders": handle_list_skill_folders,
+    "evaluate_auto_skill": handle_evaluate_auto_skill,
     "lookup_skill_metadata": handle_lookup_skill_metadata,
 
     # Memory and Skill Clear/Reset
