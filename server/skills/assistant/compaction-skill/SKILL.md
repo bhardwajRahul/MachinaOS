@@ -6,7 +6,7 @@ metadata:
   author: machina
   version: "1.0"
   category: memory
-  icon: "📦"
+  icon: "lucide:Package"
   color: "#8B5CF6"
 ---
 

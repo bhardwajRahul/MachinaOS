@@ -6,7 +6,7 @@ metadata:
   author: machina
   version: "1.0"
   category: filesystem
-  icon: "\u270F\uFE0F"
+  icon: "lucide:Edit"
   color: "#50fa7b"
 ---
 

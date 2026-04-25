@@ -5,7 +5,7 @@ class SocialAgentNode(SpecializedAgentBase):
     type = "social_agent"
     display_name = "Social Agent"
     subtitle = "Social Messaging"
-    icon = "📱"
+    icon = "lucide:Smartphone"
     color = "#50fa7b"
     group = ("agent",)
     description = "AI agent for social messaging"

@@ -6,7 +6,7 @@ metadata:
   author: machina
   version: "2.0"
   category: memory
-  icon: "🧠"
+  icon: "lucide:Brain"
   color: "#8B5CF6"
 ---
 

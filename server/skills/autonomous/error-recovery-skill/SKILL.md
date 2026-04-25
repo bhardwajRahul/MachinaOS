@@ -6,7 +6,7 @@ metadata:
   author: machina
   version: "1.0"
   category: autonomous
-  icon: "🛡️"
+  icon: "lucide:Shield"
   color: "#EF4444"
 ---
 # Error Recovery Pattern

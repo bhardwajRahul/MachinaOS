@@ -31,7 +31,7 @@ class TaskManagerNode(ToolNode):
     type = "taskManager"
     display_name = "Task Manager"
     subtitle = "AI Task Tracking"
-    icon = "📋"
+    icon = "lucide:ClipboardList"
     color = "#f1fa8c"
     group = ("tool", "ai")
     description = "Task management tool for AI agents to create, track, and manage tasks"

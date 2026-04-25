@@ -26,7 +26,7 @@ class ProxyStatusNode(ActionNode):
     type = "proxyStatus"
     display_name = "Proxy Status"
     subtitle = "Health Stats"
-    icon = "📊"
+    icon = "lucide:BarChart3"
     color = "#ffb86c"
     group = ("proxy", "tool")
     description = "View proxy provider health, scores, and usage statistics"

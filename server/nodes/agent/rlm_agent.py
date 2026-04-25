@@ -25,7 +25,7 @@ class RLMAgentNode(ActionNode):
     type = "rlm_agent"
     display_name = "RLM Agent"
     subtitle = "Recursive Reasoning"
-    icon = "🧠"
+    icon = "lucide:Brain"
     color = "#ffb86c"
     group = ("agent",)
     description = "Recursive Language Model agent (REPL-based)"

@@ -43,7 +43,7 @@ class ProxyRequestNode(ActionNode):
     type = "proxyRequest"
     display_name = "Proxy Request"
     subtitle = "Routed HTTP"
-    icon = "🛡"
+    icon = "lucide:Shield"
     color = "#ffb86c"
     group = ("proxy", "tool")
     description = "Make HTTP requests through residential proxy providers"

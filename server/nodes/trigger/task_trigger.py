@@ -40,7 +40,7 @@ class TaskTriggerNode(TriggerNode):
     type = "taskTrigger"
     display_name = "Task Completed"
     subtitle = "Delegated Task Done"
-    icon = "📨"
+    icon = "lucide:Mailbox"
     color = "#ffb86c"
     group = ("trigger", "workflow")
     description = "Triggers when a delegated child agent completes its task (success or error)"

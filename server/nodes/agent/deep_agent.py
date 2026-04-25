@@ -26,7 +26,7 @@ class DeepAgentNode(ActionNode):
     type = "deep_agent"
     display_name = "Deep Agent"
     subtitle = "LangChain DeepAgents"
-    icon = "\U0001F9E0"
+    icon = "lucide:Brain"
     color = "#50fa7b"
     group = ("agent",)
     description = "LangChain DeepAgents with filesystem tools and sub-agent delegation"

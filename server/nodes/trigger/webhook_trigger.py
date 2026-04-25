@@ -75,7 +75,7 @@ class WebhookTriggerNode(TriggerNode):
     type = "webhookTrigger"
     display_name = "Webhook Trigger"
     subtitle = "HTTP Inbound"
-    icon = "🪝"
+    icon = "lucide:Anchor"
     color = "#ffb86c"
     group = ("trigger",)
     description = "Start workflow when HTTP request is received"

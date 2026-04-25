@@ -6,7 +6,7 @@ metadata:
   author: machina
   version: "1.0"
   category: location
-  icon: "🗺️"
+  icon: "lucide:Map"
   color: "#34A853"
 ---
 

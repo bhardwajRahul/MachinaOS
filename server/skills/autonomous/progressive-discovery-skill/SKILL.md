@@ -6,7 +6,7 @@ metadata:
   author: machina
   version: "1.0"
   category: autonomous
-  icon: "🔍"
+  icon: "lucide:Search"
   color: "#F59E0B"
 ---
 # Progressive Tool Discovery

@@ -5,7 +5,7 @@ metadata:
   author: machina
   version: "1.0"
   category: reasoning
-  icon: "brain"
+  icon: "lucide:Brain"
   color: "#FF8C00"
 ---
 

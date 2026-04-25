@@ -6,7 +6,7 @@ metadata:
   author: machina
   version: "1.0"
   category: automation
-  icon: "⏱️"
+  icon: "lucide:Timer"
   color: "#10B981"
 ---
 

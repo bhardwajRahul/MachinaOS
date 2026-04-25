@@ -58,7 +58,7 @@ class CalculatorToolNode(ToolNode):
     type = "calculatorTool"
     display_name = "Calculator"
     subtitle = "Math Operations"
-    icon = "🔢"
+    icon = "lucide:Calculator"
     color = "#f1fa8c"
     group = ("tool", "ai")
     description = "Add, subtract, multiply, divide, power, sqrt, mod, abs"

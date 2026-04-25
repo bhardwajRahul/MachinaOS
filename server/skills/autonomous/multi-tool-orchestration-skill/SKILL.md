@@ -6,7 +6,7 @@ metadata:
   author: machina
   version: "1.0"
   category: autonomous
-  icon: "🔀"
+  icon: "lucide:Shuffle"
   color: "#6366F1"
 ---
 # Multi-Tool Orchestration Pattern

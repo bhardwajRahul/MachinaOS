@@ -48,7 +48,7 @@ class FileHandlerNode(ActionNode):
     type = "fileHandler"
     display_name = "File Handler"
     subtitle = "Wrap Content Metadata"
-    icon = "📁"
+    icon = "lucide:Folder"
     color = "#bd93f9"
     group = ("text",)
     description = "Wrap text content with file-type / file-name metadata"

@@ -31,7 +31,7 @@ class StartNode(ActionNode):
     type = "start"
     display_name = "Start"
     subtitle = "Workflow Start"
-    icon = "▶"
+    icon = "lucide:Play"
     color = "#bd93f9"
     group = ("workflow",)
     description = "Starting point for workflow execution. Provides initial data to connected nodes."

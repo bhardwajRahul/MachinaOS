@@ -6,7 +6,7 @@ metadata:
   author: machina
   version: "1.0"
   category: autonomous
-  icon: "💻"
+  icon: "lucide:Laptop"
   color: "#10B981"
 ---
 # Code Mode Pattern

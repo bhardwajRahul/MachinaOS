@@ -6,7 +6,7 @@ metadata:
   author: machina
   version: "1.0"
   category: web
-  icon: "🕷"
+  icon: "lucide:Bug"
   color: "#00D1B2"
 ---
 

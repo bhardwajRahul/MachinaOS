@@ -116,7 +116,7 @@ class ConsoleNode(ActionNode):
     type = "console"
     display_name = "Console"
     subtitle = "Debug Logger"
-    icon = "🖥️"
+    icon = "lucide:Monitor"
     color = "#8be9fd"
     group = ("utility",)
     description = "Log data to console panel for debugging during execution"

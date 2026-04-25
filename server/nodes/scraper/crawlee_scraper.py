@@ -278,7 +278,7 @@ class CrawleeScraperNode(ActionNode):
     type = "crawleeScraper"
     display_name = "Web Scraper"
     subtitle = "Crawlee"
-    icon = "🕷"
+    icon = "lucide:Bug"
     color = "#ff79c6"
     group = ("scraper", "tool")
     description = "Web scraper supporting static HTML (BeautifulSoup) and JS-rendered (Playwright)"

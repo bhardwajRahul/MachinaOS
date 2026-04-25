@@ -6,7 +6,7 @@ metadata:
   author: machina
   version: "1.0"
   category: terminal
-  icon: "\U0001F4E6"
+  icon: "lucide:Package"
   color: "#E95420"
 ---
 

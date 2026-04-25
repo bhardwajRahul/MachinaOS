@@ -6,7 +6,7 @@ class AIEmployeeNode(SpecializedAgentBase):
     type = "ai_employee"
     display_name = "AI Employee"
     subtitle = "Team Orchestration"
-    icon = "👥"
+    icon = "lucide:Users"
     color = "#bd93f9"
     group = ("agent",)
     description = "Team lead for multi-agent coordination"

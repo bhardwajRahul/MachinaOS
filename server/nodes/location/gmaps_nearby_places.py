@@ -32,7 +32,7 @@ class GmapsNearbyPlacesNode(ActionNode):
     type = "gmaps_nearby_places"
     display_name = "Nearby Places"
     subtitle = "Places API"
-    icon = "🔍"
+    icon = "lucide:Search"
     color = "#50fa7b"
     group = ("location", "service", "tool")
     description = "Google Places API nearbySearch"

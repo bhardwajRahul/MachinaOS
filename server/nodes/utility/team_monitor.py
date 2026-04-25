@@ -29,7 +29,7 @@ class TeamMonitorNode(ActionNode):
     type = "teamMonitor"
     display_name = "Team Monitor"
     subtitle = "Agent Team Status"
-    icon = "📊"
+    icon = "lucide:BarChart3"
     color = "#bd93f9"
     group = ("utility",)
     description = "Real-time monitoring of Agent Team operations"

@@ -70,7 +70,7 @@ class DocumentParserNode(ActionNode):
     type = "documentParser"
     display_name = "Document Parser"
     subtitle = "Parse to Text"
-    icon = "📄"
+    icon = "lucide:FileType"
     color = "#bd93f9"
     group = ("document",)
     description = "Parse documents to text using configurable parsers"

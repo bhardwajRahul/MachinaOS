@@ -32,7 +32,7 @@ class WriteTodosNode(ToolNode):
     type = "writeTodos"
     display_name = "Write Todos"
     subtitle = "Plan-Work-Update Loop"
-    icon = "📝"
+    icon = "lucide:FileText"
     color = "#bd93f9"
     group = ("tool", "ai")
     description = "Structured task list planning for complex multi-step operations"

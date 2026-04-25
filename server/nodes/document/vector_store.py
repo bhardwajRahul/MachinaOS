@@ -243,7 +243,7 @@ class VectorStoreNode(ActionNode):
     type = "vectorStore"
     display_name = "Vector Store"
     subtitle = "Store/Query"
-    icon = "🗄️"
+    icon = "lucide:Database"
     color = "#bd93f9"
     group = ("document",)
     description = "Store and query vector embeddings"

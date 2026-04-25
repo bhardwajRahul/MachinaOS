@@ -6,7 +6,7 @@ metadata:
   author: machina
   version: "1.0"
   category: android
-  icon: "🌡️"
+  icon: "lucide:Thermometer"
   color: "#84CC16"
 ---
 

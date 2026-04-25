@@ -5,7 +5,7 @@ metadata:
   author: machina
   version: "1.0"
   category: formatting
-  icon: "✨"
+  icon: "lucide:Sparkles"
   color: "#F59E0B"
 ---
 

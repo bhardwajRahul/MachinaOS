@@ -6,7 +6,7 @@ metadata:
   author: machina
   version: "1.0"
   category: integration
-  icon: "🌐"
+  icon: "lucide:Globe"
   color: "#EF4444"
 ---
 

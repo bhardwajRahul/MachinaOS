@@ -366,7 +366,7 @@ class ProxyConfigNode(ActionNode):
     type = "proxyConfig"
     display_name = "Proxy Config"
     subtitle = "Routing Rules"
-    icon = "🔧"
+    icon = "lucide:Wrench"
     color = "#ffb86c"
     group = ("proxy", "tool")
     description = "Configure proxy providers and routing rules"

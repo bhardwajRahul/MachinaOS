@@ -6,7 +6,7 @@ metadata:
   author: machina
   version: "1.0"
   category: code
-  icon: "📜"
+  icon: "asset:javascript"
   color: "#F7DF1E"
 ---
 

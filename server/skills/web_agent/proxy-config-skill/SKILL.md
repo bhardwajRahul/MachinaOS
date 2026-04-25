@@ -6,7 +6,7 @@ metadata:
   author: machina
   version: "3.0"
   category: integration
-  icon: "🛡"
+  icon: "lucide:Shield"
   color: "#8B5CF6"
 ---
 

@@ -28,7 +28,7 @@ class FsSearchNode(ActionNode):
     type = "fsSearch"
     display_name = "FS Search"
     subtitle = "ls/glob/grep"
-    icon = "🔍"
+    icon = "lucide:Search"
     color = "#8be9fd"
     group = ("filesystem", "tool")
     description = "Search the filesystem (ls, glob, grep)"

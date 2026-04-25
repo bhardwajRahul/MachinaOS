@@ -69,7 +69,7 @@ class HttpRequestNode(ActionNode):
     type = "httpRequest"
     display_name = "HTTP Request"
     subtitle = "REST Call"
-    icon = "🌐"
+    icon = "lucide:Globe"
     color = "#bd93f9"
     group = ("utility", "tool")
     description = "Make HTTP requests to external APIs (GET, POST, PUT, DELETE, PATCH)"

@@ -6,7 +6,7 @@ metadata:
   author: machina
   version: "3.0"
   category: execution
-  icon: "\u2699\uFE0F"
+  icon: "lucide:Settings"
   color: "#ffb86c"
 ---
 

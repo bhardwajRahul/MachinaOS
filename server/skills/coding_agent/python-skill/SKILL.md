@@ -6,7 +6,7 @@ metadata:
   author: machina
   version: "1.0"
   category: code
-  icon: "🐍"
+  icon: "asset:python"
   color: "#3776AB"
 ---
 

@@ -168,7 +168,7 @@ class CronSchedulerNode(ActionNode):
     type = "cronScheduler"
     display_name = "Cron Scheduler"
     subtitle = "Time-Based Trigger"
-    icon = "⏰"
+    icon = "lucide:AlarmClock"
     color = "#ffb86c"
     group = ("scheduler", "trigger", "tool")
     description = "Cron expression-based scheduling trigger"

@@ -6,7 +6,7 @@ metadata:
   author: machina
   version: "1.0"
   category: autonomous
-  icon: "🔄"
+  icon: "lucide:RotateCw"
   color: "#8B5CF6"
 ---
 # Agentic Loop Pattern
