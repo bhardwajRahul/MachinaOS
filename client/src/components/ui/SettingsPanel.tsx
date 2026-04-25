@@ -1,6 +1,15 @@
 import React, { useEffect } from 'react';
 import { toast } from 'sonner';
-import { HelpCircle } from 'lucide-react';
+import {
+  Settings as SettingsIcon,
+  Monitor,
+  Save,
+  Brain,
+  Cpu,
+  HelpCircle,
+  RotateCcw,
+  X,
+} from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { ActionButton } from '@/components/ui/action-button';
@@ -8,7 +17,6 @@ import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
 import Modal from './Modal';
-import { useAppTheme } from '../../hooks/useAppTheme';
 import {
   useUserSettingsQuery,
   useSaveUserSettingsMutation,
@@ -32,6 +40,57 @@ interface SettingsPanelProps {
   onReplayOnboarding?: () => void;
 }
 
+// ---------------------------------------------------------------------------
+// Reusable row + section primitives
+// ---------------------------------------------------------------------------
+
+type SectionTone = 'agent' | 'model' | 'workflow';
+
+const TONE_CLASSES: Record<SectionTone, string> = {
+  agent:    'bg-node-agent-soft text-node-agent',
+  model:    'bg-node-model-soft text-node-model',
+  workflow: 'bg-node-workflow-soft text-node-workflow',
+};
+
+interface SectionProps {
+  title: string;
+  Icon: React.ElementType;
+  tone: SectionTone;
+  children: React.ReactNode;
+}
+
+const Section: React.FC<SectionProps> = ({ title, Icon, tone, children }) => (
+  <div className="mb-4 rounded-md border border-border bg-muted p-4">
+    <div className="mb-4 flex items-center gap-2 border-b border-border pb-3">
+      <div className={`flex h-8 w-8 items-center justify-center rounded-md ${TONE_CLASSES[tone]}`}>
+        <Icon className="h-4 w-4" />
+      </div>
+      <div className="text-base font-semibold text-foreground">{title}</div>
+    </div>
+    {children}
+  </div>
+);
+
+interface RowProps {
+  label: string;
+  description: string;
+  children: React.ReactNode;
+}
+
+const Row: React.FC<RowProps> = ({ label, description, children }) => (
+  <div className="flex items-center justify-between py-2">
+    <div className="flex-1">
+      <div className="text-sm font-medium text-foreground">{label}</div>
+      <div className="mt-0.5 text-xs text-muted-foreground">{description}</div>
+    </div>
+    {children}
+  </div>
+);
+
+// ---------------------------------------------------------------------------
+// Main panel
+// ---------------------------------------------------------------------------
+
 const SettingsPanel: React.FC<SettingsPanelProps> = ({
   isOpen,
   onClose,
@@ -39,7 +98,6 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   onSettingsChange,
   onReplayOnboarding,
 }) => {
-  const theme = useAppTheme();
   const settingsQuery = useUserSettingsQuery();
   const saveMutation = useSaveUserSettingsMutation();
   const isLoading = settingsQuery.isLoading;
@@ -89,70 +147,10 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     await persist(settings, true);
   };
 
-  // Section card style
-  const sectionStyle: React.CSSProperties = {
-    marginBottom: theme.spacing.lg,
-    padding: theme.spacing.lg,
-    backgroundColor: theme.colors.backgroundAlt,
-    borderRadius: theme.borderRadius.md,
-    border: `1px solid ${theme.colors.border}`,
-  };
-
-  // Section header style
-  const sectionHeaderStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: theme.spacing.sm,
-    marginBottom: theme.spacing.lg,
-    paddingBottom: theme.spacing.md,
-    borderBottom: `1px solid ${theme.colors.border}`,
-  };
-
-  const sectionIconStyle: React.CSSProperties = {
-    width: '32px',
-    height: '32px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '16px',
-    backgroundColor: `${theme.dracula.purple}20`,
-    borderRadius: theme.borderRadius.md,
-  };
-
-  const sectionTitleStyle: React.CSSProperties = {
-    fontSize: theme.fontSize.base,
-    fontWeight: theme.fontWeight.semibold,
-    color: theme.colors.text,
-  };
-
-  const descriptionStyle: React.CSSProperties = {
-    fontSize: theme.fontSize.xs,
-    color: theme.colors.textSecondary,
-    marginTop: '2px',
-  };
-
-  const settingRowStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: `${theme.spacing.sm} 0`,
-  };
-
-  const settingLabelStyle: React.CSSProperties = {
-    flex: 1,
-  };
-
-  const labelTextStyle: React.CSSProperties = {
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.medium,
-    color: theme.colors.text,
-  };
-
-  // Header actions with title and buttons
   const headerActions = (
     <div className="flex items-center gap-4">
       <div className="flex items-center gap-2 text-[15px] font-semibold text-foreground">
-        <span>{'\u2699'}</span>
+        <SettingsIcon className="h-4 w-4" />
         <span>Settings</span>
       </div>
       <div className="flex items-center gap-2">
@@ -162,10 +160,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
           disabled={isSaving}
           title="Reset to default settings"
         >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-            <path d="M3 3v5h5" />
-          </svg>
+          <RotateCcw className="h-3 w-3" />
           Reset
         </ActionButton>
         <ActionButton
@@ -174,18 +169,11 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
           disabled={isSaving}
           title="Save settings"
         >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-            <polyline points="17 21 17 13 7 13 7 21" />
-            <polyline points="7 3 7 8 15 8" />
-          </svg>
+          <Save className="h-3 w-3" />
           {isSaving ? 'Saving...' : 'Save'}
         </ActionButton>
         <ActionButton tone="pink" onClick={onClose} title="Close settings">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
+          <X className="h-3 w-3" />
           Close
         </ActionButton>
       </div>
@@ -201,93 +189,62 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
       maxHeight="95vh"
       headerActions={headerActions}
     >
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-      }}>
-
-        {/* Content */}
-        <div style={{
-          flex: 1,
-          overflow: 'auto',
-          padding: theme.spacing.lg,
-          opacity: isLoading ? 0.6 : 1,
-          transition: 'opacity 0.2s ease',
-        }}>
-          {/* UI Defaults Section */}
-          <div style={sectionStyle}>
-            <div style={sectionHeaderStyle}>
-              <div style={sectionIconStyle}>{'\uD83D\uDDA5'}</div>
-              <div style={sectionTitleStyle}>UI Defaults</div>
-            </div>
-
-            <div style={settingRowStyle}>
-              <div style={settingLabelStyle}>
-                <div style={labelTextStyle}>Sidebar Open by Default</div>
-                <div style={descriptionStyle}>Show the sidebar panel when the application starts</div>
-              </div>
+      <div className="flex h-full flex-col">
+        <div
+          className={`flex-1 overflow-auto p-4 transition-opacity ${isLoading ? 'opacity-60' : 'opacity-100'}`}
+        >
+          {/* UI Defaults */}
+          <Section title="UI Defaults" Icon={Monitor} tone="agent">
+            <Row
+              label="Sidebar Open by Default"
+              description="Show the sidebar panel when the application starts"
+            >
               <Switch
-                
                 checked={settings.sidebarDefaultOpen}
                 onCheckedChange={(checked) => handleChange('sidebarDefaultOpen', checked)}
                 disabled={isSaving}
               />
-            </div>
-
-            <div style={settingRowStyle}>
-              <div style={settingLabelStyle}>
-                <div style={labelTextStyle}>Component Palette Open by Default</div>
-                <div style={descriptionStyle}>Show the component palette when the application starts</div>
-              </div>
+            </Row>
+            <Row
+              label="Component Palette Open by Default"
+              description="Show the component palette when the application starts"
+            >
               <Switch
-                
                 checked={settings.componentPaletteDefaultOpen}
                 onCheckedChange={(checked) => handleChange('componentPaletteDefaultOpen', checked)}
                 disabled={isSaving}
               />
-            </div>
-
-            <div style={settingRowStyle}>
-              <div style={settingLabelStyle}>
-                <div style={labelTextStyle}>Console Panel Open by Default</div>
-                <div style={descriptionStyle}>Show the console/chat panel at the bottom when the application starts</div>
-              </div>
+            </Row>
+            <Row
+              label="Console Panel Open by Default"
+              description="Show the console/chat panel at the bottom when the application starts"
+            >
               <Switch
-                
                 checked={settings.consolePanelDefaultOpen}
                 onCheckedChange={(checked) => handleChange('consolePanelDefaultOpen', checked)}
                 disabled={isSaving}
               />
-            </div>
-          </div>
+            </Row>
+          </Section>
 
-          {/* Auto-save Settings */}
-          <div style={sectionStyle}>
-            <div style={sectionHeaderStyle}>
-              <div style={{ ...sectionIconStyle, backgroundColor: `${theme.dracula.cyan}20` }}>{'\uD83D\uDCBE'}</div>
-              <div style={sectionTitleStyle}>Auto-save</div>
-            </div>
-
-            <div style={settingRowStyle}>
-              <div style={settingLabelStyle}>
-                <div style={labelTextStyle}>Enable Auto-save</div>
-                <div style={descriptionStyle}>Automatically save the workflow at regular intervals</div>
-              </div>
+          {/* Auto-save */}
+          <Section title="Auto-save" Icon={Save} tone="model">
+            <Row
+              label="Enable Auto-save"
+              description="Automatically save the workflow at regular intervals"
+            >
               <Switch
-                
                 checked={settings.autoSave}
                 onCheckedChange={(checked) => handleChange('autoSave', checked)}
                 disabled={isSaving}
               />
-            </div>
+            </Row>
 
             {settings.autoSave && (
-              <div style={{ ...settingRowStyle, marginTop: theme.spacing.xs }}>
-                <div style={settingLabelStyle}>
-                  <div style={labelTextStyle}>Auto-save Interval</div>
-                  <div style={descriptionStyle}>How often to auto-save (10-300 seconds)</div>
-                </div>
+              <Row
+                label="Auto-save Interval"
+                description="How often to auto-save (10-300 seconds)"
+              >
                 <div className="relative w-24">
                   <Input
                     type="number"
@@ -303,22 +260,16 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     s
                   </span>
                 </div>
-              </div>
+              </Row>
             )}
-          </div>
+          </Section>
 
-          {/* Memory & Compaction Settings */}
-          <div style={sectionStyle}>
-            <div style={sectionHeaderStyle}>
-              <div style={{ ...sectionIconStyle, backgroundColor: `${theme.dracula.purple}20` }}>{'\uD83E\uDDE0'}</div>
-              <div style={sectionTitleStyle}>Memory & Compaction</div>
-            </div>
-
-            <div style={settingRowStyle}>
-              <div style={settingLabelStyle}>
-                <div style={labelTextStyle}>Default Window Size</div>
-                <div style={descriptionStyle}>Number of message pairs to keep in short-term memory (1-100)</div>
-              </div>
+          {/* Memory & Compaction */}
+          <Section title="Memory & Compaction" Icon={Brain} tone="agent">
+            <Row
+              label="Default Window Size"
+              description="Number of message pairs to keep in short-term memory (1-100)"
+            >
               <Input
                 type="number"
                 min={1}
@@ -329,25 +280,19 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 disabled={isSaving}
                 className="w-20"
               />
-            </div>
+            </Row>
 
-            <div style={{ borderBottom: `1px solid ${theme.colors.border}40`, margin: `${theme.spacing.xs} 0` }} />
+            <div className="my-1 border-b border-border" />
 
-            <div style={{ padding: `${theme.spacing.sm} 0` }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: theme.spacing.sm }}>
-                <div style={settingLabelStyle}>
-                  <div style={labelTextStyle}>Compaction Ratio</div>
-                  <div style={descriptionStyle}>
+            <div className="py-2">
+              <div className="mb-2 flex items-center justify-between">
+                <div className="flex-1">
+                  <div className="text-sm font-medium text-foreground">Compaction Ratio</div>
+                  <div className="mt-0.5 text-xs text-muted-foreground">
                     Fraction of context window that triggers memory compaction
                   </div>
                 </div>
-                <span style={{
-                  fontSize: theme.fontSize.sm,
-                  fontWeight: theme.fontWeight.semibold,
-                  color: theme.dracula.cyan,
-                  minWidth: 42,
-                  textAlign: 'right',
-                }}>
+                <span className="min-w-[42px] text-right text-sm font-semibold text-node-model">
                   {Math.round(settings.compactionRatio * 100)}%
                 </span>
               </div>
@@ -365,29 +310,18 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 <span>50%</span>
                 <span>90%</span>
               </div>
-              <div style={{
-                fontSize: theme.fontSize.xs,
-                color: theme.colors.textMuted,
-                marginTop: theme.spacing.xs,
-                lineHeight: 1.4,
-              }}>
+              <div className="mt-1 text-xs leading-snug text-muted-foreground">
                 Lower = compact sooner (saves tokens, loses detail). Higher = compact later (preserves context, uses more tokens).
               </div>
             </div>
-          </div>
+          </Section>
 
-          {/* Process Manager Section */}
-          <div style={sectionStyle}>
-            <div style={sectionHeaderStyle}>
-              <div style={{ ...sectionIconStyle, backgroundColor: `${theme.dracula.orange}20` }}>{'\u2699\uFE0F'}</div>
-              <div style={sectionTitleStyle}>Process Manager</div>
-            </div>
-
-            <div style={settingRowStyle}>
-              <div style={settingLabelStyle}>
-                <div style={labelTextStyle}>Max Concurrent Processes</div>
-                <div style={descriptionStyle}>Maximum number of running processes per workflow (1-50)</div>
-              </div>
+          {/* Process Manager */}
+          <Section title="Process Manager" Icon={Cpu} tone="workflow">
+            <Row
+              label="Max Concurrent Processes"
+              description="Maximum number of running processes per workflow (1-50)"
+            >
               <Input
                 type="number"
                 min={1}
@@ -398,41 +332,27 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 disabled={isSaving}
                 className="w-20"
               />
-            </div>
-          </div>
+            </Row>
+          </Section>
 
-          {/* Help Section */}
-          <div style={sectionStyle}>
-            <div style={sectionHeaderStyle}>
-              <div style={{ ...sectionIconStyle, backgroundColor: `${theme.dracula.cyan}20` }}>
-                <HelpCircle className="h-4 w-4" style={{ color: theme.dracula.cyan }} />
-              </div>
-              <div style={sectionTitleStyle}>Help</div>
-            </div>
-
-            <div style={settingRowStyle}>
-              <div style={settingLabelStyle}>
-                <div style={labelTextStyle}>Replay Welcome Guide</div>
-                <div style={descriptionStyle}>Show the onboarding wizard again to review platform features</div>
-              </div>
+          {/* Help */}
+          <Section title="Help" Icon={HelpCircle} tone="model">
+            <Row
+              label="Replay Welcome Guide"
+              description="Show the onboarding wizard again to review platform features"
+            >
               <Button
                 size="sm"
-                variant="outline"
+                variant="default"
                 onClick={onReplayOnboarding}
                 disabled={!onReplayOnboarding}
-                style={{
-                  backgroundColor: `${theme.dracula.cyan}25`,
-                  color: theme.dracula.cyan,
-                  borderColor: `${theme.dracula.cyan}60`,
-                }}
               >
                 <HelpCircle className="h-3.5 w-3.5" />
                 Replay
               </Button>
-            </div>
-          </div>
+            </Row>
+          </Section>
         </div>
-
       </div>
     </Modal>
   );
