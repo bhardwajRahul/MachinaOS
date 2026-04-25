@@ -1,10 +1,19 @@
 import React, { useState } from 'react';
 import Prism from 'prismjs';
 import 'prismjs/components/prism-json';
+import {
+  Play,
+  CheckCircle2,
+  XCircle,
+  ChevronRight,
+  Trash2,
+  Copy,
+} from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { ExecutionResult } from '../../services/executionService';
 import { copyToClipboard, formatTimestamp } from '../../utils/formatters';
-import { useAppTheme } from '../../hooks/useAppTheme';
-import { styles as themeStyles, getPrismTokenCSS } from '../../styles/theme';
 
 interface OutputDisplayPanelProps {
   results: ExecutionResult[];
@@ -13,154 +22,128 @@ interface OutputDisplayPanelProps {
   currentWorkflow?: any;
 }
 
+// ---------------------------------------------------------------------------
+// Output transforms — render structured tool output as readable text.
+// ---------------------------------------------------------------------------
+
+const getExecutionData = (result: ExecutionResult) => {
+  if (result.outputs) return result.outputs;
+  if (result.data?.data) return result.data.data;
+  return { message: 'No output data' };
+};
+
+const formatFilesystemOutput = (data: any): string | null => {
+  const r = data?.result || data;
+  if (!r) return null;
+
+  if (r.content && r.file_path) {
+    return `File: ${r.file_path}\n\n${r.content}`;
+  }
+  if (r.operation === 'write' && r.file_path) {
+    return `Written: ${r.file_path}`;
+  }
+  if (r.operation === 'edit' && r.file_path) {
+    return `Edited: ${r.file_path} (${r.occurrences || 1} replacement${(r.occurrences || 1) > 1 ? 's' : ''})`;
+  }
+  if (r.command !== undefined && r.stdout !== undefined) {
+    const status = r.exit_code === 0 ? 'OK' : `Exit ${r.exit_code}`;
+    const output = r.stdout || '(no output)';
+    return `$ ${r.command}\n[${status}]\n\n${output}`;
+  }
+  if (r.entries && Array.isArray(r.entries)) {
+    const lines = r.entries.map((e: any) =>
+      `${e.type === 'dir' ? '[DIR]' : '     '} ${e.name}${e.size != null ? ` (${e.size} bytes)` : ''}`
+    );
+    return `${r.path || '.'} (${r.count || r.entries.length} items)\n\n${lines.join('\n')}`;
+  }
+  if (r.matches && Array.isArray(r.matches)) {
+    if (r.matches.length === 0) return `No matches for "${r.pattern}"`;
+    const lines = r.matches.slice(0, 50).map((m: any) =>
+      m.line ? `${m.path}:${m.line}: ${m.text}` : (m.path || JSON.stringify(m))
+    );
+    const suffix = r.count > 50 ? `\n... and ${r.count - 50} more` : '';
+    return `${r.count || r.matches.length} match${(r.count || r.matches.length) > 1 ? 'es' : ''} for "${r.pattern}"\n\n${lines.join('\n')}${suffix}`;
+  }
+  return null;
+};
+
+const formatTodoOutput = (data: any): string | null => {
+  const r = data?.result || data;
+  if (!r) return null;
+
+  let todos: any[] = [];
+  if (typeof r.todos === 'string') {
+    try { todos = JSON.parse(r.todos); } catch { return null; }
+  } else if (Array.isArray(r.todos)) {
+    todos = r.todos;
+  } else {
+    return null;
+  }
+
+  if (todos.length === 0) return r.message || 'Todo list is empty.';
+
+  const statusIcon: Record<string, string> = {
+    pending: '[ ]',
+    in_progress: '[~]',
+    completed: '[x]',
+  };
+  const lines = todos.map((t: any, i: number) => {
+    const icon = statusIcon[t.status] || '[ ]';
+    return `${i + 1}. ${icon} ${t.content}`;
+  });
+
+  const counts = {
+    pending: todos.filter((t: any) => t.status === 'pending').length,
+    in_progress: todos.filter((t: any) => t.status === 'in_progress').length,
+    completed: todos.filter((t: any) => t.status === 'completed').length,
+  };
+  const summary = `${todos.length} items: ${counts.completed} done, ${counts.in_progress} active, ${counts.pending} pending`;
+
+  return `${summary}\n\n${lines.join('\n')}`;
+};
+
+const getMainResponse = (result: ExecutionResult): string | null => {
+  const data = getExecutionData(result);
+
+  const fsOutput = formatFilesystemOutput(data);
+  if (fsOutput) return fsOutput;
+
+  const todoOutput = formatTodoOutput(data);
+  if (todoOutput) return todoOutput;
+
+  if (data?.result?.response) return data.result.response;
+  if (data?.response) return data.response;
+  if (data?.result?.text) return data.result.text;
+  if (data?.text) return data.text;
+  if (data?.result?.content) return data.result.content;
+  if (data?.content) return data.content;
+  if (data?.result?.message) return data.result.message;
+  if (data?.message && typeof data.message === 'string') return data.message;
+  return null;
+};
+
+// ---------------------------------------------------------------------------
+// Main panel
+// ---------------------------------------------------------------------------
+
 const OutputDisplayPanel: React.FC<OutputDisplayPanelProps> = ({ results, onClear }) => {
-  const theme = useAppTheme();
   const [expandedResults, setExpandedResults] = useState<Set<string>>(new Set());
 
   const toggleExpand = (key: string) => {
     setExpandedResults(prev => {
       const next = new Set(prev);
-      if (next.has(key)) {
-        next.delete(key);
-      } else {
-        next.add(key);
-      }
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   };
 
-  const getExecutionData = (result: ExecutionResult) => {
-    if (result.outputs) return result.outputs;
-    if (result.data?.data) return result.data.data;
-    return { message: 'No output data' };
-  };
-
-  // Format filesystem/shell results into readable output
-  const formatFilesystemOutput = (data: any): string | null => {
-    const r = data?.result || data;
-    if (!r) return null;
-
-    // fileRead: show file content
-    if (r.content && r.file_path) {
-      return `File: ${r.file_path}\n\n${r.content}`;
-    }
-
-    // fileModify: show operation result
-    if (r.operation === 'write' && r.file_path) {
-      return `Written: ${r.file_path}`;
-    }
-    if (r.operation === 'edit' && r.file_path) {
-      return `Edited: ${r.file_path} (${r.occurrences || 1} replacement${(r.occurrences || 1) > 1 ? 's' : ''})`;
-    }
-
-    // shell: show stdout with exit code
-    if (r.command !== undefined && r.stdout !== undefined) {
-      const status = r.exit_code === 0 ? 'OK' : `Exit ${r.exit_code}`;
-      const output = r.stdout || '(no output)';
-      return `$ ${r.command}\n[${status}]\n\n${output}`;
-    }
-
-    // fsSearch ls: show directory listing
-    if (r.entries && Array.isArray(r.entries)) {
-      const lines = r.entries.map((e: any) =>
-        `${e.type === 'dir' ? '[DIR]' : '     '} ${e.name}${e.size != null ? ` (${e.size} bytes)` : ''}`
-      );
-      return `${r.path || '.'} (${r.count || r.entries.length} items)\n\n${lines.join('\n')}`;
-    }
-
-    // fsSearch glob/grep: show matches
-    if (r.matches && Array.isArray(r.matches)) {
-      if (r.matches.length === 0) return `No matches for "${r.pattern}"`;
-      const lines = r.matches.slice(0, 50).map((m: any) =>
-        m.line ? `${m.path}:${m.line}: ${m.text}` : (m.path || JSON.stringify(m))
-      );
-      const suffix = r.count > 50 ? `\n... and ${r.count - 50} more` : '';
-      return `${r.count || r.matches.length} match${(r.count || r.matches.length) > 1 ? 'es' : ''} for "${r.pattern}"\n\n${lines.join('\n')}${suffix}`;
-    }
-
-    return null;
-  };
-
-  // Format writeTodos results into a readable checklist
-  const formatTodoOutput = (data: any): string | null => {
-    const r = data?.result || data;
-    if (!r) return null;
-
-    // Parse todos from JSON string or array
-    let todos: any[] = [];
-    if (typeof r.todos === 'string') {
-      try { todos = JSON.parse(r.todos); } catch { return null; }
-    } else if (Array.isArray(r.todos)) {
-      todos = r.todos;
-    } else {
-      return null;
-    }
-
-    if (todos.length === 0) return r.message || 'Todo list is empty.';
-
-    const statusIcon: Record<string, string> = {
-      pending: '[ ]',
-      in_progress: '[~]',
-      completed: '[x]',
-    };
-    const lines = todos.map((t: any, i: number) => {
-      const icon = statusIcon[t.status] || '[ ]';
-      return `${i + 1}. ${icon} ${t.content}`;
-    });
-
-    const counts = {
-      pending: todos.filter((t: any) => t.status === 'pending').length,
-      in_progress: todos.filter((t: any) => t.status === 'in_progress').length,
-      completed: todos.filter((t: any) => t.status === 'completed').length,
-    };
-    const summary = `${todos.length} items: ${counts.completed} done, ${counts.in_progress} active, ${counts.pending} pending`;
-
-    return `${summary}\n\n${lines.join('\n')}`;
-  };
-
-  // Extract the main response text from AI results
-  const getMainResponse = (result: ExecutionResult): string | null => {
-    const data = getExecutionData(result);
-
-    // Filesystem/shell nodes
-    const fsOutput = formatFilesystemOutput(data);
-    if (fsOutput) return fsOutput;
-
-    // Todo planning nodes
-    const todoOutput = formatTodoOutput(data);
-    if (todoOutput) return todoOutput;
-
-    // Handle nested response structure
-    if (data?.result?.response) return data.result.response;
-    if (data?.response) return data.response;
-    if (data?.result?.text) return data.result.text;
-    if (data?.text) return data.text;
-    if (data?.result?.content) return data.result.content;
-    if (data?.content) return data.content;
-    if (data?.result?.message) return data.result.message;
-    if (data?.message && typeof data.message === 'string') return data.message;
-    return null;
-  };
-
   if (results.length === 0) {
     return (
-      <div style={{
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: theme.spacing.xxl,
-        color: theme.colors.textMuted,
-        backgroundColor: theme.colors.backgroundPanel,
-      }}>
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke={theme.colors.textMuted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: theme.spacing.lg }}>
-          <polygon points="5 3 19 12 5 21 5 3"/>
-        </svg>
-        <div style={{ fontSize: theme.fontSize.base, fontWeight: theme.fontWeight.medium, color: theme.colors.textSecondary, marginBottom: theme.spacing.xs }}>
-          No executions yet
-        </div>
-        <div style={{ fontSize: theme.fontSize.sm, color: theme.colors.textMuted, textAlign: 'center' }}>
+      <div className="flex h-full flex-col items-center justify-center bg-muted p-12 text-muted-foreground">
+        <Play className="mb-4 h-12 w-12 stroke-1" />
+        <div className="mb-1 text-base font-medium text-foreground">No executions yet</div>
+        <div className="text-center text-sm text-muted-foreground">
           Run nodes to see their<br />execution results here
         </div>
       </div>
@@ -168,82 +151,24 @@ const OutputDisplayPanel: React.FC<OutputDisplayPanelProps> = ({ results, onClea
   }
 
   return (
-    <div style={{
-      height: '100%',
-      display: 'flex',
-      flexDirection: 'column',
-      backgroundColor: theme.colors.backgroundPanel,
-    }}>
+    <div className="flex h-full flex-col bg-muted">
       {/* Header */}
-      <div style={{
-        padding: `${theme.spacing.md} ${theme.spacing.lg}`,
-        borderBottom: `1px solid ${theme.colors.border}`,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        backgroundColor: theme.colors.background,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.sm }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={theme.dracula.green} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polygon points="5 3 19 12 5 21 5 3"/>
-          </svg>
-          <span style={{
-            fontSize: theme.fontSize.sm,
-            fontWeight: theme.fontWeight.semibold,
-            color: theme.colors.text,
-          }}>
-            Execution Results
-          </span>
-          <span style={{
-            fontSize: theme.fontSize.xs,
-            color: theme.colors.textMuted,
-            backgroundColor: theme.colors.backgroundAlt,
-            padding: `2px ${theme.spacing.sm}`,
-            borderRadius: theme.borderRadius.sm,
-          }}>
-            {results.length}
-          </span>
+      <div className="flex items-center justify-between border-b border-border bg-background px-4 py-3">
+        <div className="flex items-center gap-2">
+          <Play className="h-4 w-4 text-success" />
+          <span className="text-sm font-semibold text-foreground">Execution Results</span>
+          <Badge variant="secondary" className="text-xs">{results.length}</Badge>
         </div>
         {onClear && (
-          <button
-            onClick={onClear}
-            style={{
-              padding: `${theme.spacing.xs} ${theme.spacing.md}`,
-              fontSize: theme.fontSize.xs,
-              color: theme.colors.textSecondary,
-              backgroundColor: 'transparent',
-              border: `1px solid ${theme.colors.border}`,
-              borderRadius: theme.borderRadius.sm,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: theme.spacing.xs,
-              transition: theme.transitions.fast,
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = theme.colors.backgroundAlt;
-              e.currentTarget.style.borderColor = theme.colors.textMuted;
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'transparent';
-              e.currentTarget.style.borderColor = theme.colors.border;
-            }}
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="3 6 5 6 21 6"/>
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-            </svg>
+          <Button variant="outline" size="sm" onClick={onClear}>
+            <Trash2 className="h-3 w-3" />
             Clear
-          </button>
+          </Button>
         )}
       </div>
 
       {/* Results List */}
-      <div style={{
-        flex: 1,
-        overflowY: 'auto',
-        padding: theme.spacing.md,
-      }}>
+      <div className="flex-1 space-y-3 overflow-y-auto p-3">
         {results.map((result, index) => {
           const resultKey = `${result.nodeId}-${result.timestamp}-${index}`;
           const isExpanded = expandedResults.has(resultKey);
@@ -253,199 +178,95 @@ const OutputDisplayPanel: React.FC<OutputDisplayPanelProps> = ({ results, onClea
           return (
             <div
               key={resultKey}
-              style={{
-                marginBottom: theme.spacing.md,
-                borderRadius: theme.borderRadius.md,
-                border: `1px solid ${result.success ? theme.dracula.green + '40' : theme.dracula.red + '40'}`,
-                backgroundColor: theme.colors.background,
-                overflow: 'hidden',
-              }}
+              className={cn(
+                'overflow-hidden rounded-md border bg-background',
+                result.success ? 'border-success/40' : 'border-destructive/40'
+              )}
             >
               {/* Result Header */}
-              <div style={{
-                padding: `${theme.spacing.sm} ${theme.spacing.md}`,
-                backgroundColor: result.success ? theme.dracula.green + '10' : theme.dracula.red + '10',
-                borderBottom: `1px solid ${result.success ? theme.dracula.green + '30' : theme.dracula.red + '30'}`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.sm }}>
+              <div
+                className={cn(
+                  'flex items-center justify-between border-b px-3 py-2',
+                  result.success
+                    ? 'border-success/30 bg-success/10'
+                    : 'border-destructive/30 bg-destructive/10'
+                )}
+              >
+                <div className="flex items-center gap-2">
                   {result.success ? (
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill={theme.dracula.green} stroke="none">
-                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                    </svg>
+                    <CheckCircle2 className="h-4 w-4 text-success" />
                   ) : (
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill={theme.dracula.red} stroke="none">
-                      <path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z"/>
-                    </svg>
+                    <XCircle className="h-4 w-4 text-destructive" />
                   )}
-                  <span style={{
-                    fontSize: theme.fontSize.sm,
-                    fontWeight: theme.fontWeight.semibold,
-                    color: theme.colors.text,
-                  }}>
+                  <span className="text-sm font-semibold text-foreground">
                     {result.nodeName}
                   </span>
-                  <span style={{
-                    fontSize: theme.fontSize.xs,
-                    fontWeight: theme.fontWeight.medium,
-                    color: result.success ? theme.dracula.green : theme.dracula.red,
-                    padding: `2px ${theme.spacing.sm}`,
-                    backgroundColor: result.success ? theme.dracula.green + '20' : theme.dracula.red + '20',
-                    borderRadius: theme.borderRadius.sm,
-                  }}>
+                  <Badge variant={result.success ? 'success' : 'destructive'} className="text-xs">
                     {result.success ? 'SUCCESS' : 'FAILED'}
-                  </span>
+                  </Badge>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.md }}>
-                  <span style={{ fontSize: theme.fontSize.xs, color: theme.colors.textMuted }}>
-                    {result.executionTime.toFixed(2)}ms
-                  </span>
-                  <span style={{ fontSize: theme.fontSize.xs, color: theme.colors.textMuted }}>
-                    {formatTimestamp(result.timestamp)}
-                  </span>
+                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                  <span>{result.executionTime.toFixed(2)}ms</span>
+                  <span>{formatTimestamp(result.timestamp)}</span>
                 </div>
               </div>
 
               {/* Error Display */}
               {result.error && (
-                <div style={{
-                  padding: theme.spacing.md,
-                  backgroundColor: theme.dracula.red + '10',
-                  borderBottom: `1px solid ${theme.dracula.red}30`,
-                }}>
-                  <pre style={{
-                    margin: 0,
-                    fontSize: theme.fontSize.sm,
-                    fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
-                    color: theme.dracula.red,
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-word',
-                  }}>
+                <div className="border-b border-destructive/30 bg-destructive/10 p-3">
+                  <pre className="m-0 font-mono text-sm whitespace-pre-wrap break-words text-destructive">
                     {result.error}
                   </pre>
                 </div>
               )}
 
-              {/* Main Response (for AI results) */}
+              {/* Main Response (for AI / tool results) */}
               {mainResponse && (
-                <div style={{
-                  padding: theme.spacing.md,
-                  borderBottom: `1px solid ${theme.colors.border}`,
-                }}>
-                  <div style={{
-                    fontSize: theme.fontSize.xs,
-                    fontWeight: theme.fontWeight.medium,
-                    color: theme.colors.textMuted,
-                    marginBottom: theme.spacing.sm,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
-                  }}>
+                <div className="border-b border-border p-3">
+                  <div className="mb-2 text-xs font-medium tracking-wider text-muted-foreground uppercase">
                     Response
                   </div>
-                  <div style={{
-                    fontSize: theme.fontSize.sm,
-                    color: theme.colors.text,
-                    lineHeight: 1.6,
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-word',
-                  }}>
+                  <div className="text-sm leading-relaxed whitespace-pre-wrap break-words text-foreground">
                     {mainResponse}
                   </div>
                 </div>
               )}
 
               {/* JSON Output Toggle */}
-              <div style={{ padding: theme.spacing.md }}>
+              <div className="p-3">
                 <div
                   onClick={() => toggleExpand(resultKey)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: `${theme.spacing.sm} ${theme.spacing.md}`,
-                    backgroundColor: theme.colors.backgroundAlt,
-                    borderRadius: theme.borderRadius.sm,
-                    cursor: 'pointer',
-                    transition: theme.transitions.fast,
-                  }}
+                  className="flex cursor-pointer items-center justify-between rounded-sm bg-muted px-3 py-2 transition-colors hover:bg-card"
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.sm }}>
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke={theme.colors.textSecondary}
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      style={{
-                        transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
-                        transition: 'transform 0.2s ease',
-                      }}
-                    >
-                      <polyline points="9 18 15 12 9 6"/>
-                    </svg>
-                    <span style={{
-                      fontSize: theme.fontSize.xs,
-                      fontWeight: theme.fontWeight.medium,
-                      color: theme.colors.textSecondary,
-                    }}>
+                  <div className="flex items-center gap-2">
+                    <ChevronRight
+                      className={cn(
+                        'h-3 w-3 text-muted-foreground transition-transform',
+                        isExpanded && 'rotate-90'
+                      )}
+                    />
+                    <span className="text-xs font-medium text-muted-foreground">
                       {isExpanded ? 'Hide' : 'Show'} Raw JSON
                     </span>
                   </div>
-                  <button
+                  <Button
+                    variant="outline"
+                    size="xs"
                     onClick={(e) => {
                       e.stopPropagation();
                       copyToClipboard(executionData, 'JSON copied to clipboard!');
                     }}
-                    style={{
-                      padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
-                      fontSize: theme.fontSize.xs,
-                      color: theme.colors.textMuted,
-                      backgroundColor: 'transparent',
-                      border: `1px solid ${theme.colors.border}`,
-                      borderRadius: theme.borderRadius.sm,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: theme.spacing.xs,
-                      transition: theme.transitions.fast,
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = theme.colors.background;
-                      e.currentTarget.style.color = theme.colors.text;
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = 'transparent';
-                      e.currentTarget.style.color = theme.colors.textMuted;
-                    }}
                   >
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                    </svg>
+                    <Copy className="h-3 w-3" />
                     Copy
-                  </button>
+                  </Button>
                 </div>
 
-                {/* Expanded JSON with prismjs highlighting (theme from styles/theme.ts) */}
+                {/* Expanded JSON with prismjs highlighting via shared
+                 *  .code-editor-container palette (see index.css). */}
                 {isExpanded && (
-                  <div style={{
-                    ...themeStyles.codeBlock.container,
-                    marginTop: theme.spacing.sm,
-                    padding: theme.spacing.md,
-                    maxHeight: '300px',
-                    backgroundColor: theme.colors.backgroundAlt,
-                    color: theme.dracula.foreground,
-                    borderRadius: theme.borderRadius.sm,
-                    border: `1px solid ${theme.colors.border}`,
-                  }}>
-                    <style>{getPrismTokenCSS(theme)}</style>
+                  <div className="code-editor-container mt-2 max-h-[300px] overflow-auto rounded-sm border border-border bg-muted p-3 font-mono text-xs text-foreground">
                     <code
-                      className="prism-code"
                       dangerouslySetInnerHTML={{
                         __html: Prism.highlight(
                           JSON.stringify(executionData, null, 2),
@@ -463,14 +284,7 @@ const OutputDisplayPanel: React.FC<OutputDisplayPanelProps> = ({ results, onClea
       </div>
 
       {/* Footer */}
-      <div style={{
-        padding: `${theme.spacing.sm} ${theme.spacing.lg}`,
-        borderTop: `1px solid ${theme.colors.border}`,
-        backgroundColor: theme.colors.background,
-        fontSize: theme.fontSize.xs,
-        color: theme.colors.textMuted,
-        textAlign: 'center',
-      }}>
+      <div className="border-t border-border bg-background px-4 py-2 text-center text-xs text-muted-foreground">
         Results displayed in execution order
       </div>
     </div>
