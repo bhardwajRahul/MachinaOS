@@ -600,6 +600,8 @@ The project uses WebSocket as the primary communication method between frontend 
 - `server/routers/websocket.py` - WebSocket endpoint with 89 message handlers
 - `server/services/status_broadcaster.py` - Connection management and broadcasting
 
+**Canvas mutations from the backend** -- any handler that needs to add / move / delete nodes or edges (e.g., auto-add-skill on tool connect, future workflow-template features, AI-suggested edits) returns a workflow-ops batch (`{operations: [...]}`) and the frontend applies it through `applyOperations` in [client/src/lib/workflowOps.ts](./client/src/lib/workflowOps.ts). Backend builders live in [server/services/workflow_ops.py](./server/services/workflow_ops.py). Full spec: [docs-internal/workflow_ops_protocol.md](./docs-internal/workflow_ops_protocol.md). Do not invent a parallel "modify the canvas" RPC for new features -- target this protocol.
+
 ## Implemented Node Types
 The following 92 nodes are currently implemented and functional:
 
