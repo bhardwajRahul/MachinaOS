@@ -12,7 +12,8 @@ import { Node } from 'reactflow';
 import { useForm, useFieldArray, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useAppTheme } from '../../hooks/useAppTheme';
+import { ChevronDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { useToolSchema, ToolSchemaConfig } from '../../hooks/useToolSchema';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { useAppStore } from '../../store/useAppStore';
@@ -122,7 +123,6 @@ function formValuesToConfig(values: ToolSchemaFormValues): ToolSchemaConfig {
 // ---------------------------------------------------------------------------
 
 const ToolSchemaEditor: React.FC<ToolSchemaEditorProps> = ({ nodeId }) => {
-  const theme = useAppTheme();
   const { getToolSchema, saveToolSchema, deleteToolSchema, isLoading } = useToolSchema();
   const { isConnected } = useWebSocket();
   const { currentWorkflow } = useAppStore();
@@ -229,33 +229,24 @@ const ToolSchemaEditor: React.FC<ToolSchemaEditorProps> = ({ nodeId }) => {
   const hasChanges = form.formState.isDirty;
 
   return (
-    <div
-      style={{
-        backgroundColor: theme.colors.background,
-        border: `1px solid ${theme.colors.border}`,
-        borderRadius: theme.borderRadius.md,
-        overflow: 'hidden',
-      }}
-    >
+    <div className="overflow-hidden rounded-md border border-border bg-background">
       <div
         onClick={() => setIsExpanded(!isExpanded)}
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: theme.spacing.md,
-          backgroundColor: theme.colors.backgroundAlt,
-          cursor: 'pointer',
-          borderBottom: isExpanded ? `1px solid ${theme.colors.border}` : 'none',
-        }}
+        className={cn(
+          'flex cursor-pointer items-center justify-between bg-muted p-3',
+          isExpanded && 'border-b border-border'
+        )}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.sm }}>
-          <span>{isExpanded ? '▼' : '▶'}</span>
-          <span style={{ fontWeight: theme.fontWeight.semibold, color: theme.colors.text }}>
-            Connected Services
-          </span>
+        <div className="flex items-center gap-2">
+          <ChevronDown
+            className={cn(
+              'h-3 w-3 text-muted-foreground transition-transform',
+              !isExpanded && '-rotate-90'
+            )}
+          />
+          <span className="font-semibold text-foreground">Connected Services</span>
         </div>
-        <span style={{ fontSize: theme.fontSize.sm, color: theme.colors.textSecondary }}>
+        <span className="text-sm text-muted-foreground">
           {connectedServices.length} service(s)
         </span>
       </div>
