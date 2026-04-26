@@ -210,6 +210,75 @@ Run: `pytest server/tests/test_plugin_contract.py -q`.
 
 ---
 
+## Self-contained plugin folders (richer plugins)
+
+Most plugins are a single file in the right folder — that's the
+default. But some own a long-lived service (bot connection, SDK
+session, subprocess), credentials-modal Connect/Disconnect commands,
+trigger pre-checks, etc. Those graduate to a **self-contained folder
+shape** so nothing telegram-specific (or whatsapp-specific, twitter-
+specific, …) lives outside that folder.
+
+**Reference: `server/nodes/telegram/`.** Read it first before adding a
+similar plugin.
+
+```
+server/nodes/telegram/
+├── __init__.py          # imports + 6 register_* calls (zero logic)
+├── _credentials.py      # TelegramCredential subclass
+├── _service.py          # singleton bot lifecycle (connect / send / poll)
+├── _handlers.py         # WS_HANDLERS dict (telegram_connect, …)
+├── _filters.py          # build_telegram_filter (event_waiter filter)
+├── _refresh.py          # WS-connect refresh + trigger precheck
+├── telegram_send.py     # ActionNode + AI tool
+└── telegram_receive.py  # TriggerNode
+```
+
+### Five generic registries to plug into
+
+Telegram's `__init__.py` is the canonical wiring example. Adding any
+of these concerns to your plugin is one `register_*` call from your
+package's `__init__.py` — the consumer never imports your folder.
+
+| Concern | Where to register | What it does |
+|---|---|---|
+| Credentials-modal WebSocket commands | `services.ws_handler_registry.register_ws_handlers({"<type>": handler})` | Adds `<type>` to the central WS dispatcher (no router edits) |
+| Event-trigger filter | `services.event_waiter.register_filter_builder(node_type, fn)` | Plugs into `FILTER_BUILDERS` for `event_waiter.build_filter()` |
+| Trigger pre-execution check | `services.event_waiter.register_trigger_precheck(node_type, async_fn)` | Generic `triggers.py` handler runs `run_trigger_precheck` before entering the wait loop |
+| Service-status refresh on WS connect | `services.status_broadcaster.register_service_refresh(async_callback)` | Callback runs once per `_refresh_all_services` cycle |
+| Output schema | `services.node_output_schemas.register_output_schema(node_type, ModelClass)` | Avoids declaring a duplicate `Output` class in the central schema file |
+
+All five are idempotent (same callable / class for the same key is a
+no-op; conflicts raise `ValueError`).
+
+### When NOT to use this shape
+
+Don't create `_service.py` / `_handlers.py` siblings unless the plugin
+genuinely owns:
+
+- A long-lived stateful object (bot / device / session / subprocess).
+- Credentials-modal lifecycle commands beyond the standard
+  Save / Load / Delete.
+- Trigger pre-checks that depend on plugin-specific service state.
+- A status refresh that runs on WebSocket connect.
+
+A single search node, an HTTP-only REST plugin, a code executor — all
+of those stay one file. Adding the folder ceremony for them is just
+overhead.
+
+### Wire format is stable across moves
+
+Frontend identifies plugin commands by **WebSocket message type
+strings** (`telegram_connect`, `telegram_status`, …) — never by Python
+module paths. As long as your `WS_HANDLERS` keys stay the same, you
+can rearrange your `nodes/<group>/` folder freely with zero frontend
+changes. The telegram refactor moved 754 lines without touching
+`client/`.
+
+Full reference: [docs-internal/plugin_system.md → "Self-contained plugin folders"](../../docs-internal/plugin_system.md#self-contained-plugin-folders).
+
+---
+
 ## Common pitfalls
 
 - **Don't edit `server/nodes/__init__.py`** — it's a pure auto-discovery

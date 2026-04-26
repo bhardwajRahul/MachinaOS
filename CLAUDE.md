@@ -12,9 +12,9 @@ This is a React Flow-based workflow automation platform implementing n8n-inspire
 | **[Frontend Architecture](./docs-internal/frontend_architecture.md)** | Current frontend stack (React 19 + Vite + Tailwind v4 + shadcn/ui + Radix + RHF/zod + TanStack Query + Zustand). Tokens, primitives, forms, credentials exemplar, ownership boundary, `uiHints` catalogue. |
 | **[UI Migration Plan](./docs-internal/ui_migration_plan.md)** | antd → shadcn/ui migration plan + completion log. Waves 1–10 done. Full frontend is schema-driven (backend SSOT); remaining DIY widget registry (ex-Phase 6) is the one deferred item. |
 | **[Schema Source of Truth RFC](./docs-internal/schema_source_of_truth_rfc.md)** | Backend is SSOT for node schemas, visual metadata, handlers, palette metadata, icons. Plugin pattern: one `BaseNode` subclass in `server/nodes/<group>/<name>.py`. Wire format: `asset:<key>` / `<lib>:<brand>` / URL / emoji. Endpoint: `/api/schemas/nodes/{type}/spec.json`. 124 pytest invariants lock the contract. |
-| **[Plugin System (Wave 11)](./docs-internal/plugin_system.md)** | Class-based plugin-first architecture. `BaseNode` / `ActionNode` / `TriggerNode` / `ToolNode` + `@Operation` decorator. Pydantic `Params`/`Output`. Declarative `Routing` DSL + `Connection` facade (Nango pattern). 18 `Credential` subclasses live in each node folder's `_credentials.py` (or inline for single-use). `TaskQueue` constants route to Temporal worker pools. 111 plugins live across 9 queues; handler bodies fully inlined (`services/handlers/` shrank 12.8K → 1.1K LOC across 16 → 4 files; only cross-cutting orchestration remains: `tools.py` AI-tool dispatch + agent delegation, `google_auth.py`, `triggers.py`). |
-| **[Nodes Cookbook](./server/nodes/README.md)** | 5-minute recipe + folder map + shared helpers (`_base.py` / `_inline.py` per domain) + shared credentials + contract invariants + common pitfalls. Lives next to the plugin files. |
-| **[Node Creation Guide](./docs-internal/node_creation.md)** | Canonical plugin recipe — one Python file, zero frontend edits. Subclass `ActionNode`/`TriggerNode`/`ToolNode`, declare metadata + `Params` + `Output`, decorate op methods with `@Operation`. Auto-registers via `BaseNode.__init_subclass__`. |
+| **[Plugin System (Wave 11)](./docs-internal/plugin_system.md)** | Class-based plugin-first architecture. `BaseNode` / `ActionNode` / `TriggerNode` / `ToolNode` + `@Operation` decorator. Pydantic `Params`/`Output`. Declarative `Routing` DSL + `Connection` facade (Nango pattern). 18 `Credential` subclasses live in each node folder's `_credentials.py` (or inline for single-use). `TaskQueue` constants route to Temporal worker pools. 111 plugins live across 9 queues; handler bodies fully inlined (`services/handlers/` shrank 12.8K → 1.1K LOC across 16 → 4 files; only cross-cutting orchestration remains: `tools.py` AI-tool dispatch + agent delegation, `google_auth.py`, `triggers.py`). **Wave 11.H added "self-contained plugin folders"** — five generic registries (`ws_handler_registry`, `event_waiter.{register_filter_builder,register_trigger_precheck}`, `status_broadcaster.register_service_refresh`, `node_output_schemas.register_output_schema`) so rich plugins like telegram own their entire surface area without core-services edits. |
+| **[Nodes Cookbook](./server/nodes/README.md)** | 5-minute recipe + folder map + shared helpers (`_base.py` / `_inline.py` per domain) + shared credentials + **self-contained plugin folder pattern (telegram reference)** + contract invariants + common pitfalls. Lives next to the plugin files. |
+| **[Node Creation Guide](./docs-internal/node_creation.md)** | Canonical plugin recipe — one Python file (default), or a self-contained folder for richer plugins (telegram-style). Zero frontend edits, zero core-services edits. Auto-registers via `BaseNode.__init_subclass__` + the five `register_*` hooks. |
 | **[AI Tool Node Guide](./docs-internal/ai_tool_node_creation.md)** | Detailed guide for creating dedicated AI Agent tool nodes (schemas, handlers, toolkits) |
 | **[Specialized Agent Guide](./docs-internal/specialized_agent_node_creation.md)** | Guide for creating specialized AI agents (Android, Coding, Web, Task, Social, Travel, Tool, Productivity, Payments, Consumer) with full AI configuration |
 | **[Dual-Purpose Tool Guide](./docs-internal/dual_purpose_tool_node_creation.md)** | Guide for nodes that work as both workflow nodes AND AI Agent tools (e.g., whatsappSend) |
@@ -52,6 +52,69 @@ This is a React Flow-based workflow automation platform implementing n8n-inspire
 
 **CRITICAL: Always follow these principles when modifying backend execution code:**
 
+### 0. Adding a new node — the canonical recipe (Wave 11.H)
+
+**One file is the default; a self-contained folder is the next step up.**
+Reference implementation: [`server/nodes/telegram/`](./server/nodes/telegram/).
+
+1. **Default — single file.** `server/nodes/<group>/<name>.py` with one
+   `ActionNode` / `TriggerNode` / `ToolNode` subclass. Declare `type`,
+   `display_name`, `group`, `handles`, `Params`, `Output`, `credentials`,
+   `task_queue`, and `@Operation`-decorated methods. Auto-registers via
+   `BaseNode.__init_subclass__` on import. Zero edits anywhere else.
+   See [server/nodes/README.md](./server/nodes/README.md).
+
+2. **Promote to a self-contained folder** when the plugin owns:
+   - a long-lived stateful object (bot / device / SDK session / subprocess),
+   - credentials-modal WebSocket commands beyond Save / Load / Delete,
+   - trigger pre-execution checks that need plugin-specific state,
+   - a status-refresh callback that runs on WS-client connect.
+
+   Folder shape (telegram is the reference):
+   ```
+   server/nodes/<group>/
+   ├── __init__.py          # imports + register_* calls (zero logic)
+   ├── _credentials.py      # <Provider>Credential subclass
+   ├── _service.py          # singleton/service lifecycle
+   ├── _handlers.py         # WS_HANDLERS dict
+   ├── _filters.py          # build_<provider>_filter (event_waiter)
+   ├── _refresh.py          # refresh_*_status + precheck_*_trigger
+   ├── <provider>_send.py
+   └── <provider>_receive.py
+   ```
+   Underscore-prefixed files are package-private (the node walker skips
+   them). The package `__init__.py` is the single wiring point.
+
+3. **Five generic registries** the package self-registers into. Nothing
+   outside the plugin folder hardcodes the plugin's name:
+
+   | Concern | Register call | Backed by |
+   |---|---|---|
+   | Credentials-modal WebSocket commands | `services.ws_handler_registry.register_ws_handlers({type: handler})` | central `_resolve_handler()` in `routers/websocket.py` |
+   | Trigger event-filter builder | `services.event_waiter.register_filter_builder(node_type, fn)` | `event_waiter.FILTER_BUILDERS` |
+   | Trigger pre-execution check | `services.event_waiter.register_trigger_precheck(node_type, async_fn)` | generic `services/handlers/triggers.py` runs `run_trigger_precheck` before entering the wait loop |
+   | Service-status refresh on WS connect | `services.status_broadcaster.register_service_refresh(async_callback)` | `_refresh_all_services` TaskGroup |
+   | Output schema | `services.node_output_schemas.register_output_schema(node_type, ModelClass)` | central `NODE_OUTPUT_SCHEMAS` |
+
+   All five are idempotent (same callable / class for the same key is a
+   no-op; conflicts raise `ValueError`).
+
+4. **Wire format is the contract — not module paths.** The frontend
+   identifies plugin commands by WebSocket message-type strings
+   (`telegram_connect`, `telegram_status`, …). Moving handler bodies
+   between Python files is invisible to the frontend so long as the
+   registered keys stay the same. The 754-line telegram extraction
+   from `services/telegram_service.py` (Wave 11.H) changed zero
+   frontend code.
+
+5. **What NOT to do**: don't import the plugin folder from `routers/`,
+   `services/`, or another `nodes/` subfolder. Don't edit
+   `event_waiter.py` / `status_broadcaster.py` / `routers/websocket.py`
+   to add a new plugin's handler/filter/refresh — register from the
+   plugin's `__init__.py` instead.
+
+Full reference: [docs-internal/plugin_system.md → "Self-contained plugin folders"](./docs-internal/plugin_system.md#self-contained-plugin-folders).
+
 ### 1. Use Existing Patterns - No Tribal Code
 - **Never add ad-hoc workarounds** - Use the established patterns documented in DESIGN.md
 - **Conductor Decide Pattern** - All orchestration goes through `_workflow_decide()` loop
@@ -85,7 +148,7 @@ server/services/
 ├── nodejs_client.py         # HTTP client for Node.js code executor
 ├── pricing.py               # LLM and API cost calculation (loads config/pricing.json)
 ├── markdown_formatter.py    # GFM markdown to platform-specific formatting (Telegram HTML, WhatsApp, plain)
-├── telegram_service.py      # TelegramService with python-telegram-bot long-polling
+├── ws_handler_registry.py   # Plugin-owned WS commands self-register here (Wave 11.H)
 ├── browser_service.py       # BrowserService singleton wrapping agent-browser CLI
 ├── himalaya_service.py      # HimalayaService CLI wrapper for IMAP/SMTP (any email provider)
 ├── email_service.py         # EmailService orchestrator (credential resolution, provider presets)
@@ -1077,18 +1140,24 @@ TWITTER_CLIENT_SECRET=your_client_secret
 # TWITTER_REDIRECT_URI is derived at runtime from request context (no env var needed)
 ```
 
-### Telegram Nodes (2 nodes)
-Telegram bot integration using `python-telegram-bot` SDK with long-polling for incoming messages.
+### Telegram Nodes (2 nodes) — reference for self-contained plugin folders
+Telegram bot integration using `python-telegram-bot` SDK with long-polling for incoming messages. **All telegram code lives in `server/nodes/telegram/`** — the plugin folder owns its service, WebSocket handlers, event filter, lifecycle hooks, and credentials. Read this folder first before adding any plugin that needs more than a single `BaseNode` subclass; see [docs-internal/plugin_system.md → "Self-contained plugin folders"](./docs-internal/plugin_system.md#self-contained-plugin-folders).
 
 - **telegramSend**: **Dual-purpose node** - Send text, photo, document, location, or contact messages via Telegram bot. Works as workflow node OR AI Agent tool. Group: `['social', 'tool']`. Recipient types: Self (bot owner), User/Chat ID, Group. Parameters: recipient_type, chat_id, message_type, text, media_url, caption, parse_mode (Auto/HTML/Markdown/MarkdownV2/None), silent, reply_to_message_id. **Auto parse_mode** (default, recommended): converts GFM markdown to Telegram HTML via `markdown_formatter.to_telegram_html()`. MarkdownV2/Markdown text auto-escaped via `_escape_text()`; falls back to plain text on `BadRequest`. "Self" restores `owner_chat_id` from credentials DB if not in memory.
-- **telegramReceive**: Event-driven trigger that waits for incoming Telegram messages. Group: `['social', 'trigger']`. Uses `senderFilter` dropdown: All Messages, From Self (Bot Owner) (zero-config), Private/Group/Supergroup/Channel Only, Specific Chat, Specific User, Keywords. Content type filter and ignore bots option. "From Self" uses lazy `_get_owner_chat_id()` lookup at match time. Auto-reconnects on server restart via `StatusBroadcaster._refresh_telegram_status()`.
+- **telegramReceive**: Event-driven trigger that waits for incoming Telegram messages. Group: `['social', 'trigger']`. Uses `senderFilter` dropdown: All Messages, From Self (Bot Owner) (zero-config), Private/Group/Supergroup/Channel Only, Specific Chat, Specific User, Keywords. Content type filter and ignore bots option. "From Self" uses lazy `_get_owner_chat_id()` lookup at match time. Auto-reconnects on server restart via the registered service-refresh callback.
 
-**Key Files:**
+**Key Files** (all under `server/nodes/telegram/`):
 | File | Description |
 |------|-------------|
-| `server/services/telegram_service.py` | TelegramService with long-polling message handler |
-| `server/services/handlers/telegram.py` | Node handlers for send and receive |
-| `client/src/components/CredentialsModal.tsx` | Telegram bot token panel |
+| `__init__.py` | Imports + 6 self-registration calls — the only wiring needed (zero logic). |
+| `_credentials.py` | `TelegramCredential(ApiKeyCredential)` — bot token + `telegram_owner_chat_id` extra field. |
+| `_service.py` | `TelegramService` singleton: connect/disconnect/send/poll lifecycle, idempotent connect, parse-mode fallback helper. |
+| `_handlers.py` | 7 WebSocket handlers (`telegram_connect` / `_disconnect` / `_status` / `_send` / `_reconnect` / `_get_me` / `_get_chat`) + `WS_HANDLERS` dict registered into `services.ws_handler_registry`. |
+| `_filters.py` | `build_telegram_filter` — registered into `event_waiter.FILTER_BUILDERS`. |
+| `_refresh.py` | `refresh_telegram_status` (registered into `status_broadcaster._SERVICE_REFRESH_CALLBACKS`) + `precheck_telegram_trigger` (registered into `event_waiter._TRIGGER_PRECHECKS`). |
+| `telegram_send.py` | `TelegramSendNode(ActionNode)` + `TelegramSendOutput` — the workflow + AI-tool plugin. |
+| `telegram_receive.py` | `TelegramReceiveNode(TriggerNode)` + `TelegramReceiveOutput` — the trigger plugin (declares `event_type = "telegram_message_received"`). |
+| `client/src/components/CredentialsModal.tsx` | Telegram bot token panel (frontend; identifies commands by WebSocket message-type strings, not Python paths). |
 
 **Authentication:** Bot token from @BotFather on Telegram. Stored via `auth_service.store_api_key('telegram_bot_token', token, models=[])`. Owner auto-captured on first private message, persisted as `telegram_owner_chat_id`. Credentials panel: Save (store only), Connect (store + connect), Reconnect. All credential access uses `from core.container import container; container.auth_service()` (NOT `from services.auth import get_auth_service`).
 
