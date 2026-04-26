@@ -21,8 +21,6 @@ function fixPermissions() {
     resolve(ROOT, 'bin/cli.js'),
     resolve(ROOT, 'scripts/start.js'),
     resolve(ROOT, 'scripts/dev.js'),
-    resolve(ROOT, 'scripts/build.js'),
-    resolve(ROOT, 'scripts/clean.js'),
     resolve(ROOT, 'scripts/install.js'),
     resolve(ROOT, 'install.sh'),
   ];

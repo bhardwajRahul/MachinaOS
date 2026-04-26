@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import typer
 
+from machina.commands.build import build_command
+from machina.commands.clean import clean_command
 from machina.commands.stop import stop_command
 
 
@@ -21,16 +23,17 @@ app = typer.Typer(
 
 @app.callback()
 def _root() -> None:
-    """Marks the Typer app as a multi-command group.
-
-    Without an ``@app.callback()`` Typer collapses a single registered
-    subcommand into the root, hiding the subcommand structure that's
-    about to grow as more JS scripts migrate.
-    """
+    """Marks the Typer app as a multi-command group."""
 
 
 app.command("stop", help="Stop all MachinaOS services and free configured ports.")(
     stop_command
+)
+app.command("clean", help="Stop services then remove build artefacts and venvs.")(
+    clean_command
+)
+app.command("build", help="Install toolchain + build client + sync Python + verify deps.")(
+    build_command
 )
 
 
