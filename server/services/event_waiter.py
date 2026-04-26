@@ -120,11 +120,9 @@ TRIGGER_REGISTRY: Dict[str, TriggerConfig] = {
         event_type='gmail_email_received',
         display_name='Gmail Email'
     ),
-    'telegramReceive': TriggerConfig(
-        node_type='telegramReceive',
-        event_type='telegram_message_received',
-        display_name='Telegram Message'
-    ),
+    # 'telegramReceive' moved to nodes/telegram/ — backfilled here from
+    # the plugin's ``event_type`` class attribute via
+    # ``_auto_populate_from_plugins`` on first access.
     'emailReceive': TriggerConfig(
         node_type='emailReceive',
         event_type='email_received',
@@ -487,125 +485,6 @@ def build_gmail_filter(params: Dict) -> Callable[[Dict], bool]:
     return matches
 
 
-def build_telegram_filter(params: Dict) -> Callable[[Dict], bool]:
-    """Build filter function for Telegram messages.
-
-    Supports new senderFilter-based params and legacy chatTypeFilter/chat_id/from_user params.
-
-    New parameter: senderFilter
-        - 'all': Accept all messages
-        - 'self': Only messages from the bot owner (uses injected _owner_chat_id)
-        - 'private': Only private (DM) chats
-        - 'group': Only group chats
-        - 'supergroup': Only supergroup chats
-        - 'channel': Only channel posts
-        - 'specific_chat': Only from specific chat_id
-        - 'specific_user': Only from specific from_user
-        - 'keywords': Messages containing specific keywords
-
-    Legacy parameters (backward compat):
-        - chatTypeFilter: 'all', 'private', 'group', 'supergroup', 'channel'
-        - chat_id, from_user, keywords, ignoreBots
-
-    Event data fields (from TelegramService._format_message):
-        message_id, chat_id, chat_type, chat_title, from_id, from_username,
-        from_first_name, from_last_name, is_bot, text, content_type, date,
-        reply_to_message_id, photo/document/location/contact dicts
-
-    Args:
-        params: Node parameters (may include injected _owner_chat_id)
-
-    Returns:
-        Filter function that checks if event matches criteria
-    """
-    # New-style sender_filter (takes precedence)
-    sender_filter = params.get('sender_filter', '')
-
-    # Legacy fallback: reconstruct from old params if sender_filter absent.
-    # `chat_type_filter` was the pre-Wave-11 schema field name (already
-    # snake_case in the DB), so the read here matches.
-    if not sender_filter:
-        chat_type_filter = params.get('chat_type_filter', 'all')
-        old_chat_id = params.get('chat_id', '')
-        old_from_user = params.get('from_user', '')
-        old_keywords = params.get('keywords', '')
-
-        if old_chat_id:
-            sender_filter = 'specific_chat'
-        elif old_from_user:
-            sender_filter = 'specific_user'
-        elif old_keywords:
-            sender_filter = 'keywords'
-        elif chat_type_filter != 'all':
-            sender_filter = chat_type_filter
-        else:
-            sender_filter = 'all'
-
-    content_type_filter = params.get('content_type_filter', 'all')
-    chat_id_filter = params.get('chat_id', '')
-    from_user_filter = params.get('from_user', '')
-    keywords = [k.strip().lower() for k in params.get('keywords', '').split(',') if k.strip()]
-    ignore_bots = params.get('ignore_bots', True)
-    owner_chat_id = params.get('_owner_chat_id')
-
-    logger.debug(f"[TelegramFilter] Built: sender={sender_filter}, content_type={content_type_filter}, owner_chat_id={owner_chat_id}")
-
-    def _get_owner_chat_id() -> object:
-        """Get owner_chat_id dynamically - handles case where owner is detected
-        after the filter was built (first message to bot captures the owner)."""
-        if owner_chat_id:
-            return owner_chat_id
-        # Lazy lookup from service at match time
-        try:
-            from services.telegram_service import get_telegram_service
-            service = get_telegram_service()
-            return service.owner_chat_id
-        except Exception:
-            return None
-
-    def matches(m: Dict) -> bool:
-        # Content type filter (always applies)
-        if content_type_filter != 'all':
-            if m.get('content_type', '') != content_type_filter:
-                return False
-
-        # Sender filter
-        if sender_filter == 'self':
-            current_owner = _get_owner_chat_id()
-            if not current_owner:
-                logger.debug("[TelegramFilter] Rejecting: owner_chat_id not available")
-                return False
-            if str(m.get('from_id', '')) != str(current_owner):
-                return False
-
-        elif sender_filter in ('private', 'group', 'supergroup', 'channel'):
-            if m.get('chat_type', '') != sender_filter:
-                return False
-
-        elif sender_filter == 'specific_chat':
-            if chat_id_filter and str(m.get('chat_id', '')) != str(chat_id_filter):
-                return False
-
-        elif sender_filter == 'specific_user':
-            if from_user_filter and str(m.get('from_id', '')) != str(from_user_filter):
-                return False
-
-        elif sender_filter == 'keywords':
-            if keywords:
-                text = (m.get('text') or '').lower()
-                if not any(kw in text for kw in keywords):
-                    return False
-
-        # Ignore bot messages (skip for 'self' filter)
-        if sender_filter != 'self' and ignore_bots and m.get('is_bot', False):
-            return False
-
-        logger.debug(f"[TelegramFilter] Matched message from {m.get('from_username', m.get('from_id'))}")
-        return True
-
-    return matches
-
-
 def build_email_filter(params: Dict) -> Callable[[Dict], bool]:
     """Build filter for email events (Himalaya IMAP polling)."""
     folder_filter = params.get('folder', 'INBOX')
@@ -620,7 +499,12 @@ def build_email_filter(params: Dict) -> Callable[[Dict], bool]:
     return matches
 
 
-# Registry of filter builders per trigger type
+# Registry of filter builders per trigger type. Plugin packages
+# (nodes/<group>/) call :func:`register_filter_builder` from their
+# package ``__init__.py`` to publish per-trigger filters without this
+# module needing to import them. The hardcoded entries below are core
+# triggers that don't yet live in their own plugin folder; once they
+# do, this dict shrinks to ``{}`` and everything is registry-driven.
 FILTER_BUILDERS: Dict[str, Callable[[Dict], Callable[[Dict], bool]]] = {
     'whatsappReceive': build_whatsapp_filter,
     'webhookTrigger': build_webhook_filter,
@@ -628,9 +512,27 @@ FILTER_BUILDERS: Dict[str, Callable[[Dict], Callable[[Dict], bool]]] = {
     'taskTrigger': build_task_completed_filter,
     'twitterReceive': build_twitter_filter,
     'gmailReceive': build_gmail_filter,
-    'telegramReceive': build_telegram_filter,
     'emailReceive': build_email_filter,
 }
+
+
+def register_filter_builder(
+    node_type: str,
+    builder: Callable[[Dict], Callable[[Dict], bool]],
+) -> None:
+    """Publish a filter builder for a trigger node type.
+
+    Idempotent on re-import (same callable for same key is a no-op).
+    Used by plugin packages to keep all per-node-type knowledge inside
+    the plugin folder instead of hardcoding it here.
+    """
+    existing = FILTER_BUILDERS.get(node_type)
+    if existing is not None and existing is not builder:
+        raise ValueError(
+            f"Filter builder for '{node_type}' is already registered by "
+            f"{existing.__module__}.{existing.__qualname__}"
+        )
+    FILTER_BUILDERS[node_type] = builder
 
 
 def build_filter(node_type: str, params: Dict) -> Callable[[Dict], bool]:
@@ -646,6 +548,56 @@ def build_filter(node_type: str, params: Dict) -> Callable[[Dict], bool]:
         return builder(params)
     # Default: accept all events
     return lambda x: True
+
+
+# =============================================================================
+# TRIGGER PRE-CHECKS (plugin-registered)
+# =============================================================================
+#
+# Some trigger nodes need to short-circuit with a friendly error before
+# entering the wait loop -- e.g. "Telegram bot not connected, add token
+# in Credentials". The pre-check used to be a hardcoded ``if node_type
+# == 'telegramReceive'`` branch in handlers/triggers.py; it now lives in
+# the plugin folder and registers itself here.
+#
+# Signature: ``async def precheck(parameters: Dict) -> Optional[str]``
+#   - return None  -> proceed normally
+#   - return str   -> short-circuit with that error message
+
+import inspect as _inspect
+
+_TriggerPrecheck = Callable[[Dict[str, Any]], Any]
+_TRIGGER_PRECHECKS: Dict[str, _TriggerPrecheck] = {}
+
+
+def register_trigger_precheck(node_type: str, fn: _TriggerPrecheck) -> None:
+    """Register a pre-execution check for a trigger node type.
+
+    Idempotent on re-import. The callback may be sync or async; ``run_trigger_precheck``
+    awaits the coroutine when needed.
+    """
+    existing = _TRIGGER_PRECHECKS.get(node_type)
+    if existing is not None and existing is not fn:
+        raise ValueError(
+            f"Trigger precheck for '{node_type}' is already registered by "
+            f"{existing.__module__}.{existing.__qualname__}"
+        )
+    _TRIGGER_PRECHECKS[node_type] = fn
+
+
+async def run_trigger_precheck(node_type: str, parameters: Dict) -> Any:
+    """Run the registered precheck for ``node_type`` (if any).
+
+    Returns the precheck's return value (typically ``None`` or an
+    error-message string).
+    """
+    fn = _TRIGGER_PRECHECKS.get(node_type)
+    if fn is None:
+        return None
+    result = fn(parameters)
+    if _inspect.isawaitable(result):
+        result = await result
+    return result
 
 
 # =============================================================================

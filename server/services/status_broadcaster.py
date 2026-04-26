@@ -129,17 +129,18 @@ class StatusBroadcaster:
         Uses ``asyncio.TaskGroup`` (Python 3.11+) for structured
         concurrency: every refresh runs as an independent task and
         publishes its own ``<service>_status`` message the moment its
-        cache slot is populated. The slowest service (e.g. Telegram's
-        10 s ``getMe`` cold-DNS path) no longer gates the others — the
-        credentials/status UI hydrates incrementally.
+        cache slot is populated. The slowest service no longer gates
+        the others — the credentials/status UI hydrates incrementally.
 
-        Each ``_refresh_*`` already swallows its own exceptions, so
-        TaskGroup never sees one. Kept inside try/except* defensively
-        in case a future refactor lets one escape.
+        Plugin packages register their own refresh callbacks via
+        :func:`register_service_refresh` (see
+        ``nodes/<group>/__init__.py``). The hardcoded core refreshes
+        below predate the registry; they'll move into their own plugin
+        folders in subsequent waves.
 
-        Wrapped in an OTel span so the cycle's wall-clock duration is
-        emitted via the configured span exporter (ConsoleSpanExporter
-        in dev for benchmarking, OTLP in prod).
+        Each callback swallows its own exceptions, so TaskGroup never
+        sees one. Kept inside try/except* defensively in case a future
+        refactor lets one escape.
         """
         with tracer.start_as_current_span("broadcaster.refresh_all_services"):
             try:
@@ -147,8 +148,10 @@ class StatusBroadcaster:
                     tg.create_task(self._refresh_whatsapp_status())
                     tg.create_task(self._refresh_twitter_status())
                     tg.create_task(self._refresh_google_status())
-                    tg.create_task(self._refresh_telegram_status())
                     tg.create_task(self._auto_reconnect_android_relay())
+                    # Plugin-registered refreshes (telegram, future ones)
+                    for callback in list(_SERVICE_REFRESH_CALLBACKS):
+                        tg.create_task(callback(self))
             except* Exception as eg:
                 for exc in eg.exceptions:
                     logger.warning("[StatusBroadcaster] Service refresh task failed: %s", exc)
@@ -378,62 +381,6 @@ class StatusBroadcaster:
             except Exception as e:
                 span.record_exception(e)
                 logger.debug(f"[StatusBroadcaster] Could not refresh Google status: {e}")
-
-    async def _refresh_telegram_status(self):
-        """Refresh Telegram status from stored credentials and auto-reconnect.
-
-        Called on client connect. Auth reads + owner restore are handled
-        inside TelegramService; this function just decides whether to
-        attempt an auto-reconnect and mirrors the resulting status into
-        the broadcaster cache.
-
-        Span emitted via OTel for cold-start benchmarking. This is the
-        canonical "is the broadcaster fast?" metric — Telegram's getMe
-        on cold DNS is the historical bottleneck (10s read_timeout).
-        """
-        with tracer.start_as_current_span("broadcaster.refresh_telegram") as span:
-            try:
-                from services.telegram_service import get_telegram_service
-                service = get_telegram_service()
-
-                def _snapshot(connected: bool, has_token: bool) -> Dict[str, Any]:
-                    s = service.get_status()
-                    return {
-                        "connected": connected,
-                        "bot_id": s.get("bot_id") if connected else None,
-                        "bot_username": s.get("bot_username") if connected else None,
-                        "bot_name": s.get("bot_name") if connected else None,
-                        "owner_chat_id": s.get("owner_chat_id") if connected else None,
-                        "has_stored_token": has_token,
-                    }
-
-                if service.connected:
-                    self._status["telegram"] = _snapshot(True, True)
-                    span.set_attribute("path", "already_connected")
-                elif not await service.has_stored_token():
-                    self._status["telegram"] = _snapshot(False, False)
-                    span.set_attribute("path", "no_token")
-                else:
-                    span.set_attribute("path", "auto_reconnect")
-                    logger.info("[StatusBroadcaster] Auto-reconnecting Telegram bot...")
-                    result = await service.connect()  # service reads token from DB
-                    ok = bool(result.get("success"))
-                    self._status["telegram"] = _snapshot(ok, True)
-                    span.set_attribute("reconnect_ok", ok)
-                    if ok:
-                        bot_username = self._status["telegram"].get("bot_username")
-                        logger.info(f"[StatusBroadcaster] Telegram auto-reconnected: @{bot_username}")
-                    else:
-                        logger.warning(f"[StatusBroadcaster] Telegram auto-reconnect failed: {result.get('error')}")
-
-                await self.broadcast({
-                    "type": "telegram_status",
-                    "data": self._status["telegram"],
-                })
-                span.set_attribute("connected", bool(self._status["telegram"]["connected"]))
-            except Exception as e:
-                span.record_exception(e)
-                logger.debug(f"[StatusBroadcaster] Could not refresh Telegram status: {e}")
 
     async def _auto_reconnect_android_relay(self):
         """Auto-reconnect to Android relay if there's a stored pairing session.
@@ -1242,6 +1189,34 @@ class StatusBroadcaster:
     def connection_count(self) -> int:
         """Get the number of active WebSocket connections."""
         return len(self._connections)
+
+
+# ---------------------------------------------------------------------------
+# Plugin-registered service-refresh callbacks.
+#
+# The legacy ``_refresh_*`` instance methods (whatsapp/twitter/google/
+# android) hardcode service-specific lookups inside the broadcaster.
+# New plugin packages instead register an ``async def refresh(broadcaster)``
+# callback here -- the broadcaster has zero per-plugin knowledge.
+# ---------------------------------------------------------------------------
+
+import typing as _typing  # local alias to avoid shadowing module-level name
+
+_ServiceRefreshCallback = _typing.Callable[
+    ["StatusBroadcaster"], _typing.Awaitable[None]
+]
+_SERVICE_REFRESH_CALLBACKS: _typing.List[_ServiceRefreshCallback] = []
+
+
+def register_service_refresh(callback: _ServiceRefreshCallback) -> None:
+    """Register a per-service refresh callback.
+
+    Idempotent on re-import (same callable is a no-op). Each registered
+    callback runs once per ``_refresh_all_services()`` cycle (i.e. on
+    every WebSocket client connect).
+    """
+    if callback not in _SERVICE_REFRESH_CALLBACKS:
+        _SERVICE_REFRESH_CALLBACKS.append(callback)
 
 
 # Global singleton instance

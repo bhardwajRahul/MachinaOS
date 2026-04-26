@@ -376,28 +376,10 @@ class ContactsOutput(_OutputBase):
 
 
 # ---------------------------------------------------------------------------
-# Messaging: Telegram, WhatsApp DB, Social
+# Messaging: WhatsApp DB, Social
+# (Telegram schemas moved to nodes/telegram/, registered via
+# ``register_output_schema``.)
 # ---------------------------------------------------------------------------
-
-
-class TelegramReceiveOutput(_OutputBase):
-    message_id: Optional[int] = None
-    chat_id: Optional[int] = None
-    chat_type: Optional[str] = None
-    chat_title: Optional[str] = None
-    from_id: Optional[int] = None
-    from_username: Optional[str] = None
-    from_first_name: Optional[str] = None
-    from_last_name: Optional[str] = None
-    is_bot: Optional[bool] = None
-    text: Optional[str] = None
-    content_type: Optional[str] = None
-    date: Optional[str] = None
-    reply_to_message_id: Optional[int] = None
-    photo: Optional[dict] = None
-    document: Optional[dict] = None
-    location: Optional[dict] = None
-    contact: Optional[dict] = None
 
 
 class WhatsAppDbOutput(_OutputBase):
@@ -789,8 +771,9 @@ NODE_OUTPUT_SCHEMAS: dict[str, type[BaseModel]] = {
     "whatsappReceive": WhatsAppReceiveOutput,
     "whatsappSend": WhatsAppSendOutput,
     "whatsappDb": WhatsAppDbOutput,
-    # telegram / twitter
-    "telegramReceive": TelegramReceiveOutput,
+    # telegram entries are registered by nodes/telegram/__init__.py via
+    # register_output_schema() to keep all telegram code self-contained.
+    # twitter
     "twitterSend": TwitterSendOutput,
     "twitterSearch": TwitterSearchOutput,
     "twitterUser": TwitterUserOutput,
@@ -881,3 +864,26 @@ def list_node_types_with_schema() -> list[str]:
     client cache key."""
 
     return sorted(NODE_OUTPUT_SCHEMAS.keys())
+
+
+def register_output_schema(node_type: str, model_class: type[BaseModel]) -> None:
+    """Publish an output schema for a node type from a plugin package.
+
+    Plugin folders (``nodes/<group>/__init__.py``) use this to register
+    their own ``Output`` Pydantic class so the central registry above
+    doesn't need to import or duplicate it. Idempotent on re-import;
+    registering a different class for an existing type raises
+    ``ValueError``.
+
+    See e.g. ``nodes/telegram/__init__.py``.
+    """
+    existing = NODE_OUTPUT_SCHEMAS.get(node_type)
+    if existing is not None and existing is not model_class:
+        raise ValueError(
+            f"Output schema for '{node_type}' is already registered as "
+            f"{existing.__module__}.{existing.__qualname__}; refusing to "
+            f"overwrite with {model_class.__module__}.{model_class.__qualname__}"
+        )
+    NODE_OUTPUT_SCHEMAS[node_type] = model_class
+    # Bust the JSON-schema cache so the next call re-serialises.
+    _schema_cache.pop(node_type, None)

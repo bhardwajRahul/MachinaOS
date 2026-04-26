@@ -2121,160 +2121,12 @@ async def handle_whatsapp_diagnostics(data: Dict[str, Any], websocket: WebSocket
 
 
 # ============================================================================
-# Telegram Handlers - Connect/disconnect/status for Telegram bot
+# Plugin-owned WS handlers (telegram, future plugins, ...) live in their
+# own ``nodes/<group>/`` package and self-register via
+# ``register_ws_handlers`` at import time.  The dispatch table below
+# merges them in via ``get_ws_handlers()`` -- no plugin names hardcoded
+# in this file.
 # ============================================================================
-
-from services.telegram_service import get_telegram_service
-
-
-async def handle_telegram_connect(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
-    """Connect to Telegram. Service reads stored token from DB when the
-    payload omits it — DB is the source of truth, the frontend saves the
-    token via save_api_key before calling this handler."""
-    return await get_telegram_service().connect(data.get("token"))
-
-
-async def handle_telegram_disconnect(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
-    """Stop the polling session. The stored token stays in DB; explicit
-    delete_api_key removes it."""
-    return await get_telegram_service().disconnect()
-
-
-async def handle_telegram_status(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
-    """Get Telegram bot connection status."""
-    service = get_telegram_service()
-    status = service.get_status()
-    status["has_stored_token"] = await service.has_stored_token()
-    return {"success": True, "status": status}
-
-
-async def handle_telegram_send(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
-    """Send message via Telegram bot (direct WebSocket call, not via workflow node)."""
-    service = get_telegram_service()
-
-    if not service.connected:
-        return {"success": False, "error": "Telegram bot not connected"}
-
-    chat_id = data.get("chat_id")
-    message_type = data.get("message_type", "text")
-    text = data.get("text")
-    parse_mode = data.get("parse_mode")
-
-    if not chat_id:
-        return {"success": False, "error": "chat_id required"}
-
-    try:
-        if message_type == "text":
-            if not text:
-                return {"success": False, "error": "text required for text message"}
-            result = await service.send_message(
-                chat_id=chat_id,
-                text=text,
-                parse_mode=parse_mode,
-            )
-        elif message_type == "photo":
-            photo_url = data.get("media_url")
-            if not photo_url:
-                return {"success": False, "error": "media_url required for photo"}
-            result = await service.send_photo(
-                chat_id=chat_id,
-                photo=photo_url,
-                caption=data.get("caption"),
-                parse_mode=parse_mode,
-            )
-        elif message_type == "document":
-            doc_url = data.get("media_url")
-            if not doc_url:
-                return {"success": False, "error": "media_url required for document"}
-            result = await service.send_document(
-                chat_id=chat_id,
-                document=doc_url,
-                caption=data.get("caption"),
-                parse_mode=parse_mode,
-            )
-        elif message_type == "location":
-            lat = data.get("latitude")
-            lon = data.get("longitude")
-            if lat is None or lon is None:
-                return {"success": False, "error": "latitude and longitude required"}
-            result = await service.send_location(
-                chat_id=chat_id,
-                latitude=float(lat),
-                longitude=float(lon),
-            )
-        elif message_type == "contact":
-            phone = data.get("phone_number")
-            first_name = data.get("first_name")
-            if not phone or not first_name:
-                return {"success": False, "error": "phone_number and first_name required"}
-            result = await service.send_contact(
-                chat_id=chat_id,
-                phone_number=phone,
-                first_name=first_name,
-                last_name=data.get("last_name"),
-            )
-        else:
-            return {"success": False, "error": f"Unsupported message type: {message_type}"}
-
-        return {"success": True, "result": result}
-    except Exception as e:
-        logger.error(f"[Telegram] Send error: {e}")
-        return {"success": False, "error": str(e)}
-
-
-async def handle_telegram_reconnect(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
-    """Reconnect Telegram using stored bot token from encrypted credentials."""
-    try:
-        auth_service = get_auth_service()
-        token = await auth_service.get_api_key("telegram_bot_token")
-        if not token:
-            return {"success": False, "error": "No stored bot token found. Enter token to connect."}
-
-        service = get_telegram_service()
-        result = await service.connect(token)
-
-        # Restore owner_chat_id from credentials if previously captured
-        if result.get("success"):
-            try:
-                saved_owner = await auth_service.get_api_key("telegram_owner_chat_id")
-                if saved_owner:
-                    await service.set_owner(int(saved_owner))
-            except Exception as e:
-                logger.warning(f"[Telegram] Failed to restore owner_chat_id: {e}")
-
-        return result
-    except Exception as e:
-        logger.error(f"[Telegram] Reconnect failed: {e}")
-        return {"success": False, "error": str(e)}
-
-
-async def handle_telegram_get_me(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
-    """Get bot info."""
-    service = get_telegram_service()
-    if not service.connected:
-        return {"success": False, "error": "Telegram bot not connected"}
-    try:
-        result = await service.get_me()
-        return {"success": True, "result": result}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-
-async def handle_telegram_get_chat(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
-    """Get chat info."""
-    service = get_telegram_service()
-    if not service.connected:
-        return {"success": False, "error": "Telegram bot not connected"}
-
-    chat_id = data.get("chat_id")
-    if not chat_id:
-        return {"success": False, "error": "chat_id required"}
-
-    try:
-        result = await service.get_chat(chat_id)
-        return {"success": True, "result": result}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
 
 
 # ============================================================================
@@ -3350,6 +3202,27 @@ async def handle_refresh_model_registry(data: Dict[str, Any], websocket: WebSock
 # Message Router
 # ============================================================================
 
+# Plugin packages (nodes/<group>/__init__.py) self-register their WS
+# handlers into ``services.ws_handler_registry`` at import time. This
+# router doesn't know any plugin's message-type names — it consults the
+# registry at dispatch time via :func:`_resolve_handler`.
+from services.ws_handler_registry import get_ws_handlers
+
+
+def _resolve_handler(msg_type: str):
+    """Resolve a WS message_type to its handler.
+
+    Looks first in the legacy core ``MESSAGE_HANDLERS`` table, then
+    falls back to the plugin-owned registry. Plugin handlers are
+    discovered at import time (via the side-effect ``import nodes`` in
+    ``main.lifespan``), so by the time messages flow they're registered.
+    """
+    handler = MESSAGE_HANDLERS.get(msg_type)
+    if handler is None:
+        handler = get_ws_handlers().get(msg_type)
+    return handler
+
+
 MESSAGE_HANDLERS: Dict[str, MessageHandler] = {
     # Status/ping
     "ping": handle_ping,
@@ -3470,14 +3343,9 @@ MESSAGE_HANDLERS: Dict[str, MessageHandler] = {
     "whatsapp_stop": handle_whatsapp_stop,
     "whatsapp_diagnostics": handle_whatsapp_diagnostics,
 
-    # Telegram operations
-    "telegram_connect": handle_telegram_connect,
-    "telegram_disconnect": handle_telegram_disconnect,
-    "telegram_reconnect": handle_telegram_reconnect,
-    "telegram_status": handle_telegram_status,
-    "telegram_send": handle_telegram_send,
-    "telegram_get_me": handle_telegram_get_me,
-    "telegram_get_chat": handle_telegram_get_chat,
+    # Telegram operations live in nodes/telegram/_handlers.py and
+    # self-register via services.ws_handler_registry. Dispatch hits them
+    # via _resolve_handler() defined above.
 
     # Workflow storage operations
     "save_workflow": handle_save_workflow,
@@ -3679,7 +3547,7 @@ async def websocket_status_endpoint(websocket: WebSocket):
 
             logger.debug("WebSocket message received", msg_type=msg_type, has_request_id=bool(request_id))
 
-            handler = MESSAGE_HANDLERS.get(msg_type)
+            handler = _resolve_handler(msg_type)
 
             if handler:
                 # Run handler as task so it doesn't block queue processing
@@ -3777,7 +3645,7 @@ async def websocket_internal_endpoint(websocket: WebSocket):
             msg_type = data.get("type", "")
             request_id = data.get("request_id")
 
-            handler = MESSAGE_HANDLERS.get(msg_type)
+            handler = _resolve_handler(msg_type)
 
             if handler:
                 task = asyncio.create_task(
@@ -3827,5 +3695,7 @@ async def websocket_info():
         "endpoint": "/ws/status",
         "connected_clients": broadcaster.connection_count,
         "current_status": broadcaster.get_status(),
-        "supported_message_types": list(MESSAGE_HANDLERS.keys())
+        "supported_message_types": sorted(
+            set(MESSAGE_HANDLERS.keys()) | set(get_ws_handlers().keys())
+        ),
     }

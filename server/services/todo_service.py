@@ -4,7 +4,8 @@ Provides the write_todos tool capability for AI agents to create and manage
 structured task lists during complex multi-step operations.
 
 State is persisted as JSON strings, keyed by session identifier.
-Follows the singleton pattern used by browser_service.py and telegram_service.py.
+Follows the singleton pattern used by browser_service.py and the
+TelegramService inside ``nodes/telegram/_service.py``.
 """
 
 import json

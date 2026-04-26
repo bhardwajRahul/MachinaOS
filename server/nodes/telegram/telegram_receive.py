@@ -130,7 +130,7 @@ class TelegramReceiveNode(TriggerNode):
         # and returns an error envelope.
         import time
 
-        from services.telegram_service import get_telegram_service
+        from ._service import get_telegram_service
 
         svc = get_telegram_service()
         if not getattr(svc, "connected", False):

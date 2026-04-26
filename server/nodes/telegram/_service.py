@@ -1,20 +1,55 @@
-"""
-Telegram Bot Integration Service
+"""Telegram bot service — moved from services/ to nodes/ as the
+plugin-first home for all telegram business logic.
 
-Uses python-telegram-bot v22.6 for Bot API communication.
-Singleton service with background polling for receiving updates.
+Public surface (consumed by `_handlers.py`, `telegram_send.py`,
+`telegram_receive.py`, and the global `status_broadcaster`):
+
+    get_telegram_service() -> TelegramService     module-level singleton
+
+    service.connect(token=None) -> dict           idempotent connect; reads
+                                                  token from TelegramCredential
+                                                  when omitted
+    service.disconnect() -> dict
+    service.connected: bool
+    service.owner_chat_id: int | None
+    service.has_stored_token() -> bool
+    service.set_owner(chat_id) -> None
+    service.get_status() -> dict
+
+    service.send_message / send_photo / send_document /
+    service.send_location / send_contact            send helpers; the
+                                                    parse-mode fallback on
+                                                    `BadRequest("can't parse
+                                                    entities")` is folded into
+                                                    a single helper instead of
+                                                    being copy-pasted four
+                                                    times.
+
+    service.get_me() / service.get_chat(id)         direct API helpers used by
+                                                    the non-workflow WebSocket
+                                                    handlers.
+
+Auth lookups go through :class:`TelegramCredential.resolve` (lifted from
+the per-key ``auth.get_api_key("telegram_bot_token")`` / ``..._owner_chat_id``
+calls scattered across the previous handler/router code).  The credential
+class stays declarative — :class:`ApiKeyCredential` does the heavy lifting,
+this service just consumes the resolved dict.
 """
+
+from __future__ import annotations
 
 import asyncio
 import logging
 import os
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Awaitable, Callable, Dict, Optional
 
 from telegram import Bot, Update
 from telegram.error import BadRequest, NetworkError
 from telegram.ext import Application, ContextTypes, MessageHandler, filters
 from telegram.helpers import escape_markdown
+
+from ._credentials import TelegramCredential
 
 logger = logging.getLogger(__name__)
 
@@ -36,30 +71,26 @@ class TelegramService:
 
     @classmethod
     def get_instance(cls) -> "TelegramService":
-        """Get singleton instance."""
         if cls._instance is None:
             cls._instance = cls()
         return cls._instance
 
     @classmethod
     async def reset_instance(cls):
-        """Reset singleton (for testing)."""
         if cls._instance:
             await cls._instance.disconnect()
             cls._instance = None
 
     @property
     def connected(self) -> bool:
-        """Check if bot is connected and polling."""
         return self._connected and self._application is not None
 
     @property
     def owner_chat_id(self) -> Optional[int]:
-        """Get the bot owner's chat ID (auto-captured from first private message).
-        Falls back to TELEGRAM_OWNER_CHAT_ID env var if not auto-detected."""
+        """Bot owner's chat ID (auto-captured on first private message).
+        Falls back to TELEGRAM_OWNER_CHAT_ID env var."""
         if self._owner_chat_id:
             return self._owner_chat_id
-        # Fallback: TELEGRAM_OWNER_CHAT_ID env var
         env_owner = os.environ.get("TELEGRAM_OWNER_CHAT_ID")
         if env_owner:
             try:
@@ -70,12 +101,10 @@ class TelegramService:
         return None
 
     async def set_owner(self, chat_id: int):
-        """Set owner chat_id (used to restore from credentials on reconnect)."""
         self._owner_chat_id = chat_id
         logger.info(f"[Telegram] Owner chat_id restored: {chat_id}")
 
     def get_status(self) -> Dict[str, Any]:
-        """Get current connection status."""
         return {
             "connected": self._connected,
             "bot_id": self._bot_info.get("id"),
@@ -85,11 +114,17 @@ class TelegramService:
             "owner_chat_id": self._owner_chat_id,
         }
 
+    # =========================================================================
+    # Connection lifecycle
+    # =========================================================================
+
     async def has_stored_token(self) -> bool:
-        """Whether a ``telegram_bot_token`` is persisted in auth credentials."""
-        from core.container import container
-        auth = container.auth_service()
-        return bool(await auth.get_api_key("telegram_bot_token"))
+        """Whether `telegram_bot_token` is persisted in auth credentials."""
+        try:
+            secrets = await TelegramCredential.resolve()
+            return bool(secrets.get("api_key"))
+        except PermissionError:
+            return False
 
     async def connect(self, token: Optional[str] = None) -> Dict[str, Any]:
         """Connect to Telegram with bot token and start polling.
@@ -97,38 +132,33 @@ class TelegramService:
         When ``token`` is omitted, falls back to the stored
         ``telegram_bot_token`` credential — matches the Twitter/Google
         OAuth pattern where the frontend saves credentials first and then
-        calls connect. On success the token is persisted (idempotent) and
-        any previously captured owner chat id is restored.
+        calls connect.
 
-        Args:
-            token: Bot token from @BotFather. Optional when a token has
-                already been saved via ``auth_service.store_api_key``.
-
-        Returns:
-            Connection result with bot info
+        Idempotent: if already connected, returns success without tearing
+        down the working bot.  See the in-line comment block for the race
+        this guards against.
         """
-        from core.container import container
-        auth = container.auth_service()
-
+        # Resolve credentials via the declarative class instead of raw
+        # ``auth.get_api_key("telegram_bot_token")`` / ``..._owner_chat_id``
+        # lookups.  Keeps the credential id in one place.
+        secrets: Dict[str, Any] = {}
         if not token:
-            token = await auth.get_api_key("telegram_bot_token")
+            try:
+                secrets = await TelegramCredential.resolve()
+                token = secrets.get("api_key")
+            except PermissionError:
+                pass
         if not token:
             return {"success": False, "error": "Bot token required"}
+
         async with self._lock:
-            # Idempotent: if already connected, return success without
-            # tearing down. The previous disconnect-then-rebuild logic
-            # caused a race when multiple WebSocket clients triggered
-            # _refresh_telegram_status concurrently — the first one
-            # connected the bot, the second saw _connected=True inside
-            # the lock and tore down the working bot, leaving a 1-2s
-            # window where in-flight send_message calls hung on a closed
-            # httpx transport until the 10s read_timeout fired.
-            #
-            # Genuine reconnect (e.g. new token) should call disconnect()
-            # explicitly first, then connect().
+            # Idempotent: avoid the disconnect-then-rebuild race that
+            # caused intermittent ``send_message`` hangs against a closed
+            # httpx transport when concurrent _refresh_telegram_status
+            # tasks fired on overlapping WebSocket connects.
             if self._connected:
                 logger.debug(
-                    f"[Telegram] connect() called while already connected to "
+                    "[Telegram] connect() called while already connected to "
                     f"@{self._bot_info.get('username')}, returning success",
                 )
                 return {
@@ -142,21 +172,13 @@ class TelegramService:
             try:
                 logger.info("[Telegram] Connecting with bot token...")
 
-                # Create bot and validate token
-                bot = Bot(token=token)
-                me = await bot.get_me()
-
-                self._bot_info = {
-                    "id": me.id,
-                    "username": me.username,
-                    "first_name": me.first_name,
-                    "can_join_groups": me.can_join_groups,
-                    "can_read_all_group_messages": me.can_read_all_group_messages,
-                }
-
-                logger.info(f"[Telegram] Bot validated: @{me.username} (ID: {me.id})")
-
-                # Build application
+                # Build application. Bot info is populated by
+                # ``application.initialize()`` below (it calls getMe once
+                # and caches on the bot instance) — the previous code
+                # also called ``bot.get_me()`` on a separate throwaway
+                # Bot before building the Application, paying for a
+                # second redundant network round-trip on every cold
+                # start.  Drop that — single round-trip now.
                 self._application = (
                     Application.builder()
                     .token(token)
@@ -173,25 +195,36 @@ class TelegramService:
                 )
                 self._bot = self._application.bot
                 self._token = token
-
-                # Register message handler for all messages
                 self._application.add_handler(
                     MessageHandler(filters.ALL, self._on_message_received)
                 )
 
-                # Initialize application
                 await self._application.initialize()
 
-                # Start polling in background task
+                me = self._bot
+                self._bot_info = {
+                    "id": me.id,
+                    "username": me.username,
+                    "first_name": me.first_name,
+                    "can_join_groups": me.can_join_groups,
+                    "can_read_all_group_messages": me.can_read_all_group_messages,
+                }
+                logger.info(f"[Telegram] Bot validated: @{me.username} (ID: {me.id})")
+
                 self._polling_task = asyncio.create_task(self._run_polling())
                 self._connected = True
 
-                # Broadcast status update
                 await self._broadcast_status()
 
                 # Hydrate runtime owner_chat_id from stored credential.
-                # The DB is the source of truth; connect only reads.
-                saved_owner = await auth.get_api_key("telegram_owner_chat_id")
+                saved_owner = secrets.get("telegram_owner_chat_id")
+                if saved_owner is None:
+                    try:
+                        saved_owner = (await TelegramCredential.resolve()).get(
+                            "telegram_owner_chat_id"
+                        )
+                    except PermissionError:
+                        saved_owner = None
                 if saved_owner:
                     try:
                         self._owner_chat_id = int(saved_owner)
@@ -199,7 +232,6 @@ class TelegramService:
                         pass
 
                 logger.info(f"[Telegram] Connected and polling started for @{me.username}")
-
                 return {
                     "success": True,
                     "bot": self._bot_info,
@@ -211,30 +243,21 @@ class TelegramService:
                 self._connected = False
                 self._application = None
                 self._bot = None
-                return {
-                    "success": False,
-                    "error": str(e),
-                }
+                return {"success": False, "error": str(e)}
 
     async def disconnect(self) -> Dict[str, Any]:
-        """Disconnect bot and stop polling."""
         async with self._lock:
             return await self._disconnect_internal()
 
     async def _disconnect_internal(self) -> Dict[str, Any]:
-        """Internal disconnect (must be called with lock held)."""
         try:
             logger.info("[Telegram] Disconnecting...")
-
-            # Cancel polling task
             if self._polling_task and not self._polling_task.done():
                 self._polling_task.cancel()
                 try:
                     await self._polling_task
                 except asyncio.CancelledError:
                     pass
-
-            # Stop and shutdown application
             if self._application:
                 try:
                     await self._application.stop()
@@ -250,25 +273,24 @@ class TelegramService:
             self._owner_chat_id = None
             self._bot_info = {}
 
-            # Broadcast disconnected status
             await self._broadcast_status()
-
             logger.info("[Telegram] Disconnected")
             return {"success": True, "message": "Disconnected"}
-
         except Exception as e:
             logger.error(f"[Telegram] Disconnect error: {e}")
             return {"success": False, "error": str(e)}
 
+    # =========================================================================
+    # Polling loop
+    # =========================================================================
+
     def _on_polling_error(self, error) -> None:
-        """Handle polling errors (called by PTB's internal retry loop)."""
         if isinstance(error, NetworkError):
             logger.debug(f"[Telegram] Network error during polling (auto-retrying): {error}")
         else:
             logger.error(f"[Telegram] Polling error: {error}")
 
     async def _run_polling(self):
-        """Run polling loop in background."""
         try:
             logger.info("[Telegram] Starting polling loop...")
             await self._application.start()
@@ -277,11 +299,8 @@ class TelegramService:
                 allowed_updates=Update.ALL_TYPES,
                 error_callback=self._on_polling_error,
             )
-
-            # Keep running until cancelled
             while True:
                 await asyncio.sleep(1)
-
         except asyncio.CancelledError:
             logger.info("[Telegram] Polling cancelled")
             raise
@@ -291,41 +310,51 @@ class TelegramService:
             await self._broadcast_status()
 
     async def _on_message_received(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle incoming messages and dispatch to event_waiter."""
         try:
             if not update.message:
                 return
-
             msg = update.message
 
             # Auto-capture bot owner from first private message
-            if self._owner_chat_id is None and msg.chat.type == "private" and msg.from_user:
+            if (
+                self._owner_chat_id is None
+                and msg.chat.type == "private"
+                and msg.from_user
+            ):
                 self._owner_chat_id = msg.from_user.id
-                logger.info(f"[Telegram] Owner detected: @{msg.from_user.username} (ID: {msg.from_user.id})")
-                # Persist to credentials DB so it survives reconnects
+                logger.info(
+                    f"[Telegram] Owner detected: @{msg.from_user.username} "
+                    f"(ID: {msg.from_user.id})"
+                )
                 try:
                     from core.container import container
                     auth = container.auth_service()
-                    await auth.store_api_key("telegram_owner_chat_id", str(msg.from_user.id), models=[])
+                    await auth.store_api_key(
+                        "telegram_owner_chat_id",
+                        str(msg.from_user.id),
+                        models=[],
+                    )
                 except Exception as persist_err:
-                    logger.warning(f"[Telegram] Failed to persist owner chat_id: {persist_err}")
+                    logger.warning(
+                        f"[Telegram] Failed to persist owner chat_id: {persist_err}"
+                    )
                 await self._broadcast_status()
 
             event_data = self._format_message(msg)
+            logger.info(
+                f"[Telegram] Message received: {event_data.get('content_type')} from "
+                f"{event_data.get('from_username', event_data.get('from_id'))}, "
+                f"chat_type={event_data.get('chat_type')}"
+            )
 
-            logger.info(f"[Telegram] Message received: {event_data.get('content_type')} from {event_data.get('from_username', event_data.get('from_id'))}, chat_type={event_data.get('chat_type')}")
-
-            # Dispatch to event_waiter for trigger nodes
             from services import event_waiter
             resolved = event_waiter.dispatch("telegram_message_received", event_data)
             logger.info(f"[Telegram] Dispatched to {resolved} waiter(s)")
-
         except Exception as e:
             logger.error(f"[Telegram] Message handler error: {e}")
 
     def _format_message(self, msg) -> Dict[str, Any]:
         """Format Telegram message to unified event data."""
-        # Determine content type
         content_type = "text"
         if msg.photo:
             content_type = "photo"
@@ -346,11 +375,10 @@ class TelegramService:
         elif msg.poll:
             content_type = "poll"
 
-        # Build event data
         data = {
             "message_id": msg.message_id,
             "chat_id": msg.chat.id,
-            "chat_type": msg.chat.type,  # private, group, supergroup, channel
+            "chat_type": msg.chat.type,
             "chat_title": msg.chat.title,
             "from_id": msg.from_user.id if msg.from_user else None,
             "from_username": msg.from_user.username if msg.from_user else None,
@@ -363,9 +391,7 @@ class TelegramService:
             "reply_to_message_id": msg.reply_to_message.message_id if msg.reply_to_message else None,
         }
 
-        # Add media info if present
         if msg.photo:
-            # Get largest photo
             photo = msg.photo[-1]
             data["photo"] = {
                 "file_id": photo.file_id,
@@ -393,11 +419,9 @@ class TelegramService:
                 "last_name": msg.contact.last_name,
                 "user_id": msg.contact.user_id,
             }
-
         return data
 
     async def _broadcast_status(self):
-        """Broadcast connection status to all WebSocket clients."""
         try:
             from services.status_broadcaster import get_status_broadcaster
             broadcaster = get_status_broadcaster()
@@ -412,17 +436,11 @@ class TelegramService:
             logger.warning(f"[Telegram] Status broadcast failed: {e}")
 
     # =========================================================================
-    # Send Methods
+    # Send helpers — parse-mode preprocessing + BadRequest fallback in one place
     # =========================================================================
 
     @staticmethod
-    def _escape_text(text: str, parse_mode: Optional[str]) -> str:
-        """Escape reserved characters for the given parse mode.
-
-        MarkdownV2 reserves: _ * [ ] ( ) ~ ` > # + - = | { } . !
-        Markdown (v1) reserves: _ * ` [
-        HTML: no escaping needed (Telegram handles it).
-        """
+    def _escape_text(text: Optional[str], parse_mode: Optional[str]) -> Optional[str]:
         if not text or not parse_mode:
             return text
         if parse_mode == "MarkdownV2":
@@ -432,15 +450,60 @@ class TelegramService:
         return text
 
     @staticmethod
-    def _format_auto(text: str) -> tuple[str, str]:
-        """Convert GFM markdown to Telegram HTML using markdown-it-py.
-
-        Returns (formatted_text, parse_mode) tuple.
-        """
+    def _format_auto(text: Optional[str]) -> tuple[Optional[str], str]:
         if not text:
             return text, "HTML"
         from services.markdown_formatter import to_telegram_html
         return to_telegram_html(text), "HTML"
+
+    @classmethod
+    def _resolve_body(
+        cls, body: Optional[str], parse_mode: Optional[str]
+    ) -> tuple[Optional[str], Optional[str]]:
+        """Apply parse-mode preprocessing to a text/caption.  Returns
+        ``(body, effective_parse_mode)``."""
+        if parse_mode == "Auto":
+            return cls._format_auto(body)
+        return cls._escape_text(body, parse_mode), parse_mode or None
+
+    async def _send_with_parse_fallback(
+        self,
+        method: Callable[..., Awaitable[Any]],
+        *,
+        body_kw: str,
+        body: Optional[str],
+        parse_mode: Optional[str],
+        **kwargs: Any,
+    ) -> Any:
+        """Call ``method(**{body_kw: processed_body, parse_mode: pm}, **kwargs)``;
+        on Telegram ``BadRequest("can't parse entities")`` retry once with the
+        raw body and ``parse_mode=None``.  Folds 4 copies of the same try/except
+        into a single helper.
+        """
+        processed, effective_pm = self._resolve_body(body, parse_mode)
+        try:
+            return await method(
+                **{body_kw: processed},
+                parse_mode=effective_pm,
+                **kwargs,
+            )
+        except BadRequest as e:
+            if "can't parse entities" in str(e).lower() and effective_pm:
+                logger.warning(
+                    f"[Telegram] Parse mode {effective_pm} failed for "
+                    f"{method.__name__}, sending as plain text"
+                )
+                return await method(
+                    **{body_kw: body},
+                    parse_mode=None,
+                    **kwargs,
+                )
+            raise
+
+    def _require_bot(self) -> Bot:
+        if not self._bot:
+            raise ValueError("Telegram bot not connected")
+        return self._bot
 
     async def send_message(
         self,
@@ -450,48 +513,16 @@ class TelegramService:
         disable_notification: bool = False,
         reply_to_message_id: Optional[int] = None,
     ) -> Dict[str, Any]:
-        """Send a text message.
-
-        Args:
-            chat_id: Chat ID or @username
-            text: Message text
-            parse_mode: 'HTML', 'Markdown', 'MarkdownV2', or 'Auto'
-            disable_notification: Send silently
-            reply_to_message_id: Reply to this message
-
-        Returns:
-            Sent message info
-        """
-        if not self._bot:
-            raise ValueError("Telegram bot not connected")
-
-        if parse_mode == "Auto":
-            safe_text, effective_pm = self._format_auto(text)
-        else:
-            effective_pm = parse_mode if parse_mode else None
-            safe_text = self._escape_text(text, effective_pm)
-
-        try:
-            msg = await self._bot.send_message(
-                chat_id=chat_id,
-                text=safe_text,
-                parse_mode=effective_pm,
-                disable_notification=disable_notification,
-                reply_to_message_id=reply_to_message_id,
-            )
-        except BadRequest as e:
-            if "can't parse entities" in str(e).lower() and effective_pm:
-                logger.warning(f"[Telegram] Parse mode {effective_pm} failed, sending as plain text")
-                msg = await self._bot.send_message(
-                    chat_id=chat_id,
-                    text=text,
-                    parse_mode=None,
-                    disable_notification=disable_notification,
-                    reply_to_message_id=reply_to_message_id,
-                )
-            else:
-                raise
-
+        bot = self._require_bot()
+        msg = await self._send_with_parse_fallback(
+            bot.send_message,
+            body_kw="text",
+            body=text,
+            parse_mode=parse_mode,
+            chat_id=chat_id,
+            disable_notification=disable_notification,
+            reply_to_message_id=reply_to_message_id,
+        )
         return {
             "message_id": msg.message_id,
             "chat_id": msg.chat.id,
@@ -508,51 +539,17 @@ class TelegramService:
         disable_notification: bool = False,
         reply_to_message_id: Optional[int] = None,
     ) -> Dict[str, Any]:
-        """Send a photo.
-
-        Args:
-            chat_id: Chat ID or @username
-            photo: URL or file_id
-            caption: Photo caption
-            parse_mode: Caption parse mode
-            disable_notification: Send silently
-            reply_to_message_id: Reply to this message
-
-        Returns:
-            Sent message info
-        """
-        if not self._bot:
-            raise ValueError("Telegram bot not connected")
-
-        if parse_mode == "Auto" and caption:
-            safe_caption, effective_pm = self._format_auto(caption)
-        else:
-            effective_pm = parse_mode if parse_mode else None
-            safe_caption = self._escape_text(caption, effective_pm) if caption else caption
-
-        try:
-            msg = await self._bot.send_photo(
-                chat_id=chat_id,
-                photo=photo,
-                caption=safe_caption,
-                parse_mode=effective_pm,
-                disable_notification=disable_notification,
-                reply_to_message_id=reply_to_message_id,
-            )
-        except BadRequest as e:
-            if "can't parse entities" in str(e).lower() and effective_pm:
-                logger.warning(f"[Telegram] Parse mode {effective_pm} failed for photo caption, sending as plain text")
-                msg = await self._bot.send_photo(
-                    chat_id=chat_id,
-                    photo=photo,
-                    caption=caption,
-                    parse_mode=None,
-                    disable_notification=disable_notification,
-                    reply_to_message_id=reply_to_message_id,
-                )
-            else:
-                raise
-
+        bot = self._require_bot()
+        msg = await self._send_with_parse_fallback(
+            bot.send_photo,
+            body_kw="caption",
+            body=caption,
+            parse_mode=parse_mode,
+            chat_id=chat_id,
+            photo=photo,
+            disable_notification=disable_notification,
+            reply_to_message_id=reply_to_message_id,
+        )
         return {
             "message_id": msg.message_id,
             "chat_id": msg.chat.id,
@@ -568,51 +565,17 @@ class TelegramService:
         disable_notification: bool = False,
         reply_to_message_id: Optional[int] = None,
     ) -> Dict[str, Any]:
-        """Send a document.
-
-        Args:
-            chat_id: Chat ID or @username
-            document: URL or file_id
-            caption: Document caption
-            parse_mode: Caption parse mode
-            disable_notification: Send silently
-            reply_to_message_id: Reply to this message
-
-        Returns:
-            Sent message info
-        """
-        if not self._bot:
-            raise ValueError("Telegram bot not connected")
-
-        if parse_mode == "Auto" and caption:
-            safe_caption, effective_pm = self._format_auto(caption)
-        else:
-            effective_pm = parse_mode if parse_mode else None
-            safe_caption = self._escape_text(caption, effective_pm) if caption else caption
-
-        try:
-            msg = await self._bot.send_document(
-                chat_id=chat_id,
-                document=document,
-                caption=safe_caption,
-                parse_mode=effective_pm,
-                disable_notification=disable_notification,
-                reply_to_message_id=reply_to_message_id,
-            )
-        except BadRequest as e:
-            if "can't parse entities" in str(e).lower() and effective_pm:
-                logger.warning(f"[Telegram] Parse mode {effective_pm} failed for document caption, sending as plain text")
-                msg = await self._bot.send_document(
-                    chat_id=chat_id,
-                    document=document,
-                    caption=caption,
-                    parse_mode=None,
-                    disable_notification=disable_notification,
-                    reply_to_message_id=reply_to_message_id,
-                )
-            else:
-                raise
-
+        bot = self._require_bot()
+        msg = await self._send_with_parse_fallback(
+            bot.send_document,
+            body_kw="caption",
+            body=caption,
+            parse_mode=parse_mode,
+            chat_id=chat_id,
+            document=document,
+            disable_notification=disable_notification,
+            reply_to_message_id=reply_to_message_id,
+        )
         return {
             "message_id": msg.message_id,
             "chat_id": msg.chat.id,
@@ -627,29 +590,14 @@ class TelegramService:
         disable_notification: bool = False,
         reply_to_message_id: Optional[int] = None,
     ) -> Dict[str, Any]:
-        """Send a location.
-
-        Args:
-            chat_id: Chat ID or @username
-            latitude: Latitude
-            longitude: Longitude
-            disable_notification: Send silently
-            reply_to_message_id: Reply to this message
-
-        Returns:
-            Sent message info
-        """
-        if not self._bot:
-            raise ValueError("Telegram bot not connected")
-
-        msg = await self._bot.send_location(
+        bot = self._require_bot()
+        msg = await bot.send_location(
             chat_id=chat_id,
             latitude=latitude,
             longitude=longitude,
             disable_notification=disable_notification,
             reply_to_message_id=reply_to_message_id,
         )
-
         return {
             "message_id": msg.message_id,
             "chat_id": msg.chat.id,
@@ -665,23 +613,8 @@ class TelegramService:
         disable_notification: bool = False,
         reply_to_message_id: Optional[int] = None,
     ) -> Dict[str, Any]:
-        """Send a contact.
-
-        Args:
-            chat_id: Chat ID or @username
-            phone_number: Contact phone number
-            first_name: Contact first name
-            last_name: Contact last name
-            disable_notification: Send silently
-            reply_to_message_id: Reply to this message
-
-        Returns:
-            Sent message info
-        """
-        if not self._bot:
-            raise ValueError("Telegram bot not connected")
-
-        msg = await self._bot.send_contact(
+        bot = self._require_bot()
+        msg = await bot.send_contact(
             chat_id=chat_id,
             phone_number=phone_number,
             first_name=first_name,
@@ -689,19 +622,19 @@ class TelegramService:
             disable_notification=disable_notification,
             reply_to_message_id=reply_to_message_id,
         )
-
         return {
             "message_id": msg.message_id,
             "chat_id": msg.chat.id,
             "date": msg.date.isoformat(),
         }
 
-    async def get_me(self) -> Dict[str, Any]:
-        """Get bot info."""
-        if not self._bot:
-            raise ValueError("Telegram bot not connected")
+    # =========================================================================
+    # Misc API helpers (used by the credentials-modal WS handlers)
+    # =========================================================================
 
-        me = await self._bot.get_me()
+    async def get_me(self) -> Dict[str, Any]:
+        bot = self._require_bot()
+        me = await bot.get_me()
         return {
             "id": me.id,
             "username": me.username,
@@ -710,18 +643,8 @@ class TelegramService:
         }
 
     async def get_chat(self, chat_id: str | int) -> Dict[str, Any]:
-        """Get chat info.
-
-        Args:
-            chat_id: Chat ID or @username
-
-        Returns:
-            Chat info
-        """
-        if not self._bot:
-            raise ValueError("Telegram bot not connected")
-
-        chat = await self._bot.get_chat(chat_id)
+        bot = self._require_bot()
+        chat = await bot.get_chat(chat_id)
         return {
             "id": chat.id,
             "type": chat.type,

@@ -20,10 +20,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-# Force import so unittest.mock.patch("services.telegram_service.X") can
-# resolve the attribute path. Without this the module is never loaded at
-# test-collection time and patch raises AttributeError.
-import services.telegram_service  # noqa: F401
+# Force import so unittest.mock.patch("nodes.telegram._service.X") can
+# resolve the attribute path. The TelegramService now lives inside the
+# plugin folder; nothing telegram-specific remains under ``services/``.
+import nodes.telegram._service  # noqa: F401
 
 from tests.nodes._mocks import patched_broadcaster, patched_container
 
@@ -66,9 +66,9 @@ def _make_telegram_service(*, connected: bool = True, owner_chat_id=None):
 
 
 def _patch_telegram_service(svc):
-    """Patch the get_telegram_service accessor everywhere it is imported."""
+    """Patch the get_telegram_service accessor at its canonical path."""
     return patch(
-        "services.telegram_service.get_telegram_service", return_value=svc
+        "nodes.telegram._service.get_telegram_service", return_value=svc
     )
 
 
@@ -267,6 +267,7 @@ def _make_waiter_stub(*, canned_event=None, is_trigger=True, wait_side_effect=No
         stub.wait_for_event = AsyncMock(side_effect=wait_side_effect)
     else:
         stub.wait_for_event = AsyncMock(return_value=canned_event or {})
+    stub.run_trigger_precheck = AsyncMock(return_value=None)
     stub.get_backend_mode = MagicMock(return_value="asyncio.Future")
     stub.cancel = MagicMock(return_value=True)
     stub.dispatch = MagicMock(return_value=1)

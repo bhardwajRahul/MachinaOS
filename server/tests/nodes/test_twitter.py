@@ -577,6 +577,7 @@ def _make_waiter_stub(*, canned_event=None):
     )
     stub.register = AsyncMock(return_value=waiter_obj)
     stub.wait_for_event = AsyncMock(return_value=canned_event or {})
+    stub.run_trigger_precheck = AsyncMock(return_value=None)
     stub.get_backend_mode = MagicMock(return_value="asyncio.Future")
     stub.cancel = MagicMock(return_value=True)
     stub.dispatch = MagicMock(return_value=1)

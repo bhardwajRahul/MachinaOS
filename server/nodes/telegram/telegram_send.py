@@ -169,7 +169,8 @@ class TelegramSendNode(ActionNode):
     async def send(self, ctx: NodeContext, params: TelegramSendParams) -> Any:
         """Inlined from handlers/telegram.py:handle_telegram_send (Wave 11.D.1)."""
         from core.logging import get_logger
-        from services.telegram_service import get_telegram_service
+
+        from ._service import get_telegram_service
 
         log = get_logger(__name__)
         service = get_telegram_service()

@@ -48,24 +48,20 @@ async def handle_trigger_node(
         }
 
     try:
-        # Telegram pre-check: verify bot is connected before waiting
-        if node_type == 'telegramReceive':
-            from services.telegram_service import get_telegram_service
-            service = get_telegram_service()
-            if not service.connected:
-                return {
-                    "success": False,
-                    "node_id": node_id,
-                    "node_type": node_type,
-                    "error": "Telegram bot not connected. Add bot token in Credentials.",
-                    "execution_time": time.time() - start_time,
-                    "timestamp": datetime.now().isoformat()
-                }
-            sender_filter = parameters.get('sender_filter', 'all')
-            logger.info("Telegram trigger starting",
-                       node_id=node_id, sender_filter=sender_filter,
-                       owner_detected=service.owner_chat_id is not None,
-                       execution_id=execution_id)
+        # Plugin-registered pre-check (e.g. "Telegram bot not connected").
+        # Plugins call ``event_waiter.register_trigger_precheck(node_type, fn)``
+        # from their package __init__. ``fn(parameters) -> Optional[str]``
+        # returns an error message to short-circuit, or None to proceed.
+        precheck_error = await event_waiter.run_trigger_precheck(node_type, parameters)
+        if precheck_error:
+            return {
+                "success": False,
+                "node_id": node_id,
+                "node_type": node_type,
+                "error": precheck_error,
+                "execution_time": time.time() - start_time,
+                "timestamp": datetime.now().isoformat(),
+            }
 
         # Register waiter for this trigger (async to pre-fetch LID cache)
         waiter = await event_waiter.register(node_type, node_id, parameters)
