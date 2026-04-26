@@ -10,6 +10,7 @@ import typer
 
 from machina.commands.build import build_command
 from machina.commands.clean import clean_command
+from machina.commands.daemon import app as daemon_app
 from machina.commands.dev import dev_command
 from machina.commands.docs import app as docs_app
 from machina.commands.start import start_command
@@ -47,6 +48,7 @@ app.command("build", help="Install toolchain + build client + sync Python + veri
 )
 app.add_typer(version_app, name="version")
 app.add_typer(docs_app, name="docs")
+app.add_typer(daemon_app, name="daemon")
 
 
 if __name__ == "__main__":
