@@ -10,6 +10,8 @@ import typer
 
 from machina.commands.build import build_command
 from machina.commands.clean import clean_command
+from machina.commands.dev import dev_command
+from machina.commands.start import start_command
 from machina.commands.stop import stop_command
 
 
@@ -26,6 +28,12 @@ def _root() -> None:
     """Marks the Typer app as a multi-command group."""
 
 
+app.command("start", help="Start all services in production mode (static client + uvicorn + temporal).")(
+    start_command
+)
+app.command("dev", help="Start all services in dev mode (Vite HMR + uvicorn + temporal).")(
+    dev_command
+)
 app.command("stop", help="Stop all MachinaOS services and free configured ports.")(
     stop_command
 )

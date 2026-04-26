@@ -60,9 +60,9 @@
     "client"
   ],
   "scripts": {
-    "start": "node scripts/start.js",
-    "dev": "node scripts/dev.js",
-    "start:temporal": "cross-env TEMPORAL_ENABLED=true node scripts/start.js",
+    "start": "python -m machina start",
+    "dev": "python -m machina dev",
+    "start:temporal": "cross-env TEMPORAL_ENABLED=true python -m machina start",
     "client:start": "cd client && npm run start",
     "python:start": "cd server && uv run uvicorn main:app --host 127.0.0.1 --port 3010 --log-level warning",
     "python:daemon": "cd server && uv run uvicorn main:app --host 0.0.0.0 --port 3010 --log-level warning",
