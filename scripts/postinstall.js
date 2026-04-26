@@ -21,7 +21,6 @@ function fixPermissions() {
     resolve(ROOT, 'bin/cli.js'),
     resolve(ROOT, 'scripts/start.js'),
     resolve(ROOT, 'scripts/dev.js'),
-    resolve(ROOT, 'scripts/stop.js'),
     resolve(ROOT, 'scripts/build.js'),
     resolve(ROOT, 'scripts/clean.js'),
     resolve(ROOT, 'scripts/install.js'),
@@ -78,6 +77,18 @@ function runScript(scriptPath) {
   });
 }
 
+function runPython(args) {
+  return new Promise((resolveP, reject) => {
+    const cmd = process.platform === 'win32' ? 'python' : 'python3';
+    const child = spawn(cmd, args, { cwd: ROOT, stdio: 'inherit' });
+    child.on('error', reject);
+    child.on('close', (code) => {
+      if (code === 0) resolveP();
+      else reject(new Error(`${cmd} exited with code ${code}`));
+    });
+  });
+}
+
 async function main() {
   try {
     // Fix executable permissions on Unix
@@ -86,6 +97,19 @@ async function main() {
     // Run full installation
     console.log('Installing dependencies...');
     await runScript(resolve(__dirname, 'install.js'));
+
+    // Install the machina CLI into whatever python is on PATH (system,
+    // conda, or active venv). Idempotent: re-runs are no-ops since pip
+    // detects the editable install. Fail-soft: a missing Python
+    // interpreter doesn't block the rest of npm install.
+    console.log('Installing machina CLI (python -m pip install -e ./machina)...');
+    try {
+      await runPython(['-m', 'pip', 'install', '-e', resolve(ROOT, 'machina'),
+                       '--quiet', '--disable-pip-version-check']);
+    } catch (err) {
+      console.log(`Warning: machina CLI install skipped (${err.message}).`);
+      console.log('         Install manually with: python -m pip install -e ./machina');
+    }
 
     console.log('');
     console.log('========================================');

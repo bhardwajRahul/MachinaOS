@@ -72,7 +72,7 @@
     "temporal:worker": "cd server && uv run python -m services.temporal.worker",
     "build": "node scripts/build.js",
     "clean": "node scripts/clean.js",
-    "stop": "node scripts/stop.js",
+    "stop": "python -m machina stop",
     "test": "npm run test:backend && npm run test:frontend",
     "test:backend": "cd server && uv run pytest tests/ -v",
     "test:frontend": "cd client && npm run test",
