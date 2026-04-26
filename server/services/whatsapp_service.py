@@ -301,6 +301,17 @@ async def reset_client():
 async def get_client(force_reconnect: bool = False) -> RPCClient:
     """Get or create RPC client. Use force_reconnect=True to ensure fresh connection."""
     global _client
+    # Lazy-spawn the edgymeow binary on first use so its session DB lives
+    # under <data_dir>/whatsapp/ instead of the pnpm package directory.
+    # Idempotent: no-op if already running or disabled via settings.
+    from nodes.whatsapp import get_whatsapp_runtime
+    try:
+        # `start()` is idempotent (BaseSupervisor takes a lock and no-ops
+        # if already running) so calling it from every get_client() is safe.
+        await get_whatsapp_runtime().start()
+    except Exception as e:
+        logger.warning(f"[WhatsApp RPC] Runtime start failed (will try connecting anyway): {e}")
+
     async with _lock:
         # Force reconnect if requested or if client is stale
         if force_reconnect and _client:

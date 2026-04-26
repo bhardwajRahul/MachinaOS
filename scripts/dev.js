@@ -2,7 +2,10 @@
 /**
  * Development server for MachinaOS.
  * Vite HMR, uvicorn hot-reload, full log output.
- * Usage: machina dev [--daemon] [--skip-whatsapp]
+ * Usage: machina dev [--daemon]
+ *
+ * WhatsApp's edgymeow Go binary is supervised by the Python backend
+ * (see server/nodes/whatsapp/_runtime.py) — no separate npm script.
  */
 import { spawn } from 'child_process';
 import { existsSync, rmSync } from 'fs';
@@ -29,7 +32,6 @@ installPerfMeasureLogger(log);
 // Parse command line arguments
 const args = process.argv.slice(2);
 const isDaemonMode = args.includes('--daemon');
-const skipWhatsApp = args.includes('--skip-whatsapp');
 
 async function main() {
   // Check if build has been run
@@ -48,7 +50,6 @@ async function main() {
   log(`Mode: ${isDaemonMode ? 'Daemon (uvicorn)' : 'Development (uvicorn)'}`);
   log(`Ports: ${config.allPorts.join(', ')}`);
   log(`Temporal: enabled`);
-  log(`WhatsApp: ${skipWhatsApp ? 'skipped' : 'enabled'}`);
 
   // Create .env if not exists
   if (ensureEnvFile()) {
@@ -93,7 +94,6 @@ async function main() {
     services.push('"pnpm run client:start"');
   }
   services.push(isDaemonMode ? '"pnpm run python:daemon"' : '"pnpm run python:start"');
-  if (!skipWhatsApp) services.push('"pnpm run whatsapp:api"');
   services.push('"pnpm run temporal:start"');
   // Worker runs embedded in the backend (main.py TemporalWorkerManager)
 
@@ -118,9 +118,6 @@ async function main() {
     { name: 'Client',   port: config.clientPort },
     { name: 'Backend',  port: config.backendPort },
   ];
-  if (!skipWhatsApp) {
-    readyTargets.push({ name: 'WhatsApp', port: config.ports.whatsapp });
-  }
   readyTargets.push({ name: 'Temporal', port: config.ports.temporal });
 
   Promise.all(

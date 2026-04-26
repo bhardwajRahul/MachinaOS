@@ -2,7 +2,10 @@
 /**
  * Production start script for MachinaOS.
  * Clean output by default, --verbose for full logs.
- * Usage: machina start [--verbose|-v] [--skip-whatsapp]
+ * Usage: machina start [--verbose|-v]
+ *
+ * WhatsApp's edgymeow Go binary is supervised by the Python backend
+ * (see server/nodes/whatsapp/_runtime.py) — no separate npm script.
  */
 import { spawn, execSync } from 'child_process';
 import { existsSync, readFileSync } from 'fs';
@@ -29,7 +32,6 @@ installPerfMeasureLogger(log);
 
 const args = process.argv.slice(2);
 const isVerbose = args.includes('--verbose') || args.includes('-v');
-const skipWhatsApp = args.includes('--skip-whatsapp');
 
 function getVersion() {
   try {
@@ -107,11 +109,13 @@ async function main() {
   }
   log('Ports ready');
 
-  // Services: static client, backend (uvicorn), whatsapp, temporal
+  // Services: static client, backend (uvicorn), temporal.
+  // WhatsApp's edgymeow Go binary is spawned lazily by the Python backend
+  // (see server/nodes/whatsapp/_runtime.py) so the session DB lives under
+  // data_dir. Disable via WHATSAPP_RUNTIME_ENABLED=false in .env.
   const services = [];
   services.push(`"node ${resolve(ROOT, 'scripts', 'serve-client.js').replace(/\\/g, '/')}"`);
   services.push((isWindows || isWSL) ? '"pnpm run python:start"' : '"pnpm run python:daemon"');
-  if (!skipWhatsApp) services.push('"pnpm run whatsapp:api"');
   if (!temporalRunning) services.push('"pnpm run temporal:start"');
   // Worker runs embedded in the backend (main.py TemporalWorkerManager)
 
@@ -123,9 +127,6 @@ async function main() {
     { name: 'Client',  port: config.clientPort },
     { name: 'Backend', port: config.backendPort },
   ];
-  if (!skipWhatsApp) {
-    readyTargets.push({ name: 'WhatsApp', port: config.ports.whatsapp });
-  }
   if (!temporalRunning) {
     readyTargets.push({ name: 'Temporal', port: config.ports.temporal });
   }
@@ -172,7 +173,6 @@ async function main() {
     console.log(`  Use --verbose for full logs\n`);
 
     const serviceNames = ['client', 'server'];
-    if (!skipWhatsApp) serviceNames.push('whatsapp');
     if (!temporalRunning) serviceNames.push('temporal');
 
     const proc = spawn('pnpm', [

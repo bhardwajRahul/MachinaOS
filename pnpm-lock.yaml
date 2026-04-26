@@ -18,8 +18,8 @@ importers:
         specifier: ^7.0.3
         version: 7.0.3
       edgymeow:
-        specifier: 0.0.18
-        version: 0.0.18
+        specifier: 0.0.20
+        version: 0.0.20
       rimraf:
         specifier: ^6.0.1
         version: 6.1.2
@@ -3548,8 +3548,8 @@ packages:
     resolution: {integrity: sha512-wG99Zcfcys9fZux7Cft8BAX/YrOJLJSZ3jyYPfhZHqN2E+Ffx+QXBDsv3gubEgPtV6dTzJMSQUwk1H98/t/0wQ==}
     engines: {bun: '>=1', deno: '>=2', node: '>=16'}
 
-  edgymeow@0.0.18:
-    resolution: {integrity: sha512-+iWozBpK7zOdOqvlFK9AaWKENzcaLdMzSOnivKIg5ynCIBMxUlUoTnGlwt6m8HpG4d30iI3OWA9jtyO4lBlS/A==}
+  edgymeow@0.0.20:
+    resolution: {integrity: sha512-c/3VgIzWAvZa0ffBFdKDwmM0w3zCyGSHILiXDnW6XELWtxFJ/aONAN+xoDzS38hTRKDGTZ1cDRt29Wyi4Vqv5A==}
     engines: {node: '>=18.0.0'}
     hasBin: true
 
@@ -10347,7 +10347,7 @@ snapshots:
       '@noble/curves': 1.9.7
       '@noble/hashes': 1.8.0
 
-  edgymeow@0.0.18:
+  edgymeow@0.0.20:
     dependencies:
       chalk: 5.6.2
       commander: 11.1.0

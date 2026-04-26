@@ -70,11 +70,6 @@
     "temporal:stop": "temporal stop",
     "temporal:status": "temporal status",
     "temporal:worker": "cd server && uv run python -m services.temporal.worker",
-    "whatsapp:start": "edgymeow start",
-    "whatsapp:stop": "edgymeow stop",
-    "whatsapp:status": "edgymeow status",
-    "whatsapp:api": "edgymeow api --foreground",
-    "whatsapp:build": "edgymeow build",
     "build": "node scripts/build.js",
     "clean": "node scripts/clean.js",
     "stop": "node scripts/stop.js",
@@ -104,7 +99,7 @@
     "rimraf": "^6.0.1",
     "temporal-server": "^0.0.10",
     "agent-browser": "latest",
-    "edgymeow": "0.0.18"
+    "edgymeow": "0.0.20"
   },
   "pnpm": {
     "peerDependencyRules": {

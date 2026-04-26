@@ -192,12 +192,16 @@ try {
     console.log('  Warning: Playwright browser install failed. JS-rendered web scraping will be unavailable.');
   }
 
-  // Step 5: Verify WhatsApp RPC package (non-fatal)
-  console.log('[5/5] Verifying WhatsApp RPC...');
-  try {
-    run('edgymeow status', ROOT);
-  } catch {
-    console.log('  Warning: edgymeow not available. Use --skip-whatsapp when starting.');
+  // Step 5: Verify edgymeow Go binary is installed (non-fatal). The Python
+  // backend supervises it lazily via nodes/whatsapp/_runtime.py, so we just
+  // confirm pnpm fetched the package.
+  console.log('[5/5] Verifying edgymeow binary...');
+  const edgymeowBin = resolve(ROOT, 'node_modules', 'edgymeow', 'bin',
+    process.platform === 'win32' ? 'edgymeow-server.exe' : 'edgymeow-server');
+  if (existsSync(edgymeowBin)) {
+    console.log(`  Binary present: ${edgymeowBin}`);
+  } else {
+    console.log('  Warning: edgymeow binary not found. Set WHATSAPP_RUNTIME_ENABLED=false to disable.');
   }
 
   console.log('\nBuild complete.');

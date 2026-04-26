@@ -345,6 +345,12 @@ async def lifespan(app: FastAPI):
     from services.process_service import shutdown_process_service
     await shutdown_process_service()
 
+    # Stop every plugin supervisor that registered itself via
+    # services._supervisor.register_supervisor() (currently: WhatsApp;
+    # other plugins migrate in PR 2).
+    from services._supervisor import shutdown_all_supervisors
+    await shutdown_all_supervisors()
+
     # Stop cleanup service
     if cleanup_service is not None:
         await cleanup_service.stop()

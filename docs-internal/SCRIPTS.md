@@ -54,11 +54,6 @@ Run with `npm run <script>` from the project root.
 |--------|---------|-------------|
 | `client:start` | `cd client && npm run start` | Start React frontend (Vite) |
 | `python:start` | `cd server && uv run uvicorn main:app ...` | Start Python backend |
-| `whatsapp:api` | `cd server/whatsapp-rpc && npm run api` | Start WhatsApp API server |
-| `whatsapp:start` | `cd server/whatsapp-rpc && npm start` | Start WhatsApp connection |
-| `whatsapp:stop` | `cd server/whatsapp-rpc && npm stop` | Stop WhatsApp service |
-| `whatsapp:status` | `cd server/whatsapp-rpc && npm run status` | Check WhatsApp status |
-| `whatsapp:build` | `cd server/whatsapp-rpc && npm run build` | Build WhatsApp Go binary |
 | `temporal:start` | `temporal-server api` | Start Temporal server (foreground) |
 | `temporal:stop` | `temporal-server stop` | Stop Temporal server |
 | `temporal:status` | `temporal-server status` | Check Temporal server status |
@@ -107,8 +102,7 @@ Cross-platform start script that runs all services concurrently.
 4. Frees configured app ports (client, backend, WhatsApp, Node.js executor)
 5. Starts services via `concurrently` with `--kill-others`:
    - Static client server (`serve-client.js`)
-   - Python backend (uvicorn)
-   - WhatsApp API server (unless `--skip-whatsapp`)
+   - Python backend (uvicorn) -- supervises the edgymeow Go binary lazily via [server/nodes/whatsapp/_runtime.py](../server/nodes/whatsapp/_runtime.py)
    - Temporal server via `npm:temporal:start` (unless already running)
 
 **Temporal handling:** If `temporal-server status` reports the server is already running, Temporal is skipped in the concurrently service list. This prevents `temporal-server api` from exiting immediately with "Already running", which would trigger `--kill-others` and cascade-kill all services.
@@ -178,9 +172,7 @@ Removes build artifacts and dependencies.
 - `client/.vite/` - Vite cache
 - `server/.venv/` - Python virtual environment
 - `server/data/` - Server data
-- `server/whatsapp-rpc/node_modules/` - WhatsApp dependencies
-- `server/whatsapp-rpc/bin/` - WhatsApp Go binary
-- `server/whatsapp-rpc/data/` - WhatsApp data
+- `server/data/whatsapp/` - WhatsApp session DB + edgymeow logs (managed by [server/nodes/whatsapp/_runtime.py](../server/nodes/whatsapp/_runtime.py))
 
 ---
 
