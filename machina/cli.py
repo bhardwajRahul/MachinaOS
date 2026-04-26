@@ -11,8 +11,10 @@ import typer
 from machina.commands.build import build_command
 from machina.commands.clean import clean_command
 from machina.commands.dev import dev_command
+from machina.commands.docs import app as docs_app
 from machina.commands.start import start_command
 from machina.commands.stop import stop_command
+from machina.commands.version import app as version_app
 
 
 app = typer.Typer(
@@ -43,6 +45,8 @@ app.command("clean", help="Stop services then remove build artefacts and venvs."
 app.command("build", help="Install toolchain + build client + sync Python + verify deps.")(
     build_command
 )
+app.add_typer(version_app, name="version")
+app.add_typer(docs_app, name="docs")
 
 
 if __name__ == "__main__":
