@@ -59,7 +59,7 @@ def _build_specs(root: Path, cfg, *, daemon: bool, use_vite: bool) -> list[Servi
             name="client",
             argv=["pnpm", "run", "client:start"],
             cwd=root,
-            ready_port=cfg.ports.client,
+            ready_port=cfg.client_port,
             ready_timeout=60.0,
         )
     else:
@@ -67,7 +67,7 @@ def _build_specs(root: Path, cfg, *, daemon: bool, use_vite: bool) -> list[Servi
             name="client",
             argv=["node", str(static_client)],
             cwd=root,
-            ready_port=cfg.ports.client,
+            ready_port=cfg.client_port,
         )
 
     backend_host = "0.0.0.0" if daemon else "127.0.0.1"
@@ -76,11 +76,11 @@ def _build_specs(root: Path, cfg, *, daemon: bool, use_vite: bool) -> list[Servi
         argv=[
             "uv", "run", "uvicorn", "main:app",
             "--host", backend_host,
-            "--port", str(cfg.ports.backend),
+            "--port", str(cfg.backend_port),
             "--log-level", "warning",
         ],
         cwd=server_dir,
-        ready_port=cfg.ports.backend,
+        ready_port=cfg.backend_port,
     )
 
     return [
@@ -90,7 +90,7 @@ def _build_specs(root: Path, cfg, *, daemon: bool, use_vite: bool) -> list[Servi
             name="temporal",
             argv=["temporal-server", "api"],
             cwd=root,
-            ready_port=cfg.ports.temporal,
+            ready_port=cfg.temporal_port,
         ),
     ]
 
@@ -109,10 +109,10 @@ def dev_command(
     console.print("\n[bold]=== MachinaOS Starting ===[/]\n")
     console.print(f"Platform: {platform_name()}")
     console.print(f"Mode:     {'Daemon (uvicorn)' if daemon else 'Development (uvicorn)'}")
-    console.print(f"Ports:    {', '.join(str(p) for p in cfg.ports.all())}")
+    console.print(f"Ports:    {', '.join(str(p) for p in cfg.all_ports)}")
 
     console.print("Freeing ports...")
-    for port in cfg.ports.all():
+    for port in cfg.all_ports:
         kill_port(port)
 
     _clear_vite_cache(root)

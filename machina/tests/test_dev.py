@@ -5,14 +5,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from machina.commands import dev
-from machina.config import Config, Ports
+from machina.config import Config
 
 
 def _cfg() -> Config:
-    return Config(
-        raw={},
-        ports=Ports(client=3000, backend=3010, whatsapp=9400, nodejs=3020, temporal=7233),
-    )
+    return Config()
 
 
 def test_has_vite_false_when_missing(tmp_path: Path):

@@ -52,7 +52,7 @@ def clean_command() -> None:
     # Step 1: kill anything on configured ports
     console.print("Stopping running processes...")
     killed_ports = 0
-    for port in cfg.ports.all():
+    for port in cfg.all_ports:
         result = kill_port(port)
         if result.killed_pids:
             console.print(f"  Port {port}: Killed {len(result.killed_pids)} process(es)")

@@ -6,14 +6,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 from machina.commands import start
-from machina.config import Config, Ports
+from machina.config import Config
 
 
 def _cfg() -> Config:
-    return Config(
-        raw={},
-        ports=Ports(client=3000, backend=3010, whatsapp=9400, nodejs=3020, temporal=7233),
-    )
+    return Config()
 
 
 def test_venv_python_returns_none_when_missing(tmp_path: Path):

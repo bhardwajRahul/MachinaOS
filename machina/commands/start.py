@@ -119,7 +119,7 @@ def _build_specs(root: Path, cfg, *, temporal_running: bool) -> list[ServiceSpec
     backend_argv = [
         "uv", "run", "uvicorn", "main:app",
         "--host", backend_host,
-        "--port", str(cfg.ports.backend),
+        "--port", str(cfg.backend_port),
         "--log-level", "warning",
     ]
 
@@ -128,13 +128,13 @@ def _build_specs(root: Path, cfg, *, temporal_running: bool) -> list[ServiceSpec
             name="client",
             argv=["node", str(static_client)],
             cwd=root,
-            ready_port=cfg.ports.client,
+            ready_port=cfg.client_port,
         ),
         ServiceSpec(
             name="server",
             argv=backend_argv,
             cwd=server_dir,
-            ready_port=cfg.ports.backend,
+            ready_port=cfg.backend_port,
         ),
     ]
     if not temporal_running:
@@ -143,7 +143,7 @@ def _build_specs(root: Path, cfg, *, temporal_running: bool) -> list[ServiceSpec
                 name="temporal",
                 argv=["temporal-server", "api"],
                 cwd=root,
-                ready_port=cfg.ports.temporal,
+                ready_port=cfg.temporal_port,
             )
         )
     return specs
@@ -162,15 +162,15 @@ def start_command() -> None:
         console.print("[dim]Temporal already running, skipping[/]")
 
     console.print("Freeing ports...")
-    for port in cfg.ports.all():
+    for port in cfg.all_ports:
         kill_port(port)
     console.print("Ports ready")
 
     version = _read_version(root)
     console.print()
     console.print(f"  [bold]MachinaOS[/] v{version}")
-    console.print(f"  Frontend:  http://localhost:{cfg.ports.client}")
-    console.print(f"  Backend:   http://localhost:{cfg.ports.backend}")
+    console.print(f"  Frontend:  http://localhost:{cfg.client_port}")
+    console.print(f"  Backend:   http://localhost:{cfg.backend_port}")
     console.print(f"  Platform:  {platform_name()}")
     console.print()
 
