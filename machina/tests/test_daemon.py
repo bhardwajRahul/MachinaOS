@@ -12,12 +12,8 @@ import pytest
 from machina.commands import daemon
 
 
-def test_venv_python_chooses_layout_per_platform():
-    install_dir = Path("/x")
-    with patch.object(daemon, "IS_WINDOWS", True):
-        assert daemon._venv_python(install_dir).name == "python.exe"
-    with patch.object(daemon, "IS_WINDOWS", False):
-        assert daemon._venv_python(install_dir).name == "python"
+# venv-python discovery is now centralised in machina.buildenv; covered
+# by tests/test_start.py (test_venv_python_finds_*).
 
 
 def test_detached_kwargs_windows_uses_creationflags():

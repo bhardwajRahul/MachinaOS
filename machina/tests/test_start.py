@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
+from machina import buildenv
 from machina.commands import start
 from machina.config import Config
 
@@ -14,21 +15,21 @@ def _cfg() -> Config:
 
 
 def test_venv_python_returns_none_when_missing(tmp_path: Path):
-    assert start._venv_python(tmp_path) is None
+    assert buildenv.venv_python(tmp_path) is None
 
 
 def test_venv_python_finds_windows_layout(tmp_path: Path):
     win_py = tmp_path / "server" / ".venv" / "Scripts" / "python.exe"
     win_py.parent.mkdir(parents=True)
     win_py.write_text("")
-    assert start._venv_python(tmp_path) == win_py
+    assert buildenv.venv_python(tmp_path) == win_py
 
 
 def test_venv_python_finds_posix_layout(tmp_path: Path):
     posix_py = tmp_path / "server" / ".venv" / "bin" / "python"
     posix_py.parent.mkdir(parents=True)
     posix_py.write_text("")
-    assert start._venv_python(tmp_path) == posix_py
+    assert buildenv.venv_python(tmp_path) == posix_py
 
 
 def test_temporal_running_false_when_cli_missing():

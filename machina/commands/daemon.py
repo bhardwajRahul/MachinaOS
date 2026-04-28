@@ -21,6 +21,7 @@ from pathlib import Path
 import psutil
 import typer
 
+from machina.buildenv import venv_python
 from machina.colors import console
 from machina.platform_ import IS_WINDOWS, project_root
 
@@ -36,12 +37,6 @@ app = typer.Typer(
 
 _PID_DIR = Path.home() / ".machina"
 _PID_FILE = _PID_DIR / "machina-backend.pid"
-
-
-def _venv_python(install_dir: Path) -> Path:
-    if IS_WINDOWS:
-        return install_dir / "server" / ".venv" / "Scripts" / "python.exe"
-    return install_dir / "server" / ".venv" / "bin" / "python"
 
 
 def _detached_kwargs() -> dict:
@@ -103,8 +98,8 @@ def start_command() -> None:
 
     root = project_root()
     server = root / "server"
-    py = _venv_python(root)
-    if not py.exists():
+    py = venv_python(root)
+    if py is None:
         console.print(f'[red]Python venv not found at {py}.[/] Run "machina build" first.')
         raise typer.Exit(code=1)
 

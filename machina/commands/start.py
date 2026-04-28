@@ -24,18 +24,9 @@ import typer
 from machina.colors import console
 from machina.config import load_config
 from machina.platform_ import IS_WINDOWS, IS_WSL, platform_name, project_root
+from machina.buildenv import validate_build, venv_python
 from machina.ports import kill_port
 from machina.supervisor import Manager, RestartPolicy, ServiceSpec
-
-
-def _venv_python(root: Path) -> Path | None:
-    for candidate in (
-        root / "server" / ".venv" / "Scripts" / "python.exe",
-        root / "server" / ".venv" / "bin" / "python",
-    ):
-        if candidate.exists():
-            return candidate
-    return None
 
 
 def _sqlalchemy_preflight(root: Path) -> None:
@@ -47,7 +38,7 @@ def _sqlalchemy_preflight(root: Path) -> None:
     clear remediation message instead of letting uvicorn hang silently.
     See ``docs-internal/errors.md`` #1 / #1a.
     """
-    py = _venv_python(root)
+    py = venv_python(root)
     if py is None:
         return
     started = time.monotonic()
@@ -89,15 +80,6 @@ def _temporal_running() -> bool:
         return any(token in out.stdout for token in ("running", "UP", "up"))
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return False
-
-
-def _validate_build(root: Path) -> None:
-    if not (root / "node_modules").exists() or not (root / "server" / ".venv").exists():
-        console.print('[red]Error: Project not built. Run "machina build" first.[/]')
-        raise typer.Exit(code=1)
-    if not (root / "client" / "dist" / "index.html").exists():
-        console.print('[red]Error: Client not built. Run "machina build" first.[/]')
-        raise typer.Exit(code=1)
 
 
 def _read_version(root: Path) -> str:
@@ -154,7 +136,7 @@ def start_command() -> None:
     cfg = load_config()
     os.environ.setdefault("PYTHONUTF8", "1")
 
-    _validate_build(root)
+    validate_build(root, require_client_dist=True)
     _sqlalchemy_preflight(root)
 
     temporal_running = _temporal_running()

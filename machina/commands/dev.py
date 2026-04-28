@@ -22,14 +22,9 @@ import typer
 from machina.colors import console
 from machina.config import load_config
 from machina.platform_ import platform_name, project_root
+from machina.buildenv import validate_build
 from machina.ports import kill_port
 from machina.supervisor import Manager, ServiceSpec
-
-
-def _validate_build(root: Path) -> None:
-    if not (root / "node_modules").exists() or not (root / "server" / ".venv").exists():
-        console.print('[red]Error: Project not built. Run "machina build" first.[/]')
-        raise typer.Exit(code=1)
 
 
 def _has_vite(root: Path) -> bool:
@@ -104,7 +99,7 @@ def dev_command(
     cfg = load_config()
     os.environ.setdefault("PYTHONUTF8", "1")
 
-    _validate_build(root)
+    validate_build(root)
 
     console.print("\n[bold]=== MachinaOS Starting ===[/]\n")
     console.print(f"Platform: {platform_name()}")
