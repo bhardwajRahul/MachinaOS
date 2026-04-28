@@ -9,13 +9,13 @@ from __future__ import annotations
 
 import json
 import re
-import subprocess
 from pathlib import Path
 
 import typer
 
 from machina.colors import console
 from machina.platform_ import project_root
+from machina.run import capture
 
 
 app = typer.Typer(
@@ -31,33 +31,12 @@ _VALID_VERSION = re.compile(r"^\d+\.\d+\.\d+")
 
 def _git_describe(root: Path) -> str | None:
     """``git describe --tags --abbrev=0``; falls back to sorted ``git tag -l``."""
-    try:
-        out = subprocess.run(
-            ["git", "describe", "--tags", "--abbrev=0"],
-            cwd=str(root),
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        tag = out.stdout.strip()
-        if tag:
-            return tag
-    except (FileNotFoundError, subprocess.CalledProcessError):
-        pass
-    try:
-        out = subprocess.run(
-            ["git", "tag", "-l", "--sort=-version:refname"],
-            cwd=str(root),
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        for line in out.stdout.splitlines():
-            tag = line.strip()
-            if tag:
-                return tag
-    except (FileNotFoundError, subprocess.CalledProcessError):
-        pass
+    described = capture(["git", "describe", "--tags", "--abbrev=0"], cwd=root)
+    if described:
+        return described
+    listed = capture(["git", "tag", "-l", "--sort=-version:refname"], cwd=root)
+    if listed:
+        return next((line.strip() for line in listed.splitlines() if line.strip()), None)
     return None
 
 

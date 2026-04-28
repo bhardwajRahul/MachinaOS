@@ -13,37 +13,17 @@ from __future__ import annotations
 import os
 import re
 import shutil
-import subprocess
 import sys
 from pathlib import Path
 
 import typer
 
+from machina.run import capture, run
 from machina.colors import console
 from machina.platform_ import project_root
 
 
 # ---------------------------------------------------------------- helpers
-
-def _run(cmd: list[str], *, cwd: Path | None = None, check: bool = True) -> int:
-    """Inherit-stdio run; raises ``typer.Exit`` on failure when ``check``."""
-    proc = subprocess.run(cmd, cwd=str(cwd) if cwd else None)
-    if check and proc.returncode != 0:
-        console.print(f"[red]Command failed:[/] {' '.join(cmd)}")
-        raise typer.Exit(code=proc.returncode)
-    return proc.returncode
-
-
-def _capture(cmd: list[str]) -> str | None:
-    """Capture stdout; return None if the command isn't on PATH or fails."""
-    try:
-        out = subprocess.run(
-            cmd, capture_output=True, text=True, check=True, encoding="utf-8"
-        )
-        return out.stdout.strip() or out.stderr.strip()
-    except (FileNotFoundError, subprocess.CalledProcessError):
-        return None
-
 
 def _which_python() -> str | None:
     """Prefer ``python3`` so we don't pick up Python 2.x on POSIX distros."""
@@ -54,7 +34,7 @@ def _which_python() -> str | None:
 
 
 def _check_python(cmd: str) -> bool:
-    out = _capture([cmd, "--version"])
+    out = capture([cmd, "--version"])
     if not out:
         return False
     match = re.search(r"Python (\d+)\.(\d+)", out)
@@ -69,21 +49,21 @@ def _check_python(cmd: str) -> bool:
 
 
 def _ensure_pip(python_cmd: str) -> None:
-    if not _capture([python_cmd, "-m", "pip", "--version"]):
+    if not capture([python_cmd, "-m", "pip", "--version"]):
         console.print("  Installing pip via ensurepip...")
-        _run([python_cmd, "-m", "ensurepip", "--upgrade"])
+        run([python_cmd, "-m", "ensurepip", "--upgrade"])
 
 
 def _ensure_uv(python_cmd: str) -> str:
     """Install ``uv`` via pip if missing; return the resolved version string."""
-    version = _capture(["uv", "--version"])
+    version = capture(["uv", "--version"])
     if version:
         console.print(f"  uv: {version}")
         return version
     _ensure_pip(python_cmd)
     console.print("  Installing uv via pip...")
-    _run([python_cmd, "-m", "pip", "install", "uv"])
-    version = _capture(["uv", "--version"])
+    run([python_cmd, "-m", "pip", "install", "uv"])
+    version = capture(["uv", "--version"])
     if not version:
         console.print("[red]Error: failed to install uv. See https://docs.astral.sh/uv/[/]")
         raise typer.Exit(code=1)
@@ -93,19 +73,19 @@ def _ensure_uv(python_cmd: str) -> str:
 
 def _ensure_temporal() -> None:
     """``temporal-server`` is a global npm CLI; install if missing (non-fatal)."""
-    version = _capture(["temporal-server", "--version"])
+    version = capture(["temporal-server", "--version"])
     if version:
         console.print(f"  temporal-server: {version}")
         return
     console.print("  temporal-server: not found, installing globally...")
-    rc = _run(["npm", "install", "-g", "temporal-server"], check=False)
+    rc = run(["npm", "install", "-g", "temporal-server"], check=False)
     if rc != 0:
         console.print(
             "  [yellow]Warning: temporal-server install failed. "
             "Distributed execution unavailable.[/]"
         )
         return
-    version = _capture(["temporal-server", "--version"])
+    version = capture(["temporal-server", "--version"])
     if version:
         console.print(f"  temporal-server: {version}")
 
@@ -128,13 +108,13 @@ def build_command() -> None:
 
     # ---- toolchain ---------------------------------------------------
     console.print("[bold]Checking dependencies...[/]\n")
-    node_version = _capture(["node", "--version"])
+    node_version = capture(["node", "--version"])
     console.print(f"  Node.js: {node_version or '[red]not found[/]'}")
     if not node_version:
         console.print("[red]Error: Node.js is required.[/]")
         raise typer.Exit(code=1)
 
-    npm_version = _capture(["npm", "--version"])
+    npm_version = capture(["npm", "--version"])
     console.print(f"  npm: {npm_version or '[red]not found[/]'}")
 
     python_cmd = _which_python()
@@ -161,20 +141,20 @@ def build_command() -> None:
 
     if not is_postinstall:
         console.print("[1/5] Installing dependencies...")
-        _run(["pnpm", "install"], cwd=root)
+        run(["pnpm", "install"], cwd=root)
     else:
         console.print("[1/5] Dependencies already installed by package manager")
 
     console.print("[2/5] Building client...")
-    _run(["pnpm", "--filter", "react-flow-client", "run", "build"], cwd=root)
+    run(["pnpm", "--filter", "react-flow-client", "run", "build"], cwd=root)
 
     console.print("[3/5] Installing Python dependencies...")
     if not (server_dir / ".venv").exists():
-        _run(["uv", "venv"], cwd=server_dir)
-    _run(["uv", "sync"], cwd=server_dir)
+        run(["uv", "venv"], cwd=server_dir)
+    run(["uv", "sync"], cwd=server_dir)
 
     console.print("[4/5] Installing Playwright browser...")
-    rc = _run(["playwright", "install", "chromium"], cwd=server_dir, check=False)
+    rc = run(["playwright", "install", "chromium"], cwd=server_dir, check=False)
     if rc != 0:
         console.print(
             "  [yellow]Warning: Playwright browser install failed. "

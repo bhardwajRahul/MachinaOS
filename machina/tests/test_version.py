@@ -39,5 +39,5 @@ def test_update_package_json_preserves_trailing_newline(tmp_path: Path):
 
 
 def test_git_describe_returns_none_without_git():
-    with patch.object(version.subprocess, "run", side_effect=FileNotFoundError):
+    with patch.object(version, "capture", return_value=None):
         assert version._git_describe(Path(".")) is None
