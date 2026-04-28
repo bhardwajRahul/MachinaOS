@@ -4,65 +4,64 @@ Documented root causes and fixes for errors encountered in MachinaOs development
 
 ---
 
-## 1. SQLAlchemy Import Hang (Windows)
+## 1. SQLAlchemy Import Hang / Exit Code 15 (Windows)
 
-**Symptom**: Backend hangs at startup with no output after `Importing DI container + all services...`. The process is alive but never binds port 3010. `import sqlalchemy` blocks indefinitely.
+**Symptom**: One of two failures when Python imports SQLAlchemy on Windows:
 
-**Root cause**: Git worktrees nested inside the project root (e.g., `.claude/worktrees/`) cause Windows Defender real-time scanning to fan out across all worktree directories when Python loads `.pyd` (native DLL) files. SQLAlchemy has 5 Cython `.pyd` files (`collections`, `immutabledict`, `processors`, `resultproxy`, `util`) loaded sequentially during import. Defender's scan queue backs up across the worktree copies, blocking `LoadLibrary()` for minutes per file.
+- **Hang**: Backend startup produces no output after `Importing DI container + all services...`. Process is alive (CPU idle or low) but `import sqlalchemy` never returns. Port 3010 is never bound.
+- **Exit 15**: `uv run` fails instantly with `error: Querying Python at '...\.venv\Scripts\python.exe' failed with exit status exit code: 15`. Or direct invocation: `venv/Scripts/python.exe -c "print('hello')"` succeeds but `venv/Scripts/python.exe -c "import sqlalchemy"` exits with code 15 and no output.
 
-**Contributing factors**:
-- Each worktree contains its own `.venv/`, `node_modules/`, and source tree (thousands of files)
-- Windows Search Indexer and Defender monitor directory trees recursively from the project root
-- pnpm hardlinks from `.pnpm-store` into each worktree's `node_modules/` create additional file-system contention
-- Killing the hung Python process does NOT help -- the next attempt restarts the scan queue from scratch
+**Root cause**: Windows Defender's in-process antimalware scan interface. Defender injects `MpOav.dll` (Microsoft Antimalware On-access scanning) and `amsi.dll` (Antimalware Scan Interface) into every process on the system, including Python. When Python calls `LoadLibraryW()` on a `.pyd` (Cython C extension), the loader invokes `MpOav.dll` via an AMSI hook, which synchronously requests a scan verdict from the Defender engine. SQLAlchemy imports 6 `.pyd` files back-to-back (`_greenlet`, `collections`, `immutabledict`, `processors`, `resultproxy`, `util`), so each `import sqlalchemy` triggers 6 AMSI scans.
 
-**Fix**: Move or remove worktrees from inside the project root.
+Two failure modes follow from this:
+
+- **Hang**: When the Defender engine is in a bad state (signature update in progress, engine reload, queue saturated from an earlier burst), the AMSI scan request blocks. `LoadLibrary()` is synchronous, so Python waits forever on the first scan that stalls.
+- **Exit 15**: When AMSI returns a "block" verdict (e.g., a heuristic false-positive on a Cython `.pyd`), Windows terminates the process externally via `TerminateProcess()`. The exit code surfaces as 15. This is not a Python launcher code (the launcher only emits 100-107; see [CPython PC/launcher.c](https://github.com/python/cpython/blob/main/PC/launcher.c)) and not a signal (Windows has no SIGTERM) -- it is an external kill.
+
+**Verification that Defender is the injector**: While a Python process is running, check its loaded modules:
 
 ```bash
-# Remove worktrees
-git worktree remove .claude/worktrees/<name>
-
-# Or move them outside the project root
-git worktree move .claude/worktrees/<name> ../machinaos-worktrees/<name>
+tasklist //M //FI "imagename eq python.exe"
 ```
 
-**Prevention**: Keep git worktrees as siblings of the project, not nested inside it. For example:
-```
-d:/startup/projects/
-  MachinaOs/                  # main project
-  machinaos-worktrees/        # worktrees outside the project root
-    credentials-scaling/
-    native-llm-sdk/
-```
+Expected presence of `MpOav.dll` and `amsi.dll` alongside Python's own DLLs confirms Defender has hooked the process.
 
-**Verification**: After removing worktrees, `import sqlalchemy` should complete in <1 second:
-```bash
-cd server && uv run python -u -c "import time; t=time.time(); import sqlalchemy; print(f'{time.time()-t:.2f}s')"
-```
+**Contributing factors** (amplify the above, not independent causes):
+- Larger venvs and more `.pyd` extensions = more AMSI scans per import = higher probability of hitting a bad-state scan
+- Git worktrees that duplicate the full `.venv/` tree multiply the on-disk file count Defender has to keep metadata for; it does not cause the hang on its own, but does worsen the burst behaviour
+- Killing hung Python via `Stop-Process` does not help -- the next attempt hits the same bad Defender state
 
-### 1a. SQLAlchemy Hang Persists After Removing Worktrees
+**Fix** (reliable): **Reboot**. Resets the AMSI session state and Defender engine, clears any stuck scan queue. This is what consistently works in practice.
 
-**Symptom**: Even after moving worktrees outside the project root and adding the `.venv` to Defender exclusions, `import sqlalchemy` still hangs. Only a system reboot resolves it.
+**Fix** (try first if admin is available): Restart the Defender or prefetch service:
 
-**Root cause**: Defender's minifilter driver (`MpFilter.sys`) caches scan verdicts in a kernel-mode cache keyed by file identity (volume + file reference number + USN). When scans were previously backed up, some entries stay in "pending scan" state indefinitely. Defender exclusions added at runtime do NOT evict existing pending cache entries -- only a Defender service restart or full reboot clears the minifilter's in-memory state.
-
-Contributing factors:
-- Killing stuck Python processes via `Stop-Process` can trigger Defender to re-scan the DLL handles those processes had mapped
-- SysMain/Superfetch prefetch contention on cold venv imports
-- NTFS USN journal backlog from large file-churn operations (pip installs, worktree moves)
-
-**Fix** (without reboot):
 ```powershell
-# Restart Defender service (admin required)
+# Often blocked by Tamper Protection even as admin
 Restart-Service WinDefend
 
-# Or restart SysMain
-Restart-Service SysMain
+# Usually allowed; sometimes clears related state
+Restart-Service SysMain -Force
 ```
 
-**Fix** (if admin is unavailable): **Reboot**. This is what clears the stuck kernel cache reliably.
+If `Restart-Service WinDefend` is blocked, disable Tamper Protection in Settings -> Windows Security -> Virus & threat protection -> Manage settings, restart the service, then re-enable. Otherwise reboot.
 
-**Prevention** (`scripts/start.js`): A preflight probe times `import sqlalchemy`. If it exceeds 8 seconds, it fails fast with actionable remediation steps instead of letting uvicorn hang silently.
+**Prevention** (partial, not guaranteed): Add Defender exclusions for the venv and the Python binary:
+
+```powershell
+Add-MpPreference -ExclusionPath "D:\startup\projects\MachinaOs\server\.venv"
+Add-MpPreference -ExclusionProcess "python.exe"
+```
+
+Exclusions are evaluated per-scan; they reduce per-import scan load but do not evict in-flight scan state, so they help prevent future hangs more than they recover from an active one. A reboot or service restart may still be needed after adding exclusions to clear whatever state triggered the original hang.
+
+**Retracted theory**: An earlier version of this document blamed the `MpFilter.sys` minifilter driver's kernel-mode scan-verdict cache and pinned the root cause on nested git worktrees. That theory has no external corroboration (the user confirmed a hang on a worktree that was already a sibling of the project root, not nested inside it). The observed data -- `MpOav.dll` + `amsi.dll` loaded in every Python process, exit code 15 matching external `TerminateProcess`, reboot being the reliable fix -- matches the AMSI in-process hook mechanism, not a kernel-filter cache. Git worktree nesting is a disk-usage multiplier, not the cause.
+
+**External references**:
+- [astral-sh/uv#14508](https://github.com/astral-sh/uv/issues/14508) - uv maintainer: "almost always due to overzealous antivirus blocking execution of python.exe"
+- [astral-sh/uv#12612](https://github.com/astral-sh/uv/issues/12612), [#15302](https://github.com/astral-sh/uv/issues/15302), [#14563](https://github.com/astral-sh/uv/issues/14563) - similar DLL-injection symptoms from other Windows security products (SecuPrint, AuthenticateLicense, Astrill VPN)
+- [astral-sh/uv#14582](https://github.com/astral-sh/uv/pull/14582) - uv added `SetUnhandledExceptionFilter` because Windows no longer surfaces access-violation dialogs, which is why these kills can appear as silent "exit code N" with no output
+
+**Preflight** (`scripts/start.js`): A preflight probe times `import sqlalchemy`. If it exceeds 8 seconds, it fails fast with actionable remediation steps instead of letting uvicorn hang silently.
 
 ---
 

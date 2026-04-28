@@ -1,6 +1,6 @@
 {
   "name": "machinaos",
-  "version": "0.0.64",
+  "version": "0.0.65",
   "description": "Open source workflow automation platform with AI agents, React Flow, and n8n-inspired architecture",
   "type": "module",
   "keywords": [
@@ -104,7 +104,7 @@
     "rimraf": "^6.0.1",
     "temporal-server": "^0.0.10",
     "agent-browser": "latest",
-    "edgymeow": "^0.0.18"
+    "edgymeow": "^0.0.20"
   },
   "pnpm": {
     "peerDependencyRules": {

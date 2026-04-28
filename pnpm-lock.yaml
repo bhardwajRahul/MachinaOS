@@ -18,8 +18,8 @@ importers:
         specifier: ^7.0.3
         version: 7.0.3
       edgymeow:
-        specifier: ^0.0.18
-        version: 0.0.18
+        specifier: ^0.0.20
+        version: 0.0.20
       rimraf:
         specifier: ^6.0.1
         version: 6.1.2
@@ -2609,8 +2609,8 @@ packages:
   eastasianwidth@0.2.0:
     resolution: {integrity: sha512-I88TYZWc9XiYHRQ4/3c5rjjfgkjhLyW2luGIheGERbNQ6OY7yTybanSpDXZa8y7VUP9YmDcYa+eyq4ca7iLqWA==}
 
-  edgymeow@0.0.18:
-    resolution: {integrity: sha512-+iWozBpK7zOdOqvlFK9AaWKENzcaLdMzSOnivKIg5ynCIBMxUlUoTnGlwt6m8HpG4d30iI3OWA9jtyO4lBlS/A==}
+  edgymeow@0.0.20:
+    resolution: {integrity: sha512-c/3VgIzWAvZa0ffBFdKDwmM0w3zCyGSHILiXDnW6XELWtxFJ/aONAN+xoDzS38hTRKDGTZ1cDRt29Wyi4Vqv5A==}
     engines: {node: '>=18.0.0'}
     hasBin: true
 
@@ -7853,7 +7853,7 @@ snapshots:
 
   eastasianwidth@0.2.0: {}
 
-  edgymeow@0.0.18:
+  edgymeow@0.0.20:
     dependencies:
       chalk: 5.6.2
       commander: 11.1.0
