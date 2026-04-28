@@ -14,7 +14,6 @@ class ResizeObserverStub {
 }
 
 if (typeof globalThis.ResizeObserver === 'undefined') {
-  // @ts-expect-error - intentional shim
   globalThis.ResizeObserver = ResizeObserverStub;
 }
 
@@ -46,7 +45,6 @@ if (typeof globalThis.IntersectionObserver === 'undefined') {
     rootMargin = '';
     thresholds = [];
   }
-  // @ts-expect-error - intentional shim
   globalThis.IntersectionObserver = IntersectionObserverStub;
 }
 

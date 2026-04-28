@@ -10,7 +10,6 @@
  *   - Config nodes (memory/tool group) inherit their parent node's main inputs
  */
 
-import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 

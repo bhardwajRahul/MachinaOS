@@ -14,7 +14,6 @@
  * so the modal can mount in jsdom without real WS connection / antd transitions.
  */
 
-import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
