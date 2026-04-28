@@ -482,7 +482,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
                     wsRef.current?.removeEventListener('message', handler);
                     resolve(msg);
                   }
-                } catch {}
+                } catch { /* ignore non-matching messages */ }
               };
 
               wsRef.current?.addEventListener('message', handler);
@@ -1084,7 +1084,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
                     ws.removeEventListener('message', handler);
                     resolve(msg);
                   }
-                } catch {}
+                } catch { /* ignore non-matching messages */ }
               };
 
               ws.addEventListener('message', handler);
@@ -1116,7 +1116,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
                   ws.removeEventListener('message', handler);
                   resolve(msg);
                 }
-              } catch {}
+              } catch { /* ignore non-matching messages */ }
             };
 
             ws.addEventListener('message', handler);
@@ -1152,7 +1152,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
                   ws.removeEventListener('message', handler);
                   resolve(msg);
                 }
-              } catch {}
+              } catch { /* ignore non-matching messages */ }
             };
 
             ws.addEventListener('message', handler);
@@ -1185,7 +1185,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
                   ws.removeEventListener('message', handler);
                   resolve(msg);
                 }
-              } catch {}
+              } catch { /* ignore non-matching messages */ }
             };
 
             ws.addEventListener('message', handler);

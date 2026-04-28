@@ -331,7 +331,7 @@ const NodeOutputPanel: React.FC<NodeOutputPanelProps> = ({
     }
     // Webhook trigger output
     if (data?.method && data?.path !== undefined) {
-      let bodyData = data.json || (data.body ? (() => { try { return JSON.parse(data.body); } catch { return data.body; } })() : null);
+      const bodyData = data.json || (data.body ? (() => { try { return JSON.parse(data.body); } catch { return data.body; } })() : null);
       const bodyStr = bodyData ? JSON.stringify(bodyData) : '';
       return `${data.method} /${data.path}${bodyStr ? ` - ${bodyStr}` : ''}`;
     }

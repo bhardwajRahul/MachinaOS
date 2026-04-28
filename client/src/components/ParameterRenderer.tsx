@@ -1320,7 +1320,7 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
 
   const renderInput = () => {
     switch (parameter.type) {
-      case 'string':
+      case 'string': {
         // Check if this should be a textarea based on typeOptions.rows
         const shouldUseTextarea = (parameter as any).typeOptions?.rows > 1;
         // Check if this should be a password field
@@ -1526,10 +1526,6 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
           );
         }
 
-        // Log why we're not using dynamic options for this parameter
-        if (parameter.type === 'string' && parameter.name === 'model') {
-        }
-
         // Special case for group_id parameter - add Load Groups button
         if (parameter.name === 'group_id') {
           const storedGroupName = allParameters?.group_name || '';
@@ -1659,6 +1655,7 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
             }}
           />
         );
+      }
 
       case 'number':
 
@@ -1712,7 +1709,7 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
         );
 
       case 'select':
-      case 'options':
+      case 'options': {
         // Use dynamic options if available, otherwise use static options
         const optionsToRender = dynamicOptions.length > 0 ? dynamicOptions : (parameter.options || []);
         const selectOptions = optionsToRender.filter((option): option is import('../types/INodeProperties').INodePropertyOption =>
@@ -1758,6 +1755,7 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
             ))}
           </select>
         );
+      }
 
       case 'slider':
         return (
@@ -1849,7 +1847,7 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
           />
         );
 
-      case 'file':
+      case 'file': {
         const fileInputRef = React.useRef<HTMLInputElement>(null);
 
         const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1994,8 +1992,9 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
             </div>
           </div>
         );
+      }
 
-      case 'array':
+      case 'array': {
         const arrayValue = Array.isArray(currentValue) ? currentValue : [];
         return (
           <div>
@@ -2043,6 +2042,7 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
             </div>
           </div>
         );
+      }
 
       case 'collection':
         return <CollectionRenderer parameter={parameter} value={currentValue} onChange={onChange} allParameters={allParameters} theme={theme} />;
@@ -2066,7 +2066,7 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
           </div>
         );
 
-      case 'json':
+      case 'json': {
         // JSON editor - textarea for JSON input
         const jsonRows = (parameter as any).typeOptions?.rows || 6;
         return (
@@ -2097,6 +2097,7 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
             onBlur={(e) => e.target.style.borderColor = theme.colors.border}
           />
         );
+      }
 
       default:
         return <div style={{ color: theme.colors.error, fontSize: '14px', padding: '8px 12px', backgroundColor: `${theme.colors.error}15`, border: `1px solid ${theme.colors.error}30`, borderRadius: '6px' }}>Unsupported parameter type: {parameter.type}</div>;
