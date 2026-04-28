@@ -2,20 +2,14 @@
 
 from __future__ import annotations
 
-import sys
+import subprocess
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+
+import psutil
+import pytest
 
 from machina.commands import daemon
-
-
-def test_install_dir_uses_project_root_by_default():
-    with patch.object(daemon, "project_root", return_value=Path("/proj")):
-        assert daemon._install_dir(None) == Path("/proj")
-
-
-def test_install_dir_resolves_explicit_override(tmp_path: Path):
-    assert daemon._install_dir(str(tmp_path)) == tmp_path.resolve()
 
 
 def test_venv_python_chooses_layout_per_platform():
@@ -26,43 +20,89 @@ def test_venv_python_chooses_layout_per_platform():
         assert daemon._venv_python(install_dir).name == "python"
 
 
-def test_linux_unit_text_includes_user_memory_and_paths(tmp_path: Path):
-    text = daemon._linux_unit_text(
-        tmp_path, service_user="bob", memory="3G",
-    )
-    assert "User=bob" in text
-    assert "MemoryMax=3G" in text
-    assert f"WorkingDirectory={tmp_path / 'server'}" in text
-    assert "ExecStart=" in text
-    assert "uvicorn main:app" in text
+def test_detached_kwargs_windows_uses_creationflags():
+    with patch.object(daemon, "IS_WINDOWS", True):
+        kw = daemon._detached_kwargs()
+    assert "creationflags" in kw
+    expected = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+    assert kw["creationflags"] == expected
+    assert "start_new_session" not in kw
 
 
-def test_mac_plist_text_uses_label_and_paths(tmp_path: Path):
-    text = daemon._mac_plist_text(tmp_path)
-    assert f"<string>{daemon.PLIST_LABEL}</string>" in text
-    assert "main:app" in text
-    assert "0.0.0.0" in text
+def test_detached_kwargs_posix_uses_setsid():
+    with patch.object(daemon, "IS_WINDOWS", False):
+        kw = daemon._detached_kwargs()
+    assert kw == {"start_new_session": True}
 
 
-def test_mac_plist_path_under_launchagents():
-    path = daemon._mac_plist_path()
-    assert path.name == f"{daemon.PLIST_LABEL}.plist"
-    # Sanity: should resolve under user's home Library/LaunchAgents.
-    assert "LaunchAgents" in str(path)
+def test_read_pid_returns_none_when_file_missing(tmp_path: Path):
+    with patch.object(daemon, "_PID_FILE", tmp_path / "missing.pid"):
+        assert daemon._read_pid() is None
 
 
-def test_dispatch_simple_routes_per_platform():
-    """Each verb hits the right handler for the current platform."""
-    install_dir = Path("/x")
-    with patch.object(daemon, "_windows_status") as win, \
-         patch.object(daemon, "_linux_status") as lin, \
-         patch.object(daemon, "_mac_status") as mac:
-        if sys.platform == "win32":
-            daemon._dispatch_simple("status", install_dir)
-            win.assert_called_once_with(install_dir)
-        elif sys.platform == "darwin":
-            daemon._dispatch_simple("status", install_dir)
-            mac.assert_called_once_with(install_dir)
-        else:
-            daemon._dispatch_simple("status", install_dir)
-            lin.assert_called_once_with(install_dir)
+def test_read_pid_returns_none_for_corrupt_pid_file(tmp_path: Path):
+    pid_file = tmp_path / "machina.pid"
+    pid_file.write_text("not-a-number")
+    with patch.object(daemon, "_PID_FILE", pid_file):
+        assert daemon._read_pid() is None
+
+
+def test_read_pid_returns_none_when_process_no_longer_exists(tmp_path: Path):
+    pid_file = tmp_path / "machina.pid"
+    pid_file.write_text("999999")
+    with patch.object(daemon, "_PID_FILE", pid_file), \
+         patch.object(daemon.psutil, "pid_exists", return_value=False):
+        assert daemon._read_pid() is None
+
+
+def test_read_pid_returns_pid_when_alive(tmp_path: Path):
+    pid_file = tmp_path / "machina.pid"
+    pid_file.write_text("1234\n")
+    with patch.object(daemon, "_PID_FILE", pid_file), \
+         patch.object(daemon.psutil, "pid_exists", return_value=True):
+        assert daemon._read_pid() == 1234
+
+
+def test_kill_tree_terminates_children_and_parent():
+    parent = MagicMock()
+    child1 = MagicMock()
+    child2 = MagicMock()
+    parent.children.return_value = [child1, child2]
+    with patch.object(daemon.psutil, "Process", return_value=parent):
+        daemon._kill_tree(123)
+    child1.kill.assert_called_once()
+    child2.kill.assert_called_once()
+    parent.terminate.assert_called_once()
+    parent.wait.assert_called_once_with(timeout=5)
+
+
+def test_kill_tree_force_kills_on_timeout():
+    parent = MagicMock()
+    parent.children.return_value = []
+    parent.wait.side_effect = psutil.TimeoutExpired(seconds=5)
+    with patch.object(daemon.psutil, "Process", return_value=parent):
+        daemon._kill_tree(123)
+    parent.terminate.assert_called_once()
+    parent.kill.assert_called_once()
+
+
+def test_kill_tree_no_such_process_is_noop():
+    with patch.object(daemon.psutil, "Process", side_effect=psutil.NoSuchProcess(123)):
+        daemon._kill_tree(123)
+
+
+def test_stop_command_clears_pid_file_when_not_running(tmp_path: Path):
+    pid_file = tmp_path / "machina.pid"
+    pid_file.write_text("999999")
+    with patch.object(daemon, "_PID_FILE", pid_file), \
+         patch.object(daemon, "_read_pid", return_value=None):
+        daemon.stop_command()
+    assert not pid_file.exists()
+
+
+def test_status_command_exits_1_when_not_running():
+    import typer
+    with patch.object(daemon, "_read_pid", return_value=None), \
+         pytest.raises(typer.Exit) as exc:
+        daemon.status_command()
+    assert exc.value.exit_code == 1
