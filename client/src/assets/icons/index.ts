@@ -27,8 +27,23 @@
  */
 
 import * as React from 'react';
-import * as Lobehub from '@lobehub/icons';
 import * as Lucide from 'lucide-react';
+// Deep imports of just the brand icons we expose via `lobehub:<brand>`.
+// A namespace import (`import * as Lobehub`) would re-evaluate the package
+// index, which re-exports antd-using feature modules (Editor / Dashboard /
+// ProviderCombine / ProviderIcon / ModelIcon) and drags `antd` into the
+// bundle. Whenever the backend declares a new `lobehub:<brand>` icon in
+// `server/nodes/visuals.json` or `server/config/credential_providers.json`,
+// add the matching deep import + entry to LOBEHUB_BRANDS below.
+import OpenAI from '@lobehub/icons/es/OpenAI';
+import Claude from '@lobehub/icons/es/Claude';
+import Gemini from '@lobehub/icons/es/Gemini';
+import Groq from '@lobehub/icons/es/Groq';
+import Cerebras from '@lobehub/icons/es/Cerebras';
+import OpenRouter from '@lobehub/icons/es/OpenRouter';
+import DeepSeek from '@lobehub/icons/es/DeepSeek';
+import Kimi from '@lobehub/icons/es/Kimi';
+import Mistral from '@lobehub/icons/es/Mistral';
 
 type RawSvg = string;
 
@@ -102,19 +117,29 @@ export type LibraryIcon = React.FC<{ size?: number; className?: string }>;
 
 type LibraryResolver = (brand: string) => LibraryIcon | null;
 
-// Build a case-insensitive name index once per library so `lobehub:claude`
-// and `lobehub:Claude` both hit the same `Claude` export.
+// Build a case-insensitive name index for libraries we still namespace-import.
 const indexLibrary = (lib: Record<string, unknown>): Record<string, string> =>
   Object.fromEntries(Object.keys(lib).map((name) => [name.toLowerCase(), name]));
 
-const lobehubIndex = indexLibrary(Lobehub as Record<string, unknown>);
 const lucideIndex = indexLibrary(Lucide as Record<string, unknown>);
+
+// Static brand map keyed by lowercase brand string. Adding a new lobehub:<brand>
+// requires the matching deep import at the top of this file plus an entry below.
+const LOBEHUB_BRANDS: Readonly<Record<string, any>> = {
+  openai: OpenAI,
+  claude: Claude,
+  gemini: Gemini,
+  groq: Groq,
+  cerebras: Cerebras,
+  openrouter: OpenRouter,
+  deepseek: DeepSeek,
+  kimi: Kimi,
+  mistral: Mistral,
+};
 
 const ICON_LIBRARIES: Readonly<Record<string, LibraryResolver>> = {
   lobehub: (brand) => {
-    const exportName = lobehubIndex[brand.toLowerCase()];
-    if (!exportName) return null;
-    const entry = (Lobehub as Record<string, any>)[exportName];
+    const entry = LOBEHUB_BRANDS[brand.toLowerCase()];
     return entry?.Color ?? entry?.Avatar ?? null;
   },
   // Lucide ships ~1,500 PascalCase forwardRef'd icon components. Same

@@ -1,6 +1,17 @@
-// AI Provider Icons - Using @lobehub/icons for official brand logos
+// AI Provider Icons - Using @lobehub/icons for official brand logos.
+// Deep imports keep the package's antd-using `Editor`/`Dashboard`/`Provider*`
+// feature modules out of the bundle (their index re-export would otherwise
+// drag `antd` -> `@ant-design/icons` -> `@ant-design/colors` into rollup).
 import React from 'react';
-import { OpenAI, Claude, Gemini, Groq, OpenRouter, Cerebras, DeepSeek, Kimi, Mistral } from '@lobehub/icons';
+import OpenAI from '@lobehub/icons/es/OpenAI';
+import Claude from '@lobehub/icons/es/Claude';
+import Gemini from '@lobehub/icons/es/Gemini';
+import Groq from '@lobehub/icons/es/Groq';
+import OpenRouter from '@lobehub/icons/es/OpenRouter';
+import Cerebras from '@lobehub/icons/es/Cerebras';
+import DeepSeek from '@lobehub/icons/es/DeepSeek';
+import Kimi from '@lobehub/icons/es/Kimi';
+import Mistral from '@lobehub/icons/es/Mistral';
 import { dracula, solarized } from '../../styles/theme';
 
 // Icon size constant for consistency
