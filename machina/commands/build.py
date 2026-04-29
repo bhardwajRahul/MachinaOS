@@ -72,22 +72,22 @@ def _ensure_uv(python_cmd: str) -> str:
 
 
 def _ensure_temporal() -> None:
-    """``temporal-server`` is a global npm CLI; install if missing (non-fatal)."""
-    version = capture(["temporal-server", "--version"])
+    """Ensure the ``temporal`` CLI (from npm package ``temporal-server``) is on PATH."""
+    version = capture(["temporal", "--version"])
     if version:
-        console.print(f"  temporal-server: {version}")
+        console.print(f"  temporal: {version}")
         return
-    console.print("  temporal-server: not found, installing globally...")
+    console.print("  temporal: not found, installing globally...")
     rc = run(["npm", "install", "-g", "temporal-server"], check=False)
     if rc != 0:
         console.print(
-            "  [yellow]Warning: temporal-server install failed. "
+            "  [yellow]Warning: temporal install failed. "
             "Distributed execution unavailable.[/]"
         )
         return
-    version = capture(["temporal-server", "--version"])
+    version = capture(["temporal", "--version"])
     if version:
-        console.print(f"  temporal-server: {version}")
+        console.print(f"  temporal: {version}")
 
 
 # ---------------------------------------------------------------- build
@@ -135,25 +135,28 @@ def build_command() -> None:
     env_path = root / ".env"
     template_path = root / ".env.template"
 
+    # Step markers go through ``console.log`` so each [N/5] line is
+    # timestamped — diff between consecutive timestamps is the wall-clock
+    # cost of that step, no manual instrumentation needed.
     if not env_path.exists() and template_path.exists():
         shutil.copy2(template_path, env_path)
-        console.print("[0/5] Created .env from template")
+        console.log("[0/5] Created .env from template")
 
     if not is_postinstall:
-        console.print("[1/5] Installing dependencies...")
+        console.log("[1/5] Installing dependencies...")
         run(["pnpm", "install"], cwd=root)
     else:
-        console.print("[1/5] Dependencies already installed by package manager")
+        console.log("[1/5] Dependencies already installed by package manager")
 
-    console.print("[2/5] Building client...")
+    console.log("[2/5] Building client...")
     run(["pnpm", "--filter", "react-flow-client", "run", "build"], cwd=root)
 
-    console.print("[3/5] Installing Python dependencies...")
+    console.log("[3/5] Installing Python dependencies...")
     if not (server_dir / ".venv").exists():
         run(["uv", "venv"], cwd=server_dir)
     run(["uv", "sync"], cwd=server_dir)
 
-    console.print("[4/5] Installing Playwright browser...")
+    console.log("[4/5] Installing Playwright browser...")
     rc = run(["playwright", "install", "chromium"], cwd=server_dir, check=False)
     if rc != 0:
         console.print(
@@ -161,7 +164,7 @@ def build_command() -> None:
             "JS-rendered scraping unavailable.[/]"
         )
 
-    console.print("[5/5] Verifying edgymeow binary...")
+    console.log("[5/5] Verifying edgymeow binary...")
     bin_name = "edgymeow-server.exe" if sys.platform == "win32" else "edgymeow-server"
     edgymeow_bin = root / "node_modules" / "edgymeow" / "bin" / bin_name
     if edgymeow_bin.exists():
@@ -172,4 +175,4 @@ def build_command() -> None:
             "Set WHATSAPP_RUNTIME_ENABLED=false to disable.[/]"
         )
 
-    console.print("\n[green]Build complete.[/]")
+    console.log("[green]Build complete.[/]")

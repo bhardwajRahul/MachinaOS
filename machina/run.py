@@ -17,12 +17,27 @@ swallowed stderr, etc.).
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 from pathlib import Path
 
 import typer
 
 from machina.colors import console
+
+
+def which_argv(argv: list[str]) -> list[str]:
+    """Resolve argv[0] via PATH (PATHEXT-aware on Windows for .cmd/.bat).
+
+    ``subprocess.run`` / ``anyio.open_process`` with ``shell=False`` do not
+    consult PATHEXT, so on Windows ``["npm", ...]`` raises FileNotFoundError
+    because the launcher is ``npm.cmd``. ``shutil.which`` mirrors what the
+    shell would resolve. Shared by ``run`` / ``capture`` and the supervisor
+    so all subprocess entry points behave identically.
+    """
+    if not argv:
+        return argv
+    return [shutil.which(argv[0]) or argv[0], *argv[1:]]
 
 
 def run(
@@ -32,7 +47,14 @@ def run(
     check: bool = True,
 ) -> int:
     """Inherit-stdio run; raises :class:`typer.Exit` on non-zero when ``check``."""
-    proc = subprocess.run(argv, cwd=str(cwd) if cwd else None)
+    resolved = which_argv(argv)
+    try:
+        proc = subprocess.run(resolved, cwd=str(cwd) if cwd else None)
+    except FileNotFoundError:
+        console.print(f"[red]Command not found:[/] {argv[0] if argv else ''}")
+        if check:
+            raise typer.Exit(code=127)
+        return 127
     if check and proc.returncode != 0:
         console.print(f"[red]Command failed:[/] {' '.join(argv)}")
         raise typer.Exit(code=proc.returncode)
@@ -47,7 +69,7 @@ def capture(argv: list[str], *, cwd: Path | str | None = None) -> str | None:
     """
     try:
         result = subprocess.run(
-            argv,
+            which_argv(argv),
             cwd=str(cwd) if cwd else None,
             capture_output=True,
             text=True,

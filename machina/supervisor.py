@@ -31,6 +31,7 @@ from typing import Iterable, Optional
 import anyio
 
 from machina.colors import emit, next_color
+from machina.run import which_argv
 from machina.tcp import wait_for_tcp_port
 from machina.tree import add_to_job, kill_tree, new_session_kwargs
 
@@ -67,26 +68,6 @@ def _full_env(spec_env: dict[str, str]) -> dict[str, str]:
     }
 
 
-async def _terminate_then_kill(
-    proc: anyio.abc.Process, *, grace: float
-) -> None:
-    """SIGTERM (POSIX) / TerminateProcess (Win) -> wait grace -> tree-kill."""
-    if proc.returncode is not None:
-        return
-    try:
-        proc.terminate()
-    except ProcessLookupError:
-        return
-    with anyio.move_on_after(grace):
-        await proc.wait()
-    if proc.returncode is None:
-        kill_tree(proc.pid)
-        try:
-            await proc.wait()
-        except Exception:
-            pass
-
-
 class Manager:
     """Supervise multiple ``ServiceSpec`` instances in one TaskGroup."""
 
@@ -94,6 +75,12 @@ class Manager:
         self._specs: list[ServiceSpec] = []
         self._fatal: list[str] = []  # names of services that crash-looped
         self._active = 0
+        # name -> (Process, color). Populated by _spawn_once for the
+        # lifetime of each child. Used by _wait_for_signal so a second
+        # Ctrl-C can force-kill PIDs synchronously without waiting on the
+        # cancel-scope unwind.
+        self._procs: dict[str, tuple[anyio.abc.Process, str]] = {}
+        self._shutting_down = False
 
     def add(self, spec: ServiceSpec) -> None:
         if spec.color is None:
@@ -119,6 +106,13 @@ class Manager:
             for exc in eg.exceptions:
                 emit("manager", "red", f"unexpected error: {exc}", stream="stderr")
             unhandled = True
+        finally:
+            # Runs even on ``CancelledError`` (which is ``BaseException``
+            # in py311+ and so escapes ``except* Exception``). Without the
+            # finally, the shutdown-complete marker is silently skipped on
+            # the Ctrl-C path -- the user's actual exit case.
+            if self._shutting_down:
+                emit("manager", "green", "shutdown complete")
         if unhandled:
             return 1
         return 1 if self._fatal else 0
@@ -137,12 +131,20 @@ class Manager:
                 cancel_scope.cancel()
 
     async def _wait_for_signal(self, cancel_scope: anyio.CancelScope) -> None:
-        """Cancel the TaskGroup on Ctrl-C / SIGTERM (cross-platform).
+        """Two-stage Ctrl-C / SIGTERM handler.
 
-        Windows can only deliver ``SIGINT`` and ``SIGBREAK`` to a Python
-        process; passing ``SIGTERM`` would raise ``NotImplementedError``
-        from anyio. We probe the platform and subscribe to whichever
-        subset is available.
+        First signal: emit a "shutting down" notice and cancel the task
+        group so each ``_spawn_once`` unwinds via :meth:`_stop_proc`
+        (SIGTERM -> grace -> tree-kill).
+
+        Second signal: skip the grace period entirely -- iterate the
+        ``self._procs`` registry and tree-kill every still-running PID
+        synchronously. This matches the typical "Ctrl-C, then Ctrl-C
+        again to force" UX from systemd / VS Code / docker compose.
+
+        Windows only delivers ``SIGINT`` / ``SIGBREAK`` to a Python
+        process; passing ``SIGTERM`` raises ``NotImplementedError``
+        from anyio, so we subscribe to whichever subset is available.
         """
         if sys.platform == "win32":
             signals = (signal.SIGINT, getattr(signal, "SIGBREAK", signal.SIGINT))
@@ -151,14 +153,28 @@ class Manager:
         try:
             with anyio.open_signal_receiver(*signals) as receiver:
                 async for sig in receiver:
-                    emit(
-                        "manager",
-                        "yellow",
-                        f"received {sig.name}, shutting down",
-                        stream="stderr",
-                    )
-                    cancel_scope.cancel()
-                    return
+                    if not self._shutting_down:
+                        self._shutting_down = True
+                        emit(
+                            "manager",
+                            "yellow",
+                            f"received {sig.name} -- shutting down "
+                            "(Ctrl-C again to force-kill)",
+                            stream="stderr",
+                        )
+                        cancel_scope.cancel()
+                    else:
+                        emit(
+                            "manager",
+                            "red",
+                            f"received {sig.name} again -- force-killing",
+                            stream="stderr",
+                        )
+                        for name, (proc, color) in list(self._procs.items()):
+                            if proc.returncode is None:
+                                kill_tree(proc.pid)
+                                emit(name, color, "force-killed", stream="stderr")
+                        return
         except NotImplementedError:
             # Some environments (eg. asyncio on Windows without
             # ProactorEventLoop, or signal handling from a non-main
@@ -166,6 +182,46 @@ class Manager:
             # sleeping forever -- the supervised tasks themselves wake
             # the cancel scope when they finish.
             await anyio.sleep_forever()
+
+    async def _stop_proc(self, proc: anyio.abc.Process, spec: ServiceSpec) -> None:
+        """SIGTERM (POSIX) / TerminateProcess (Win) -> wait grace -> tree-kill.
+
+        Wrapped in ``CancelScope(shield=True)`` -- this is the anyio-
+        documented idiom for cleanup that must run to completion during
+        an outer cancellation. Without the shield, ``_stop_proc`` is
+        invoked from inside an already-cancelled scope (the supervisor
+        signal handler cancelled the task group), so the very first
+        ``await proc.wait()`` re-raises ``CancelledError`` and the grace
+        period never elapses.
+        """
+        if proc.returncode is not None:
+            return
+        color = spec.color or "white"
+        emit(spec.name, color, "stopping", stream="stderr")
+        with anyio.CancelScope(shield=True):
+            try:
+                proc.terminate()
+            except ProcessLookupError:
+                return
+            with anyio.move_on_after(spec.terminate_grace_seconds):
+                await proc.wait()
+            if proc.returncode is None:
+                emit(
+                    spec.name,
+                    "red",
+                    f"did not exit in {spec.terminate_grace_seconds:.0f}s, "
+                    "force-killing process tree",
+                    stream="stderr",
+                )
+                kill_tree(proc.pid)
+                with anyio.move_on_after(2.0):
+                    await proc.wait()
+            emit(
+                spec.name,
+                color,
+                f"stopped (exit {proc.returncode})",
+                stream="stderr",
+            )
 
     async def _supervise(
         self, spec: ServiceSpec, cancel_scope: anyio.CancelScope
@@ -212,32 +268,45 @@ class Manager:
             backoff_seconds = min(backoff_seconds * 2, 30.0)
 
     async def _spawn_once(self, spec: ServiceSpec) -> int:
-        """Spawn the service, drain its output, return exit code."""
+        """Spawn the service, drain its output, return exit code.
+
+        ``async with`` on the ``anyio.Process`` runs ``aclose`` on exit,
+        which closes stdin/stdout/stderr and awaits the child. Without
+        this, asyncio's Windows ProactorEventLoop leaves the underlying
+        ``BaseSubprocessTransport`` un-closed and ``__del__`` later logs
+        ``ResourceWarning: unclosed transport`` / ``ValueError: I/O
+        operation on closed pipe`` at GC time.
+        """
         env = _full_env(spec.env)
         spawn_kwargs = new_session_kwargs()
-        proc = await anyio.open_process(
-            spec.argv,
+        async with await anyio.open_process(
+            which_argv(spec.argv),
             cwd=str(spec.cwd) if spec.cwd else None,
             env=env,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             **spawn_kwargs,
-        )
-        if sys.platform == "win32":
-            add_to_job(proc.pid)
-        emit(spec.name, spec.color or "white", f"started pid={proc.pid}")
-
-        try:
-            async with anyio.create_task_group() as tg:
-                tg.start_soon(self._drain, proc.stdout, spec, "stdout")
-                tg.start_soon(self._drain, proc.stderr, spec, "stderr")
-                if spec.ready_port:
-                    tg.start_soon(self._announce_ready, spec)
-                exit_code = await proc.wait()
-                tg.cancel_scope.cancel()
-        except anyio.get_cancelled_exc_class():
-            await _terminate_then_kill(proc, grace=spec.terminate_grace_seconds)
-            raise
+        ) as proc:
+            if sys.platform == "win32":
+                add_to_job(proc.pid)
+            color = spec.color or "white"
+            emit(spec.name, color, f"started pid={proc.pid}")
+            # Register for force-kill access on second Ctrl-C; deregister on
+            # exit so a restarted-then-died service doesn't leave a stale entry.
+            self._procs[spec.name] = (proc, color)
+            try:
+                async with anyio.create_task_group() as tg:
+                    tg.start_soon(self._drain, proc.stdout, spec, "stdout")
+                    tg.start_soon(self._drain, proc.stderr, spec, "stderr")
+                    if spec.ready_port:
+                        tg.start_soon(self._announce_ready, spec)
+                    exit_code = await proc.wait()
+                    tg.cancel_scope.cancel()
+            except anyio.get_cancelled_exc_class():
+                await self._stop_proc(proc, spec)
+                raise
+            finally:
+                self._procs.pop(spec.name, None)
         return exit_code
 
     async def _drain(

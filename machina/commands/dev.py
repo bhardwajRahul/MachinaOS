@@ -83,7 +83,7 @@ def _build_specs(root: Path, cfg, *, daemon: bool, use_vite: bool) -> list[Servi
         server_spec,
         ServiceSpec(
             name="temporal",
-            argv=["temporal-server", "api"],
+            argv=["temporal", "api"],
             cwd=root,
             ready_port=cfg.temporal_port,
         ),
@@ -106,9 +106,10 @@ def dev_command(
     console.print(f"Mode:     {'Daemon (uvicorn)' if daemon else 'Development (uvicorn)'}")
     console.print(f"Ports:    {', '.join(str(p) for p in cfg.all_ports)}")
 
-    console.print("Freeing ports...")
+    console.log("Freeing ports...")
     for port in cfg.all_ports:
         kill_port(port)
+    console.log("Ports ready")
 
     _clear_vite_cache(root)
 

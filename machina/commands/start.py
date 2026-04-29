@@ -26,6 +26,7 @@ from machina.config import load_config
 from machina.platform_ import IS_WINDOWS, IS_WSL, platform_name, project_root
 from machina.buildenv import validate_build, venv_python
 from machina.ports import kill_port
+from machina.run import which_argv
 from machina.supervisor import Manager, RestartPolicy, ServiceSpec
 
 
@@ -69,10 +70,10 @@ def _sqlalchemy_preflight(root: Path) -> None:
 
 
 def _temporal_running() -> bool:
-    """Check whether ``temporal-server`` is already up via its CLI."""
+    """Check whether the temporal server is already up via the ``temporal`` CLI."""
     try:
         out = subprocess.run(
-            ["temporal-server", "status"],
+            which_argv(["temporal", "status"]),
             capture_output=True,
             text=True,
             timeout=5,
@@ -123,7 +124,7 @@ def _build_specs(root: Path, cfg, *, temporal_running: bool) -> list[ServiceSpec
         specs.append(
             ServiceSpec(
                 name="temporal",
-                argv=["temporal-server", "api"],
+                argv=["temporal", "api"],
                 cwd=root,
                 ready_port=cfg.temporal_port,
             )
@@ -143,10 +144,10 @@ def start_command() -> None:
     if temporal_running:
         console.print("[dim]Temporal already running, skipping[/]")
 
-    console.print("Freeing ports...")
+    console.log("Freeing ports...")
     for port in cfg.all_ports:
         kill_port(port)
-    console.print("Ports ready")
+    console.log("Ports ready")
 
     version = _read_version(root)
     console.print()
