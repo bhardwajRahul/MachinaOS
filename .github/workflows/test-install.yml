@@ -65,7 +65,7 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          machina start --skip-whatsapp &
+          machina start &
           PID=$!
 
           for i in {1..15}; do
@@ -88,7 +88,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $job = Start-Job -ScriptBlock { machina start --skip-whatsapp }
+          $job = Start-Job -ScriptBlock { machina start }
           Start-Sleep -Seconds 15
 
           try {
@@ -159,7 +159,7 @@ jobs:
         shell: bash
         working-directory: MachinaOS
         run: |
-          pnpm run start -- --skip-whatsapp &
+          pnpm run start &
           PID=$!
 
           for i in {1..15}; do
@@ -185,7 +185,7 @@ jobs:
         run: |
           $job = Start-Job -ScriptBlock {
             Set-Location $using:PWD
-            pnpm run start -- --skip-whatsapp
+            pnpm run start
           }
           Start-Sleep -Seconds 15
 
