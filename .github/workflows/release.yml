@@ -58,6 +58,9 @@ jobs:
 
   publish-npm:
     name: Publish to npm (with provenance)
+    # Disabled: npmjs publish is currently turned off per ops decision.
+    # Flip back to ``if: ${{ true }}`` (or remove the line) to re-enable.
+    if: ${{ false }}
     needs: build-for-publish
     runs-on: ubuntu-latest
     permissions:
@@ -82,8 +85,13 @@ jobs:
       - name: Install dependencies (skip scripts)
         run: npm install --ignore-scripts
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - name: Sync versions from git tag
-        run: node scripts/sync-version.js
+        run: python -m machina version sync
 
       - name: Verify package contents
         run: npm pack --dry-run
@@ -119,8 +127,13 @@ jobs:
       - name: Install dependencies (skip scripts)
         run: npm install --ignore-scripts
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - name: Sync versions from git tag
-        run: node scripts/sync-version.js
+        run: python -m machina version sync
 
       - name: Configure scoped package
         run: |
@@ -139,7 +152,7 @@ jobs:
   # Create GitHub Release with auto-generated notes
   create-github-release:
     name: Create GitHub Release
-    needs: [publish-npm, publish-github-packages]
+    needs: [publish-github-packages]
     runs-on: ubuntu-latest
     permissions:
       contents: write
