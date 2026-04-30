@@ -46,14 +46,15 @@ class FsSearchNode(ActionNode):
     async def search(self, ctx: NodeContext, params: FsSearchParams) -> Any:
         """Inlined from handlers/filesystem.py (Wave 11.D.1)."""
         import asyncio
-        from ._backend import get_backend
+        from ._backend import get_backend, normalize_virtual_path
 
         backend = get_backend(params.model_dump(), ctx.raw)
+        path = normalize_virtual_path(params.path)
 
         if params.mode == "ls":
-            entries = await asyncio.to_thread(backend.ls_info, params.path)
+            entries = await asyncio.to_thread(backend.ls_info, path)
             return {
-                "path": params.path,
+                "path": path,
                 "entries": [dict(e) for e in entries],
                 "count": len(entries),
             }
@@ -62,10 +63,10 @@ class FsSearchNode(ActionNode):
             if not params.pattern:
                 raise RuntimeError("pattern is required for glob mode")
             matches = await asyncio.to_thread(
-                backend.glob_info, params.pattern, path=params.path,
+                backend.glob_info, params.pattern, path=path,
             )
             return {
-                "path": params.path,
+                "path": path,
                 "pattern": params.pattern,
                 "matches": [dict(m) for m in matches],
                 "count": len(matches),
@@ -75,12 +76,12 @@ class FsSearchNode(ActionNode):
             if not params.pattern:
                 raise RuntimeError("pattern is required for grep mode")
             result = await asyncio.to_thread(
-                backend.grep_raw, params.pattern, path=params.path,
+                backend.grep_raw, params.pattern, path=path,
             )
             if isinstance(result, str):
                 raise RuntimeError(result)
             return {
-                "path": params.path,
+                "path": path,
                 "pattern": params.pattern,
                 "matches": [dict(m) for m in result],
                 "count": len(result),

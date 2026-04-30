@@ -53,30 +53,48 @@ class FileModifyNode(ActionNode):
     async def modify(self, ctx: NodeContext, params: FileModifyParams) -> Any:
         """Inlined from handlers/filesystem.py (Wave 11.D.1)."""
         import asyncio
-        from ._backend import get_backend
+        from ._backend import get_backend, normalize_virtual_path
 
         if not params.file_path:
             raise RuntimeError("file_path is required")
         backend = get_backend(params.model_dump(), ctx.raw)
+        file_path = normalize_virtual_path(params.file_path)
 
         if params.operation == "write":
-            result = await asyncio.to_thread(backend.write, params.file_path, params.content)
+            # ``write`` is wholesale create-or-replace. deepagents'
+            # backend.write() refuses to overwrite by design, so unlink any
+            # pre-existing file at the resolved path first; ``edit`` remains
+            # the surgical option for callers that want a partial change.
+            def _do_write():
+                resolved = backend._resolve_path(file_path)
+                if resolved.exists():
+                    if resolved.is_dir():
+                        raise IsADirectoryError(
+                            f"Cannot write to {file_path}: path is a directory"
+                        )
+                    resolved.unlink()
+                return backend.write(file_path, params.content)
+
+            try:
+                result = await asyncio.to_thread(_do_write)
+            except (OSError, ValueError) as e:
+                raise RuntimeError(str(e)) from e
             if result.error:
                 raise RuntimeError(result.error)
-            return {"operation": "write", "file_path": result.path or params.file_path}
+            return {"operation": "write", "file_path": result.path or file_path}
 
         if params.operation == "edit":
             if not params.old_string:
                 raise RuntimeError("old_string is required for edit")
             result = await asyncio.to_thread(
-                backend.edit, params.file_path, params.old_string, params.new_string,
+                backend.edit, file_path, params.old_string, params.new_string,
                 replace_all=params.replace_all,
             )
             if result.error:
                 raise RuntimeError(result.error)
             return {
                 "operation": "edit",
-                "file_path": result.path or params.file_path,
+                "file_path": result.path or file_path,
                 "occurrences": result.occurrences,
             }
 

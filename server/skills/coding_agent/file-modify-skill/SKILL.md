@@ -19,9 +19,9 @@ Write new files or edit existing files with exact string replacement. Uses deepa
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| operation | string | Yes | `write` (create/overwrite) or `edit` (find and replace) |
+| operation | string | Yes | `write` (create or wholesale-replace the file) or `edit` (surgical find-and-replace inside an existing file) |
 | file_path | string | Yes | Path to the file |
-| content | string | If write | Full file content to write |
+| content | string | If write | Full file content to write — overwrites any existing file at this path |
 | old_string | string | If edit | Exact text to find and replace |
 | new_string | string | If edit | Replacement text |
 | replace_all | boolean | No | Replace all occurrences (default: false, old_string must be unique) |
@@ -72,8 +72,8 @@ Write new files or edit existing files with exact string replacement. Uses deepa
 
 ### Guidelines
 
-1. Use `write` to create new files or overwrite existing ones
-2. Use `edit` for surgical string replacement in existing files
-3. For edit: `old_string` must be unique in the file unless `replace_all` is true
-4. Prefer `edit` over `write` when modifying existing files
-5. Read the file first before editing to ensure correct context
+1. Use `write` to create a new file or replace an existing file's contents wholesale. Provide the full new contents in `content`; any existing file at `file_path` is replaced.
+2. Use `edit` for surgical string replacement inside an existing file — it is the right choice when you want to change a small portion of a file rather than rewrite the whole thing.
+3. For edit: `old_string` must be unique in the file unless `replace_all` is true.
+4. Prefer `edit` over `write` when changing only part of an existing file — it produces a smaller diff and is less destructive.
+5. Read the file first before editing to ensure correct context.

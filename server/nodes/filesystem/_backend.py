@@ -9,7 +9,37 @@ setup so each plugin file stays small.
 from __future__ import annotations
 
 import os
+from pathlib import PureWindowsPath
 from typing import Any, Dict, Optional
+
+from deepagents.backends.utils import validate_path
+
+
+def normalize_virtual_path(path: str) -> str:
+    """Coerce any caller-supplied path to deepagents' canonical virtual form.
+
+    LLMs (and humans) emit paths in every flavour: ``/foo`` (POSIX),
+    ``C:\\foo`` (Windows drive), ``\\\\server\\share\\foo`` (UNC),
+    ``foo\\bar`` / ``foo/bar`` (relative, mixed separators). deepagents'
+    ``virtual_mode`` only resolves POSIX virtual paths, and its public
+    :func:`validate_path` helper rejects Windows-anchored inputs.
+
+    ``PureWindowsPath`` is a pure (host-OS independent) parser and is a
+    superset of the POSIX grammar — Windows itself accepts ``/`` as a
+    separator, so ``PureWindowsPath('/tmp/foo')`` correctly identifies
+    ``/`` as the root anchor. That means a single parser covers Windows
+    drives, UNC, and POSIX absolutes uniformly on any host OS. Strip
+    the anchor here, then delegate to :func:`validate_path` for traversal
+    rejection (``..``, ``~``) and canonical normalisation.
+    """
+    if not path:
+        return path
+    pw = PureWindowsPath(path)
+    if pw.drive or pw.root:
+        rel = "/" + "/".join(pw.parts[1:]) if len(pw.parts) > 1 else "/"
+    else:
+        rel = path.replace("\\", "/")
+    return validate_path(rel)
 
 
 def get_backend(

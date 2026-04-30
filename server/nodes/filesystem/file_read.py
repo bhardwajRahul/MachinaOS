@@ -46,13 +46,14 @@ class FileReadNode(ActionNode):
     async def read(self, ctx: NodeContext, params: FileReadParams) -> Any:
         """Inlined from handlers/filesystem.py (Wave 11.D.1)."""
         import asyncio
-        from ._backend import get_backend
+        from ._backend import get_backend, normalize_virtual_path
 
         if not params.file_path:
             raise RuntimeError("file_path is required")
         backend = get_backend(params.model_dump(), ctx.raw)
+        file_path = normalize_virtual_path(params.file_path)
         content = await asyncio.to_thread(
-            backend.read, params.file_path,
+            backend.read, file_path,
             offset=params.offset, limit=params.limit,
         )
-        return {"content": content, "file_path": params.file_path}
+        return {"content": content, "file_path": file_path}
