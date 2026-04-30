@@ -50,6 +50,8 @@ import { useApiKeys, GlobalModelState } from '../../hooks/useApiKeys';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { AI_PROVIDER_META } from '../icons/AIProviderIcons';
 
+const Divider = () => <div className="mx-1 h-6 w-px bg-border" />;
+
 interface TopToolbarProps {
   workflowName: string;
   onWorkflowNameChange: (name: string) => void;
@@ -149,10 +151,6 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
       setIsEditing(false);
     }
   };
-
-  const Divider = () => (
-    <div className="mx-1 h-6 w-px bg-border" />
-  );
 
   return (
     <div className="flex h-12 items-center justify-between gap-3 border-b border-border bg-muted px-3">

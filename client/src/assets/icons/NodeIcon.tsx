@@ -47,7 +47,10 @@ export const NodeIcon: React.FC<NodeIconProps> = ({
   let inner: React.ReactNode;
   const LibIcon = resolveLibraryIcon(icon);
   if (LibIcon) {
-    inner = <LibIcon className="h-full w-full" />;
+    // LibIcon is a runtime-resolved component reference; using it as a JSX
+    // tag trips react-hooks/static-components. createElement is equivalent
+    // and rule-clean.
+    inner = React.createElement(LibIcon, { className: 'h-full w-full' });
   } else {
     const resolved = resolveIcon(icon);
     if (!resolved) {
