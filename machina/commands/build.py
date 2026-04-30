@@ -1,8 +1,8 @@
 """``machina build`` -- replaces ``scripts/build.js``.
 
 Checks toolchain (node, npm, python, uv, temporal-server), then runs
-the 5-step build: ``.env`` bootstrap -> ``pnpm install`` -> client
-build -> ``uv sync`` -> Playwright -> verify edgymeow binary.
+the 4-step build: ``.env`` bootstrap -> ``pnpm install`` -> client
+build -> ``uv sync`` -> verify edgymeow binary.
 
 The ``MACHINAOS_BUILDING`` env var is set so ``scripts/postinstall.js``
 skips its own ``install.js`` invocation when build is the orchestrator.
@@ -151,20 +151,12 @@ def build_command() -> None:
     console.log("[2/5] Building client...")
     run(["pnpm", "--filter", "react-flow-client", "run", "build"], cwd=root)
 
-    console.log("[3/5] Installing Python dependencies...")
+    console.log("[3/4] Installing Python dependencies...")
     if not (server_dir / ".venv").exists():
         run(["uv", "venv"], cwd=server_dir)
     run(["uv", "sync"], cwd=server_dir)
 
-    console.log("[4/5] Installing Playwright browser...")
-    rc = run(["playwright", "install", "chromium"], cwd=server_dir, check=False)
-    if rc != 0:
-        console.print(
-            "  [yellow]Warning: Playwright browser install failed. "
-            "JS-rendered scraping unavailable.[/]"
-        )
-
-    console.log("[5/5] Verifying edgymeow binary...")
+    console.log("[4/4] Verifying edgymeow binary...")
     bin_name = "edgymeow-server.exe" if sys.platform == "win32" else "edgymeow-server"
     edgymeow_bin = root / "node_modules" / "edgymeow" / "bin" / bin_name
     if edgymeow_bin.exists():
