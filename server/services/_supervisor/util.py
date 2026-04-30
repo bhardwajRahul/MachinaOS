@@ -23,9 +23,8 @@ def kill_tree(pid: int) -> None:
     """Kill a process and all descendants. Cross-platform via psutil.
 
     Defensively guards every psutil call against ``NoSuchProcess`` to
-    survive races with fast-exiting children. Same shape as
-    ``process_service.py:_kill_process_tree`` and
-    ``browser_service.py:_kill_process_tree``.
+    survive races with fast-exiting children. Used by process_service,
+    browser_service, and BaseProcessSupervisor for tree termination.
     """
     try:
         parent = psutil.Process(pid)

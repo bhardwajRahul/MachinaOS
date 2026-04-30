@@ -4,8 +4,9 @@ Manages lifecycle (start/stop/restart), streams stdout/stderr to the
 Terminal tab via broadcast_terminal_log(), and persists output to temp
 log files so AI agents can fetch output selectively.
 
-Uses stdlib asyncio.create_subprocess_exec -- no third-party deps beyond
-psutil (already a project dependency for process tree killing).
+Uses stdlib asyncio.create_subprocess_exec; process-tree termination is
+delegated to ``services._supervisor.util.kill_tree`` (the canonical
+psutil-backed helper shared with browser_service and the supervisor base).
 """
 
 import asyncio
@@ -17,9 +18,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import psutil
-
 from core.logging import get_logger
+from services._supervisor.util import kill_tree
 
 logger = get_logger(__name__)
 
@@ -179,7 +179,7 @@ class ProcessService:
             return {"success": True, "result": self._info(managed)}
 
         logger.info("[Process] Stopping: %s (pid=%d)", name, managed.pid)
-        _kill_process_tree(managed.pid)
+        kill_tree(managed.pid)
         managed.status = "stopped"
 
         for task in (managed.stdout_task, managed.stderr_task):
@@ -308,7 +308,7 @@ class ProcessService:
                 continue
             managed = self._processes[key]
             if managed.status == "running":
-                _kill_process_tree(managed.pid)
+                kill_tree(managed.pid)
                 for task in (managed.stdout_task, managed.stderr_task):
                     if task and not task.done():
                         task.cancel()
@@ -332,7 +332,7 @@ class ProcessService:
         for key in list(self._processes.keys()):
             managed = self._processes[key]
             if managed.status == "running":
-                _kill_process_tree(managed.pid)
+                kill_tree(managed.pid)
                 for task in (managed.stdout_task, managed.stderr_task):
                     if task and not task.done():
                         task.cancel()
@@ -407,27 +407,6 @@ class ProcessService:
             "stderr_lines": m.stderr_lines,
             "log_dir": str(m.log_dir),
         }
-
-
-def _kill_process_tree(pid: int) -> None:
-    """Kill a process and all descendants (cross-platform via psutil)."""
-    try:
-        parent = psutil.Process(pid)
-    except psutil.NoSuchProcess:
-        return
-    try:
-        descendants = parent.children(recursive=True)
-    except psutil.NoSuchProcess:
-        descendants = []
-    for child in descendants:
-        try:
-            child.kill()
-        except psutil.NoSuchProcess:
-            pass
-    try:
-        parent.kill()
-    except psutil.NoSuchProcess:
-        pass
 
 
 # -- Singleton --

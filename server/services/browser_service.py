@@ -30,41 +30,12 @@ import shutil
 import subprocess
 from typing import Any, Dict, List, Optional
 
-import psutil
-
 from core.logging import get_logger
+from services._supervisor.util import kill_tree
 
 logger = get_logger(__name__)
 
 _MAX_OUTPUT = 100_000
-
-
-def _kill_process_tree(pid: int) -> None:
-    """Terminate a process and all its descendants (cross-platform via psutil).
-
-    Fast-exiting processes can race between ``Process(pid)`` and
-    ``children()``, so every psutil call is defensively guarded.
-    """
-    try:
-        parent = psutil.Process(pid)
-    except psutil.NoSuchProcess:
-        return
-
-    try:
-        descendants = parent.children(recursive=True)
-    except psutil.NoSuchProcess:
-        descendants = []
-
-    for child in descendants:
-        try:
-            child.kill()
-        except psutil.NoSuchProcess:
-            pass
-
-    try:
-        parent.kill()
-    except psutil.NoSuchProcess:
-        pass
 
 
 class BrowserService:
@@ -175,7 +146,7 @@ class BrowserService:
             # npx -> node -> agent-browser daemon -> Chromium. Killing only
             # proc.pid leaves the daemon orphaned. psutil.children(recursive=True)
             # walks the tree natively on every platform.
-            _kill_process_tree(proc.pid)
+            kill_tree(proc.pid)
             proc.wait()
 
 
