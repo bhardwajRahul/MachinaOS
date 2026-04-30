@@ -39,11 +39,16 @@ class ChatModelParams(BaseModel):
         default="",
         json_schema_extra={"placeholder": "Select a model..."},
     )
-    temperature: float = Field(
-        default=0.7, ge=0.0, le=2.0,
+    # default=None so an unset value falls through to ``agent.default_temperature``
+    # in server/config/llm_defaults.json (resolved by _resolve_temperature).
+    temperature: Optional[float] = Field(
+        default=None, ge=0.0, le=2.0,
         json_schema_extra={"numberStepSize": 0.1},
     )
-    max_tokens: Optional[int] = Field(default=1000, ge=1, le=200000)
+    # default=None so an unset value is absent from the dumped dict and the
+    # backend (_resolve_max_tokens) falls through to the per-model default
+    # in server/config/llm_defaults.json instead of being silently capped.
+    max_tokens: Optional[int] = Field(default=None, ge=1, le=200000)
     system_prompt: Optional[str] = Field(
         default="",
         json_schema_extra={"rows": 3, "placeholder": "You are a helpful assistant."},

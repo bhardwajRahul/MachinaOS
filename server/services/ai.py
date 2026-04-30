@@ -44,6 +44,7 @@ from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, Base
 _ailog("importing langgraph + pydantic...")
 from langchain_core.tools import StructuredTool
 from langgraph.graph import StateGraph, END
+from langgraph.errors import GraphRecursionError
 from pydantic import BaseModel, Field, create_model
 _ailog("eager LangChain imports done")
 import json
@@ -375,7 +376,10 @@ def _resolve_temperature(flattened: dict, model: str, provider: str, thinking_en
     from services.model_registry import get_model_registry
     registry = get_model_registry()
 
-    user_temp = float(flattened.get('temperature', 0.7))
+    user_val = flattened.get('temperature')
+    if user_val is None:
+        user_val = registry.get_agent_defaults()["default_temperature"]
+    user_temp = float(user_val)
 
     # O-series reasoning models always require temperature=1
     if registry.is_reasoning_model(model, provider):
@@ -847,14 +851,18 @@ def create_tool_node(tool_executor: Callable):
 
 
 def should_continue(state: AgentState) -> str:
-    """Determine if the agent should continue or end.
+    """Conditional edge: route to ``tools`` when the LLM emitted tool calls,
+    otherwise terminate the graph.
 
-    This is the conditional edge function for LangGraph.
-    Returns "tools" to execute pending tool calls, or "end" to finish.
+    The previous implementation tracked a custom ``iteration`` counter to cap
+    the loop. That counter shared a name with LangGraph internals and was
+    being mutated unexpectedly, causing the edge to return ``"end"`` on the
+    first tool call. The standard LangGraph pattern is to route purely on
+    pending tool calls and rely on ``recursion_limit`` (passed via
+    ``ainvoke(config=...)``) as the safety net.
     """
-    if state.get("should_continue", False):
-        if state.get("iteration", 0) < state.get("max_iterations", 10):
-            return "tools"
+    if state.get("pending_tool_calls"):
+        return "tools"
     return "end"
 
 
@@ -1325,11 +1333,14 @@ class AIService:
         from services.model_registry import get_model_registry
         registry = get_model_registry()
 
-        # Force temperature=1 for reasoning models (regardless of thinking mode)
+        # Reasoning models (listed in ``reasoning_models`` per provider in
+        # llm_defaults.json) do not support the ``temperature`` parameter —
+        # the API rejects requests that send any value, including 1. Drop
+        # it entirely rather than pass an explicit value.
         if registry.is_reasoning_model(model, provider):
-            if kwargs.get('temperature', 1) != 1:
-                logger.info(f"[AI] Reasoning model '{model}': forcing temperature to 1 (was {kwargs.get('temperature')})")
-                kwargs['temperature'] = 1
+            if 'temperature' in kwargs:
+                logger.info(f"[AI] Reasoning model '{model}': omitting temperature param")
+                kwargs.pop('temperature', None)
 
         if thinking and thinking.enabled:
             thinking_type = registry.get_thinking_type(model, provider)
@@ -1907,9 +1918,29 @@ class AIService:
                 "history_count": history_count
             })
 
-            # Execute the graph using ainvoke for proper async support
-            # This allows async tool nodes and WebSocket broadcasts to work correctly
-            final_state = await agent_graph.ainvoke(initial_state)
+            # Execute the graph. ``recursion_limit`` (cap on agent/tool
+            # supersteps) is sourced from llm_defaults.json so deployments
+            # tune it without code changes. On hit, surface what the agent
+            # produced before stopping rather than the raw library error.
+            from services.model_registry import get_model_registry
+            recursion_limit = int(get_model_registry().get_agent_defaults()["recursion_limit"])
+            final_state = None
+            try:
+                async for snapshot in agent_graph.astream(
+                    initial_state,
+                    config={"recursion_limit": recursion_limit},
+                    stream_mode="values",
+                ):
+                    final_state = snapshot
+            except GraphRecursionError:
+                msgs = (final_state or {}).get("messages") or []
+                raise ValueError(
+                    f"Agent reached the {recursion_limit}-superstep recursion "
+                    f"limit without producing a final answer "
+                    f"({len(msgs)} message(s) exchanged). "
+                    f"Adjust agent.recursion_limit in llm_defaults.json or "
+                    f"simplify the task."
+                )
 
             # Extract the AI response (last message in the accumulated messages)
             all_messages = final_state["messages"]
@@ -2345,8 +2376,29 @@ class AIService:
                     "thinking_content": None
                 }
 
-                # Execute the graph
-                final_state = await agent_graph.ainvoke(initial_state)
+                # Execute the graph. ``recursion_limit`` is sourced from
+                # llm_defaults.json; see ``execute_agent`` for the rationale.
+                from services.model_registry import get_model_registry
+                recursion_limit = int(
+                    get_model_registry().get_agent_defaults()["recursion_limit"]
+                )
+                final_state = None
+                try:
+                    async for snapshot in agent_graph.astream(
+                        initial_state,
+                        config={"recursion_limit": recursion_limit},
+                        stream_mode="values",
+                    ):
+                        final_state = snapshot
+                except GraphRecursionError:
+                    msgs = (final_state or {}).get("messages") or []
+                    raise ValueError(
+                        f"Agent reached the {recursion_limit}-superstep "
+                        f"recursion limit without producing a final answer "
+                        f"({len(msgs)} message(s) exchanged). "
+                        f"Adjust agent.recursion_limit in llm_defaults.json "
+                        f"or simplify the task."
+                    )
 
                 # Extract response
                 all_messages = final_state["messages"]

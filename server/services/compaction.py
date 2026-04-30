@@ -21,9 +21,9 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-# Default fraction of context window used as compaction threshold
-# Overridden by user_settings.compaction_ratio if configured.
-DEFAULT_CONTEXT_THRESHOLD_RATIO = 0.5
+# Compaction ratio is sourced from server/config/llm_defaults.json
+# (``agent.compaction.ratio``). Per-user override in ``user_settings`` still
+# wins via :meth:`CompactionService._get_compaction_ratio`.
 
 
 def _extract_text_from_response(content) -> str:
@@ -77,7 +77,9 @@ class CompactionService:
         self._ai_service = ai_service
 
     async def _get_compaction_ratio(self) -> float:
-        """Get compaction ratio from user settings, falling back to default."""
+        """Per-user override from ``user_settings.compaction_ratio``, falling
+        back to ``agent.compaction.ratio`` in ``llm_defaults.json``."""
+        from services.model_registry import get_model_registry
         try:
             settings = await self._db.get_user_settings("default")
             if settings and "compaction_ratio" in settings:
@@ -86,17 +88,20 @@ class CompactionService:
                     return ratio
         except Exception:
             pass
-        return DEFAULT_CONTEXT_THRESHOLD_RATIO
+        return float(get_model_registry().get_agent_defaults()["compaction"]["ratio"])
 
-    def get_model_threshold(self, model: str, provider: str, ratio: float = DEFAULT_CONTEXT_THRESHOLD_RATIO) -> int:
+    def get_model_threshold(self, model: str, provider: str, ratio: Optional[float] = None) -> int:
         """Compute compaction threshold based on model's context window.
 
-        Returns ratio * model's context length, floored to the global
-        default if the registry has no data.  Per-session custom_threshold
-        (checked in track()) still takes priority over this value.
+        ``ratio`` defaults to ``agent.compaction.ratio`` from
+        ``llm_defaults.json``; pass an explicit value to override per call.
+        Per-session ``custom_threshold`` (checked in :meth:`track`) still
+        wins over the value returned here.
         """
         from services.model_registry import get_model_registry
         registry = get_model_registry()
+        if ratio is None:
+            ratio = float(registry.get_agent_defaults()["compaction"]["ratio"])
         context_length = registry.get_context_length(model, provider)
         model_threshold = int(context_length * ratio)
         # Never go below the configured minimum (ge=10000 in Settings)

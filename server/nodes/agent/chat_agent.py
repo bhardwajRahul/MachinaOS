@@ -44,12 +44,17 @@ class ChatAgentParams(BaseModel):
     )
 
     # ---- "Options" group (collapsed by default in the parameter panel) ----
-    temperature: float = Field(
-        default=0.7, ge=0.0, le=2.0,
+    # default=None so an unset value falls through to ``agent.default_temperature``
+    # in server/config/llm_defaults.json (resolved by _resolve_temperature).
+    temperature: Optional[float] = Field(
+        default=None, ge=0.0, le=2.0,
         json_schema_extra={"group": "options"},
     )
+    # default=None so an unset value is absent from the dumped dict and the
+    # backend (_resolve_max_tokens) falls through to the per-model default
+    # in server/config/llm_defaults.json instead of being silently capped.
     max_tokens: Optional[int] = Field(
-        default=1000, ge=1, le=200000,
+        default=None, ge=1, le=200000,
         json_schema_extra={"group": "options"},
     )
 

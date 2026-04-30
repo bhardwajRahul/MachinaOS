@@ -483,6 +483,16 @@ class ModelRegistryService:
             logger.warning(f"Could not load llm_defaults.json: {e}")
             self._llm_defaults = {"providers": {}}
 
+    def get_agent_defaults(self) -> Dict[str, Any]:
+        """Return the ``agent`` block from ``llm_defaults.json``.
+
+        Holds runtime defaults shared across the LangGraph executor and
+        compaction layer (e.g. ``recursion_limit``, ``compaction.ratio``).
+        Callers should ``.get(...)`` with their own fallback so the system
+        still boots if the JSON is missing or partial.
+        """
+        return self._llm_defaults.get("agent", {})
+
     def _get_default_max_output_tokens(self, provider: str, model: str) -> int:
         """Fallback: get max output tokens from llm_defaults.json."""
         providers = self._llm_defaults.get("providers", {})
