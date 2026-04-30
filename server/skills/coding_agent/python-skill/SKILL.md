@@ -29,16 +29,18 @@ Execute Python code and return results.
 
 ### Available Libraries
 
-| Library | Description |
-|---------|-------------|
-| `math` | Mathematical functions (sqrt, pow, sin, cos, etc.) |
-| `json` | JSON encoding/decoding |
-| `datetime` | Date and time manipulation |
-| `timedelta` | Time duration calculations |
-| `re` | Regular expressions |
-| `random` | Random number generation |
-| `Counter` | Count hashable objects |
-| `defaultdict` | Dictionary with default values |
+All modules below are **pre-injected as names** in the sandbox. **Do not use `import` statements** — they will fail (`ImportError: __import__ not found`). Reference each name directly.
+
+| Name | Reference Style | Description |
+|------|-----------------|-------------|
+| `math` | `math.sqrt(2)` | Mathematical functions |
+| `json` | `json.loads(s)` / `json.dumps(d)` | JSON encoding/decoding |
+| `datetime` | `datetime.datetime.now()` (the **module**) | Date/time module |
+| `timedelta` | `timedelta(days=30)` | Duration class (already unwrapped) |
+| `re` | `re.findall(pat, text)` | Regular expressions |
+| `random` | `random.randint(1, 10)` | Random number generation |
+| `Counter` | `Counter(items)` | Count hashable objects (already unwrapped) |
+| `defaultdict` | `defaultdict(list)` | Dictionary with defaults (already unwrapped) |
 
 ### Built-in Variables
 
@@ -71,14 +73,14 @@ Execute Python code and return results.
 **Generate random numbers:**
 ```json
 {
-  "code": "import random\nnumbers = [random.randint(1, 100) for _ in range(5)]\nprint(f'Random numbers: {numbers}')\noutput = numbers"
+  "code": "numbers = [random.randint(1, 100) for _ in range(5)]\nprint(f'Random numbers: {numbers}')\noutput = numbers"
 }
 ```
 
 **Date calculations:**
 ```json
 {
-  "code": "from datetime import datetime, timedelta\ntoday = datetime.now()\nfuture = today + timedelta(days=30)\nresult = future.strftime('%Y-%m-%d')\nprint(f'30 days from now: {result}')\noutput = result"
+  "code": "today = datetime.datetime.now()\nfuture = today + timedelta(days=30)\nresult = future.strftime('%Y-%m-%d')\nprint(f'30 days from now: {result}')\noutput = result"
 }
 ```
 
@@ -92,21 +94,21 @@ Execute Python code and return results.
 **Parse JSON:**
 ```json
 {
-  "code": "import json\njson_str = '{\"name\": \"John\", \"age\": 30}'\ndata = json.loads(json_str)\nprint(f'Name: {data[\"name\"]}')\noutput = data"
+  "code": "json_str = '{\"name\": \"John\", \"age\": 30}'\ndata = json.loads(json_str)\nprint(f'Name: {data[\"name\"]}')\noutput = data"
 }
 ```
 
 **Count items:**
 ```json
 {
-  "code": "from collections import Counter\nitems = ['apple', 'banana', 'apple', 'cherry', 'banana', 'apple']\ncounts = dict(Counter(items))\nprint(f'Counts: {counts}')\noutput = counts"
+  "code": "items = ['apple', 'banana', 'apple', 'cherry', 'banana', 'apple']\ncounts = dict(Counter(items))\nprint(f'Counts: {counts}')\noutput = counts"
 }
 ```
 
 **Text processing:**
 ```json
 {
-  "code": "import re\ntext = 'Contact: john@example.com or jane@test.org'\nemails = re.findall(r'\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Z|a-z]{2,}\\b', text)\nprint(f'Found emails: {emails}')\noutput = emails"
+  "code": "text = 'Contact: john@example.com or jane@test.org'\nemails = re.findall(r'\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Z|a-z]{2,}\\b', text)\nprint(f'Found emails: {emails}')\noutput = emails"
 }
 ```
 

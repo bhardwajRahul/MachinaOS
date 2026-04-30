@@ -24,9 +24,13 @@ class PythonExecutorNode(CodeExecutorBase):
         results are reachable; ``workspace_dir`` is the per-workflow
         scratch directory.
         """
+        import datetime as datetime_module
         import io
         import json as json_module
         import math
+        import random as random_module
+        import re as re_module
+        from collections import Counter, defaultdict
 
         if not params.code.strip():
             raise RuntimeError("No code provided")
@@ -46,7 +50,17 @@ class PythonExecutorNode(CodeExecutorBase):
             "range": range, "round": round, "set": set, "sorted": sorted,
             "str": str, "sum": sum, "tuple": tuple, "type": type, "zip": zip,
             "True": True, "False": False, "None": None,
-            "math": math, "json": json_module,
+            # Pre-injected modules — match the documented sandbox contract
+            # (skill docs, CLAUDE.md). No __import__: callers reference these
+            # by name, e.g. ``datetime.datetime.now()`` not ``import datetime``.
+            "math": math,
+            "json": json_module,
+            "datetime": datetime_module,
+            "timedelta": datetime_module.timedelta,
+            "re": re_module,
+            "random": random_module,
+            "Counter": Counter,
+            "defaultdict": defaultdict,
         }
         namespace = {
             "__builtins__": safe_builtins,
