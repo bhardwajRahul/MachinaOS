@@ -13,7 +13,7 @@ import hashlib
 from typing import Dict, Any, Optional, List, Tuple, TYPE_CHECKING
 
 from core.logging import get_logger
-from constants import ANDROID_SERVICE_NODE_TYPES
+from constants import AI_AGENT_TYPES, ANDROID_SERVICE_NODE_TYPES
 
 if TYPE_CHECKING:
     pass
@@ -84,9 +84,20 @@ async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
     # plugin is the single source of truth for both workflow-node
     # execution and AI-tool invocation. Legacy branches below only
     # fire for node types not yet migrated to the plugin pattern.
+    #
+    # Exception: AI agent types must fall through to the delegation
+    # branch below. ``execute_as_tool`` runs the plugin synchronously
+    # without resolving the child's api_key from the credentials DB,
+    # whereas ``_execute_delegated_agent`` injects credentials, applies
+    # duplicate-call de-dupe, and spawns the child as a fire-and-forget
+    # background task — the contract callers (and the agent system
+    # prompt) expect for delegation tools.
     # ----------------------------------------------------------------
     from services.node_registry import get_node_class
-    plugin_cls = get_node_class(node_type)
+    plugin_cls = (
+        None if node_type in AI_AGENT_TYPES
+        else get_node_class(node_type)
+    )
     if plugin_cls is not None:
         from services.plugin import NodeContext
         instance = plugin_cls()
