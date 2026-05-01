@@ -1920,8 +1920,10 @@ class AIService:
 
             # Execute the graph. ``recursion_limit`` (cap on agent/tool
             # supersteps) is sourced from llm_defaults.json so deployments
-            # tune it without code changes. On hit, surface what the agent
-            # produced before stopping rather than the raw library error.
+            # tune it without code changes. On hit, synthesise a terminal
+            # AIMessage from whatever the agent produced before stopping
+            # so downstream extraction returns a usable partial response
+            # instead of failing the workflow.
             from services.model_registry import get_model_registry
             recursion_limit = int(get_model_registry().get_agent_defaults()["recursion_limit"])
             final_state = None
@@ -1933,13 +1935,19 @@ class AIService:
                 ):
                     final_state = snapshot
             except GraphRecursionError:
-                msgs = (final_state or {}).get("messages") or []
-                raise ValueError(
-                    f"Agent reached the {recursion_limit}-superstep recursion "
-                    f"limit without producing a final answer "
-                    f"({len(msgs)} message(s) exchanged). "
+                # Append a terminal AIMessage so downstream extraction (and
+                # the post-loop _track_token_usage / compact_context call)
+                # still has a usable state instead of a half-built one.
+                msgs = list((final_state or {}).get("messages") or [])
+                msgs.append(AIMessage(content=(
+                    f"[Recursion limit reached: {recursion_limit} supersteps. "
                     f"Adjust agent.recursion_limit in llm_defaults.json or "
-                    f"simplify the task."
+                    f"simplify the task.]"
+                )))
+                final_state = {**(final_state or {}), "messages": msgs}
+                logger.warning(
+                    f"[LangGraph] Recursion limit hit ({recursion_limit}); "
+                    f"returning partial response with {len(msgs)} message(s)"
                 )
 
             # Extract the AI response (last message in the accumulated messages)
@@ -2391,13 +2399,16 @@ class AIService:
                     ):
                         final_state = snapshot
                 except GraphRecursionError:
-                    msgs = (final_state or {}).get("messages") or []
-                    raise ValueError(
-                        f"Agent reached the {recursion_limit}-superstep "
-                        f"recursion limit without producing a final answer "
-                        f"({len(msgs)} message(s) exchanged). "
-                        f"Adjust agent.recursion_limit in llm_defaults.json "
-                        f"or simplify the task."
+                    msgs = list((final_state or {}).get("messages") or [])
+                    msgs.append(AIMessage(content=(
+                        f"[Recursion limit reached: {recursion_limit} supersteps. "
+                        f"Adjust agent.recursion_limit in llm_defaults.json or "
+                        f"simplify the task.]"
+                    )))
+                    final_state = {**(final_state or {}), "messages": msgs}
+                    logger.warning(
+                        f"[LangGraph] Recursion limit hit ({recursion_limit}); "
+                        f"returning partial response with {len(msgs)} message(s)"
                     )
 
                 # Extract response

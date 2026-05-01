@@ -143,9 +143,10 @@ class Settings(BaseSettings):
     # silently allows. Override to "0.0.0.0" for container deployments.
     whatsapp_bind_host: str = Field(default="localhost", env="WHATSAPP_BIND_HOST")
 
-    # Compaction Configuration
+    # Compaction Configuration. The threshold is fully model-aware and
+    # sourced from server/config/llm_defaults.json (context_length ×
+    # agent.compaction.ratio). Only the global on/off toggle remains here.
     compaction_enabled: bool = Field(default=True, env="COMPACTION_ENABLED")
-    compaction_threshold: int = Field(default=100000, env="COMPACTION_THRESHOLD", ge=10000)
 
     # Gunicorn Configuration (for production deployment)
     gunicorn_timeout: int = Field(default=120, env="GUNICORN_TIMEOUT", ge=30)

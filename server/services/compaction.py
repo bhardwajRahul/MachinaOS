@@ -58,7 +58,6 @@ def _extract_text_from_response(content) -> str:
 class CompactionConfig(BaseModel):
     """Provider-agnostic compaction configuration."""
     enabled: bool = True
-    threshold: int = 100000
 
 
 class CompactionService:
@@ -66,10 +65,7 @@ class CompactionService:
 
     def __init__(self, database: "Database", settings: "Settings"):
         self._db = database
-        self._config = CompactionConfig(
-            enabled=settings.compaction_enabled,
-            threshold=settings.compaction_threshold
-        )
+        self._config = CompactionConfig(enabled=settings.compaction_enabled)
         self._ai_service = None
 
     def set_ai_service(self, ai_service) -> None:
@@ -226,11 +222,9 @@ class CompactionService:
         custom = state.get("custom_threshold")
         if custom:
             threshold = custom
-        elif model and provider:
+        else:
             ratio = await self._get_compaction_ratio()
             threshold = self.get_model_threshold(model, provider, ratio=ratio)
-        else:
-            threshold = self._config.threshold
         # Get context window size for frontend display
         context_length = 0
         if model and provider:

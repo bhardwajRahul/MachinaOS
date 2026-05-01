@@ -1,17 +1,19 @@
 ---
 name: shell-skill
-description: Execute short-lived shell commands in a sandboxed environment. No PATH access -- use process_manager for npm/python/node commands.
+description: Execute short-lived shell commands inside the per-workflow workspace. The shell is Nushell (cross-platform, same syntax on Windows/macOS/Linux). External tools on PATH (npm, node, python, git, ...) are available.
 allowed-tools: "shell"
 metadata:
   author: machina
-  version: "3.0"
+  version: "4.0"
   category: execution
 
 ---
 
-# Shell Tool
+# Shell Tool (Nushell)
 
-Execute short-lived shell commands in a sandboxed workspace. The shell runs with a **restricted environment** (no system PATH). For commands that need `npm`, `python`, `node`, or other system tools, use the **process_manager** tool instead.
+Execute short-lived shell commands in the workflow workspace. **The shell is [Nushell](https://www.nushell.sh/) — the same grammar runs on Windows, macOS, and Linux.** Do not write `cmd.exe`, PowerShell, or Bash idioms; they will fail or behave wrong.
+
+External binaries on `PATH` (`npm`, `node`, `python`, `git`, `pwd`, etc.) are available — Nu invokes them as external commands automatically.
 
 ## shell_execute Tool
 
@@ -19,8 +21,8 @@ Execute short-lived shell commands in a sandboxed workspace. The shell runs with
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| command | string | Yes | Shell command to execute |
-| timeout | int | No | Timeout in seconds (default: 30, max: 300) |
+| command | string | Yes | Nushell command (single or `;`-chained) |
+| timeout | int | No | Seconds (default 30, max 300) |
 
 ### Response
 
@@ -29,81 +31,88 @@ Execute short-lived shell commands in a sandboxed workspace. The shell runs with
   "stdout": "command output",
   "exit_code": 0,
   "truncated": false,
-  "command": "dir"
+  "command": "ls"
 }
 ```
 
-### Exit Codes
-
-| Code | Meaning |
-|------|---------|
+| Exit code | Meaning |
+|---|---|
 | 0 | Success |
 | 124 | Timed out |
 | non-zero | Failure |
 
-## OS-Specific Commands
+## Critical: Nushell ≠ Bash
 
-The shell uses the system's native shell (`cmd.exe` on Windows, `/bin/sh` on Linux/macOS). Use the correct commands for the platform.
+| Bash / cmd.exe (do NOT use) | Nushell (correct) |
+|---|---|
+| `cmd1 && cmd2` (and-then) | `cmd1; cmd2` *(unconditional sequential — see below for short-circuit)* |
+| `cmd1 || cmd2` (or-else) | `try { cmd1 } catch { cmd2 }` |
+| `$VAR` substitution | `$env.VAR` |
+| `` `cmd` `` or `$(cmd)` | `(cmd)` *(parens, no dollar)* |
+| `cmd > file.txt` | `cmd \| save file.txt` |
+| `cmd >> file.txt` | `cmd \| save --append file.txt` |
+| `cmd 2>&1` | `cmd \| complete \| get stdout` *(all output is captured anyway)* |
+| `if [ -f x.txt ]; then ...` | `if ('x.txt' \| path exists) { ... }` |
+| `for f in *.py; do ...` | `glob '*.py' \| each { \|f\| ... }` |
+| `*` glob in argv (auto-expand) | wrap in quotes or use `glob` |
+| `~/path` | `('~/path' \| path expand)` |
 
-### Detect OS first
+### Short-circuit "and-then" (the `&&` replacement)
 
-```json
-{"command": "ver"}
+The user log showed `pwd && ls -la` failing — the parser explicitly rejects `&&`. Use one of:
+
+```nu
+# A: just sequential, doesn't short-circuit on failure
+pwd; ls -la
+
+# B: short-circuit using exit code via try/catch
+try { npm install } catch { print 'install failed'; exit 1 }
+ls -la
+
+# C: explicit conditional on the previous command's success
+let r = (do { npm install } | complete)
+if $r.exit_code == 0 { ls -la } else { print $r.stderr }
 ```
-If output contains `Windows`, use Windows commands. Otherwise use Unix commands.
 
-### Windows (cmd.exe)
+Use **A** for "run these in order regardless of outcome", **B/C** when you must stop on failure.
 
-| Task | Command |
-|------|---------|
-| List files | `dir` |
-| List with details | `dir /a` |
-| Read file | `type README.md` |
-| Write to file | `echo hello > output.txt` |
-| Find files | `dir /s /b *.py` |
-| Search content | `findstr /s /i "pattern" *.py` |
-| Copy file | `copy src.txt dst.txt` |
-| Move file | `move src.txt dst.txt` |
-| Delete file | `del output.txt` |
-| Delete folder | `rmdir /s /q folder` |
-| Create folder | `mkdir newfolder` |
-| Show current dir | `cd` |
-
-### Linux / macOS (sh)
+## Common tasks (cross-platform, Nushell)
 
 | Task | Command |
-|------|---------|
-| List files | `ls -la` |
-| Read file | `cat README.md` |
-| Write to file | `echo hello > output.txt` |
-| Find files | `find . -name '*.py' -type f` |
-| Search content | `grep -r "pattern" --include='*.py' .` |
-| Copy file | `cp src.txt dst.txt` |
-| Move file | `mv src.txt dst.txt` |
-| Delete file | `rm output.txt` |
-| Delete folder | `rm -rf folder` |
-| Create folder | `mkdir -p newfolder` |
-| Show current dir | `pwd` |
+|---|---|
+| Show current dir | `pwd` *(nu builtin)* |
+| List files | `ls` *(returns a table — pipe further)* |
+| List recursively | `ls **/*` |
+| Read file | `open README.md` *(text/json/csv auto-parsed)* or `cat README.md` |
+| Write to file | `'hello' \| save -f output.txt` |
+| Append | `'more' \| save --append output.txt` |
+| Find files by name | `glob '**/*.py'` |
+| Search content | `rg 'pattern' .` *(if ripgrep on PATH)* or `open file.txt \| find 'pattern'` |
+| Copy / move / delete | `cp a b`, `mv a b`, `rm a` |
+| Make folder | `mkdir new` |
+| Run npm / node / python | `npm install`, `node app.js`, `python -V` *(via PATH)* |
+| Capture command output into a var | `let v = (npm -v \| str trim)` |
+| Conditional on a binary existing | `if (which git \| is-empty) { print 'no git' }` |
 
-## Shell vs Process Manager
+## Workspace and paths
+
+- The cwd is the per-workflow workspace; relative paths resolve there.
+- Filesystem operations elsewhere on this tool (read/write/edit via `file_*`) honour `virtual_mode=True` and reject `..`/`~` traversal. Shell `execute()` itself is **not** path-restricted (deepagents documents this), so prefer `file_read` / `file_modify` / `fs_search` for actual filesystem work.
+
+## Use the right tool
 
 | Need | Tool | Why |
-|------|------|-----|
-| List/read/copy/move files | **shell_execute** | Sandboxed, safe |
-| Delete files | **shell_execute** | Confined to workspace |
-| Search file content | **shell_execute** | Fast, no PATH needed |
-| `npm install`, `pip install` | **process_manager** | Needs PATH |
-| `python script.py`, `node app.js` | **process_manager** | Needs PATH |
-| Dev servers, watchers | **process_manager** | Long-running |
-
-The shell is the **only safe tool for file deletion**. It runs inside the agent's workspace with `virtual_mode=True` (path traversal blocked). The process_manager blocks destructive commands since it has full PATH.
+|---|---|---|
+| List / search / one-shot file ops | **shell_execute** | Fast, in-workspace |
+| Reading or editing a specific file | **file_read** / **file_modify** | Path-sandboxed, no shell parsing surprises |
+| Long-running processes (dev servers, watchers, `npm run dev`) | **process_manager** | Streams output, restartable, doesn't tie up the agent |
+| Recursive code search | **fs_search** | grep mode, structured results |
 
 ## Guidelines
 
-1. **Detect OS first** -- use `ver` to check Windows vs Unix, then use correct commands
-2. **Short-lived commands only** -- the shell waits for completion
-3. **No system PATH** -- `npm`, `python`, `node` will not be found. Use process_manager
-4. **No daemons/servers** -- commands that don't exit will hang until timeout
-5. Use relative paths (workspace is the working directory)
-6. Chain with `&&` for sequential execution
-7. Avoid interactive commands requiring user input
+1. **Never use `&&`, `||`, backticks, `$VAR`, or `>` redirection.** Use the Nushell equivalent on the right side of the table above.
+2. **One command (or `;`-chain) per call.** No multi-line scripts; if you need control flow, use `if` / `try` / `each` inline.
+3. **Short-lived only.** If the command runs longer than ~30s or is a daemon, switch to `process_manager`.
+4. **Don't pre-detect the OS.** Nu syntax is identical on Windows, macOS, Linux — write one command, not platform branches.
+5. **Quote glob patterns** (`'*.py'`) so Nu's `glob` builtin expands them, not the caller.
+6. **Capture command exit code** with `do { … } | complete` if you need to branch on success/failure.

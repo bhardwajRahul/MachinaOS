@@ -102,11 +102,11 @@ class NushellBackend(LocalShellBackend):
 
         # Flags per nushell/src/command.rs (long forms):
         #   -n / --no-config-file   Skip user/global config (deterministic).
-        #   --no-std-lib            Don't load the std library (faster, fewer
-        #                           surprises in a one-shot invocation).
         #   --no-history            Don't read or write shell history.
         #   -c / --commands         Run the next argument as a single command.
-        argv = [nu, "-n", "--no-history", "--no-std-lib", "-c", command]
+        # The std library is intentionally left loaded — agents need
+        # ``path``, ``str``, ``http``, etc. without per-command imports.
+        argv = [nu, "-n", "--no-history", "-c", command]
 
         try:
             result = subprocess.run(
@@ -181,4 +181,9 @@ def get_backend(
     )
     os.makedirs(root, exist_ok=True)
     get_logger(__name__).info("[Filesystem] root=%s", root)
-    return NushellBackend(root_dir=root, virtual_mode=True)
+    # ``inherit_env=True`` makes the host PATH available so the agent can
+    # invoke npm, node, python, git, pwd (POSIX), where (Win), etc. as
+    # external commands. ``virtual_mode`` only sandboxes filesystem ops
+    # per deepagents docs — shell ``execute()`` was never path-restricted —
+    # so inheriting env doesn't loosen any existing security boundary.
+    return NushellBackend(root_dir=root, virtual_mode=True, inherit_env=True)

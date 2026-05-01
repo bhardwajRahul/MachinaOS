@@ -224,7 +224,7 @@ server/models/
 └── database.py              # ConversationMessage, NodeParameter, ToolSchema, ChatMessage, TokenUsageMetric, APIUsageMetric, CompactionEvent, SessionTokenState, UserSettings, ProviderDefaults, AgentTeam, TeamMember, TeamTask, AgentMessage tables
 
 server/config/
-├── llm_defaults.json        # Default models per provider (edit to change defaults)
+├── llm_defaults.json        # Per-provider defaults (model, base_url, max_output_tokens, context_length, temperature_range, reasoning_models, thinking_type, ...) AND a top-level `agent` block (recursion_limit, default_temperature, compaction.ratio) that drives the LangGraph agent loop and CompactionService — no env-var defaults; this is the source of truth.
 ├── model_registry.json      # Cached model data from OpenRouter (auto-refreshed)
 ├── pricing.json             # LLM and API pricing config
 ├── google_apis.json         # Google Workspace API endpoints, scopes, OAuth callback paths
@@ -1457,19 +1457,23 @@ Residential proxy provider management with geo-targeting, session control, and a
 - **typescriptExecutor**: **Dual-purpose node** - Execute TypeScript code via persistent Node.js server with type safety, syntax-highlighted editor and console output. Works as workflow node OR AI Agent tool (`typescript_code`).
 
 ### Filesystem & Shell Nodes (4 nodes)
-Dual-purpose tool nodes delegating to `deepagents.backends.LocalShellBackend`. Uses per-workflow workspace from execution context (`context["workspace_dir"]` = `data/workspaces/<workflow_id>/`). `virtual_mode=True` confines paths within the workspace. Fallback uses `Settings().workspace_base_dir` (never `os.getcwd()`).
+Dual-purpose tool nodes wrapping `deepagents.backends.LocalShellBackend`. Per-workflow workspace from execution context (`context["workspace_dir"]` = `data/workspaces/<workflow_id>/`). Fallback uses `Settings().workspace_base_dir` (never `os.getcwd()`).
+
+**Path safety**: `nodes/filesystem/_backend.py` exposes `normalize_virtual_path()` which uses `pathlib.PureWindowsPath` (host-OS independent) to strip Windows drives, POSIX root, and UNC anchors uniformly, then delegates to `deepagents.backends.utils.validate_path` for `..`/`~` rejection. Wired into `file_read`, `file_modify`, and `fs_search` so LLM-emitted paths in any flavour (`C:\foo`, `/tmp/foo`, `\\server\share\x`, `foo\bar`) all map to a virtual path under the workspace. `virtual_mode=True` only sandboxes filesystem ops — `execute()` itself is never path-restricted (deepagents documents this).
+
+**Shell backend is Nushell** (`NushellBackend` subclassing `LocalShellBackend`). Cross-platform parity — same grammar on Windows/macOS/Linux. `inherit_env=True` so `npm`, `node`, `python`, `git`, etc. are reachable on PATH. Nu stdlib is loaded (no `--no-std-lib`). Falls back to upstream `LocalShellBackend.execute()` (POSIX `sh` / cmd.exe) when `nu` isn't on PATH. **Bash idioms (`&&`, `||`, `$VAR`, backticks, `>`) do not work** — see `server/skills/terminal/shell-skill/SKILL.md` for the Nu equivalents.
 
 - **fileRead**: **Dual-purpose node** - Read file contents with line numbers and pagination. Works as workflow node OR AI Agent tool (`file_read`). Parameters: file_path, offset, limit.
-- **fileModify**: **Dual-purpose node** - Write new files or edit existing files with string replacement. Works as workflow node OR AI Agent tool (`file_modify`). Operations: write (create/overwrite), edit (find and replace with old_string/new_string/replace_all).
-- **shell**: **Dual-purpose node** - Execute shell commands with timeout. Works as workflow node OR AI Agent tool (`shell_execute`). **Sandboxed: no system PATH** -- use process_manager for npm/python/node commands. All backend calls wrapped in `asyncio.to_thread()` to avoid blocking the event loop. Returns stdout, exit_code, truncated flag.
+- **fileModify**: **Dual-purpose node** - Write new files or edit existing files with string replacement. Works as workflow node OR AI Agent tool (`file_modify`). Operations: write (wholesale create-or-replace, no overwrite flag), edit (find and replace with old_string/new_string/replace_all).
+- **shell**: **Dual-purpose node** - Execute Nushell commands with timeout. Works as workflow node OR AI Agent tool (`shell_execute`). PATH inherited; external tools (npm, node, python, git, ...) work. All backend calls wrapped in `asyncio.to_thread()` to avoid blocking the event loop. Returns stdout, exit_code, truncated flag.
 - **fsSearch**: **Dual-purpose node** - Search the filesystem with three modes. Works as workflow node OR AI Agent tool (`fs_search`). Modes: ls (list directory), glob (pattern match), grep (search file contents).
 
 **Key Files:**
 | File | Description |
 |------|-------------|
-| `server/services/handlers/filesystem.py` | Handlers delegating to `deepagents.backends.LocalShellBackend` |
+| `server/nodes/filesystem/_backend.py` | `NushellBackend`, `get_backend()`, `normalize_virtual_path()` |
 | `server/skills/coding_agent/` | Skills: file-read-skill, file-modify-skill, fs-search-skill |
-| `server/skills/terminal/` | Skills: shell-skill, process-manager-skill, bash-skill, powershell-skill, wsl-skill |
+| `server/skills/terminal/` | Skills: shell-skill (Nushell), process-manager-skill, bash-skill, powershell-skill, wsl-skill |
 
 ### Process Manager Node (1 node)
 Cross-platform process manager for long-running subprocesses (dev servers, watchers, build tools). Uses `asyncio.create_subprocess_exec` with full system PATH (`env={**os.environ}`). Output streams to Terminal tab via `broadcast_terminal_log()` and persists to log files in the workspace.
@@ -2291,6 +2295,13 @@ Adding a new node type's output shape: define one Pydantic model, register it in
 - **Cerebras**: Qwen-3-235b supports format-based reasoning (same as Groq Qwen).
 
 ## AI Agent Node Architecture
+
+### LangGraph Loop Termination
+The standard agent path (`build_agent_graph` in `services/ai.py`) routes purely on `pending_tool_calls` — no custom iteration counter. Termination is bounded by LangGraph's built-in `recursion_limit`, sourced from `agent.recursion_limit` in `llm_defaults.json` (currently 500 — generous backstop, not the load-bearing termination signal).
+
+The token-based compaction threshold (`agent.compaction.ratio` × context_length, ≈100K for claude-sonnet-4-6) is the real termination signal: `_track_token_usage` runs after each agent turn, and when cumulative tokens cross the threshold it invokes `CompactionService.compact_context` to summarise the transcript before the next turn.
+
+If the recursion cap is ever hit anyway, the `GraphRecursionError` handler appends a terminal `AIMessage` carrying a truncation note so `_extract_text_content` returns a usable partial response and the workflow continues — `_track_token_usage` and any post-loop persistence still run.
 
 ### Config-Driven Component Design
 The `AIAgentNode.tsx` component uses a configuration-driven pattern to support multiple agent types from a single component.
@@ -3673,13 +3684,24 @@ pricing_info = pricing.get_pricing("anthropic", "claude-3-5-sonnet-20241022")
 
 ### Configuration
 
-Environment variables in `.env`:
-```bash
-COMPACTION_ENABLED=true       # Enable/disable compaction globally
-COMPACTION_THRESHOLD=100000   # Global default threshold (min: 10000, used when model context unknown)
+The compaction threshold is fully JSON-driven via `server/config/llm_defaults.json`:
+
+```json
+"agent": {
+  "recursion_limit": 500,
+  "default_temperature": 0.7,
+  "compaction": { "ratio": 0.5 }
+}
 ```
 
-**Threshold priority:** per-session `custom_threshold` > model-aware (50% of context window) > `COMPACTION_THRESHOLD`
+Effective threshold = `providers.<provider>.context_length.<model>` × `agent.compaction.ratio` (e.g. claude-sonnet-4-6 → 200K × 0.5 = 100K input tokens). When model/provider are unknown, `model_registry.get_context_length` falls through to the provider's `_default` entry in the same JSON — never a Python constant.
+
+Only the global on/off toggle stays in `.env`:
+```bash
+COMPACTION_ENABLED=true       # Enable/disable compaction globally
+```
+
+**Threshold priority:** per-session `custom_threshold` > model-aware (`context_length × ratio`).
 
 ### Client-Side Compaction
 
