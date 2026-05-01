@@ -58,7 +58,7 @@ def _toggle_skill(
     skill_name: str,
     enabled: bool,
 ) -> SkillsConfig:
-    """Return a new skillsConfig with ``skill_name`` toggled.
+    """Return a new skills_config with ``skill_name`` toggled.
 
     Preserves any existing ``instructions`` / ``isCustomized`` so a
     user-customised skill keeps its content when toggled. New entries
@@ -117,7 +117,7 @@ def evaluate(
             "operations": [
                 workflow_ops.set_node_parameters(
                     master_skill_id,
-                    {"skillsConfig": new_config},
+                    {"skills_config": new_config},
                 ),
             ],
         }
@@ -134,7 +134,7 @@ def evaluate(
             workflow_ops.add_node(
                 client_ref,
                 _MASTER_SKILL_TYPE,
-                {"skillsConfig": new_config},
+                {"skills_config": new_config},
                 label=_MASTER_SKILL_LABEL,
                 position=workflow_ops.anchored(
                     target_node_id,

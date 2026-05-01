@@ -52,7 +52,7 @@ export function useAutoSkillEdges({
   setNodes,
   setEdges,
 }: UseAutoSkillEdgesProps) {
-  const { sendRequest, saveNodeParameters } = useWebSocket();
+  const { sendRequest, saveNodeParameters, getNodeParameters } = useWebSocket();
   const settingsQuery = useUserSettingsQuery();
   const enabled = settingsQuery.data?.auto_add_skill_for_tools ?? true;
 
@@ -72,13 +72,18 @@ export function useAutoSkillEdges({
       const skillEdge = edges.find(
         e => e.target === targetId && e.targetHandle === SKILL_HANDLE,
       );
-      const masterSkill = skillEdge && nodes.find(
+      const masterSkillNode = skillEdge && nodes.find(
         n => n.id === skillEdge.source && n.type === MASTER_SKILL_TYPE,
       );
-      const masterSkillId = masterSkill?.id ?? null;
-      const masterSkillConfig = masterSkillId
-        ? ((masterSkill?.data as any)?.skillsConfig ?? null)
+      const masterSkillId = masterSkillNode?.id ?? null;
+      // node.data only stores the label (see CLAUDE.md "Node Data
+      // Architecture") -- params live in the database. Fetch the
+      // current skills_config so the backend can toggle the new tool's
+      // skill without wiping previously enabled siblings.
+      const masterParams = masterSkillId
+        ? await getNodeParameters(masterSkillId)
         : null;
+      const masterSkillConfig = masterParams?.parameters?.skills_config ?? null;
 
       const result = await sendRequest<EvaluateAutoSkillResponse>('evaluate_auto_skill', {
         action,
@@ -100,7 +105,7 @@ export function useAutoSkillEdges({
         saveNodeParameters,
       });
     },
-    [enabled, nodes, edges, sendRequest, saveNodeParameters, setNodes, setEdges],
+    [enabled, nodes, edges, sendRequest, saveNodeParameters, getNodeParameters, setNodes, setEdges],
   );
 
   const onConnect = useCallback(

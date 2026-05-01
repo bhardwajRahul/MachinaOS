@@ -482,7 +482,7 @@ const MasterSkillEditor: React.FC<MasterSkillEditorProps> = ({
         if (nodeId) {
           await sendRequest('save_node_parameters', {
             node_id: nodeId,
-            parameters: { skillsConfig: newConfig, skillFolder: skillFolder || 'assistant' }
+            parameters: { skills_config: newConfig, skillFolder: skillFolder || 'assistant' }
           });
         }
 

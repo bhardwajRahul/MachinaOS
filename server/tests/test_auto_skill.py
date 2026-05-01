@@ -149,7 +149,7 @@ def test_connect_with_existing_master_skill_returns_set_params():
         op = result["operations"][0]
         assert op["type"] == "set_node_parameters"
         assert op["node_id"] == "ms-1"
-        skills_config = op["parameters"]["skillsConfig"]
+        skills_config = op["parameters"]["skills_config"]
         assert "http-request-skill" in skills_config
         assert skills_config["http-request-skill"]["enabled"] is True
     finally:
@@ -171,7 +171,7 @@ def test_disconnect_with_existing_master_skill_disables_skill():
                 }
             },
         )
-        skills_config = result["operations"][0]["parameters"]["skillsConfig"]
+        skills_config = result["operations"][0]["parameters"]["skills_config"]
         assert skills_config["http-request-skill"]["enabled"] is False
     finally:
         _exit(patches)
@@ -193,7 +193,7 @@ def test_existing_skill_customisation_is_preserved_on_toggle():
                 }
             },
         )
-        entry = result["operations"][0]["parameters"]["skillsConfig"]["http-request-skill"]
+        entry = result["operations"][0]["parameters"]["skills_config"]["http-request-skill"]
         assert entry["instructions"] == "Custom user instructions"
         assert entry["isCustomized"] is True
         assert entry["enabled"] is False  # only the enabled flag flipped
@@ -216,7 +216,7 @@ def test_other_skills_in_config_are_preserved():
                 }
             },
         )
-        skills_config = result["operations"][0]["parameters"]["skillsConfig"]
+        skills_config = result["operations"][0]["parameters"]["skills_config"]
         assert "calculator-skill" in skills_config
         assert skills_config["calculator-skill"]["enabled"] is True
         assert skills_config["http-request-skill"]["enabled"] is True
@@ -240,8 +240,8 @@ def test_connect_with_no_master_skill_spawns_one():
         assert add_node["type"] == "add_node"
         assert add_node["node_type"] == "masterSkill"
         assert add_node["label"] == "Master Skill"
-        assert "http-request-skill" in add_node["parameters"]["skillsConfig"]
-        assert add_node["parameters"]["skillsConfig"]["http-request-skill"]["enabled"] is True
+        assert "http-request-skill" in add_node["parameters"]["skills_config"]
+        assert add_node["parameters"]["skills_config"]["http-request-skill"]["enabled"] is True
 
         # Position is anchored to the agent so the frontend places it nearby.
         assert add_node["position"]["anchor_node_id"] == "agent-1"
