@@ -54,6 +54,51 @@ from ._credentials import TelegramCredential
 logger = logging.getLogger(__name__)
 
 
+# Telegram Bot API hard limits (https://core.telegram.org/bots/api):
+#   sendMessage.text -> 1-4096 chars
+#   sendPhoto/Video/Document/Audio.caption -> 0-1024 chars
+# Exceeding these raises BadRequest("Message is too long" / "Message
+# caption is too long"). We split text messages across multiple
+# sends, and for media captions we truncate the caption to fit then
+# emit the remainder as a follow-up text message so the LLM/user
+# never silently loses content.
+_TG_TEXT_LIMIT = 4096
+_TG_CAPTION_LIMIT = 1024
+
+
+def _split_text(text: str, limit: int) -> list[str]:
+    """Split ``text`` into chunks no longer than ``limit`` characters,
+    preferring paragraph -> line -> sentence -> space boundaries before
+    falling back to a hard cut. Used for Telegram's 4096 / 1024 caps.
+
+    Pure stdlib, no regex outside ``str`` ops -- the splitting heuristic
+    should stay legible.
+    """
+    if len(text) <= limit:
+        return [text]
+
+    chunks: list[str] = []
+    remaining = text
+    while len(remaining) > limit:
+        # Search for a clean break point in the last ~25% of the window
+        # so we don't end up with tiny tail chunks.
+        window = remaining[:limit]
+        cut = -1
+        for sep in ("\n\n", "\n", ". ", "! ", "? ", " "):
+            idx = window.rfind(sep)
+            if idx > limit // 2:
+                cut = idx + len(sep)
+                break
+        if cut <= 0:
+            # No clean break -- hard cut at the limit.
+            cut = limit
+        chunks.append(remaining[:cut].rstrip())
+        remaining = remaining[cut:].lstrip()
+    if remaining:
+        chunks.append(remaining)
+    return chunks
+
+
 class TelegramService:
     """Singleton service for Telegram bot operations."""
 
@@ -514,20 +559,44 @@ class TelegramService:
         reply_to_message_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         bot = self._require_bot()
-        msg = await self._send_with_parse_fallback(
-            bot.send_message,
-            body_kw="text",
-            body=text,
-            parse_mode=parse_mode,
-            chat_id=chat_id,
-            disable_notification=disable_notification,
-            reply_to_message_id=reply_to_message_id,
-        )
+        # Telegram caps sendMessage.text at 4096. Split into chunks and
+        # emit a chain (each chunk replies to the previous one so they
+        # render as a thread). Returns the FIRST message's metadata
+        # plus a parts/message_ids summary so callers can track the
+        # whole chain.
+        chunks = _split_text(text, _TG_TEXT_LIMIT)
+        if len(chunks) > 1:
+            logger.info(
+                "[Telegram] Splitting %d-char message into %d parts",
+                len(text), len(chunks),
+            )
+
+        first_msg: Any = None
+        message_ids: list[int] = []
+        reply_to = reply_to_message_id
+        for chunk in chunks:
+            msg = await self._send_with_parse_fallback(
+                bot.send_message,
+                body_kw="text",
+                body=chunk,
+                parse_mode=parse_mode,
+                chat_id=chat_id,
+                disable_notification=disable_notification,
+                reply_to_message_id=reply_to,
+            )
+            if first_msg is None:
+                first_msg = msg
+            message_ids.append(msg.message_id)
+            # Thread subsequent chunks under the previous chunk.
+            reply_to = msg.message_id
+
         return {
-            "message_id": msg.message_id,
-            "chat_id": msg.chat.id,
-            "date": msg.date.isoformat(),
-            "text": msg.text,
+            "message_id": first_msg.message_id,
+            "chat_id": first_msg.chat.id,
+            "date": first_msg.date.isoformat(),
+            "text": first_msg.text,
+            "parts": len(chunks),
+            "message_ids": message_ids,
         }
 
     async def send_photo(

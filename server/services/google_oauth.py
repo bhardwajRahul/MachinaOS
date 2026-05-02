@@ -18,9 +18,31 @@ Docs: https://developers.google.com/identity/protocols/oauth2
 """
 
 import json
+import os
 import time
+import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+# Google's OAuth token endpoint legitimately returns a wider scope set
+# than was requested when the OAuth Client's "Data Access" page lists
+# extra scopes (e.g. ``cloud-platform``) or when ``include_granted_scopes``
+# replays a previously-granted scope. ``oauthlib`` does an exact
+# set-equality comparison and aborts with ``Warning: Scope has changed``.
+# As of 2026 (google-auth-oauthlib 1.2.4, oauthlib still tracking
+# upstream issue #562) there is no constructor flag, context manager,
+# or ``expected_scopes`` argument -- ``OAUTHLIB_RELAX_TOKEN_SCOPE`` is
+# still the only documented relief, read once when
+# ``oauthlib.oauth2.rfc6749.parameters`` is imported. Set BEFORE the
+# ``google_auth_oauthlib.flow`` import below so the env var is in place
+# by the time oauthlib is loaded transitively. ``setdefault`` so an
+# operator can still flip it off via the environment for diagnostics.
+os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
+# The relax flag stops the abort but the library still emits the
+# warning via ``warnings.warn``; silence it to keep the operator log
+# usable. Match by class + message regex; anything else (transport
+# errors, deprecation notices) keeps surfacing.
+warnings.filterwarnings("ignore", message=r"Scope has changed.*")
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
