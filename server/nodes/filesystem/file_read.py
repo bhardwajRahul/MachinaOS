@@ -6,7 +6,7 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
+from services.plugin import ActionNode, NodeContext, NodeUserError, Operation, TaskQueue
 
 
 class FileReadParams(BaseModel):
@@ -49,11 +49,16 @@ class FileReadNode(ActionNode):
         from ._backend import get_backend, normalize_virtual_path
 
         if not params.file_path:
-            raise RuntimeError("file_path is required")
+            raise NodeUserError("file_path is required")
         backend = get_backend(params.model_dump(), ctx.raw)
         file_path = normalize_virtual_path(params.file_path)
-        content = await asyncio.to_thread(
-            backend.read, file_path,
-            offset=params.offset, limit=params.limit,
-        )
+        try:
+            content = await asyncio.to_thread(
+                backend.read, file_path,
+                offset=params.offset, limit=params.limit,
+            )
+        except (FileNotFoundError, IsADirectoryError, ValueError) as e:
+            # File doesn't exist / is a directory / bad offset — the
+            # LLM should retry with corrected input, not fail the run.
+            raise NodeUserError(str(e)) from e
         return {"content": content, "file_path": file_path}

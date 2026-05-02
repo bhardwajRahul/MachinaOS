@@ -41,6 +41,19 @@ from services.plugin.scaling import (
 logger = get_logger(__name__)
 
 
+class NodeUserError(Exception):
+    """Raised by an operation when the failure is *expected and
+    user-correctable* (bad ``old_string`` for an edit, missing required
+    field, unknown enum value, ...). The framework converts it to a
+    structured ``{success: False, error: ...}`` response and logs at
+    WARN level without a stack trace — these are not server bugs, they
+    are signals the LLM (or user) should retry with different input.
+
+    Use plain ``RuntimeError`` / ``Exception`` only for genuinely
+    unexpected failures that warrant a stacktrace in the operator log.
+    """
+
+
 # Sentinel used by Params-less nodes so .model_validate({}) works.
 class _EmptyParams(BaseModel):
     pass
@@ -250,6 +263,15 @@ class BaseNode:
         except PermissionError as e:
             return self._wrap_error(
                 start_time=start_time, error=str(e), error_type="PermissionDeniedError"
+            )
+        except NodeUserError as e:
+            # Expected, user-correctable: log a single WARN line so it
+            # shows up in operator logs, but skip the traceback — the
+            # LLM gets the message in the structured response and can
+            # retry with corrected input.
+            logger.warning("[%s] %s op %s: %s", self.type, op_name, type(e).__name__, e)
+            return self._wrap_error(
+                start_time=start_time, error=str(e), error_type="NodeUserError"
             )
         except Exception as e:
             logger.exception("[%s] operation %s failed", self.type, op_name)

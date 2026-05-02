@@ -52,8 +52,14 @@ class ShellNode(ActionNode):
 
         log = get_logger(__name__)
         backend = get_backend(params.model_dump(), ctx.raw)
+        # "non-blocking" here only meant the asyncio event loop isn't
+        # blocked (the call is offloaded via ``to_thread``). The
+        # subprocess itself is still awaited — long-running commands
+        # are killed at ``timeout`` and must use ``process_manager``
+        # instead. Logging the bare command + timeout to avoid
+        # misleading users into thinking shell runs daemons.
         log.info(
-            "[Shell] Executing (non-blocking): %s (timeout=%ds)",
+            "[Shell] Executing: %s (timeout=%ds)",
             params.command[:200], params.timeout,
         )
         result = await asyncio.to_thread(

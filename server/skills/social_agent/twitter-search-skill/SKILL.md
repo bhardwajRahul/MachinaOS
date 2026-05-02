@@ -4,7 +4,7 @@ description: Search for recent tweets on Twitter/X using keywords, hashtags, men
 allowed-tools: twitter_search
 metadata:
   author: machina
-  version: "2.0"
+  version: "2.1"
   category: social
 
 ---
@@ -27,6 +27,34 @@ Search for tweets matching a query. Returns enriched tweet data via X API v2 exp
 |-------|------|----------|-------------|
 | query | string | Yes | Search query (supports operators) |
 | max_results | integer | No | Number of results (10-100, default: 10) |
+
+### Query Rules (X API constraint — required reading)
+
+**Every query must contain at least one STANDALONE term.** Operator-only queries return HTTP 400 from X.
+
+- **Standalone (can stand alone as the whole query)**: keyword, `"quoted phrase"`, `#hashtag`, `@mention`, `from:user`, `to:user`, `url:domain`, `context:`.
+- **Conjunction-required (must be combined with a standalone term)**: `lang:`, `is:retweet` / `-is:retweet`, `is:reply` / `-is:reply`, `is:quote`, `has:links`, `has:media`, `has:images`, `has:videos`, plain `-negation` of any keyword.
+
+**HTTP 400 — these queries fail:**
+
+| Bad query | Why |
+|---|---|
+| `lang:en` | conjunction-required operator alone |
+| `-is:retweet` | negation alone |
+| `-is:retweet lang:en` | two conjunction-required operators, zero standalone |
+| `has:media` | conjunction-required alone |
+| `is:reply` | conjunction-required alone |
+
+**Valid — these have at least one standalone term:**
+
+| Good query | Standalone anchor |
+|---|---|
+| `python -is:retweet` | keyword `python` |
+| `"machine learning" lang:en` | quoted phrase |
+| `from:elonmusk -is:retweet` | `from:` |
+| `#ai has:media` | hashtag |
+| `@OpenAI lang:en` | mention |
+| `url:"github.com" -is:retweet` | `url:` |
 
 ### Query Operators
 
@@ -199,13 +227,14 @@ Each tweet includes rich data. The `display_text` field has t.co links replaced 
 
 ## Guidelines
 
-1. **Query length**: Keep queries concise for better results
-2. **Max results**: Minimum 10, maximum 100 per request (X API v2 constraint)
-3. **Recent tweets only**: X API v2 free/basic tier searches recent tweets (last 7 days)
-4. **Rate limits**: Be mindful of API rate limits when searching repeatedly
-5. **Combine operators**: Use multiple operators for precise filtering
-6. **Exclude retweets**: Add `-is:retweet` to get original content only
-7. **Language filter**: Add `lang:en` to filter by language
+1. **Always include a standalone term** (keyword / phrase / hashtag / mention / `from:` / `to:` / `url:`) — see "Query Rules" above. Operator-only queries fail with HTTP 400.
+2. **Max results**: Minimum 10, maximum 100 per request (X API v2 constraint).
+3. **Recent tweets only**: X API v2 free/basic tier searches recent tweets (last 7 days).
+4. **Rate limits**: Be mindful of API rate limits when searching repeatedly.
+5. **Combine operators on a base term**: e.g., `python -is:retweet lang:en has:links` — the `python` keyword anchors all three filters.
+6. **Exclude retweets**: append `-is:retweet` to a keyword query (e.g. `python -is:retweet`). Cannot stand alone.
+7. **Language filter**: append `lang:en` to a keyword/`from:`/hashtag query (e.g. `"openai" lang:en`). Cannot stand alone.
+8. **Media filter**: append `has:media` / `has:images` / `has:videos` to a keyword query. Cannot stand alone.
 
 ## Common Use Cases
 
@@ -222,3 +251,9 @@ Each tweet includes rich data. The `display_text` field has t.co links replaced 
 1. Connect the **Twitter Search** node to an AI Agent's `input-tools` handle
 2. Ensure Twitter is connected (authenticated via OAuth in Credentials Modal)
 3. Your X Developer account must have appropriate API access level
+
+## References
+
+- [X API — Build a query](https://docs.x.com/x-api/posts/search/integrate/build-a-query)
+- [X API — Operators reference](https://docs.x.com/x-api/posts/search/integrate/operators)
+- [X API — /2/tweets/search/recent](https://docs.x.com/x-api/posts/search-recent-posts)

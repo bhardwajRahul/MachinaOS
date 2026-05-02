@@ -6,7 +6,7 @@ from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
+from services.plugin import ActionNode, NodeContext, NodeUserError, Operation, TaskQueue
 
 
 class FsSearchParams(BaseModel):
@@ -61,7 +61,7 @@ class FsSearchNode(ActionNode):
 
         if params.mode == "glob":
             if not params.pattern:
-                raise RuntimeError("pattern is required for glob mode")
+                raise NodeUserError("pattern is required for glob mode")
             matches = await asyncio.to_thread(
                 backend.glob_info, params.pattern, path=path,
             )
@@ -74,12 +74,12 @@ class FsSearchNode(ActionNode):
 
         if params.mode == "grep":
             if not params.pattern:
-                raise RuntimeError("pattern is required for grep mode")
+                raise NodeUserError("pattern is required for grep mode")
             result = await asyncio.to_thread(
                 backend.grep_raw, params.pattern, path=path,
             )
             if isinstance(result, str):
-                raise RuntimeError(result)
+                raise NodeUserError(result)
             return {
                 "path": path,
                 "pattern": params.pattern,
@@ -87,4 +87,4 @@ class FsSearchNode(ActionNode):
                 "count": len(result),
             }
 
-        raise RuntimeError(f"Unknown mode: {params.mode}")
+        raise NodeUserError(f"Unknown mode: {params.mode}")

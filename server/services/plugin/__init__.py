@@ -25,7 +25,7 @@ Temporal integration (11.F): every subclass exposes
 
 from __future__ import annotations
 
-from services.plugin.base import BaseNode
+from services.plugin.base import BaseNode, NodeUserError
 from services.plugin.action import ActionNode
 from services.plugin.trigger import TriggerNode
 from services.plugin.tool import ToolNode
@@ -49,6 +49,7 @@ from services.plugin.interceptor import Interceptor, InterceptorChain
 
 __all__ = [
     "BaseNode",
+    "NodeUserError",
     "ActionNode",
     "TriggerNode",
     "ToolNode",

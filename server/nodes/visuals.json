@@ -297,7 +297,7 @@
   "processManager": {
     "icon": "⚙️",
     "color": "#bd93f9",
-    "skill": "bash-skill"
+    "skill": "process-manager-skill"
   },
   "productivity_agent": {
     "icon": "⏰",
@@ -318,7 +318,7 @@
   },
   "pythonExecutor": {
     "icon": "asset:python",
-    "skill": "agentic-loop-skill"
+    "skill": "python-skill"
   },
   "rlm_agent": {
     "icon": "🧠",

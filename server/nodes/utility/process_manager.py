@@ -6,7 +6,7 @@ from typing import Any, Dict, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
+from services.plugin import ActionNode, NodeContext, NodeUserError, Operation, TaskQueue
 
 
 _START = {"displayOptions": {"show": {"operation": ["start"]}}}
@@ -74,9 +74,14 @@ class ProcessManagerNode(ActionNode):
             """Raise on service-level failure envelopes so the plugin
             wrapper returns success=False instead of burying a
             ``{"success": False, "error": "..."}`` inside the result dict.
+
+            ``NodeUserError`` (vs ``RuntimeError``) so the framework logs
+            a single WARN line — these are user/LLM-correctable
+            (process-not-found, command-not-found, bad cwd, ...), not
+            server bugs warranting a stack trace.
             """
             if isinstance(response, dict) and response.get("success") is False:
-                raise RuntimeError(response.get("error") or "process operation failed")
+                raise NodeUserError(response.get("error") or "process operation failed")
             return response
 
         if op == "start":
@@ -96,7 +101,7 @@ class ProcessManagerNode(ActionNode):
             return {"processes": svc.list_processes(workflow_id)}
         if op == "get_output":
             return _unwrap(svc.get_output(name, workflow_id, params.stream, params.tail, 0))
-        raise RuntimeError(f"Unknown operation: {op}")
+        raise NodeUserError(f"Unknown operation: {op}")
 
 
 def _clean(val: str) -> str:

@@ -23,8 +23,16 @@ class TwitterSearchParams(BaseModel):
     query: str = Field(
         default="",
         description=(
-            "Twitter search query (operators: keywords, hashtags, @mentions, "
-            "from:user, -exclude, OR, lang:, has:*, is:*)"
+            "X / Twitter search query for /2/tweets/search/recent. "
+            "MUST include at least one STANDALONE term: a keyword, "
+            "quoted \"phrase\", #hashtag, @mention, from:user, to:user, "
+            "or url:domain. "
+            "Operators like lang:, -is:retweet, is:reply, has:media, "
+            "has:links are CONJUNCTION-REQUIRED -- they only work when "
+            "combined with a standalone term. Operator-only queries "
+            "(e.g. '-is:retweet lang:en' or 'has:media') return HTTP 400. "
+            "Valid: 'python -is:retweet', '\"machine learning\" lang:en', "
+            "'from:elonmusk -is:retweet', '#ai has:media'."
         ),
     )
     max_results: int = Field(

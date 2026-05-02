@@ -6,7 +6,7 @@ from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
+from services.plugin import ActionNode, NodeContext, NodeUserError, Operation, TaskQueue
 
 
 _WRITE = {"displayOptions": {"show": {"operation": ["write"]}}}
@@ -56,7 +56,7 @@ class FileModifyNode(ActionNode):
         from ._backend import get_backend, normalize_virtual_path
 
         if not params.file_path:
-            raise RuntimeError("file_path is required")
+            raise NodeUserError("file_path is required")
         backend = get_backend(params.model_dump(), ctx.raw)
         file_path = normalize_virtual_path(params.file_path)
 
@@ -78,24 +78,24 @@ class FileModifyNode(ActionNode):
             try:
                 result = await asyncio.to_thread(_do_write)
             except (OSError, ValueError) as e:
-                raise RuntimeError(str(e)) from e
+                raise NodeUserError(str(e)) from e
             if result.error:
-                raise RuntimeError(result.error)
+                raise NodeUserError(result.error)
             return {"operation": "write", "file_path": result.path or file_path}
 
         if params.operation == "edit":
             if not params.old_string:
-                raise RuntimeError("old_string is required for edit")
+                raise NodeUserError("old_string is required for edit")
             result = await asyncio.to_thread(
                 backend.edit, file_path, params.old_string, params.new_string,
                 replace_all=params.replace_all,
             )
             if result.error:
-                raise RuntimeError(result.error)
+                raise NodeUserError(result.error)
             return {
                 "operation": "edit",
                 "file_path": result.path or file_path,
                 "occurrences": result.occurrences,
             }
 
-        raise RuntimeError(f"Unknown operation: {params.operation}")
+        raise NodeUserError(f"Unknown operation: {params.operation}")

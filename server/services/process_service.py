@@ -102,6 +102,24 @@ class ProcessService:
             await self.stop(name, workflow_id)
 
         argv = shlex.split(command)
+        # Resolve argv[0] to an absolute path. Canonical idiom in this
+        # codebase (browser_service, claude_code_service, claude_oauth,
+        # himalaya_service): shutil.which honours PATHEXT on Windows so
+        # `npm` -> `C:\...\npm.cmd`. Without this, asyncio.create_subprocess_exec
+        # fails with `WinError 2` because CreateProcessW does not apply
+        # PATHEXT to a bare argv[0]. CreateProcessW launches .cmd/.bat
+        # directly when given an absolute path, so no `cmd /c` wrap is
+        # needed.
+        resolved = shutil.which(argv[0]) if argv else None
+        if resolved is None:
+            return {
+                "success": False,
+                "error": (
+                    f"Command not found: '{argv[0] if argv else ''}'. "
+                    "Check spelling or ensure the binary is on PATH."
+                ),
+            }
+        argv[0] = resolved
         env = {**os.environ, "PYTHONUNBUFFERED": "1"}
         from core.config import Settings
         workspace_base = Path(Settings().workspace_base_resolved).resolve()
