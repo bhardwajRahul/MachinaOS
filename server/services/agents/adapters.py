@@ -67,10 +67,20 @@ class ToolAdapter:
 
     @staticmethod
     def _wrap(tool: StructuredTool, config: Dict, workflow_id: str, broadcaster) -> StructuredTool:
-        """Replace placeholder func with a real async executor."""
+        """Replace placeholder func with a real async executor.
+
+        Tool-node status lifecycle (executing/success/error) is owned by
+        ``handlers.tools.execute_tool`` — the same single source of
+        truth that ``services.ai`` uses. We only emit DeepAgent-side
+        timing logs here.
+        """
         tool_name = tool.name
-        tool_node_id = config.get('node_id')
         tool_node_type = config.get('node_type', '')
+
+        # ``broadcaster`` is intentionally unused now — kept in the
+        # signature for call-site compatibility until DeepAgentService
+        # stops passing it.
+        del broadcaster  # noqa: F841
 
         async def _execute(**kwargs) -> Any:
             import time
@@ -79,13 +89,6 @@ class ToolAdapter:
             logger.info("[DeepAgent] Tool call: %s (type=%s) args=%s",
                         tool_name, tool_node_type, {k: str(v)[:200] for k, v in kwargs.items()})
             t0 = time.time()
-
-            if tool_node_id and broadcaster:
-                await broadcaster.update_node_status(
-                    tool_node_id, "executing",
-                    {"message": f"Executing {tool_name}"},
-                    workflow_id=workflow_id,
-                )
 
             cfg = {**config, 'workflow_id': workflow_id}
             try:
@@ -97,22 +100,10 @@ class ToolAdapter:
                     success = True
                 logger.info("[DeepAgent] Tool done: %s (%.2fs) success=%s",
                             tool_name, elapsed, success)
-                if tool_node_id and broadcaster:
-                    await broadcaster.update_node_status(
-                        tool_node_id, "success",
-                        {"message": f"{tool_name} completed ({elapsed:.1f}s)"},
-                        workflow_id=workflow_id,
-                    )
                 return result
             except Exception as e:
                 elapsed = time.time() - t0
                 logger.error("[DeepAgent] Tool failed: %s (%.2fs) error=%s", tool_name, elapsed, e)
-                if tool_node_id and broadcaster:
-                    await broadcaster.update_node_status(
-                        tool_node_id, "error",
-                        {"message": str(e)},
-                        workflow_id=workflow_id,
-                    )
                 return {"error": str(e)}
 
         return StructuredTool.from_function(

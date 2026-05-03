@@ -7,7 +7,12 @@
     "dev": "python -m uvicorn main:app --host 127.0.0.1 --port ${PORT:-3010} --reload --reload-dir . --reload-exclude \"*.pyc\" --reload-exclude \"__pycache__\" --log-level warning"
   },
   "dependencies": {
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.6.1",
+    "clsx": "^2.1.1",
     "express": "^5.2.1",
-    "morgan": "^1.10.1"
+    "morgan": "^1.10.1",
+    "tailwind-merge": "^3.5.0",
+    "three": "^0.184.0"
   }
 }

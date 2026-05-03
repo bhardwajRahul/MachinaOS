@@ -367,7 +367,7 @@ interface WebSocketContextValue {
   unpauseWhatsAppRateLimit: () => Promise<{ success: boolean; stats?: RateLimitStats; error?: string }>;
 
   // Memory and Skill Operations
-  clearMemory: (sessionId: string, clearLongTerm?: boolean) => Promise<{ success: boolean; default_content?: string; cleared_vector_store?: boolean; error?: string }>;
+  clearMemory: (sessionId: string, clearLongTerm?: boolean, workflowId?: string) => Promise<{ success: boolean; default_content?: string; cleared_vector_store?: boolean; cleared_todo_keys?: string[]; error?: string }>;
   resetSkill: (skillName: string) => Promise<{ success: boolean; original_content?: string; is_builtin?: boolean; error?: string }>;
 }
 
@@ -983,8 +983,21 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           break;
 
         case 'console_log':
-          // Handle console log entries from Console nodes
+          // Handle console log entries from Console nodes. Scope to the
+          // currently-open workflow: a log carrying a different workflow_id
+          // belongs to a parallel run the user isn't viewing right now,
+          // and must not bleed into this panel. Logs without workflow_id
+          // (legacy / non-workflow contexts) still render so we don't
+          // hide debug output during transition.
           if (data) {
+            const activeWorkflowId = useAppStore.getState().currentWorkflow?.id;
+            if (
+              data.workflow_id &&
+              activeWorkflowId &&
+              data.workflow_id !== activeWorkflowId
+            ) {
+              break;
+            }
             const logEntry: ConsoleLogEntry = {
               node_id: data.node_id || '',
               label: data.label || 'Console',
@@ -1299,7 +1312,13 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             };
 
             ws.addEventListener('message', handler);
-            ws.send(JSON.stringify({ type: 'get_chat_messages', session_id: 'default', request_id: requestId }));
+            // Scope to the currently-open workflow if any. session_id is
+            // re-used as the workflow identifier on the chat side so the
+            // panel only shows messages tied to this workflow. Falls
+            // back to "default" when no workflow is selected (initial
+            // bootstrap before the user opens any workflow).
+            const workflowId = useAppStore.getState().currentWorkflow?.id || 'default';
+            ws.send(JSON.stringify({ type: 'get_chat_messages', session_id: workflowId, request_id: requestId }));
           });
 
           if (chatResponse.success && chatResponse.messages) {
@@ -1332,7 +1351,15 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             };
 
             ws.addEventListener('message', handler);
-            ws.send(JSON.stringify({ type: 'get_console_logs', limit: 100, request_id: consoleRequestId }));
+            // Scope to the currently-open workflow so the panel only
+            // shows console output from this workflow's runs.
+            const consoleWorkflowId = useAppStore.getState().currentWorkflow?.id;
+            ws.send(JSON.stringify({
+              type: 'get_console_logs',
+              limit: 100,
+              workflow_id: consoleWorkflowId,
+              request_id: consoleRequestId,
+            }));
           });
 
           if (consoleResponse.success && consoleResponse.logs) {
@@ -1493,12 +1520,16 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setLastWhatsAppMessage(null);
   }, []);
 
-  // Clear console logs (both local state and database)
+  // Clear console logs (both local state and database). Scoped to
+  // the currently-open workflow so other workflows' history survives.
   const clearConsoleLogs = useCallback(() => {
     setConsoleLogs([]);
-    // Also clear from database via direct WebSocket send
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'clear_console_logs' }));
+      const workflowId = useAppStore.getState().currentWorkflow?.id;
+      wsRef.current.send(JSON.stringify({
+        type: 'clear_console_logs',
+        workflow_id: workflowId,
+      }));
     }
   }, []);
 
@@ -1511,15 +1542,73 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, []);
 
-  // Clear chat messages (both local state and database)
-  // Uses direct WebSocket send to avoid dependency on sendRequest (which is defined later)
+  // Clear chat messages (both local state and database). Scoped to
+  // the currently-open workflow (session_id == workflow_id on the
+  // chat side); other workflows' history survives.
+  // Uses direct WebSocket send to avoid dependency on sendRequest (which is defined later).
   const clearChatMessages = useCallback(() => {
     setChatMessages([]);
-    // Also clear from database via direct WebSocket send
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'clear_chat_messages', session_id: 'default' }));
+      const workflowId = useAppStore.getState().currentWorkflow?.id || 'default';
+      wsRef.current.send(JSON.stringify({
+        type: 'clear_chat_messages',
+        session_id: workflowId,
+      }));
     }
   }, []);
+
+  // Refetch chat + console panels when the user switches workflow.
+  // Both are scoped on the backend (chat by session_id == workflow id,
+  // console by workflow_id). Resets local state first so the panel
+  // doesn't briefly show the previous workflow's content while the
+  // refetch is in flight. The initial bootstrap inside ws.onopen runs
+  // before this effect with a "default" / null id; this effect then
+  // refires once ``currentWorkflowId`` resolves to a real value.
+  useEffect(() => {
+    if (!isReady || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      return;
+    }
+    setChatMessages([]);
+    setConsoleLogs([]);
+    const sessionId = currentWorkflowId || 'default';
+    const ws = wsRef.current;
+
+    const chatRequestId = `chat_switch_${Date.now()}`;
+    const consoleRequestId = `console_switch_${Date.now()}`;
+    const handler = (event: MessageEvent) => {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.request_id === chatRequestId && msg.success && Array.isArray(msg.messages)) {
+          setChatMessages(msg.messages.map((m: any) => ({
+            role: m.role as 'user' | 'assistant',
+            message: m.message,
+            timestamp: m.timestamp,
+          })));
+        } else if (msg.request_id === consoleRequestId && msg.success && Array.isArray(msg.logs)) {
+          setConsoleLogs(msg.logs.map((log: any) => ({
+            node_id: log.node_id,
+            label: log.label,
+            timestamp: log.timestamp,
+            data: log.data,
+            formatted: log.formatted,
+            format: log.format,
+            workflow_id: log.workflow_id,
+            source_node_id: log.source_node_id,
+            source_node_type: log.source_node_type,
+            source_node_label: log.source_node_label,
+          })));
+        }
+      } catch {
+        // Ignore parse errors — handler is best-effort.
+      }
+    };
+    ws.addEventListener('message', handler);
+    ws.send(JSON.stringify({ type: 'get_chat_messages', session_id: sessionId, request_id: chatRequestId }));
+    ws.send(JSON.stringify({ type: 'get_console_logs', limit: 100, workflow_id: currentWorkflowId, request_id: consoleRequestId }));
+    return () => {
+      ws.removeEventListener('message', handler);
+    };
+  }, [currentWorkflowId, isReady]);
 
   // Derive current workflow's node statuses (n8n pattern). Subscribes
   // to the Zustand store so context consumers still re-render on
@@ -1657,13 +1746,16 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     // Add to local messages immediately for UI feedback
     setChatMessages(prev => [...prev, chatMessage]);
 
-    // Send to backend to dispatch to chatTrigger nodes (also saves to database)
+    // Send to backend to dispatch to chatTrigger nodes (also saves to database).
+    // session_id is the workflow id when one is open, "default" otherwise --
+    // this is what scopes the persisted chat history to a single workflow.
     try {
+      const workflowId = useAppStore.getState().currentWorkflow?.id || 'default';
       await sendRequest('send_chat_message', {
         message,
         role: 'user',
         node_id: nodeId,  // Target specific chatTrigger node if specified
-        session_id: 'default',
+        session_id: workflowId,
         timestamp
       });
     } catch (error) {
@@ -2376,17 +2468,20 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const clearMemoryAsync = useCallback(async (
     sessionId: string,
-    clearLongTerm = false
-  ): Promise<{ success: boolean; default_content?: string; cleared_vector_store?: boolean; error?: string }> => {
+    clearLongTerm = false,
+    workflowId?: string
+  ): Promise<{ success: boolean; default_content?: string; cleared_vector_store?: boolean; cleared_todo_keys?: string[]; error?: string }> => {
     try {
       const response = await sendRequest<any>('clear_memory', {
         session_id: sessionId,
-        clear_long_term: clearLongTerm
+        clear_long_term: clearLongTerm,
+        workflow_id: workflowId,
       });
       return {
         success: response.success !== false,
         default_content: response.default_content,
         cleared_vector_store: response.cleared_vector_store,
+        cleared_todo_keys: response.cleared_todo_keys,
         error: response.error
       };
     } catch (error: any) {

@@ -910,14 +910,24 @@ class Database:
             logger.error("Failed to add console log", error=str(e))
             return False
 
-    async def get_console_logs(self, limit: int = 100) -> List[Dict[str, Any]]:
-        """Get console logs, optionally limited to last N entries."""
+    async def get_console_logs(
+        self, limit: int = 100, workflow_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Get console logs, optionally limited and scoped to a workflow.
+
+        ``workflow_id=None`` returns the global stream (legacy behavior, used
+        by the initial WebSocket-bootstrap fetch before any workflow is
+        selected). When a workflow is open, the frontend passes its id so
+        the panel only shows logs from that workflow.
+        """
         from models.database import ConsoleLog
         import json
 
         try:
             async with self.get_session() as session:
                 stmt = select(ConsoleLog).order_by(ConsoleLog.created_at.desc()).limit(limit)
+                if workflow_id is not None:
+                    stmt = stmt.where(ConsoleLog.workflow_id == workflow_id)
 
                 result = await session.execute(stmt)
                 logs = result.scalars().all()
@@ -944,13 +954,20 @@ class Database:
             logger.error("Failed to get console logs", error=str(e))
             return []
 
-    async def clear_console_logs(self) -> int:
-        """Clear all console logs. Returns count deleted."""
+    async def clear_console_logs(self, workflow_id: Optional[str] = None) -> int:
+        """Clear console logs, optionally scoped to a single workflow.
+
+        ``workflow_id=None`` clears every row (used for the global "Clear"
+        action and one-shot maintenance). When a workflow is open, the
+        frontend passes its id so other workflows' history is preserved.
+        """
         from models.database import ConsoleLog
 
         try:
             async with self.get_session() as session:
                 stmt = select(ConsoleLog)
+                if workflow_id is not None:
+                    stmt = stmt.where(ConsoleLog.workflow_id == workflow_id)
                 result = await session.execute(stmt)
                 logs = result.scalars().all()
 
@@ -959,7 +976,10 @@ class Database:
                     await session.delete(log)
 
                 await session.commit()
-                logger.info(f"[Console] Cleared {count} console logs")
+                logger.info(
+                    f"[Console] Cleared {count} console logs"
+                    + (f" (workflow={workflow_id})" if workflow_id else " (all)")
+                )
                 return count
 
         except Exception as e:

@@ -1707,10 +1707,17 @@ class AIService:
             logger.debug(f"[LangGraph] Creating {provider} model: {model}")
             chat_model = self.create_model(provider, api_key, model, temperature, max_tokens, thinking_config, proxy_url)
 
-            # Build initial messages for state
+            # Build initial messages for state. The SystemMessage is
+            # PREPENDED after tool building (below), because the
+            # delegation-guidance block at the end of the tool-building
+            # section grows ``system_message`` to include the
+            # ``Available agents: delegate_to_*`` list and the
+            # ``task``/``context`` schema description. Appending the
+            # SystemMessage here would lock in the pre-update string
+            # and the LLM would never see the delegation contract,
+            # which is exactly what previously broke ``aiAgent``-driven
+            # delegation through the ``input-tools`` handle.
             initial_messages: List[BaseMessage] = []
-            if system_message:
-                initial_messages.append(SystemMessage(content=system_message))
 
             # Add memory history from connected simpleMemory node (markdown-based)
             session_id = None
@@ -1801,7 +1808,17 @@ class AIService:
                         f"Available agents: {', '.join(delegate_names)}"
                     )
 
-            # Create tool executor callback
+            # Now that ``system_message`` is final (skill prompt + delegation
+            # guidance both folded in), prepend it as the first message.
+            # See the comment at the original ``initial_messages`` declaration
+            # for why this can't happen earlier.
+            if system_message:
+                initial_messages.insert(0, SystemMessage(content=system_message))
+
+            # Create tool executor callback. Tool-node status lifecycle
+            # (executing/success/error) is owned by ``handlers.tools.execute_tool``
+            # — this closure only emits the *parent agent's* phase
+            # broadcasts (``executing_tool`` / ``tool_completed``).
             async def tool_executor(tool_name: str, tool_args: Dict) -> Any:
                 """Execute a tool by name."""
                 from services.handlers.tools import execute_tool
@@ -1809,35 +1826,22 @@ class AIService:
                 config = tool_configs.get(tool_name, {})
                 tool_node_id = config.get('node_id')
 
-                # Log tool execution details for debugging glow animation
                 logger.debug(f"[LangGraph] Executing tool: {tool_name} (args={tool_args})")
-                logger.debug(f"[LangGraph] Available tool configs: {list(tool_configs.keys())}")
-                logger.debug(f"[LangGraph] Tool node_id={tool_node_id}, workflow_id={workflow_id}, broadcaster={'yes' if broadcaster else 'no'}")
+                logger.debug(f"[LangGraph] Tool node_id={tool_node_id}, workflow_id={workflow_id}")
 
-                # Broadcast executing status to the AI Agent node
+                # Parent-agent phase broadcast (does not touch tool node).
                 await broadcast_status("executing_tool", {
                     "message": f"Executing tool: {tool_name}",
                     "tool_name": tool_name,
                     "tool_args": tool_args
                 })
 
-                # Also broadcast executing status directly to the tool node so it glows
-                if tool_node_id and broadcaster:
-                    await broadcaster.update_node_status(
-                        tool_node_id,
-                        "executing",
-                        {"message": f"Executing {tool_name}"},
-                        workflow_id=workflow_id
-                    )
-
-                # Include workflow_id in config so tool handlers can broadcast with proper scoping
+                # Inject services + graph context so execute_tool can scope its
+                # broadcasts and nested agents can execute with their own tools.
                 config['workflow_id'] = workflow_id
-
-                # For nested agent delegation: inject services and graph context
-                # These allow child agents to execute with their own tools
                 config['ai_service'] = self
                 config['database'] = self.database
-                config['parent_node_id'] = node_id  # For delegation result tracking
+                config['parent_node_id'] = node_id
                 if context:
                     config['nodes'] = context.get('nodes', [])
                     config['edges'] = context.get('edges', [])
@@ -1846,36 +1850,17 @@ class AIService:
                 try:
                     result = await execute_tool(tool_name, tool_args, config)
 
-                    # Broadcast completion to AI Agent node
                     await broadcast_status("tool_completed", {
                         "message": f"Tool completed: {tool_name}",
                         "tool_name": tool_name,
                         "result_preview": str(result)[:100]
                     })
 
-                    # Broadcast success status to the tool node
-                    if tool_node_id and broadcaster:
-                        await broadcaster.update_node_status(
-                            tool_node_id,
-                            "success",
-                            {"message": f"{tool_name} completed", "result": result},
-                            workflow_id=workflow_id
-                        )
-
                     return result
 
                 except Exception as e:
                     error_msg = str(e)
                     logger.error(f"[LangGraph] Tool execution failed: {tool_name}", error=error_msg)
-
-                    # Broadcast error status to the tool node so UI shows failure
-                    if tool_node_id and broadcaster:
-                        await broadcaster.update_node_status(
-                            tool_node_id,
-                            "error",
-                            {"message": f"{tool_name} failed", "error": error_msg},
-                            workflow_id=workflow_id
-                        )
 
                     # Re-raise to let LangGraph handle the error
                     raise
@@ -2302,68 +2287,36 @@ class AIService:
                 # Use LangGraph for tool execution (like AI Agent)
                 logger.debug(f"[ChatAgent] Using LangGraph with {len(all_tools)} tools")
 
-                # Create tool executor callback - same pattern as AI Agent
-                # Uses handlers/tools.py execute_tool() for actual execution
+                # Create tool executor callback. Tool-node status lifecycle
+                # is owned by ``handlers.tools.execute_tool`` (single source
+                # of truth, shared with execute_agent's tool_executor).
                 async def chat_tool_executor(tool_name: str, tool_args: Dict) -> Any:
                     """Execute a tool by name using handlers/tools.py (same as AI Agent)."""
                     from services.handlers.tools import execute_tool
 
                     logger.debug(f"[ChatAgent] Executing tool: {tool_name}, args={tool_args}")
 
-                    # Get tool node config (contains node_id, node_type, parameters)
                     config = tool_node_configs.get(tool_name, {})
                     tool_node_id = config.get('node_id')
                     logger.debug(f"[ChatAgent] Tool config: node_id={tool_node_id}, node_type={config.get('node_type')}, workflow_id={workflow_id}")
 
-                    # Broadcast executing status to tool node for glow effect
-                    if tool_node_id and broadcaster:
-                        logger.debug(f"[ChatAgent] Broadcasting 'executing' status to node {tool_node_id}")
-                        await broadcaster.update_node_status(
-                            tool_node_id,
-                            "executing",
-                            {"message": f"Executing {tool_name}"},
-                            workflow_id=workflow_id
-                        )
-
-                    # Include workflow_id in config so tool handlers can broadcast with proper scoping
-                    # This is needed for Android toolkit to broadcast status to connected service nodes
+                    # Inject services + graph context so execute_tool can scope its
+                    # broadcasts and nested agents can execute with their own tools.
                     config['workflow_id'] = workflow_id
-
-                    # For nested agent delegation: inject services and graph context
-                    # These allow child agents to execute with their own tools
                     config['ai_service'] = self
                     config['database'] = self.database
-                    config['parent_node_id'] = node_id  # For delegation result tracking
+                    config['parent_node_id'] = node_id
                     if context:
                         config['nodes'] = context.get('nodes', [])
                         config['edges'] = context.get('edges', [])
                         config['workspace_dir'] = context.get('workspace_dir', '')
 
                     try:
-                        # Execute via handlers/tools.py - same pattern as AI Agent
                         result = await execute_tool(tool_name, tool_args, config)
                         logger.debug(f"[ChatAgent] Tool executed successfully: {tool_name}")
-
-                        # Broadcast success to tool node
-                        if tool_node_id and broadcaster:
-                            await broadcaster.update_node_status(
-                                tool_node_id,
-                                "success",
-                                {"message": f"{tool_name} completed", "result": result},
-                                workflow_id=workflow_id
-                            )
                         return result
-
                     except Exception as e:
                         logger.error(f"[ChatAgent] Tool execution failed: {tool_name}", error=str(e))
-                        # Broadcast error to tool node
-                        if tool_node_id and broadcaster:
-                            await broadcaster.update_node_status(
-                                tool_node_id,
-                                "error",
-                                {"message": f"{tool_name} failed", "error": str(e)},
-                                workflow_id=workflow_id
-                            )
                         return {"error": str(e)}
 
                 # Build LangGraph agent with all tools

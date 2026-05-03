@@ -1,6 +1,6 @@
 {
-  "version": "2026.04",
-  "last_updated": "2026-04-03",
+  "version": "2026.05",
+  "last_updated": "2026-05-02",
   "_description": "LLM provider defaults. Connection config (base_url, models_endpoint) drives both native SDK and LangChain paths. Model specs auto-enriched by model_registry.json (OpenRouter cache).",
 
   "agent": {
@@ -14,13 +14,14 @@
 
   "providers": {
     "openai": {
-      "default_model": "gpt-5.4",
+      "default_model": "gpt-5.5",
       "detection_patterns": ["gpt", "openai", "o1", "o3", "o4"],
       "base_url": "https://api.openai.com/v1",
       "models_endpoint": "https://api.openai.com/v1/models",
       "api_key_param": "openai_api_key",
       "max_tokens_param": "max_tokens",
       "max_output_tokens": {
+        "gpt-5.5": 128000,
         "gpt-5.4": 128000,
         "gpt-5.3-chat": 16384,
         "gpt-5.2": 128000,
@@ -29,6 +30,7 @@
         "_default": 16384
       },
       "context_length": {
+        "gpt-5.5": 1050000,
         "gpt-5.4": 1050000,
         "gpt-5.3-chat": 128000,
         "gpt-5.2": 400000,
@@ -68,29 +70,32 @@
       "temperature_range": [0.0, 1.0]
     },
     "gemini": {
-      "default_model": "gemini-2.5-flash",
+      "default_model": "gemini-flash-latest",
       "detection_patterns": ["gemini", "google"],
       "base_url": "https://generativelanguage.googleapis.com/v1beta",
       "models_endpoint": "https://generativelanguage.googleapis.com/v1beta/models",
       "api_key_param": "google_api_key",
       "max_tokens_param": "max_output_tokens",
+      "_alias_note": "gemini-flash-latest / gemini-pro-latest are family-level rolling aliases (cross-generation, 2-week notice on rotation per https://ai.google.dev/gemini-api/docs/changelog). Bare gemini-2.5-flash / gemini-2.5-pro are themselves rolling within their generation; -001/-002 suffixes pin a specific revision. Currently flash-latest -> gemini-3-flash-preview, pro-latest -> gemini-3.1-pro-preview.",
       "max_output_tokens": {
+        "gemini-flash-latest": 65536,
+        "gemini-pro-latest": 65536,
         "gemini-3.1-pro-preview": 65536,
         "gemini-3-flash-preview": 65536,
-        "gemini-3-pro-preview": 65536,
         "gemini-2.5-pro": 65536,
         "gemini-2.5-flash": 65535,
         "_default": 8192
       },
       "context_length": {
+        "gemini-flash-latest": 1048576,
+        "gemini-pro-latest": 1048576,
         "gemini-3.1-pro-preview": 1048576,
         "gemini-3-flash-preview": 1048576,
-        "gemini-3-pro-preview": 1048576,
         "gemini-2.5-pro": 1048576,
         "gemini-2.5-flash": 1048576,
         "_default": 1048576
       },
-      "thinking_models": ["gemini-2.5", "gemini-3"],
+      "thinking_models": ["gemini-2.5", "gemini-3", "gemini-flash-latest", "gemini-pro-latest"],
       "thinking_type": "budget",
       "temperature_range": [0.0, 2.0]
     },
@@ -111,26 +116,26 @@
       "temperature_range": [0.0, 2.0]
     },
     "groq": {
-      "default_model": "llama-4-scout",
+      "default_model": "meta-llama/llama-4-scout-17b-16e-instruct",
       "detection_patterns": ["groq"],
       "base_url": "https://api.groq.com/openai/v1",
       "models_endpoint": "https://api.groq.com/openai/v1/models",
       "api_key_param": "api_key",
       "max_tokens_param": "max_tokens",
       "max_output_tokens": {
-        "llama-4-scout": 8192,
-        "llama-4-maverick": 16384,
-        "llama-3.3-70b": 32768,
-        "llama-3.1-8b": 131072,
-        "qwen3-32b": 40960,
+        "meta-llama/llama-4-scout-17b-16e-instruct": 8192,
+        "meta-llama/llama-4-maverick-17b-128e-instruct": 16384,
+        "llama-3.3-70b-versatile": 32768,
+        "llama-3.1-8b-instant": 131072,
+        "qwen/qwen3-32b": 40960,
         "_default": 8192
       },
       "context_length": {
-        "llama-4-scout": 131072,
-        "llama-4-maverick": 131072,
-        "llama-3.3-70b": 131072,
-        "llama-3.1-8b": 131072,
-        "qwen3-32b": 131072,
+        "meta-llama/llama-4-scout-17b-16e-instruct": 131072,
+        "meta-llama/llama-4-maverick-17b-128e-instruct": 131072,
+        "llama-3.3-70b-versatile": 131072,
+        "llama-3.1-8b-instant": 131072,
+        "qwen/qwen3-32b": 131072,
         "_default": 131072
       },
       "thinking_models": ["qwen3"],
@@ -138,18 +143,20 @@
       "temperature_range": [0.0, 2.0]
     },
     "cerebras": {
-      "default_model": "llama3.1-8b",
-      "detection_patterns": ["cerebras", "llama3.1", "qwen-3-235b"],
+      "default_model": "gpt-oss-120b",
+      "detection_patterns": ["cerebras", "gpt-oss", "llama3.1", "qwen-3-235b"],
       "base_url": "https://api.cerebras.ai/v1",
       "models_endpoint": "https://api.cerebras.ai/v1/models",
       "api_key_param": "api_key",
       "max_tokens_param": "max_tokens",
       "max_output_tokens": {
+        "gpt-oss-120b": 8192,
         "qwen-3-235b": 8192,
         "llama3.1-8b": 8192,
         "_default": 8192
       },
       "context_length": {
+        "gpt-oss-120b": 128000,
         "qwen-3-235b": 32768,
         "llama3.1-8b": 128000,
         "_default": 128000
@@ -159,17 +166,19 @@
       "temperature_range": [0.0, 1.5]
     },
     "xai": {
-      "default_model": "grok-3",
+      "default_model": "grok-4.3",
       "detection_patterns": ["grok", "xai"],
       "base_url": "https://api.x.ai/v1",
       "models_endpoint": "https://api.x.ai/v1/models",
       "api_key_param": "api_key",
       "max_tokens_param": "max_tokens",
       "max_output_tokens": {
+        "grok-4.3": 131072,
         "grok-3": 131072,
         "_default": 8192
       },
       "context_length": {
+        "grok-4.3": 256000,
         "grok-3": 131072,
         "_default": 131072
       },
@@ -197,21 +206,23 @@
       "temperature_range": [0.0, 2.0]
     },
     "kimi": {
-      "default_model": "kimi-k2.5",
+      "default_model": "kimi-k2.6",
       "detection_patterns": ["kimi", "moonshot"],
       "base_url": "https://api.moonshot.ai/v1",
       "models_endpoint": "https://api.moonshot.ai/v1/models",
       "api_key_param": "api_key",
       "max_tokens_param": "max_tokens",
       "supported_params": ["temperature", "max_tokens", "top_p", "frequency_penalty", "presence_penalty", "stop", "seed", "tools", "tool_choice", "response_format"],
-      "thinking_default_on": ["kimi-k2.5", "kimi-k2-thinking", "kimi-k2-0905-preview"],
-      "fixed_temperature": {"kimi-k2.5": 0.6, "kimi-k2-thinking": 1.0, "kimi-k2-0905-preview": 0.6},
+      "thinking_default_on": ["kimi-k2.6", "kimi-k2.5", "kimi-k2-thinking", "kimi-k2-0905-preview"],
+      "fixed_temperature": {"kimi-k2.6": 0.6, "kimi-k2.5": 0.6, "kimi-k2-thinking": 1.0, "kimi-k2-0905-preview": 0.6},
       "max_output_tokens": {
+        "kimi-k2.6": 32768,
         "kimi-k2.5": 98304,
         "kimi-k2-thinking": 98304,
         "_default": 8192
       },
       "context_length": {
+        "kimi-k2.6": 262144,
         "kimi-k2.5": 262144,
         "kimi-k2-thinking": 262144,
         "_default": 262144

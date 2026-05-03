@@ -2264,33 +2264,57 @@ async def handle_clear_chat_messages(data: Dict[str, Any], websocket: WebSocket)
 
 @ws_handler()
 async def handle_get_console_logs(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
-    """Get console logs from database."""
+    """Get console logs from database, optionally scoped to a workflow."""
     limit = data.get("limit", 100)
+    workflow_id = data.get("workflow_id")
 
     database = container.database()
-    logs = await database.get_console_logs(limit)
+    logs = await database.get_console_logs(limit, workflow_id=workflow_id)
 
     return {
         "success": True,
-        "logs": logs
+        "logs": logs,
+        "workflow_id": workflow_id,
     }
 
 
 @ws_handler()
 async def handle_clear_console_logs(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
-    """Clear all console logs from database and memory."""
-    database = container.database()
-    count = await database.clear_console_logs()
+    """Clear console logs from database and in-memory broadcaster cache.
 
-    # Also clear in-memory logs
+    With ``workflow_id`` set, only that workflow's history is cleared
+    (DB rows + in-memory entries). Without it, the legacy "clear all"
+    behaviour is preserved. Broadcasts ``console_logs_cleared`` carrying
+    the workflow_id so other tabs viewing the same workflow drop their
+    local list, while tabs on a different workflow are unaffected
+    (the frontend filter already keys on this).
+    """
+    workflow_id = data.get("workflow_id")
+    database = container.database()
+    count = await database.clear_console_logs(workflow_id=workflow_id)
+
+    # Also clear / filter in-memory logs
     broadcaster = get_status_broadcaster()
     if "console_logs" in broadcaster._status:
-        broadcaster._status["console_logs"] = []
+        if workflow_id:
+            broadcaster._status["console_logs"] = [
+                log for log in broadcaster._status["console_logs"]
+                if log.get("workflow_id") != workflow_id
+            ]
+        else:
+            broadcaster._status["console_logs"] = []
+
+    # Tell connected clients to drop their local copy for this scope.
+    await broadcaster.broadcast({
+        "type": "console_logs_cleared",
+        "workflow_id": workflow_id,
+    })
 
     return {
         "success": True,
         "message": f"Cleared {count} console logs",
-        "cleared_count": count
+        "cleared_count": count,
+        "workflow_id": workflow_id,
     }
 
 
@@ -2708,27 +2732,29 @@ async def handle_delete_user_skill(data: Dict[str, Any], websocket: WebSocket) -
 
 @ws_handler()
 async def handle_clear_memory(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
-    """Clear memory content and optionally the long-term vector store."""
-    from services.ai import _memory_vector_stores
+    """Clear conversation memory and sibling agent session state.
+
+    Business logic lives in :func:`services.memory.clear_agent_session_state`
+    — this handler only decodes the request and shapes the response.
+    """
+    from services.memory import clear_agent_session_state
 
     session_id = data.get("session_id", "default")
+    workflow_id = data.get("workflow_id")
     clear_long_term = data.get("clear_long_term", False)
 
-    default_content = "# Conversation History\n\n*No messages yet.*\n"
-    cleared_vector_store = False
-
-    if clear_long_term and session_id in _memory_vector_stores:
-        del _memory_vector_stores[session_id]
-        cleared_vector_store = True
-        logger.info(f"[Memory] Cleared vector store for session '{session_id}'")
-
-    logger.info(f"[Memory] Cleared memory content for session '{session_id}', vector_store={cleared_vector_store}")
+    cleared = clear_agent_session_state(
+        session_id=session_id,
+        workflow_id=workflow_id,
+        clear_long_term=clear_long_term,
+    )
 
     return {
         "success": True,
-        "default_content": default_content,
-        "cleared_vector_store": cleared_vector_store,
-        "session_id": session_id
+        "default_content": "# Conversation History\n\n*No messages yet.*\n",
+        "cleared_vector_store": cleared["cleared_vector_store"],
+        "cleared_todo_keys": cleared["cleared_todo_keys"],
+        "session_id": session_id,
     }
 
 

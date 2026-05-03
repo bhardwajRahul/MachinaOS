@@ -735,12 +735,26 @@ class StatusBroadcaster:
         Set `include_waiting=True` for explicit user cancels (toolbar
         Stop, cancel_execution) where the user wants every indicator to
         go quiet.
+
+        Also skips children with an in-flight fire-and-forget delegation:
+        the parent's workflow run completes the instant the
+        ``delegate_to_<x>`` tool returns, but the child agent's
+        background ``asyncio.Task`` keeps running for tens of seconds.
+        Without this guard the cleanup wipes the child's glow even
+        though it's legitimately still working. ``handlers.tools``
+        owns the registry; lazy-imported to avoid a circular import.
         """
+        # Lazy import — handlers.tools imports this module via
+        # ``execute_tool`` -> status_broadcaster, so a top-level import
+        # here would form a cycle.
+        from services.handlers.tools import is_node_in_active_delegation
+
         statuses = ("executing", "waiting") if include_waiting else ("executing",)
         stuck = [
             (nid, info) for nid, info in self._status["nodes"].items()
             if info.get("workflow_id") == workflow_id
             and info.get("status") in statuses
+            and not is_node_in_active_delegation(nid)
         ]
         for node_id, _info in stuck:
             try:

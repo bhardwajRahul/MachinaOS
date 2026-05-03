@@ -54,21 +54,93 @@ _delegation_results: Dict[str, Dict[str, Any]] = {}
 # Track active delegations to prevent duplicate calls: (parent_node_id, child_node_id, task_hash) -> task_id
 _active_delegations: Dict[Tuple[str, str, str], str] = {}
 
+# Ref-counted set of child node ids with an in-flight fire-and-forget
+# delegation. Queried by ``StatusBroadcaster._clear_stuck_node_statuses``
+# so the post-run cleanup that protects against glow-leaks on crash paths
+# does NOT wipe the glow of a child agent whose background task is still
+# running after its parent's workflow run completed. A node can host
+# multiple concurrent delegations (rare but possible), hence the refcount
+# instead of a plain set.
+_active_delegated_nodes: Dict[str, int] = {}
+
+
+def is_node_in_active_delegation(node_id: str) -> bool:
+    """Return True iff ``node_id`` has at least one in-flight
+    fire-and-forget delegation. See ``_active_delegated_nodes`` docstring."""
+    return _active_delegated_nodes.get(node_id, 0) > 0
+
 
 async def execute_tool(tool_name: str, tool_args: Dict[str, Any],
                        config: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute a tool by name using the appropriate handler.
+    """Execute a tool by name and own the tool node's status lifecycle.
 
-    This is the main dispatch function that routes tool calls to specific handlers
-    based on the node_type in the config.
+    This is the single source of truth for the tool node's
+    ``executing``/``success``/``error`` broadcasts. Caller-side
+    ``tool_executor`` closures in :mod:`services.ai` only emit
+    *parent-agent* phase broadcasts (``executing_tool``/``tool_completed``)
+    and must not duplicate the tool-node lifecycle here.
+
+    Handlers that own their own asynchronous lifecycle opt out of the
+    terminal ``success`` broadcast by returning a dict with
+    ``status in {"delegated", "ALREADY_DELEGATED"}`` — the canonical
+    contract for fire-and-forget agent delegation
+    (:func:`_execute_delegated_agent` then drives the child's
+    executing/success/error timeline from inside its background task).
 
     Args:
-        tool_name: Name of the tool (for logging)
-        tool_args: Arguments provided by the AI model
-        config: Tool configuration containing node_type, node_id, parameters
+        tool_name: Name of the tool (for logging + broadcast messages).
+        tool_args: Arguments provided by the AI model.
+        config: Tool configuration containing ``node_type``, ``node_id``,
+            ``workflow_id``, ``parameters``, and any injected services.
 
     Returns:
-        Tool execution result dict
+        Tool execution result dict (re-raises on dispatch failure after
+        emitting the ``error`` broadcast).
+    """
+    from services.status_broadcaster import get_status_broadcaster
+
+    broadcaster = get_status_broadcaster()
+    node_id = config.get('node_id')
+    workflow_id = config.get('workflow_id')
+
+    if node_id and broadcaster:
+        await broadcaster.update_node_status(
+            node_id, "executing",
+            {"message": f"Executing {tool_name}"},
+            workflow_id=workflow_id,
+        )
+
+    try:
+        result = await _dispatch_tool(tool_name, tool_args, config)
+    except Exception as e:
+        logger.error("[Tool] Execution failed: %s", tool_name, exc_info=True)
+        if node_id and broadcaster:
+            await broadcaster.update_node_status(
+                node_id, "error",
+                {"message": f"{tool_name} failed", "error": str(e)},
+                workflow_id=workflow_id,
+            )
+        raise
+
+    handler_owns_lifecycle = (
+        isinstance(result, dict)
+        and result.get("status") in ("delegated", "ALREADY_DELEGATED")
+    )
+    if node_id and broadcaster and not handler_owns_lifecycle:
+        await broadcaster.update_node_status(
+            node_id, "success",
+            {"message": f"{tool_name} completed", "result": result},
+            workflow_id=workflow_id,
+        )
+    return result
+
+
+async def _dispatch_tool(tool_name: str, tool_args: Dict[str, Any],
+                         config: Dict[str, Any]) -> Dict[str, Any]:
+    """Route a tool call to the right handler based on ``node_type``.
+
+    Pure dispatch — no broadcasting. Lifecycle is owned by
+    :func:`execute_tool`.
     """
     node_type = config.get('node_type', '')
     node_params = config.get('parameters', {})
@@ -312,6 +384,14 @@ async def _execute_delegated_agent(args: Dict[str, Any],
 
     # Register this delegation to prevent duplicates
     _active_delegations[delegation_key] = task_id
+
+    # Mark this child node as having a live delegation so the workflow's
+    # post-run cleanup (StatusBroadcaster._clear_stuck_node_statuses) does
+    # not reset its glow to idle while the background task is still
+    # working — the parent's workflow run completes the moment the
+    # delegate_to_<x> tool returns, but the child runs ~tens of seconds
+    # longer in its own asyncio task.
+    _active_delegated_nodes[node_id] = _active_delegated_nodes.get(node_id, 0) + 1
 
     # Get child agent parameters from database
     child_params = await database.get_node_parameters(node_id) or {}
@@ -559,6 +639,14 @@ async def _execute_delegated_agent(args: Dict[str, Any],
             _delegated_tasks.pop(task_id, None)
             # Cleanup delegation tracking (allows re-delegation after completion)
             _active_delegations.pop(delegation_key, None)
+            # Decrement active-delegation refcount so the broadcaster's
+            # post-run cleanup can sweep this node's glow on the next
+            # workflow run if it ever does get stuck.
+            current = _active_delegated_nodes.get(node_id, 0)
+            if current <= 1:
+                _active_delegated_nodes.pop(node_id, None)
+            else:
+                _active_delegated_nodes[node_id] = current - 1
 
     # Spawn as background task (fire-and-forget)
     task = asyncio.create_task(run_child_agent())

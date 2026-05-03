@@ -128,12 +128,15 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
   const [connectedAgentId, setConnectedAgentId] = useState<string | null>(null);
 
   // Clear memory handler. Schema-canonical keys are snake_case
-  // (post-Wave-11 plugin Pydantic models).
+  // (post-Wave-11 plugin Pydantic models). Passing the active workflow
+  // id lets the backend also clear sibling session-scoped state
+  // (TodoService) keyed by workflow_id — see
+  // ``services/memory.clear_agent_session_state``.
   const handleClearMemory = async () => {
     setIsProcessing(true);
     try {
       const sessionId = parameters.session_id || 'default';
-      const result = await clearMemory(sessionId, clearLongTermMemory);
+      const result = await clearMemory(sessionId, clearLongTermMemory, currentWorkflow?.id);
       if (result.success && result.default_content) {
         onParameterChange('memory_content', result.default_content);
       }
