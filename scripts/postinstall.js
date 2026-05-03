@@ -5,7 +5,7 @@
  * Runs install.js to check deps, install npm/Python packages, build.
  * WhatsApp RPC is now an npm dependency - binary downloaded by its own postinstall.
  */
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { existsSync, chmodSync } from 'fs';
@@ -73,18 +73,6 @@ function runScript(scriptPath) {
   });
 }
 
-function runPython(args) {
-  return new Promise((resolveP, reject) => {
-    const cmd = process.platform === 'win32' ? 'python' : 'python3';
-    const child = spawn(cmd, args, { cwd: ROOT, stdio: 'inherit' });
-    child.on('error', reject);
-    child.on('close', (code) => {
-      if (code === 0) resolveP();
-      else reject(new Error(`${cmd} exited with code ${code}`));
-    });
-  });
-}
-
 async function main() {
   try {
     // Fix executable permissions on Unix
@@ -94,17 +82,42 @@ async function main() {
     console.log('Installing dependencies...');
     await runScript(resolve(__dirname, 'install.js'));
 
-    // Install the machina CLI into whatever python is on PATH (system,
-    // conda, or active venv). Idempotent: re-runs are no-ops since pip
-    // detects the editable install. Fail-soft: a missing Python
-    // interpreter doesn't block the rest of npm install.
-    console.log('Installing machina CLI (python -m pip install -e ./machina)...');
+    // Note: we deliberately do NOT `pip install -e ./machina` here. An
+    // editable install creates a `Scripts/machina.exe` (or
+    // `bin/machina`) entry-point that imports `machina.cli` from the
+    // package's npm install directory. When npm later moves, prunes,
+    // or upgrades that directory, the shim survives but its target
+    // disappears -- the user runs `machina start` and gets
+    // `ModuleNotFoundError: No module named 'machina'`. The same
+    // shim also wins PATH precedence over the npm bin shim at
+    // bin/cli.js, masking the real entry point.
+    //
+    // Both call sites that need the Python CLI use `python -m machina
+    // <cmd>` (npm run start, .github/workflows/release.yml version
+    // sync). `-m` resolves the package from the working directory's
+    // sys.path entry, which `bin/cli.js` already pins to the npm
+    // package root via `cwd: ROOT`. No pip install required.
+
+    // Detect a stale `Scripts/machina.exe` (or `bin/machina`) left
+    // behind by a prior version's `pip install -e ./machina`. If pip
+    // shows the package installed but the current `machina` on PATH
+    // is NOT our Node shim, surface the cleanup command -- otherwise
+    // the user keeps hitting the dead Python entry-point even after
+    // upgrading.
     try {
-      await runPython(['-m', 'pip', 'install', '-e', resolve(ROOT, 'machina'),
-                       '--quiet', '--disable-pip-version-check']);
-    } catch (err) {
-      console.log(`Warning: machina CLI install skipped (${err.message}).`);
-      console.log('         Install manually with: python -m pip install -e ./machina');
+      const pipShow = execSync('python -m pip show machina 2>nul || python3 -m pip show machina 2>/dev/null', {
+        encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'], shell: true,
+      }).trim();
+      if (pipShow) {
+        console.log('');
+        console.log('Notice: a previous install left `machina` registered with pip.');
+        console.log('If `machina start` fails with "No module named \'machina\'",');
+        console.log('clean it up once with:');
+        console.log('  python -m pip uninstall -y machina');
+        console.log('');
+      }
+    } catch {
+      // pip not present, or the package isn't installed -- nothing to warn about.
     }
 
     console.log('');
