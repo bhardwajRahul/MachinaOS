@@ -1,14 +1,23 @@
 """Dynamic webhook endpoint router for incoming HTTP requests.
 
-Works like WhatsApp trigger - uses broadcaster.send_custom_event() to dispatch
-to event_waiter which resolves waiting trigger nodes.
+Two dispatch paths:
+
+1. **Plugin-owned WebhookSource** (Wave 12 framework). Plugins register
+   a :class:`services.events.WebhookSource` for their path; the router
+   verifies the signature, shapes a :class:`WorkflowEvent`, and queues
+   it onto the source. The source's owning plugin pulls events via
+   ``source.emit()`` and dispatches into ``event_waiter``.
+2. **Legacy generic webhook** (pre-framework). Falls through to
+   ``broadcaster.send_custom_event("webhook_received", …)`` so existing
+   ``webhookTrigger`` nodes keep working untouched.
 """
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 from typing import Dict
 import asyncio
 import logging
 
+from services.events import WEBHOOK_SOURCES
 from services.status_broadcaster import get_status_broadcaster
 
 logger = logging.getLogger(__name__)
@@ -38,10 +47,21 @@ def resolve_webhook_response(node_id: str, response_data: dict):
 async def handle_webhook(path: str, request: Request):
     """Handle incoming webhook requests.
 
-    Dispatches webhook_received event to trigger waiting webhookTrigger nodes.
-    Similar to how WhatsApp events dispatch to whatsappReceive nodes.
+    Path-handler dispatch (Wave 12) runs first; legacy generic
+    dispatch is the fallback for paths nobody has claimed.
     """
-    # Build webhook request data
+    source = WEBHOOK_SOURCES.get(path)
+    if source is not None:
+        try:
+            await source.handle(request)
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.exception("[Webhook] %s handler crashed: %s", path, e)
+            raise HTTPException(status_code=500, detail=str(e))
+        logger.info("[Webhook] %s %s -> %s", request.method, path, type(source).__name__)
+        return JSONResponse({"status": "received", "path": path}, status_code=200)
+
     body = await request.body()
     json_body = None
     content_type = request.headers.get("content-type", "")
@@ -63,12 +83,9 @@ async def handle_webhook(path: str, request: Request):
 
     logger.info(f"[Webhook] Received: {request.method} /webhook/{path}")
 
-    # Dispatch event using broadcaster (same pattern as WhatsApp)
     broadcaster = get_status_broadcaster()
     await broadcaster.send_custom_event("webhook_received", webhook_data)
 
-    # For now, always return immediate response
-    # TODO: Support responseNode mode by storing Future and waiting
     return JSONResponse(
         content={
             "status": "received",
