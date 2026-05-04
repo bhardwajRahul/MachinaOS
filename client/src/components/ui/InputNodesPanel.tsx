@@ -19,7 +19,7 @@ interface InputDataItem {
 }
 
 const InputNodesPanel: React.FC<InputNodesPanelProps> = ({ nodeId }) => {
-  const { currentWorkflow } = useAppStore();
+  const currentWorkflow = useAppStore((s) => s.currentWorkflow);
   const { getNodeOutput } = useWebSocket();
   const [inputData, setInputData] = useState<InputDataItem[]>([]);
   const [loading, setLoading] = useState(false);

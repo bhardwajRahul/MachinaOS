@@ -122,7 +122,7 @@ const ANDROID_NODE_TYPES = [
 
 const OutputPanel: React.FC<OutputPanelProps> = ({ nodeId }) => {
   const theme = useAppTheme();
-  const { currentWorkflow } = useAppStore();
+  const currentWorkflow = useAppStore((s) => s.currentWorkflow);
   const [expandedNode, setExpandedNode] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [draggedParam, setDraggedParam] = useState<{ nodeId: string; output: string } | null>(null);
@@ -188,14 +188,15 @@ const OutputPanel: React.FC<OutputPanelProps> = ({ nodeId }) => {
     return false;
   };
 
-  // Helper to check if a node is a config/auxiliary node (connects to config handles)
+  // Helper to check if a node is a config/auxiliary node (connects to config handles).
+  // Backend auto-derives `uiHints.isConfigNode` from group membership
+  // (`memory` / `tool`) at registration time — see
+  // services/plugin/base.py::_derive_auto_ui_hints. Plugins can also
+  // set the flag explicitly to override.
   const isConfigNode = (nodeType: string | undefined): boolean => {
     if (!nodeType) return false;
     const definition = resolveNodeDescription(nodeType);
-    if (!definition) return false;
-    // Config nodes typically have 'memory' or 'tool' in their group, or have no main input
-    const groups = definition.group || [];
-    return groups.includes('memory') || groups.includes('tool');
+    return definition?.uiHints?.isConfigNode === true;
   };
 
   // Get connected nodes with their outputs

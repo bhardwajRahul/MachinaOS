@@ -155,7 +155,7 @@ const DraggableVar: React.FC<DraggableVarProps> = ({
 // ---------------------------------------------------------------------------
 
 const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) => {
-  const { currentWorkflow } = useAppStore();
+  const currentWorkflow = useAppStore((s) => s.currentWorkflow);
   const { getNodeOutput, sendRequest } = useWebSocket();
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const [connectedNodes, setConnectedNodes] = useState<NodeData[]>([]);
@@ -183,13 +183,15 @@ const InputSection: React.FC<InputSectionProps> = ({ nodeId, visible = true }) =
         return false;
       };
 
-      // Helper to check if a node is a config/auxiliary node
+      // Helper to check if a node is a config/auxiliary node.
+      // Backend auto-derives `uiHints.isConfigNode` from group membership
+      // (`memory` / `tool`) at registration time — see
+      // services/plugin/base.py::_derive_auto_ui_hints. Plugins can also
+      // set the flag explicitly to override.
       const isConfigNode = (nodeType: string | undefined): boolean => {
         if (!nodeType) return false;
         const definition = resolveNodeDescription(nodeType);
-        if (!definition) return false;
-        const groups = definition.group || [];
-        return groups.includes('memory') || groups.includes('tool');
+        return definition?.uiHints?.isConfigNode === true;
       };
 
       const currentNode = nodes.find((node: Node) => node.id === nodeId);

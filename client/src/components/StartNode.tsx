@@ -8,7 +8,9 @@ import { PlayCircle } from 'lucide-react';
 import EditableNodeLabel from './ui/EditableNodeLabel';
 
 const StartNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectable, selected }) => {
-  const { setSelectedNode, setRenamingNodeId, updateNodeData } = useAppStore();
+  const setSelectedNode = useAppStore((s) => s.setSelectedNode);
+  const setRenamingNodeId = useAppStore((s) => s.setRenamingNodeId);
+  const updateNodeData = useAppStore((s) => s.updateNodeData);
   const theme = useAppTheme();
 
   const defaultLabel = 'Start';

@@ -26,7 +26,7 @@ interface DragVariableHookReturn {
  * @param targetNodeId - The ID of the node receiving the drag (target of edge)
  */
 export const useDragVariable = (_targetNodeId: string): DragVariableHookReturn => {
-  const { currentWorkflow } = useAppStore();
+  const currentWorkflow = useAppStore((s) => s.currentWorkflow);
 
   /**
    * Get template variable name for a source node.

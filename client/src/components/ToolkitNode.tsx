@@ -27,7 +27,9 @@ const TOOLKIT_NODE_TYPES = ['androidTool'];
 
 const ToolkitNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectable, selected }) => {
   const theme = useAppTheme();
-  const { setSelectedNode, setRenamingNodeId, updateNodeData } = useAppStore();
+  const setSelectedNode = useAppStore((s) => s.setSelectedNode);
+  const setRenamingNodeId = useAppStore((s) => s.setRenamingNodeId);
+  const updateNodeData = useAppStore((s) => s.updateNodeData);
 
   // Get node status from WebSocket context
   const { getNodeStatus } = useWebSocket();

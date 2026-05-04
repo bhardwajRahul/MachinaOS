@@ -44,7 +44,12 @@ import { ExecutionResult } from '../../services/executionService';
 import { Edge } from 'reactflow';
 import { shouldShowParameter } from '../../utils/parameterVisibility';
 
-import { resolveNodeDescription } from '../../lib/nodeSpec';
+import { resolveNodeDescription, getCachedNodeSpec } from '../../lib/nodeSpec';
+
+const isMasterSkillNodeType = (nodeType: string | undefined): boolean => {
+  if (!nodeType) return false;
+  return (getCachedNodeSpec(nodeType)?.uiHints as any)?.isMasterSkillEditor === true;
+};
 // Wave 10.G.3: retired the three tribal arrays `SKILL_NODE_TYPES`,
 // `TOOL_NODE_TYPES`, and `AGENT_WITH_SKILLS_TYPES`. The parameter panel
 // now reads `uiHints.hasSkills` / `uiHints.isToolPanel` /
@@ -88,7 +93,7 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
   executionResults = []
 }) => {
   const theme = useAppTheme();
-  const { currentWorkflow } = useAppStore();
+  const currentWorkflow = useAppStore((s) => s.currentWorkflow);
   const { clearMemory, resetSkill, sendRequest, getNodeParameters, compactionStats: contextCompactionStats, updateCompactionStats } = useWebSocket();
 
   const [showClearMemoryDialog, setShowClearMemoryDialog] = useState(false);
@@ -297,7 +302,7 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
   const masterSkillEdgeSources = useMemo<string[]>(() => {
     const nodes = currentWorkflow?.nodes || [];
     return skillEdges
-      .filter((edge) => nodes.find((n: any) => n.id === edge.source)?.type === 'masterSkill')
+      .filter((edge) => isMasterSkillNodeType(nodes.find((n: any) => n.id === edge.source)?.type))
       .map((edge) => edge.source);
   }, [skillEdges, currentWorkflow?.nodes]);
 
@@ -425,7 +430,7 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
     for (const edge of skillEdges) {
       const sourceNode = nodes.find((n: any) => n.id === edge.source);
       const nodeType = sourceNode?.type || '';
-      if (nodeType === 'masterSkill') continue;
+      if (isMasterSkillNodeType(nodeType)) continue;
       const def = resolveNodeDescription(nodeType);
       skills.push({
         id: edge.source,
@@ -452,7 +457,7 @@ const MiddleSection: React.FC<MiddleSectionProps> = ({
 
     for (const edge of skillEdges) {
       const sourceNode = nodes.find((n: any) => n.id === edge.source);
-      if (sourceNode?.type === 'masterSkill') {
+      if (isMasterSkillNodeType(sourceNode?.type)) {
         const params = masterSkillParams[edge.source];
         const skillsConfig = params?.skills_config || {};
 

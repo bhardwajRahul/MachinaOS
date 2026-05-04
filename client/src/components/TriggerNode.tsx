@@ -19,7 +19,9 @@ import EditableNodeLabel from './ui/EditableNodeLabel';
 
 const TriggerNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectable, selected }) => {
   const theme = useAppTheme();
-  const { setSelectedNode, setRenamingNodeId, updateNodeData } = useAppStore();
+  const setSelectedNode = useAppStore((s) => s.setSelectedNode);
+  const setRenamingNodeId = useAppStore((s) => s.setRenamingNodeId);
+  const updateNodeData = useAppStore((s) => s.updateNodeData);
   const [isConfigured, setIsConfigured] = useState(false);
   const isDisabled = data?.disabled === true;
 

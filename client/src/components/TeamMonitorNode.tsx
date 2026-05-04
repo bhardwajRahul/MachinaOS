@@ -38,7 +38,7 @@ interface TeamStatus {
 
 const TeamMonitorNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectable, selected }) => {
   const theme = useAppTheme();
-  const { setSelectedNode } = useAppStore();
+  const setSelectedNode = useAppStore((s) => s.setSelectedNode);
   const { sendRequest } = useWebSocket();
   const edges = useEdges();
   const nodes = useNodes();

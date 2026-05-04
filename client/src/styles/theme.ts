@@ -119,9 +119,12 @@ export const lightColors = {
   // Edge colors for light mode - MUCH darker for visibility
   edgeDefault: '#6b7280',         // gray-500 - much more visible
   edgeSelected: '#7c3aed',        // Violet
-  edgeExecuting: '#7c3aed',       // Violet
-  edgeCompleted: '#059669',       // Emerald-600
+  edgeExecuting: '#2563eb',       // Blue-600 (executing state pop)
+  edgeCompleted: '#16a34a',       // Green-600
   edgeError: '#dc2626',           // Red-600
+  edgePending: '#6b7280',         // gray-500 (same as default, dashed)
+  edgeMemoryActive: '#db2777',    // Pink-600
+  edgeToolActive: '#ea580c',      // Orange-600
   // Category colors for light mode (darker, more saturated)
   categoryWorkflow: '#ea580c',    // Orange-600
   categoryTrigger: '#db2777',     // Pink-600
@@ -190,9 +193,12 @@ export const darkColors = {
   // Edge colors for dark mode
   edgeDefault: dracula.cyan,       // Cyan
   edgeSelected: dracula.purple,    // Purple
-  edgeExecuting: dracula.purple,   // Purple
+  edgeExecuting: dracula.purple,   // Purple (executing state pop)
   edgeCompleted: dracula.green,    // Green
   edgeError: dracula.red,          // Red
+  edgePending: dracula.cyan,       // Cyan (same as default, dashed)
+  edgeMemoryActive: dracula.pink,  // Pink
+  edgeToolActive: dracula.orange,  // Orange
   // Category colors for dark mode (Dracula - vibrant)
   categoryWorkflow: dracula.orange,
   categoryTrigger: dracula.pink,

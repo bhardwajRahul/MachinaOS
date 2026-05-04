@@ -4,6 +4,9 @@
  * ALL conditional logic lives in config — panel components are pure renderers.
  */
 
+import type { ActionButtonIntent } from '@/components/ui/action-button';
+export type { ActionButtonIntent };
+
 // ============================================================================
 // Panel kinds — one renderer branch per kind
 // ============================================================================
@@ -43,8 +46,9 @@ export interface StatusRowDef {
 export interface ActionDef {
   key: string;
   label: string;
-  /** Theme color key (e.g., 'green', 'pink', 'cyan', 'orange'). Resolved at render. */
-  themeColor: string;
+  /** Semantic role consumed by `<ActionButton intent="...">`. Themes
+   * remap the underlying --action-X tokens without touching call sites. */
+  intent: ActionButtonIntent;
   /** Return true to hide this action. */
   hidden?: (status: any, stored: boolean) => boolean;
   /** Return true to disable this action. */

@@ -213,6 +213,11 @@ export interface INodeUIHints {
   isConsoleSink?: boolean;
   /** Agent panels show the connected-skills section. */
   hasSkills?: boolean;
+  /** InputSection / OutputPanel: this node is auxiliary configuration
+   * (memory, tool). Its panel inherits the parent's main inputs
+   * instead of showing direct upstream connections. Auto-derived on
+   * the backend from group membership; plugins can override. */
+  isConfigNode?: boolean;
 }
 
 export interface INodeTypeDescription {

@@ -10,7 +10,8 @@ interface UseReactFlowNodesProps {
 }
 
 export const useReactFlowNodes = ({ setNodes, setEdges }: UseReactFlowNodesProps) => {
-  const { selectedNode, setSelectedNode } = useAppStore();
+  const selectedNode = useAppStore((s) => s.selectedNode);
+  const setSelectedNode = useAppStore((s) => s.setSelectedNode);
 
   // Helper function to get node inputs/outputs for both enhanced and legacy nodes
   const getNodeInputs = (nodeType: string): INodeInputDefinition[] => {

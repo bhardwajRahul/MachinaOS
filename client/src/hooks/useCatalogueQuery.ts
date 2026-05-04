@@ -22,7 +22,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
+import { useQuery, useQueryClient, type QueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { get as idbGet, set as idbSet } from 'idb-keyval';
 
 import { useWebSocket } from '../contexts/WebSocketContext';
@@ -133,6 +133,33 @@ function isUnchanged(response: WsResponse): response is UnchangedResponse {
 // ============================================================================
 
 export const CATALOGUE_QUERY_KEY = ['credentialCatalogue'] as const;
+
+// ============================================================================
+// Debounced invalidation
+//
+// 8 broadcast handlers in WebSocketContext (api_key_status, whatsapp_status,
+// twitter_oauth_complete, google_oauth_complete, google_status,
+// telegram_status, credential_catalogue_updated, initial_status) all want to
+// refetch the catalogue. During init-burst or multi-service reconnect, those
+// fire within the same tick and would trigger N back-to-back roundtrips.
+// Coalesce them onto a single invalidate at the trailing edge of a 300ms
+// quiet window. Trailing-edge debounce so the freshest state always wins.
+// ============================================================================
+
+const CATALOGUE_INVALIDATE_DEBOUNCE_MS = 300;
+let _catalogueInvalidateTimer: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * Request a catalogue refetch, coalesced across rapid bursts of broadcasts.
+ * Replaces direct `queryClient.invalidateQueries({ queryKey: CATALOGUE_QUERY_KEY })`.
+ */
+export function invalidateCatalogue(queryClient: QueryClient): void {
+  if (_catalogueInvalidateTimer) clearTimeout(_catalogueInvalidateTimer);
+  _catalogueInvalidateTimer = setTimeout(() => {
+    _catalogueInvalidateTimer = null;
+    void queryClient.invalidateQueries({ queryKey: CATALOGUE_QUERY_KEY });
+  }, CATALOGUE_INVALIDATE_DEBOUNCE_MS);
+}
 
 /** IDB key — we only store the current version, overwritten on each update. */
 const IDB_STORAGE_KEY = 'credentials:catalogue:current';

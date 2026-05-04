@@ -23,7 +23,8 @@ function defaultsForNodeType(nodeType: string): Record<string, any> {
 }
 
 export const useParameterPanel = () => {
-  const { selectedNode, setSelectedNode } = useAppStore();
+  const selectedNode = useAppStore((s) => s.selectedNode);
+  const setSelectedNode = useAppStore((s) => s.setSelectedNode);
   const { sendRequest, isConnected } = useWebSocket();
 
   const nodeId = selectedNode?.id;

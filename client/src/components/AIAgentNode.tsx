@@ -44,7 +44,7 @@ const REACT_POSITION: Record<SpecHandle['position'], Position> = {
 
 const AIAgentNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectable, selected }) => {
   const theme = useAppTheme();
-  const { setSelectedNode } = useAppStore();
+  const setSelectedNode = useAppStore((s) => s.setSelectedNode);
   const [_configValid, setConfigValid] = useState(true);
   const [_configErrors, setConfigErrors] = useState<string[]>([]);
 

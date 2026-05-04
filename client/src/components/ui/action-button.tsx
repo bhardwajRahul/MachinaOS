@@ -20,22 +20,24 @@ import { cn } from '@/lib/utils';
 
 export const actionButtonVariants = cva(
   // Base: 32px tall pill with icon-text gap, semibold, focus ring, smooth hover.
-  'inline-flex h-8 items-center gap-1.5 rounded-md border px-3.5 text-[13px] font-semibold transition-all outline-none select-none disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-ring/40',
+  // Disabled state uses shadcn-idiomatic `disabled:opacity-50` so we don't
+  // do per-token opacity arithmetic at the call site.
+  'inline-flex h-8 items-center gap-1.5 rounded-md border px-3.5 text-[13px] font-semibold transition-all outline-none select-none disabled:cursor-not-allowed disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-ring/40',
   {
     variants: {
       intent: {
         run:
-          'border-action-run-border bg-action-run-soft text-action-run hover:bg-action-run/25 disabled:border-primary/40 disabled:bg-primary/10 disabled:text-primary',
+          'border-action-run-border bg-action-run-soft text-action-run hover:bg-action-run-hover',
         stop:
-          'border-action-stop-border bg-action-stop-soft text-action-stop hover:bg-action-stop/25 disabled:border-primary/40 disabled:bg-primary/10 disabled:text-primary',
+          'border-action-stop-border bg-action-stop-soft text-action-stop hover:bg-action-stop-hover',
         save:
-          'border-action-save-border bg-action-save-soft text-action-save hover:bg-action-save/25 disabled:border-primary/40 disabled:bg-primary/10 disabled:text-primary',
+          'border-action-save-border bg-action-save-soft text-action-save hover:bg-action-save-hover',
         config:
-          'border-action-config-border bg-action-config-soft text-action-config hover:bg-action-config/25 disabled:border-primary/40 disabled:bg-primary/10 disabled:text-primary',
+          'border-action-config-border bg-action-config-soft text-action-config hover:bg-action-config-hover',
         secret:
-          'border-action-secret-border bg-action-secret-soft text-action-secret hover:bg-action-secret/25 disabled:border-primary/40 disabled:bg-primary/10 disabled:text-primary',
+          'border-action-secret-border bg-action-secret-soft text-action-secret hover:bg-action-secret-hover',
         tools:
-          'border-action-tools-border bg-action-tools-soft text-action-tools hover:bg-action-tools/25 disabled:border-primary/40 disabled:bg-primary/10 disabled:text-primary',
+          'border-action-tools-border bg-action-tools-soft text-action-tools hover:bg-action-tools-hover',
       },
     },
     defaultVariants: { intent: 'save' },

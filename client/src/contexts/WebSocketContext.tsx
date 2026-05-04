@@ -16,7 +16,7 @@ import { useAppStore } from '../store/useAppStore';
 import { useAuth } from './AuthContext';
 import { queryClient } from '../lib/queryClient';
 import { queryKeys } from '../lib/queryConfig';
-import { CATALOGUE_QUERY_KEY } from '../hooks/useCatalogueQuery';
+import { invalidateCatalogue } from '../hooks/useCatalogueQuery';
 import { nodeParamsQueryKey } from '../hooks/useNodeParamsQuery';
 import {
   useNodeStatusStore,
@@ -652,7 +652,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             }
             // Catalogue 'stored' flags derive from api_keys + oauth state;
             // re-sync once after the bulk status lands.
-            queryClient.invalidateQueries({ queryKey: CATALOGUE_QUERY_KEY });
+            invalidateCatalogue(queryClient);
           }
           break;
 
@@ -664,7 +664,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             }));
             // Sidebar catalogue's `stored` flag depends on server-side
             // api_keys + oauth state; refresh it.
-            queryClient.invalidateQueries({ queryKey: CATALOGUE_QUERY_KEY });
+            invalidateCatalogue(queryClient);
           }
           break;
 
@@ -672,7 +672,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           // Future server emitter (per useCatalogueQuery.ts TODO). Client
           // handler is wired now so once the server pushes it, consumers
           // refresh automatically.
-          queryClient.invalidateQueries({ queryKey: CATALOGUE_QUERY_KEY });
+          invalidateCatalogue(queryClient);
           break;
 
         case 'android_status':
@@ -681,7 +681,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
         case 'whatsapp_status':
           setWhatsappStatus(data || defaultWhatsAppStatus);
-          queryClient.invalidateQueries({ queryKey: CATALOGUE_QUERY_KEY });
+          invalidateCatalogue(queryClient);
           break;
 
         case 'twitter_oauth_complete':
@@ -694,7 +694,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
               name: data.name,
               profile_image_url: data.profile_image_url,
             });
-            queryClient.invalidateQueries({ queryKey: CATALOGUE_QUERY_KEY });
+            invalidateCatalogue(queryClient);
           }
           break;
 
@@ -707,7 +707,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
               name: data.name,
               profile_image_url: data.profile_image_url,
             });
-            queryClient.invalidateQueries({ queryKey: CATALOGUE_QUERY_KEY });
+            invalidateCatalogue(queryClient);
           }
           break;
 
@@ -719,7 +719,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
               email: data.email || null,
               name: data.name,
             });
-            queryClient.invalidateQueries({ queryKey: CATALOGUE_QUERY_KEY });
+            invalidateCatalogue(queryClient);
           }
           break;
 
@@ -733,7 +733,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
               bot_id: data.bot_id || null,
               owner_chat_id: data.owner_chat_id ?? null,
             });
-            queryClient.invalidateQueries({ queryKey: CATALOGUE_QUERY_KEY });
+            invalidateCatalogue(queryClient);
           }
           break;
 
@@ -1224,162 +1224,132 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           }
         }, 30000);
 
-        // Load initial API key statuses for known providers
-        const providers = ['openai', 'anthropic', 'gemini', 'google_maps', 'android_remote'];
-        for (const provider of providers) {
+        // Init burst — every probe / history fetch below is independent
+        // (no handler reads results from a sibling), so we run them in
+        // parallel via Promise.allSettled. Time-to-isReady drops from
+        // ~8 × roundtrip (serial) to one wide round-trip. Each helper
+        // owns its own request_id, message handler, timeout, and state
+        // write — failure in one does not abort the others.
+
+        const sendBurstRequest = <T = any>(payload: object, idPrefix: string): Promise<T> =>
+          new Promise<T>((resolve, reject) => {
+            const requestId = `${idPrefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+            const timeout = setTimeout(() => {
+              ws.removeEventListener('message', handler);
+              reject(new Error('Timeout'));
+            }, 5000);
+            const handler = (event: MessageEvent) => {
+              try {
+                const msg = JSON.parse(event.data);
+                if (msg.request_id === requestId) {
+                  clearTimeout(timeout);
+                  ws.removeEventListener('message', handler);
+                  resolve(msg);
+                }
+              } catch {}
+            };
+            ws.addEventListener('message', handler);
+            ws.send(JSON.stringify({ ...payload, request_id: requestId }));
+          });
+
+        const probeApiKey = async (provider: string) => {
           try {
-            const response = await new Promise<any>((resolve, reject) => {
-              const requestId = `init_${provider}_${Date.now()}`;
-              const timeout = setTimeout(() => reject(new Error('Timeout')), 5000);
-
-              const handler = (event: MessageEvent) => {
-                try {
-                  const msg = JSON.parse(event.data);
-                  if (msg.request_id === requestId) {
-                    clearTimeout(timeout);
-                    ws.removeEventListener('message', handler);
-                    resolve(msg);
-                  }
-                } catch {}
-              };
-
-              ws.addEventListener('message', handler);
-              ws.send(JSON.stringify({ type: 'get_stored_api_key', provider, request_id: requestId }));
-            });
-
+            const response = await sendBurstRequest<any>(
+              { type: 'get_stored_api_key', provider },
+              `init_${provider}`,
+            );
             if (response.hasKey) {
               setApiKeyStatuses(prev => ({
                 ...prev,
-                [provider]: { hasKey: true, valid: true }
+                [provider]: { hasKey: true, valid: true },
               }));
             }
           } catch {
             // Ignore errors during initial check
           }
-        }
+        };
 
-        // Load terminal log history
-        try {
-          const terminalResponse = await new Promise<any>((resolve, reject) => {
-            const requestId = `terminal_logs_${Date.now()}`;
-            const timeout = setTimeout(() => reject(new Error('Timeout')), 5000);
-
-            const handler = (event: MessageEvent) => {
-              try {
-                const msg = JSON.parse(event.data);
-                if (msg.request_id === requestId) {
-                  clearTimeout(timeout);
-                  ws.removeEventListener('message', handler);
-                  resolve(msg);
-                }
-              } catch {}
-            };
-
-            ws.addEventListener('message', handler);
-            ws.send(JSON.stringify({ type: 'get_terminal_logs', request_id: requestId }));
-          });
-
-          if (terminalResponse.success && terminalResponse.logs) {
-            // Map server logs to TerminalLogEntry format (newest first)
-            const logs: TerminalLogEntry[] = terminalResponse.logs.map((log: any) => ({
-              timestamp: log.timestamp || new Date().toISOString(),
-              level: log.level || 'info',
-              message: log.message || '',
-              source: log.source,
-              details: log.details
-            })).reverse();  // Server stores oldest first, we want newest first
-            setTerminalLogs(logs);
+        const loadTerminalLogs = async () => {
+          try {
+            const terminalResponse = await sendBurstRequest<any>(
+              { type: 'get_terminal_logs' },
+              'terminal_logs',
+            );
+            if (terminalResponse.success && terminalResponse.logs) {
+              const logs: TerminalLogEntry[] = terminalResponse.logs.map((log: any) => ({
+                timestamp: log.timestamp || new Date().toISOString(),
+                level: log.level || 'info',
+                message: log.message || '',
+                source: log.source,
+                details: log.details,
+              })).reverse();  // Server stores oldest first, we want newest first
+              setTerminalLogs(logs);
+            }
+          } catch {
+            // Ignore errors loading terminal logs
           }
-        } catch {
-          // Ignore errors loading terminal logs
-        }
+        };
 
-        // Load chat message history from database
-        try {
-          const chatResponse = await new Promise<any>((resolve, reject) => {
-            const requestId = `chat_messages_${Date.now()}`;
-            const timeout = setTimeout(() => reject(new Error('Timeout')), 5000);
-
-            const handler = (event: MessageEvent) => {
-              try {
-                const msg = JSON.parse(event.data);
-                if (msg.request_id === requestId) {
-                  clearTimeout(timeout);
-                  ws.removeEventListener('message', handler);
-                  resolve(msg);
-                }
-              } catch {}
-            };
-
-            ws.addEventListener('message', handler);
+        const loadChatHistory = async () => {
+          try {
             // Scope to the currently-open workflow if any. session_id is
             // re-used as the workflow identifier on the chat side so the
             // panel only shows messages tied to this workflow. Falls
-            // back to "default" when no workflow is selected (initial
-            // bootstrap before the user opens any workflow).
+            // back to "default" when no workflow is selected.
             const workflowId = useAppStore.getState().currentWorkflow?.id || 'default';
-            ws.send(JSON.stringify({ type: 'get_chat_messages', session_id: workflowId, request_id: requestId }));
-          });
-
-          if (chatResponse.success && chatResponse.messages) {
-            const messages: ChatMessage[] = chatResponse.messages.map((msg: any) => ({
-              role: msg.role as 'user' | 'assistant',
-              message: msg.message,
-              timestamp: msg.timestamp
-            }));
-            setChatMessages(messages);
+            const chatResponse = await sendBurstRequest<any>(
+              { type: 'get_chat_messages', session_id: workflowId },
+              'chat_messages',
+            );
+            if (chatResponse.success && chatResponse.messages) {
+              const messages: ChatMessage[] = chatResponse.messages.map((msg: any) => ({
+                role: msg.role as 'user' | 'assistant',
+                message: msg.message,
+                timestamp: msg.timestamp,
+              }));
+              setChatMessages(messages);
+            }
+          } catch {
+            // Ignore errors loading chat messages
           }
-        } catch {
-          // Ignore errors loading chat messages
-        }
+        };
 
-        // Load console logs from database
-        try {
-          const consoleRequestId = `console_${Date.now()}`;
-          const consoleResponse = await new Promise<any>((resolve, reject) => {
-            const timeout = setTimeout(() => reject(new Error('Timeout')), 5000);
-
-            const handler = (event: MessageEvent) => {
-              try {
-                const msg = JSON.parse(event.data);
-                if (msg.request_id === consoleRequestId) {
-                  clearTimeout(timeout);
-                  ws.removeEventListener('message', handler);
-                  resolve(msg);
-                }
-              } catch {}
-            };
-
-            ws.addEventListener('message', handler);
+        const loadConsoleLogs = async () => {
+          try {
             // Scope to the currently-open workflow so the panel only
             // shows console output from this workflow's runs.
             const consoleWorkflowId = useAppStore.getState().currentWorkflow?.id;
-            ws.send(JSON.stringify({
-              type: 'get_console_logs',
-              limit: 100,
-              workflow_id: consoleWorkflowId,
-              request_id: consoleRequestId,
-            }));
-          });
-
-          if (consoleResponse.success && consoleResponse.logs) {
-            const logs: ConsoleLogEntry[] = consoleResponse.logs.map((log: any) => ({
-              node_id: log.node_id,
-              label: log.label,
-              timestamp: log.timestamp,
-              data: log.data,
-              formatted: log.formatted,
-              format: log.format,
-              workflow_id: log.workflow_id,
-              source_node_id: log.source_node_id,
-              source_node_type: log.source_node_type,
-              source_node_label: log.source_node_label,
-            }));
-            setConsoleLogs(logs);
+            const consoleResponse = await sendBurstRequest<any>(
+              { type: 'get_console_logs', limit: 100, workflow_id: consoleWorkflowId },
+              'console',
+            );
+            if (consoleResponse.success && consoleResponse.logs) {
+              const logs: ConsoleLogEntry[] = consoleResponse.logs.map((log: any) => ({
+                node_id: log.node_id,
+                label: log.label,
+                timestamp: log.timestamp,
+                data: log.data,
+                formatted: log.formatted,
+                format: log.format,
+                workflow_id: log.workflow_id,
+                source_node_id: log.source_node_id,
+                source_node_type: log.source_node_type,
+                source_node_label: log.source_node_label,
+              }));
+              setConsoleLogs(logs);
+            }
+          } catch {
+            // Ignore errors loading console logs
           }
-        } catch {
-          // Ignore errors loading console logs
-        }
+        };
+
+        const providers = ['openai', 'anthropic', 'gemini', 'google_maps', 'android_remote'];
+        await Promise.allSettled([
+          ...providers.map(probeApiKey),
+          loadTerminalLogs(),
+          loadChatHistory(),
+          loadConsoleLogs(),
+        ]);
 
         // Drain any sends that were queued while the socket was reconnecting.
         // Must run BEFORE setIsReady(true) so isReady-gated callers don't race

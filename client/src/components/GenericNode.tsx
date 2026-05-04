@@ -13,7 +13,9 @@ import EditableNodeLabel from './ui/EditableNodeLabel';
 
 const GenericNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectable, selected }) => {
   const theme = useAppTheme();
-  const { setSelectedNode, setRenamingNodeId, updateNodeData } = useAppStore();
+  const setSelectedNode = useAppStore((s) => s.setSelectedNode);
+  const setRenamingNodeId = useAppStore((s) => s.setRenamingNodeId);
+  const updateNodeData = useAppStore((s) => s.updateNodeData);
   const isDisabled = data?.disabled === true;
 
   // Per-id slice subscription so an unrelated node's status update

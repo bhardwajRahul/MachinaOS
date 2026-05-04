@@ -63,6 +63,22 @@ class _EmptyOutput(BaseModel):
     pass
 
 
+# Group memberships that mark a node as auxiliary configuration —
+# its panel inherits the parent's main inputs instead of showing
+# direct inputs. Centralized here so the frontend doesn't need to
+# know any group strings.
+_CONFIG_NODE_GROUPS = frozenset({"memory", "tool"})
+
+
+def _derive_auto_ui_hints(group: Sequence[str]) -> Dict[str, Any]:
+    """Auto-derived uiHints based on group membership. Plugin-declared
+    ``ui_hints`` override these — explicit always wins."""
+    hints: Dict[str, Any] = {}
+    if any(g in _CONFIG_NODE_GROUPS for g in group):
+        hints["isConfigNode"] = True
+    return hints
+
+
 class BaseNode:
     """Abstract plugin node. Do not instantiate directly — subclass
     :class:`ActionNode`, :class:`TriggerNode`, or :class:`ToolNode`.
@@ -187,8 +203,10 @@ class BaseNode:
             meta["hideOutputHandle"] = True
         if cls.visibility != "all":
             meta["visibility"] = cls.visibility
-        if cls.ui_hints:
-            meta["uiHints"] = dict(cls.ui_hints)
+        ui_hints = _derive_auto_ui_hints(cls.group)
+        ui_hints.update(cls.ui_hints)
+        if ui_hints:
+            meta["uiHints"] = ui_hints
         return meta
 
     # ---- legacy handler adapter ------------------------------------------

@@ -4,7 +4,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Modal from './ui/Modal';
 import CodeEditor from './ui/CodeEditor';
-import { useAppTheme } from '../hooks/useAppTheme';
 import { useWebSocket } from '../contexts/WebSocketContext';
 import {
   Form,
@@ -25,6 +24,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { ActionButton } from '@/components/ui/action-button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Switch } from '@/components/ui/switch';
 
 // ---------------------------------------------------------------------------
@@ -107,7 +108,6 @@ const SkillEditorModal: React.FC<SkillEditorModalProps> = ({
   skill,
   onSave,
 }) => {
-  const theme = useAppTheme();
   const { sendRequest } = useWebSocket();
   const [activeTab, setActiveTab] = React.useState<'details' | 'instructions'>('details');
   const [submitError, setSubmitError] = React.useState<string | null>(null);
@@ -157,7 +157,7 @@ const SkillEditorModal: React.FC<SkillEditorModalProps> = ({
   const isExisting = !!form.watch('id');
   const tabBaseClass =
     'px-4 py-2 text-sm font-medium border-b-2 border-transparent transition-colors';
-  const tabActiveClass = 'border-dracula-purple text-foreground';
+  const tabActiveClass = 'border-primary text-foreground';
   const tabInactiveClass = 'text-muted-foreground hover:text-foreground';
 
   return (
@@ -382,27 +382,18 @@ const SkillEditorModal: React.FC<SkillEditorModalProps> = ({
           </div>
 
           {submitError && (
-            <div
-              className="border-t border-border bg-dracula-red/15 px-4 py-3 text-sm text-dracula-red"
-            >
-              {submitError}
-            </div>
+            <Alert variant="destructive" className="rounded-none border-x-0 border-b-0">
+              <AlertDescription>{submitError}</AlertDescription>
+            </Alert>
           )}
 
-          <div
-            className="flex justify-end gap-3 border-t border-border bg-card px-4 py-3"
-            style={{ backgroundColor: theme.colors.backgroundPanel }}
-          >
+          <div className="flex justify-end gap-3 border-t border-border bg-card px-4 py-3">
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button
-              type="submit"
-              disabled={isSaving}
-              className="bg-dracula-purple text-white hover:bg-dracula-purple/90"
-            >
+            <ActionButton intent="save" type="submit" disabled={isSaving}>
               {isSaving ? 'Saving...' : isExisting ? 'Update Skill' : 'Create Skill'}
-            </Button>
+            </ActionButton>
           </div>
         </form>
       </Form>

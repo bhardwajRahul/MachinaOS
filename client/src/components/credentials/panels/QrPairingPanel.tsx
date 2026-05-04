@@ -8,7 +8,6 @@ import React, { useMemo } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import ApiKeyInput from '../../ui/ApiKeyInput';
 import QRCodeDisplay from '../../ui/QRCodeDisplay';
-import { useAppTheme } from '../../../hooks/useAppTheme';
 import { useWebSocket } from '../../../contexts/WebSocketContext';
 import { useWhatsApp } from '../../../hooks/useWhatsApp';
 import { useCredentialPanel } from '../useCredentialPanel';
@@ -20,7 +19,6 @@ import type { ActionDef } from '../primitives/ActionBar';
 import type { ProviderConfig } from '../types';
 
 const QrPairingPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = ({ config, visible }) => {
-  const theme = useAppTheme();
   const panel = useCredentialPanel(config, visible);
   const status = useProviderStatus(config.statusHook);
   const { startConnection, restartConnection, getStatus: refreshWa } = useWhatsApp();
@@ -48,7 +46,7 @@ const QrPairingPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = (
   const actions: ActionDef[] = (config.actions ?? []).map(a => ({
     key: a.key,
     label: a.label,
-    color: (theme.dracula as any)[a.themeColor] ?? a.themeColor,
+    intent: a.intent,
     onClick: actionHandlers[a.key] ?? (() => {}),
     hidden: a.hidden?.(status, panel.stored),
     disabled: a.disabled?.(status, panel.stored),

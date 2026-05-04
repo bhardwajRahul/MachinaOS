@@ -48,9 +48,9 @@ export const PROVIDERS: ProviderConfig[] = [
       { label: 'Service', ok: s => !!s?.running,     trueText: 'Running',   falseText: 'Stopped' },
     ],
     actions: [
-      { key: 'start',   label: 'Start',   themeColor: 'green' },
-      { key: 'restart', label: 'Restart', themeColor: 'orange' },
-      { key: 'refresh', label: 'Refresh', themeColor: 'cyan' },
+      { key: 'start',   label: 'Start',   intent: 'run' },
+      { key: 'restart', label: 'Restart', intent: 'config' },
+      { key: 'refresh', label: 'Refresh', intent: 'save' },
     ],
     qr: {
       qrField: 'qr',
@@ -123,9 +123,9 @@ export const PROVIDERS: ProviderConfig[] = [
       { label: 'Pairing', ok: s => !!s?.paired,    trueText: 'Paired',    falseText: 'Waiting', warn: true },
     ],
     actions: [
-      { key: 'connect',    label: 'Connect',    themeColor: 'green',
+      { key: 'connect',    label: 'Connect',    intent: 'save',
         disabled: (s, stored) => !!s?.paired || !stored },
-      { key: 'disconnect', label: 'Disconnect', themeColor: 'pink',
+      { key: 'disconnect', label: 'Disconnect', intent: 'stop',
         disabled: s => !s?.connected },
     ],
     qr: {

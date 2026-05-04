@@ -116,26 +116,32 @@
      * convention). */
     --action-run:           135 94% 65%;        /* primary CTA: deploy / run */
     --action-run-soft:      135 94% 65% / 0.15;
+    --action-run-hover:     135 94% 65% / 0.25;
     --action-run-border:    135 94% 65% / 0.6;
 
     --action-stop:          326 100% 74%;       /* destructive: stop / cancel / logout */
     --action-stop-soft:     326 100% 74% / 0.15;
+    --action-stop-hover:    326 100% 74% / 0.25;
     --action-stop-border:   326 100% 74% / 0.6;
 
     --action-save:          191 97% 77%;        /* commit / save / panel toggle */
     --action-save-soft:     191 97% 77% / 0.15;
+    --action-save-hover:    191 97% 77% / 0.25;
     --action-save-border:   191 97% 77% / 0.6;
 
     --action-config:        27 100% 71%;        /* settings / config / warning */
     --action-config-soft:   27 100% 71% / 0.15;
+    --action-config-hover:  27 100% 71% / 0.25;
     --action-config-border: 27 100% 71% / 0.6;
 
     --action-secret:        65 92% 76%;         /* credentials / theme toggle */
     --action-secret-soft:   65 92% 76% / 0.15;
+    --action-secret-hover:  65 92% 76% / 0.25;
     --action-secret-border: 65 92% 76% / 0.6;
 
     --action-tools:         265 89% 78%;        /* component palette / creative */
     --action-tools-soft:    265 89% 78% / 0.15;
+    --action-tools-hover:   265 89% 78% / 0.25;
     --action-tools-border:  265 89% 78% / 0.6;
   }
 
@@ -265,21 +271,27 @@
    * the standard "soft tinted button" look (see ActionButton CVA). */
   --color-action-run:           hsl(var(--action-run));
   --color-action-run-soft:      hsl(var(--action-run-soft));
+  --color-action-run-hover:     hsl(var(--action-run-hover));
   --color-action-run-border:    hsl(var(--action-run-border));
   --color-action-stop:          hsl(var(--action-stop));
   --color-action-stop-soft:     hsl(var(--action-stop-soft));
+  --color-action-stop-hover:    hsl(var(--action-stop-hover));
   --color-action-stop-border:   hsl(var(--action-stop-border));
   --color-action-save:          hsl(var(--action-save));
   --color-action-save-soft:     hsl(var(--action-save-soft));
+  --color-action-save-hover:    hsl(var(--action-save-hover));
   --color-action-save-border:   hsl(var(--action-save-border));
   --color-action-config:        hsl(var(--action-config));
   --color-action-config-soft:   hsl(var(--action-config-soft));
+  --color-action-config-hover:  hsl(var(--action-config-hover));
   --color-action-config-border: hsl(var(--action-config-border));
   --color-action-secret:        hsl(var(--action-secret));
   --color-action-secret-soft:   hsl(var(--action-secret-soft));
+  --color-action-secret-hover:  hsl(var(--action-secret-hover));
   --color-action-secret-border: hsl(var(--action-secret-border));
   --color-action-tools:         hsl(var(--action-tools));
   --color-action-tools-soft:    hsl(var(--action-tools-soft));
+  --color-action-tools-hover:   hsl(var(--action-tools-hover));
   --color-action-tools-border:  hsl(var(--action-tools-border));
 
   --radius-sm: calc(var(--radius) - 4px);

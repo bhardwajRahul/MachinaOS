@@ -3,7 +3,8 @@
  * Dashboard. Split into named groups so a new status visual or keyframe
  * can be added without touching Dashboard.tsx.
  *
- *   KEYFRAMES                -- @keyframes definitions
+ *   KEYFRAMES                -- @keyframes definitions (color-agnostic;
+ *                               consume scoped --node-glow* CSS vars)
  *   edgeStatusStyles(...)    -- .react-flow__edge.{selected,executing,...}
  *   nodeStatusStyles(...)    -- .react-flow__node.{executing,...}
  *   buildCanvasStyles(...)   -- composes the three for Dashboard
@@ -11,6 +12,10 @@
  * Per-node inline animations (border pulse, etc.) live in their own
  * components and read theme tokens directly; this module is for
  * canvas-wide rules that need to match React Flow's wrapper classes.
+ *
+ * The light vs dark distinction is encoded entirely in `colors` (the
+ * theme object provides different values per mode), so this file knows
+ * nothing about which theme is active.
  */
 
 export interface CanvasStatusColors {
@@ -19,6 +24,9 @@ export interface CanvasStatusColors {
   edgeExecuting: string;
   edgeCompleted: string;
   edgeError: string;
+  edgePending: string;
+  edgeMemoryActive: string;
+  edgeToolActive: string;
 }
 
 const KEYFRAMES = `
@@ -27,18 +35,13 @@ const KEYFRAMES = `
     100% { stroke-dashoffset: 0; }
   }
 
-  @keyframes nodeGlowDark {
+  @keyframes nodeGlow {
     0%, 100% { filter: drop-shadow(0 0 8px var(--node-glow)) drop-shadow(0 0 16px var(--node-glow-soft)); }
     50%      { filter: drop-shadow(0 0 14px var(--node-glow)) drop-shadow(0 0 24px var(--node-glow)); }
   }
-
-  @keyframes nodeGlowLight {
-    0%, 100% { filter: drop-shadow(0 0 10px rgba(37, 99, 235, 0.8)) drop-shadow(0 0 20px rgba(37, 99, 235, 0.6)); }
-    50%      { filter: drop-shadow(0 0 16px rgba(37, 99, 235, 1))   drop-shadow(0 0 30px rgba(37, 99, 235, 0.8)); }
-  }
 `;
 
-function edgeStatusStyles(colors: CanvasStatusColors, isDark: boolean): string {
+function edgeStatusStyles(colors: CanvasStatusColors): string {
   return `
   .react-flow__edge path {
     stroke: ${colors.edgeDefault} !important;
@@ -51,14 +54,14 @@ function edgeStatusStyles(colors: CanvasStatusColors, isDark: boolean): string {
   }
 
   .react-flow__edge.executing path {
-    stroke: ${isDark ? colors.edgeExecuting : '#2563eb'} !important;
+    stroke: ${colors.edgeExecuting} !important;
     stroke-width: 3px !important;
     stroke-dasharray: 8 4;
     animation: dashFlow 0.5s linear infinite;
   }
 
   .react-flow__edge.completed path {
-    stroke: ${isDark ? colors.edgeCompleted : '#16a34a'} !important;
+    stroke: ${colors.edgeCompleted} !important;
     stroke-width: 2px !important;
   }
 
@@ -68,45 +71,42 @@ function edgeStatusStyles(colors: CanvasStatusColors, isDark: boolean): string {
   }
 
   .react-flow__edge.pending path {
-    stroke: ${isDark ? colors.edgeDefault : '#6b7280'} !important;
+    stroke: ${colors.edgePending} !important;
     stroke-width: 2px !important;
     stroke-dasharray: 8 4;
     animation: dashFlow 0.5s linear infinite;
   }
 
   .react-flow__edge.memory-active path {
-    stroke: ${isDark ? '#ff79c6' : '#db2777'} !important;
+    stroke: ${colors.edgeMemoryActive} !important;
     stroke-width: 3px !important;
   }
 
   .react-flow__edge.tool-active path {
-    stroke: ${isDark ? '#ffb86c' : '#ea580c'} !important;
+    stroke: ${colors.edgeToolActive} !important;
     stroke-width: 3px !important;
   }
 `;
 }
 
-function nodeStatusStyles(colors: CanvasStatusColors, isDark: boolean): string {
+function nodeStatusStyles(colors: CanvasStatusColors): string {
   // --node-glow / --node-glow-soft are scoped vars consumed by the
-  // nodeGlowDark keyframe, so the keyframe stays color-agnostic and
-  // theme swaps don't require regenerating the keyframe text.
+  // nodeGlow keyframe, so the keyframe stays color-agnostic and theme
+  // swaps don't require regenerating the keyframe text.
   const glow = colors.edgeExecuting;
   return `
   .react-flow__node.executing {
     --node-glow: ${glow};
     --node-glow-soft: ${glow}80;
-    animation: ${isDark ? 'nodeGlowDark' : 'nodeGlowLight'} 1.2s ease-in-out infinite;
+    animation: nodeGlow 1.2s ease-in-out infinite;
   }
 `;
 }
 
-export function buildCanvasStyles(
-  colors: CanvasStatusColors,
-  isDark: boolean,
-): string {
+export function buildCanvasStyles(colors: CanvasStatusColors): string {
   return [
-    edgeStatusStyles(colors, isDark),
-    nodeStatusStyles(colors, isDark),
+    edgeStatusStyles(colors),
+    nodeStatusStyles(colors),
     KEYFRAMES,
   ].join('\n');
 }

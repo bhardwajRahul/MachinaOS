@@ -13,7 +13,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
+import { ActionButton } from '@/components/ui/action-button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Form,
@@ -31,7 +31,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useAppTheme } from '../../../hooks/useAppTheme';
 import { useApiKeys } from '../../../hooks/useApiKeys';
 import { NodeIcon } from '../../../assets/icons';
 import { StatusCard } from '../primitives';
@@ -54,7 +53,6 @@ const DEFAULT_VALUES: EmailFormValues = {
 };
 
 const EmailPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = ({ config, visible }) => {
-  const theme = useAppTheme();
   const { saveApiKey, getStoredApiKey, hasStoredKey, removeApiKey, isConnected } = useApiKeys();
 
   const [stored, setStored] = useState(false);
@@ -333,35 +331,25 @@ const EmailPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = ({ co
       <div className="flex-1" />
 
       <div className="flex justify-center gap-2 border-t border-border pt-3">
-        <Button
+        <ActionButton
+          intent="save"
           type="submit"
           form="email-form"
-          variant="outline"
           disabled={loading === 'save'}
-          style={{
-            backgroundColor: `${theme.dracula.green}25`,
-            borderColor: `${theme.dracula.green}60`,
-            color: theme.dracula.green,
-          }}
         >
           {loading === 'save' && <Loader2 className="h-4 w-4 animate-spin" />}
           Save
-        </Button>
+        </ActionButton>
         {stored && (
-          <Button
+          <ActionButton
+            intent="stop"
             type="button"
-            variant="outline"
             onClick={handleRemove}
             disabled={loading === 'remove'}
-            style={{
-              backgroundColor: `${theme.dracula.pink}25`,
-              borderColor: `${theme.dracula.pink}60`,
-              color: theme.dracula.pink,
-            }}
           >
             {loading === 'remove' && <Loader2 className="h-4 w-4 animate-spin" />}
             Remove
-          </Button>
+          </ActionButton>
         )}
       </div>
     </div>

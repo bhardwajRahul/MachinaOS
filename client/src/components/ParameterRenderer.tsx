@@ -983,7 +983,7 @@ const ParameterRenderer: React.FC<ParameterRendererProps> = ({
   const [dynamicOptions, setDynamicOptions] = useState<INodePropertyOption[]>([]);
   const [nodeParameters, setNodeParameters] = useState<Record<string, any>>({});
 
-  const { selectedNode } = useAppStore();
+  const selectedNode = useAppStore((s) => s.selectedNode);
   const { getNodeParameters, sendRequest } = useWebSocket();
   const { getStoredApiKey, hasStoredKey, getStoredModels, getProviderDefaults } = useApiKeys();
 

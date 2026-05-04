@@ -27,9 +27,14 @@ import type { Node, Edge, Connection } from 'reactflow';
 import { useWebSocket } from '../contexts/WebSocketContext';
 import { useUserSettingsQuery } from './useUserSettingsQuery';
 import { applyOperations, type WorkflowOperation } from '../lib/workflowOps';
+import { getCachedNodeSpec } from '../lib/nodeSpec';
 
-const MASTER_SKILL_TYPE = 'masterSkill';
 const SKILL_HANDLE = 'input-skill';
+
+const isMasterSkillNode = (nodeType: string | undefined): boolean => {
+  if (!nodeType) return false;
+  return (getCachedNodeSpec(nodeType)?.uiHints as any)?.isMasterSkillEditor === true;
+};
 
 interface UseAutoSkillEdgesProps {
   baseOnConnect: (params: Edge | Connection) => void;
@@ -73,7 +78,7 @@ export function useAutoSkillEdges({
         e => e.target === targetId && e.targetHandle === SKILL_HANDLE,
       );
       const masterSkillNode = skillEdge && nodes.find(
-        n => n.id === skillEdge.source && n.type === MASTER_SKILL_TYPE,
+        n => n.id === skillEdge.source && isMasterSkillNode(n.type),
       );
       const masterSkillId = masterSkillNode?.id ?? null;
       // node.data only stores the label (see CLAUDE.md "Node Data

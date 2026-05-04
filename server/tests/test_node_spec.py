@@ -777,6 +777,11 @@ class TestNodeSpecContractInvariants:
             "width", "height",
             # Wave 10.G.5: start-node's user-authored JSON blob marker
             "hasInitialDataBlob",
+            # Auto-derived from group membership ('memory' / 'tool') by
+            # _derive_auto_ui_hints in services/plugin/base.py. Tells the
+            # parameter panel that this node is an auxiliary config node
+            # and should inherit the parent's main inputs.
+            "isConfigNode",
         }
         for node_type, meta in NODE_METADATA.items():
             hints = meta.get("uiHints") or {}

@@ -47,7 +47,6 @@ import { useAutoSkillEdges } from './hooks/useAutoSkillEdges';
 import { useCopyPaste } from './hooks/useCopyPaste';
 import { useWebSocket } from './contexts/WebSocketContext';
 import { useNodeStatusStore } from './stores/nodeStatusStore';
-import { useTheme } from './contexts/ThemeContext';
 import {
   sanitizeNodesForComparison,
   sanitizeEdgesForComparison,
@@ -95,7 +94,7 @@ const createNodeTypes = (): Record<string, React.ComponentType<any>> => {
       types[spec.type] = COMPONENT_BY_KIND[kind];
     } else if (spec.type === 'teamMonitor') {
       types[spec.type] = TeamMonitorNode;
-    } else if (spec.type === 'masterSkill') {
+    } else if ((spec.uiHints as any)?.isMasterSkillEditor === true) {
       types[spec.type] = ToolkitNode;
     } else {
       types[spec.type] = SquareNode;
@@ -120,35 +119,36 @@ const initialEdges: Edge[] = [];
 // Inner component that uses useReactFlow() - must be inside ReactFlowProvider
 const DashboardContent: React.FC = () => {
   const theme = useAppTheme();
-  const { isDarkMode } = useTheme();
-  const {
-    currentWorkflow,
-    hasUnsavedChanges,
-    sidebarVisible,
-    componentPaletteVisible,
-    updateWorkflow,
-    loadWorkflow,
-    createNewWorkflow,
-    saveWorkflow,
-    deleteWorkflow,
-    migrateCurrentWorkflow,
-    toggleSidebar,
-    toggleComponentPalette,
-    proMode,
-    toggleProMode,
-    exportWorkflowToJSON,
-    exportWorkflowToFile,
-    setCurrentWorkflow,
-    selectedNode,
-    setSelectedNode,
-    renamingNodeId,
-    setRenamingNodeId,
-    // Per-workflow UI state (n8n pattern)
-    setWorkflowExecuting,
-    setWorkflowExecutionOrder,
-    setWorkflowViewport,
-    clearWorkflowExecutionState,
-  } = useAppStore();
+  // Slice selectors so a sidebar/palette toggle (or any other store
+  // mutation) does NOT re-render every node, edge, and toolbar in the
+  // Dashboard subtree. Action setters are stable refs from Zustand —
+  // single-field selectors are the cheapest way to read them.
+  const currentWorkflow = useAppStore((s) => s.currentWorkflow);
+  const hasUnsavedChanges = useAppStore((s) => s.hasUnsavedChanges);
+  const sidebarVisible = useAppStore((s) => s.sidebarVisible);
+  const componentPaletteVisible = useAppStore((s) => s.componentPaletteVisible);
+  const updateWorkflow = useAppStore((s) => s.updateWorkflow);
+  const loadWorkflow = useAppStore((s) => s.loadWorkflow);
+  const createNewWorkflow = useAppStore((s) => s.createNewWorkflow);
+  const saveWorkflow = useAppStore((s) => s.saveWorkflow);
+  const deleteWorkflow = useAppStore((s) => s.deleteWorkflow);
+  const migrateCurrentWorkflow = useAppStore((s) => s.migrateCurrentWorkflow);
+  const toggleSidebar = useAppStore((s) => s.toggleSidebar);
+  const toggleComponentPalette = useAppStore((s) => s.toggleComponentPalette);
+  const proMode = useAppStore((s) => s.proMode);
+  const toggleProMode = useAppStore((s) => s.toggleProMode);
+  const exportWorkflowToJSON = useAppStore((s) => s.exportWorkflowToJSON);
+  const exportWorkflowToFile = useAppStore((s) => s.exportWorkflowToFile);
+  const setCurrentWorkflow = useAppStore((s) => s.setCurrentWorkflow);
+  const selectedNode = useAppStore((s) => s.selectedNode);
+  const setSelectedNode = useAppStore((s) => s.setSelectedNode);
+  const renamingNodeId = useAppStore((s) => s.renamingNodeId);
+  const setRenamingNodeId = useAppStore((s) => s.setRenamingNodeId);
+  // Per-workflow UI state (n8n pattern)
+  const setWorkflowExecuting = useAppStore((s) => s.setWorkflowExecuting);
+  const setWorkflowExecutionOrder = useAppStore((s) => s.setWorkflowExecutionOrder);
+  const setWorkflowViewport = useAppStore((s) => s.setWorkflowViewport);
+  const clearWorkflowExecutionState = useAppStore((s) => s.clearWorkflowExecutionState);
   
   // Single source-to-store sync: push currentWorkflow.id into the
   // node-status Zustand store from the canonical app store. Previously
@@ -1089,7 +1089,7 @@ const DashboardContent: React.FC = () => {
 
   return (
     <>
-      <style>{buildCanvasStyles(theme.colors, isDarkMode)}</style>
+      <style>{buildCanvasStyles(theme.colors)}</style>
       <div style={{
         width: '100%',
         height: '100vh',

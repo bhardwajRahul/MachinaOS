@@ -65,6 +65,19 @@ function buildStatusRows(defs: ServerStatusRowDef[] | undefined): StatusRowDef[]
   }));
 }
 
+// Server sends a palette name (`green`, `pink`, etc.) for backwards
+// compatibility; map onto the semantic --action-X intents the
+// frontend's ActionButton consumes. Anything unrecognized falls back
+// to `save` (the neutral CTA).
+const SERVER_COLOR_TO_INTENT: Record<string, ActionDef['intent']> = {
+  green: 'run',
+  pink: 'stop',
+  cyan: 'save',
+  orange: 'config',
+  yellow: 'secret',
+  purple: 'tools',
+};
+
 function buildActions(defs: ServerActionDef[] | undefined): ActionDef[] | undefined {
   if (!defs || defs.length === 0) return undefined;
   return defs.map((d) => {
@@ -82,7 +95,7 @@ function buildActions(defs: ServerActionDef[] | undefined): ActionDef[] | undefi
     return {
       key: d.key,
       label: d.label,
-      themeColor: d.theme_color,
+      intent: SERVER_COLOR_TO_INTENT[d.theme_color] ?? 'save',
       disabled,
     };
   });

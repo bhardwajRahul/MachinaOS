@@ -34,6 +34,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { ActionButton } from '@/components/ui/action-button';
 import { Checkbox } from '@/components/ui/checkbox';
 
 import { resolveNodeDescription } from '../../lib/nodeSpec';
@@ -125,7 +126,7 @@ function formValuesToConfig(values: ToolSchemaFormValues): ToolSchemaConfig {
 const ToolSchemaEditor: React.FC<ToolSchemaEditorProps> = ({ nodeId }) => {
   const { getToolSchema, saveToolSchema, deleteToolSchema, isLoading } = useToolSchema();
   const { isConnected } = useWebSocket();
-  const { currentWorkflow } = useAppStore();
+  const currentWorkflow = useAppStore((s) => s.currentWorkflow);
 
   const currentNode = useMemo(() => {
     if (!currentWorkflow?.nodes) return null;
@@ -279,18 +280,16 @@ const ToolSchemaEditor: React.FC<ToolSchemaEditorProps> = ({ nodeId }) => {
                 )}
               </div>
             ) : (
-              <div className="mb-3 rounded border border-dracula-orange/30 bg-dracula-orange/10 p-2 text-sm text-dracula-orange">
+              <div className="mb-3 rounded border border-warning/30 bg-warning/10 p-2 text-sm text-warning">
                 Connect Android nodes to the input handle
               </div>
             )}
 
             <div className="mb-2 flex items-center justify-between">
               <label className="text-sm text-muted-foreground">Schema Fields</label>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 border-dracula-cyan/40 bg-dracula-cyan/15 text-dracula-cyan hover:bg-dracula-cyan/25"
+              <ActionButton
+                intent="config"
+                className="h-7"
                 onClick={() =>
                   append({
                     name: `field_${fields.length + 1}`,
@@ -301,7 +300,7 @@ const ToolSchemaEditor: React.FC<ToolSchemaEditorProps> = ({ nodeId }) => {
                 }
               >
                 + Add
-              </Button>
+              </ActionButton>
             </div>
 
             <div className="flex flex-col gap-1">
@@ -315,14 +314,13 @@ const ToolSchemaEditor: React.FC<ToolSchemaEditorProps> = ({ nodeId }) => {
                 <Button type="button" variant="outline" size="sm" onClick={handleReset}>
                   Reset
                 </Button>
-                <Button
+                <ActionButton
+                  intent="save"
                   type="submit"
-                  size="sm"
                   disabled={isLoading || saveStatus === 'saving'}
-                  className="border-dracula-green/40 bg-dracula-green/15 text-dracula-green hover:bg-dracula-green/25"
                 >
                   {saveStatus === 'saving' ? 'Saving...' : saveStatus === 'saved' ? 'Saved!' : 'Save'}
-                </Button>
+                </ActionButton>
               </div>
             )}
           </form>
@@ -391,14 +389,13 @@ const FieldRow: React.FC<{ index: number; onRemove: () => void }> = ({ index, on
             </FormItem>
           )}
         />
-        <Button
-          type="button"
-          size="sm"
+        <ActionButton
+          intent="stop"
           onClick={onRemove}
-          className="h-7 border-none bg-dracula-red/15 px-2 text-xs text-dracula-red hover:bg-dracula-red/25"
+          className="h-7 px-2 text-xs"
         >
           X
-        </Button>
+        </ActionButton>
       </div>
       <FormField
         control={control}

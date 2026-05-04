@@ -31,7 +31,13 @@ const CREDENTIAL_TO_PROVIDER: Record<string, string> = {
 
 const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectable, selected }) => {
   const theme = useAppTheme();
-  const { setSelectedNode, setRenamingNodeId, updateNodeData } = useAppStore();
+  // Slice selectors so an unrelated store mutation (sidebar toggle,
+  // workflow rename, parameter save on another node) does NOT re-render
+  // every canvas node. Setters are stable refs — single-field selector
+  // is the cheapest read.
+  const setSelectedNode = useAppStore((s) => s.setSelectedNode);
+  const setRenamingNodeId = useAppStore((s) => s.setRenamingNodeId);
+  const updateNodeData = useAppStore((s) => s.updateNodeData);
   const isDisabled = data?.disabled === true;
 
   // Get Android status + API key status from the broad WebSocket

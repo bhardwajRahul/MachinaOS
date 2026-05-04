@@ -6,9 +6,8 @@
 
 import React from 'react';
 import { Loader2, RotateCcw } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { useAppTheme } from '../../../hooks/useAppTheme';
+import { ActionButton } from '@/components/ui/action-button';
 import FieldRenderer from './FieldRenderer';
 import ActionBar, { type ActionDef } from './ActionBar';
 import StatusCard from './StatusCard';
@@ -39,17 +38,22 @@ const OAuthConnect: React.FC<Props> = ({
   config, form, connected, stored, loading, error, icon,
   onSaveCredentials, onLogin, onLogout, onRefresh, extraSection,
 }) => {
-  const theme = useAppTheme();
+  // Some providers (e.g. Stripe) delegate auth entirely to an external
+  // CLI tool — they have no MachinaOs-side credentials to paste, so
+  // there's nothing to "store" before Login is meaningful.
+  const hasFields = !!config.fields?.length;
 
   const statusRows: StatusRowDef[] = [
     { label: 'Status', ok: () => connected, trueText: 'Connected', falseText: 'Not Connected' },
-    { label: 'Credentials', ok: () => stored, trueText: 'Configured', falseText: 'Not configured' },
+    ...(hasFields
+      ? [{ label: 'Credentials', ok: () => stored, trueText: 'Configured', falseText: 'Not configured' } as StatusRowDef]
+      : []),
   ];
 
   const actions: ActionDef[] = [
-    { key: 'login', label: `Login with ${config.name}`, color: theme.dracula.green, onClick: onLogin, disabled: !stored, hidden: connected },
-    { key: 'logout', label: 'Disconnect', color: theme.dracula.pink, onClick: onLogout, hidden: !connected },
-    { key: 'refresh', label: 'Refresh', color: theme.dracula.cyan, onClick: onRefresh, icon: <RotateCcw className="h-4 w-4" /> },
+    { key: 'login', label: `Login with ${config.name}`, intent: 'save', onClick: onLogin, disabled: hasFields && !stored, hidden: connected },
+    { key: 'logout', label: 'Disconnect', intent: 'stop', onClick: onLogout, hidden: !connected },
+    { key: 'refresh', label: 'Refresh', intent: 'save', onClick: onRefresh, icon: <RotateCcw className="h-4 w-4" /> },
   ];
 
   const isSaving = loading === 'save';
@@ -61,19 +65,10 @@ const OAuthConnect: React.FC<Props> = ({
       {!connected && config.fields && (
         <div className="flex w-full flex-col gap-3">
           <FieldRenderer fields={config.fields} form={form} />
-          <Button
-            variant="outline"
-            onClick={onSaveCredentials}
-            disabled={isSaving}
-            style={{
-              backgroundColor: `${theme.dracula.purple}25`,
-              borderColor: `${theme.dracula.purple}60`,
-              color: theme.dracula.purple,
-            }}
-          >
+          <ActionButton intent="secret" onClick={onSaveCredentials} disabled={isSaving}>
             {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
             Save Credentials
-          </Button>
+          </ActionButton>
           {config.instructions && (
             <div className="text-xs leading-relaxed text-muted-foreground">
               {config.instructions}
@@ -81,7 +76,7 @@ const OAuthConnect: React.FC<Props> = ({
                 <>
                   <br />
                   Callback URL:{' '}
-                  <code className="text-dracula-cyan">{config.callbackUrl}</code>
+                  <code className="text-accent">{config.callbackUrl}</code>
                 </>
               )}
             </div>
@@ -95,17 +90,11 @@ const OAuthConnect: React.FC<Props> = ({
         </Alert>
       )}
 
-      <div
-        className="rounded-md border p-3"
-        style={{
-          backgroundColor: `${theme.dracula.cyan}10`,
-          borderColor: `${theme.dracula.cyan}30`,
-        }}
-      >
+      <div className="rounded-md border border-accent/30 bg-accent/10 p-3">
         <div className="text-sm leading-relaxed text-muted-foreground">
           {connected
             ? `Your ${config.name} account is connected.`
-            : stored
+            : (stored || !hasFields)
               ? 'Click Login to authorize.'
               : 'Enter your credentials above to get started.'}
         </div>

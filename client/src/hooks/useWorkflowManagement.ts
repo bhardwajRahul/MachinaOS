@@ -3,14 +3,12 @@ import { useAppStore } from '../store/useAppStore';
 import { useWorkflowsQuery, type SavedWorkflow } from './useWorkflowsQuery';
 
 export const useWorkflowManagement = () => {
-  const {
-    currentWorkflow,
-    hasUnsavedChanges,
-    updateWorkflow,
-    saveWorkflow,
-    loadWorkflow,
-    createNewWorkflow,
-  } = useAppStore();
+  const currentWorkflow = useAppStore((s) => s.currentWorkflow);
+  const hasUnsavedChanges = useAppStore((s) => s.hasUnsavedChanges);
+  const updateWorkflow = useAppStore((s) => s.updateWorkflow);
+  const saveWorkflow = useAppStore((s) => s.saveWorkflow);
+  const loadWorkflow = useAppStore((s) => s.loadWorkflow);
+  const createNewWorkflow = useAppStore((s) => s.createNewWorkflow);
 
   const { data: savedWorkflows = [] } = useWorkflowsQuery();
 

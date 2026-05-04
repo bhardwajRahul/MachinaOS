@@ -5,13 +5,14 @@
 
 import React from 'react';
 import { Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { ActionButton } from '@/components/ui/action-button';
+import type { ActionButtonIntent } from '@/components/ui/action-button';
 
 export interface ActionDef {
   key: string;
   label: string;
-  /** Dracula color string from theme (e.g., theme.dracula.green). */
-  color: string;
+  /** Semantic role consumed by `<ActionButton intent="...">`. */
+  intent: ActionButtonIntent;
   onClick: () => void;
   disabled?: boolean;
   icon?: React.ReactNode;
@@ -31,20 +32,15 @@ const ActionBar: React.FC<Props> = ({ actions, loading }) => {
         .map((a) => {
           const isLoading = loading === a.key;
           return (
-            <Button
+            <ActionButton
               key={a.key}
-              variant="outline"
+              intent={a.intent}
               onClick={a.onClick}
               disabled={a.disabled || isLoading}
-              style={{
-                backgroundColor: `${a.color}25`,
-                borderColor: `${a.color}60`,
-                color: a.color,
-              }}
             >
               {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : a.icon}
               {a.label}
-            </Button>
+            </ActionButton>
           );
         })}
     </div>

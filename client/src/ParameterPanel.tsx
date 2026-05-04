@@ -22,7 +22,7 @@ const ParameterPanel: React.FC = () => {
     isLoading,
   } = useParameterPanel();
 
-  const { currentWorkflow } = useAppStore();
+  const currentWorkflow = useAppStore((s) => s.currentWorkflow);
   const { executeNode, getNodeParameters, clearNodeStatus, cancelEventWait, getNodeStatus } = useWebSocket();
 
   // Get current node status to check if waiting
