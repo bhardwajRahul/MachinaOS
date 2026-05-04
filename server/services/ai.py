@@ -11,45 +11,43 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional, Callable, Type, TypedDict, Annotated, Sequence, TYPE_CHECKING
 import operator
 
-_ai_t0 = time.perf_counter()
-
-
-def _ailog(msg):
-    elapsed = (time.perf_counter() - _ai_t0) * 1000
-    print(f"           ai.py: {msg} ({elapsed:.0f}ms)", flush=True)
-
-
 # ---------------------------------------------------------------------------
-# LangChain imports — split by cost.
+# LangChain imports — fully lazy except for ``BaseMessage``.
 #
-# The heavy ones (``langchain_anthropic`` ~800ms, ``langchain_groq`` ~270ms,
-# ``langchain_cerebras`` if installed) are deferred via a lazy provider-class
-# resolver. They are only needed when an AI agent actually runs through the
-# LangChain agent path; the native LLM SDK (``services/llm/``) handles
-# ``execute_chat()`` without LangChain entirely.
+# Cold-start measurement (Windows, fresh disk):
+#   ``from langchain_openai import ChatOpenAI``          ~20.8s (pulls openai SDK + tiktoken)
+#   ``from langchain_core.tools/langgraph/pydantic``     ~3.0s (langgraph state-graph init)
+# Total eager cost was ~23.8s on first launch.
 #
-# The light ones (``langchain_openai``, ``langchain_core.messages``,
-# ``langgraph``, ``langchain_core.tools``, ``pydantic``) total ~17ms and are
-# tightly coupled to module-level type annotations / dataclasses, so we keep
-# them eager. Saves ~1.05s of cold-start time without touching type hints.
+# ``services/llm/`` (the native LLM SDK layer) handles ``execute_chat()`` and
+# ``fetch_models()`` without LangChain. LangChain is only needed on the agent
+# execution path (``execute_agent`` / ``execute_chat_agent``). Deferring the
+# imports until the first agent run trims that 23.8s off server-ready time.
 #
-# Type-only imports go behind ``TYPE_CHECKING`` so static analyzers see them
-# without paying the runtime cost.
+# Only ``BaseMessage`` stays eager: ``AgentState`` (a module-level TypedDict)
+# carries ``Annotated[Sequence[BaseMessage], operator.add]``, which LangGraph
+# resolves via ``typing.get_type_hints()`` when ``StateGraph(AgentState)`` is
+# constructed. ``get_type_hints`` ``eval()``s the string annotations against
+# this module's globals, and ``module.__getattr__`` is NOT consulted by
+# ``eval``, so ``BaseMessage`` must live in the real namespace. Importing
+# ``langchain_core.messages`` standalone is cheap (it doesn't pull tiktoken
+# or the openai SDK).
+#
+# Everything else is resolved via ``@functools.cache``'d helpers or local
+# imports inside the function/method that needs them. Python's ``sys.modules``
+# cache makes repeated local imports microsecond-cheap after the first.
 # ---------------------------------------------------------------------------
 
-_ailog("importing langchain_openai...")
-from langchain_openai import ChatOpenAI
-_ailog("importing langchain_core.messages...")
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, BaseMessage, ToolMessage
-_ailog("importing langgraph + pydantic...")
-from langchain_core.tools import StructuredTool
-from langgraph.graph import StateGraph, END
-from langgraph.errors import GraphRecursionError
-from pydantic import BaseModel, Field, create_model
-_ailog("eager LangChain imports done")
+from langchain_core.messages import BaseMessage  # eager: needed for AgentState type resolution
 import json
 
 if TYPE_CHECKING:
+    from langchain_openai import ChatOpenAI  # noqa: F401
+    from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage  # noqa: F401
+    from langchain_core.tools import StructuredTool  # noqa: F401
+    from langgraph.graph import StateGraph, END  # noqa: F401
+    from langgraph.errors import GraphRecursionError  # noqa: F401
+    from pydantic import BaseModel, Field, create_model  # noqa: F401
     from langchain_anthropic import ChatAnthropic  # noqa: F401
     from langchain_groq import ChatGroq  # noqa: F401
     from langchain_cerebras import ChatCerebras  # noqa: F401
@@ -158,6 +156,7 @@ def _parse_memory_markdown(content: str) -> List[BaseMessage]:
     ### **Assistant** (timestamp)
     response content
     """
+    from langchain_core.messages import HumanMessage, AIMessage
     messages = []
     pattern = r'### \*\*(Human|Assistant)\*\*[^\n]*\n(.*?)(?=\n### \*\*|$)'
     for role, text in re.findall(pattern, content, re.DOTALL):
@@ -304,6 +303,7 @@ def _bearer_headers(api_key: str) -> dict:
 # (OpenAI-compatible). ``model_class_factory`` returns the resolved class
 # (or None for gemini, whose lazy resolver lives at the call site).
 def _build_provider_class_map() -> Dict[str, tuple]:
+    from langchain_openai import ChatOpenAI
     mapping: Dict[str, tuple] = {
         'openai': (ChatOpenAI, _openai_headers),
         'anthropic': (_get_chat_anthropic(), _anthropic_headers),
@@ -405,6 +405,7 @@ def _resolve_temperature(flattened: dict, model: str, provider: str, thinking_en
 # (services/llm/) bypasses this entirely.
 def _build_provider_configs() -> Dict[str, ProviderConfig]:
     """Build PROVIDER_CONFIGS from llm_defaults.json + provider-class map."""
+    from langchain_openai import ChatOpenAI
     providers = _LLM_DEFAULTS.get("providers", {})
     configs: Dict[str, ProviderConfig] = {}
     class_map = _build_provider_class_map()
@@ -550,6 +551,7 @@ def filter_empty_messages(messages: Sequence[BaseMessage]) -> List[BaseMessage]:
     Returns:
         Filtered list of messages with empty content removed
     """
+    from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
     filtered = []
 
     for m in messages:
@@ -814,6 +816,7 @@ def create_tool_node(tool_executor: Callable):
     Note: This returns an async function for use with ainvoke().
     LangGraph supports async node functions natively.
     """
+    from langchain_core.messages import ToolMessage
     async def tool_node(state: AgentState) -> Dict[str, Any]:
         """Execute pending tool calls and return results as ToolMessages."""
         tool_messages = []
@@ -882,6 +885,7 @@ def build_agent_graph(chat_model, tools: List = None, tool_executor: Callable = 
         tools: Optional list of LangChain tools to bind to the model
         tool_executor: Optional async callback to execute tools
     """
+    from langgraph.graph import StateGraph, END
     # Create the graph with our state schema
     graph = StateGraph(AgentState)
 
@@ -1263,6 +1267,7 @@ class AIService:
         Returns:
             Configured LangChain chat model instance
         """
+        from langchain_openai import ChatOpenAI
         config = get_provider_configs().get(provider)
         if not config:
             # Provide helpful error for Cerebras if import failed
@@ -1517,6 +1522,7 @@ class AIService:
 
             # --- LangChain fallback path (groq, cerebras) ---
             else:
+                from langchain_core.messages import HumanMessage, SystemMessage
                 max_tokens = _resolve_max_tokens(flattened, model, provider)
                 temperature = _resolve_temperature(
                     flattened, model, provider,
@@ -1616,6 +1622,8 @@ class AIService:
             workflow_id: Optional workflow ID for scoped status broadcasts
             context: Optional execution context with nodes, edges for nested agent delegation
         """
+        from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+        from langgraph.errors import GraphRecursionError
         start_time = time.time()
         provider = 'unknown'
         model = 'unknown'
@@ -2090,6 +2098,8 @@ class AIService:
             workflow_id: Optional workflow ID for scoped status broadcasts
             context: Optional execution context with nodes, edges for nested agent delegation
         """
+        from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+        from langgraph.errors import GraphRecursionError
         start_time = time.time()
         provider = 'unknown'
         model = 'unknown'
@@ -2531,6 +2541,7 @@ class AIService:
         Returns:
             Tuple of (StructuredTool, config_dict) or (None, None) on failure
         """
+        from langchain_core.tools import StructuredTool
         # Default tool names matching frontend toolNodes.ts definitions
         DEFAULT_TOOL_NAMES = {
             'calculatorTool': 'calculator',
@@ -2806,6 +2817,7 @@ class AIService:
         Returns:
             Pydantic BaseModel class for the tool's arguments
         """
+        from pydantic import BaseModel, Field
         # Check if we have a database-stored schema config (source of truth)
         db_schema_config = params.get('db_schema_config')
         if db_schema_config:
@@ -2934,6 +2946,7 @@ class AIService:
             }
         }
         """
+        from pydantic import Field, create_model
         fields_config = schema_config.get('fields', {})
         schema_description = schema_config.get('description', 'Tool arguments schema')
 
