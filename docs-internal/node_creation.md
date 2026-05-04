@@ -17,6 +17,7 @@ this file picks the right entry point based on what you're adding.
 | A node that wraps a CLI tool, supervises a daemon, or receives signed webhooks | [Wave 12 event framework](./plugin_system.md#wave-12--generalized-event-framework-servicesevents) (this section is the most important one) | self-contained folder under `server/nodes/<group>/` using `services.events` base classes |
 | A polling-based trigger node | [Wave 12 event framework](./plugin_system.md#wave-12--generalized-event-framework-servicesevents) — subclass `PollingEventSource` | new file or folder; framework owns the loop |
 | A long-lived service plugin (bot connection, WebSocket bridge, SDK session) | [Self-contained plugin folders (Wave 11.H)](./plugin_system.md#self-contained-plugin-folders) — telegram is the reference | folder with `_credentials.py` / `_service.py` / `_handlers.py` / `_filters.py` / `_refresh.py` |
+| A plugin whose auth is owned by an external CLI (`stripe login`, `gh auth login`, `gcloud auth login`) | [Stripe Service](./stripe_service.md) — the reference for "marker-token + generic catalogue invalidation" — and [plugin_system.md → CLI-managed auth pattern](./plugin_system.md#cli-managed-auth-pattern) | self-contained folder + `_install.py` for the auto-downloader; `_handlers.py` calls `auth_service.store_oauth_tokens(provider, "cli-managed", "cli-managed")` after the CLI login completes, then broadcasts the existing generic `credential_catalogue_updated` event |
 
 ## The four node kinds
 
@@ -123,6 +124,79 @@ provider-specific. See:
 - [Plugin System → Wave 12 framework](./plugin_system.md#wave-12--generalized-event-framework-servicesevents) — every base class + helper documented with examples.
 - [Stripe Service](./stripe_service.md) — the reference implementation walked through file by file.
 
+## Recipe — CLI-managed auth (Stripe / `gh` / `gcloud` shape)
+
+When auth lives **inside** an external CLI (the CLI runs its own
+OAuth, persists tokens to its own config file, and our `<command>`
+calls just inherit those creds), use this pattern. Stripe is the
+canonical example.
+
+**Three plumbing pieces** — all already in the codebase, just
+reused:
+
+1. **Marker-token write after CLI login completes.** The plugin
+   writes synthetic strings to `auth_service.store_oauth_tokens`
+   with the provider id matching the catalogue's `status_hook`. The
+   strings exist purely to flip
+   `auth_service.get_oauth_tokens(status_hook) is not None` true,
+   which the catalogue handler at
+   [`server/routers/websocket.py:handle_get_credential_catalogue`](../server/routers/websocket.py)
+   uses to set `provider.stored = true`. **Same API path Google's
+   OAuth callback uses** — no new abstraction.
+
+   ```python
+   await auth_service.store_oauth_tokens(
+       provider="stripe",                # matches status_hook in catalogue JSON
+       access_token="cli-managed",       # marker; CLI owns the real auth
+       refresh_token="cli-managed",
+   )
+   ```
+
+2. **Generic broadcast on state change.** Plugin emits the existing
+   `credential_catalogue_updated` event — handled in
+   [`WebSocketContext.tsx`](../client/src/contexts/WebSocketContext.tsx)
+   line 671 since before Stripe shipped. The frontend invalidates
+   the catalogue, refetches, and the modal re-renders. No
+   per-provider broadcast type, no `case 'stripe_status'` —
+   **zero node-specific code in the frontend**.
+
+   ```python
+   await get_status_broadcaster().broadcast(
+       {"type": "credential_catalogue_updated"}
+   )
+   ```
+
+3. **Auto-installer for the CLI binary.** Plugins that wrap a CLI
+   ship a `_install.py` with a single `ensure_stripe_cli()`-shaped
+   async helper:
+   - Cached path → system PATH (`brew`, `scoop`, `apt`) → workspace
+     cache → fresh download from GitHub releases.
+   - Pinned version constant; `(system, machine) -> asset_name` map
+     covering Windows/Linux/Mac × x86_64/arm64.
+   - Returns absolute binary path; subsequent calls hit the cache.
+
+   The plugin's `DaemonEventSource` subclass overrides `start()` to
+   `await ensure_<provider>_cli()` before `super().start()` and
+   sets `binary_name = ""` so the framework's pre-flight
+   `shutil.which` check is skipped (we handle install ourselves).
+
+**Frontend contract**: the `OAuthPanel.tsx` `connected` derivation
+already supports CLI-managed providers via:
+
+```tsx
+const connected = status ? !!status.connected : !!config.stored;
+```
+
+Providers with no `statusHook` registered in `useProviderStatus`
+fall back to the catalogue's authoritative `config.stored` field.
+**No frontend edits needed** to add a new CLI-managed plugin.
+
+The cumulative effect: a new "wrap a CLI tool whose login is
+browser-OAuth" plugin lands as a self-contained folder under
+`server/nodes/<group>/` plus a one-line entry in
+`server/config/credential_providers.json` and zero touches outside
+the folder.
+
 ## What auto-wires (don't write it yourself)
 
 When a plugin file is imported (which the `nodes/__init__.py`
@@ -156,7 +230,7 @@ What you **do** still write:
 | Full plugin pattern (every class attribute, `@Operation`, declarative `Routing`, `Connection` facade, Temporal task queues, credential classes) | [plugin_system.md](./plugin_system.md) |
 | Self-contained plugin folders (rich plugins like telegram with their own service, WS handlers, pre-checks) | [plugin_system.md → Self-contained plugin folders](./plugin_system.md#self-contained-plugin-folders) |
 | Wave 12 event framework (signed webhooks, CLI daemons, polling) | [plugin_system.md → Wave 12](./plugin_system.md#wave-12--generalized-event-framework-servicesevents) |
-| Stripe as the Wave 12 reference plugin | [stripe_service.md](./stripe_service.md) |
+| Stripe as the Wave 12 reference plugin (also the canonical CLI-managed-auth + auto-installer reference) | [stripe_service.md](./stripe_service.md) |
 | Backend-as-SSOT design (NodeSpec, icons, output schemas) | [schema_source_of_truth_rfc.md](./schema_source_of_truth_rfc.md) |
 | JSON workflow format, edge handle conventions | [workflow-schema.md](./workflow-schema.md) |
 | Dual-purpose nodes (workflow node + AI tool) | [dual_purpose_tool_node_creation.md](./dual_purpose_tool_node_creation.md) |
@@ -176,7 +250,18 @@ What you **do** still write:
   ([`services/events/`](../server/services/events/)). `EventSource`
   hierarchy + CloudEvents-shaped envelope + verifier registry +
   wiring helpers. Stripe is the reference.
+- **Wave 12.B** — CLI-managed-auth pattern (Stripe). Plugins whose
+  auth lives in an external CLI's own config file (`stripe login` →
+  `~/.config/stripe/config.toml`) reuse `auth_service.store_oauth_tokens`
+  with marker strings + the existing generic
+  `credential_catalogue_updated` broadcast — no provider-specific
+  Zustand entries, no per-provider WS handler cases. Includes a
+  reusable `ensure_<cli>_cli()` shape for downloading the CLI binary
+  on first use (pinned version + GitHub-releases asset map). The
+  same pattern fits any future CLI-managed integration (`gh auth
+  login`, `gcloud auth login`, `vercel login`, etc.).
 
 The end state: every new event-source plugin is **~150 executable
 lines** of provider-specific code on top of shared bases, with
-**zero edits outside the plugin folder**.
+**zero edits outside the plugin folder** (and zero edits to the
+frontend).

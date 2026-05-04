@@ -1097,6 +1097,71 @@ daemon, verifying signed webhooks, exposing both a TriggerNode
 (`stripeAction`). See [`stripe_service.md`](./stripe_service.md) for
 the per-file walkthrough.
 
+### CLI-managed auth pattern
+
+Some plugins delegate auth to an external CLI tool that runs its own
+OAuth flow and persists tokens in its own config file (Stripe →
+`~/.config/stripe/config.toml`; future `gh auth login` →
+`~/.config/gh/hosts.yml`; `gcloud auth login` →
+`~/.config/gcloud/...`). Three reuse points let these plugins ship
+without any node-specific code in the frontend or in core services:
+
+1. **Marker-token write via the existing `auth_service.store_oauth_tokens`
+   API.** Plugin writes synthetic strings (e.g. `"cli-managed"`) on
+   login completion. The catalogue's existing per-provider `stored`
+   check at
+   [`routers/webhook.py:handle_get_credential_catalogue`](../server/routers/websocket.py)
+   uses
+   `auth_service.get_oauth_tokens(status_hook) is not None` —
+   identical to Google's OAuth-callback path. The synthetic tokens
+   exist purely to flip the existence check; the CLI owns the real
+   auth.
+
+2. **Generic `credential_catalogue_updated` broadcast.** The plugin
+   emits this event after every state change. The frontend's
+   existing handler in
+   [`WebSocketContext.tsx`](../client/src/contexts/WebSocketContext.tsx)
+   (line 671) invalidates the catalogue query; the modal refetches
+   and re-renders. **No new broadcast type, no Zustand entry, no
+   `case '<provider>_status'`.** Frontend has zero references to any
+   CLI-managed plugin's name.
+
+3. **`OAuthPanel.tsx` `connected` fallback.** The panel reads
+   `useProviderStatus(config.statusHook)` for legacy hook-driven
+   providers and falls back to `config.stored` (the catalogue's
+   authoritative flag) for everything else:
+
+   ```tsx
+   const connected = status ? !!status.connected : !!config.stored;
+   ```
+
+   Generic — no provider names anywhere. Future CLI-managed plugins
+   inherit correct connection-indicator behaviour automatically.
+
+**Auto-installer pattern.** Plugins wrapping a CLI binary that may
+not be on the user's `PATH` ship a `_install.py` exposing a single
+async helper:
+
+```python
+# server/nodes/<provider>/_install.py
+_VERSION = "1.40.9"  # pinned
+_ASSETS = {
+    ("Windows", "AMD64"):  ("…_windows_x86_64.zip", "zip", "stripe.exe"),
+    ("Linux",   "x86_64"): ("…_linux_x86_64.tar.gz", "tar", "stripe"),
+    …
+}
+
+async def ensure_<cli>_cli() -> Path:
+    # 1. cached path → 2. shutil.which(...) → 3. workspace cache →
+    # 4. fresh download from GitHub releases.
+```
+
+The plugin's `DaemonEventSource` subclass overrides `start()` to
+`await ensure_<cli>_cli()` first, sets `binary_name = ""` so the
+framework's pre-flight `shutil.which` check is skipped, and uses
+the resolved path inside `build_command`. The same shape suits any
+project that publishes pre-built binaries via GitHub releases.
+
 ### Integration points (no core edits per plugin)
 
 | Concern | Framework integration | Plugin contribution |
@@ -1111,6 +1176,8 @@ the per-file walkthrough.
 | Credentials Modal panel | `server/config/credential_providers.json` (read by `services.credential_registry`) | one provider entry: name, category, color, `kind: "oauth"`, `icon_ref`, `status_hook`, `ws.{login,logout,status}` handler names, fields list, instructions string. Frontend modal renders it automatically — no React file edits. |
 | AI tool surface | `services/ai.py` `DEFAULT_TOOL_NAMES` + `DEFAULT_TOOL_DESCRIPTIONS` | one row per dual-purpose ActionNode mapping `<nodeType>` → `<snake_case_of_node_type>` |
 | Skill (LLM teaching markdown) | `server/skills/<agent>/<skill-name>/SKILL.md` (auto-discovered by `SkillLoader`) | the markdown itself, plus the linkage in `visuals.json` (`"<nodeType>": { ..., "skill": "<skill-name>" }`) |
+| Connection state surfaced to the modal (CLI-managed auth) | `auth_service.store_oauth_tokens(status_hook, "cli-managed", "cli-managed")` + the generic `credential_catalogue_updated` broadcast | one `_mark_logged_in` / `_mark_logged_out` helper pair calling `store_oauth_tokens` / `remove_oauth_tokens`; one `broadcast({"type": "credential_catalogue_updated"})` after every state change |
+| Auto-install of an external CLI binary | `_install.py` with `ensure_<cli>_cli()` + GitHub-releases asset map | pinned `_VERSION` constant, `(system, machine) -> (asset, kind, member)` table, and an override on `DaemonEventSource.start()` that `await`s the helper before `super().start()` (also set `binary_name = ""` to skip the framework's `shutil.which` pre-check) |
 
 ### Tool / skill / visuals naming contract
 

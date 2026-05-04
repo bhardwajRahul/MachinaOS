@@ -14,7 +14,11 @@ import type { ProviderConfig } from '../types';
 const OAuthPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = ({ config, visible }) => {
   const panel = useCredentialPanel(config, visible);
   const status = useProviderStatus(config.statusHook);
-  const connected = !!status?.connected;
+  // Providers without a registered status hook (e.g. CLI-managed auth
+  // like Stripe) signal "connected" via the catalogue's authoritative
+  // `stored` field — same source the modal sidebar uses for badges.
+  // Providers with a hook keep their hook-driven semantics.
+  const connected = status ? !!status.connected : !!config.stored;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col p-5">

@@ -470,7 +470,8 @@
   },
   "stripeAction": {
     "icon": "asset:stripe",
-    "color": "#635BFF"
+    "color": "#635BFF",
+    "skill": "stripe-skill"
   },
   "stripeReceive": {
     "icon": "asset:stripe",

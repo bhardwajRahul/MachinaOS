@@ -59,12 +59,18 @@ class StripeActionNode(ActionNode):
 
     @Operation("run", cost={"service": "stripe", "action": "run", "count": 1})
     async def run(self, ctx: NodeContext, params: StripeActionParams) -> Any:
+        from ._install import ensure_stripe_cli
+
         cmd = params.command.strip()
         if not cmd:
             raise RuntimeError("command is required (e.g. 'customers create --email a@b.com')")
-        result = await run_cli_command(
-            binary="stripe", argv=shlex.split(cmd), credential=StripeCredential,
-        )
+        try:
+            binary = str(await ensure_stripe_cli())
+        except Exception as e:
+            raise RuntimeError(f"Stripe CLI install failed: {e}")
+        # No credential= — Stripe CLI reads its own creds from
+        # ~/.config/stripe/config.toml after `stripe login`.
+        result = await run_cli_command(binary=binary, argv=shlex.split(cmd))
         if not result["success"]:
             raise RuntimeError(result.get("error") or "Stripe CLI invocation failed")
         return {

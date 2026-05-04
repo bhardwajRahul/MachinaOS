@@ -2623,6 +2623,8 @@ class AIService:
             # Email (Himalaya CLI, dual-purpose tools)
             'emailSend': 'email_send',
             'emailRead': 'email_read',
+            # Stripe (CLI pass-through, dual-purpose tool)
+            'stripeAction': 'stripe_action',
         }
         DEFAULT_TOOL_DESCRIPTIONS = {
             'calculatorTool': 'Perform mathematical calculations. Operations: add, subtract, multiply, divide, power, sqrt, mod, abs',
@@ -2703,6 +2705,8 @@ class AIService:
             # Email (Himalaya CLI, dual-purpose tools)
             'emailSend': 'Send email via SMTP. Specify to, subject, body. Optional: cc, bcc, body_type (text/html).',
             'emailRead': 'Read and manage emails via IMAP. Operations: list (envelopes), search (query), read (message by ID), folders (list), move, delete, flag.',
+            # Stripe (CLI pass-through, dual-purpose tool)
+            'stripeAction': "Run any Stripe CLI command and return the parsed JSON response. Pass a 'command' field exactly as you would type after 'stripe ' (e.g. 'customers create --email a@b.com', 'charges list --limit 10', 'payment_intents create --amount 2000 --currency usd', 'refunds create --payment-intent pi_xxx', 'trigger charge.succeeded'). Covers every Stripe resource: customers, charges, payment_intents, refunds, invoices, products, prices, subscriptions, payment_methods, setup_intents, transfers, payouts, plus 'trigger <event>' for synthetic test events.",
         }
 
         try:

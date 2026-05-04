@@ -189,7 +189,8 @@ class TestStripeActionPassthrough:
     def cli_capture(self):
         captured: list[list[str]] = []
 
-        async def fake_run(*, binary, argv, credential, **kwargs):
+        async def fake_run(*, binary, argv, **kwargs):
+            # Stripe CLI uses ~/.config/stripe/config.toml — no credential injection.
             captured.append(list(argv))
             return {"success": True, "result": {"id": "x"}, "stdout": "{}"}
 
@@ -221,7 +222,7 @@ class TestStripeActionPassthrough:
     def test_cli_failure_raises(self):
         from nodes.stripe.stripe_action import StripeActionNode, StripeActionParams
 
-        async def fake_fail(*, binary, argv, credential, **kwargs):
+        async def fake_fail(*, binary, argv, **kwargs):
             return {"success": False, "error": "stripe: unknown command 'frobnicate'"}
 
         with patch("nodes.stripe.stripe_action.run_cli_command", AsyncMock(side_effect=fake_fail)):
@@ -241,6 +242,7 @@ class TestStripePluginRegistration:
         from services.ws_handler_registry import get_ws_handlers
         registered = get_ws_handlers()
         for name in (
+            "stripe_login", "stripe_logout",
             "stripe_connect", "stripe_disconnect", "stripe_reconnect",
             "stripe_status", "stripe_trigger",
         ):
@@ -261,7 +263,9 @@ class TestStripePluginRegistration:
     def test_credential_registered(self):
         import nodes.stripe  # noqa: F401
         from services.plugin.credential import CREDENTIAL_REGISTRY
-        assert "stripe_api_key" in CREDENTIAL_REGISTRY
+        # Stripe CLI manages auth at ~/.config/stripe/config.toml; the
+        # credential class is a thin marker keyed by "stripe" (no api_key).
+        assert "stripe" in CREDENTIAL_REGISTRY
 
     def test_output_schemas_registered(self):
         import nodes.stripe  # noqa: F401
@@ -282,4 +286,8 @@ class TestStripePluginRegistration:
         src = get_listen_source()
         assert src.process_name == "stripe-listen"
         assert src.workflow_namespace == "_stripe"
-        assert src.binary_name == "stripe"
+        # Empty binary_name disables the framework's PATH check; the
+        # plugin resolves the binary itself via ensure_stripe_cli (which
+        # falls back to a workspace-local download on systems without
+        # a system install of the Stripe CLI).
+        assert src.binary_name == ""

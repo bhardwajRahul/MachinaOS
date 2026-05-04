@@ -16,8 +16,10 @@ plug into the framework registries from ``__init__.py``.
 from __future__ import annotations
 
 import asyncio
+import os
 import re
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 from fastapi import Request
@@ -38,6 +40,26 @@ _SECRET_RE = re.compile(r"whsec_[A-Za-z0-9_]+")
 _SECRET_FIELD = "stripe_webhook_secret"
 
 
+def stripe_config_path() -> Path:
+    """Default location for the Stripe CLI's credentials file
+    (``~/.config/stripe/config.toml``, ``XDG_CONFIG_HOME``-aware)."""
+    base = os.environ.get("XDG_CONFIG_HOME")
+    return (Path(base) if base else Path.home() / ".config") / "stripe" / "config.toml"
+
+
+def is_logged_in() -> bool:
+    """Detect Stripe CLI login by sniffing its config file. Cheap
+    filesystem check — the CLI writes ``test_mode_api_key`` /
+    ``live_mode_api_key`` under a profile section on success."""
+    cfg = stripe_config_path()
+    if not cfg.exists():
+        return False
+    try:
+        return "_api_key" in cfg.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
+
+
 class StripeListenSource(DaemonEventSource):
     """Supervises ``stripe listen`` and persists the captured webhook
     signing secret. Emits no events itself — Stripe events arrive over
@@ -45,18 +67,44 @@ class StripeListenSource(DaemonEventSource):
 
     type = "stripe.listen"
     process_name = "stripe-listen"
-    binary_name = "stripe"
+    # Empty so DaemonEventSource skips its built-in PATH check; we
+    # do install + verification ourselves in start() via
+    # ensure_stripe_cli (which falls back to system PATH first, then
+    # workspace-local download).
+    binary_name = ""
     workflow_namespace = "_stripe"
     install_hint = "https://stripe.com/docs/stripe-cli#install"
     credential = StripeCredential
 
     def build_command(self, secrets: Dict) -> str:
+        # The CLI uses credentials it stored at ~/.config/stripe/config.toml
+        # (populated by `stripe login`). No --api-key flag here.
+        # Binary path is resolved by `ensure_stripe_cli` (called from
+        # the start() override below) and cached for sync access here.
         from core.config import Settings
+        from ._install import stripe_cli_path
+
         port = int(Settings().port)
+        binary = str(stripe_cli_path() or "stripe")
         return (
-            f"stripe listen --forward-to http://localhost:{port}/webhook/stripe "
-            f"--print-secret --api-key {secrets['api_key']}"
+            f"{binary} listen --forward-to http://localhost:{port}/webhook/stripe "
+            f"--print-secret"
         )
+
+    async def start(self) -> Dict[str, Any]:
+        """Ensure the CLI binary is downloaded before delegating to the
+        framework's daemon-start path (which calls ``build_command``)."""
+        from ._install import ensure_stripe_cli
+        try:
+            await ensure_stripe_cli()
+        except Exception as e:
+            return {"success": False, "error": f"Stripe CLI install failed: {e}"}
+        return await super().start()
+
+    async def has_credential(self) -> bool:
+        """The Stripe CLI manages auth state in its own config file —
+        that's our 'credential' for the daemon's start gate."""
+        return is_logged_in()
 
     def parse_line(self, stream: str, line: str) -> Optional[WorkflowEvent]:
         if stream == "stderr" and (m := _SECRET_RE.search(line)):
