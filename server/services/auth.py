@@ -85,6 +85,29 @@ class AuthService:
         """Create hash for API key identification."""
         return hashlib.sha256(api_key.encode()).hexdigest()[:16]
 
+    def _bump_catalogue_version(self) -> None:
+        """Notify the credential registry that a credential has changed.
+
+        Bumps the registry's mutation counter so the next call to
+        ``CredentialRegistry.get_version()`` returns a new content hash.
+        The frontend's conditional ``since: <prior version>`` fetch then
+        receives a fresh catalogue with updated ``stored`` flags
+        instead of ``{unchanged: true}``. Without this bump, the version
+        is constant for the life of the process and the per-provider
+        ``stored`` flag stays stale on every connected client until the
+        process restarts.
+
+        Local import to avoid an import cycle at module load time.
+        Failures are swallowed (logged at WARNING) so a missing registry
+        never blocks a credential mutation from completing.
+        """
+        try:
+            from services.credential_registry import get_credential_registry
+
+            get_credential_registry().invalidate_version()
+        except Exception as e:  # noqa: BLE001 — best-effort signal
+            logger.warning("Failed to bump credential catalogue version: %s", e)
+
     async def store_api_key(
         self,
         provider: str,
@@ -122,6 +145,13 @@ class AuthService:
                 key=api_key,
                 models=list(models),
             )
+
+            # 3. Bump the catalogue version so the frontend's conditional
+            #    fetch (``since: <prior version>``) returns a fresh
+            #    catalogue instead of ``{unchanged: true}`` — without
+            #    this the per-provider ``stored`` flag stays stale on
+            #    every connected client until the process restarts.
+            self._bump_catalogue_version()
 
             logger.info(f"Stored and cached API key for {provider}")
             return True
@@ -226,6 +256,9 @@ class AuthService:
             # 2. Cache evict only after DB succeeds. One pop, not two.
             self._api_key_cache.pop(cache_key, None)
 
+            # 3. Bump the catalogue version — same reason as store.
+            self._bump_catalogue_version()
+
             logger.info(f"Removed API key for {provider}")
             return True
 
@@ -306,6 +339,11 @@ class AuthService:
                 "name": name,
                 "scopes": scopes,
             }
+
+            # 3. Bump the catalogue version so the frontend's conditional
+            #    fetch returns fresh ``stored`` flags after this OAuth
+            #    save (login).
+            self._bump_catalogue_version()
 
             logger.info(f"Stored OAuth tokens for {provider}")
             return True
@@ -497,11 +535,14 @@ class AuthService:
         try:
             cache_key = f"{customer_id}_{provider}"
 
-            # Remove from memory cache
+            # 1. DB delete first (canonical source).
+            await self.credentials_db.delete_oauth_tokens(provider, customer_id)
+
+            # 2. Cache evict after DB succeeds.
             self._oauth_cache.pop(cache_key, None)
 
-            # Remove from encrypted database
-            await self.credentials_db.delete_oauth_tokens(provider, customer_id)
+            # 3. Bump the catalogue version — same reason as store.
+            self._bump_catalogue_version()
 
             logger.info(f"Removed OAuth tokens for {provider}")
             return True

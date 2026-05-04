@@ -39,6 +39,7 @@ import { Search, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { NodeIcon } from '../../assets/icons';
+import { useWebSocket } from '../../contexts/WebSocketContext';
 import type { ProviderConfig, CategoryGroup } from './types';
 
 // ============================================================================
@@ -50,8 +51,6 @@ export interface CredentialsPaletteProps {
   categories: CategoryGroup[];
   selectedId: string | null;
   onSelect: (id: string) => void;
-  /** Map of provider id → has stored/validated key. Drives the green status dot. */
-  storedKeys?: Record<string, boolean>;
   /** Height of the scrollable list area. */
   height?: number | string;
   /** Optional placeholder for the search input. */
@@ -136,6 +135,77 @@ function groupFiltered(filtered: ProviderConfig[], categoryOrder: CategoryGroup[
 }
 
 // ============================================================================
+// Status indicator — three states: configured + validated, configured but
+// validation failed, not configured. "Validated" is meaningful only for
+// providers that go through `validate_api_key` (AI providers + the special
+// google_maps / apify validators); for OAuth + QR-pairing flows the
+// validation cache is empty and a stored credential renders as success.
+// ============================================================================
+
+type CredStatus = 'unconfigured' | 'stored' | 'failed';
+
+const STATUS_CLASSES: Record<CredStatus, string> = {
+  unconfigured: 'bg-muted-foreground/30',
+  stored: 'bg-success',
+  failed: 'bg-destructive',
+};
+
+const STATUS_LABEL: Record<CredStatus, string> = {
+  unconfigured: 'Not configured',
+  stored: 'Configured',
+  failed: 'Validation failed',
+};
+
+interface ProviderStatusDotProps {
+  providerId: string;
+  stored: boolean;
+}
+
+/** Memo'd indicator. Reads `apiKeyStatuses[id]` only when it exists, so
+ *  providers without a validation flow (OAuth, QR pairing) don't pay
+ *  for the lookup, and any future state (failed validation, etc.)
+ *  renders without touching the row's click / selection logic. */
+const ProviderStatusDot = memo<ProviderStatusDotProps>(function ProviderStatusDot({
+  providerId,
+  stored,
+}) {
+  const { apiKeyStatuses } = useWebSocket();
+  const validation = apiKeyStatuses[providerId];
+
+  // Treat the broadcast that fires on delete (`message === 'deleted'`)
+  // as unconfigured for the brief window before the catalogue refetch
+  // lands and flips `stored` to false. Without this the dot flashes red
+  // for ~300 ms (the invalidateCatalogue debounce) every time a key is
+  // removed, even though the user's intent was deletion, not failure.
+  const justDeleted = validation?.message === 'deleted';
+
+  let status: CredStatus;
+  let title = STATUS_LABEL.unconfigured;
+  if (!stored || justDeleted) {
+    status = 'unconfigured';
+  } else if (validation && validation.valid === false) {
+    status = 'failed';
+    title = validation.message
+      ? `${STATUS_LABEL.failed}: ${validation.message}`
+      : STATUS_LABEL.failed;
+  } else {
+    status = 'stored';
+    title = STATUS_LABEL.stored;
+  }
+
+  return (
+    <span
+      aria-label={STATUS_LABEL[status]}
+      title={title}
+      className={cn(
+        'h-2 w-2 shrink-0 rounded-full transition-colors',
+        STATUS_CLASSES[status],
+      )}
+    />
+  );
+});
+
+// ============================================================================
 // Row renderer — memoized to stop upstream re-renders from cascading
 // ============================================================================
 
@@ -164,9 +234,7 @@ const ProviderRow = memo<RowProps>(function ProviderRow({ provider, selected, on
         className="h-3.5 w-3.5 shrink-0 text-sm"
       />
       <span className="flex-1 truncate">{provider.name}</span>
-      {provider.stored && (
-        <span aria-label="Credential stored" className="h-2 w-2 rounded-full bg-success" />
-      )}
+      <ProviderStatusDot providerId={provider.id} stored={!!provider.stored} />
     </Command.Item>
   );
 });

@@ -2183,14 +2183,16 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const deleteApiKeyAsync = useCallback(async (provider: string): Promise<boolean> => {
     try {
       await sendRequest<any>('delete_api_key', { provider });
-
-      // Remove from apiKeyStatuses on successful delete
-      setApiKeyStatuses(prev => {
-        const newStatuses = { ...prev };
-        delete newStatuses[provider];
-        return newStatuses;
-      });
-
+      // Don't optimistically clear apiKeyStatuses[provider] here. The
+      // backend's `api_key_status` broadcast (fired before this reply
+      // lands) already wrote `{valid: false, hasKey: false, message:
+      // 'deleted'}` to every connected client. The catalogue refetch
+      // (debounced 300 ms after `credential_catalogue_updated`) will
+      // flip `provider.stored` to false. A local optimistic clear here
+      // raced with the broadcast and produced a green-flash mid-delete:
+      // broadcast → red, optimistic clear → green (validation undefined
+      // but stored still cached true), catalogue refetch → gray.
+      // Trusting the broadcast pipeline gives a clean red → gray.
       return true;
     } catch (error) {
       console.error('[WebSocket] Failed to delete API key:', error);

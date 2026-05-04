@@ -44,6 +44,10 @@ class CredentialRegistry:
         self._raw: Optional[Dict[str, Any]] = None
         self._resolved_providers: Optional[Dict[str, Dict[str, Any]]] = None
         self._version: Optional[str] = None
+        # Bumped on every credential mutation; folded into the version
+        # hash so the conditional fetch returns fresh ``stored`` flags.
+        # See ``get_version()`` + ``invalidate_version()``.
+        self._mutation_seq: int = 0
 
     @classmethod
     def get_instance(cls) -> "CredentialRegistry":
@@ -162,20 +166,41 @@ class CredentialRegistry:
         return out
 
     def get_version(self) -> str:
-        """Content-sha256 of the resolved catalogue (providers + categories).
+        """Content-sha256 of the resolved catalogue (providers + categories +
+        mutation counter).
 
         Used by clients for warm-start cache invalidation: when the hash
         changes, the client fetches a fresh catalogue; otherwise it serves
         from IndexedDB with zero network traffic.
+
+        The mutation counter is bumped by ``invalidate_version()`` on every
+        credential save / delete / oauth-disconnect — this is what makes
+        the conditional fetch ("`since: <prior version>`") actually return
+        fresh data after a mutation. Without it the hash would only depend
+        on the static catalogue JSON, the version would be constant for
+        the life of the process, and the conditional fetch would always
+        return ``{unchanged: true}`` even after a key was deleted — leaving
+        the per-provider ``stored`` flag stuck at ``true`` on every client.
         """
         if self._version is None:
             payload = {
                 "providers": self.get_all_providers(),
                 "categories": self.get_categories(),
+                "mutation_seq": self._mutation_seq,
             }
             encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
             self._version = hashlib.sha256(encoded).hexdigest()
         return self._version
+
+    def invalidate_version(self) -> None:
+        """Bump the mutation counter so the next ``get_version()`` returns a
+        new hash. Call this from every credential mutation path (store /
+        remove / oauth-disconnect) so the frontend's conditional fetch
+        actually returns fresh ``stored`` flags. Cheap — just a counter
+        increment + clearing the cached hash.
+        """
+        self._mutation_seq += 1
+        self._version = None
 
     def get_catalogue(self) -> Dict[str, Any]:
         """Full payload returned by the `get_credential_catalogue` WebSocket handler."""
