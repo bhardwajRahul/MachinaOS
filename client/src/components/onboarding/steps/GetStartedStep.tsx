@@ -2,15 +2,7 @@ import React from 'react';
 import { Play, FlaskConical, BookOpen, Settings } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-
-type NodeRole = 'skill' | 'agent' | 'model' | 'workflow';
-
-const ROLE_CLASSES: Record<NodeRole, { card: string; text: string }> = {
-  skill:    { card: 'bg-node-skill-soft border-node-skill-border',       text: 'text-node-skill' },
-  agent:    { card: 'bg-node-agent-soft border-node-agent-border',       text: 'text-node-agent' },
-  model:    { card: 'bg-node-model-soft border-node-model-border',       text: 'text-node-model' },
-  workflow: { card: 'bg-node-workflow-soft border-node-workflow-border', text: 'text-node-workflow' },
-};
+import { NODE_ROLE_CLASSES, type NodeRole } from '../nodeRoleClasses';
 
 type Tip = {
   Icon: typeof Play;
@@ -69,7 +61,7 @@ const GetStartedStep: React.FC = () => {
 
       <div className="flex w-full flex-col gap-2.5">
         {tips.map(({ Icon, title, desc, role }, i) => {
-          const classes = ROLE_CLASSES[role];
+          const classes = NODE_ROLE_CLASSES[role];
           return (
             <Card key={i} className={classes.card}>
               <CardContent className="flex items-start gap-2.5 p-3">

@@ -1,15 +1,6 @@
 import React from 'react';
 import { LayoutGrid, GitBranch, Bot, Wrench, ArrowLeftRight } from 'lucide-react';
-
-type NodeRole = 'model' | 'skill' | 'agent' | 'workflow' | 'trigger';
-
-const ROLE_CLASSES: Record<NodeRole, { card: string; text: string }> = {
-  model:    { card: 'bg-node-model-soft border-node-model-border',       text: 'text-node-model' },
-  skill:    { card: 'bg-node-skill-soft border-node-skill-border',       text: 'text-node-skill' },
-  agent:    { card: 'bg-node-agent-soft border-node-agent-border',       text: 'text-node-agent' },
-  workflow: { card: 'bg-node-workflow-soft border-node-workflow-border', text: 'text-node-workflow' },
-  trigger:  { card: 'bg-node-trigger-soft border-node-trigger-border',   text: 'text-node-trigger' },
-};
+import { NODE_ROLE_CLASSES, type NodeRole } from '../nodeRoleClasses';
 
 const concepts: { Icon: typeof LayoutGrid; title: string; desc: string; role: NodeRole }[] = [
   {
@@ -56,7 +47,7 @@ const ConceptsStep: React.FC = () => {
 
       <div className="flex w-full flex-col gap-2.5">
         {concepts.map((c) => {
-          const classes = ROLE_CLASSES[c.role];
+          const classes = NODE_ROLE_CLASSES[c.role];
           return (
             <div
               key={c.title}

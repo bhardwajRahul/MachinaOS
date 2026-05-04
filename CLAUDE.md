@@ -527,20 +527,10 @@ class CacheEntry(SQLModel, table=True):
 - `cleanup_expired_cache()` - Remove expired entries
 
 ## Codebase Summary
-- **Hybrid architecture**: Node.js + Python + React TypeScript
-- **107 implemented workflow nodes** with clean service separation (9 AI models + 3 AI agents/memory + 16 specialized agents + 1 skill + 5 dedicated tools + 3 search + 16 Android + 3 WhatsApp + 4 Twitter + 2 Telegram + 2 Social + 3 Location + 3 Code + 6 Utility + 6 Document + 2 Chat + 2 Scheduler + 2 Workflow + 7 Google Workspace + 1 Apify + 1 Crawlee + 1 Browser + 3 Email + 3 Proxy + 4 Filesystem/Shell + 1 Process Manager)
-- **WebSocket-First Architecture**: WebSocket as primary frontend-backend communication (89 message handlers)
-- **Recent optimizations**: REST APIs replaced with WebSocket, AI endpoints migrated to Python, Android automation integrated
-
-## Architecture Refactoring
-The project was completely refactored from schema-based node definitions to explicit INodeProperties interface system inspired by n8n architecture. Key changes:
-- **Pure INodeProperties System**: Removed all backward compatibility layers
-- **93 Implemented Node Components**: AI models, agents, skills, location services, Android automation, WhatsApp, Twitter/X, Telegram, social, code execution, HTTP/Webhook utilities, document processing, chat, schedulers, search, and proxy
-- **WebSocket-First Communication**: 125 WebSocket message handlers replace most REST API calls
-- **Resource-Operation Pattern**: Organized by functional categories (AI, Location, Android, WhatsApp)
-- **TypeScript-First**: Full type safety with proper interface alignment
-- **Code Cleanup**: Removed dead code, unused files, and legacy methods
-- **Android Integration**: 16 Android service nodes with ADB-based device automation
+- **Hybrid architecture**: Python (FastAPI + Pydantic plugins) + React/TypeScript frontend + Node.js subprocess for JS/TS code execution.
+- **Backend NodeSpec is the single source of truth.** Plugins live in [`server/nodes/<group>/<name>.py`](./server/nodes/) and auto-register via `BaseNode.__init_subclass__`. Authoritative node count is whatever globs out of `server/nodes/**/*.py` (excluding `_*.py` helpers and `__init__.py`); folders cover agent / model / android / google / whatsapp / twitter / telegram / social / email / search / scraper / document / code / filesystem / proxy / location / chat / text / scheduler / trigger / tool / utility / workflow / skill / browser / stripe.
+- **WebSocket-first frontend-backend communication.** Authoritative handler count is the size of the `MESSAGE_HANDLERS` dict in [`server/routers/websocket.py`](./server/routers/websocket.py) plus plugin-registered handlers via `services.ws_handler_registry`. Don't hand-maintain the count in this doc — it drifts on every plugin add.
+- **Plugin-first architecture (Wave 11).** One file = one node. `services/handlers/` shrank from 12.8K → 1.1K LOC across 16 → 4 files. 124 pytest invariants lock the contract.
 
 ## Frontend Performance Architecture
 
@@ -617,7 +607,7 @@ authoring model.
 - `src/components/parameterPanel/MiddleSection.tsx` - Parameter panel middle section with conditional display logic
 - `src/components/OutputPanel.tsx` - Connected node output display with drag mapping
 - `src/components/LocationParameterPanel.tsx` - Location-specific parameter handling
-- `src/components/AIAgentNode.tsx` - Config-driven AI agent component supporting both aiAgent and chatAgent via AGENT_CONFIGS
+- `src/components/AIAgentNode.tsx` - Spec-driven agent canvas component. Reads `useNodeSpec(type)` for handles / icon / colour / displayName / uiHints; renders any plugin whose backend `component_kind` is `"agent"` or `"chat"`. No `AGENT_CONFIGS` map.
 - `src/ParameterPanel.tsx` - Main parameter configuration modal
 
 ### AI Chat Model Components
@@ -669,13 +659,14 @@ Single source of truth: [client/src/index.css](./client/src/index.css). All toke
 ### WebSocket-First Architecture
 The project uses WebSocket as the primary communication method between frontend and backend, replacing most REST API calls:
 - `src/contexts/WebSocketContext.tsx` - Central WebSocket context with request/response pattern
-- `server/routers/websocket.py` - WebSocket endpoint with 89 message handlers
+- `server/routers/websocket.py` - WebSocket endpoint; the live handler set is the `MESSAGE_HANDLERS` dict plus plugin-registered handlers via `services.ws_handler_registry`. Don't hand-maintain a count here.
 - `server/services/status_broadcaster.py` - Connection management and broadcasting
 
 **Canvas mutations from the backend** -- any handler that needs to add / move / delete nodes or edges (e.g., auto-add-skill on tool connect, future workflow-template features, AI-suggested edits) returns a workflow-ops batch (`{operations: [...]}`) and the frontend applies it through `applyOperations` in [client/src/lib/workflowOps.ts](./client/src/lib/workflowOps.ts). Backend builders live in [server/services/workflow_ops.py](./server/services/workflow_ops.py). Full spec: [docs-internal/workflow_ops_protocol.md](./docs-internal/workflow_ops_protocol.md). Do not invent a parallel "modify the canvas" RPC for new features -- target this protocol.
 
 ## Implemented Node Types
-The following 92 nodes are currently implemented and functional:
+
+> **Authoritative source: backend plugin registry.** Glob [`server/nodes/**/*.py`](./server/nodes/) (excluding `_*.py` helpers and `__init__.py`) for the live count. The per-node descriptions below are reference material — they drift on every plugin add and should be cross-checked against [`server/nodes/README.md`](./server/nodes/README.md), the per-domain docs in `docs-internal/`, and the actual plugin classes before relying on any specific detail.
 
 ### AI Chat Models (9 nodes)
 - **openaiChatModel**: OpenAI GPT models with response format options. O-series models (o1, o3, o4) support reasoning effort parameter.
@@ -835,12 +826,7 @@ The Master Skill node uses a custom split-panel editor (`MasterSkillEditor.tsx`)
 - Default folder: `assistant`
 
 **Icon Resolution Priority:**
-Skill icons are resolved in this order (node definition first for SVG support):
-1. `skillNodes.ts` node definition icon (supports SVG data URIs, e.g., WhatsApp logo)
-2. SKILL.md metadata `icon` field (emoji strings)
-3. Default fallback
-
-Implemented via `getNodeDefaults()` helper that looks up icon/color from `skillNodes.ts` by matching `skillName` property.
+Skill icons resolve via the central `visuals.json` registry — see "Icon + color — central `visuals.json` registry" below. The pre-Wave-10 `skillNodes.ts` + `getNodeDefaults()` helper that did per-skill icon overrides on the frontend was retired; icons + colours now live exclusively in [`server/nodes/visuals.json`](./server/nodes/visuals.json) and SKILL.md frontmatter for orphan skills (no node target).
 
 **Keyboard Handling:**
 The editor uses a native DOM `addEventListener('keydown')` on a wrapper div (via `useRef`) to `stopPropagation()` for Ctrl/Meta key events. This prevents React Flow's document-level `useKeyPress` hook from intercepting Ctrl+A (select all) and other Ctrl shortcuts inside the textarea. React synthetic `stopPropagation()` is insufficient because React Flow uses native `document.addEventListener`.
@@ -1746,8 +1732,8 @@ All scripts in `scripts/` are cross-platform Node.js (Windows, macOS, Linux, WSL
 See **[Scripts Reference](./docs-internal/SCRIPTS.md)** for full documentation.
 
 ## Current Status
-✅ **INodeProperties System**: Fully implemented with 93 functional node components
-✅ **WebSocket-First Architecture**: 89 message handlers replacing REST APIs
+✅ **Plugin-first architecture (Wave 11)**: every node is one Python file under `server/nodes/<group>/<name>.py`; backend NodeSpec is the SSOT for icon, colour, handles, params, output schema, uiHints. Frontend renders via `useNodeSpec` + `componentKind` dispatch.
+✅ **WebSocket-First Architecture**: most frontend-backend RPC goes through WebSocket; live handler set lives in `MESSAGE_HANDLERS` in `server/routers/websocket.py`
 ✅ **Code Editor**: Python, JavaScript, and TypeScript executors with syntax-highlighted editor (react-simple-code-editor + prismjs) and console output
 ✅ **Node.js Executor**: Persistent Node.js server (Express + tsx) for fast JS/TS execution, replacing subprocess spawning
 ✅ **Component Palette**: Emoji icons with distinct dracula-themed category colors, localStorage persistence for collapsed sections
@@ -2312,68 +2298,43 @@ The token-based compaction threshold (`agent.compaction.ratio` × context_length
 
 If the recursion cap is ever hit anyway, the `GraphRecursionError` handler appends a terminal `AIMessage` carrying a truncation note so `_extract_text_content` returns a usable partial response and the workflow continues — `_track_token_usage` and any post-loop persistence still run.
 
-### Config-Driven Component Design
-The `AIAgentNode.tsx` component uses a configuration-driven pattern to support multiple agent types from a single component.
+### Spec-driven component design (Wave 10.D)
 
-#### AGENT_CONFIGS Object
+`AIAgentNode.tsx` knows nothing about specific agent types. It calls `useNodeSpec(type)` once and reads `handles`, `color`, `displayName`, `subtitle`, and `uiHints` from the cached `NodeSpec` ([`AIAgentNode.tsx:55-68`](./client/src/components/AIAgentNode.tsx#L55-L68)). The earlier 60-line `AGENT_CONFIGS` map (one entry per agent type, each with hardcoded `themeColorKey` + handle topology) was retired in Wave 10.D.
+
+Component dispatch lives in [`Dashboard.tsx:74-105`](./client/src/Dashboard.tsx#L74-L105):
+
 ```typescript
-type ThemeColorKey = 'purple' | 'cyan' | 'green' | 'pink' | 'orange' | 'yellow' | 'red';
+const COMPONENT_BY_KIND: Record<string, React.ComponentType<any>> = {
+  start: StartNode,
+  trigger: TriggerNode,
+  agent: AIAgentNode,    // every plugin with component_kind="agent" routes here
+  chat: AIAgentNode,
+  model: SquareNode,
+  square: SquareNode,
+  tool: SquareNode,
+  generic: SquareNode,
+};
 
-interface AgentConfig {
-  icon: React.ReactNode;
-  title: string;
-  subtitle: string;
-  themeColorKey: ThemeColorKey;  // References dracula theme constant
-  bottomHandles: Array<{ id: string; label: string; position: string }>;
-  leftHandles?: Array<{ id: string; label: string; position: string }>;
-  topOutputHandle?: { id: string; label: string };
-  width?: number;
-  height?: number;
-}
-
-// Color resolved at runtime: dracula[config.themeColorKey]
-const AGENT_CONFIGS: Record<string, AgentConfig> = {
-  aiAgent: {
-    icon: <RobotIcon />,
-    title: 'AI Agent',
-    subtitle: 'LangGraph Agent',
-    themeColorKey: 'purple',
-    bottomHandles: [
-      { id: 'input-skill', label: 'Skill', position: '25%' },
-      { id: 'input-tools', label: 'Tool', position: '75%' },
-    ],
-    leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '55%' },
-      { id: 'input-task', label: 'Task', position: '85%' },
-    ],
-  },
-  chatAgent: {
-    icon: <ZeenieIcon />,
-    title: 'Zeenie',
-    subtitle: 'Conversational Agent',
-    themeColorKey: 'cyan',
-    bottomHandles: [
-      { id: 'input-skill', label: 'Skill', position: '25%' },
-      { id: 'input-tools', label: 'Tool', position: '75%' },
-    ],
-    leftHandles: [
-      { id: 'input-memory', label: 'Memory', position: '55%' },
-      { id: 'input-task', label: 'Task', position: '85%' },
-    ],
-  },
-  // ... 11 specialized agents (android_agent, coding_agent, web_agent, task_agent,
-  //     social_agent, travel_agent, tool_agent, productivity_agent, payments_agent, consumer_agent, autonomous_agent)
-  //     each with themeColorKey, standard Skill/Tool bottom handles, Memory/Task left handles
+const createNodeTypes = () => {
+  const types: Record<string, React.ComponentType<any>> = {};
+  listCachedNodeSpecs().forEach(spec => {
+    const kind = spec.componentKind;
+    if (kind && COMPONENT_BY_KIND[kind]) {
+      types[spec.type] = COMPONENT_BY_KIND[kind];
+    } else if (spec.type === 'teamMonitor') {
+      types[spec.type] = TeamMonitorNode;
+    } else if ((spec.uiHints as any)?.isMasterSkillEditor === true) {
+      types[spec.type] = ToolkitNode;
+    } else {
+      types[spec.type] = SquareNode;
+    }
+  });
+  return types;
 };
 ```
 
-#### Component Selection
-In `Dashboard.tsx`, both agent types map to the same component:
-```typescript
-} else if (type === 'aiAgent' || type === 'chatAgent') {
-  types[type] = AIAgentNode;
-}
-```
+The dispatch keys off `spec.componentKind` (a backend-declared string), never `spec.type`. Specialized agent visuals (icon, color, handles, subtitle, width, height) all come from the spec. Icons + colours live in [`server/nodes/visuals.json`](./server/nodes/visuals.json) — not in the frontend component.
 
 ### AI Agent vs Zeenie
 
@@ -2497,45 +2458,23 @@ Child broadcasts its own status updates (executing, success, error)
 
 ### Specialized AI Agents
 
-The system supports specialized agent variants that inherit from the base AI Agent architecture:
+The system ships specialized agent variants — each is one Python file under [`server/nodes/agent/`](./server/nodes/agent/) inheriting `SpecializedAgentBase`. Authoritative list: glob that folder. Per-type display name / subtitle / description live on the plugin class; icon + colour live in [`server/nodes/visuals.json`](./server/nodes/visuals.json). Do not maintain a hand-list of agent types in this doc — it drifts on every plugin add.
 
-| Agent Type | Node Type | Icon | Theme Color (dracula) |
-|------------|-----------|------|-----------------------|
-| AI Agent | `aiAgent` | Robot SVG | purple |
-| Zeenie | `chatAgent` | Chat SVG | cyan |
-| Android Control | `android_agent` | robot | green |
-| Coding Agent | `coding_agent` | laptop | cyan |
-| Web Control | `web_agent` | globe | pink |
-| Task Management | `task_agent` | clipboard | purple |
-| Social Media | `social_agent` | phone | green |
-| Travel Agent | `travel_agent` | plane | orange |
-| Tool Agent | `tool_agent` | wrench | yellow |
-| Productivity | `productivity_agent` | clock | cyan |
-| Payments | `payments_agent` | credit card | green |
-| Consumer | `consumer_agent` | cart | purple |
-| Autonomous | `autonomous_agent` | target | purple |
-| Orchestrator | `orchestrator_agent` | conductor | cyan |
-| AI Employee | `ai_employee` | briefcase | purple |
-| RLM Agent | `rlm_agent` | brain | orange |
-| Deep Agent | `deep_agent` | brain (U+1F9E0) | green |
-
-All specialized agents share the same handle configuration:
+Standard handle topology (declared on `SpecializedAgentBase` via `std_agent_handles()`):
 - **Left**: `input-main` (Input, 30%), `input-memory` (Memory, 55%), `input-task` (Task, 85%)
 - **Bottom**: `input-skill` (Skill, 25%), `input-tools` (Tool, 75%)
 - **Top**: `output-top` (Output)
 
-**Team Lead Agents** (`orchestrator_agent`, `ai_employee`) have an additional handle:
-- **Bottom**: `input-teammates` (Teammates, 50%) - Connect specialized agents here for delegation
+**Team Lead Agents** (`orchestrator_agent`, `ai_employee`) declare an extra `input-teammates` handle on the bottom (50%) for delegation. They are listed in `TEAM_LEAD_TYPES` in [`client/src/components/TeamMonitorNode.tsx`](./client/src/components/TeamMonitorNode.tsx) (frontend tribal array — flagged as tech debt; see "remaining tribal arrays" note).
 
-The `AIAgentNode.tsx` component uses `AGENT_CONFIGS` to render all agent types with their specific icons, titles, and theme colors.
+`AIAgentNode.tsx` is type-agnostic: it calls `useNodeSpec(type)` and renders whatever handles/icon/color the spec returns — no `AGENT_CONFIGS` map.
 
 ## Architecture Patterns
-- **Resource-Operation Pattern**: Nodes organized by functional resources
-- **TypeScript-First**: 90.4% TypeScript coverage with strict typing
-- **Component-Driven**: Modular UI components with clear responsibilities  
-- **State Management**: Zustand for reactive application state
-- **Interface Compatibility**: Dual interface support for smooth transitions
-- **Execution Pipeline**: Async component execution with result handling
+- **Plugin-first (Wave 11).** One file per node under [`server/nodes/<group>/<name>.py`](./server/nodes/) subclassing `BaseNode` / `ActionNode` / `TriggerNode` / `ToolNode`. Auto-registers via `__init_subclass__`. See [`docs-internal/plugin_system.md`](./docs-internal/plugin_system.md).
+- **Backend NodeSpec is the SSOT** for icon, colour, handles, params, output schema, uiHints, palette group. Frontend consumes via `useNodeSpec(type)` and adapts the JSON Schema → `INodeTypeDescription` shape through [`adapters/nodeSpecToDescription.ts`](./client/src/adapters/nodeSpecToDescription.ts) (legacy interface kept as a render contract; not a parallel schema system).
+- **Component-driven frontend.** shadcn/ui primitives + Tailwind tokens; canvas nodes are spec-driven (see "Spec-driven component design" above).
+- **State management.** TanStack Query owns server-backed data; Zustand (`useAppStore`, `nodeStatusStore`) owns UI state and slice-subscribed high-frequency push state. Slice-selector reads only — never whole-store destructure (see "Frontend Performance Architecture").
+- **Execution pipeline.** Temporal-distributed activities for plugin execution; `WorkflowExecutor` for parallel orchestration; per-node retry / timeout / heartbeat declared on the plugin class.
 
 ## File Structure Cleanup
 **Removed Files:**
@@ -3872,66 +3811,33 @@ Tool Node (calculatorTool) → (tool output) → AI Agent (input-tools handle)
 | `server/services/ai.py` | `_get_tool_schema()` - Pydantic schemas for tools |
 | `server/services/handlers/ai.py` | Tool discovery from edges |
 
-### Tool Node Definition Pattern
-```typescript
-// In toolNodes.ts
-calculatorTool: {
-  displayName: 'Calculator Tool',
-  name: 'calculatorTool',
-  icon: '...',
-  group: ['tool', 'ai'],  // 'tool' marks as tool node
-  outputs: [{
-    name: 'tool',
-    type: 'main' as NodeConnectionType,
-    description: 'Connect to AI Agent tool handle'
-  }],
-  properties: [
-    { name: 'toolName', type: 'string', default: 'calculator' },
-    { name: 'toolDescription', type: 'string', default: '...' }
-  ]
-}
+### Adding a new tool or specialized agent (Wave 11)
+
+**Single source of truth: [`server/nodes/README.md`](./server/nodes/README.md)** (5-minute recipe) and [`docs-internal/plugin_system.md`](./docs-internal/plugin_system.md) (full reference). The pre-Wave-11 `toolNodes.ts` / `specializedAgentNodes.ts` / `AGENT_CONFIGS` files do not exist — the canonical authoring shape is one Python file.
+
+The whole workflow:
+
+```python
+# server/nodes/tool/<name>.py     ← for a tool
+# server/nodes/agent/<name>.py    ← for a specialized agent
+class MyTool(ToolNode):              # or SpecializedAgentBase for an agent
+    type = "myTool"
+    display_name = "My Tool"
+    group = ("tool", "ai")
+    component_kind = "tool"          # or "agent"
+    Params = MyParams                # Pydantic — feeds UI + AI tool schema
+    Output = MyOutput
+    @Operation("run")
+    async def run(self, ctx, params): ...
 ```
 
-### Specialized Agent Node Definition Pattern
-```typescript
-// In specializedAgentNodes.ts - uses shared AI_AGENT_PROPERTIES for full AI configuration
-android_agent: {
-  displayName: 'Android Control Agent',
-  name: 'android_agent',
-  icon: '📱',
-  group: ['agent', 'ai'],  // 'agent' for category placement
-  inputs: [
-    { name: 'main', displayName: 'Input', type: 'main' as NodeConnectionType },
-    { name: 'skill', displayName: 'Skill', type: 'main' as NodeConnectionType },
-    { name: 'memory', displayName: 'Memory', type: 'main' as NodeConnectionType },
-    { name: 'tools', displayName: 'Tool', type: 'main' as NodeConnectionType }
-  ],
-  outputs: [{ name: 'main', displayName: 'Output', type: 'main' as NodeConnectionType }],
-  properties: AI_AGENT_PROPERTIES  // Full AI configuration (provider, model, prompt, etc.)
-}
-```
+`BaseNode.__init_subclass__` registers the class into `NODE_METADATA`, `NODE_INPUT_MODELS`, `NODE_OUTPUT_SCHEMAS`, `_HANDLER_REGISTRY`, and `_NODE_CLASS_REGISTRY` on import. NodeSpec emits at `GET /api/schemas/nodes/<type>/spec.json`. The frontend auto-discovers via `useNodeSpec` + `componentKind` dispatch (see "Spec-driven component design" above). Icon + colour go in [`server/nodes/visuals.json`](./server/nodes/visuals.json).
 
-### Adding New Tools
-1. **Frontend**: Add node definition in `toolNodes.ts` with `group: ['tool', 'ai']`
-2. **Schema**: Add Pydantic schema in `ai.py` `_get_tool_schema()`
-3. **Handler**: Add execution handler in `tools.py` and dispatcher case in `execute_tool()`
-4. **TOOL_NODE_TYPES**: Add to array in `toolNodes.ts`
+**Cross-cutting edits that are still required (small):**
+- New specialized agent: add the agent's `type` string to the delegation-check tuple in [`server/services/handlers/tools.py:execute_tool()`](./server/services/handlers/tools.py) (~line 224) so the parent agent's `delegate_to_*` tool finds it. Also update `AI_AGENT_TYPES` frozenset in [`server/constants.py`](./server/constants.py) — used for legacy delegation checks. Both are flagged as tech debt; see "remaining tribal arrays" note.
+- Brand-new uiHint flag: add to `INodeUIHints` in [`client/src/types/INodeProperties.ts`](./client/src/types/INodeProperties.ts) AND to the `known` set in `test_ui_hints_only_carry_known_flags` (`server/tests/test_node_spec.py`).
 
-### Adding New Specialized Agents
-**Frontend (5 files):**
-1. **Node Definition**: Add to `specializedAgentNodes.ts` with `group: ['agent', 'ai']`, `properties: AI_AGENT_PROPERTIES`, and `defaults.color: dracula.<color>`
-2. **SPECIALIZED_AGENT_TYPES**: Add to array in `specializedAgentNodes.ts`
-3. **AIAgentNode Config**: Add to `AGENT_CONFIGS` in `AIAgentNode.tsx` with icon, title, subtitle, `themeColorKey`, standard handles (Skill 25%, Tool 75%, Memory 70%), 260x160px
-4. **MiddleSection.tsx**: Add to `AGENT_WITH_SKILLS_TYPES` array
-5. **InputSection.tsx**: Add to both `AGENT_WITH_SKILLS_TYPES` and `aiAgentTypes` arrays
-
-**Backend (4 files):**
-6. **constants.py**: Add to `AI_AGENT_TYPES` frozenset
-7. **Plugin file**: Add `server/nodes/agent/<name>.py` subclassing the chat-agent base; registry auto-wires via `BaseNode.__init_subclass__`
-8. **handlers/tools.py**: Add to delegation check tuple in `execute_tool()`
-9. **ai.py**: Add entries to `DEFAULT_TOOL_NAMES`, `DEFAULT_TOOL_DESCRIPTIONS`, and `DelegateToAgentSchema` condition
-
-**No changes needed:** `Dashboard.tsx` auto-maps via `SPECIALIZED_AGENT_TYPES.forEach()`
+**No edits needed:** any TypeScript node definition file, `_get_tool_schema()`, `AGENT_CONFIGS`, `AGENT_WITH_SKILLS_TYPES`, `aiAgentTypes`, `Dashboard.tsx`, `MiddleSection.tsx`, `InputSection.tsx`, or any of the other arrays the pre-Wave-11 docs listed.
 
 ### Tool Execution Animation
 Tool nodes display execution status via the standard node status system:
@@ -5139,7 +5045,7 @@ This function:
 - **Performance**: Fast HMR updates and clean TypeScript compilation
 - **AI Architecture**: 5-layer system with factory pattern and secure credential management
 - **Android Architecture**: Factory-based node creation with ADB integration for device automation
-- **WebSocket-First Architecture**: 89 message handlers replace REST APIs for parameters, execution, API keys, Android, WhatsApp, and skill operations
+- **WebSocket-First Architecture**: most frontend-backend RPC (parameters, execution, API keys, Android, WhatsApp, skill operations) goes through WebSocket. Live handler set lives in the `MESSAGE_HANDLERS` dict in `server/routers/websocket.py` plus plugin-registered handlers via `services.ws_handler_registry`.
 - **WebSocket Hooks**: Dedicated React hooks (useWhatsApp, useExecution, useApiKeys, useAndroidOperations, useParameterPanel) for clean component integration
 - **WebSocket Support**: Persistent remote Android device connections via WebSocket proxy with background tasks
   - Connection stays alive across multiple API requests until switched to local ADB

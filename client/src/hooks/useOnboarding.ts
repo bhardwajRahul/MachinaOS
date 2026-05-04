@@ -12,9 +12,21 @@ export interface OnboardingState {
   hasChecked: boolean;
 }
 
-const TOTAL_STEPS = 5;
+const DEFAULT_TOTAL_STEPS = 5;
 
-export const useOnboarding = (reopenTrigger?: number) => {
+/**
+ * Onboarding wizard state hook.
+ *
+ * @param reopenTrigger - bump from SettingsPanel to replay the wizard.
+ * @param totalSteps - number of steps the wizard will render. Caller
+ *   owns the step list (`STEPS.length` in OnboardingWizard); the hook
+ *   uses this only to detect last-step completion. Defaults to 5 for
+ *   backwards compatibility.
+ */
+export const useOnboarding = (
+  reopenTrigger?: number,
+  totalSteps: number = DEFAULT_TOTAL_STEPS,
+) => {
   const settingsQuery = useUserSettingsQuery();
   const saveSettings = useSaveUserSettingsMutation();
   const [state, setState] = useState<OnboardingState>({
@@ -77,14 +89,14 @@ export const useOnboarding = (reopenTrigger?: number) => {
   const nextStep = useCallback(() => {
     setState((prev) => {
       const next = prev.currentStep + 1;
-      if (next >= TOTAL_STEPS) {
-        saveProgress(TOTAL_STEPS, true);
+      if (next >= totalSteps) {
+        saveProgress(totalSteps, true);
         return { ...prev, currentStep: next, isCompleted: true, isVisible: false };
       }
       saveProgress(next, false);
       return { ...prev, currentStep: next };
     });
-  }, [saveProgress]);
+  }, [saveProgress, totalSteps]);
 
   const prevStep = useCallback(() => {
     setState((prev) => {
@@ -100,13 +112,13 @@ export const useOnboarding = (reopenTrigger?: number) => {
   }, [saveProgress, state.currentStep]);
 
   const complete = useCallback(() => {
-    saveProgress(TOTAL_STEPS, true);
+    saveProgress(totalSteps, true);
     setState((prev) => ({ ...prev, isVisible: false, isCompleted: true }));
-  }, [saveProgress]);
+  }, [saveProgress, totalSteps]);
 
   return {
     ...state,
-    totalSteps: TOTAL_STEPS,
+    totalSteps,
     nextStep,
     prevStep,
     skip,

@@ -19,13 +19,19 @@ const CanvasStep: React.FC = () => {
         </p>
       </div>
 
-      {/* Visual layout diagram */}
+      {/*
+       * Visual layout diagram. Region tints mirror the live UI's
+       * accent colours via the predefined --node-X-soft tokens — no
+       * opacity arithmetic at the call site. Each region maps to a
+       * node-group colour: toolbar→workflow (orange), sidebar→model
+       * (cyan), canvas→agent (purple), palette→skill (green),
+       * console→trigger (pink). Decorative use of the dracula text
+       * colours is permitted (tutorial diagram intentionally mirrors
+       * the live UI palette).
+       */}
       <div className="mb-4 overflow-hidden rounded-lg border border-border">
         {/* Toolbar */}
-        <div
-          className="flex items-center gap-1.5 border-b border-border px-2.5 py-1.5"
-          style={{ backgroundColor: 'hsl(var(--dracula-orange) / 0.12)' }}
-        >
+        <div className="flex items-center gap-1.5 border-b border-border bg-node-workflow-soft px-2.5 py-1.5">
           <Wrench className="h-3 w-3 text-dracula-orange" />
           <span className="text-xs font-semibold text-dracula-orange">Toolbar</span>
           <div className="flex-1" />
@@ -37,10 +43,7 @@ const CanvasStep: React.FC = () => {
         {/* Main area */}
         <div className="flex h-[120px]">
           {/* Sidebar */}
-          <div
-            className="flex w-20 flex-col gap-1 border-r border-border p-1.5"
-            style={{ backgroundColor: 'hsl(var(--dracula-cyan) / 0.08)' }}
-          >
+          <div className="flex w-20 flex-col gap-1 border-r border-border bg-node-model-soft p-1.5">
             <span className="text-[9px] font-semibold text-dracula-cyan">Sidebar</span>
             {['Workflow 1', 'Workflow 2'].map((w) => (
               <div key={w} className="rounded-sm bg-muted px-1 py-0.5 text-[8px] text-muted-foreground">
@@ -50,10 +53,7 @@ const CanvasStep: React.FC = () => {
           </div>
 
           {/* Canvas */}
-          <div
-            className="relative flex flex-1 items-center justify-center"
-            style={{ backgroundColor: 'hsl(var(--dracula-purple) / 0.06)' }}
-          >
+          <div className="relative flex flex-1 items-center justify-center bg-node-agent-soft">
             <div className="text-center">
               <Layout className="mx-auto h-5 w-5 text-dracula-purple opacity-50" />
               <div className="mt-0.5 text-[9px] text-dracula-purple">Canvas</div>
@@ -61,10 +61,7 @@ const CanvasStep: React.FC = () => {
           </div>
 
           {/* Palette */}
-          <div
-            className="flex w-20 flex-col gap-1 border-l border-border p-1.5"
-            style={{ backgroundColor: 'hsl(var(--dracula-green) / 0.08)' }}
-          >
+          <div className="flex w-20 flex-col gap-1 border-l border-border bg-node-skill-soft p-1.5">
             <span className="text-[9px] font-semibold text-dracula-green">Palette</span>
             {['AI Agents', 'AI Models', 'Skills'].map((c) => (
               <div key={c} className="rounded-sm bg-muted px-1 py-0.5 text-[8px] text-muted-foreground">
@@ -75,10 +72,7 @@ const CanvasStep: React.FC = () => {
         </div>
 
         {/* Console */}
-        <div
-          className="flex items-center gap-1.5 border-t border-border px-2.5 py-1.5"
-          style={{ backgroundColor: 'hsl(var(--dracula-pink) / 0.08)' }}
-        >
+        <div className="flex items-center gap-1.5 border-t border-border bg-node-trigger-soft px-2.5 py-1.5">
           <Terminal className="h-3 w-3 text-dracula-pink" />
           <span className="text-xs font-semibold text-dracula-pink">Console</span>
           <div className="flex-1" />
