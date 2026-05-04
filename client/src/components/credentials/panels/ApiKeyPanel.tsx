@@ -77,30 +77,29 @@ const ApiKeyPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = ({ c
                 setValidated(false);
               }}
               onSave={() =>
-                // Cloud providers store under config.id and validate via
-                // the upstream API. Local servers (Ollama, LM Studio)
-                // declare a non-`apiKey` field key (e.g. `ollama_proxy`)
-                // because nothing remote needs validating — just persist
-                // the base URL where the existing proxy_url lookup in
-                // execute_chat will find it.
-                (field.key === 'apiKey'
-                  ? panel.actions.validate(config.id, inputValue.trim())
-                  : panel.actions.save(field.key, inputValue.trim())
-                ).then((r) => {
-                  if (r?.isValid) setValidated(true);
-                })
+                panel.actions
+                  .validate(config.id, inputValue.trim())
+                  .then((r) => {
+                    if (r?.isValid) setValidated(true);
+                  })
               }
               onDelete={
                 validated
-                  ? () => {
-                      panel.actions.remove(field.key === 'apiKey' ? config.id : field.key);
+                  ? async () => {
+                      // Local providers also stored a Base URL under
+                      // {field.key} (e.g. `ollama_proxy`) — wipe both
+                      // so the modal returns to a clean empty state.
+                      await panel.actions.remove(config.id);
+                      if (field.key !== 'apiKey') {
+                        await panel.actions.remove(field.key);
+                      }
                       setInputValue('');
                       setValidated(false);
                     }
                   : undefined
               }
               placeholder={field.placeholder}
-              loading={panel.loading === 'validate' || panel.loading === 'save'}
+              loading={panel.loading === 'validate'}
               isStored={validated}
             />
           )}

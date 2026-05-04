@@ -1397,11 +1397,16 @@ class AIService:
         """Fetch available models from provider API.
 
         Native providers use their SDK-based fetch_models(). Groq/Cerebras
-        fall back to the LangChain httpx path.
+        fall back to the LangChain httpx path. Local providers (ollama,
+        lmstudio) honour the user's stored ``{provider}_proxy`` base URL
+        the same way ``execute_chat`` does — without this passthrough the
+        probe always hits the JSON default and never sees the user's
+        actual installed models.
         """
         # --- Native SDK path ---
         if is_native_provider(provider):
-            native_provider = create_provider(provider, api_key)
+            proxy_url = await self.auth.get_api_key(f"{provider}_proxy")
+            native_provider = create_provider(provider, api_key, proxy_url=proxy_url)
             return await native_provider.fetch_models(api_key)
 
         # --- LangChain fallback (groq, cerebras) ---
@@ -1435,10 +1440,14 @@ class AIService:
         except Exception as e:
             logger.warning(f"[AI] Failed to fetch models from {provider} API: {e}")
 
-        # Fallback to curated list from llm_defaults.json
+        # Fallback to curated list from llm_defaults.json. When the
+        # provider has no default_model declared (intentional for local
+        # servers like ollama/lmstudio), return an empty list so the
+        # frontend dropdown shows a real "no models" empty state instead
+        # of a placeholder name the user doesn't actually have.
         if curated:
             return curated
-        return [config.default_model]
+        return [config.default_model] if config.default_model else []
 
     async def execute_chat(self, node_id: str, node_type: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
         """Execute AI chat model."""

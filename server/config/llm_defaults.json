@@ -253,8 +253,7 @@
     },
 
     "ollama": {
-      "_description": "Local Ollama server (OpenAI-compatible /v1). The shape mirrors deepseek/kimi/mistral: base_url + models_endpoint, no auth field. The user's custom server address lives in the {provider}_proxy credential (existing Ollama-style auth-delegation path) which OpenAIProvider treats as the API base.",
-      "default_model": "llama3.2:3b",
+      "_description": "Local Ollama server (OpenAI-compatible /v1). No `default_model` because the dropdown should reflect the user's actually-pulled models — fetch_models hits the user's saved {provider}_proxy URL and returns whatever Ollama reports; when the server is offline we want an empty list (a 'start your server' cue), not a placeholder name the user almost certainly doesn't have.",
       "detection_patterns": ["ollama"],
       "base_url": "http://localhost:11434/v1",
       "models_endpoint": "http://localhost:11434/v1/models",
@@ -266,8 +265,7 @@
     },
 
     "lmstudio": {
-      "_description": "Local LM Studio server (pure OpenAI-compatible). Same OpenAIProvider+base_url path as deepseek/kimi/mistral; user's custom URL rides via {provider}_proxy.",
-      "default_model": "local-model",
+      "_description": "Local LM Studio server (pure OpenAI-compatible). Same no-default-model rule as ollama — the dropdown reflects what the user has loaded in LM Studio, not a fake placeholder.",
       "detection_patterns": ["lmstudio", "lm_studio", "lm-studio"],
       "base_url": "http://localhost:1234/v1",
       "models_endpoint": "http://localhost:1234/v1/models",

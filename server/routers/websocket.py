@@ -1976,10 +1976,16 @@ async def handle_validate_apify_key(data: Dict[str, Any], websocket: WebSocket) 
 
 # Per-provider validation strategies. Register any non-LLM provider here
 # and `handle_validate_api_key` will dispatch to it automatically, so the
-# frontend only ever calls one WS message type.
+# frontend only ever calls one WS message type. Local-LLM validators
+# live in their plugin folder (see `nodes/model/_local_validator.py`)
+# so all per-provider behaviour for ollama/lmstudio stays in `nodes/model/`.
+from nodes.model._local_validator import validate_local_llm as _validate_local_llm
+
 _SPECIAL_PROVIDER_VALIDATORS = {
     "google_maps": handle_validate_maps_key,
     "apify": handle_validate_apify_key,
+    "ollama": _validate_local_llm,
+    "lmstudio": _validate_local_llm,
 }
 
 
