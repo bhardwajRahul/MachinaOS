@@ -25,6 +25,7 @@ This is a React Flow-based workflow automation platform implementing n8n-inspire
 | **[Pricing Service](./docs-internal/pricing_service.md)** | Centralized cost tracking for LLM tokens and API services (Twitter, Google Maps) with HTTPX event hooks |
 | **[Proxy Service](./docs-internal/proxy_service.md)** | Residential proxy provider management with template-based URL formatting, health scoring, and transparent HTTP node injection |
 | **[Email Service](./docs-internal/email_service.md)** | IMAP/SMTP integration via Himalaya CLI with EmailService orchestrator, provider presets, custom credential fallback, and polling triggers |
+| **[Stripe Service](./docs-internal/stripe_service.md)** | Stripe CLI integration via the Wave 12 event framework — `stripeAction` (CLI pass-through) + `stripeReceive` (signed-webhook trigger). Reference plugin for `services/events/` (DaemonEventSource, WebhookSource, WebhookTriggerNode, signature verifiers, lifecycle helpers) |
 | **[CI/CD Pipeline](./docs-internal/ci_cd.md)** | GitHub Actions workflows, predeploy validation, release publishing, and composite setup action |
 | **[Workflow Schema](./docs-internal/workflow-schema.md)** | JSON schema for workflows, edge handle conventions, config node architecture |
 | **[Execution Engine Design](./docs-internal/DESIGN.md)** | Architecture patterns, design standards, and implementation details for the workflow execution engine |

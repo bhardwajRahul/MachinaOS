@@ -732,7 +732,19 @@ every CI run. Examples:
   `event_waiter.register_trigger_precheck` (trigger pre-execution
   checks), `status_broadcaster.register_service_refresh` (WS-connect
   refresh callbacks), `node_output_schemas.register_output_schema`
-  (output schemas). Telegram is the reference implementation:
+  (output schemas).
+- Wave 12 — Generalized event framework
+  ([`services/events/`](../server/services/events/)). Adds
+  `WorkflowEvent` (CloudEvents v1.0 envelope, in-house Pydantic),
+  `EventSource` hierarchy (`PushEventSource` /
+  `PollingEventSource` / `DaemonEventSource` / `WebhookSource` /
+  `WebhookTriggerNode`), a verifier registry (Stripe / GitHub /
+  Standard Webhooks / generic HMAC), and three wiring helpers
+  (`make_lifecycle_handlers`, `make_status_refresh`,
+  `run_cli_command`). Future event-source plugins drop to ≈150
+  executable lines. Stripe is the reference implementation;
+  Phase 2-4 migrate the existing polling and daemon triggers onto
+  the framework. Telegram is the reference implementation:
   ~870 lines of telegram-specific code moved out of
   `services/telegram_service.py` (deleted), `routers/websocket.py`
   (7 inline handlers removed), `services/event_waiter.py`
@@ -759,3 +771,333 @@ files / 12,800 LOC):
 Every domain owns its own code under `nodes/<group>/` — plugin file +
 optional `_base.py` / `_inline.py` / `_credentials.py` siblings. No
 handler shells, no central credential registry, no cross-domain reach.
+
+## Wave 12 — Generalized event framework (`services/events/`)
+
+Wave 11.H proved the self-contained-folder pattern. Wave 12 takes the
+next step: stop re-implementing the same event-source plumbing in
+every folder. The new package
+[`server/services/events/`](../server/services/events/) provides the
+shared base classes that every trigger / daemon / signed-webhook
+plugin builds on top of.
+
+### Why
+
+Pre-framework, every event-source plugin re-wrote the same boilerplate:
+
+- **Polling loop frame** duplicated verbatim across `gmail_receive`,
+  `email_receive`, `twitter_receive` (`sleep → poll → diff baseline →
+  dispatch`).
+- **Subprocess supervision** had no shared base — telegram (SDK loop),
+  whatsapp (Go RPC), stripe (CLI subprocess) each owned their
+  singleton.
+- **HMAC signature verification** was about to be re-implemented per
+  signed-webhook integration (Stripe, GitHub, Slack, Standard Webhooks
+  / Svix providers).
+- **Lifecycle WebSocket handlers** (connect / disconnect / reconnect /
+  status) were ~25 LOC of identical boilerplate per plugin.
+- **Status-refresh callback** (auto-reconnect on WS-client connect) was
+  another ~12 LOC of identical boilerplate per plugin.
+- **CLI invocation** (find binary on PATH, inject API key, subprocess
+  with timeout, parse JSON, uniform error envelope) was a copy-paste
+  target.
+
+Wave 12 absorbs all of this into framework code. New event-source
+plugins drop to **~150 executable lines** (vs ~600+ pre-framework).
+
+### Public surface
+
+```python
+from services.events import (
+    # Envelope
+    WorkflowEvent,                # CloudEvents v1.0 model (in-house)
+
+    # EventSource hierarchy
+    EventSource,                  # ABC: start / stop / status / emit
+    PushEventSource,              #   external code calls receive()
+    PollingEventSource,           #   poll_once() at intervals
+    DaemonEventSource,            #   ProcessService-supervised subprocess
+    WebhookSource,                #   HTTP POST to /webhook/{path}
+    BaseTriggerParams,            # Pydantic base for trigger Params
+    WebhookTriggerNode,           # TriggerNode bound to a WebhookSource
+
+    # Webhook signature verifiers
+    WebhookVerifier,              # ABC
+    StripeVerifier,               # t=,v1=,HMAC-SHA256
+    GitHubVerifier,               # X-Hub-Signature-256
+    StandardWebhooksVerifier,     # Svix scheme (id.timestamp.body)
+    HmacVerifier,                 # Generic single-header HMAC fallback
+
+    # Wiring helpers
+    register_webhook_source,      # WEBHOOK_SOURCES[path] = source
+    make_lifecycle_handlers,      # connect/disconnect/reconnect/status WS dict
+    make_status_refresh,          # register_service_refresh callback factory
+    run_cli_command,              # subprocess + credential + JSON parse
+)
+```
+
+### Source taxonomy
+
+Modality-axis hierarchy aligned with Apache Camel EIP and n8n trigger
+modes:
+
+```
+EventSource (abstract)
+├── PushEventSource         events arrive via external write (HTTP, RPC, SSE)
+│   └── WebhookSource       HTTP POST to /webhook/{path}
+├── PollingEventSource      sleep → poll_once → emit; framework owns the loop
+└── DaemonEventSource       long-lived subprocess via ProcessService;
+                            tail stdout/stderr; parse_line() → events
+```
+
+Cron / scheduled events stay on APScheduler — they don't need this
+base. Internal in-process events go through `event_waiter.dispatch`
+directly.
+
+### Unified envelope (`WorkflowEvent`)
+
+Mirrors CloudEvents v1.0 verbatim
+([spec](https://github.com/cloudevents/spec/blob/v1.0.2/cloudevents/spec.md))
+plus three MachinaOs routing extras (`workflow_id`,
+`trigger_node_id`, `correlation_id`). Field set:
+`specversion / id / source / type / time / subject / datacontenttype /
+dataschema / data` plus the extras.
+
+```python
+WorkflowEvent(
+    id=payload["id"],                          # provider's event id (replay safety)
+    source="stripe://acct_test",               # URI: scheme://provider/account
+    type="stripe.charge.succeeded",            # reverse-DNS event type
+    time=datetime.fromtimestamp(payload["created"], tz=timezone.utc),
+    subject=payload.get("type"),
+    data=payload,
+)
+```
+
+`WorkflowEvent.matches_type(pattern)` does CloudEvents-style glob
+matching: `"all"` / `""` matches everything, `"foo.*"` matches
+`"foo.X"` and `"foo.X.Y"`, exact strings match exactly.
+
+`from_legacy(event_type, payload)` wraps pre-framework `Dict`
+dispatches as a back-compat shim — every existing trigger keeps
+working untouched.
+
+### `WebhookTriggerNode` — the canonical TriggerNode base
+
+Subclass for any signed-webhook trigger. Plugin declares only what
+differs from the generic shape:
+
+```python
+from services.events import (
+    BaseTriggerParams, WebhookTriggerNode, WorkflowEvent,
+)
+
+class MyParams(BaseTriggerParams):
+    livemode_filter: Literal["all", "test", "live"] = "all"
+
+class MyReceiveNode(WebhookTriggerNode):
+    type = "myReceive"
+    display_name = "My Receive"
+    group = ("myprovider", "trigger")
+    handles = (...,)
+    credentials = (MyCredential,)
+
+    webhook_source = MyWebhookSource          # required: which source feeds events
+    event_type_prefix = "my."                  # auto-prepended to user filters
+    Params = MyParams
+    Output = MyOutput
+
+    async def _check_precondition(self) -> Optional[str]:
+        from ._source import get_listen_source
+        return None if get_listen_source()._started else "Daemon not running"
+
+    def _extra_filter(self, params):           # optional; on top of event-type match
+        if params.livemode_filter == "all":
+            return None
+        target = params.livemode_filter == "live"
+        return lambda ev: bool(ev.data.get("livemode")) is target
+
+    def shape_output(self, event: WorkflowEvent) -> Dict:
+        # Optional override; default returns event.model_dump(mode="json")
+        ...
+```
+
+`WebhookTriggerNode` provides:
+
+- `event_type` derived from `webhook_source.type` automatically.
+- `build_filter` combining CloudEvents type-glob + optional
+  `_extra_filter`.
+- `execute()` with `_check_precondition` short-circuit and reshape
+  passthrough.
+- The `@Operation("wait")` stub.
+
+### `WebhookSource` — HTTP receiver
+
+Plugin pairs the trigger with a `WebhookSource` that owns signature
+verification + payload shaping:
+
+```python
+from services.events import StripeVerifier, WebhookSource, WorkflowEvent
+
+class StripeWebhookSource(WebhookSource):
+    type = "stripe.webhook"
+    path = "stripe"                             # /webhook/stripe
+    verifier = StripeVerifier
+    secret_field = "stripe_webhook_secret"
+    credential = StripeCredential
+
+    async def shape(self, request, body, payload) -> WorkflowEvent:
+        return WorkflowEvent(
+            id=payload["id"],
+            type=f"stripe.{payload['type']}",
+            source=f"stripe://{payload.get('account', 'default')}",
+            time=datetime.fromtimestamp(payload["created"], tz=timezone.utc),
+            data=payload,
+        )
+```
+
+The shared dispatch path lives in `routers/webhook.py` — it consults
+`WEBHOOK_SOURCES`, runs the verifier, calls `shape()`, dispatches via
+`event_waiter`. **No plugin name is hardcoded in core.**
+
+### `DaemonEventSource` — supervised subprocess driver
+
+For plugins that wrap a long-lived CLI tool or SDK loop (Stripe CLI,
+future GitHub-CLI / Cloudflare-Wrangler / etc.). Delegates lifecycle
+to `ProcessService` (battle-tested PATHEXT-aware launching, kill_tree
+cleanup, log capture):
+
+```python
+from services.events import DaemonEventSource, WorkflowEvent
+
+class StripeListenSource(DaemonEventSource):
+    type = "stripe.listen"
+    process_name = "stripe-listen"
+    binary_name = "stripe"
+    workflow_namespace = "_stripe"
+    install_hint = "https://stripe.com/docs/stripe-cli#install"
+    credential = StripeCredential
+
+    def build_command(self, secrets: Dict) -> str:
+        return f"stripe listen --print-secret --api-key {secrets['api_key']}"
+
+    def parse_line(self, stream: str, line: str) -> Optional[WorkflowEvent]:
+        # called per-line for both stdout and stderr
+        if stream == "stderr" and (m := WHSEC_RE.search(line)):
+            asyncio.create_task(self._persist_secret(m.group(0)))
+        return None
+```
+
+The base provides `start()` / `stop()` / `restart()` / `status()` /
+`has_credential()` / lifecycle locking / pre-flight `shutil.which`
+check / log tailing.
+
+### Webhook verifiers
+
+Drop-in HMAC schemes covering the major providers:
+
+| Class | Header | Algorithm | Used by |
+|---|---|---|---|
+| `StripeVerifier` | `Stripe-Signature: t=…,v1=…` | HMAC-SHA256 over `t.body` | Stripe |
+| `StandardWebhooksVerifier` | `webhook-id` / `webhook-timestamp` / `webhook-signature` | HMAC-SHA256 base64 over `id.ts.body` | Svix-backed providers (Resend, Clerk, Loops, …) |
+| `GitHubVerifier` | `X-Hub-Signature-256: sha256=…` | HMAC-SHA256 over body | GitHub |
+| `HmacVerifier` | configurable header + prefix | HMAC-SHA256 over body | generic fallback |
+
+Each verifier raises `ValueError` on mismatch; `WebhookSource.handle`
+catches it and returns HTTP 400.
+
+### Wiring helpers
+
+Two factory functions collapse the per-plugin `__init__.py` boilerplate
+to four lines:
+
+```python
+# nodes/stripe/_handlers.py
+from services.events import make_lifecycle_handlers, run_cli_command
+from ._source import get_listen_source
+
+WS_HANDLERS = make_lifecycle_handlers(
+    prefix="stripe",
+    source=get_listen_source(),
+    extra={"stripe_trigger": handle_stripe_trigger},  # plugin-specific extras
+)
+# → registers stripe_connect / stripe_disconnect / stripe_reconnect /
+#   stripe_status from the source's start/stop/restart/status methods +
+#   the stripe_trigger handler the plugin owns.
+
+# nodes/stripe/__init__.py
+register_service_refresh(make_status_refresh(
+    get_listen_source(),
+    status_key="stripe",
+    broadcast_type="stripe_status",
+))
+# → auto-reconnect on WS-client connect + mirror status into
+#   broadcaster._status["stripe"] + broadcast.
+```
+
+### `run_cli_command` — generic CLI invocation
+
+Used by ActionNodes that wrap a CLI tool. Resolves the binary on
+PATH, optionally injects the credential's `api_key` via the
+convention flag (`--api-key` by default), runs subprocess with
+timeout, parses stdout as JSON, returns a uniform envelope:
+
+```python
+from services.events import run_cli_command
+
+result = await run_cli_command(
+    binary="stripe",
+    argv=["customers", "create", "--email", "a@b.com"],
+    credential=StripeCredential,
+)
+# {"success": bool, "result": parsed-or-None, "stdout": str,
+#  "stderr": str, "error": str-or-None}
+```
+
+### Stripe — reference implementation
+
+The Stripe plugin
+([`server/nodes/stripe/`](../server/nodes/stripe/)) is the canonical
+Wave 12 example: 540 LOC total / 258 executable, supervising a CLI
+daemon, verifying signed webhooks, exposing both a TriggerNode
+(`stripeReceive`) and a dual-purpose ActionNode + AI tool
+(`stripeAction`). See [`stripe_service.md`](./stripe_service.md) for
+the per-file walkthrough.
+
+### Integration points (no core edits per plugin)
+
+| Concern | Framework integration | Plugin contribution |
+|---|---|---|
+| HTTP webhook ingress | `routers/webhook.py` consults `WEBHOOK_SOURCES` registry | `register_webhook_source(MySource())` |
+| Event dispatch into workflows | `event_waiter.dispatch(source.type, event)` from `WebhookSource.handle` | provider-specific `shape()` returning `WorkflowEvent` |
+| Trigger waiting + filtering | `WebhookTriggerNode.build_filter` (CloudEvents glob) | optional `_extra_filter(params)` |
+| Daemon lifecycle | `DaemonEventSource.start/stop/restart` via `ProcessService` | `build_command(secrets)` + `parse_line(stream, line)` |
+| Lifecycle WebSocket commands | `make_lifecycle_handlers(prefix, source, extra=…)` | provider-specific extra handlers |
+| Status refresh on WS connect | `make_status_refresh(source, status_key, broadcast_type)` | nothing — auto-derived from source |
+| CLI subprocess invocation | `run_cli_command(binary=…, argv=…, credential=…)` | nothing — credential injection is automatic |
+
+### When to use the framework
+
+Use it for any new event-source plugin:
+
+- Signed webhooks → `WebhookSource` + `WebhookTriggerNode` + a verifier
+  from `services.events.verifiers` (or contribute a new one).
+- CLI daemons → `DaemonEventSource`.
+- API polling → `PollingEventSource`.
+- Pure HTTP push without a verifier → `PushEventSource` directly.
+
+Use plain `TriggerNode` only for in-process / synthetic events
+(`taskTrigger`, `chatTrigger`) that don't have an external source.
+
+### Phase rollout
+
+- **Phase 1 (shipped):** framework lands, Stripe plugin built natively
+  on top. Existing 9 trigger plugins keep using their pre-framework
+  paths (the `event_waiter.dispatch(event_type, Dict)` shim accepts
+  legacy `Dict` payloads alongside `WorkflowEvent`).
+- **Phase 2 (planned):** migrate `gmailReceive`, `emailReceive`,
+  `twitterReceive` to `PollingEventSource`. Net delete: ~30 LOC each.
+- **Phase 3 (planned):** migrate `telegramReceive` and
+  `whatsappReceive` to `DaemonEventSource`. Net delete: ~50 LOC each.
+- **Phase 4 (planned):** sunset the legacy `Dict`-payload shim once
+  every trigger uses `WorkflowEvent`.
