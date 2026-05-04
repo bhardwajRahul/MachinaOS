@@ -461,7 +461,25 @@ class WorkflowService:
             workflow_id: Specific workflow to cancel. If None, cancels first running deployment.
         """
         manager = self._get_deployment_manager()
-        return await manager.cancel(workflow_id)
+        result = await manager.cancel(workflow_id)
+
+        # Also cancel any in-flight CLI agent batches (claude_code_agent /
+        # codex_agent) for this workflow. Best-effort — failure to cancel
+        # CLI sessions must not block the deployment cancel.
+        if workflow_id:
+            try:
+                from services.cli_agent.service import get_ai_cli_service
+                cli_svc = get_ai_cli_service()
+                cancelled = await cli_svc.cancel_workflow(workflow_id)
+                if cancelled:
+                    logger.info(
+                        "[workflow] cancelled %d CLI agent session(s) for workflow %s",
+                        cancelled, workflow_id,
+                    )
+            except Exception as exc:
+                logger.debug("[workflow] CLI agent cancel: %s", exc)
+
+        return result
 
     def get_deployment_status(self, workflow_id: Optional[str] = None) -> Dict[str, Any]:
         """Get deployment status.

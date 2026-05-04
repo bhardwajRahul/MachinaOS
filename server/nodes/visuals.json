@@ -89,6 +89,10 @@
     "icon": "lobehub:Claude",
     "color": "#8be9fd"
   },
+  "codex_agent": {
+    "icon": "lobehub:OpenAI",
+    "color": "#ffb86c"
+  },
   "coding_agent": {
     "icon": "💻",
     "color": "#8be9fd"

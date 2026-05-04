@@ -1,30 +1,40 @@
-"""Claude Code service - manages CLI execution with session persistence."""
+"""Legacy single-task Claude Code shim.
 
-import asyncio
-import json
+Kept for back-compat with any caller that still imports
+`get_claude_code_service()`. New code should call
+`services.cli_agent.AICliService.run_batch("claude", ...)` directly via
+the `claude_code_agent` plugin.
+
+This module:
+  - Builds a single ``ClaudeTaskSpec`` from kwargs
+  - Calls ``AICliService.run_batch("claude", ...)``
+  - Adapts the ``BatchResult`` back into the dict shape the legacy
+    callers expected
+
+Eventually deletable once all imports point at ``cli_agent.service``.
+The hardcoded 300s `wait_for` is gone — ``timeout_seconds`` is now per
+task and configurable.
+"""
+
+from __future__ import annotations
+
 import os
-import shutil
-from typing import Any, Dict, List, Optional
+from pathlib import Path
+from typing import Any, Dict, Optional
 
+from core.config import Settings
 from core.logging import get_logger
+
+from services.cli_agent import ClaudeTaskSpec
+from services.cli_agent.service import get_ai_cli_service
 
 logger = get_logger(__name__)
 
 
-def _find_claude_cmd() -> List[str]:
-    """Find claude CLI cross-platform."""
-    if shutil.which("claude"):
-        return ["claude"]
-    npx = shutil.which("npx")
-    if npx:
-        return [npx, "-y", "@anthropic-ai/claude-code"]
-    raise FileNotFoundError("Neither 'claude' nor 'npx' found in PATH")
-
-
 class ClaudeCodeService:
-    """Executes tasks via Claude Code CLI with session tracking."""
+    """Thin shim that adapts to the new AICliService."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._session_map: Dict[str, str] = {}  # node_id -> session_id
 
     async def execute(
@@ -37,63 +47,84 @@ class ClaudeCodeService:
         max_turns: int = 10,
         max_budget_usd: float = 5.0,
         system_prompt: Optional[str] = None,
+        timeout_seconds: int = 600,
     ) -> Dict[str, Any]:
-        """Run claude CLI and return parsed JSON result."""
-        cmd = _find_claude_cmd() + [
-            "-p", prompt,
-            "--output-format", "json",
-            "--model", model,
-            "--max-turns", str(max_turns),
-            "--allowedTools", allowed_tools,
-        ]
-
-        if max_budget_usd > 0:
-            cmd += ["--max-budget-usd", str(max_budget_usd)]
-
-        # Resume existing session for this node
-        session_id = self._session_map.get(node_id)
-        if session_id:
-            cmd += ["--resume", session_id]
-
-        if system_prompt:
-            cmd += ["--append-system-prompt", system_prompt]
-
+        """Run a single Claude Code task. Returns legacy dict shape."""
         if not cwd:
-            from core.config import Settings
-            cwd = os.path.join(Settings().workspace_base_resolved, 'default')
+            cwd = os.path.join(Settings().workspace_base_resolved, "default")
             os.makedirs(cwd, exist_ok=True)
-        work_dir = cwd
 
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=work_dir,
+        # Resume the prior session for this node if we have one
+        resume_session_id = self._session_map.get(node_id) if node_id else None
+
+        task = ClaudeTaskSpec(
+            task_id=f"legacy_{node_id}" if node_id else "legacy",
+            prompt=prompt,
+            model=model,
+            max_turns=max_turns,
+            max_budget_usd=max_budget_usd,
+            allowed_tools=allowed_tools,
+            system_prompt=system_prompt,
+            timeout_seconds=timeout_seconds,
+            resume_session_id=resume_session_id,
         )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=300)
 
-        if proc.returncode != 0:
-            err = stderr.decode("utf-8", errors="replace").strip()
-            logger.error("Claude Code failed (exit %d): %s", proc.returncode, err)
-            raise RuntimeError(err or f"Exit code {proc.returncode}")
+        svc = get_ai_cli_service()
+        workspace_dir = Path(cwd)
+        repo_root = self._find_git_repo(workspace_dir)
 
-        raw = stdout.decode("utf-8", errors="replace").strip()
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError:
-            data = {"result": raw}
+        result = await svc.run_batch(
+            "claude",
+            tasks=[task],
+            node_id=node_id or "legacy_node",
+            workflow_id="legacy_workflow",
+            workspace_dir=workspace_dir,
+            broadcaster=None,
+            repo_root=repo_root,
+        )
 
-        # Track session for future resume
-        if data.get("session_id") and node_id:
-            self._session_map[node_id] = data["session_id"]
+        if not result.tasks:
+            raise RuntimeError("AICliService returned empty batch")
 
-        return data
+        sr = result.tasks[0]
+        if not sr.success:
+            raise RuntimeError(sr.error or "claude_code_service: task failed")
+
+        # Persist session_id for future resume
+        if sr.session_id and node_id:
+            self._session_map[node_id] = sr.session_id
+
+        return {
+            "result": sr.response,
+            "session_id": sr.session_id or "",
+            "total_cost_usd": sr.cost_usd,
+            "duration_ms": sr.duration_ms,
+            "num_turns": sr.num_turns,
+            "usage": {
+                "input_tokens": sr.canonical_usage.input_tokens,
+                "output_tokens": sr.canonical_usage.output_tokens,
+                "cache_creation_input_tokens": sr.canonical_usage.cache_write,
+                "cache_read_input_tokens": sr.canonical_usage.cache_read,
+            },
+        }
 
     def get_session_id(self, node_id: str) -> Optional[str]:
         return self._session_map.get(node_id)
 
     def clear_session(self, node_id: str) -> None:
         self._session_map.pop(node_id, None)
+
+    @staticmethod
+    def _find_git_repo(start: Path) -> Optional[Path]:
+        """Walk up from `start` looking for a `.git` directory."""
+        cur = start.resolve()
+        for _ in range(8):
+            if (cur / ".git").exists():
+                return cur
+            if cur.parent == cur:
+                return None
+            cur = cur.parent
+        return None
 
 
 _instance: Optional[ClaudeCodeService] = None

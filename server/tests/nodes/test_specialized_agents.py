@@ -463,73 +463,120 @@ class TestRLMAgent:
 
 
 class TestClaudeCodeAgent:
-    def _wire_claude_service(self, result_payload=None):
-        service = MagicMock(name="ClaudeCodeService")
-        service.execute = AsyncMock(
-            return_value=result_payload
-            or {
-                "result": "cli response",
-                "session_id": "sess-abc",
-                "usage": {"input_tokens": 10, "output_tokens": 5},
-            }
-        )
-        return service
+    """The claude_code_agent plugin now goes through `AICliService.run_batch`
+    (multi-task batch). Single-prompt input gets adapted to a one-task batch
+    for back-compat. These tests mock the new service path."""
 
-    async def test_happy_path_spawns_cli_and_returns_response(self, harness):
-        service = self._wire_claude_service()
+    def _wire_cli_service(
+        self,
+        *,
+        response: str = "cli response",
+        session_id: str = "sess-abc",
+        cost_usd: float = 0.012,
+        success: bool = True,
+        error: str | None = None,
+    ):
+        """Mock `AICliService` with a `run_batch` that returns a one-task BatchResult."""
+        from services.cli_agent.protocol import (
+            BatchResult,
+            CanonicalUsage,
+            SessionResult,
+        )
+
+        async def fake_run_batch(provider, *, tasks, **kwargs):
+            tasks_list = list(tasks)
+            results = []
+            for t in tasks_list:
+                results.append(SessionResult(
+                    task_id=t.task_id or "t_test",
+                    session_id=session_id,
+                    provider=provider,
+                    prompt=t.prompt,
+                    response=response,
+                    cost_usd=cost_usd,
+                    duration_ms=1234,
+                    num_turns=2,
+                    canonical_usage=CanonicalUsage(input_tokens=10, output_tokens=5),
+                    success=success,
+                    error=error,
+                ))
+            n_succeeded = sum(1 for r in results if r.success)
+            return BatchResult(
+                tasks=results,
+                n_tasks=len(results),
+                n_succeeded=n_succeeded,
+                n_failed=len(results) - n_succeeded,
+                total_cost_usd=cost_usd if all(r.success for r in results) else None,
+                wall_clock_ms=1500,
+                provider=provider,
+                timestamp="2026-05-04T00:00:00Z",
+            )
+
+        svc = MagicMock(name="AICliService")
+        svc.run_batch = AsyncMock(side_effect=fake_run_batch)
+        svc.cancel_workflow = AsyncMock(return_value=0)
+        svc.cancel_node = AsyncMock(return_value=0)
+        return svc
+
+    async def test_happy_path_routes_through_run_batch(self, harness):
+        svc = self._wire_cli_service()
 
         with patched_container(auth_api_keys={}), patched_broadcaster(), patch(
-            "services.claude_code_service.get_claude_code_service",
-            return_value=service,
+            "services.cli_agent.service.get_ai_cli_service",
+            return_value=svc,
         ):
             result = await harness.execute(
                 "claude_code_agent",
                 {
                     "prompt": "write a hello world script",
                     "model": "claude-sonnet-4-6",
-                    "max_turns": 5,
-                    "max_budget_usd": 2.0,
                 },
             )
 
         harness.assert_envelope(result, success=True)
         payload = result["result"]
         assert payload["response"] == "cli response"
-        assert payload["provider"] == "anthropic"
         assert payload["session_id"] == "sess-abc"
-        assert payload["model"] == "claude-sonnet-4-6"
+        assert payload["provider"] == "claude"
+        assert payload["n_tasks"] == 1
+        assert payload["n_succeeded"] == 1
 
-        # The service was called with the documented kwargs.
-        call = service.execute.await_args
-        assert call.kwargs["model"] == "claude-sonnet-4-6"
-        assert call.kwargs["max_turns"] == 5
-        assert call.kwargs["max_budget_usd"] == 2.0
-        assert call.kwargs["prompt"] == "write a hello world script"
+        # AICliService.run_batch was called with provider="claude" + 1 task
+        call = svc.run_batch.await_args
+        assert call.args[0] == "claude"
+        tasks = list(call.kwargs["tasks"])
+        assert len(tasks) == 1
+        assert tasks[0].prompt == "write a hello world script"
+        assert tasks[0].model == "claude-sonnet-4-6"
 
-    async def test_max_budget_usd_flag_is_passed_through(self, harness):
-        """Guards against the historical '--max-cost' bug: the handler must
-        forward maxBudgetUsd to the service as max_budget_usd."""
-        service = self._wire_claude_service()
+    async def test_max_budget_usd_propagates_via_task_spec(self, harness):
+        """Per-task max_budget_usd must reach the ClaudeTaskSpec."""
+        svc = self._wire_cli_service()
 
         with patched_container(auth_api_keys={}), patched_broadcaster(), patch(
-            "services.claude_code_service.get_claude_code_service",
-            return_value=service,
+            "services.cli_agent.service.get_ai_cli_service",
+            return_value=svc,
         ):
             await harness.execute(
                 "claude_code_agent",
-                {"prompt": "x", "max_budget_usd": 7.5},
+                {
+                    "tasks": [
+                        {"prompt": "x", "provider": "claude", "max_budget_usd": 7.5},
+                    ],
+                },
             )
 
-        call = service.execute.await_args
-        assert call.kwargs["max_budget_usd"] == 7.5
+        call = svc.run_batch.await_args
+        tasks = list(call.kwargs["tasks"])
+        assert tasks[0].max_budget_usd == 7.5
 
     async def test_no_prompt_returns_failure(self, harness):
-        """Unique to claude_code_agent: explicit no-prompt short-circuit."""
-        service = self._wire_claude_service()
+        """No prompt + no tasks must short-circuit before constructing a batch."""
+        svc = self._wire_cli_service()
 
         with patched_container(auth_api_keys={}), patched_broadcaster(), patch(
-            "services.claude_code_service.get_claude_code_service",
-            return_value=service,
+            "services.cli_agent.service.get_ai_cli_service",
+            return_value=svc,
         ):
             result = await harness.execute(
                 "claude_code_agent",
@@ -538,18 +585,17 @@ class TestClaudeCodeAgent:
 
         harness.assert_envelope(result, success=False)
         assert "prompt" in result["error"].lower()
-        # CLI must not have been spawned.
-        assert service.execute.await_count == 0
+        # AICliService must not have been engaged.
+        assert svc.run_batch.await_count == 0
 
-    async def test_subprocess_failure_becomes_envelope(self, harness):
-        """When ClaudeCodeService.execute raises, the handler returns
-        success=false with the error message."""
-        service = MagicMock(name="ClaudeCodeService")
-        service.execute = AsyncMock(side_effect=RuntimeError("cli exit 1: boom"))
+    async def test_run_batch_failure_becomes_envelope(self, harness):
+        """When AICliService.run_batch raises, the handler surfaces the error."""
+        svc = MagicMock(name="AICliService")
+        svc.run_batch = AsyncMock(side_effect=RuntimeError("cli exit 1: boom"))
 
         with patched_container(auth_api_keys={}), patched_broadcaster(), patch(
-            "services.claude_code_service.get_claude_code_service",
-            return_value=service,
+            "services.cli_agent.service.get_ai_cli_service",
+            return_value=svc,
         ):
             result = await harness.execute(
                 "claude_code_agent",
@@ -560,7 +606,7 @@ class TestClaudeCodeAgent:
         assert "boom" in result["error"]
 
     async def test_auto_prompt_fallback_from_input_main(self, harness):
-        service = self._wire_claude_service()
+        svc = self._wire_cli_service()
 
         nodes = [
             {"id": "src-1", "type": "chatTrigger"},
@@ -576,8 +622,8 @@ class TestClaudeCodeAgent:
         )
 
         with patched_container(auth_api_keys={}), patched_broadcaster(), patch(
-            "services.claude_code_service.get_claude_code_service",
-            return_value=service,
+            "services.cli_agent.service.get_ai_cli_service",
+            return_value=svc,
         ):
             await harness.execute(
                 "claude_code_agent",
@@ -586,5 +632,6 @@ class TestClaudeCodeAgent:
                 context=ctx,
             )
 
-        call = service.execute.await_args
-        assert call.kwargs["prompt"] == "upstream text"
+        call = svc.run_batch.await_args
+        tasks = list(call.kwargs["tasks"])
+        assert tasks[0].prompt == "upstream text"

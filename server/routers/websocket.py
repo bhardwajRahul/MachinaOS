@@ -1391,6 +1391,12 @@ async def handle_claude_oauth_status(data: Dict[str, Any], websocket: WebSocket)
     return get_claude_credentials()
 
 
+# NOTE: `cli_login` / `cli_auth_status` handlers are owned by
+# `services/cli_agent/_handlers.py` and self-registered into
+# `services.ws_handler_registry` on package import — no entries needed
+# here. See `services/cli_agent/__init__.py`.
+
+
 # ============================================================================
 # Twitter OAuth Handlers
 # ============================================================================

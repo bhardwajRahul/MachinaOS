@@ -75,6 +75,10 @@ async def lifespan(app: FastAPI):
     # Side-effect import; the package __init__ walks its submodules.
     import nodes  # noqa: F401
 
+    # Side-effect import: services/cli_agent/__init__.py self-registers
+    # `cli_login` / `cli_auth_status` into `services.ws_handler_registry`.
+    import services.cli_agent  # noqa: F401
+
     # Wire dependency injection
     container.wire(modules=[
         "routers.workflow",
@@ -293,6 +297,21 @@ async def lifespan(app: FastAPI):
     else:
         _startup_log("[Temporal] Disabled")
 
+    # Enter the CLI-agent MCP server's lifespan so its
+    # StreamableHTTPSessionManager task group is initialised (Starlette
+    # does NOT auto-propagate lifespans across `app.mount`). Stored on
+    # `app.state` so shutdown can exit the context cleanly.
+    cli_mcp_lifespan_ctx = None
+    try:
+        from services.cli_agent.mcp_server import get_mcp_app as _get_cli_mcp_app
+        _cli_mcp_app = _get_cli_mcp_app()
+        cli_mcp_lifespan_ctx = _cli_mcp_app.router.lifespan_context(_cli_mcp_app)
+        await cli_mcp_lifespan_ctx.__aenter__()
+        app.state.cli_mcp_lifespan_ctx = cli_mcp_lifespan_ctx
+        _startup_log("[CLI MCP] StreamableHTTP session manager initialised")
+    except Exception as exc:
+        logger.warning("[CLI MCP] lifespan init failed: %s", exc)
+
     _startup_log("All services initialized")
     print("Application startup complete", flush=True)
     yield
@@ -361,6 +380,15 @@ async def lifespan(app: FastAPI):
         logger.info("Execution recovery sweeper stopped")
 
     shutdown_scheduler()  # Stop APScheduler
+
+    # Exit the CLI-agent MCP server's lifespan
+    cli_mcp_lifespan_ctx = getattr(app.state, "cli_mcp_lifespan_ctx", None)
+    if cli_mcp_lifespan_ctx is not None:
+        try:
+            await cli_mcp_lifespan_ctx.__aexit__(None, None, None)
+        except Exception as exc:
+            logger.debug("[CLI MCP] lifespan shutdown: %s", exc)
+
     await container.cache().shutdown()
     await container.database().shutdown()
     logger.info("Services shutdown complete")
@@ -428,6 +456,38 @@ app.include_router(twitter.router)  # Twitter/X OAuth routes
 app.include_router(google.router)  # Google Workspace OAuth routes (Gmail, Calendar, Drive, Sheets, Tasks, Contacts)
 app.include_router(credentials.router)  # Credentials panel - lazy per-tile icon endpoint (n8n pattern)
 app.include_router(schemas.router)  # Per-node output schema endpoint (GET /api/schemas/nodes/{type}.json)
+
+
+# ---------------------------------------------------------------------------
+# CLI agent IDE MCP server (VSCode pattern)
+# ---------------------------------------------------------------------------
+#
+# Spawned Claude Code / Codex CLI sessions auto-discover this server via
+# a per-batch lockfile (~/.claude/ide/<pid>.lock) and call tools like
+# mcp__machina__getSkill / getCredential / broadcastLog over MCP-over-HTTP.
+# Bearer-token auth scoped per batch (see services/cli_agent/mcp_server.py).
+try:
+    from services.cli_agent.mcp_server import get_mcp_app as _get_cli_mcp_app
+    _cli_mcp_app = _get_cli_mcp_app()
+    app.mount("/mcp/ide", _cli_mcp_app)
+    logger.info("[main] mounted CLI agent MCP server at /mcp/ide")
+except Exception as exc:  # pragma: no cover — defensive; MCP must not block startup
+    logger.warning("[main] failed to mount CLI agent MCP server: %s", exc)
+
+
+# Stale lockfile sweep on startup — mirrors VSCode's behavior. PIDs in
+# leftover lockfiles that are no longer alive get cleaned up.
+@app.on_event("startup")
+async def _sweep_cli_lockfiles_on_startup() -> None:
+    try:
+        from services.cli_agent.config import list_provider_names, get_provider_config
+        from services.cli_agent.lockfile import sweep_stale_lockfiles
+        for name in list_provider_names():
+            cfg = get_provider_config(name)
+            if cfg and cfg.ide_lockfile_dir:
+                sweep_stale_lockfiles(cfg.ide_lockfile_dir)
+    except Exception as exc:
+        logger.debug("[main] CLI lockfile sweep failed: %s", exc)
 
 
 @app.get("/health")

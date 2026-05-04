@@ -1,17 +1,10 @@
-"""Claude Code Agent — multi-instance via `AICliService`.
+"""OpenAI Codex CLI agent — multi-instance via `AICliService`.
 
-Refactored from the single-task shim. ``Params.tasks`` is a list of
-``ClaudeTaskSpec``; each task gets its own git worktree, its own session
-id, and runs in parallel under a 5-way semaphore.
+Sandbox-first companion to `claude_code_agent`. Each task gets its own
+git worktree; sandbox is enforced by Codex itself, not by us.
 
-Back-compat: an empty `tasks` array with a non-empty `prompt` falls back
-to a single-task batch — preserves the legacy single-shot UX.
-
-Skill instructions connected via the parent node's ``input-skill`` handle
-are exposed to the CLI through the MCP server's ``listSkills`` /
-``getSkill`` tools (NOT concatenated into the system prompt — the
-agent fetches them on-demand). Connected skill names ARE collected here
-and passed to ``run_batch()`` so the MCP server can scope its responses.
+Codex has no session/resume/budget/turns surface — `CodexTaskSpec`
+exposes only `sandbox` + `ask_for_approval` as task-level overrides.
 """
 
 from __future__ import annotations
@@ -32,25 +25,17 @@ from ._handles import STD_AGENT_HINTS, std_agent_handles
 logger = get_logger(__name__)
 
 
-# Late import the cli_agent types so node_registry import doesn't pull
-# the whole MCP / pool stack at module import time.
-from services.cli_agent import ClaudeTaskSpec  # noqa: E402
+from services.cli_agent import CodexTaskSpec  # noqa: E402
 
 
-class ClaudeCodeAgentParams(BaseModel):
-    """Multi-task batch parameters for Claude Code.
+class CodexAgentParams(BaseModel):
+    """Multi-task batch parameters for Codex."""
 
-    Two paths:
-      1. ``tasks=[...]`` — explicit list, runs N in parallel
-      2. ``tasks=[]`` + legacy ``prompt`` — synthesises a single-task batch
-    """
-
-    tasks: List[ClaudeTaskSpec] = Field(
+    tasks: List[CodexTaskSpec] = Field(
         default_factory=list,
-        description="List of Claude tasks to run in parallel (max 5 concurrent).",
+        description="List of Codex tasks to run in parallel (max 5 concurrent).",
         json_schema_extra={"rows": 1},
     )
-    # Legacy single-task fallback ----------------------------------------
     prompt: str = Field(
         default="",
         description="Legacy: single-prompt fallback used only when "
@@ -58,52 +43,48 @@ class ClaudeCodeAgentParams(BaseModel):
         json_schema_extra={"rows": 4, "placeholder": "Or use the tasks array..."},
     )
     model: str = Field(
-        default="claude-sonnet-4-6",
+        default="gpt-5.2-codex",
         description="Default model for tasks that don't override it.",
     )
+    sandbox: str = Field(
+        default="workspace-write",
+        description="Default sandbox for tasks that don't override it. "
+                    "One of: read-only | workspace-write | danger-full-access.",
+    )
+    ask_for_approval: str = Field(
+        default="never",
+        description="Default approval mode: untrusted | on-request | never.",
+    )
     system_prompt: Optional[str] = Field(default=None, json_schema_extra={"rows": 3})
-    working_directory: Optional[str] = Field(
-        default=None,
-        description="Git repo root. Defaults to the workflow's workspace dir.",
-    )
-    max_parallel: int = Field(
-        default=5, ge=1, le=20,
-        description="Concurrency cap.",
-    )
-    allowed_credentials: List[str] = Field(
-        default_factory=list,
-        description="Credential names the CLI is permitted to fetch via MCP.",
-    )
+    working_directory: Optional[str] = None
+    max_parallel: int = Field(default=5, ge=1, le=20)
+    allowed_credentials: List[str] = Field(default_factory=list)
 
     model_config = ConfigDict(extra="ignore")
 
 
-class ClaudeCodeAgentOutput(BaseModel):
-    """Aggregated batch output."""
+class CodexAgentOutput(BaseModel):
     success: bool = True
     n_tasks: int = 0
     n_succeeded: int = 0
     n_failed: int = 0
-    total_cost_usd: Optional[float] = None
     wall_clock_ms: int = 0
     tasks: List[Any] = Field(default_factory=list)
-    provider: str = "claude"
+    provider: str = "codex"
     timestamp: Optional[str] = None
-    # Legacy single-task fields, populated when n_tasks==1 for back-compat:
+    # Legacy single-task convenience
     response: Optional[str] = None
-    session_id: Optional[str] = None
-    cost_usd: Optional[float] = None
     model_config = ConfigDict(extra="allow")
 
 
-class ClaudeCodeAgentNode(ActionNode):
-    type = "claude_code_agent"
-    display_name = "Claude Code"
-    subtitle = "Agentic Coding"
+class CodexAgentNode(ActionNode):
+    type = "codex_agent"
+    display_name = "Codex"
+    subtitle = "Sandboxed Coding"
     group = ("agent",)
     description = (
-        "Run N parallel Claude Code CLI sessions over a list of tasks. "
-        "Each task is isolated in its own git worktree."
+        "Run N parallel OpenAI Codex CLI sessions. Sandbox enforced "
+        "by Codex itself; per-task git worktree isolation."
     )
     component_kind = "agent"
     handles = std_agent_handles()
@@ -111,15 +92,15 @@ class ClaudeCodeAgentNode(ActionNode):
     annotations = {"destructive": True, "readonly": False, "open_world": True}
     task_queue = TaskQueue.AI_HEAVY
 
-    Params = ClaudeCodeAgentParams
-    Output = ClaudeCodeAgentOutput
+    Params = CodexAgentParams
+    Output = CodexAgentOutput
 
     @Operation(
         "execute",
-        cost={"service": "claude_code_agent", "action": "run", "count": 1},
+        cost={"service": "codex_agent", "action": "run", "count": 1},
     )
     async def execute_op(
-        self, ctx: NodeContext, params: ClaudeCodeAgentParams,
+        self, ctx: NodeContext, params: CodexAgentParams,
     ) -> Any:
         from core.container import container
         from services.cli_agent.service import get_ai_cli_service
@@ -133,28 +114,27 @@ class ClaudeCodeAgentNode(ActionNode):
 
         await broadcaster.update_node_status(
             node_id, "executing",
-            {"message": "Starting Claude Code batch..."},
+            {"message": "Starting Codex batch..."},
             workflow_id=workflow_id,
         )
 
         tasks = list(params.tasks)
         if not tasks:
-            # Legacy fallback — synthesise a single task from the
-            # top-level `prompt`/`model`/`system_prompt`.
             prompt = params.prompt or self._infer_prompt_from_inputs(ctx, node_id)
             if not prompt:
                 raise RuntimeError(
-                    "claude_code_agent: provide either `tasks` or `prompt`"
+                    "codex_agent: provide either `tasks` or `prompt`"
                 )
             tasks = [
-                ClaudeTaskSpec(
+                CodexTaskSpec(
                     prompt=prompt,
                     model=params.model,
+                    sandbox=params.sandbox,  # type: ignore[arg-type]
+                    ask_for_approval=params.ask_for_approval,  # type: ignore[arg-type]
                     system_prompt=params.system_prompt,
                 ),
             ]
         else:
-            # Apply node-level defaults to tasks that don't override
             for i, t in enumerate(tasks):
                 changed: dict = {}
                 if not t.model and params.model:
@@ -164,8 +144,6 @@ class ClaudeCodeAgentNode(ActionNode):
                 if changed:
                     tasks[i] = t.model_copy(update=changed)
 
-        # Collect connected skills (the MCP server's listSkills/getSkill
-        # tools scope to these names).
         database = container.database()
         _, skill_data, _, _, _ = await collect_agent_connections(
             node_id, ctx.raw, database,
@@ -176,7 +154,6 @@ class ClaudeCodeAgentNode(ActionNode):
             if s.get("skill_name") or s.get("label")
         ]
 
-        # Workspace dir — workflow.py injects this into context
         workspace_dir = ctx.raw.get("workspace_dir") or params.working_directory
         if workspace_dir is None:
             from core.config import Settings
@@ -191,7 +168,7 @@ class ClaudeCodeAgentNode(ActionNode):
 
         svc = get_ai_cli_service()
         result = await svc.run_batch(
-            "claude",
+            "codex",
             tasks=tasks,
             node_id=node_id,
             workflow_id=workflow_id or "",
@@ -205,7 +182,7 @@ class ClaudeCodeAgentNode(ActionNode):
 
         elapsed = time.time() - start_time
         logger.debug(
-            "[claude_code_agent] node=%s tasks=%d ok=%d fail=%d elapsed=%.2fs",
+            "[codex_agent] node=%s tasks=%d ok=%d fail=%d elapsed=%.2fs",
             node_id, result.n_tasks, result.n_succeeded, result.n_failed, elapsed,
         )
 
@@ -225,34 +202,25 @@ class ClaudeCodeAgentNode(ActionNode):
 
         task_models = [session_result_to_model(t).model_dump() for t in result.tasks]
 
-        # Legacy single-task convenience fields
-        legacy_response = None
-        legacy_session_id = None
-        legacy_cost = None
-        if len(result.tasks) == 1:
-            legacy_response = result.tasks[0].response
-            legacy_session_id = result.tasks[0].session_id
-            legacy_cost = result.tasks[0].cost_usd
+        legacy_response = (
+            result.tasks[0].response if len(result.tasks) == 1 else None
+        )
 
         return {
             "success": result.n_failed == 0,
             "n_tasks": result.n_tasks,
             "n_succeeded": result.n_succeeded,
             "n_failed": result.n_failed,
-            "total_cost_usd": result.total_cost_usd,
+            "total_cost_usd": result.total_cost_usd,  # always None for Codex
             "wall_clock_ms": result.wall_clock_ms,
             "tasks": task_models,
             "provider": result.provider,
             "timestamp": result.timestamp or datetime.now().isoformat(),
             "response": legacy_response,
-            "session_id": legacy_session_id,
-            "cost_usd": legacy_cost,
         }
 
     @staticmethod
     def _infer_prompt_from_inputs(ctx: NodeContext, node_id: str) -> str:
-        """Fall back to whatever the upstream node connected to
-        ``input-main`` produced."""
         for edge in ctx.raw.get("edges", []):
             if edge.get("target") != node_id:
                 continue
