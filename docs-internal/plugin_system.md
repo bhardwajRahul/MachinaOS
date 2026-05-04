@@ -118,7 +118,7 @@ class SpecializedAgentBase(ActionNode, abstract=True):
 | `group` | Tuple of palette groupings (first is primary). |
 | `component_kind` | Frontend dispatch: `square` / `trigger` / `agent` / `tool` / `model` / `start` / `generic`. |
 | `handles` | React Flow handle topology (`input-main`, `output-main`, …). |
-| `ui_hints` | Dict of panel flags (`hasCodeEditor`, `isMemoryPanel`, …). |
+| `ui_hints` | Dict of panel flags (`hasCodeEditor`, `isMemoryPanel`, `isMasterSkillEditor`, `isToolPanel`, `hasSkills`, `isConfigNode`, …). See "Auto-derived uiHints" below — `isConfigNode` is set automatically for `('memory', 'tool')` group plugins. |
 | `annotations` | Pipedream-style: `destructive` / `readonly` / `open_world`. |
 | `credentials` | Tuple of `Credential` subclasses the node uses. |
 | `Params` | Pydantic `BaseModel` — user-facing parameters. Used for both UI rendering and AI tool schemas. |
@@ -127,6 +127,39 @@ class SpecializedAgentBase(ActionNode, abstract=True):
 | `task_queue` | Temporal worker pool. See `TaskQueue` constants. |
 | `retry_policy` | `RetryPolicy` dataclass (mirrors `temporalio.common.RetryPolicy`). |
 | `start_to_close_timeout` / `heartbeat_timeout` | Per-node Temporal knobs. |
+
+### Auto-derived uiHints
+
+`BaseNode._metadata_dict` (`server/services/plugin/base.py`) calls
+`_derive_auto_ui_hints(cls.group)` to pre-populate panel-visibility
+flags from group membership before merging the plugin's explicit
+`cls.ui_hints`:
+
+```python
+ui_hints = _derive_auto_ui_hints(cls.group)
+ui_hints.update(cls.ui_hints)
+if ui_hints:
+    meta["uiHints"] = ui_hints
+```
+
+The auto-derivation rule today:
+
+| Trigger | Sets | Used by |
+|---|---|---|
+| Plugin's `group` tuple contains `"memory"` or `"tool"` (centralized as `_CONFIG_NODE_GROUPS = frozenset({"memory", "tool"})`) | `uiHints.isConfigNode = True` | Frontend `InputSection.tsx` and `OutputPanel.tsx` — tells the panel that this node is auxiliary configuration and should inherit the parent's main inputs instead of showing direct upstream connections |
+
+**Explicit always wins.** A plugin that wants to opt out of an
+auto-derived flag declares it explicitly: `ui_hints = {"isConfigNode": False}`.
+The merge order (auto first, then `dict.update` with the plugin's
+declaration) means explicit values overwrite auto-derived ones.
+
+**Adding a new auto-derivation rule.** Extend `_derive_auto_ui_hints`
+in `services/plugin/base.py`. The rule must be derivable from
+declared class attributes (group / kind / etc.) — never from runtime
+state. Add the new flag name to `INodeUIHints` in
+`client/src/types/INodeProperties.ts` and to the `known` set in
+`server/tests/test_node_spec.py::test_ui_hints_only_carry_known_flags`
+(the pytest invariant locks the flag set so unknown keys fail CI).
 
 ### Params schema conventions
 
@@ -1075,6 +1108,30 @@ the per-file walkthrough.
 | Lifecycle WebSocket commands | `make_lifecycle_handlers(prefix, source, extra=…)` | provider-specific extra handlers |
 | Status refresh on WS connect | `make_status_refresh(source, status_key, broadcast_type)` | nothing — auto-derived from source |
 | CLI subprocess invocation | `run_cli_command(binary=…, argv=…, credential=…)` | nothing — credential injection is automatic |
+| Credentials Modal panel | `server/config/credential_providers.json` (read by `services.credential_registry`) | one provider entry: name, category, color, `kind: "oauth"`, `icon_ref`, `status_hook`, `ws.{login,logout,status}` handler names, fields list, instructions string. Frontend modal renders it automatically — no React file edits. |
+| AI tool surface | `services/ai.py` `DEFAULT_TOOL_NAMES` + `DEFAULT_TOOL_DESCRIPTIONS` | one row per dual-purpose ActionNode mapping `<nodeType>` → `<snake_case_of_node_type>` |
+| Skill (LLM teaching markdown) | `server/skills/<agent>/<skill-name>/SKILL.md` (auto-discovered by `SkillLoader`) | the markdown itself, plus the linkage in `visuals.json` (`"<nodeType>": { ..., "skill": "<skill-name>" }`) |
+
+### Tool / skill / visuals naming contract
+
+Three coordinates have to agree for both the LLM tool dispatcher and
+the skill icon resolver to find their target:
+
+| Place | Form | Example |
+|---|---|---|
+| Plugin node `type` | camelCase | `stripeAction` |
+| `visuals.json` key | matches node `type` (camelCase) | `"stripeAction": { "icon": "asset:stripe", ... }` |
+| `services/ai.py` `DEFAULT_TOOL_NAMES[<type>]` | snake_case of node type | `"stripeAction": "stripe_action"` |
+| Skill `allowed-tools` token | matches the LLM tool name above | `allowed-tools: "stripe_action"` |
+
+`SkillLoader._parse_skill_metadata` runs each `allowed-tools` token
+through snake → camel and looks the result up in `visuals.json`.
+Mismatches silently break icon resolution — a skill with
+`allowed-tools: "stripe_cli"` would convert to `stripeCli` and find
+nothing in `visuals.json` even though the node `stripeAction` is
+registered. Stick to `<snake_case_of_node_type>` unless you're
+prepared to maintain alias entries in `visuals.json`. See
+[`server/skills/GUIDE.md → Tool naming`](../server/skills/GUIDE.md#tool-naming--snake_case--camelcase-contract).
 
 ### When to use the framework
 

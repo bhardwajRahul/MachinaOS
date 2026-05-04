@@ -314,6 +314,18 @@ Full reference: [docs-internal/plugin_system.md → "Self-contained plugin folde
   subclasses and auto-inject at execution time. Plugins that need the
   injected key read `ctx.raw["_raw_parameters"]["api_key"]` — it's
   stashed before Pydantic validation strips it.
+- **`isConfigNode` is auto-derived — don't declare it.** Plugins
+  whose `group` tuple contains `"memory"` or `"tool"` automatically
+  export `uiHints.isConfigNode: True` (set by `_derive_auto_ui_hints`
+  in `services/plugin/base.py`). The flag tells the frontend that the
+  node's parameter panel inherits its parent's main inputs instead
+  of showing direct upstream connections. If you genuinely want to
+  opt out, declare `ui_hints = {"isConfigNode": False}` — explicit
+  always wins via `dict.update`. Adding a new auto-derivation rule
+  goes in `_derive_auto_ui_hints`, not in individual plugins; new
+  uiHint flags must also be added to `INodeUIHints` in
+  `client/src/types/INodeProperties.ts` and to the `known` set in
+  `server/tests/test_node_spec.py::test_ui_hints_only_carry_known_flags`.
 
 ---
 

@@ -561,10 +561,19 @@ The frontend uses a layered cache + slice-subscription model so cold refreshes a
 - Per-workflow node statuses live in a Zustand store (built on `useSyncExternalStore`). `useNodeStatus(id)` is a slice selector -- only the affected node's consumers re-render on a status tick.
 - Mirror this pattern when adding any new high-frequency push state. Do **not** put it on `WebSocketContext.value` -- that's a context fan-out trap.
 
+### `useAppStore` reads must be slice selectors, never whole-store destructure
+- Always `const x = useAppStore((s) => s.x)`, never `const { x } = useAppStore()`. The whole-store form re-renders the consumer on ANY mutation (sidebar toggle, unrelated workflow rename, parameter save on another node), which defeats `React.memo` + `nodePropsEqual` on the canvas. Setters are stable refs from Zustand — single-field selectors are the cheapest read.
+- Audited and converted across the canvas + parameter-panel hot paths: every node component, `Dashboard.tsx`, `useDragVariable`, `useParameterPanel`, `useReactFlowNodes`, `useWorkflowManagement`, `InputSection`, `MiddleSection`, `OutputPanel`, `ParameterRenderer`, `ToolSchemaEditor`, `ParameterPanel`, `InputNodesPanel`. New code should follow.
+
 ### `isOpen` vs `isReady` -- gate every catalogue/spec query on `isReady` ([WebSocketContext.tsx](./client/src/contexts/WebSocketContext.tsx))
-- `isOpen` flips when the socket opens. `isReady` flips only after the 8-step init burst (api-key probes, terminal/chat/console history) settles.
-- Queries that depend on backend-served catalogue data (`useCatalogueQuery`, `useNodeParamsQuery`, `useUserSettingsQuery`, `useNodeGroups`, `useNodeSpec` lazy fetch, prefetch effect) gate on `isReady` so they fire once, post-burst, instead of racing the serial init awaits.
-- `WebSocketContext.value` is `useMemo`'d -- consumers only re-render when an actual field they read changes. Pending requests are rejected on `ws.onclose` so retries fire immediately on the new socket instead of waiting the 30s `REQUEST_TIMEOUT`.
+- `isOpen` flips when the socket opens. `isReady` flips only after the init burst (api-key probes, terminal / chat / console history) settles.
+- The init burst runs **in parallel** via `Promise.allSettled`: 5 `probeApiKey(provider)` calls + `loadTerminalLogs()` + `loadChatHistory()` + `loadConsoleLogs()`, each owning its own request id, message handler, 5 s timeout, and state write via a small `sendBurstRequest` factory. Time-to-`isReady` is one wide round-trip, not 8 sequential ones. `drainPendingSends(ws)` still runs synchronously after the await and before `setIsReady(true)` so the queue replay ordering is preserved.
+- Queries that depend on backend-served catalogue data (`useCatalogueQuery`, `useNodeParamsQuery`, `useUserSettingsQuery`, `useNodeGroups`, `useNodeSpec` lazy fetch, prefetch effect) gate on `isReady` so they fire once, post-burst, instead of racing the parallel init helpers.
+- `WebSocketContext.value` is `useMemo`'d -- consumers only re-render when an actual field they read changes. Pending requests are rejected on `ws.onclose` so retries fire immediately on the new socket instead of waiting the 30 s `REQUEST_TIMEOUT`.
+
+### Catalogue invalidation is debounced
+- `invalidateCatalogue(queryClient)` in [`hooks/useCatalogueQuery.ts`](./client/src/hooks/useCatalogueQuery.ts) wraps `queryClient.invalidateQueries({ queryKey: CATALOGUE_QUERY_KEY })` with a 300 ms trailing-edge debounce via a single shared module-scope timer. **Always go through it** from broadcast handlers — direct `invalidateQueries` calls were the old pattern.
+- All 8 broadcast handlers in `WebSocketContext.tsx` (`api_key_status`, `whatsapp_status`, `twitter_oauth_complete`, `google_oauth_complete`, `google_status`, `telegram_status`, `credential_catalogue_updated`, `initial_status`) now route through it. An OAuth burst or multi-service reconnect collapses to one refetch instead of N back-to-back round-trips.
 
 ### React.memo every canvas node component ([client/src/components/nodeMemoEquality.ts](./client/src/components/nodeMemoEquality.ts))
 - React Flow's documented requirement. Use the shared `nodePropsEqual` comparator -- it skips drag-state props (`xPos` / `yPos` / `dragging`) so the memo isn't defeated during drag.
@@ -604,11 +613,10 @@ authoring model.
 - `src/assets/icons/google/` - Official Google service SVG icons (Gmail, Calendar, Drive, Sheets, Tasks, Contacts) using n8n pattern with data URI exports
 
 ### UI Components
-- `src/components/ParameterRenderer.tsx` - Universal parameter renderer (dual interface support)
+- `src/components/ParameterRenderer.tsx` - Universal parameter renderer (also handles AI-specific control rendering; the former `AIParameterRenderer.tsx` was absorbed here)
 - `src/components/parameterPanel/MiddleSection.tsx` - Parameter panel middle section with conditional display logic
 - `src/components/OutputPanel.tsx` - Connected node output display with drag mapping
 - `src/components/LocationParameterPanel.tsx` - Location-specific parameter handling
-- `src/components/AIParameterRenderer.tsx` - AI component configuration
 - `src/components/AIAgentNode.tsx` - Config-driven AI agent component supporting both aiAgent and chatAgent via AGENT_CONFIGS
 - `src/ParameterPanel.tsx` - Main parameter configuration modal
 
@@ -645,16 +653,16 @@ Single source of truth: [client/src/index.css](./client/src/index.css). All toke
    - `bg-node-X-soft` — tinted surface (cards, tinted backgrounds)
    - `border-node-X-border` — tinted outline
    Themes redefine these in their own scope without touching call sites. **Never use opacity arithmetic at the call site** (`bg-node-agent/10`); add a new `-soft` / `-border` variant if you need a different opacity.
-3. **Action role tokens** — `--action-run`, `--action-stop`, `--action-save`, `--action-config`, `--action-secret`, `--action-tools`. Same `base / -soft / -border` triplet as `--node-X` (e.g. `bg-action-run-soft text-action-run border-action-run-border`). Used for toolbar icon buttons, File menu items, and as the underlying tokens behind `<ActionButton>`'s `intent` variants. Themes redefine these without touching call sites.
+3. **Action role tokens** — `--action-run`, `--action-stop`, `--action-save`, `--action-config`, `--action-secret`, `--action-tools`. Same `base / -soft / -hover / -border` quartet as `--node-X` (e.g. `bg-action-run-soft text-action-run border-action-run-border`, plus `hover:bg-action-run-hover` for the hover state). Used for toolbar icon buttons, File menu items, and as the underlying tokens behind `<ActionButton>`'s `intent` variants. Themes redefine these without touching call sites. The `-hover` triplet means ActionButton no longer composes hover via opacity arithmetic.
 4. **Dracula raw accents** — `--dracula-green/purple/pink/cyan/red/orange/yellow`. Same value across light + dark themes. Used as the underlying palette that `--action-X` and `--node-X` reference; do not consume directly in components — go through the semantic role token instead.
 
-**Action buttons** — use [ActionButton](./client/src/components/ui/action-button.tsx) (CVA primitive with semantic `intent` variants: `run | stop | save | config | secret | tools`). Each intent reads the matching `--action-X` triplet. Replaces the old `actionButtonStyle()` helper.
+**Action buttons** — use [ActionButton](./client/src/components/ui/action-button.tsx) (CVA primitive with semantic `intent` variants: `run | stop | save | config | secret | tools`). Each intent reads the matching `--action-X` quartet (`-soft` for resting bg, `-hover` for hover bg, `-border` for outline, base for text). Disabled state is the shadcn-idiomatic `disabled:opacity-50` on the base class (one rule, all intents) — never per-token opacity arithmetic. Replaces the old `actionButtonStyle()` helper. Credential-modal panels (`OAuthConnect`, `EmailPanel`, `QrPairingPanel`, `ActionBar`) consume `<ActionButton>` directly; their `ActionDef` carries an `intent` key, not a free-form colour.
 
-**Canvas-wide animations** — [client/src/styles/canvasAnimations.ts](./client/src/styles/canvasAnimations.ts) owns the `@keyframes` + `.react-flow__edge.{status}` + `.react-flow__node.{status}` rules injected once into Dashboard's `<style>` tag. Three named groups (`KEYFRAMES`, `edgeStatusStyles`, `nodeStatusStyles`) -- adding a new keyframe or status visual is a single-file change. Per-node inline animations (border pulse on `isExecuting`, etc.) live in their components and read theme tokens directly.
+**Canvas-wide animations** — [client/src/styles/canvasAnimations.ts](./client/src/styles/canvasAnimations.ts) owns the `@keyframes` + `.react-flow__edge.{status}` + `.react-flow__node.{status}` rules injected once into Dashboard's `<style>` tag. Three named groups (`KEYFRAMES`, `edgeStatusStyles`, `nodeStatusStyles`) -- adding a new keyframe or status visual is a single-file change. Per-node inline animations (border pulse on `isExecuting`, etc.) live in their components and read theme tokens directly. Light/dark distinction lives entirely in `theme.ts` — `buildCanvasStyles(colors)` is single-arg and the file ships zero hardcoded hex colours; `CanvasStatusColors` carries `edgeDefault | edgeSelected | edgeExecuting | edgeCompleted | edgeError | edgePending | edgeMemoryActive | edgeToolActive`. The `nodeGlow` keyframe consumes scoped `--node-glow` / `--node-glow-soft` vars so one keyframe serves both themes.
 
 **shadcn primitives** — full set under `client/src/components/ui/` (Button, Badge, Alert, Dialog, DropdownMenu, Select, Popover, Tooltip, Tabs, Card, Input, Textarea, Switch, Checkbox, Slider, Label, Form, Sonner, Skeleton, Collapsible, Accordion, AlertDialog). New code composes these with Tailwind classes.
 
-**`useAppTheme()`** ([src/styles/theme.ts](./client/src/styles/theme.ts), [src/hooks/useAppTheme.ts](./client/src/hooks/useAppTheme.ts)) is grandfathered for the canvas node components (`AIAgentNode`, `SquareNode`, `TriggerNode`, `StartNode`, `ToolkitNode`, `TeamMonitorNode`, `BaseChatModelNode`, `ModelNode`, `GenericNode`) and `EdgeConditionEditor` — they interpolate per-definition `nodeColor` into gradients, borders, and React Flow `<Handle>` styles. Every other surface uses Tailwind + the tokens above.
+**`useAppTheme()`** ([src/styles/theme.ts](./client/src/styles/theme.ts), [src/hooks/useAppTheme.ts](./client/src/hooks/useAppTheme.ts)) is grandfathered for the canvas node components (`AIAgentNode`, `SquareNode`, `TriggerNode`, `StartNode`, `ToolkitNode`, `TeamMonitorNode`, `GenericNode`) and `EdgeConditionEditor` — they interpolate per-definition `nodeColor` into gradients, borders, and React Flow `<Handle>` styles. Credential-modal panels (`OAuthConnect`, `EmailPanel`, `QrPairingPanel`) and the skill/tool editors (`SkillEditorModal`, `ToolSchemaEditor`) no longer call it — they compose `<ActionButton intent="...">` plus shadcn semantic tokens (`bg-warning/10`, `bg-accent/10`, `<Alert variant="destructive">`). Every other surface uses Tailwind + the tokens above.
 
 **Theme switching** — `[data-theme="dark"]` + Tailwind's `.dark` class, both set by `App.tsx`'s `useEffect` on `isDarkMode`. See [docs-internal/frontend_architecture.md](./docs-internal/frontend_architecture.md#tokens--theming) for the full token table and migration patterns.
 
@@ -4118,18 +4126,21 @@ const isConfigHandle = (handle: string | null | undefined): boolean => {
   return handle.startsWith('input-') && handle !== 'input-main';
 };
 
-// Check if node is a config/auxiliary node
+// Check if node is a config/auxiliary node — reads the backend-derived
+// uiHint, not a frontend group-string heuristic.
 const isConfigNode = (nodeType: string | undefined): boolean => {
+  if (!nodeType) return false;
   const definition = resolveNodeDescription(nodeType);
-  const groups = definition?.group || [];
-  return groups.includes('memory') || groups.includes('tool');
+  return definition?.uiHints?.isConfigNode === true;
 };
 ```
 
+The `isConfigNode` flag is **auto-derived on the backend** by `_derive_auto_ui_hints` in [`server/services/plugin/base.py`](./server/services/plugin/base.py): plugins whose `group` tuple contains `memory` or `tool` (the centralized `_CONFIG_NODE_GROUPS = frozenset({"memory", "tool"})`) automatically export `uiHints.isConfigNode: True`. Explicit `cls.ui_hints` always wins (merge order: auto-derived first, then `dict.update` with the plugin's declaration). Pytest invariant `test_ui_hints_only_carry_known_flags` locks the flag name in `server/tests/test_node_spec.py`.
+
 ### Adding New Config Node Types
-1. Add 'memory' or 'tool' to node's `group` array in definition
-2. Use `input-<type>` naming for the target handle on parent node
-3. Input inheritance and filtering work automatically
+1. Put the plugin in `('memory',)` or `('tool',)` (or any tuple containing one of those). The backend auto-derivation does the rest — do NOT declare `isConfigNode` in `ui_hints` unless you want to override.
+2. Use `input-<type>` naming for the target handle on the parent node.
+3. Input inheritance and filtering work automatically — the frontend reads `definition.uiHints.isConfigNode`, never the group strings.
 
 ### Toolkit Sub-Node Execution Pattern
 
@@ -5236,4 +5247,7 @@ This function:
 - **Google OAuth scope expansion**: Google's authorisation server legitimately returns a wider scope set than requested when the OAuth Client's "Data Access" page lists extra scopes (commonly `cloud-platform`) or when `include_granted_scopes` replays a previously-granted scope. `oauthlib` does strict set-equality and aborts with `Warning: Scope has changed`. As of 2026 (`google-auth-oauthlib` 1.2.4, `oauthlib` upstream issue #562 still open), no constructor flag, context manager, or `expected_scopes` argument exists — the documented relief is the env var. `services/google_oauth.py` sets `OAUTHLIB_RELAX_TOKEN_SCOPE=1` via `os.environ.setdefault` BEFORE the `google_auth_oauthlib.flow` import (oauthlib reads it once at parameters-module import; request-time setting races under uvicorn workers), paired with `warnings.filterwarnings(message=r"Scope has changed.*")` to keep the operator log clean. Long-term root cause: audit the Cloud Console Data Access page and remove `cloud-platform` if no handler uses it.
 - **Code-executor error mapping** (`pythonExecutor` / `javascriptExecutor` / `typescriptExecutor`): wrap user-code execution and sidecar calls in `try/except`. Python: detect `ImportError("__import__ not found")` (the LLM tried `import X` against the sandboxed builtins) and surface the pre-injected names list (`math, json, datetime, timedelta, re, random, Counter, defaultdict`) plus the suggestion to use `process_manager` for unsupported modules; other exceptions get formatted as `<ErrorName> at line N: <message>` (line N walked from `<string>` frame in the traceback) plus any captured stdout. JS/TS: detect `aiohttp.ClientConnectorError` and surface "JavaScript executor not running on localhost:3020. Start the dev runner or fall back to python_executor." All raise `NodeUserError` so the framework logs one WARN line — no aiohttp/CreateProcessW noise in the operator log.
 - **Workflow-scoped chat + console history**: chat messages persist with `chat_messages.session_id == <workflow_id>` (or `"default"` when no workflow is open); console logs persist with `console_logs.workflow_id`. Backend `database.get_console_logs(limit, workflow_id=None)` and `clear_console_logs(workflow_id=None)` filter by workflow when given. `handle_clear_console_logs` broadcasts `console_logs_cleared` carrying the `workflow_id` so the existing frontend filter in `WebSocketContext` keeps other workflows' panels intact. Frontend reads `currentWorkflow.id` via the documented Zustand escape hatch (`useAppStore.getState().currentWorkflow?.id`) at call time for `clearChatMessages` / `clearConsoleLogs` / `sendChatMessage` so the callbacks don't re-create on every workflow switch. A dedicated `useEffect([currentWorkflowId, isReady])` resets local `chatMessages` / `consoleLogs` and refetches both when the user opens / switches workflow. Incoming `console_log` broadcasts are filtered by `currentWorkflow.id` so a parallel run on another workflow never bleeds into the active panel. Legacy logs without `workflow_id` still surface (transition guard).
+- **Auto-derived `isConfigNode` uiHint**: `_derive_auto_ui_hints(group)` in `services/plugin/base.py` automatically sets `uiHints.isConfigNode: True` on any plugin whose `group` tuple contains `memory` or `tool` (centralized as `_CONFIG_NODE_GROUPS = frozenset({"memory", "tool"})`). Explicit `cls.ui_hints` always wins (merge order: auto first, then `dict.update`). Frontend `InputSection.tsx` and `OutputPanel.tsx` consume the flag via `definition?.uiHints?.isConfigNode === true` — the old `groups.includes('memory') || groups.includes('tool')` heuristic is gone. Pytest invariant `test_ui_hints_only_carry_known_flags` locks the flag name. Adding a new auxiliary node type costs zero per-plugin code; opting out costs one line (`ui_hints = {"isConfigNode": False}`).
+- **`isMasterSkillEditor` uiHint replaces `node.type === 'masterSkill'` checks**: 6 frontend callsites (`Dashboard.tsx:98` component dispatch, `useAutoSkillEdges.ts` constant + edge filter, `MiddleSection.tsx` × 3) now read `getCachedNodeSpec(type)?.uiHints?.isMasterSkillEditor === true` instead of comparing the type string. The `MasterSkillNode` plugin already declared the hint — no backend change. Renaming the plugin's `type` is now a single backend edit followed by a NodeSpec deploy; the frontend never needs to know the string.
+- **`--action-X-hover` triplet + ActionButton zero-arithmetic**: each of the 6 action roles (`run`/`stop`/`save`/`config`/`secret`/`tools`) now exposes a `-hover` variant (0.25 alpha) alongside the existing `-soft` (0.15) and `-border` (0.6). ActionButton's CVA reads `hover:bg-action-X-hover` directly; disabled state is the shadcn-idiomatic `disabled:opacity-50` on the base class. No per-token `/25`, `/40`, `/10` opacity arithmetic at any call site. Credential-modal panels (`OAuthConnect`, `EmailPanel`, `QrPairingPanel`) and the skill / tool-schema editors (`SkillEditorModal`, `ToolSchemaEditor`) consume `<ActionButton intent="...">` directly. `ActionDef` carries an `intent` key; the catalogue adapter maps server-sent `theme_color` palette strings to intents via `SERVER_COLOR_TO_INTENT`.
 - never use emojis in prints

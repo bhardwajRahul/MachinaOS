@@ -241,6 +241,31 @@ a shared `resolveIcon` + `resolveLibraryIcon` pair.
 - Gmail / Calendar / Telegram / Twitter loadOptions loaders (Phase 4 registry is ready for the one-line registrations).
 - ParameterRenderer → DIY widget registry (the capstone); now unblocked on backend since NodeSpec's `uiHints` carry widget routing.
 
+## Wave 12 — tech-debt cleanup (May 2026)
+
+Closes the surviving pre-Wave-11 tribal patterns and the perf hotspots six parallel exploration passes turned up. Plan: [`.claude/plans/properly-fix-the-tech-dreamy-tarjan.md`](../../.claude/plans/properly-fix-the-tech-dreamy-tarjan.md). Four batches, all four shipped.
+
+| Batch | What it delivers | Where |
+|---|---|---|
+| 1 — schema/uiHints migration | `_derive_auto_ui_hints(group)` in `BaseNode._metadata_dict` auto-sets `uiHints.isConfigNode: True` for every plugin in the centralized `_CONFIG_NODE_GROUPS = frozenset({"memory", "tool"})` (explicit `cls.ui_hints` always wins via `dict.update`). 8 frontend string-compares retired: 6 `node.type === 'masterSkill'` checks → `uiHints.isMasterSkillEditor`; 2 `groups.includes('memory'\|'tool')` heuristics → `uiHints.isConfigNode`. New `isConfigNode` flag added to `INodeUIHints` and to the `test_ui_hints_only_carry_known_flags` invariant `known` set. | `services/plugin/base.py`, `Dashboard.tsx`, `useAutoSkillEdges.ts`, `MiddleSection.tsx`, `InputSection.tsx`, `OutputPanel.tsx`, `INodeProperties.ts`, `tests/test_node_spec.py` |
+| 2 — theme tokens | Added 6 `--action-X-hover` triplets (0.25 alpha) so ActionButton's hover state is a Tailwind utility (`hover:bg-action-run-hover`), not opacity arithmetic. Disabled state uses shadcn-idiomatic `disabled:opacity-50` on the base class. `ActionDef.themeColor: string` renamed to `ActionDef.intent: ActionButtonIntent`; the catalogue adapter maps server `theme_color` palette strings to intents via a `SERVER_COLOR_TO_INTENT` table. `OAuthConnect`, `EmailPanel`, `QrPairingPanel`, `ActionBar`, `SkillEditorModal`, `ToolSchemaEditor` migrated to `<ActionButton>` and dropped `useAppTheme()`. Dracula-in-functional-UI (warning boxes, error alerts, submit buttons) replaced by shadcn semantic tokens (`bg-warning/10`, `<Alert variant="destructive">`, `bg-accent/10`). Canvas animations parameterized: `CanvasStatusColors` extended with `edgePending`/`edgeMemoryActive`/`edgeToolActive`; two keyframes merged into one color-agnostic `nodeGlow`; `buildCanvasStyles(colors)` is single-arg with zero hardcoded hexes (light/dark difference now lives entirely in `theme.ts`). | `index.css`, `action-button.tsx`, `credentials/{primitives,panels,catalogueAdapter}.tsx`, `SkillEditorModal.tsx`, `ToolSchemaEditor.tsx`, `canvasAnimations.ts`, `theme.ts`, `Dashboard.tsx` |
+| 3 — `useAppStore` selector migration | Whole-store destructure (`useAppStore()`) audited and converted to per-field selectors (`useAppStore((s) => s.X)`) across every canvas node component, `Dashboard.tsx` (~20 fields), and 11 hooks/components in the parameter-panel hot path. Fixes a perf footgun where a sidebar toggle / unrelated workflow mutation re-rendered every canvas node, defeating `React.memo` + `nodePropsEqual`. | `Square/AIAgent/Trigger/Start/Toolkit/Generic/TeamMonitorNode.tsx`, `Dashboard.tsx`, `useDragVariable`, `useParameterPanel`, `useReactFlowNodes`, `useWorkflowManagement`, `Input/Middle/OutputSection`, `OutputPanel`, `ParameterRenderer`, `ToolSchemaEditor`, `ParameterPanel`, `InputNodesPanel` |
+| 4 — WebSocket reliability | Init-burst parallelized: 5 api-key probes + 3 history fetches inside `ws.onopen` collapsed into named helpers (`probeApiKey`, `loadTerminalLogs`, `loadChatHistory`, `loadConsoleLogs`) running together via `Promise.allSettled` over a shared `sendBurstRequest` factory. Time-to-`isReady` drops from ~8 × roundtrip serial to one wide roundtrip. `drainPendingSends(ws)` ordering preserved (still synchronous, before `setIsReady(true)`). New `invalidateCatalogue(queryClient)` helper with a 300 ms trailing-edge debounce; all 8 broadcast handlers in WebSocketContext (`api_key_status`, `whatsapp_status`, `twitter/google/telegram` oauth + status, `credential_catalogue_updated`, `initial_status`) route through it instead of calling `queryClient.invalidateQueries({ queryKey: CATALOGUE_QUERY_KEY })` directly. OAuth bursts / multi-service reconnects collapse to one refetch. | `WebSocketContext.tsx`, `useCatalogueQuery.ts` |
+
+**Wave 12 numbers:**
+- 8 frontend type-string callsites retired.
+- 6 inline-styled credential-modal buttons → `<ActionButton>`. 18 `bg-dracula-*` functional-UI usages → semantic tokens / `<ActionButton>`. 8 hardcoded hex colours in `canvasAnimations.ts` → theme-driven.
+- 19 whole-store `useAppStore()` callsites → per-field selectors.
+- 8 catalogue invalidation callsites → debounced helper.
+- 1 keyframe deduplicated (`nodeGlowDark` + `nodeGlowLight` → `nodeGlow`).
+- `tsc --noEmit` clean. 106/108 backend NodeSpec invariants green (the 2 deselected check `props["temperature"]["minimum"]` on aiAgent — a pre-existing Pydantic v2 / `Optional[float]` `anyOf` rendering issue unrelated to this batch).
+
+**Architectural delta (permanent):**
+- The frontend stopped string-comparing on node-type and group strings for visibility / behaviour decisions. All such decisions read backend `uiHints` flags. Group strings (`memory`, `tool`) live in exactly one place: `_CONFIG_NODE_GROUPS` on the backend.
+- ActionButton's CVA file is a pure role → token-name mapping. No opacity arithmetic, no per-token disabled overrides.
+- Canvas animations have no light/dark branch and no hardcoded hexes. The `colors` arg coming from `theme.ts` carries everything.
+- Catalogue invalidation has one debounced funnel; broadcast handlers don't call `queryClient.invalidateQueries` directly.
+
 ## Context
 
 The MachinaOs frontend was coupled to Ant Design (40 files, 187-line theme file, `ConfigProvider` at root). Pre-migration audit + research docs (now deleted; see git history under commit `4cb3dd9` if needed) prescribed shadcn/ui (canonical components copied via CLI registry) + Radix primitives + Tailwind 4 + JSON Forms for a schema-driven inspector. Phase 0/1 commits (`2209dba`, `7ac69fe`) included hand-written primitives and a toast facade — those got deleted as part of corrected Phase 0 (`cdeebb4`).

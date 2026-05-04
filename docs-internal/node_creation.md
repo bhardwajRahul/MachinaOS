@@ -133,6 +133,7 @@ walker does on startup), these registrations happen automatically:
 | Node class registration | `_NODE_CLASS_REGISTRY` | `BaseNode.__init_subclass__` on class definition |
 | Metadata + Pydantic schemas | `NODE_METADATA`, `NODE_INPUT_MODELS`, `NODE_OUTPUT_SCHEMAS` | same |
 | Handler dispatch | `_PLUGIN_HANDLERS` (merged into `NodeExecutor`) | same |
+| Auto-derived `uiHints.isConfigNode: True` | `NODE_METADATA[type]['uiHints']` | `_metadata_dict` runs `_derive_auto_ui_hints(cls.group)` for every plugin in a `('memory', 'tool')` group. Plugin `ui_hints = {...}` always wins. Tells the frontend that the node's panel inherits its parent's main inputs. See [plugin_system.md → Auto-derived uiHints](./plugin_system.md#auto-derived-uihints). |
 | Credentials | `CREDENTIAL_REGISTRY` | `Credential.__init_subclass__` when `_credentials.py` is imported |
 | Trigger registry + filter builders | `event_waiter.TRIGGER_REGISTRY`, `FILTER_BUILDERS` | back-fill from `TriggerNode` subclasses on first lookup |
 | Temporal activity wrapper | `cls.as_activity()` | first call; pooled into the worker queue declared by `task_queue` |
