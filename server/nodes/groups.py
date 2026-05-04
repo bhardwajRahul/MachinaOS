@@ -49,6 +49,7 @@ register_group(key="scheduler",   metadata={"label": "Schedulers",        "icon"
 register_group(key="proxy",       metadata={"label": "Proxy",             "icon": "🛡", "color": "#bd93f9", "visibility": "dev"})
 register_group(key="whatsapp",    metadata={"label": "WhatsApp",          "icon": "💬", "color": "#25D366", "visibility": "dev"})
 register_group(key="email",       metadata={"label": "Email",             "icon": "✉️", "color": "#8be9fd", "visibility": "dev"})
+register_group(key="payments",    metadata={"label": "Payments",          "icon": "asset:stripe", "color": "#635BFF", "visibility": "dev"})
 register_group(key="browser",     metadata={"label": "Browser",           "icon": "🌐", "color": "#ff79c6", "visibility": "dev"})
 register_group(key="scraper",     metadata={"label": "Scrapers",          "icon": "🕸", "color": "#ff79c6", "visibility": "dev"})
 register_group(key="filesystem",  metadata={"label": "Filesystem",        "icon": "📁", "color": "#8be9fd", "visibility": "dev"})
