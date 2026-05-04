@@ -1,23 +1,23 @@
-"""Native CLI auth — login + status, no token wrapping.
+"""Native CLI login spawner.
 
 Replaces what would have been per-provider OAuth modules
 (``codex_oauth.py``, ``gemini_oauth.py``). Each CLI ships a working
 ``<provider> login`` flow that handles the browser/device flow and
 stores credentials in its native location (``~/.claude/``,
-``~/.codex/``, ``~/.gemini/``). MachinaOs only triggers the flow and
-detects the resulting state.
+``~/.codex/``, ``~/.gemini/``). MachinaOs only triggers the flow.
 
-Two public coroutines:
+After ``run_native_login()`` succeeds, ``_handlers.py`` writes a
+synthetic marker OAuth token via ``auth_service.store_oauth_tokens()``
+(Stripe-style — see ``nodes/stripe/_handlers.py``). The catalogue's
+generic ``stored`` check then flips ``true`` and the existing
+``OAuthConnect.tsx`` primitive renders the modal as Connected — no
+per-provider status hook needed.
 
-- :func:`run_native_login` — spawns ``<provider> login`` (interactive
-  by default; the user completes the browser/device flow directly).
-- :func:`check_auth` — runs ``<provider> --version`` (or whatever
-  ``auth_status_argv()`` returns), feeds output into
-  ``provider.detect_auth_error()``, returns a ``{logged_in, available,
-  hint, ...}`` payload for the Credentials Modal.
-
-Both share a single ``_resolve_argv`` helper that does the npx-shim
-fallback the providers' own ``binary_path()`` does.
+There's no ``check_auth`` here: the marker-token + catalogue-broadcast
+pattern makes a separate status probe redundant. If you actually want to
+verify the CLI is functional (vs just "we marked you as logged in"), the
+first session attempt's stderr matcher (``provider.detect_auth_error``)
+catches it.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Shared argv resolution (binary or npx fallback)
+# Argv resolution (shared between login + the providers' own binary_path)
 # ---------------------------------------------------------------------------
 
 def _resolve_argv(
@@ -45,6 +45,12 @@ def _resolve_argv(
     """Resolve ``argv[0]`` to an absolute path or an npx shim.
 
     Returns ``(resolved_argv, error)``. Either field is None.
+
+    NB: For npm-distributed CLIs (Claude / Codex / Gemini), the Stripe
+    GitHub-release auto-installer pattern doesn't apply — there are no
+    standalone binaries on GitHub releases. We fall back to ``npx`` which
+    auto-fetches the npm package on first use, mirroring what
+    ``provider.binary_path()`` already does in the providers themselves.
     """
     if not argv:
         return None, "empty argv"
@@ -65,19 +71,9 @@ def _build_provider(provider_name: str) -> Tuple[Optional[AICliProvider], Option
     try:
         return create_cli_provider(provider_name), None
     except NotImplementedError as exc:
-        return None, {
-            "success": False, "logged_in": False, "available": False,
-            "exit_code": None, "stderr_tail": "",
-            "hint": "Provider deferred to v2",
-            "error": str(exc),
-        }
+        return None, {"success": False, "exit_code": None, "stderr_tail": "", "error": str(exc)}
     except ValueError as exc:
-        return None, {
-            "success": False, "logged_in": False, "available": False,
-            "exit_code": None, "stderr_tail": "",
-            "hint": "Unknown provider",
-            "error": str(exc),
-        }
+        return None, {"success": False, "exit_code": None, "stderr_tail": "", "error": str(exc)}
 
 
 # ---------------------------------------------------------------------------
@@ -150,103 +146,4 @@ async def run_native_login(
             None if proc.returncode == 0
             else f"login exited with code {proc.returncode}"
         ),
-    }
-
-
-# ---------------------------------------------------------------------------
-# Auth status
-# ---------------------------------------------------------------------------
-
-async def check_auth(
-    provider_name: str,
-    *,
-    timeout_seconds: float = 15.0,
-) -> Dict[str, Any]:
-    """Probe whether ``provider_name`` is logged in.
-
-    ``available`` is False when the binary isn't installed.
-    """
-    provider, err = _build_provider(provider_name)
-    if err is not None:
-        return err
-    assert provider is not None
-
-    status_argv = provider.auth_status_argv()
-    if not status_argv:
-        # No cheap probe configured — defer to the first session's stderr.
-        return {
-            "logged_in": True,  # optimistic; real run will surface errors
-            "available": True,
-            "hint": "",
-            "exit_code": None,
-            "error": None,
-        }
-
-    argv, resolve_err = _resolve_argv(provider, list(status_argv))
-    if argv is None:
-        return {
-            "logged_in": False, "available": False,
-            "hint": (
-                f"Install the CLI: `npm install -g {provider.package_name}`"
-                if provider.package_name
-                else f"Install the {provider_name} CLI"
-            ),
-            "exit_code": None,
-            "error": resolve_err,
-        }
-
-    logger.debug("[cli_auth_status:%s] probing %s", provider_name, argv)
-
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            *argv,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await asyncio.wait_for(
-            proc.communicate(), timeout=timeout_seconds,
-        )
-    except asyncio.TimeoutError:
-        return {
-            "logged_in": False, "available": True,
-            "hint": "auth status probe timed out",
-            "exit_code": None,
-            "error": f"timeout after {timeout_seconds:.0f}s",
-        }
-    except FileNotFoundError as exc:
-        return {
-            "logged_in": False, "available": False,
-            "hint": f"Install the {provider_name} CLI",
-            "exit_code": None,
-            "error": str(exc),
-        }
-
-    stderr_text = stderr.decode("utf-8", errors="replace")
-    stdout_text = stdout.decode("utf-8", errors="replace")
-    combined = f"{stderr_text}\n{stdout_text}"
-    exit_code = proc.returncode if proc.returncode is not None else -1
-
-    if provider.detect_auth_error(combined, exit_code):
-        login_hint = " ".join(provider.login_argv())
-        return {
-            "logged_in": False, "available": True,
-            "hint": f"Run `{login_hint}` (or click Login in the Credentials Modal)",
-            "exit_code": exit_code,
-            "error": stderr_text[-500:].strip() or "not authenticated",
-        }
-
-    if exit_code != 0:
-        # Non-zero exit but not an auth error.
-        return {
-            "logged_in": False, "available": True,
-            "hint": f"Status probe failed (exit {exit_code})",
-            "exit_code": exit_code,
-            "error": stderr_text[-500:].strip() or "non-zero exit",
-        }
-
-    return {
-        "logged_in": True, "available": True,
-        "hint": "",
-        "exit_code": 0,
-        "error": None,
     }

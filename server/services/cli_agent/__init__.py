@@ -13,7 +13,7 @@ does not need to know about us by name.
 
 from __future__ import annotations
 
-from services.cli_agent.cli_auth import check_auth, run_native_login
+from services.cli_agent.cli_auth import run_native_login
 from services.cli_agent.factory import (
     ALL_PROVIDERS,
     SUPPORTED_PROVIDERS,
@@ -69,5 +69,4 @@ __all__ = [
     "session_result_to_model",
     # Native auth helpers (also used by the router for Credentials Modal)
     "run_native_login",
-    "check_auth",
 ]
