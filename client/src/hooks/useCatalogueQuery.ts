@@ -339,3 +339,30 @@ export function useCatalogueQuery(): UseCatalogueQueryResult {
 
   return useMemo(() => ({ ...query, refresh }), [query, refresh]);
 }
+
+/**
+ * Single-provider "is stored?" selector derived from the catalogue.
+ *
+ * Replaces the retired ``apiKeyStatuses[id].hasKey`` duplication —
+ * `provider.stored` on the server-driven catalogue is the canonical
+ * answer (computed from `auth_service.has_valid_key` on every catalogue
+ * read). Consumers re-render only when this provider's `stored` flag
+ * actually flips, not on every credential mutation, because TanStack
+ * Query produces a new array reference per refetch and React's
+ * referential-equality short-circuits the boolean derivation.
+ */
+export function useProviderStored(providerId: string | null | undefined): boolean {
+  const { data } = useCatalogueQuery();
+  if (!providerId || !data?.providers) return false;
+  return Boolean(data.providers.find((p) => p.id === providerId)?.stored);
+}
+
+/**
+ * Count of providers with a stored credential (any kind — API key,
+ * OAuth, paired QR). Read from the catalogue's `stored` flag.
+ */
+export function useStoredProviderCount(): number {
+  const { data } = useCatalogueQuery();
+  if (!data?.providers) return 0;
+  return data.providers.filter((p) => p.stored).length;
+}

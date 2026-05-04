@@ -60,6 +60,10 @@ def patched_container(monkeypatch, auth_service):
     # not on services.status_broadcaster (the bound name in the handler module).
     fake_broadcaster = MagicMock()
     fake_broadcaster.update_api_key_status = AsyncMock()
+    # Wave-12 credential broadcast helper used by save / delete /
+    # oauth-logout handlers. Wraps WorkflowEvent (CloudEvents v1.0)
+    # and broadcasts as `credential_catalogue_updated`.
+    fake_broadcaster.broadcast_credential_event = AsyncMock()
     fake_broadcaster.broadcast = AsyncMock()
     fake_broadcaster._status = {}
     monkeypatch.setattr(ws_module, "get_status_broadcaster", lambda: fake_broadcaster)

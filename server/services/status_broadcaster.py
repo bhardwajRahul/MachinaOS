@@ -231,6 +231,54 @@ class StatusBroadcaster:
         return self._status["api_keys"].get(provider)
 
     # =========================================================================
+    # Credential Mutation Broadcasts (CloudEvents v1.0)
+    # =========================================================================
+    #
+    # Every backend handler that mutates credential state (store / remove API
+    # keys, OAuth login / logout) MUST emit a credential event via this helper
+    # so the frontend `useCatalogueQuery` cache stays coherent across all
+    # connected clients. Wire-format key stays `credential_catalogue_updated`
+    # for FE back-compat; the body is the CloudEvents-shaped `WorkflowEvent`
+    # so future EventBridge / Knative interop is a JSON-schema swap.
+    #
+    # Pytest invariant `test_credential_broadcasts.py` locks the contract.
+
+    async def broadcast_credential_event(
+        self,
+        event_type: str,
+        *,
+        provider: str,
+        customer_id: Optional[str] = None,
+    ) -> None:
+        """Emit a CloudEvents-typed credential-mutation broadcast.
+
+        Args:
+            event_type: CloudEvents `type` field. Convention:
+                ``"credential.api_key.saved"`` / ``".deleted"``,
+                ``"credential.oauth.disconnected"``.
+            provider: Provider id (e.g. ``"openai"``, ``"twitter"``).
+            customer_id: For multi-tenant OAuth flows. Default omitted.
+        """
+        # Local import keeps the broadcaster module independent of the
+        # event framework's load order during startup.
+        from services.events import WorkflowEvent
+
+        event = WorkflowEvent(
+            source="machinaos://services/credentials",
+            type=event_type,
+            subject=provider,
+            data={
+                "provider": provider,
+                **({"customer_id": customer_id} if customer_id else {}),
+            },
+        )
+
+        await self.broadcast({
+            "type": "credential_catalogue_updated",
+            "data": event.model_dump(mode="json"),
+        })
+
+    # =========================================================================
     # Android Status Updates
     # =========================================================================
 

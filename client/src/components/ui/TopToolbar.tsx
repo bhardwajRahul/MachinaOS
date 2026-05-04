@@ -47,7 +47,7 @@ import { cn } from '@/lib/utils';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useApiKeys, GlobalModelState } from '../../hooks/useApiKeys';
-import { useWebSocket } from '../../contexts/WebSocketContext';
+import { useStoredProviderCount } from '../../hooks/useCatalogueQuery';
 import { AI_PROVIDER_META } from '../icons/AIProviderIcons';
 
 const Divider = () => <div className="mx-1 h-6 w-px bg-border" />;
@@ -112,11 +112,13 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
 
   // Global Model Selector state
   const { getValidatedAiProviders, saveGlobalModel, isConnected: apiKeysConnected } = useApiKeys();
-  const { apiKeyStatuses } = useWebSocket();
   const [globalModelState, setGlobalModelState] = useState<GlobalModelState>({ providers: [], global_provider: null, global_model: null });
 
-  // Re-fetch validated providers when API key statuses change
-  const apiKeyCount = Object.values(apiKeyStatuses).filter(s => s.hasKey).length;
+  // Re-fetch validated providers whenever the count of stored
+  // credentials changes. Read from the catalogue (single source of
+  // truth — `provider.stored` flag); the retired
+  // `apiKeyStatuses[id].hasKey` mirror duplicated this answer.
+  const apiKeyCount = useStoredProviderCount();
   useEffect(() => {
     if (!apiKeysConnected) return;
     getValidatedAiProviders().then(state => setGlobalModelState(state));

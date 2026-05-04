@@ -185,7 +185,6 @@ async def get_twitter_status(request: Request):
         }
 
     access_token = tokens.get("access_token")
-    refresh_token = tokens.get("refresh_token")
 
     # Get stored client credentials (these remain in auth_service as they're app-level)
     client_id = await auth_service.get_api_key("twitter_client_id") or ""
@@ -202,7 +201,11 @@ async def get_twitter_status(request: Request):
     user_info = await oauth.get_user_info(access_token)
 
     if not user_info.get("success"):
-        # Token may be expired, try to refresh
+        # Token may be expired, try to refresh — refresh_token is read
+        # from the DB on demand (RFC 9700; not cached in memory).
+        refresh_token = await auth_service.get_oauth_refresh_token(
+            "twitter", customer_id="owner"
+        )
         if refresh_token:
             refresh_result = await oauth.refresh_access_token(refresh_token)
             if refresh_result.get("success"):
@@ -252,7 +255,10 @@ async def twitter_logout(request: Request):
 
     if tokens:
         access_token = tokens.get("access_token")
-        refresh_token = tokens.get("refresh_token")
+        # refresh_token is not cached in memory (RFC 9700) — read from DB.
+        refresh_token = await auth_service.get_oauth_refresh_token(
+            "twitter", customer_id="owner"
+        )
 
         # Get client credentials for revocation (app-level, in auth_service)
         client_id = await auth_service.get_api_key("twitter_client_id") or ""

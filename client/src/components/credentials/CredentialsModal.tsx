@@ -1,24 +1,28 @@
 /**
  * CredentialsModal — thin shell.
  *
- * Phase 4 of the credentials-scaling plan:
- *   - Data source is the server-owned `credential_providers.json` via
- *     `useCatalogueQuery` (TanStack Query + IndexedDB warm-start).
- *   - Sidebar is `CredentialsPalette` (cmdk + fuzzysort + GroupedVirtuoso).
- *   - Detail panel is still `PanelRenderer` (unchanged; consumed via the
- *     catalogue adapter so panels see the same `ProviderConfig` shape).
+ * Post-Wave-12: the server-owned catalogue (`get_credential_catalogue`
+ * → `useCatalogueQuery`) is the SINGLE source of truth for the
+ * provider list. The retired `providers.tsx` static fallback no longer
+ * exists — adding a new provider is a backend-only change.
  *
- * Additive safety: if the server fetch fails or hasn't landed yet, the
- * modal falls back to the client-owned `PROVIDERS` from `providers.tsx`.
- * That file stays in place until Phase 8 verification passes.
+ * Cold-boot UX:
+ *   - With IDB hit (return visit): catalogue populated within ~50 ms
+ *     via the warm-start path in `useCatalogueQuery`.
+ *   - With IDB miss (first visit / cleared storage): a Skeleton
+ *     palette renders while the WS catalogue arrives (~200-500 ms).
+ *   - Server unreachable: explicit "couldn't reach server" error
+ *     state — never a stale fallback list (would mislead the user
+ *     about which providers they have configured).
  */
 
 import React, { useMemo } from 'react';
-import { Loader2, ShieldCheck } from 'lucide-react';
+import { Loader2, ShieldCheck, AlertTriangle } from 'lucide-react';
 
 import Modal from '../ui/Modal';
 import { Badge } from '@/components/ui/badge';
-import { CATEGORIES as CLIENT_CATEGORIES, PROVIDERS as CLIENT_PROVIDERS } from './providers';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Skeleton } from '@/components/ui/skeleton';
 import PanelRenderer from './PanelRenderer';
 import CredentialsPalette from './CredentialsPalette';
 import { rehydrateCatalogue } from './catalogueAdapter';
@@ -35,16 +39,19 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
   const selectedId = useCredentialRegistry((s) => s.selectedId);
   const setSelectedId = useCredentialRegistry((s) => s.setSelectedId);
 
-  // Server-owned catalogue with IDB warm-start.
+  // Server-owned catalogue with IDB warm-start. Single source of truth.
   const catalogue = useCatalogueQuery();
 
-  // Rehydrate server JSON → runtime ProviderConfig shape; fall back to
-  // the client-owned registry if the server data hasn't arrived (cold
-  // start with no IDB cache, server unreachable, etc.).
-  const { providers, categories } = useMemo(() => {
-    if (catalogue.data) return rehydrateCatalogue(catalogue.data);
-    return { providers: CLIENT_PROVIDERS, categories: CLIENT_CATEGORIES };
+  // Rehydrate server JSON → runtime ProviderConfig shape. No client
+  // fallback — if the data isn't here yet we render Skeleton, and if
+  // the fetch errored we render an explicit error state.
+  const rehydrated = useMemo(() => {
+    if (!catalogue.data) return null;
+    return rehydrateCatalogue(catalogue.data);
   }, [catalogue.data]);
+
+  const providers = rehydrated?.providers ?? [];
+  const categories = rehydrated?.categories ?? [];
 
   // Default selection: if nothing is selected yet (or the previous
   // selection isn't in the current catalogue), pick the first provider.
@@ -66,8 +73,8 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
     [providers, effectiveSelectedId],
   );
 
-  const usingServerData = !!catalogue.data;
   const isLoadingServer = catalogue.isLoading && !catalogue.data;
+  const hasServerError = catalogue.isError && !catalogue.data;
 
   const headerActions = (
     <div className="flex items-center gap-3">
@@ -75,29 +82,59 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
         <ShieldCheck className="h-4 w-4 text-dracula-yellow" />
         <span>API Credentials</span>
       </div>
-      <Badge variant="success">{providers.length} providers</Badge>
+      {rehydrated && (
+        <Badge variant="success">{providers.length} providers</Badge>
+      )}
       {isLoadingServer && (
         <Badge variant="info" className="gap-1">
           <Loader2 className="h-3 w-3 animate-spin" />
           loading
         </Badge>
       )}
-      {!usingServerData && !isLoadingServer && (
-        <Badge variant="warning" title="Using bundled fallback catalogue">
+      {hasServerError && (
+        <Badge variant="destructive" className="gap-1" title="Server unreachable">
+          <AlertTriangle className="h-3 w-3" />
           offline
         </Badge>
       )}
     </div>
   );
 
-  return (
-    <Modal
-      isOpen={visible}
-      onClose={onClose}
-      maxWidth="95vw"
-      maxHeight="95vh"
-      headerActions={headerActions}
-    >
+  // Body dispatch:
+  //   1. Server error + no cached data → error state, no providers shown.
+  //   2. Loading + no cached data → Skeleton palette + empty detail.
+  //   3. Catalogue available (cached or fresh) → normal UI.
+  let body: React.ReactNode;
+  if (hasServerError) {
+    body = (
+      <div className="flex flex-1 flex-col items-center justify-center p-8">
+        <Alert variant="destructive" className="max-w-md">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Couldn't reach the credentials server</AlertTitle>
+          <AlertDescription>
+            The provider list comes from the backend. Check your connection
+            and try again — refreshing the page will retry the fetch.
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  } else if (!rehydrated) {
+    body = (
+      <div className="flex h-full overflow-hidden">
+        <div className="flex w-[280px] shrink-0 flex-col gap-2 border-r border-border p-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-9 w-full" />
+          ))}
+        </div>
+        <div className="flex flex-1 flex-col gap-3 bg-background p-6">
+          <Skeleton className="h-6 w-48" />
+          <Skeleton className="h-4 w-72" />
+          <Skeleton className="mt-4 h-32 w-full" />
+        </div>
+      </div>
+    );
+  } else {
+    body = (
       <div className="flex h-full overflow-hidden">
         <div className="flex w-[280px] shrink-0 flex-col border-r border-border">
           <CredentialsPalette
@@ -111,6 +148,18 @@ const CredentialsModal: React.FC<Props> = ({ visible, onClose }) => {
           <PanelRenderer config={selected} visible={visible} />
         </div>
       </div>
+    );
+  }
+
+  return (
+    <Modal
+      isOpen={visible}
+      onClose={onClose}
+      maxWidth="95vw"
+      maxHeight="95vh"
+      headerActions={headerActions}
+    >
+      {body}
     </Modal>
   );
 };

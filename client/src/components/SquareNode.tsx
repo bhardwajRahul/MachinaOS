@@ -9,6 +9,7 @@ import { useWebSocket, useWhatsAppStatus, useNodeStatus } from '../contexts/WebS
 import { getCachedNodeSpec, isNodeInBackendGroup, resolveNodeDescription, useNodeSpec } from '../lib/nodeSpec';
 import { NodeIcon } from '../assets/icons';
 import { AI_MODEL_PROVIDER_MAP } from '../lib/aiModelProviders';
+import { useProviderStored } from '../hooks/useCatalogueQuery';
 
 // Nodes with 'tool' in their group can connect to AI Agent/Zeenie tool handles
 const hasToolGroup = (definition: any): boolean => {
@@ -145,11 +146,12 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
     return '';
   }, [definition?.credentials, type]);
 
-  // "Is a credential configured for this provider?" is read from the
-  // WS-context apiKeyStatuses map — populated synchronously by
-  // validateApiKeyAsync + the api_key_status broadcast. The canvas node
-  // never fetches decrypted keys; that's the credentials modal's job.
-  const hasApiKey = !!(providerId && getApiKeyStatus(providerId)?.hasKey);
+  // "Is a credential configured for this provider?" reads from the
+  // server-driven catalogue (single source of truth — the `stored`
+  // flag is computed from `auth_service.has_valid_key()` on every
+  // catalogue read). The retired `apiKeyStatuses[id].hasKey` mirror
+  // duplicated this answer with no synchronisation contract.
+  const hasApiKey = useProviderStored(providerId);
   const isConfigured = hasApiKey && !!data && Object.keys(data).length > 0;
 
   const handleParametersClick = (e: React.MouseEvent) => {
@@ -187,10 +189,11 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
       return googleMapsKeyStatus.valid ? theme.dracula.green : theme.dracula.red;
     }
 
-    // AI Model nodes - use reactive WebSocket API key status
+    // AI Model nodes - "is stored" from catalogue (hasApiKey via
+    // useProviderStored above), "is validated" from apiKeyStatuses.
     if (isAIModelNode) {
-      if (aiKeyStatus?.valid && aiKeyStatus?.hasKey) return theme.dracula.green;
-      if (aiKeyStatus?.hasKey) return theme.dracula.orange;
+      if (aiKeyStatus?.valid && hasApiKey) return theme.dracula.green;
+      if (hasApiKey) return theme.dracula.orange;
       return theme.dracula.red;
     }
 
@@ -224,12 +227,14 @@ const SquareNode: React.FC<NodeProps<NodeData>> = ({ id, type, data, isConnectab
             ? 'Google Maps API key validated'
             : `API key invalid: ${googleMapsKeyStatus.message || 'Validation failed'}`;
         }
-        // AI Model nodes - use reactive WebSocket API key status
+        // AI Model nodes - "is stored" from catalogue (hasApiKey),
+        // "is validated" from apiKeyStatuses. Independent concerns
+        // post-Wave-12; the two sources don't drift across tabs.
         if (isAIModelNode) {
-          if (aiKeyStatus?.valid && aiKeyStatus?.hasKey) {
+          if (aiKeyStatus?.valid && hasApiKey) {
             return `${aiProviderId?.charAt(0).toUpperCase()}${aiProviderId?.slice(1)} API key validated`;
           }
-          if (aiKeyStatus?.hasKey) {
+          if (hasApiKey) {
             return 'API key found, validation pending';
           }
           return 'API key required - configure in Credentials';

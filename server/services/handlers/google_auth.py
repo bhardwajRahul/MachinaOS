@@ -70,7 +70,10 @@ async def get_google_credentials(
             )
 
         access_token = tokens["access_token"]
-        refresh_token = tokens.get("refresh_token")
+        # refresh_token is read from DB directly (RFC 9700; not cached).
+        refresh_token = await auth_service.get_oauth_refresh_token(
+            "google", customer_id="owner"
+        )
 
     auth_service = container.auth_service()
     client_id = await auth_service.get_api_key("google_client_id") or ""

@@ -62,11 +62,19 @@ export const queryPersistMaxAge = 24 * 60 * 60 * 1000;
 const PERSISTED_KEY_PREFIXES = [
   'nodeSpec',
   'nodeGroups',
-  // credentialValues: panel form fields prefilled across reloads.
-  'credentialValues',
-  // credentialCatalogue is NOT here -- it has its own IDB warm-start in
-  // useCatalogueQuery.ts (idb-keyval) so localStorage persistence would
-  // duplicate the bytes for no benefit. skillContent stays in-memory only.
+  // credentialValues was previously persisted here for the cred-panel
+  // form-field warm-start. Removed per OWASP HTML5 Security Cheat Sheet
+  // / ASVS V9.9: a credentialValues entry contains the decrypted API
+  // key value (populated by getStoredApiKey on the WS roundtrip), and
+  // localStorage stores it in plaintext readable via DevTools on shared
+  // / compromised machines. The in-memory TanStack Query cache (still
+  // gcTime: FOREVER, see queryClient.ts) keeps the form populated for
+  // the session lifetime; on reload the panel refetches — one
+  // roundtrip cost, fine because the modal only opens on user action.
+  //
+  // credentialCatalogue is also NOT here -- it has its own IDB
+  // warm-start in useCatalogueQuery.ts (idb-keyval). skillContent
+  // stays in-memory only.
 ];
 
 export function shouldPersistQuery(query: Query): boolean {

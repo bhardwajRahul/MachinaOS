@@ -183,6 +183,42 @@ If `API_KEY_ENCRYPTION_KEY` is missing or changed, existing ciphertext becomes u
 - **Salt per install**: different MachinaOS installs have different salts, so ciphertext is not portable across installs even with the same server key.
 - **Wipes on shutdown**: `EncryptionService.clear()` zeroes the Fernet reference, preventing cold-boot recovery of the derived key.
 
+## Source of Truth
+
+`CredentialsDatabase` (encrypted SQLite at `credentials.db`) is the **canonical source** for every credential. Two derived in-memory caches exist for performance, both invalidated atomically on every DB write/delete:
+
+- **Backend** (`server/services/auth.py`):
+  - `_api_key_cache: Dict[str, ApiKeyCacheEntry]` keyed by `{session}_{provider}`. Single dataclass entry per provider carries decrypted key + models + `stored_at`. Replaces the previous pair of `_memory_cache` (key) + `_models_cache` (models) which shared the same key shape but had separate write/evict sites — invitation to drift.
+  - `_oauth_cache: Dict[str, Dict]` keyed by `{customer}_{provider}`. Holds **only** access token + display fields (`email`, `name`, `scopes`). Per [RFC 9700](https://datatracker.ietf.org/doc/rfc9700/) (OAuth 2.0 Security BCP, 2024) §5.1 the **refresh token is not memory-cached** — `AuthService.get_oauth_refresh_token(provider, customer_id)` reads from the encrypted DB on every call (rare path; refresh tokens are accessed only at access-token renewal + on revoke / logout).
+
+- **Frontend in-memory**:
+  - `useCatalogueQuery['credentialCatalogue']` — provider list + per-provider `stored: boolean` flag. Single source for "do we have a credential for X?". Replaces the retired `apiKeyStatuses[id].hasKey` mirror that duplicated this answer.
+  - `apiKeyStatuses[id]` — narrowly the **validation result** (`valid`, `models`, `message`, `timestamp`). NOT a duplicate of `provider.stored` — it answers "does the stored key still validate against upstream?".
+
+- **Frontend warm-start**:
+  - IndexedDB key `credentials:catalogue:current` for the provider list (idb-keyval; ~50 ms hydration on return visit).
+  - **localStorage holds NO decrypted credential values.** Per [OWASP HTML5 Security Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/HTML5_Security_Cheat_Sheet.html) and ASVS V9.9, plaintext credentials must not live in `localStorage`. The previous `'credentialValues'` prefix was removed from `PERSISTED_KEY_PREFIXES` in `client/src/lib/queryPersist.ts`. The in-memory TanStack Query cache (`gcTime: ∞`) keeps the form populated for the session lifetime; on reload the panel refetches via WS — one round-trip cost, fine because the modal only opens on user action.
+
+## Broadcast Contract
+
+Every backend handler that mutates credential state MUST emit one or both of:
+
+- **`api_key_status`** — per-provider validation state change. Payload: `{valid, models, message, timestamp}`. Used for validation results and to clear `apiKeyStatuses[provider]` on every connected client (e.g. after `delete_api_key`).
+- **`credential_catalogue_updated`** — refetch signal carrying a CloudEvents v1.0 envelope. Body shape: `WorkflowEvent` from [`server/services/events/envelope.py`](../server/services/events/envelope.py) — same envelope the Wave 12 EventSource framework already uses. CloudEvents `type` follows the convention `credential.<area>.<action>` (e.g. `credential.api_key.saved`, `credential.api_key.deleted`, `credential.oauth.disconnected`). The wire-format outer `type` stays `credential_catalogue_updated` for frontend back-compat; future external interop (EventBridge / Knative) is a JSON-schema swap rather than a rewrite.
+
+Helper: `broadcaster.broadcast_credential_event(event_type, *, provider, customer_id=None)` in `services/status_broadcaster.py` wraps `WorkflowEvent` with `source="machinaos://services/credentials"` and `subject=provider`.
+
+Delete-style mutations emit **both** events. The frontend's `WebSocketContext` handles both and refreshes `apiKeyStatuses` plus the `useCatalogueQuery` cache. The 300 ms debounce in `invalidateCatalogue(queryClient)` (`client/src/hooks/useCatalogueQuery.ts`) coalesces simultaneous events into one refetch.
+
+Pytest invariant `server/tests/credentials/test_credential_broadcasts.py` locks the contract:
+- Each canonical handler (`handle_validate_api_key`, `handle_save_api_key`, `handle_delete_api_key`, `handle_twitter_logout`, `handle_google_logout`) must contain a call to `broadcaster.update_api_key_status(...)` or `broadcaster.broadcast_credential_event(...)`.
+- `delete_api_key` must contain BOTH (clears the in-memory map AND invalidates the catalogue).
+- `AuthService.store_*` / `remove_*` must call `credentials_db.<method>` (canonical) and `_oauth_cache` entries must NOT carry `refresh_token`.
+
+## No Hand-Maintained Frontend Provider Lists
+
+All credential providers come from the backend `get_credential_catalogue` handler (which reads `server/config/credential_providers.json`). The retired `client/src/components/credentials/providers.tsx` static fallback is gone — adding a new provider is a backend-only change. On cold-boot the `CredentialsModal` renders a `<Skeleton>` palette while the WS catalogue arrives; on server-unreachable it shows an explicit error state, never stale fallback data.
+
 ## Related Docs
 
 - [DESIGN.md](DESIGN.md) - overall security posture

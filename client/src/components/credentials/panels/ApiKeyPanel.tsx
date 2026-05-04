@@ -101,6 +101,13 @@ const ApiKeyPanel: React.FC<{ config: ProviderConfig; visible: boolean }> = ({ c
               placeholder={field.placeholder}
               loading={panel.loading === 'validate'}
               isStored={validated}
+              // Local-LLM providers declare a non-`apiKey` field key
+              // (e.g. `ollama_proxy`) — the click probes the user's URL
+              // and pulls the model list. Cloud providers validate an
+              // upstream API key. The verb on the button reflects the
+              // semantic difference.
+              saveLabel={field.key === 'apiKey' ? 'Validate' : 'Fetch'}
+              savedLabel={field.key === 'apiKey' ? 'Valid' : 'Connected'}
             />
           )}
         </CardContent>

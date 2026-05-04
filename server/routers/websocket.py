@@ -61,7 +61,10 @@ MessageHandler = Callable[[Dict[str, Any], WebSocket], Awaitable[Dict[str, Any]]
 
 def ws_handler(*required_fields: str):
     """Simple decorator for WebSocket handlers. Validates required fields and wraps errors."""
+    import functools
+
     def decorator(func: MessageHandler) -> MessageHandler:
+        @functools.wraps(func)
         async def wrapper(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
             for field in required_fields:
                 if not data.get(field):
@@ -1283,11 +1286,19 @@ async def handle_save_api_key(data: Dict[str, Any], websocket: WebSocket) -> Dic
 
     async def _do_save() -> Dict[str, Any]:
         auth_service = container.auth_service()
+        broadcaster = get_status_broadcaster()
         await auth_service.store_api_key(
             provider=provider,
             api_key=data["api_key"].strip(),
             models=data.get("models", []),
             session_id=data.get("session_id", "default"),
+        )
+        # Symmetric broadcast: tells every connected client to refetch
+        # the catalogue so the `stored` flag flips on this provider.
+        # Don't claim validity here — save_api_key doesn't validate.
+        await broadcaster.broadcast_credential_event(
+            "credential.api_key.saved",
+            provider=provider,
         )
         return {"provider": data["provider"]}
 
@@ -1307,7 +1318,20 @@ async def handle_delete_api_key(data: Dict[str, Any], websocket: WebSocket) -> D
 
     async def _do_delete() -> Dict[str, Any]:
         auth_service = container.auth_service()
+        broadcaster = get_status_broadcaster()
         await auth_service.remove_api_key(provider, data.get("session_id", "default"))
+        # Two broadcasts: api_key_status clears `apiKeyStatuses[provider]`
+        # on every connected client (in-memory validation cache); the
+        # CloudEvents-typed credential.api_key.deleted invalidates the
+        # catalogue so the `stored` flag flips. Both go through the
+        # 300 ms invalidateCatalogue debounce — one refetch.
+        await broadcaster.update_api_key_status(
+            provider, valid=False, has_key=False, message="deleted", models=[],
+        )
+        await broadcaster.broadcast_credential_event(
+            "credential.api_key.deleted",
+            provider=provider,
+        )
         return {"provider": data["provider"]}
 
     return await store.run(data.get("request_id"), _do_delete)
@@ -1462,10 +1486,13 @@ async def handle_twitter_logout(data: Dict[str, Any], websocket: WebSocket) -> D
 
     auth_service = container.auth_service()
 
-    # Get tokens from OAuth system
+    # Get tokens from OAuth system. refresh_token is read from DB
+    # directly (RFC 9700; not cached in memory).
     tokens = await auth_service.get_oauth_tokens("twitter", customer_id="owner")
     access_token = tokens.get("access_token") if tokens else None
-    refresh_token = tokens.get("refresh_token") if tokens else None
+    refresh_token = await auth_service.get_oauth_refresh_token(
+        "twitter", customer_id="owner"
+    ) if tokens else None
 
     # Get client credentials (correctly stored as API keys)
     client_id = await auth_service.get_api_key("twitter_client_id") or ""
@@ -1496,6 +1523,15 @@ async def handle_twitter_logout(data: Dict[str, Any], websocket: WebSocket) -> D
             await auth_service.remove_api_key(key)
         except Exception:
             pass
+
+    # Symmetric credential broadcast — flips the catalogue's `stored`
+    # flag for "twitter" on every connected client.
+    broadcaster = get_status_broadcaster()
+    await broadcaster.broadcast_credential_event(
+        "credential.oauth.disconnected",
+        provider="twitter",
+        customer_id="owner",
+    )
 
     return {"success": True, "message": "Twitter disconnected"}
 
@@ -1568,7 +1604,10 @@ async def handle_google_oauth_status(data: Dict[str, Any], websocket: WebSocket)
 
     email = tokens.get("email")
     name = tokens.get("name")
-    refresh_token = tokens.get("refresh_token")
+    # refresh_token is read from DB directly (RFC 9700; not cached).
+    refresh_token = await auth_service.get_oauth_refresh_token(
+        "google", customer_id="owner"
+    )
 
     # Try to refresh token proactively
     try:
@@ -1624,6 +1663,17 @@ async def handle_google_logout(data: Dict[str, Any], websocket: WebSocket) -> Di
         "type": "google_status",
         "data": {"connected": False, "email": None, "name": None},
     })
+
+    # Symmetric credential broadcast — flips the catalogue's `stored`
+    # flag for "google" on every connected client. The google_status
+    # event above also triggers invalidateCatalogue on the frontend
+    # ([WebSocketContext.tsx:722]) but the credential event keeps the
+    # contract uniform with twitter / telegram disconnect paths.
+    await broadcaster.broadcast_credential_event(
+        "credential.oauth.disconnected",
+        provider="google",
+        customer_id="owner",
+    )
 
     return {"success": True, "message": "Google Workspace disconnected"}
 

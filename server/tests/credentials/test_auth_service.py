@@ -3,7 +3,9 @@
 Locks in invariants 7 and 8 from docs-internal/credentials_panel.md:
   - store_api_key requires models=[]
   - Memory cache hit path does not query DB on every call
-  - clear_cache wipes _memory_cache, _models_cache, _oauth_cache
+  - clear_cache wipes _api_key_cache, _oauth_cache (one merged cache
+    per RFC 9700 + post-Wave-12 dedup; previously the API-key half was
+    split across _memory_cache + _models_cache).
 """
 
 from __future__ import annotations
@@ -91,8 +93,7 @@ class TestMemoryCache:
         await auth_service.store_api_key("openai", "sk-foo", models=[])
 
         # Wipe memory cache to simulate fresh process
-        auth_service._memory_cache.clear()
-        auth_service._models_cache.clear()
+        auth_service._api_key_cache.clear()
 
         call_count = {"n": 0}
         original = auth_service.credentials_db.get_api_key
@@ -111,19 +112,17 @@ class TestMemoryCache:
         assert await auth_service.get_api_key("openai") == "sk-foo"
         assert call_count["n"] == 1
 
-    async def test_clear_cache_wipes_all_three_caches(self, auth_service):
+    async def test_clear_cache_wipes_both_caches(self, auth_service):
         await auth_service.store_api_key("openai", "sk-foo", models=["gpt-4"])
         await auth_service.store_oauth_tokens("google", "a", "r", email="u@x.com")
 
         # Sanity: caches populated
-        assert auth_service._memory_cache
-        assert auth_service._models_cache
+        assert auth_service._api_key_cache
         assert auth_service._oauth_cache
 
         auth_service.clear_cache()
 
-        assert auth_service._memory_cache == {}
-        assert auth_service._models_cache == {}
+        assert auth_service._api_key_cache == {}
         assert auth_service._oauth_cache == {}
 
     async def test_clear_cache_does_not_delete_db_data(self, auth_service):
@@ -149,9 +148,17 @@ class TestOAuthOps:
         tokens = await auth_service.get_oauth_tokens("google")
         assert tokens is not None
         assert tokens["access_token"] == "access-1"
-        assert tokens["refresh_token"] == "refresh-1"
+        # Per RFC 9700 the refresh token is NOT returned by
+        # get_oauth_tokens — read via get_oauth_refresh_token() instead.
+        assert "refresh_token" not in tokens
         assert tokens["email"] == "u@example.com"
         assert tokens["scopes"] == "openid email"
+
+        # The refresh token is reachable through the dedicated helper
+        # that always reads from the encrypted DB (no in-memory cache).
+        assert (
+            await auth_service.get_oauth_refresh_token("google") == "refresh-1"
+        )
 
     async def test_remove_oauth_tokens(self, auth_service):
         await auth_service.store_oauth_tokens("google", "a", "r")

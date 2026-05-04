@@ -173,9 +173,17 @@ export interface RateLimitStats {
   pause_reason?: string;
 }
 
+/**
+ * In-memory validation-result cache for an API-key provider.
+ *
+ * NOT a "do we have a stored key" answer — that comes from the
+ * `useCatalogueQuery['credentialCatalogue']` `provider.stored` field
+ * (single source of truth, derived from the encrypted DB on each
+ * `get_credential_catalogue` round-trip). Mixing the two flags caused
+ * cross-tab drift; the duplicated `hasKey` field was retired.
+ */
 export interface ApiKeyStatus {
   valid: boolean;
-  hasKey?: boolean;
   message?: string;
   models?: string[];
   timestamp?: number;
@@ -1259,9 +1267,11 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
               `init_${provider}`,
             );
             if (response.hasKey) {
+              // Only seed the validation cache; "is stored" lives on
+              // the catalogue's `provider.stored` flag (single source).
               setApiKeyStatuses(prev => ({
                 ...prev,
-                [provider]: { hasKey: true, valid: true },
+                [provider]: { valid: true },
               }));
             }
           } catch {
@@ -2089,11 +2099,12 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         models: response.models
       };
 
-      // Update apiKeyStatuses on successful validation
+      // Update apiKeyStatuses on successful validation. "is stored"
+      // lives on catalogue.provider.stored — don't duplicate it here.
       if (result.valid) {
         setApiKeyStatuses(prev => ({
           ...prev,
-          [provider]: { hasKey: true, valid: true, models: result.models }
+          [provider]: { valid: true, models: result.models }
         }));
       }
 
@@ -2121,12 +2132,13 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         models: response.models,
       };
 
-      // Mirror into apiKeyStatuses so consumers reading from context
-      // stay in sync without an extra round-trip.
+      // Mirror models into apiKeyStatuses so consumers reading from
+      // context stay in sync without an extra round-trip. "is stored"
+      // lives on the catalogue's provider.stored, not here.
       if (result.hasKey) {
         setApiKeyStatuses(prev => ({
           ...prev,
-          [provider]: { hasKey: true, valid: true, models: result.models }
+          [provider]: { valid: true, models: result.models }
         }));
       }
 
@@ -2150,11 +2162,14 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       });
       const success = response.success !== false;
 
-      // Update apiKeyStatuses on successful save
+      // Update apiKeyStatuses on successful save. The 'valid: true'
+      // here is optimistic — save_api_key doesn't actually validate
+      // upstream. Catalogue refetch (via the credential.api_key.saved
+      // broadcast) is the truthful source for "is stored".
       if (success) {
         setApiKeyStatuses(prev => ({
           ...prev,
-          [provider]: { hasKey: true, valid: true, models }
+          [provider]: { valid: true, models }
         }));
       }
 

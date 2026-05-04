@@ -1,8 +1,32 @@
-"""API key management service with encrypted credentials database."""
+"""API key management service with encrypted credentials database.
+
+Source of truth: ``CredentialsDatabase`` (encrypted SQLite at credentials.db).
+Two derived in-memory caches exist for performance — both keyed by composite
+strings, both invalidated atomically on every DB write/delete:
+
+- ``_api_key_cache``: ``Dict[str, ApiKeyCacheEntry]`` keyed by ``{session}_{provider}``.
+  One entry carries decrypted key + models + stored_at. Replaces the previous
+  pair of ``_memory_cache`` (key) + ``_models_cache`` (models) which shared the
+  same key shape but had separate write/evict sites — invitation to drift.
+- ``_oauth_cache``: ``Dict[str, Dict]`` keyed by ``{customer}_{provider}``.
+  Different namespace, different shape, different lifecycle — kept separate.
+  Per RFC 9700 (OAuth 2.0 BCP 2024) refresh tokens are NOT cached here;
+  ``get_oauth_refresh_token()`` reads from the DB on every call.
+
+Async-safety: every read / write is await-free across the cache check, so
+the GIL guarantees atomicity at the bytecode level — no locks needed. Lazy
+DB fallback inside ``get_api_key`` introduces an await, but the only race
+is "two concurrent reads both miss cache and both fetch from DB" — benign,
+since both writes set the same value.
+
+Neither cache has a TTL today; eviction is on explicit ``remove_*`` or
+``clear_cache()`` (logout). External revocation by an upstream provider is
+not detected.
+"""
 
 import hashlib
-import json
-from pathlib import Path
+import time
+from dataclasses import dataclass, field
 from typing import Dict, Any, Optional, List
 
 from core.config import Settings
@@ -12,6 +36,20 @@ from core.credentials_database import CredentialsDatabase
 from core.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+@dataclass
+class ApiKeyCacheEntry:
+    """One in-memory cache entry per ``{session}_{provider}``.
+
+    Carries the decrypted API key, the models list discovered at validation
+    time, and a monotonic timestamp for future TTL support. Single struct
+    so the two values can never drift — one write site, one evict site.
+    """
+
+    key: str
+    models: List[str] = field(default_factory=list)
+    stored_at: float = field(default_factory=time.monotonic)
 
 
 class AuthService:
@@ -32,11 +70,15 @@ class AuthService:
         self.cache = cache  # Kept for backward compatibility, not used for API keys
         self.database = database  # Kept for backward compatibility
         self.settings = settings
-        # Memory-only cache for decrypted API keys (never persisted to Redis/disk)
-        self._memory_cache: Dict[str, str] = {}
-        # Memory-only cache for models list
-        self._models_cache: Dict[str, List[str]] = {}
-        # Memory-only cache for OAuth tokens
+        # Memory-only cache for decrypted API keys + models (never persisted
+        # to Redis/disk). Single entry per provider; one write site, one
+        # evict site — see module docstring.
+        self._api_key_cache: Dict[str, ApiKeyCacheEntry] = {}
+        # Memory-only cache for OAuth tokens. Different key namespace
+        # (``{customer}_{provider}``); kept separate from API keys.
+        # Per RFC 9700 the refresh_token is NOT cached here — only
+        # access_token + display fields. Refresh-token access goes via
+        # ``get_oauth_refresh_token()`` which reads from the DB.
         self._oauth_cache: Dict[str, Dict[str, Any]] = {}
 
     def hash_api_key(self, api_key: str) -> str:
@@ -66,7 +108,7 @@ class AuthService:
 
             logger.info(f"Storing API key for provider: {provider}, session: {session_id}")
 
-            # Store in encrypted credentials database
+            # 1. DB write first (canonical source).
             await self.credentials_db.save_api_key(
                 provider=provider,
                 api_key=api_key,
@@ -74,9 +116,12 @@ class AuthService:
                 session_id=session_id
             )
 
-            # Cache decrypted key in memory only (for quick access)
-            self._memory_cache[cache_key] = api_key
-            self._models_cache[cache_key] = models
+            # 2. Cache update only after DB write succeeds. One entry,
+            #    not two parallel dicts — see ApiKeyCacheEntry docstring.
+            self._api_key_cache[cache_key] = ApiKeyCacheEntry(
+                key=api_key,
+                models=list(models),
+            )
 
             logger.info(f"Stored and cached API key for {provider}")
             return True
@@ -100,15 +145,23 @@ class AuthService:
         try:
             cache_key = f"{session_id}_{provider}"
 
-            # Check memory cache first (fastest, most secure)
-            if cache_key in self._memory_cache:
-                return self._memory_cache[cache_key]
+            # Check memory cache first (fastest, most secure).
+            entry = self._api_key_cache.get(cache_key)
+            if entry is not None:
+                return entry.key
 
-            # Fallback to encrypted database
+            # Fallback to encrypted database. The lazy fetch also pulls
+            # the models list so we populate the cache entry fully — no
+            # second roundtrip on the next get_stored_models() call.
             api_key = await self.credentials_db.get_api_key(provider, session_id)
             if api_key:
-                # Cache in memory for quick subsequent access
-                self._memory_cache[cache_key] = api_key
+                models = await self.credentials_db.get_api_key_models(
+                    provider, session_id
+                ) or []
+                self._api_key_cache[cache_key] = ApiKeyCacheEntry(
+                    key=api_key,
+                    models=models,
+                )
                 return api_key
 
             return None
@@ -131,13 +184,21 @@ class AuthService:
             cache_key = f"{session_id}_{provider}"
 
             # Check memory cache first
-            if cache_key in self._models_cache:
-                return self._models_cache[cache_key]
+            entry = self._api_key_cache.get(cache_key)
+            if entry is not None:
+                return entry.models
 
-            # Fallback to encrypted database
+            # Fallback to encrypted database. Pull the key alongside so
+            # the cache entry is populated fully — symmetric with
+            # get_api_key()'s lazy-populate path.
             models = await self.credentials_db.get_api_key_models(provider, session_id)
             if models:
-                self._models_cache[cache_key] = models
+                api_key = await self.credentials_db.get_api_key(provider, session_id)
+                if api_key:
+                    self._api_key_cache[cache_key] = ApiKeyCacheEntry(
+                        key=api_key,
+                        models=list(models),
+                    )
                 return models
 
             return []
@@ -159,12 +220,11 @@ class AuthService:
         try:
             cache_key = f"{session_id}_{provider}"
 
-            # Remove from memory cache
-            self._memory_cache.pop(cache_key, None)
-            self._models_cache.pop(cache_key, None)
-
-            # Remove from encrypted database
+            # 1. DB delete first (canonical source).
             await self.credentials_db.delete_api_key(provider, session_id)
+
+            # 2. Cache evict only after DB succeeds. One pop, not two.
+            self._api_key_cache.pop(cache_key, None)
 
             logger.info(f"Removed API key for {provider}")
             return True
@@ -192,8 +252,7 @@ class AuthService:
         Should be called on user logout to ensure decrypted keys
         don't persist in memory longer than necessary.
         """
-        self._memory_cache.clear()
-        self._models_cache.clear()
+        self._api_key_cache.clear()
         self._oauth_cache.clear()
         logger.debug("Cleared all credential memory caches")
 
@@ -226,6 +285,7 @@ class AuthService:
         try:
             cache_key = f"{customer_id}_{provider}"
 
+            # 1. DB write first (canonical source).
             await self.credentials_db.save_oauth_tokens(
                 provider=provider,
                 access_token=access_token,
@@ -236,13 +296,15 @@ class AuthService:
                 customer_id=customer_id
             )
 
-            # Cache in memory
+            # 2. Cache only the access token + display fields. Refresh
+            #    tokens are long-lived secrets per RFC 9700 (OAuth 2.0
+            #    BCP 2024) and are NOT cached in memory — readers go
+            #    through ``get_oauth_refresh_token()`` which hits the DB.
             self._oauth_cache[cache_key] = {
                 "access_token": access_token,
-                "refresh_token": refresh_token,
                 "email": email,
                 "name": name,
-                "scopes": scopes
+                "scopes": scopes,
             }
 
             logger.info(f"Stored OAuth tokens for {provider}")
@@ -257,32 +319,79 @@ class AuthService:
         provider: str,
         customer_id: str = "owner"
     ) -> Optional[Dict[str, Any]]:
-        """Get OAuth tokens from cache or encrypted database.
+        """Get OAuth display tokens from cache or encrypted database.
+
+        Returns ``{access_token, email, name, scopes}`` only — the
+        refresh token is intentionally NOT included. Callers that need
+        the refresh token (token-refresh + revoke flows) must call
+        :meth:`get_oauth_refresh_token` explicitly. This split implements
+        RFC 9700 (OAuth 2.0 BCP 2024) §5.1 — refresh tokens are
+        long-lived secrets and must not live in process memory.
 
         Args:
             provider: OAuth provider name
             customer_id: Customer identifier
 
         Returns:
-            Dict with access_token, refresh_token, email, name, scopes or None
+            Dict with ``access_token``, ``email``, ``name``, ``scopes`` or
+            ``None`` if no tokens are stored.
         """
         try:
             cache_key = f"{customer_id}_{provider}"
 
-            # Check memory cache first
+            # Check memory cache first.
             if cache_key in self._oauth_cache:
                 return self._oauth_cache[cache_key]
 
-            # Fallback to encrypted database
+            # Fallback to encrypted database. Strip refresh_token before
+            # caching so the in-memory copy is short-lived-display-only.
             tokens = await self.credentials_db.get_oauth_tokens(provider, customer_id)
             if tokens:
-                self._oauth_cache[cache_key] = tokens
-                return tokens
+                display = {
+                    "access_token": tokens.get("access_token"),
+                    "email": tokens.get("email"),
+                    "name": tokens.get("name"),
+                    "scopes": tokens.get("scopes"),
+                }
+                self._oauth_cache[cache_key] = display
+                return display
 
             return None
 
         except Exception as e:
             logger.error("Failed to get OAuth tokens", provider=provider, error=str(e))
+            return None
+
+    async def get_oauth_refresh_token(
+        self,
+        provider: str,
+        customer_id: str = "owner",
+    ) -> Optional[str]:
+        """Read the OAuth refresh token directly from the encrypted DB.
+
+        Per RFC 9700 (OAuth 2.0 BCP 2024) §5.1 the refresh token is a
+        long-lived bearer secret and must not be cached in process
+        memory. Every call decrypts from disk; this is acceptable
+        because refresh tokens are accessed rarely (only at access-token
+        renewal + on revoke / logout).
+
+        Args:
+            provider: OAuth provider name
+            customer_id: Customer identifier
+
+        Returns:
+            The decrypted refresh token, or ``None`` if no tokens are
+            stored for ``(provider, customer_id)``.
+        """
+        try:
+            tokens = await self.credentials_db.get_oauth_tokens(provider, customer_id)
+            if tokens:
+                return tokens.get("refresh_token")
+            return None
+        except Exception as e:
+            logger.error(
+                "Failed to get OAuth refresh token", provider=provider, error=str(e)
+            )
             return None
 
     async def refresh_oauth_tokens_with_breaker(
