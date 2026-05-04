@@ -21,13 +21,31 @@ const AI_PLACEHOLDERS: Record<string, string> = {
   openai: 'sk-...', anthropic: 'sk-ant-...', gemini: 'AIza...',
   groq: 'gsk_...', cerebras: 'csk-...', openrouter: 'sk-or-...',
   deepseek: 'sk-...', kimi: 'sk-...', mistral: 'sk-...',
+  // Local LLM servers — the field stores the base URL, not an API key.
+  // Backend reads it from the `{provider}_proxy` credential, the same
+  // path cloud providers already use for Ollama-style auth delegation.
+  ollama: 'http://localhost:11434/v1',
+  lmstudio: 'http://localhost:1234/v1',
 };
 
-const aiProviders: ProviderConfig[] = Object.entries(AI_PROVIDER_META).map(([id, meta]) => ({
-  id, name: meta.label, category: 'ai', categoryLabel: 'AI Providers',
-  color: meta.color, kind: 'apiKey' as const, iconRef: meta.iconRef, hasDefaults: true,
-  fields: [{ key: 'apiKey', label: 'API Key', secret: true, placeholder: AI_PLACEHOLDERS[id], required: true }],
-}));
+// Local LLM servers reuse the existing `{provider}_proxy` credential
+// for their base URL — no new field plumbing. The single-field
+// ApiKeyPanel renders this as "Base URL" via the override below; the
+// backend's _LocalLLM.resolve() returns a placeholder api_key so the
+// "API key required" check in execute_chat passes.
+const LOCAL_PROVIDER_IDS = new Set(['ollama', 'lmstudio']);
+
+const aiProviders: ProviderConfig[] = Object.entries(AI_PROVIDER_META).map(([id, meta]) => {
+  const isLocal = LOCAL_PROVIDER_IDS.has(id);
+  const fields = isLocal
+    ? [{ key: `${id}_proxy`, label: 'Base URL', placeholder: AI_PLACEHOLDERS[id], required: true }]
+    : [{ key: 'apiKey', label: 'API Key', secret: true, placeholder: AI_PLACEHOLDERS[id], required: true }];
+  return {
+    id, name: meta.label, category: 'ai', categoryLabel: 'AI Providers',
+    color: meta.color, kind: 'apiKey' as const, iconRef: meta.iconRef, hasDefaults: true,
+    fields,
+  };
+});
 
 // ============================================================================
 // ALL PROVIDERS — flat array. Categories derived below.

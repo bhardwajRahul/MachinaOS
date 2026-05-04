@@ -251,6 +251,10 @@
     "icon": "lobehub:kimi",
     "color": "#bd93f9"
   },
+  "lmstudioChatModel": {
+    "icon": "lobehub:lmstudio",
+    "color": "#4F8EFF"
+  },
   "location": {
     "icon": "📍",
     "skill": "location-skill"
@@ -272,6 +276,10 @@
   },
   "networkMonitor": {
     "icon": "📡"
+  },
+  "ollamaChatModel": {
+    "icon": "lobehub:ollama",
+    "color": "#000000"
   },
   "openaiChatModel": {
     "icon": "lobehub:openai",

@@ -1,15 +1,25 @@
 """LLM provider credentials (Wave 11.E.1 — per-domain).
 
-One :class:`ApiKeyCredential` per provider. Used by the 9 chat-model
+One :class:`ApiKeyCredential` per provider. Used by the chat-model
 plugins in this folder (openai, anthropic, gemini, openrouter, groq,
-cerebras, deepseek, kimi, mistral) plus the xAI credential referenced
-by agent plugins. At execution time the plugin's LangChain / native
-SDK client pulls the key directly from :mod:`services.auth`; this
-class is the Credentials-modal + discovery manifest, not the runtime
-client.
+cerebras, deepseek, kimi, mistral, ollama, lmstudio) plus the xAI
+credential referenced by agent plugins. At execution time the plugin's
+LangChain / native SDK client pulls the key directly from
+:mod:`services.auth`; this class is the Credentials-modal + discovery
+manifest, not the runtime client.
+
+Local servers (Ollama, LM Studio) follow the same shape as the cloud
+credentials but their api_key is optional — many users run them on
+localhost with no auth. The existing ``{provider}_proxy`` mechanism
+in :func:`services.ai.AIService.create_model` already handles the
+"override base_url + use placeholder api_key" path; the credential
+class only needs to return a placeholder when nothing is stored so
+the central "API key is required" check in ``execute_chat`` passes.
 """
 
 from __future__ import annotations
+
+from typing import Any, Dict
 
 from services.plugin.credential import ApiKeyCredential
 
@@ -95,3 +105,36 @@ class XaiCredential(_LLMApiKey):
     display_name = "xAI (Grok)"
     icon = "asset:xai"
     docs_url = "https://console.x.ai"
+
+
+class _LocalLLM(_LLMApiKey):
+    """Base for local-server credentials (Ollama, LM Studio).
+
+    Same shape as :class:`_LLMApiKey`, but ``resolve()`` returns the
+    documented Ollama placeholder when no key is stored instead of
+    raising. The user's custom server address rides on the existing
+    ``{id}_proxy`` credential — :func:`services.ai.AIService.create_model`
+    already reads it and OpenAIProvider already overrides ``base_url``
+    + forces ``api_key="ollama"``. Nothing else to wire.
+    """
+
+    @classmethod
+    async def resolve(cls, *, user_id: str = "owner") -> Dict[str, Any]:
+        from core.container import container
+
+        api_key = await container.auth_service().get_api_key(cls.id)
+        return {"api_key": api_key or "ollama"}
+
+
+class OllamaCredential(_LocalLLM):
+    id = "ollama"
+    display_name = "Ollama"
+    icon = "lobehub:ollama"
+    docs_url = "https://ollama.com/download"
+
+
+class LMStudioCredential(_LocalLLM):
+    id = "lmstudio"
+    display_name = "LM Studio"
+    icon = "lobehub:lmstudio"
+    docs_url = "https://lmstudio.ai/docs/local-server"

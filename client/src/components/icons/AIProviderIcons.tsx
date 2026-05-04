@@ -12,6 +12,8 @@ import Cerebras from '@lobehub/icons/es/Cerebras';
 import DeepSeek from '@lobehub/icons/es/DeepSeek';
 import Kimi from '@lobehub/icons/es/Kimi';
 import Mistral from '@lobehub/icons/es/Mistral';
+import Ollama from '@lobehub/icons/es/Ollama';
+import LmStudio from '@lobehub/icons/es/LmStudio';
 import { dracula, solarized } from '../../styles/theme';
 
 // Icon size constant for consistency
@@ -58,6 +60,16 @@ export const MistralIcon: React.FC<{ size?: number }> = ({ size = ICON_SIZE }) =
   <Mistral.Color size={size} />
 );
 
+// Local LLM servers — Ollama exposes a Color variant; LmStudio's lobehub
+// entry only ships an Avatar so we use that for parity.
+export const OllamaIcon: React.FC<{ size?: number }> = ({ size = ICON_SIZE }) => (
+  <Ollama.Avatar size={size} />
+);
+
+export const LmStudioIcon: React.FC<{ size?: number }> = ({ size = ICON_SIZE }) => (
+  <LmStudio.Avatar size={size} />
+);
+
 // Map provider IDs to their icon components
 export const AI_PROVIDER_ICONS: Record<string, React.FC<{ size?: number }>> = {
   openai: OpenAIIcon,
@@ -69,6 +81,8 @@ export const AI_PROVIDER_ICONS: Record<string, React.FC<{ size?: number }>> = {
   deepseek: DeepSeekIcon,
   kimi: KimiIcon,
   mistral: MistralIcon,
+  ollama: OllamaIcon,
+  lmstudio: LmStudioIcon,
 };
 
 // Centralized provider metadata (icon ref, theme color, display label).
@@ -86,6 +100,8 @@ export const AI_PROVIDER_META: Record<string, { iconRef: string; Icon: React.FC<
   deepseek:   { iconRef: 'lobehub:DeepSeek',   Icon: DeepSeekIcon,   color: dracula.cyan,     label: 'DeepSeek' },
   kimi:       { iconRef: 'lobehub:Kimi',       Icon: KimiIcon,       color: dracula.purple,   label: 'Kimi' },
   mistral:    { iconRef: 'lobehub:Mistral',    Icon: MistralIcon,    color: dracula.pink,     label: 'Mistral' },
+  ollama:     { iconRef: 'lobehub:Ollama',     Icon: OllamaIcon,     color: dracula.foreground, label: 'Ollama' },
+  lmstudio:   { iconRef: 'lobehub:LmStudio',   Icon: LmStudioIcon,   color: solarized.cyan,   label: 'LM Studio' },
 };
 
 // Get icon component by provider ID

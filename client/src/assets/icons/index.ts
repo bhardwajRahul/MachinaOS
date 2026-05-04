@@ -44,6 +44,8 @@ import OpenRouter from '@lobehub/icons/es/OpenRouter';
 import DeepSeek from '@lobehub/icons/es/DeepSeek';
 import Kimi from '@lobehub/icons/es/Kimi';
 import Mistral from '@lobehub/icons/es/Mistral';
+import Ollama from '@lobehub/icons/es/Ollama';
+import LmStudio from '@lobehub/icons/es/LmStudio';
 
 type RawSvg = string;
 
@@ -135,6 +137,8 @@ const LOBEHUB_BRANDS: Readonly<Record<string, any>> = {
   deepseek: DeepSeek,
   kimi: Kimi,
   mistral: Mistral,
+  ollama: Ollama,
+  lmstudio: LmStudio,
 };
 
 const ICON_LIBRARIES: Readonly<Record<string, LibraryResolver>> = {

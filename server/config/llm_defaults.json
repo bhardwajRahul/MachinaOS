@@ -250,6 +250,32 @@
         "_default": 131072
       },
       "temperature_range": [0.0, 1.5]
+    },
+
+    "ollama": {
+      "_description": "Local Ollama server (OpenAI-compatible /v1). The shape mirrors deepseek/kimi/mistral: base_url + models_endpoint, no auth field. The user's custom server address lives in the {provider}_proxy credential (existing Ollama-style auth-delegation path) which OpenAIProvider treats as the API base.",
+      "default_model": "llama3.2:3b",
+      "detection_patterns": ["ollama"],
+      "base_url": "http://localhost:11434/v1",
+      "models_endpoint": "http://localhost:11434/v1/models",
+      "api_key_param": "api_key",
+      "max_tokens_param": "max_tokens",
+      "max_output_tokens": {"_default": 4096},
+      "context_length": {"_default": 32768},
+      "temperature_range": [0.0, 2.0]
+    },
+
+    "lmstudio": {
+      "_description": "Local LM Studio server (pure OpenAI-compatible). Same OpenAIProvider+base_url path as deepseek/kimi/mistral; user's custom URL rides via {provider}_proxy.",
+      "default_model": "local-model",
+      "detection_patterns": ["lmstudio", "lm_studio", "lm-studio"],
+      "base_url": "http://localhost:1234/v1",
+      "models_endpoint": "http://localhost:1234/v1/models",
+      "api_key_param": "api_key",
+      "max_tokens_param": "max_tokens",
+      "max_output_tokens": {"_default": 4096},
+      "context_length": {"_default": 32768},
+      "temperature_range": [0.0, 2.0]
     }
   }
 }

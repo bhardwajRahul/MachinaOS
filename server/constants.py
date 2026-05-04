@@ -20,6 +20,10 @@ AI_CHAT_MODEL_TYPES: FrozenSet[str] = frozenset([
     'deepseekChatModel',
     'kimiChatModel',
     'mistralChatModel',
+    # Local-server providers (Phase 1 of the LiteLLM adoption — see
+    # plans/i-plan-to-implement-nested-orbit.md).
+    'ollamaChatModel',
+    'lmstudioChatModel',
 ])
 
 AI_AGENT_TYPES: FrozenSet[str] = frozenset([

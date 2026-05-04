@@ -62,6 +62,14 @@
       "codestral-latest": {"input": 0.30, "output": 0.90},
       "open-mistral-nemo": {"input": 0.15, "output": 0.15},
       "_default": {"input": 0.20, "output": 0.60}
+    },
+    "ollama": {
+      "_description": "Local inference is free at the API layer — user-borne hardware costs are not tracked here.",
+      "_default": {"input": 0.00, "output": 0.00}
+    },
+    "lmstudio": {
+      "_description": "Local inference — same zero-cost convention as ollama.",
+      "_default": {"input": 0.00, "output": 0.00}
     }
   },
 

@@ -58,6 +58,7 @@ dependencies = [
     "langchain-cerebras==0.8.2",
     "langgraph==1.1.6",
     "deepagents==0.5.2",
+
     # Pydantic 2.13 changed validator ordering; pin to main's 2.12 line
     # to keep AIMessage construction/tool-schema generation identical.
     "pydantic==2.12.5",

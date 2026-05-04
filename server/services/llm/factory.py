@@ -12,8 +12,14 @@ logger = get_logger(__name__)
 # Providers with dedicated SDK implementations
 _DEDICATED_PROVIDERS = frozenset({"anthropic", "openai", "gemini", "openrouter"})
 
-# All providers supported by native SDK path (dedicated + OpenAI-compatible via base_url)
-NATIVE_PROVIDERS = _DEDICATED_PROVIDERS | frozenset({"xai", "deepseek", "kimi", "mistral"})
+# All providers supported by native SDK path (dedicated + OpenAI-compatible via base_url).
+# Local servers (ollama, lmstudio) expose OpenAI-compatible /v1 endpoints, so they fall
+# through to OpenAIProvider with base_url from llm_defaults.json — same path as deepseek/
+# kimi/mistral. The user's custom URL rides via the existing {provider}_proxy credential.
+NATIVE_PROVIDERS = _DEDICATED_PROVIDERS | frozenset({
+    "xai", "deepseek", "kimi", "mistral",
+    "ollama", "lmstudio",
+})
 
 
 def create_provider(
