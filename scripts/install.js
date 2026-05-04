@@ -159,7 +159,7 @@ try {
   // Calculate total steps
   let totalSteps = 1;  // .env always
   if (!clientDistExists) totalSteps += 2;  // client deps + build
-  totalSteps += 1;  // Python deps always
+  totalSteps += 2;  // Python deps + bytecode compile
   let step = 0;
 
   // Create .env if needed
@@ -197,6 +197,21 @@ try {
     run('uv venv', serverDir);  // 5 min default
   }
   run('uv sync', serverDir, 600000);  // 10 min timeout
+
+  // Pre-compile our Python sources to optimised bytecode (.opt-1.pyc).
+  // `-O` strips assertions and `__debug__` branches; `-q` silences
+  // per-file output; `-j 0` parallelises across CPU cores. Scoped to
+  // our own source dirs — `uv sync` already compiles `.venv/` and
+  // some site-packages contain non-Python template files that would
+  // log spurious errors. Failure is non-fatal: the runtime regenerates
+  // missing .pyc on first import. Trims a few seconds off cold start.
+  step++;
+  console.log(`[${step}/${totalSteps}] Compiling Python bytecode...`);
+  try {
+    run('uv run python -O -m compileall -q -j 0 services core nodes routers models middleware main.py constants.py', serverDir, 120000);
+  } catch (err) {
+    console.log(`  Warning: bytecode compilation failed (non-fatal): ${err.message}`);
+  }
 
   // WhatsApp RPC is now an npm dependency - binary downloaded via postinstall
   console.log('');

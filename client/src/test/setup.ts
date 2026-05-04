@@ -45,6 +45,7 @@ if (typeof globalThis.IntersectionObserver === 'undefined') {
     takeRecords() { return []; }
     root = null;
     rootMargin = '';
+    scrollMargin = '';
     thresholds = [];
   }
   // TS infers the assignment is fine now (target widened); kept only

@@ -26,7 +26,10 @@ jobs:
         run: pnpm --filter react-flow-client run lint
 
       - name: TypeScript check
-        run: pnpm --filter react-flow-client exec tsc --noEmit
+        # Uses tsgo (`@typescript/native-preview`, pinned in client/package.json).
+        # ~5x faster than tsc on this codebase; both pass identically.
+        # `typecheck:tsc` script remains available as a fallback if tsgo regresses.
+        run: pnpm --filter react-flow-client run typecheck
 
   # Test build and start from source (cross-platform)
   test-build-start:

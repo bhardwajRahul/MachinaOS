@@ -94,12 +94,72 @@ export default defineConfig(({ mode }) => {
       host: true
     },
     build: {
-      // antd + reactflow are large libraries - this is expected
-      chunkSizeWarningLimit: 1500,
+      // ES2022 unlocks native `findLast`, optional-chaining-assignment,
+      // class-fields without polyfills. Browser baseline: Chrome 94+,
+      // Firefox 93+, Safari 15.4+ — within React 19 / Tailwind 4's range.
+      target: 'es2022',
+      // Lowered from 1500 KB once manualChunks splits out the heavy libs.
+      // 850 KB covers the largest legitimate chunk today (`vendor-icons`,
+      // ~800 KB raw / 210 KB gz from lucide-react + @lobehub/icons brand
+      // SVGs that resist tree-shaking). The cap still catches new chunk
+      // bloat in the entry / route bundles.
+      chunkSizeWarningLimit: 850,
       // Emit sourcemaps only when running the bundle analyzer so the
       // visualizer can attribute bytes to source files accurately.
       // Skipped in normal production builds to keep build time down.
       sourcemap: analyze,
+      rollupOptions: {
+        output: {
+          // Split heavy npm libs into their own cacheable chunks so the
+          // main bundle stays lean and unrelated dependency churn doesn't
+          // bust the user's cache. Group rationale:
+          //   vendor-react    — core framework + form runtime
+          //   vendor-flow     — reactflow is huge and only canvas pages use it
+          //   vendor-radix    — accessibility primitives, used widely
+          //   vendor-icons    — lucide + lobehub brand icons
+          //   vendor-query    — TanStack Query + persistence
+          //   vendor-markdown — markdown rendering stack (chat / docs panels)
+          //   vendor-misc     — small but heavyweight utilities
+          // Anything not listed falls into the default route/entry chunks.
+          manualChunks: {
+            'vendor-react': [
+              'react',
+              'react-dom',
+              'react-hook-form',
+              '@hookform/resolvers',
+            ],
+            'vendor-flow': ['reactflow'],
+            'vendor-radix': [
+              'radix-ui',
+              '@radix-ui/react-collapsible',
+              '@radix-ui/react-dialog',
+              '@radix-ui/react-slot',
+            ],
+            'vendor-icons': ['lucide-react', '@lobehub/icons'],
+            'vendor-query': [
+              '@tanstack/react-query',
+              '@tanstack/query-sync-storage-persister',
+              '@tanstack/react-query-persist-client',
+              '@lukemorales/query-key-factory',
+            ],
+            'vendor-markdown': [
+              'react-markdown',
+              'remark-gfm',
+              'remark-breaks',
+              'prismjs',
+              'react-simple-code-editor',
+              '@uiw/react-json-view',
+            ],
+            'vendor-misc': [
+              'idb-keyval',
+              'fuzzysort',
+              'cmdk',
+              'sonner',
+              'qrcode.react',
+            ],
+          },
+        },
+      },
     },
   }
 })

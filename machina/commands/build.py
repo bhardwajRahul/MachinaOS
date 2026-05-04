@@ -135,28 +135,54 @@ def build_command() -> None:
     env_path = root / ".env"
     template_path = root / ".env.template"
 
-    # Step markers go through ``console.log`` so each [N/5] line is
+    # Step markers go through ``console.log`` so each [N/6] line is
     # timestamped — diff between consecutive timestamps is the wall-clock
     # cost of that step, no manual instrumentation needed.
     if not env_path.exists() and template_path.exists():
         shutil.copy2(template_path, env_path)
-        console.log("[0/5] Created .env from template")
+        console.log("[0/6] Created .env from template")
 
     if not is_postinstall:
-        console.log("[1/5] Installing dependencies...")
+        console.log("[1/6] Installing dependencies...")
         run(["pnpm", "install"], cwd=root)
     else:
-        console.log("[1/5] Dependencies already installed by package manager")
+        console.log("[1/6] Dependencies already installed by package manager")
 
-    console.log("[2/5] Building client...")
+    console.log("[2/6] Building client...")
     run(["pnpm", "--filter", "react-flow-client", "run", "build"], cwd=root)
 
-    console.log("[3/4] Installing Python dependencies...")
+    # Pre-bundle the Node.js sidecar (server/nodejs) with esbuild so the
+    # production `npm start` runs `node dist/index.js` instead of
+    # interpreting `tsx src/index.ts`. Saves ~500ms-1s of cold start
+    # whenever the executor is launched. The bundle keeps Express
+    # external (it stays in node_modules), so the patch flow is intact.
+    console.log("[3/6] Building Node.js sidecar...")
+    run(["pnpm", "--filter", "machinaos-nodejs-executor", "run", "build"], cwd=root)
+
+    console.log("[4/6] Installing Python dependencies...")
     if not (server_dir / ".venv").exists():
         run(["uv", "venv"], cwd=server_dir)
     run(["uv", "sync"], cwd=server_dir)
 
-    console.log("[4/4] Verifying edgymeow binary...")
+    # Pre-compile our Python sources to optimised bytecode (.opt-1.pyc).
+    # `-O` strips `assert` statements + `__debug__` branches; `-q`
+    # silences per-file output (errors still print); `-j 0` parallelises
+    # across all CPU cores. Cuts a measurable few seconds off cold
+    # start by avoiding source-to-bytecode work on first import.
+    #
+    # Scoped to the project's own source dirs — `uv sync` already
+    # compiles `.venv/` packages, and `tests/` ships outside the
+    # tarball. Compiling `.venv/` is wasted work and fails on cookiecutter
+    # template files inside packages like crawlee that aren't real Python.
+    console.log("[5/6] Compiling Python bytecode...")
+    source_dirs = ["services", "core", "nodes", "routers", "models", "middleware", "main.py", "constants.py"]
+    run(
+        ["uv", "run", "python", "-O", "-m", "compileall", "-q", "-j", "0", *source_dirs],
+        cwd=server_dir,
+        check=False,  # missing pyc is non-fatal — runtime regenerates as needed
+    )
+
+    console.log("[6/6] Verifying edgymeow binary...")
     bin_name = "edgymeow-server.exe" if sys.platform == "win32" else "edgymeow-server"
     edgymeow_bin = root / "node_modules" / "edgymeow" / "bin" / bin_name
     if edgymeow_bin.exists():
