@@ -60,7 +60,7 @@ backend handle_validate_api_key (websocket.py:990):
   -> ai_service.fetch_models(provider, key)   // hits provider /v1/models endpoint
   -> auth_service.store_api_key(provider, key, models, session_id='default')
      -> credentials_db.save_api_key  -> EncryptionService.encrypt -> EncryptedAPIKey row
-     -> _memory_cache[session_id_provider] = key
+     -> _api_key_cache[session_id_provider] = ApiKeyCacheEntry(key=..., models=[...])
   -> broadcaster.update_api_key_status(provider, valid=True, has_key=True, models=[...])
   -> return {valid: True, models: [...]}
 Frontend resolves Promise:
@@ -314,8 +314,8 @@ All handlers registered in [server/routers/websocket.py](../server/routers/webso
 ### 4.2 Single point of access
 All credential reads/writes go through [`AuthService`](../server/services/auth.py):
 - API keys: `store_api_key(provider, api_key, models, session_id='default')` / `get_api_key(provider, session_id)` / `remove_api_key(provider, session_id)` / `get_stored_models(provider, session_id)`.
-- OAuth tokens: `store_oauth_tokens(provider, access, refresh, email=None, name=None, scopes=None, customer_id='owner')` / `get_oauth_tokens(provider, customer_id)` / `remove_oauth_tokens(provider, customer_id)`.
-- Memory caches: `_memory_cache` (API keys), `_models_cache` (models lists), `_oauth_cache` (OAuth tokens). All hit BEFORE the encrypted DB. `clear_cache()` empties all three (called on logout).
+- OAuth tokens: `store_oauth_tokens(provider, access, refresh, email=None, name=None, scopes=None, customer_id='owner')` / `get_oauth_tokens(provider, customer_id)` / `remove_oauth_tokens(provider, customer_id)` / `get_oauth_refresh_token(provider, customer_id)` (DB-only — see RFC 9700 below).
+- Memory caches: `_api_key_cache: Dict[str, ApiKeyCacheEntry]` (decrypted API keys + models in one dataclass entry per `{session}_{provider}`) and `_oauth_cache` (access tokens + display fields only). Both hit BEFORE the encrypted DB; `clear_cache()` empties both (called on logout). Per RFC 9700 (OAuth 2.0 BCP, 2024) the `_oauth_cache` does NOT carry `refresh_token` — refresh tokens are long-lived secrets and must not live in process memory; `get_oauth_refresh_token()` reads from the encrypted DB on every call. Pre-Wave-12 the cache was split into `_memory_cache` (key) + `_models_cache` (models) sharing the same key shape with no shared invalidation; now collapsed into one entry so the two values can never drift.
 
 ### 4.3 Two-table split
 
@@ -345,7 +345,7 @@ Provider × table examples:
 
 These are the non-negotiable behaviours the test suite enforces. The refactor is acceptable iff every test in [server/tests/credentials/](../server/tests/credentials) and [client/src/test/](../client/src/test) still passes without modification.
 
-1. **WebSocket message types** for save/validate/delete/get of any API key are exactly `validate_api_key` / `save_api_key` / `get_stored_api_key` / `delete_api_key`, with payload shape `{provider, api_key, [session_id], [models]}`. The response of `get_stored_api_key` exposes `has_key` (snake_case) and the WebSocketContext maps it to `hasKey`.
+1. **WebSocket message types** for save/validate/delete/get of any API key are exactly `validate_api_key` / `save_api_key` / `get_stored_api_key` / `delete_api_key`, with payload shape `{provider, api_key, [session_id], [models]}`. The response of `get_stored_api_key` exposes `hasKey` (camelCase post-Wave-12; the WebSocketContext consumes it directly). Note: `ApiKeyStatus.hasKey` was retired on the frontend — "is stored" comes from the catalogue's `provider.stored` flag via `useProviderStored(id)` (single source of truth).
 2. **OAuth login flows** never expose `client_secret` in the rendered DOM after save — the input is replaced by a "Configured" indicator.
 3. **Google tokens** are read exclusively via `auth_service.get_oauth_tokens('google')`. No call site uses `get_api_key('google_access_token')` or any equivalent.
 4. **Email** with `email_provider='custom'` writes BOTH `email_imap_*` and `email_smtp_*` keys (host + port + encryption for each side). With any other provider, those keys MUST NOT be written.

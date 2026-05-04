@@ -574,9 +574,12 @@ The frontend identifies plugin commands by **WebSocket message type**
 strings (`telegram_connect`, `telegram_status`, …). Moving the handler
 implementation between Python files is invisible to the frontend so
 long as the registered keys stay the same. The
-`credential_providers.json` declarative config and the
-`credentials/providers.tsx` registry are likewise stable across
-backend reorganisations.
+`server/config/credential_providers.json` declarative config — served
+to the frontend via `handle_get_credential_catalogue` and consumed by
+`useCatalogueQuery` — is likewise stable across backend reorganisations.
+(The pre-Wave-13 `client/src/components/credentials/providers.tsx`
+static fallback no longer exists; the server catalogue is the single
+source of truth for the credentials panel.)
 
 This is why the telegram refactor changed zero frontend code despite
 moving 754 lines out of `services/telegram_service.py`.

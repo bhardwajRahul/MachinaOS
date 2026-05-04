@@ -266,6 +266,40 @@ Closes the surviving pre-Wave-11 tribal patterns and the perf hotspots six paral
 - Canvas animations have no light/dark branch and no hardcoded hexes. The `colors` arg coming from `theme.ts` carries everything.
 - Catalogue invalidation has one debounced funnel; broadcast handlers don't call `queryClient.invalidateQueries` directly.
 
+## Wave 13 — Credentials: DB as single source of truth + symmetric broadcasts + cache dedup (May 2026)
+
+Driven by three sub-agent audits (broadcast asymmetry, duplicated caches, parallel sources of truth) plus a research pass against modern (2024–2025) standards (OWASP, RFC 9700, CloudEvents 1.0). Plan: [`.claude/plans/properly-fix-the-tech-dreamy-tarjan.md`](../../.claude/plans/properly-fix-the-tech-dreamy-tarjan.md). Commit `c94a610`. 17 files changed, +698 / -308.
+
+| Section | What it delivers | Where |
+|---|---|---|
+| A — Symmetric broadcasts (CloudEvents v1.0) | New `broadcaster.broadcast_credential_event(type, *, provider, customer_id)` helper wraps `WorkflowEvent` from `services/events/envelope.py` (the same envelope the Wave 12 EventSource framework uses). `handle_save_api_key` → `credential.api_key.saved`. `handle_delete_api_key` → BOTH `update_api_key_status(valid=False, has_key=False)` (clears `apiKeyStatuses[provider]`) AND `credential.api_key.deleted` (catalogue refetch). `handle_twitter_logout` + `handle_google_logout` → `credential.oauth.disconnected`. The dead-letter `credential_catalogue_updated` event the frontend already handled is finally emitted. | `services/status_broadcaster.py`, `routers/websocket.py`, `services/events/envelope.py` (reused) |
+| B — Backend cache dedup | `AuthService._memory_cache + _models_cache` collapsed into a single `_api_key_cache: Dict[str, ApiKeyCacheEntry]` dataclass — one write site, one evict site, no drift path. Per RFC 9700 (OAuth 2.0 BCP 2024) the `_oauth_cache` no longer carries `refresh_token`; new `get_oauth_refresh_token(provider, customer)` reads from the encrypted DB on every call. All 5 callers migrated (`routers/twitter.py`, `routers/websocket.py` × 2, `services/handlers/google_auth.py`). `ws_handler` decorator now uses `functools.wraps` so `__wrapped__` is set (enables introspection-based tests). | `services/auth.py`, `routers/{twitter,websocket}.py`, `services/handlers/google_auth.py` |
+| C — Frontend SoT + OWASP | Deleted 200-LOC `client/src/components/credentials/providers.tsx` static fallback — `useCatalogueQuery` is the only source. Cold-boot renders `<Skeleton>`; server-unreachable shows explicit error state. Dropped `ApiKeyStatus.hasKey` (duplicated catalogue's `provider.stored` with no synchronisation contract); two new selector hooks `useProviderStored(id)` + `useStoredProviderCount()` read the catalogue. **OWASP fix**: `'credentialValues'` removed from `PERSISTED_KEY_PREFIXES` per OWASP HTML5 Security Cheat Sheet / ASVS V9.9 — decrypted API keys must not live in `localStorage` (readable via DevTools on shared / compromised browsers). In-memory TanStack Query cache (`gcTime: ∞`) keeps the form populated for the session lifetime; on reload the panel refetches from the backend. | `CredentialsModal.tsx`, `WebSocketContext.tsx`, `useCatalogueQuery.ts`, `lib/queryPersist.ts`, `SquareNode.tsx`, `TopToolbar.tsx`, deleted `credentials/providers.tsx` |
+| D — Pytest invariant | New `server/tests/credentials/test_credential_broadcasts.py` (14 tests). Locks via `inspect.getsource`: every credential-mutation handler must call `update_api_key_status` or `broadcast_credential_event` (delete-style: both). Locks the CloudEvents v1.0 envelope shape (specversion / id / source / type / subject). Locks AuthService DB-write-then-cache-update ordering and the no-refresh-token-in-`_oauth_cache` rule. | `tests/credentials/test_credential_broadcasts.py` |
+| E — Docs | New "Source of Truth", "Broadcast Contract", "No hand-maintained frontend provider lists" sections in `credentials_encryption.md`. Notes-section entry in `CLAUDE.md`. Stale references corrected in `frontend_architecture.md`, `status_broadcaster.md`, `credentials_panel.md`, `credentials_scaling/architecture.md`. | `docs-internal/{credentials_encryption,frontend_architecture,status_broadcaster,credentials_panel,credentials_scaling/architecture}.md`, `CLAUDE.md` |
+
+**Wave 13 numbers:**
+- 4 retired patterns: silent `save_api_key` / silent `delete_api_key` / silent OAuth logout / dead-letter `credential_catalogue_updated`.
+- 2 split caches → 1 `_api_key_cache` dataclass.
+- 1 RFC-9700 violation fixed (`refresh_token` removed from `_oauth_cache`; DB-only helper added).
+- 1 OWASP violation fixed (`credentialValues` removed from `localStorage` persistence).
+- 1 200-LOC parallel registry deleted (`providers.tsx`).
+- 1 duplicated UI flag retired (`ApiKeyStatus.hasKey` → catalogue's `provider.stored`).
+- 14 new pytest invariants. 118/118 credentials tests pass. 108/108 NodeSpec invariants pass. `tsc --noEmit` clean.
+
+**Architectural delta (permanent):**
+- `CredentialsDatabase` (encrypted SQLite) is the **single canonical source** for every credential. `AuthService._api_key_cache` + `_oauth_cache` are derived caches with explicit invalidation contracts; no path lets them drift from the DB.
+- Every credential-mutation handler MUST emit `update_api_key_status` and/or `broadcast_credential_event`. Pytest invariant locks the contract.
+- All credential-broadcast bodies are CloudEvents v1.0 envelopes via the existing `WorkflowEvent` mirror — future EventBridge / Knative interop is a JSON-schema swap rather than a rewrite.
+- Frontend has zero hand-maintained provider lists. Adding a new provider is a backend-only change to `server/config/credential_providers.json`.
+- No decrypted credential value ever lands in `localStorage` (OWASP).
+
+**Out of scope (deferred, with rationale):**
+- **Argon2id KDF migration** (B5 in plan) — needs new dependency (`argon2-cffi`) + dedicated plan; PBKDF2 600k stays (OWASP-still-acceptable). Existing deployments can't migrate without re-encryption pass anyway.
+- **TTL on `_api_key_cache` / `_oauth_cache`** — `cachetools.TTLCache` adoption when staleness semantics for upstream-revoked keys are decided.
+- **`android_status` not invalidating catalogue** — separate handler bug; one-line follow-up.
+- **`broadcastQueryClient` (TanStack Query experimental)**, Zod runtime validation at the WS boundary, event-id dedup `Set` for reconnect replay, AsyncAPI 3.0 spec, RFC 9700 single-use refresh-token rotation. Each becomes its own focused plan when justified.
+
 ## Context
 
 The MachinaOs frontend was coupled to Ant Design (40 files, 187-line theme file, `ConfigProvider` at root). Pre-migration audit + research docs (now deleted; see git history under commit `4cb3dd9` if needed) prescribed shadcn/ui (canonical components copied via CLI registry) + Radix primitives + Tailwind 4 + JSON Forms for a schema-driven inspector. Phase 0/1 commits (`2209dba`, `7ac69fe`) included hand-written primitives and a toast facade — those got deleted as part of corrected Phase 0 (`cdeebb4`).

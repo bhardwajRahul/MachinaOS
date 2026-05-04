@@ -279,9 +279,9 @@ MachinaOs uses JSON for all backend config (`email_providers.json`, `llm_default
    refactor cherry-picked on top. No changes to main until verified.
 2. **Original import site preserved**: `client/src/components/CredentialsModal.tsx`
    remains a 1-line re-export. All existing usages unchanged.
-3. **Backwards-compatible YAML**: can serve the current 20 providers from YAML while
+3. **Backwards-compatible YAML**: ~~can serve the current 20 providers from YAML while
    the old `providers.tsx` is still present. Flip the switch when the YAML path is
-   proven. Delete `providers.tsx` only after manual verification.
+   proven. Delete `providers.tsx` only after manual verification.~~ **DONE (Wave 12 follow-up)** — `providers.tsx` deleted; the server-driven catalogue (`server/config/credential_providers.json` → `useCatalogueQuery`) is the single source of truth. Cold-boot renders a `<Skeleton>` palette; server-unreachable shows an explicit error state.
 4. **Feature flag** (optional): `VITE_USE_YAML_CREDENTIALS=true` — gates the new
    Zustand store fetch vs the old inline array. Enables A/B testing in dev.
 5. **No main branch touches** until the full verification checklist passes.
@@ -296,7 +296,7 @@ section "Critical files to modify/create" for the exhaustive list.
 Summary:
 - **New**: 9 files (3 research MDs, 1 YAML, 4 Python, 2 TypeScript stores, 1 palette, 1 schema helper)
 - **Modified**: 8 files (worktree credentials module + package.json + CLAUDE.md)
-- **Deleted**: 1 file (`credentials/providers.tsx` after YAML migration verified)
+- **Deleted**: 1 file (`credentials/providers.tsx`) — done in Wave 12 follow-up commit `c94a610`. Server-driven catalogue is now the single source of truth.
 
 ---
 
