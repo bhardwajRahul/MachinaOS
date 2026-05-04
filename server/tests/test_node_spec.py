@@ -16,6 +16,19 @@ from services.node_input_schemas import (
 from services.node_spec import get_node_spec, list_node_types_with_spec
 
 
+def _numeric_constraints(prop: dict) -> dict:
+    """Pydantic emits ``Optional[float] = Field(ge=..., le=...)`` as
+    ``{anyOf: [{number, minimum, maximum}, {null}]}``. This helper digs
+    out the numeric branch so tests don't have to special-case nullable
+    vs. required fields each time we tweak Params."""
+    if "minimum" in prop or "maximum" in prop:
+        return prop
+    for branch in prop.get("anyOf", ()):
+        if branch.get("type") == "number" or "minimum" in branch or "maximum" in branch:
+            return branch
+    return prop
+
+
 class TestInputSchemas:
     def test_registry_not_empty(self):
         assert len(NODE_INPUT_MODELS) > 50
@@ -35,8 +48,9 @@ class TestInputSchemas:
         schema = get_node_input_schema("aiAgent")
         assert schema is not None
         props = schema["properties"]
-        assert props["temperature"]["minimum"] == 0.0
-        assert props["temperature"]["maximum"] == 2.0
+        temp = _numeric_constraints(props["temperature"])
+        assert temp["minimum"] == 0.0
+        assert temp["maximum"] == 2.0
         # snake_case keys per Wave 11.E.4+ convention.
         # NB: ``api_key`` is NOT a declared field — credentials live in
         # the credentials DB and are auto-injected at execution time.
@@ -237,7 +251,7 @@ class TestPhase3cCoverage:
         # All 16 specialized agents share SpecializedAgentParams - constraints
         # like temperature 0-2 should appear identically.
         spec = get_node_spec("coding_agent")
-        temp = spec["inputs"]["properties"]["temperature"]
+        temp = _numeric_constraints(spec["inputs"]["properties"]["temperature"])
         assert temp["minimum"] == 0.0
         assert temp["maximum"] == 2.0
 

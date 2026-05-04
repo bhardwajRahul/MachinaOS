@@ -313,8 +313,10 @@ class TestFileRead:
         harness.assert_output_shape(result, ["content", "file_path"])
         payload = result["result"]
         assert payload["content"] == "line1\nline2\n"
-        assert payload["file_path"] == "notes.txt"
-        backend.read.assert_called_once_with("notes.txt", offset=0, limit=100)
+        # ``normalize_virtual_path`` prepends ``/`` to relative inputs so the
+        # path reaches deepagents in its canonical virtual-mode form.
+        assert payload["file_path"] == "/notes.txt"
+        backend.read.assert_called_once_with("/notes.txt", offset=0, limit=100)
 
     async def test_missing_file_path_short_circuits(self, harness):
         # No backend patch: we should short-circuit before reaching it.
@@ -333,7 +335,10 @@ class TestFileRead:
             )
 
         harness.assert_envelope(result, success=False)
-        assert "no such file" in result["error"].lower()
+        # ``normalize_virtual_path`` rejects ``..`` segments before the
+        # backend is even called, so the error comes from deepagents'
+        # ``validate_path`` helper, not the (unreached) FileNotFoundError.
+        assert "path traversal not allowed" in result["error"].lower()
 
 
 # ============================================================================
@@ -344,7 +349,11 @@ class TestFileRead:
 class TestFileModify:
     async def test_write_happy_path(self, harness):
         backend = MagicMock(name="LocalShellBackend")
-        backend.write = MagicMock(return_value=_FakeWriteResult(path="hello.txt"))
+        backend.write = MagicMock(return_value=_FakeWriteResult(path="/hello.txt"))
+        # ``write`` now does a pre-flight ``backend._resolve_path(...).exists()``
+        # check so it can unlink-and-replace; teach the mock that the target
+        # doesn't exist yet so the wholesale-write path proceeds.
+        backend._resolve_path.return_value.exists.return_value = False
 
         with _patch_fs_backend(backend):
             result = await harness.execute(
@@ -359,8 +368,8 @@ class TestFileModify:
         harness.assert_envelope(result, success=True)
         harness.assert_output_shape(result, ["operation", "file_path"])
         assert result["result"]["operation"] == "write"
-        assert result["result"]["file_path"] == "hello.txt"
-        backend.write.assert_called_once_with("hello.txt", "hi there")
+        assert result["result"]["file_path"] == "/hello.txt"
+        backend.write.assert_called_once_with("/hello.txt", "hi there")
 
     async def test_edit_happy_path_returns_occurrences(self, harness):
         backend = MagicMock(name="LocalShellBackend")
@@ -386,7 +395,7 @@ class TestFileModify:
         )
         assert result["result"]["occurrences"] == 3
         backend.edit.assert_called_once_with(
-            "README.md", "foo", "bar", replace_all=True
+            "/README.md", "foo", "bar", replace_all=True
         )
 
     async def test_edit_missing_old_string_short_circuits(self, harness):
@@ -559,7 +568,7 @@ class TestFsSearch:
             result, ["path", "pattern", "matches", "count"]
         )
         assert result["result"]["count"] == 1
-        backend.glob_info.assert_called_once_with("**/*.py", path="src")
+        backend.glob_info.assert_called_once_with("**/*.py", path="/src")
 
     async def test_grep_returns_string_error_as_error_envelope(self, harness):
         # Per doc: grep_raw returns a str on error, list on success.
