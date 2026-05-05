@@ -218,7 +218,7 @@ class AndroidService:
             Execution result with service response data
         """
         try:
-            from services.android import get_current_relay_client
+            from ._relay import get_current_relay_client
 
             relay_client = get_current_relay_client()
             if not relay_client:
@@ -373,7 +373,7 @@ class AndroidService:
 
         try:
             # Check if relay connection is available (remote device)
-            from services.android import get_current_relay_client
+            from ._relay import get_current_relay_client
             relay_client = get_current_relay_client()
 
             if relay_client and relay_client.is_paired():

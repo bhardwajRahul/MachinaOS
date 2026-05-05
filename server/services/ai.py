@@ -2955,7 +2955,7 @@ class AIService:
                     )
                 return EmptyAndroidSchema
 
-            from services.android_service import SERVICE_ACTIONS
+            from nodes.android._dispatcher import SERVICE_ACTIONS
 
             service_info = []
             for svc in connected_services:

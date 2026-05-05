@@ -174,7 +174,7 @@ async def _execute_with_broadcast(
     host: str, port: int, log_label: str,
 ) -> Dict[str, Any]:
     """Run an Android service call with broadcast status for the UI node."""
-    from services.android_service import AndroidService
+    from ._dispatcher import AndroidService
     from services.status_broadcaster import get_status_broadcaster
 
     broadcaster = get_status_broadcaster()

@@ -443,7 +443,7 @@ class StatusBroadcaster:
     async def _auto_reconnect_android_relay_body(self, span):
         try:
             # Check if already connected
-            from services.android.manager import get_current_relay_client
+            from nodes.android._relay.manager import get_current_relay_client
             existing = get_current_relay_client()
             if existing and existing.is_connected():
                 # Already connected, just refresh status
@@ -490,7 +490,7 @@ class StatusBroadcaster:
                        relay_url=relay_url, device_id=device_id)
 
             # Attempt to reconnect
-            from services.android.manager import get_relay_client
+            from nodes.android._relay.manager import get_relay_client
             client, error = await get_relay_client(relay_url, api_key)
 
             if client and client.is_connected():

@@ -40,7 +40,7 @@ from core.config import Settings
 from core.logging import configure_logging, get_logger, setup_websocket_logging, shutdown_websocket_logging
 from core.tracing import init_tracing
 _startup_log("Importing routers...")
-from routers import workflow, database, maps, nodejs_compat, android, websocket, webhook, auth, credentials, schemas
+from routers import workflow, database, maps, nodejs_compat, websocket, webhook, auth, credentials, schemas
 _startup_log("All imports complete")
 
 # Initialize settings, logging, and tracing.
@@ -85,12 +85,9 @@ async def lifespan(app: FastAPI):
         "routers.database",
         "routers.maps",
         "routers.nodejs_compat",
-        "routers.android",
         "routers.websocket",
         "routers.webhook",
         "routers.auth",
-        "routers.twitter",
-        "routers.google",
         "middleware.auth"
     ])
 
@@ -353,7 +350,7 @@ async def lifespan(app: FastAPI):
         await _proxy_svc.shutdown()
 
     # Close Android relay client (prevents "Unclosed client session" warning)
-    from services.android.manager import close_relay_client
+    from nodes.android._relay.manager import close_relay_client
     await close_relay_client(clear_stored_session=False)
 
     # Shut down agent-browser daemon (prevents orphaned processes and EBUSY file locks)
@@ -461,11 +458,9 @@ app.include_router(schemas.router)  # Per-node output schema endpoint (GET /api/
 # register_router from __init__.py), the corresponding line below is
 # removed. Tracked in the plugin-extraction plan.
 app.include_router(maps.router)
-app.include_router(android.router)
 app.include_router(webhook.router)
-# Twitter + Google OAuth callback routers moved to
-# nodes/twitter/_router.py and nodes/google/_router.py and are mounted
-# via the plugin-registered loop below.
+# Twitter, Google, and Android routers moved to nodes/<plugin>/_router.py
+# and are mounted via the plugin-registered loop below.
 
 # Plugin-registered routers — populated by `nodes/<plugin>/__init__.py`
 # at import time via `register_router(...)`. Plugins are imported during

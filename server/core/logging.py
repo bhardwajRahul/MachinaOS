@@ -32,9 +32,10 @@ class WebSocketLogHandler(logging.Handler):
         self._source_map = {
             'services.workflow': 'workflow',
             'services.ai': 'ai',
-            'services.android': 'android',
+            'nodes.android._relay': 'android',
+            'nodes.android._dispatcher': 'android',
+            'nodes.android._router': 'android',
             'nodes.whatsapp._service': 'whatsapp',
-            'routers.android': 'android',
             'routers.websocket': 'websocket',
             'routers.workflow': 'workflow',
             'services.execution': 'execution',

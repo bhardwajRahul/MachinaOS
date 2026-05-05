@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 from typing import Dict, Any
 
 from core.container import container
-from services.android_service import AndroidService
+from ._dispatcher import AndroidService
 from core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -258,7 +258,7 @@ async def get_relay_connection_status():
     and the paired Android device.
     """
     try:
-        from services.android import get_current_relay_client
+        from ._relay import get_current_relay_client
 
         relay_client = get_current_relay_client()
 

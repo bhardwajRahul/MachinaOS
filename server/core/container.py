@@ -25,7 +25,7 @@ from services.workflow import WorkflowService
 _clog("WorkflowService imported")
 from services.auth import AuthService
 from services.text import TextService
-from services.android_service import AndroidService
+from nodes.android._dispatcher import AndroidService
 from services.user_auth import UserAuthService
 from services.compaction import init_compaction_service
 _clog("all service imports done")

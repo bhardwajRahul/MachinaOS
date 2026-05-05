@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from services.ai import AIService
     from services.maps import MapsService
     from services.text import TextService
-    from services.android_service import AndroidService
+    from nodes.android._dispatcher import AndroidService
     from services.temporal import TemporalExecutor
 
 logger = get_logger(__name__)

@@ -1410,165 +1410,12 @@ async def handle_test_ai_proxy(data: Dict[str, Any], websocket: WebSocket) -> Di
 
 
 # ============================================================================
-# Android Handlers
+# Android handlers (5 of them: get_android_devices, execute_android_action,
+# android_relay_{connect,disconnect,reconnect}) live in
+# ``nodes/android/_handlers.py`` and self-register via
+# ``register_ws_handlers``. The plugin's HTTP router lives in
+# ``nodes/android/_router.py`` and mounts via the plugin-router loop.
 # ============================================================================
-
-@ws_handler()
-async def handle_get_android_devices(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
-    """Get list of connected Android devices."""
-    android_service = container.android_service()
-    devices = await android_service.list_devices()
-    return {"devices": devices, "timestamp": time.time()}
-
-
-@ws_handler("service_id", "action")
-async def handle_execute_android_action(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
-    """Execute an Android service action."""
-    android_service = container.android_service()
-    broadcaster = get_status_broadcaster()
-    service_id, action = data["service_id"], data["action"]
-    node_id = data.get("node_id", f"android_{service_id}_{action}")
-
-    await broadcaster.update_node_status(node_id, "executing")
-    result = await android_service.execute_service(
-        node_id=node_id, service_id=service_id, action=action,
-        parameters=data.get("parameters", {}),
-        android_host=data.get("android_host", "localhost"),
-        android_port=data.get("android_port", 8888)
-    )
-
-    status = "success" if result.get("success") else "error"
-    await broadcaster.update_node_status(node_id, status, result.get("result") or {"error": result.get("error")})
-    return result
-
-
-@ws_handler()
-async def handle_android_relay_connect(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
-    """Connect to Android relay server.
-
-    Establishes WebSocket connection to relay server and broadcasts QR code for pairing.
-    Status updates are automatically broadcast via the relay client's broadcaster integration.
-    """
-    from services.android import get_relay_client
-
-    url = data.get("url", "")
-    api_key = data.get("api_key")
-
-    if not url:
-        return {
-            "success": False,
-            "connected": False,
-            "error": "Relay URL is required"
-        }
-
-    if not api_key:
-        return {
-            "success": False,
-            "connected": False,
-            "error": "API key is required"
-        }
-
-    logger.info(f"[WebSocket] Android relay connect: {url}")
-
-    try:
-        client, error = await get_relay_client(url, api_key)
-        if client:
-            logger.info(f"[WebSocket] Android relay connect success, qr_data present: {bool(client.qr_data)}, session_token: {client.session_token}")
-            return {
-                "success": True,
-                "connected": True,
-                "session_token": client.session_token,
-                "qr_data": client.qr_data,
-                "message": "Connected to relay server"
-            }
-        else:
-            return {
-                "success": False,
-                "connected": False,
-                "error": error or "Failed to connect to relay server"
-            }
-    except Exception as e:
-        logger.error(f"[WebSocket] Android relay connect error: {e}")
-        return {"success": False, "error": str(e)}
-
-
-@ws_handler()
-async def handle_android_relay_disconnect(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
-    """Disconnect from Android relay server.
-
-    Closes the relay WebSocket connection and broadcasts disconnected status.
-    """
-    from services.android import close_relay_client
-
-    logger.info("[WebSocket] Android relay disconnect requested")
-
-    try:
-        await close_relay_client()
-        return {
-            "success": True,
-            "connected": False,
-            "message": "Disconnected from relay server"
-        }
-    except Exception as e:
-        logger.error(f"[WebSocket] Android relay disconnect error: {e}")
-        return {"success": False, "error": str(e)}
-
-
-@ws_handler()
-async def handle_android_relay_reconnect(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
-    """Reconnect to Android relay server with a new session token.
-
-    Forces disconnect and reconnect to get fresh session_token and QR code.
-    Useful when pairing fails or Android device needs to re-pair.
-    """
-    from services.android import close_relay_client, get_relay_client
-
-    url = data.get("url", "")
-    api_key = data.get("api_key")
-
-    if not url:
-        return {
-            "success": False,
-            "connected": False,
-            "error": "Relay URL is required"
-        }
-
-    if not api_key:
-        return {
-            "success": False,
-            "connected": False,
-            "error": "API key is required"
-        }
-
-    logger.info("[WebSocket] Android relay reconnect: forcing new session")
-
-    try:
-        # Force disconnect existing connection
-        await close_relay_client()
-
-        # Small delay to ensure clean disconnect
-        await asyncio.sleep(0.5)
-
-        # Reconnect with fresh session
-        client, error = await get_relay_client(url, api_key)
-        if client:
-            return {
-                "success": True,
-                "connected": True,
-                "session_token": client.session_token,
-                "qr_data": client.qr_data,
-                "message": "Reconnected with new session token"
-            }
-        else:
-            return {
-                "success": False,
-                "connected": False,
-                "error": error or "Failed to reconnect to relay server"
-            }
-    except Exception as e:
-        logger.error(f"[WebSocket] Android relay reconnect error: {e}")
-        return {"success": False, "error": str(e)}
-
 
 
 # ----------------------------------------------------------------------------
@@ -2791,11 +2638,6 @@ MESSAGE_HANDLERS: Dict[str, MessageHandler] = {
     # Google Workspace OAuth operations
 
     # Android operations
-    "get_android_devices": handle_get_android_devices,
-    "execute_android_action": handle_execute_android_action,
-    "android_relay_connect": handle_android_relay_connect,
-    "android_relay_disconnect": handle_android_relay_disconnect,
-    "android_relay_reconnect": handle_android_relay_reconnect,
 
     # Maps + Apify validation now flow through ``handle_validate_api_key``
     # (which dispatches via ``CREDENTIAL_REGISTRY`` to
