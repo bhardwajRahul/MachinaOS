@@ -270,16 +270,23 @@ class TestTwitterOAuthHandlers:
 
 
 class TestGoogleOAuthHandlers:
+    # Google OAuth handlers moved to ``nodes/google/_handlers.py`` as
+    # part of the plugin-extraction migration. Tests now import from
+    # the plugin folder; the dispatch contract is exercised by
+    # ``test_plugin_self_containment.py``.
+
     async def test_login_fails_without_client_credentials(
         self, patched_container, fake_ws
     ):
-        result = await _call(ws_module.handle_google_oauth_login, {}, fake_ws)
+        from nodes.google._handlers import handle_google_oauth_login
+        result = await _call(handle_google_oauth_login, {}, fake_ws)
         assert result["success"] is False
         assert "Client ID" in result["error"]
 
     async def test_login_returns_authorization_url(
         self, patched_container, fake_ws
     ):
+        from nodes.google._handlers import handle_google_oauth_login
         await patched_container.auth.store_api_key(
             "google_client_id", "ci.apps.googleusercontent.com", models=[]
         )
@@ -287,7 +294,7 @@ class TestGoogleOAuthHandlers:
             "google_client_secret", "cs-test", models=[]
         )
 
-        result = await _call(ws_module.handle_google_oauth_login, {}, fake_ws)
+        result = await _call(handle_google_oauth_login, {}, fake_ws)
 
         assert result["success"] is True
         assert result["url"].startswith("https://accounts.google.com/o/oauth2/auth")
@@ -295,15 +302,16 @@ class TestGoogleOAuthHandlers:
         assert "prompt=consent" in result["url"]
 
     async def test_status_when_disconnected(self, patched_container, fake_ws):
-        result = await _call(ws_module.handle_google_oauth_status, {}, fake_ws)
-        # success may be auto-injected by the decorator; check connected=False
+        from nodes.google._handlers import handle_google_oauth_status
+        result = await _call(handle_google_oauth_status, {}, fake_ws)
         assert result["connected"] is False
         assert result["email"] is None
 
     async def test_logout_removes_oauth_tokens(self, patched_container, fake_ws):
+        from nodes.google._handlers import handle_google_logout
         await patched_container.auth.store_oauth_tokens(
             "google", "access", "refresh", email="user@example.com"
         )
-        result = await _call(ws_module.handle_google_logout, {}, fake_ws)
+        result = await _call(handle_google_logout, {}, fake_ws)
         assert result["success"] is True
         assert await patched_container.auth.get_oauth_tokens("google") is None

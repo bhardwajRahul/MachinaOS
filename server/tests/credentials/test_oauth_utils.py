@@ -80,7 +80,7 @@ class TestGetRedirectUri:
 
     def test_paths_loaded_from_config_not_hardcoded(self):
         """Smoke test: the real config must expose google + twitter paths."""
-        from services.google_oauth import get_callback_paths
+        from nodes.google._oauth import get_callback_paths
 
         paths = get_callback_paths()
         assert "google" in paths

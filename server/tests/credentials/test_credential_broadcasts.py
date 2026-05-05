@@ -109,9 +109,9 @@ class TestCredentialMutationHandlersBroadcast:
         )
 
     def test_google_logout_broadcasts(self):
-        from routers import websocket as ws_module
+        from nodes.google._handlers import handle_google_logout
 
-        src = _handler_source(ws_module.handle_google_logout)
+        src = _handler_source(handle_google_logout)
         assert _BROADCAST_PATTERN.search(src), (
             "handle_google_logout must broadcast credential.oauth.disconnected"
         )

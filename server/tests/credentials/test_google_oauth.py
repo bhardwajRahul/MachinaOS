@@ -11,8 +11,8 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from services import google_oauth
-from services.google_oauth import GoogleOAuth, get_callback_paths
+from nodes.google import _oauth as google_oauth
+from nodes.google._oauth import GoogleOAuth, get_callback_paths
 
 
 pytestmark = pytest.mark.credentials

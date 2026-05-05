@@ -24,7 +24,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from core.container import container
 from core.logging import get_logger
-from services.google_oauth import GoogleOAuth, get_pending_state
+from nodes.google._oauth import GoogleOAuth, get_pending_state
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/api/google", tags=["google"])

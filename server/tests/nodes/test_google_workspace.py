@@ -42,10 +42,10 @@ def _patch_creds(module_name: str, creds_return=None, side_effect=None):
     By default returns a MagicMock that stands in for a Credentials instance.
     Pass `side_effect=ValueError(...)` to simulate missing credentials.
     """
-    # Scaling-branch: shared helper lives at services.handlers.google_auth.
+    # Scaling-branch: shared helper lives at nodes.google._auth_helper.
     # `module_name` is retained for API symmetry but not part of the patch path.
     _ = module_name
-    target = "services.handlers.google_auth.get_google_credentials"
+    target = "nodes.google._auth_helper.get_google_credentials"
     kwargs = {}
     if side_effect is not None:
         kwargs["side_effect"] = side_effect

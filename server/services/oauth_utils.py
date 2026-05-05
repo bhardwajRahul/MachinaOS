@@ -11,7 +11,7 @@ base URL (scheme + host + port) comes from the connection itself.
 
 from urllib.parse import urlparse
 
-from services.google_oauth import get_callback_paths
+from nodes.google._oauth import get_callback_paths
 
 
 def get_base_url(connection) -> str:

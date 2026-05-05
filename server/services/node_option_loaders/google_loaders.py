@@ -2,7 +2,7 @@
 
 Wave 6 Phase 4b. Adds dynamic-option loaders for the Gmail label
 picker and Calendar list picker. Reuses
-services/handlers/google_auth.get_google_credentials() so the OAuth
+nodes/google/_auth_helper.get_google_credentials() so the OAuth
 dance is identical to the workflow-execution path.
 
 Adding more Google loaders (e.g. Drive folder picker, Sheets
@@ -21,7 +21,7 @@ async def _google_service(api: str, version: str, params: dict[str, Any]):
 
     from googleapiclient.discovery import build
 
-    from services.handlers.google_auth import get_google_credentials
+    from nodes.google._auth_helper import get_google_credentials
 
     creds = await get_google_credentials(params, {})
     loop = asyncio.get_event_loop()
