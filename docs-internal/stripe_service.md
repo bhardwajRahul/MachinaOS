@@ -142,8 +142,14 @@ handle_stripe_login()
          │     │
          │     └── get_listen_source().start()  ← daemon auto-starts
          │
-         └── _broadcast_catalogue_updated()    ← generic broadcast
-               broadcaster.broadcast({"type": "credential_catalogue_updated"})
+         └── _broadcast_credential_event("credential.oauth.connected")
+               → broadcaster.broadcast_credential_event(
+                     "credential.oauth.connected", provider="stripe")
+               (CloudEvents v1.0 envelope wrapped under the
+               'credential_catalogue_updated' wire-format type.
+               Same shape twitter_logout / google_logout /
+               save_api_key use; locked by
+               tests/credentials/test_credential_broadcasts.py.)
                frontend's existing case-handler invalidates the catalogue
                query → modal sees provider.stored = true → connection
                indicator flips immediately
@@ -166,25 +172,32 @@ handle_stripe_logout()
 StripeListenSource.start()  (lock-protected, idempotent)
    │
    ├── ensure_stripe_cli()                     ← override before super().start()
-   ├── has_credential() → is_logged_in()       ← override
-   │     (file check on ~/.config/stripe/config.toml)
+   ├── has_credential() → is_logged_in()       ← override of the daemon gate
+   │     (filesystem check on ~/.config/stripe/config.toml)
    ├── binary_name = ""                        ← framework PATH check skipped
    ├── ProcessService.start(
    │       name="stripe-listen",
-   │       command="<resolved-binary> listen
+   │       command="<shlex-quoted-binary> listen
    │                --forward-to http://localhost:{port}/webhook/stripe
    │                --print-secret",            # no --api-key
    │       workflow_id="_stripe_global",
    │       working_directory={workspace}/_stripe,
+   │       line_handler=self._on_line,           # ← per-line callback
    │   )
-   │   (CLI reads credentials from its config file)
+   │   (CLI reads credentials from its config file; binary path is
+   │    shlex.quote'd so Windows backslashes survive ProcessService's
+   │    POSIX-mode shlex.split round-trip)
    │
-   └── tail stderr.log
-         on match r"whsec_[A-Za-z0-9_]+":
-            auth_service.store_api_key("stripe_webhook_secret", …)
+   └── ProcessService loops `stream.readline()` per stdout/stderr,
+       decodes UTF-8, writes to stdout.log / stderr.log, broadcasts to
+       the Terminal tab, AND calls our line_handler:
+         _on_line(stream, line) → parse_line(stream, line)
+            on stderr match r"whsec_[A-Za-z0-9_]+":
+               auth_service.store_api_key("stripe_webhook_secret", …)
+       (No file-tailing; we hook into the same readline loop ProcessService
+        already runs.)
 
 StripeListenSource.stop()
-   ├── cancel tail task
    └── ProcessService.stop("stripe-listen", "_stripe_global")
 ```
 
@@ -203,7 +216,8 @@ StripeListenSource.stop()
 | `server/nodes/stripe/stripe_action.py` | `StripeActionNode` — pass-through over the CLI via `run_cli_command`. |
 | `server/nodes/stripe/stripe_receive.py` | `StripeReceiveNode(WebhookTriggerNode)` — filter overrides + output reshape. |
 | `server/services/events/__init__.py` | Public framework surface — exports every base class + helper. |
-| `server/services/events/daemon.py` | `DaemonEventSource` — supervises subprocess via `ProcessService`, tails logs. |
+| `server/services/events/daemon.py` | `DaemonEventSource` — supervises subprocess via `ProcessService`. Subscribes to ProcessService's per-line callback (`line_handler`) instead of re-tailing the on-disk log files. Credential gate is `await self.has_credential()` so non-api-key auth (Stripe → `is_logged_in()`) plugs in via subclass override. |
+| `server/services/process_service.py` | Spawns + supervises long-lived subprocesses. Loops `stream.readline()` per stdout/stderr, writes to `.log`, broadcasts to Terminal, and forwards each decoded line to the optional `line_handler` async callback (Wave 12.B addition for typed event-source subscribers — see `DaemonEventSource._on_line`). |
 | `server/services/events/webhook.py` | `WebhookSource` + `WEBHOOK_SOURCES` registry + `register_webhook_source`. |
 | `server/services/events/triggers.py` | `WebhookTriggerNode` + `BaseTriggerParams`. |
 | `server/services/events/cli.py` | `run_cli_command` helper. |
@@ -251,8 +265,9 @@ Storage:
 ### `StripeListenSource(DaemonEventSource)`
 
 Supervises `stripe listen` as a long-lived process. Inherits the
-full `DaemonEventSource` lifecycle (start / stop / restart / status /
-log tailing). The Stripe-specific overrides are minimal:
+full `DaemonEventSource` lifecycle (start / stop / restart / status)
+plus the per-line callback subscription via `ProcessService`'s
+`line_handler` hook. The Stripe-specific overrides are minimal:
 
 | Method / attr | Purpose |
 |---|---|
@@ -262,9 +277,9 @@ log tailing). The Stripe-specific overrides are minimal:
 | `install_hint` | Surfaced in the "install failed" error path when the auto-installer can't reach GitHub releases. |
 | `credential = StripeCredential` | Resolved by the framework before `build_command` is called. |
 | `start()` (override) | `await ensure_stripe_cli()` then `super().start()`. Caches the resolved binary path so `build_command` (sync) can pick it up. |
-| `build_command(secrets)` | Returns `<resolved-binary> listen --forward-to … --print-secret` (no `--api-key` — CLI reads its own config file; binary path comes from `stripe_cli_path()` cache populated by `start()`). |
-| `has_credential()` (override) | Returns `is_logged_in()` — a filesystem check on `~/.config/stripe/config.toml`. The framework's auto-reconnect path uses this as the gate for restarting the daemon when a WS client connects. |
-| `parse_line(stream, line)` | On each stderr line, regex-matches `whsec_…`; on first match, persists the secret via `auth_service.store_api_key("stripe_webhook_secret", …)`. The Stripe daemon doesn't emit events itself — events arrive via the webhook receiver. |
+| `build_command(secrets)` | Returns `<shlex.quote'd-binary> listen --forward-to … --print-secret`. The binary path is `shlex.quote`d so it round-trips through `ProcessService`'s POSIX-mode `shlex.split` unchanged. No `--api-key`: CLI reads its own config file. |
+| `has_credential()` (override) | Returns `is_logged_in()` — a filesystem check on `~/.config/stripe/config.toml`. Consulted by `DaemonEventSource.start` (the credential gate) and by `make_status_refresh` on every WS-client connect (auto-reconnect). |
+| `parse_line(stream, line)` | Invoked once per decoded stdout/stderr line via `ProcessService`'s `line_handler` callback. On `whsec_…` match, persists the secret via `auth_service.store_api_key("stripe_webhook_secret", …)`. The Stripe daemon doesn't emit workflow events itself — they arrive via the webhook receiver. |
 
 ### `StripeWebhookSource(WebhookSource)`
 
@@ -413,11 +428,12 @@ the modal's Connect button are `stripe_login` and `stripe_logout`:
 
 Background `_complete_login(binary, next_step)` flow:
 
-1. `run_cli_command([binary, "login", "--complete", next_step], timeout=600s)` blocks until OAuth completes.
-2. `is_logged_in()` flips true (the CLI wrote `_api_key` lines into `config.toml`).
-3. `_mark_logged_in()` writes `auth_service.store_oauth_tokens("stripe", "cli-managed", "cli-managed")`.
-4. `get_listen_source().start()` spawns the supervised `stripe listen` daemon (which captures the `whsec_…` from its banner).
-5. `_broadcast_catalogue_updated()` emits `{type: "credential_catalogue_updated"}` — the existing generic broadcast handler in `WebSocketContext.tsx` invalidates the catalogue, the modal refetches, and `provider.stored = true` for stripe flips the connection indicator.
+1. `next_step` from step 1 is a literal shell command (`stripe login --complete '<URL>'`); extract the auth URL with `shlex.split(next_step)[-1]` before passing it to `--complete`.
+2. `run_cli_command([binary, "login", "--complete", complete_url], timeout=600s)` blocks until OAuth completes.
+3. `is_logged_in()` flips true (the CLI wrote `_api_key` lines into `config.toml`).
+4. `_mark_logged_in()` writes `auth_service.store_oauth_tokens("stripe", "cli-managed", "cli-managed")`.
+5. `get_listen_source().start()` spawns the supervised `stripe listen` daemon; the `whsec_…` banner is captured via the `line_handler` callback.
+6. `_broadcast_credential_event("credential.oauth.connected")` emits a CloudEvents v1.0 envelope (`WorkflowEvent`) via `StatusBroadcaster.broadcast_credential_event`, wrapped under the `credential_catalogue_updated` wire-format type. The frontend invalidates the catalogue and `provider.stored = true` flips the connection indicator.
 
 ## AI tool surface (`stripe_action`)
 
@@ -569,14 +585,24 @@ without any provider-specific code in the catalogue handler. The
 `auth_service.store_oauth_tokens` API doesn't validate the strings;
 the marker exists purely to flip the existence check.
 
-### 2. The generic `credential_catalogue_updated` broadcast
+### 2. The CloudEvents-shaped credential broadcast
 
-After `_mark_logged_in()` / `_mark_logged_out()`, the plugin
-broadcasts:
+After `_mark_logged_in()` / `_mark_logged_out()`, the plugin emits a
+CloudEvents v1.0 envelope via the canonical helper:
 
-```json
-{ "type": "credential_catalogue_updated" }
+```python
+await get_status_broadcaster().broadcast_credential_event(
+    "credential.oauth.connected", provider="stripe",      # or .disconnected on logout
+)
 ```
+
+`StatusBroadcaster.broadcast_credential_event` wraps a `WorkflowEvent`
+(from `services.events.envelope`) and ships it under the
+`credential_catalogue_updated` wire-format type — the same shape
+`save_api_key`, `delete_api_key`, `twitter_logout`, `google_logout`
+already use. The contract is locked by
+`tests/credentials/test_credential_broadcasts.py` (`inspect.getsource`
+introspection over each handler).
 
 `WebSocketContext.tsx` already has a generic case for this event
 (line 671 — predates Stripe). Its handler calls `invalidateCatalogue`

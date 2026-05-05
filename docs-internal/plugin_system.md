@@ -1001,21 +1001,32 @@ The shared dispatch path lives in `routers/webhook.py` — it consults
 For plugins that wrap a long-lived CLI tool or SDK loop (Stripe CLI,
 future GitHub-CLI / Cloudflare-Wrangler / etc.). Delegates lifecycle
 to `ProcessService` (battle-tested PATHEXT-aware launching, kill_tree
-cleanup, log capture):
+cleanup, log capture, Terminal-tab broadcast). The base subscribes to
+ProcessService's per-line callback hook (`line_handler`), so plugins
+just provide the parser:
 
 ```python
+import shlex
 from services.events import DaemonEventSource, WorkflowEvent
 
 class StripeListenSource(DaemonEventSource):
     type = "stripe.listen"
     process_name = "stripe-listen"
-    binary_name = "stripe"
+    binary_name = ""                  # see "binary_name" note below
     workflow_namespace = "_stripe"
     install_hint = "https://stripe.com/docs/stripe-cli#install"
     credential = StripeCredential
 
     def build_command(self, secrets: Dict) -> str:
-        return f"stripe listen --print-secret --api-key {secrets['api_key']}"
+        # `shlex.quote` the binary so the path round-trips through
+        # ProcessService's POSIX-mode `shlex.split` unchanged.
+        binary = shlex.quote(str(stripe_cli_path() or "stripe"))
+        return f"{binary} listen --forward-to ... --print-secret"
+
+    async def has_credential(self) -> bool:
+        # Override the default ``secrets["api_key"]`` gate when auth lives
+        # outside MachinaOs (e.g. the CLI's own ~/.config/stripe/config.toml).
+        return is_logged_in()
 
     def parse_line(self, stream: str, line: str) -> Optional[WorkflowEvent]:
         # called per-line for both stdout and stderr
@@ -1025,8 +1036,19 @@ class StripeListenSource(DaemonEventSource):
 ```
 
 The base provides `start()` / `stop()` / `restart()` / `status()` /
-`has_credential()` / lifecycle locking / pre-flight `shutil.which`
-check / log tailing.
+lifecycle locking / pre-flight `shutil.which` check (skip via
+`binary_name = ""` if the plugin resolves the binary itself).
+
+**Output ingestion**: `DaemonEventSource` registers `self._on_line` as
+the `line_handler` callback on `ProcessService.start()`. ProcessService
+runs the single `stream.readline()` loop per stdout/stderr; on each
+decoded line it writes the log file, broadcasts to the Terminal tab,
+and invokes the callback — which calls `parse_line(stream, line)`. No
+log-file tailing.
+
+**Credential gate**: `start()` consults `await self.has_credential()`
+before spawning. Default implementation tests `secrets["api_key"]`;
+subclasses override for non-api-key auth (Stripe → `is_logged_in()`).
 
 ### Webhook verifiers
 
@@ -1172,14 +1194,15 @@ project that publishes pre-built binaries via GitHub releases.
 | HTTP webhook ingress | `routers/webhook.py` consults `WEBHOOK_SOURCES` registry | `register_webhook_source(MySource())` |
 | Event dispatch into workflows | `event_waiter.dispatch(source.type, event)` from `WebhookSource.handle` | provider-specific `shape()` returning `WorkflowEvent` |
 | Trigger waiting + filtering | `WebhookTriggerNode.build_filter` (CloudEvents glob) | optional `_extra_filter(params)` |
-| Daemon lifecycle | `DaemonEventSource.start/stop/restart` via `ProcessService` | `build_command(secrets)` + `parse_line(stream, line)` |
+| Daemon lifecycle | `DaemonEventSource.start/stop/restart` via `ProcessService` | `build_command(secrets)` + `parse_line(stream, line)` (subscribed via `ProcessService.start(line_handler=...)` — no log-file tailing) |
+| Daemon credential gate | `DaemonEventSource.start` consults `await self.has_credential()` before spawning | optional override when auth is non-api-key (Stripe → `is_logged_in()`); default tests `secrets["api_key"]` |
 | Lifecycle WebSocket commands | `make_lifecycle_handlers(prefix, source, extra=…)` | provider-specific extra handlers |
 | Status refresh on WS connect | `make_status_refresh(source, status_key, broadcast_type)` | nothing — auto-derived from source |
 | CLI subprocess invocation | `run_cli_command(binary=…, argv=…, credential=…)` | nothing — credential injection is automatic |
 | Credentials Modal panel | `server/config/credential_providers.json` (read by `services.credential_registry`) | one provider entry: name, category, color, `kind: "oauth"`, `icon_ref`, `status_hook`, `ws.{login,logout,status}` handler names, fields list, instructions string. Frontend modal renders it automatically — no React file edits. |
 | AI tool surface | `services/ai.py` `DEFAULT_TOOL_NAMES` + `DEFAULT_TOOL_DESCRIPTIONS` | one row per dual-purpose ActionNode mapping `<nodeType>` → `<snake_case_of_node_type>` |
 | Skill (LLM teaching markdown) | `server/skills/<agent>/<skill-name>/SKILL.md` (auto-discovered by `SkillLoader`) | the markdown itself, plus the linkage in `visuals.json` (`"<nodeType>": { ..., "skill": "<skill-name>" }`) |
-| Connection state surfaced to the modal (CLI-managed auth) | `auth_service.store_oauth_tokens(status_hook, "cli-managed", "cli-managed")` + the generic `credential_catalogue_updated` broadcast | one `_mark_logged_in` / `_mark_logged_out` helper pair calling `store_oauth_tokens` / `remove_oauth_tokens`; one `broadcast({"type": "credential_catalogue_updated"})` after every state change |
+| Connection state surfaced to the modal (CLI-managed auth) | `auth_service.store_oauth_tokens(provider, "cli-managed", "cli-managed")` + `StatusBroadcaster.broadcast_credential_event` (CloudEvents v1.0 envelope wrapping `WorkflowEvent`; locked by `tests/credentials/test_credential_broadcasts.py`) | `_mark_logged_in` / `_mark_logged_out` helper pair; one `broadcaster.broadcast_credential_event("credential.oauth.connected", provider="<id>")` after login and `…disconnected` after logout. Same shape Twitter / Google logout use. |
 | Auto-install of an external CLI binary | `_install.py` with `ensure_<cli>_cli()` + GitHub-releases asset map | pinned `_VERSION` constant, `(system, machine) -> (asset, kind, member)` table, and an override on `DaemonEventSource.start()` that `await`s the helper before `super().start()` (also set `binary_name = ""` to skip the framework's `shutil.which` pre-check) |
 
 ### Tool / skill / visuals naming contract

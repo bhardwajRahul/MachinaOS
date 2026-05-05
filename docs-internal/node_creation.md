@@ -152,17 +152,19 @@ reused:
    )
    ```
 
-2. **Generic broadcast on state change.** Plugin emits the existing
-   `credential_catalogue_updated` event — handled in
-   [`WebSocketContext.tsx`](../client/src/contexts/WebSocketContext.tsx)
-   line 671 since before Stripe shipped. The frontend invalidates
-   the catalogue, refetches, and the modal re-renders. No
-   per-provider broadcast type, no `case 'stripe_status'` —
+2. **CloudEvents-shaped broadcast on state change.** Plugin emits a
+   `WorkflowEvent` (CloudEvents v1.0) via the canonical helper —
+   wrapped under the existing `credential_catalogue_updated`
+   wire-format type. Same shape `save_api_key` / `twitter_logout` /
+   `google_logout` use; locked by
+   `tests/credentials/test_credential_broadcasts.py`. The frontend
+   invalidates the catalogue, refetches, and the modal re-renders.
+   No per-provider broadcast type, no `case 'stripe_status'` —
    **zero node-specific code in the frontend**.
 
    ```python
-   await get_status_broadcaster().broadcast(
-       {"type": "credential_catalogue_updated"}
+   await get_status_broadcaster().broadcast_credential_event(
+       "credential.oauth.connected", provider="stripe",      # or .disconnected on logout
    )
    ```
 
