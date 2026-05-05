@@ -98,9 +98,12 @@ class TestCredentialMutationHandlersBroadcast:
         )
 
     def test_twitter_logout_broadcasts(self):
-        from routers import websocket as ws_module
+        # Twitter handler moved to ``nodes/twitter/_handlers.py`` as
+        # part of the plugin-extraction migration. The invariant now
+        # asserts on the plugin-owned source.
+        from nodes.twitter._handlers import handle_twitter_logout
 
-        src = _handler_source(ws_module.handle_twitter_logout)
+        src = _handler_source(handle_twitter_logout)
         assert _BROADCAST_PATTERN.search(src), (
             "handle_twitter_logout must broadcast credential.oauth.disconnected"
         )

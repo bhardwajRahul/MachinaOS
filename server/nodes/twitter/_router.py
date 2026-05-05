@@ -21,7 +21,7 @@ from fastapi.responses import HTMLResponse
 
 from core.container import container
 from core.logging import get_logger
-from services.twitter_oauth import TwitterOAuth, get_pending_state
+from nodes.twitter._oauth import TwitterOAuth, get_pending_state
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/api/twitter", tags=["twitter"])

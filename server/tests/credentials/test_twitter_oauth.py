@@ -16,8 +16,8 @@ import httpx
 import pytest
 import respx
 
-from services import twitter_oauth
-from services.twitter_oauth import (
+from nodes.twitter import _oauth as twitter_oauth
+from nodes.twitter._oauth import (
     TwitterOAuth,
     TOKEN_URL,
     REVOKE_URL,

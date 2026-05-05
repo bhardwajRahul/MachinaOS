@@ -40,7 +40,7 @@ from core.config import Settings
 from core.logging import configure_logging, get_logger, setup_websocket_logging, shutdown_websocket_logging
 from core.tracing import init_tracing
 _startup_log("Importing routers...")
-from routers import workflow, database, maps, nodejs_compat, android, websocket, webhook, auth, twitter, google, credentials, schemas
+from routers import workflow, database, maps, nodejs_compat, android, websocket, webhook, auth, google, credentials, schemas
 _startup_log("All imports complete")
 
 # Initialize settings, logging, and tracing.
@@ -463,7 +463,8 @@ app.include_router(schemas.router)  # Per-node output schema endpoint (GET /api/
 app.include_router(maps.router)
 app.include_router(android.router)
 app.include_router(webhook.router)
-app.include_router(twitter.router)  # Twitter/X OAuth routes
+# Twitter OAuth callback router moved to nodes/twitter/_router.py and
+# is mounted via the plugin-registered loop below.
 app.include_router(google.router)  # Google Workspace OAuth routes (Gmail, Calendar, Drive, Sheets, Tasks, Contacts)
 
 # Plugin-registered routers — populated by `nodes/<plugin>/__init__.py`

@@ -242,7 +242,7 @@ class TestTwitterSend:
         with _patch_client(stub_cls), patched_container(
             auth_oauth_tokens=_ok_tokens()
         ), patched_pricing(), patch(
-            "services.twitter_oauth.TwitterOAuth"
+            "nodes.twitter._oauth.TwitterOAuth"
         ) as oauth_cls:
             oauth_instance = MagicMock()
             oauth_instance.refresh_access_token = refresh_mock

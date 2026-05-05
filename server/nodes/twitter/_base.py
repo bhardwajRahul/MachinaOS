@@ -62,7 +62,7 @@ async def get_twitter_client():
 async def refresh_and_get_client():
     """Refresh the OAuth2 token and return a new client."""
     from core.container import container
-    from services.twitter_oauth import TwitterOAuth
+    from nodes.twitter._oauth import TwitterOAuth
     from xdk import Client
 
     auth_service = container.auth_service()

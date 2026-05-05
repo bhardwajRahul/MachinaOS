@@ -4,7 +4,7 @@ Used by the four twitter plugins in this folder (twitter_send, twitter_search,
 twitter_user, twitter_receive).
 
 OAuth 2.0 with PKCE. The refresh flow is non-trivial (custom code exchange
-in :mod:`services.twitter_oauth`), so :meth:`build_client` returns an
+in :mod:`nodes.twitter._oauth`), so :meth:`build_client` returns an
 authenticated XDK ``Client`` — that's what the four twitter plugins
 actually hand to the XDK API methods. Use :func:`nodes.twitter._base.call_with_retry`
 on top; it transparently refreshes on 401/403 via this class.

@@ -219,14 +219,22 @@ class TestDeleteApiKey:
 
 
 class TestTwitterOAuthHandlers:
+    # Twitter handlers moved to ``nodes/twitter/_handlers.py`` as part
+    # of the plugin-extraction migration. The tests now import
+    # directly from the plugin folder; the dispatch contract via
+    # ``register_ws_handlers`` is exercised by
+    # ``test_plugin_self_containment.py``.
+
     async def test_login_fails_without_client_id(self, patched_container, fake_ws):
-        result = await _call(ws_module.handle_twitter_oauth_login, {}, fake_ws)
+        from nodes.twitter._handlers import handle_twitter_oauth_login
+        result = await _call(handle_twitter_oauth_login, {}, fake_ws)
         assert result["success"] is False
         assert "Client ID" in result["error"]
 
     async def test_login_returns_authorization_url(
         self, patched_container, fake_ws
     ):
+        from nodes.twitter._handlers import handle_twitter_oauth_login
         await patched_container.auth.store_api_key(
             "twitter_client_id", "ci-test", models=[]
         )
@@ -234,25 +242,28 @@ class TestTwitterOAuthHandlers:
             "twitter_client_secret", "cs-test", models=[]
         )
 
-        result = await _call(ws_module.handle_twitter_oauth_login, {}, fake_ws)
+        result = await _call(handle_twitter_oauth_login, {}, fake_ws)
 
         assert result["success"] is True
         assert result["url"].startswith("https://x.com/i/oauth2/authorize")
         assert "state" in result
 
     async def test_status_when_disconnected(self, patched_container, fake_ws):
-        result = await _call(ws_module.handle_twitter_oauth_status, {}, fake_ws)
+        from nodes.twitter._handlers import handle_twitter_oauth_status
+        result = await _call(handle_twitter_oauth_status, {}, fake_ws)
         assert result["connected"] is False
         assert result["username"] is None
 
     async def test_logout_clears_oauth_tokens(self, patched_container, fake_ws):
-        # Pre-populate OAuth tokens
+        from nodes.twitter._handlers import handle_twitter_logout
         await patched_container.auth.store_oauth_tokens(
             "twitter", "access", "refresh"
         )
-        # Mock the revoke calls so we don't hit the network
-        with patch("services.twitter_oauth.TwitterOAuth.revoke_token", new=AsyncMock(return_value={"success": True})):
-            result = await _call(ws_module.handle_twitter_logout, {}, fake_ws)
+        with patch(
+            "nodes.twitter._oauth.TwitterOAuth.revoke_token",
+            new=AsyncMock(return_value={"success": True}),
+        ):
+            result = await _call(handle_twitter_logout, {}, fake_ws)
 
         assert result["success"] is True
         assert await patched_container.auth.get_oauth_tokens("twitter") is None
