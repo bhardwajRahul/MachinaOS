@@ -114,22 +114,23 @@ class TestValidateApiKey:
         # Broadcaster notified with hasKey + models
         patched_container.broadcaster.update_api_key_status.assert_awaited_once()
 
-    @patch("services.ai.PROVIDER_CONFIGS", {})
-    @patch.object(ws_module, "_SPECIAL_PROVIDER_VALIDATORS", {})
-    async def test_validate_skips_model_fetch_for_non_llm(
+    async def test_validate_unknown_provider_returns_error(
         self, patched_container, fake_ws
     ):
-        # Pick a provider that's neither in PROVIDER_CONFIGS (LLM) nor in
-        # _SPECIAL_PROVIDER_VALIDATORS (Google Maps / Apify probe). The
-        # handler should fall through to the empty-models path.
+        # ``handle_validate_api_key`` dispatches via
+        # ``CREDENTIAL_REGISTRY``; a provider without a registered
+        # ``Credential`` subclass is an explicit error (no fall-through
+        # to the default LLM probe — every supported provider must own
+        # its credential class).
         result = await _call(
             ws_module.handle_validate_api_key,
             {"provider": "anonymous_provider", "api_key": "any-test"},
             fake_ws,
         )
 
-        assert result["valid"] is True
-        assert result["models"] == []
+        assert result["success"] is False
+        assert result["valid"] is False
+        assert "anonymous_provider" in result["error"]
         patched_container.ai.fetch_models.assert_not_called()
 
     async def test_missing_required_fields_returns_error(

@@ -1231,71 +1231,34 @@ async def handle_get_ai_models(data: Dict[str, Any], websocket: WebSocket) -> Di
 async def handle_validate_api_key(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
     """Validate and store an API key.
 
-    Single entry point for all providers. Dispatches to provider-specific
-    validators (Google Maps geocode probe, Apify /users/me probe) for
-    non-LLM providers; otherwise falls through to the default LLM
-    ``/v1/models`` probe via ``ai_service.fetch_models``. The frontend
-    calls this one handler for every provider — no per-provider branching
-    on the TypeScript side.
+    Pure dispatch — looks up the plugin's ``Credential`` subclass in
+    ``CREDENTIAL_REGISTRY`` and calls its ``validate`` classmethod. The
+    base ``Credential.validate`` (defined in
+    ``services/plugin/credential.py``) wires the shared scaffold
+    (storage + status broadcast + error classification + response
+    envelope) and dispatches the per-provider probe via the
+    subclass-supplied ``_probe`` hook. Cloud LLM providers inherit
+    ``_LLMApiKey._probe`` (``ai_service.fetch_models``); Maps + Apify +
+    local-LLM credentials override ``_probe`` (or the whole ``validate``
+    method, in the local-LLM case) with their own bespoke probes.
 
-    Invalid-key responses (401/403) and provider-side errors (4xx/5xx,
-    timeouts, DNS failures) are mapped to a clean
-    ``{success: True, valid: False, message: "..."}`` envelope — same
-    shape the Maps/Apify validators return — so the frontend toast
-    surfaces the actual reason instead of the generic
-    "Validation failed" fallback. These are user-correctable input
-    failures, not handler bugs, so they log at WARNING with a one-liner
-    rather than ERROR with a stacktrace.
+    The router doesn't know about specific providers — adding a new
+    provider with a special validator is a single new ``_probe``
+    override on the plugin's ``Credential`` subclass.
     """
-    import httpx
+    from services.plugin.credential import CREDENTIAL_REGISTRY
 
     provider = data["provider"].lower()
     normalized = dict(data, provider=provider)
 
-    if provider in _SPECIAL_PROVIDER_VALIDATORS:
-        return await _SPECIAL_PROVIDER_VALIDATORS[provider](normalized, websocket)
-
-    ai_service = container.ai_service()
-    auth_service = container.auth_service()
-    broadcaster = get_status_broadcaster()
-    api_key = data["api_key"].strip()
-
-    # Fetch models for AI providers (any provider with a models_endpoint in llm_defaults.json)
-    from services.ai import PROVIDER_CONFIGS
-    try:
-        models = await ai_service.fetch_models(provider, api_key) if provider in PROVIDER_CONFIGS else []
-    except httpx.HTTPStatusError as e:
-        status = e.response.status_code
-        if status in (401, 403):
-            msg = "Invalid API key"
-        elif status == 429:
-            msg = "Rate limited by provider — try again in a moment"
-        elif 500 <= status < 600:
-            msg = f"Provider error ({status}) — try again later"
-        else:
-            msg = f"Provider rejected the key ({status})"
-        logger.warning("API key validation failed for %s: HTTP %s", provider, status)
-        await broadcaster.update_api_key_status(
-            provider=provider, valid=False, message=msg, has_key=False, models=[]
-        )
-        return {"provider": provider, "valid": False, "message": msg, "timestamp": time.time()}
-    except (httpx.TimeoutException, httpx.RequestError) as e:
-        # DNS, connect, read timeouts — the provider is unreachable.
-        logger.warning("API key validation could not reach %s: %s", provider, e)
-        msg = "Could not reach provider — check your network and try again"
-        await broadcaster.update_api_key_status(
-            provider=provider, valid=False, message=msg, has_key=False, models=[]
-        )
-        return {"provider": provider, "valid": False, "message": msg, "timestamp": time.time()}
-
-    await auth_service.store_api_key(provider=provider, api_key=api_key, models=models,
-                                      session_id=data.get("session_id", "default"))
-    # Broadcast with hasKey and models so frontend can update reactively
-    await broadcaster.update_api_key_status(
-        provider=provider, valid=True, message="API key validated",
-        has_key=True, models=models
-    )
-    return {"provider": provider, "valid": True, "models": models, "timestamp": time.time()}
+    cred_cls = CREDENTIAL_REGISTRY.get(provider)
+    if cred_cls is None:
+        return {
+            "success": False,
+            "valid": False,
+            "error": f"Unknown provider '{provider}' — no Credential class registered.",
+        }
+    return await cred_cls.validate(normalized)
 
 
 @ws_handler("provider")
@@ -1929,168 +1892,15 @@ async def handle_android_relay_reconnect(data: Dict[str, Any], websocket: WebSoc
         return {"success": False, "error": str(e)}
 
 
-# ============================================================================
-# Maps Handlers
-# ============================================================================
 
-async def handle_validate_maps_key(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
-    """Validate Google Maps API key and save to database if valid."""
-    import httpx
-    broadcaster = get_status_broadcaster()
-    auth_service = container.auth_service()
-
-    api_key = data.get("api_key", "").strip()
-    session_id = data.get("session_id", "default")
-
-    if not api_key:
-        return {"success": False, "valid": False, "error": "api_key required"}
-
-    try:
-        # Test the API key with a simple geocoding request
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                "https://maps.googleapis.com/maps/api/geocode/json",
-                params={
-                    "address": "1600 Amphitheatre Parkway, Mountain View, CA",
-                    "key": api_key
-                },
-                timeout=10.0
-            )
-
-            response_data = response.json()
-
-            if response_data.get("status") == "OK":
-                # Save the validated key to database
-                await auth_service.store_api_key(
-                    provider="google_maps",
-                    api_key=api_key,
-                    models=[],
-                    session_id=session_id
-                )
-                await broadcaster.update_api_key_status(
-                    provider="google_maps",
-                    valid=True,
-                    message="API key validated successfully"
-                )
-                return {"success": True, "valid": True, "message": "Google Maps API key is valid"}
-
-            elif response_data.get("status") == "REQUEST_DENIED":
-                error_msg = response_data.get("error_message", "Invalid API key")
-                await broadcaster.update_api_key_status(
-                    provider="google_maps",
-                    valid=False,
-                    message=error_msg
-                )
-                return {"success": True, "valid": False, "message": error_msg}
-
-            else:
-                # Other statuses like ZERO_RESULTS still mean the key works
-                # Save the validated key to database
-                await auth_service.store_api_key(
-                    provider="google_maps",
-                    api_key=api_key,
-                    models=[],
-                    session_id=session_id
-                )
-                await broadcaster.update_api_key_status(
-                    provider="google_maps",
-                    valid=True,
-                    message="API key validated"
-                )
-                return {"success": True, "valid": True, "message": f"API key is valid (status: {response_data.get('status')})"}
-
-    except httpx.TimeoutException:
-        await broadcaster.update_api_key_status(
-            provider="google_maps",
-            valid=False,
-            message="Validation request timed out"
-        )
-        return {"success": False, "valid": False, "error": "Validation request timed out"}
-
-    except Exception as e:
-        logger.error("Maps key validation failed", error=str(e))
-        await broadcaster.update_api_key_status(
-            provider="google_maps",
-            valid=False,
-            message=str(e)
-        )
-        return {"success": False, "valid": False, "error": str(e)}
-
-
-# ============================================================================
-# Apify Handlers
-# ============================================================================
-
-async def handle_validate_apify_key(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
-    """Validate Apify API token and save to database if valid."""
-    from nodes.scraper.apify_actor import validate_apify_token
-
-    broadcaster = get_status_broadcaster()
-    auth_service = container.auth_service()
-
-    api_key = data.get("api_key", "").strip()
-    session_id = data.get("session_id", "default")
-
-    if not api_key:
-        return {"success": False, "valid": False, "error": "api_key required"}
-
-    try:
-        result = await validate_apify_token(api_key)
-
-        if result.get("valid"):
-            # Save the validated key to database
-            await auth_service.store_api_key(
-                provider="apify",
-                api_key=api_key,
-                models=[],
-                session_id=session_id
-            )
-            await broadcaster.update_api_key_status(
-                provider="apify",
-                valid=True,
-                message=f"Apify token validated - user: {result.get('username', 'unknown')}"
-            )
-            return {
-                "success": True,
-                "valid": True,
-                "message": "Apify API token is valid",
-                "username": result.get("username"),
-                "email": result.get("email"),
-                "plan": result.get("plan")
-            }
-        else:
-            error_msg = result.get("error", "Invalid API token")
-            await broadcaster.update_api_key_status(
-                provider="apify",
-                valid=False,
-                message=error_msg
-            )
-            return {"success": True, "valid": False, "message": error_msg}
-
-    except Exception as e:
-        logger.error("Apify key validation failed", error=str(e))
-        await broadcaster.update_api_key_status(
-            provider="apify",
-            valid=False,
-            message=str(e)
-        )
-        return {"success": False, "valid": False, "error": str(e)}
-
-
-# Per-provider validation strategies. Register any non-LLM provider here
-# and `handle_validate_api_key` will dispatch to it automatically, so the
-# frontend only ever calls one WS message type. Local-LLM validators
-# live in their plugin folder (see `nodes/model/_local_validator.py`)
-# so all per-provider behaviour for ollama/lmstudio stays in `nodes/model/`.
-from nodes.model._local_validator import validate_local_llm as _validate_local_llm
-
-_SPECIAL_PROVIDER_VALIDATORS = {
-    "google_maps": handle_validate_maps_key,
-    "apify": handle_validate_apify_key,
-    "ollama": _validate_local_llm,
-    "lmstudio": _validate_local_llm,
-}
-
+# ----------------------------------------------------------------------------
+# Per-provider credential validators (Maps geocode probe, Apify /users/me,
+# Ollama / LM Studio SDK probes) live on their plugins Credential
+# subclass via the shared Credential._probe / Credential.validate scaffold
+# in services/plugin/credential.py. handle_validate_api_key (above) is a
+# pure dispatch through CREDENTIAL_REGISTRY  no per-provider branches in
+# this router.
+# ----------------------------------------------------------------------------
 
 # ============================================================================
 # WhatsApp Handlers - Wrappers for services.whatsapp_service functions
@@ -3451,11 +3261,12 @@ MESSAGE_HANDLERS: Dict[str, MessageHandler] = {
     "android_relay_disconnect": handle_android_relay_disconnect,
     "android_relay_reconnect": handle_android_relay_reconnect,
 
-    # Maps operations
-    "validate_maps_key": handle_validate_maps_key,
-
-    # Apify operations
-    "validate_apify_key": handle_validate_apify_key,
+    # Maps + Apify validation now flow through ``handle_validate_api_key``
+    # (which dispatches via ``CREDENTIAL_REGISTRY`` to
+    # ``GoogleMapsCredential._probe`` / ``ApifyCredential._probe``).
+    # The legacy ``validate_maps_key`` / ``validate_apify_key`` WS message
+    # types are no longer needed — the frontend already uses
+    # ``validate_api_key`` for all providers.
 
     # WhatsApp operations
     "whatsapp_status": handle_whatsapp_status,

@@ -57,13 +57,20 @@ class TestCredentialMutationHandlersBroadcast:
     """
 
     def test_validate_api_key_broadcasts(self):
-        """Sanity — already correct path; confirms the matcher works."""
-        from routers import websocket as ws_module
+        """Validation broadcasts come from ``Credential.validate`` now.
 
-        src = _handler_source(ws_module.handle_validate_api_key)
+        ``handle_validate_api_key`` is a pure dispatcher that calls
+        ``CREDENTIAL_REGISTRY[provider].validate(...)``. The broadcast
+        happens inside ``Credential.validate`` (the shared scaffold in
+        ``services/plugin/credential.py``). This test checks the
+        invariant at the point where it actually lives.
+        """
+        from services.plugin.credential import Credential
+
+        src = inspect.getsource(Credential.validate)
         assert _BROADCAST_PATTERN.search(src), (
-            "handle_validate_api_key must broadcast api_key_status "
-            "or credential_catalogue_updated"
+            "Credential.validate must broadcast via update_api_key_status — "
+            "every credential mutation must surface to connected clients."
         )
 
     def test_save_api_key_broadcasts(self):

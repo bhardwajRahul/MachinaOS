@@ -13,14 +13,132 @@ Two concrete bases:
 
 Both are discovered at import time via :data:`CREDENTIAL_REGISTRY`
 (populated by ``__init_subclass__``). Nothing else needs to wire them.
+
+Validation is also a base-class concern. Every "validate this key"
+flow shares the same wiring (read api_key + session_id from request,
+call provider probe, store on success, broadcast status, return
+envelope). Only the probe itself varies. That common scaffold lives on
+:meth:`Credential.validate`; subclasses override the lighter
+:meth:`Credential._probe` to supply the per-provider call. See
+:class:`ProbeResult` for the typed return shape.
 """
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, Dict, Literal, Optional, Sequence
+import logging
+import time
+from dataclasses import dataclass, field
+from typing import Any, ClassVar, Dict, List, Literal, Optional, Sequence
+
+import httpx
+
+logger = logging.getLogger(__name__)
 
 
 CREDENTIAL_REGISTRY: Dict[str, type] = {}
+
+
+@dataclass
+class ProbeResult:
+    """Outcome of a per-provider validation probe.
+
+    Carries the common ``valid`` / ``message`` flags every validator
+    returns, plus optional fields a few providers extend with
+    (``models`` for LLM ``/v1/models`` lists, ``model_params`` for
+    Ollama / LM Studio per-model context, ``extra`` for
+    provider-specific extensions like Apify's ``username`` / ``email``
+    / ``plan``). The base ``Credential.validate`` reads these fields
+    when wiring storage / broadcast / response envelope so subclasses
+    don't repeat any of that scaffolding.
+    """
+
+    valid: bool
+    message: str = ""
+    models: List[str] = field(default_factory=list)
+    model_params: Optional[Dict[str, Dict[str, Any]]] = None
+    # Free-form passthrough fields for provider-specific extensions
+    # (Apify returns username / email / plan; Twitter returns user id;
+    # Maps returns nothing). Merged into the response envelope.
+    extra: Dict[str, Any] = field(default_factory=dict)
+
+
+def classify_credential_error(
+    exc: BaseException, *, display_name: str
+) -> ProbeResult:
+    """Map a transport / SDK exception to a typed ``ProbeResult``.
+
+    Single source of truth for credential-error → user-message mapping.
+    Used by the base ``Credential.validate`` after a ``_probe`` call
+    raises, and by the local-LLM probe directly. Catches the documented
+    ``httpx`` / ``openai`` exception hierarchy so operator logs see
+    "HTTP 401" / "connect-refused" / "timeout" instead of an opaque
+    repr.
+
+    Returns a ``ProbeResult(valid=False, message=...)`` carrying the
+    user-facing string. Operator logs are emitted at WARN by the
+    caller — this helper just classifies, doesn't log.
+    """
+    import openai  # local import: openai is a heavy SDK
+
+    if isinstance(exc, httpx.TimeoutException) or isinstance(exc, openai.APITimeoutError):
+        return ProbeResult(
+            valid=False,
+            message=f"Request to {display_name} timed out — try again or check the network.",
+        )
+
+    if isinstance(exc, httpx.ConnectError) or isinstance(exc, openai.APIConnectionError):
+        return ProbeResult(
+            valid=False,
+            message=f"Could not reach {display_name}. Is the server running?",
+        )
+
+    if isinstance(exc, httpx.HTTPStatusError):
+        status = exc.response.status_code
+        return _classify_status(status, display_name)
+
+    if isinstance(exc, openai.AuthenticationError):
+        return _classify_status(401, display_name)
+    if isinstance(exc, openai.PermissionDeniedError):
+        return _classify_status(403, display_name)
+    if isinstance(exc, openai.NotFoundError):
+        return _classify_status(404, display_name)
+    if isinstance(exc, openai.RateLimitError):
+        return _classify_status(429, display_name)
+    if isinstance(exc, openai.APIStatusError):
+        status = getattr(getattr(exc, "response", None), "status_code", 500)
+        return _classify_status(status, display_name)
+
+    # Unknown exception: surface the type name so the operator log line
+    # is still useful, but don't dump a stacktrace into the user's toast.
+    return ProbeResult(
+        valid=False,
+        message=f"Could not validate {display_name}: {type(exc).__name__}: {exc}",
+    )
+
+
+def _classify_status(status: int, display_name: str) -> ProbeResult:
+    """Map an HTTP status code to a user-facing message."""
+    if status in (401, 403):
+        return ProbeResult(valid=False, message=f"{display_name} rejected the API key.")
+    if status == 404:
+        return ProbeResult(
+            valid=False,
+            message=f"{display_name} returned 404 — endpoint not found. Check the URL.",
+        )
+    if status == 429:
+        return ProbeResult(
+            valid=False,
+            message=f"{display_name} rate-limited the request — try again shortly.",
+        )
+    if 500 <= status < 600:
+        return ProbeResult(
+            valid=False,
+            message=f"{display_name} returned HTTP {status} — try again later.",
+        )
+    return ProbeResult(
+        valid=False,
+        message=f"{display_name} returned HTTP {status}.",
+    )
 
 
 class Credential:
@@ -72,6 +190,105 @@ class Credential:
         override to implement their auth scheme.
         """
         return request
+
+    # ---- Validation -------------------------------------------------
+    #
+    # Every "validate this credential" flow follows the same wiring:
+    # read api_key + session_id from the request, run a per-provider
+    # probe, store on success, broadcast status, return the standard
+    # response envelope. Only the probe call genuinely varies — so the
+    # scaffolding lives on the base and subclasses override the lighter
+    # :meth:`_probe` hook. The dispatch entry point (called by the WS
+    # router) is :meth:`validate`; subclasses with non-standard
+    # side-effect ordering (e.g. local-LLM credentials store under TWO
+    # keys) override :meth:`validate` directly.
+
+    @classmethod
+    async def validate(cls, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Run the credential validation probe and wire side effects.
+
+        The shared scaffold:
+          1. Read ``api_key`` + ``session_id`` from the request data.
+          2. Guard: missing key → fast-fail envelope.
+          3. Call :meth:`_probe` (subclass-supplied; provider-specific).
+          4. On exception, classify via :func:`classify_credential_error`.
+          5. On valid result, persist via ``auth_service.store_api_key``.
+          6. Broadcast the new status via
+             ``StatusBroadcaster.update_api_key_status`` (always — invalid
+             results clear stale state on connected clients).
+          7. Return the standard response envelope.
+
+        Subclasses with non-standard storage / broadcast (e.g. local-LLM
+        credentials that store both URL and placeholder key) override
+        this method directly.
+        """
+        from core.container import container
+        from services.status_broadcaster import get_status_broadcaster
+
+        api_key = (data.get("api_key") or "").strip()
+        session_id = data.get("session_id", "default")
+        if not api_key:
+            return {
+                "success": False,
+                "valid": False,
+                "error": f"{cls.id} api_key required",
+            }
+
+        try:
+            result = await cls._probe(api_key)
+        except Exception as exc:  # noqa: BLE001 — classified below
+            display = cls.display_name or cls.id
+            result = classify_credential_error(exc, display_name=display)
+            logger.warning(
+                "[%s] credential probe failed: %s",
+                cls.id,
+                result.message,
+            )
+
+        broadcaster = get_status_broadcaster()
+        auth_service = container.auth_service()
+
+        if result.valid:
+            await auth_service.store_api_key(
+                provider=cls.id,
+                api_key=api_key,
+                models=result.models,
+                session_id=session_id,
+                model_params=result.model_params,
+            )
+
+        await broadcaster.update_api_key_status(
+            provider=cls.id,
+            valid=result.valid,
+            message=result.message,
+            has_key=result.valid,
+            models=result.models,
+        )
+
+        return {
+            "success": True,
+            "provider": cls.id,
+            "valid": result.valid,
+            "message": result.message,
+            "models": result.models,
+            "timestamp": time.time(),
+            **result.extra,
+        }
+
+    @classmethod
+    async def _probe(cls, api_key: str) -> ProbeResult:
+        """Run the per-provider validation probe.
+
+        Subclass override point — the probe MUST NOT do storage,
+        broadcasts, or registry mutation. It returns a
+        :class:`ProbeResult` describing what the upstream returned;
+        :meth:`validate` does the rest. Raise ``httpx.*`` /
+        ``openai.OpenAIError`` to let the base map them to a typed
+        message via :func:`classify_credential_error`.
+        """
+        raise NotImplementedError(
+            f"Credential subclass {cls.__name__} must override _probe()"
+        )
 
 
 class OAuth2Credential(Credential):

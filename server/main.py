@@ -443,19 +443,36 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
-# Include routers
+# Include framework-level routers (everything that's NOT plugin-specific
+# stays here). Plugin-owned routers self-register via
+# ``services.ws_handler_registry.register_router`` from their plugin
+# folder's ``__init__.py`` and are mounted via the loop below — main.py
+# never imports a migrated plugin module by name.
 app.include_router(auth.router)  # Auth routes (login, register, logout, status)
 app.include_router(nodejs_compat.router)  # Node.js compatibility (includes root endpoints)
 app.include_router(workflow.router)
 app.include_router(database.router)
+app.include_router(websocket.router)
+app.include_router(credentials.router)  # Credentials panel - lazy per-tile icon endpoint (n8n pattern)
+app.include_router(schemas.router)  # Per-node output schema endpoint (GET /api/schemas/nodes/{type}.json)
+
+# Routers awaiting migration into their plugin folders. As each plugin
+# moves to the self-contained pattern (nodes/<plugin>/_router.py +
+# register_router from __init__.py), the corresponding line below is
+# removed. Tracked in the plugin-extraction plan.
 app.include_router(maps.router)
 app.include_router(android.router)
-app.include_router(websocket.router)
 app.include_router(webhook.router)
 app.include_router(twitter.router)  # Twitter/X OAuth routes
 app.include_router(google.router)  # Google Workspace OAuth routes (Gmail, Calendar, Drive, Sheets, Tasks, Contacts)
-app.include_router(credentials.router)  # Credentials panel - lazy per-tile icon endpoint (n8n pattern)
-app.include_router(schemas.router)  # Per-node output schema endpoint (GET /api/schemas/nodes/{type}.json)
+
+# Plugin-registered routers — populated by `nodes/<plugin>/__init__.py`
+# at import time via `register_router(...)`. Plugins are imported during
+# the node-discovery walk on app startup; iterating here picks up
+# anything that registered.
+from services.ws_handler_registry import get_routers as _get_plugin_routers
+for _plugin_router in _get_plugin_routers():
+    app.include_router(_plugin_router)
 
 
 # ---------------------------------------------------------------------------

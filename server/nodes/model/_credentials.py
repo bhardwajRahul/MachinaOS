@@ -21,15 +21,43 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from services.plugin.credential import ApiKeyCredential
+from services.plugin.credential import ApiKeyCredential, ProbeResult
 
 
 class _LLMApiKey(ApiKeyCredential):
-    """Shared defaults. Subclasses only set id / display_name / icon."""
+    """Shared defaults. Subclasses only set id / display_name / icon.
+
+    The :meth:`_probe` override calls ``ai_service.fetch_models`` —
+    every cloud LLM provider in this file inherits it, so adding a new
+    OpenAI-compatible provider is purely declarative (id + base_url in
+    JSON; no validator code). The local-server credential override
+    (:class:`_LocalLLM`) supersedes ``validate`` entirely because its
+    side-effect ordering differs (URL stored under ``{id}_proxy``
+    before the probe + per-model context registration after).
+    """
 
     category = "AI"
     key_name = "Authorization"
     key_location = "bearer"
+
+    @classmethod
+    async def _probe(cls, api_key: str) -> ProbeResult:
+        """Default LLM probe: fetch the provider's model list.
+
+        Hits ``GET /v1/models`` (or the provider equivalent) via
+        :meth:`AIService.fetch_models`. Returns a populated
+        :class:`ProbeResult` on success; raises ``httpx``/``openai``
+        exceptions for the base ``Credential.validate`` to classify.
+        """
+        from core.container import container
+
+        ai_service = container.ai_service()
+        models = await ai_service.fetch_models(cls.id, api_key)
+        return ProbeResult(
+            valid=True,
+            message="API key validated",
+            models=models,
+        )
 
 
 class OpenAICredential(_LLMApiKey):
@@ -124,6 +152,23 @@ class _LocalLLM(_LLMApiKey):
 
         api_key = await container.auth_service().get_api_key(cls.id)
         return {"api_key": api_key or "ollama"}
+
+    @classmethod
+    async def validate(cls, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Probe the user's local server via the official SDK.
+
+        Overrides the base ``Credential.validate`` because local-LLM
+        side-effect ordering genuinely differs from the cloud case:
+        the user's URL is persisted under ``{cls.id}_proxy`` BEFORE
+        the probe runs, the placeholder ``api_key="ollama"`` is
+        stored under ``cls.id`` only on success, and per-model context
+        is registered in the model registry. Delegates to the
+        SDK-typed probe in ``_local_validator.py`` which already owns
+        that full flow.
+        """
+        from ._local_validator import validate_local_llm
+
+        return await validate_local_llm(dict(data, provider=cls.id))
 
 
 class OllamaCredential(_LocalLLM):

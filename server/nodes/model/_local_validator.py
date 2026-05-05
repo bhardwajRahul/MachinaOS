@@ -44,8 +44,6 @@ from typing import Any, Dict, List, Optional, Tuple
 import httpx
 import lmstudio
 import ollama
-from fastapi import WebSocket
-
 from core.container import container
 from core.logging import get_logger
 from services.status_broadcaster import get_status_broadcaster
@@ -239,8 +237,16 @@ async def _fetch_local_models(provider: str, base_url: str) -> List[Dict[str, An
     raise ValueError(f"Unsupported local provider: {provider}")
 
 
-async def validate_local_llm(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
-    """Validator for ollama / lmstudio. Matches the SPECIAL_PROVIDER_VALIDATORS contract."""
+async def validate_local_llm(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Validator for ollama / lmstudio. Returns the standard response envelope.
+
+    Called from :meth:`nodes.model._credentials._LocalLLM.validate` (the
+    ``Credential.validate`` hook ``handle_validate_api_key`` dispatches
+    to). All side effects (URL persistence, status broadcasts, model
+    registry registration) go through the ``StatusBroadcaster`` /
+    ``AuthService`` singletons — no per-request WebSocket reference is
+    needed.
+    """
     provider = data["provider"].lower()
     base_url = data.get("api_key", "").strip()
     session_id = data.get("session_id", "default")

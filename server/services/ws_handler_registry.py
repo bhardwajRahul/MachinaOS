@@ -1,33 +1,40 @@
-"""WebSocket handler registry for plugin-owned messages.
+"""Plugin self-registration registries.
 
-Mirrors the pattern used by :data:`services.node_registry._HANDLER_REGISTRY`
-(plugin nodes self-register via ``BaseNode.__init_subclass__``) but for
-side-channel WebSocket commands like ``telegram_connect``,
-``whatsapp_status``, etc.
+Two sibling concerns share this file because they're the same pattern
+(idempotent dict + collision check) for the same audience (plugin
+``__init__.py`` modules wiring themselves into the framework):
 
-Each ``nodes/<group>/__init__.py`` calls :func:`register_ws_handlers`
-with a dict of ``message_type -> async handler``; the central WebSocket
-router reads :func:`get_ws_handlers` at dispatch time and merges the
-result into its own legacy ``MESSAGE_HANDLERS`` table.
+1. **WebSocket handlers** — ``register_ws_handlers({type: handler})``
+   for side-channel commands like ``telegram_connect``,
+   ``whatsapp_status``. Read by ``routers/websocket.py`` at dispatch
+   time and merged into ``MESSAGE_HANDLERS``.
 
-No hardcoded plugin names anywhere in the router.  Adding a new
-plugin's WS surface is a one-line registration call inside that
-plugin's package.
+2. **HTTP routers** — ``register_router(APIRouter, name="<plugin>")``
+   for plugin-owned routes (OAuth callbacks, webhook receivers,
+   direct-API endpoints). Read by ``server.main`` after plugin discovery
+   and ``app.include_router(...)``'d.
+
+No hardcoded plugin names anywhere in the central router or main.py.
+Adding a new plugin's WS / HTTP surface is one registration call inside
+that plugin's package.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any, Awaitable, Callable, Dict
+from typing import Any, Awaitable, Callable, Dict, List
 
-from fastapi import WebSocket
+from fastapi import APIRouter, WebSocket
 
 logger = logging.getLogger(__name__)
 
 WSHandler = Callable[[Dict[str, Any], WebSocket], Awaitable[Dict[str, Any]]]
 
-_REGISTRY: Dict[str, WSHandler] = {}
+_WS_REGISTRY: Dict[str, WSHandler] = {}
+_ROUTER_REGISTRY: Dict[str, APIRouter] = {}
 
+
+# ---- WebSocket handlers --------------------------------------------------
 
 def register_ws_handlers(handlers: Dict[str, WSHandler]) -> None:
     """Publish a batch of ``message_type -> handler`` mappings.
@@ -37,14 +44,14 @@ def register_ws_handlers(handlers: Dict[str, WSHandler]) -> None:
     ``ValueError`` to surface plugin namespace collisions early.
     """
     for msg_type, handler in handlers.items():
-        existing = _REGISTRY.get(msg_type)
+        existing = _WS_REGISTRY.get(msg_type)
         if existing is not None and existing is not handler:
             raise ValueError(
                 f"WS handler for message_type '{msg_type}' is already registered "
                 f"by {existing.__module__}.{existing.__qualname__}; refusing to "
                 f"overwrite with {handler.__module__}.{handler.__qualname__}"
             )
-        _REGISTRY[msg_type] = handler
+        _WS_REGISTRY[msg_type] = handler
 
 
 def get_ws_handlers() -> Dict[str, WSHandler]:
@@ -53,9 +60,39 @@ def get_ws_handlers() -> Dict[str, WSHandler]:
     Returns a fresh dict so callers can mutate without affecting the
     registry (e.g. ``MESSAGE_HANDLERS = {**core, **get_ws_handlers()}``).
     """
-    return dict(_REGISTRY)
+    return dict(_WS_REGISTRY)
 
 
 def list_registered_types() -> list[str]:
     """For diagnostics / startup logging."""
-    return sorted(_REGISTRY.keys())
+    return sorted(_WS_REGISTRY.keys())
+
+
+# ---- HTTP routers --------------------------------------------------------
+
+def register_router(router: APIRouter, *, name: str) -> None:
+    """Publish a plugin-owned ``APIRouter`` for inclusion at app startup.
+
+    ``name`` is the plugin folder name — used for diagnostics and
+    collision detection. Same idempotency contract as the WS side: the
+    same router for the same name is a no-op; a different router for an
+    existing name raises ``ValueError`` so plugin-name collisions fail
+    at import time, not request time.
+    """
+    existing = _ROUTER_REGISTRY.get(name)
+    if existing is not None and existing is not router:
+        raise ValueError(
+            f"Router for '{name}' is already registered; two plugin folders "
+            f"cannot claim the same name."
+        )
+    _ROUTER_REGISTRY[name] = router
+
+
+def get_routers() -> List[APIRouter]:
+    """Snapshot of registered routers in registration order."""
+    return list(_ROUTER_REGISTRY.values())
+
+
+def list_registered_routers() -> List[str]:
+    """For diagnostics / startup logging."""
+    return sorted(_ROUTER_REGISTRY.keys())
