@@ -71,9 +71,18 @@ const ProviderDefaultsSection: React.FC<Props> = ({ providerId }) => {
   const thinkingEnabled = form.watch('thinking_enabled');
   const { isDirty } = form.formState;
 
-  // Load defaults + models on mount.
+  // Load defaults + models on mount AND on providerId change.
+  // Reset models / constraints synchronously when the provider switches
+  // so a stale list from the previous panel can't bleed through. Without
+  // this, opening "OpenAI" then "LM Studio" left the OpenAI model list
+  // visible in the LM Studio dropdown — the dropdown only saw an
+  // explicit `setModels(m)` when the new fetch returned a non-empty
+  // list, so an empty `lmstudio` response (no Fetch clicked yet) was a
+  // no-op and the previous panel's state survived.
   useEffect(() => {
     if (!isConnected) return;
+    setModels([]);
+    setConstraints(null);
     let cancelled = false;
     (async () => {
       setLoading(true);
@@ -84,7 +93,10 @@ const ProviderDefaultsSection: React.FC<Props> = ({ providerId }) => {
         ]);
         if (!cancelled) {
           form.reset((d as Partial<ProviderDefaults>) ?? {});
-          if (m?.length) setModels(m);
+          // Unconditional set: clears the dropdown when the fetch comes
+          // back empty (e.g. local-LLM panel before "Fetch" was clicked,
+          // or a freshly-removed key).
+          setModels(m ?? []);
         }
       } finally {
         if (!cancelled) setLoading(false);

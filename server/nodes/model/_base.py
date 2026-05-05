@@ -100,6 +100,11 @@ class ChatModelBase(ActionNode, abstract=True):
         from core.container import container
 
         ai_service = container.ai_service()
+        # ``execute_chat`` raises ``NodeUserError`` directly for typed
+        # openai SDK failures (context overflow, bad key, server down) —
+        # BaseNode.execute() then logs at WARN with no traceback.
+        # ``RuntimeError`` here only fires for "success=False" responses
+        # that aren't typed SDK errors (real bugs worth a stacktrace).
         response = await ai_service.execute_chat(
             ctx.node_id, self.type, params.model_dump(),
         )

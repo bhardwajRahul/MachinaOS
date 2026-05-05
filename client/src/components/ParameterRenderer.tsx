@@ -18,7 +18,10 @@ import { AI_MODEL_PROVIDER_MAP } from '../lib/aiModelProviders';
 
 import { resolveNodeDescription } from '../lib/nodeSpec';
 // Map node types to provider keys for AI model nodes
-// Uses the centralized map from aiModelNodes + legacy aliases
+// Uses the centralized map from aiModelProviders.ts. Local-server
+// providers (ollama, lmstudio) live in that map alongside the cloud
+// providers, so no per-type override is needed here. The remaining
+// aliases below cover renamed-but-still-saved-in-old-workflows types.
 const NODE_TYPE_TO_PROVIDER: Record<string, string> = {
   ...AI_MODEL_PROVIDER_MAP,
   // Legacy aliases for backward compatibility
@@ -26,7 +29,6 @@ const NODE_TYPE_TO_PROVIDER: Record<string, string> = {
   'googleChatModel': 'gemini',
   'azureChatModel': 'azure_openai',
   'cohereChatModel': 'cohere',
-  'ollamaChatModel': 'ollama',
 };
 
 // Collection Renderer - n8n official style

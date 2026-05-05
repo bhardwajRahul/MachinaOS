@@ -2093,9 +2093,15 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         provider,
         api_key: apiKey
       });
+      // Backend returns one of:
+      //   { success: true,  valid: true,  models }         — key is good
+      //   { success: true,  valid: false, message }        — clean rejection (401/403/timeout/etc)
+      //   { success: false, error }                        — handler bug (uncaught exception)
+      // Surface the message field first; fall back to error so the toast
+      // shows the actual reason instead of a generic "Validation failed".
       const result = {
-        valid: response.valid || false,
-        message: response.message,
+        valid: response.valid === true,
+        message: response.message ?? response.error,
         models: response.models
       };
 

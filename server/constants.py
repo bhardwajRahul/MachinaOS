@@ -352,31 +352,50 @@ WORKFLOW_TRIGGER_TYPES: FrozenSet[str] = frozenset([
 def detect_ai_provider(node_type: str, parameters: dict = None) -> str:
     """Detect AI provider from node type or parameters.
 
+    Substring match against the node type's lower-case form. Local-server
+    providers (ollama, lmstudio) MUST be checked here — without these
+    branches `lmstudioChatModel` falls through to the final ``return
+    'openai'`` and ``execute_chat`` ends up calling api.openai.com with
+    the local-server placeholder key, which is the exact symptom users
+    see as "401 from OpenAI when I picked LM Studio".
+
     Args:
-        node_type: The node type string
-        parameters: Optional parameters dict (used for aiAgent/chatAgent)
+        node_type: The node type string (e.g. "ollamaChatModel").
+        parameters: Optional parameters dict (used for aiAgent/chatAgent
+            where the provider lives in a dropdown, not the type).
 
     Returns:
-        Provider string: 'openai', 'anthropic', 'gemini', 'openrouter', 'groq', or 'cerebras'
+        Provider string matching a key in ``services.ai.PROVIDER_CONFIGS``.
     """
     # AI Agent types get provider from parameters
     if node_type in AI_AGENT_TYPES:
         return (parameters or {}).get('provider', 'openai')
-    elif 'deepseek' in node_type.lower():
+    nt = node_type.lower()
+    # Order matters: more-specific tokens first, so e.g. `lm_studio` /
+    # `lmstudio` / `lm-studio` all classify before any future generic
+    # `openai`-prefixed match could shadow them.
+    if 'deepseek' in nt:
         return 'deepseek'
-    elif 'kimi' in node_type.lower():
+    if 'kimi' in nt:
         return 'kimi'
-    elif 'mistral' in node_type.lower():
+    if 'mistral' in nt:
         return 'mistral'
-    elif 'cerebras' in node_type.lower():
+    if 'cerebras' in nt:
         return 'cerebras'
-    elif 'groq' in node_type.lower():
+    if 'groq' in nt:
         return 'groq'
-    elif 'openrouter' in node_type.lower():
+    if 'openrouter' in nt:
         return 'openrouter'
-    elif 'anthropic' in node_type.lower():
+    if 'anthropic' in nt:
         return 'anthropic'
-    elif 'gemini' in node_type.lower():
+    if 'gemini' in nt:
         return 'gemini'
-    else:
-        return 'openai'
+    # Local-server providers — match the LMStudioChatModelNode /
+    # OllamaChatModelNode plugin types so the runtime path reads the
+    # correct {provider}_proxy credential and the openai SDK is pointed
+    # at the user's local server, not api.openai.com.
+    if 'lmstudio' in nt or 'lm_studio' in nt or 'lm-studio' in nt:
+        return 'lmstudio'
+    if 'ollama' in nt:
+        return 'ollama'
+    return 'openai'

@@ -113,7 +113,8 @@ class AuthService:
         provider: str,
         api_key: str,
         models: List[str],
-        session_id: str = "default"
+        session_id: str = "default",
+        model_params: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> bool:
         """Store API key with models in encrypted credentials database.
 
@@ -122,6 +123,11 @@ class AuthService:
             api_key: The API key to store (will be encrypted)
             models: List of available models for this key
             session_id: Session identifier for multi-user support
+            model_params: Optional per-model parameters (context_length etc.)
+                — used by local providers (Ollama, LM Studio) where the
+                context window depends on what the user has loaded.
+                Forwarded straight to the credentials DB so
+                ``model_registry`` can read real values at runtime.
 
         Returns:
             True if stored successfully, False otherwise
@@ -136,7 +142,8 @@ class AuthService:
                 provider=provider,
                 api_key=api_key,
                 models=models,
-                session_id=session_id
+                session_id=session_id,
+                model_params=model_params,
             )
 
             # 2. Cache update only after DB write succeeds. One entry,
@@ -159,6 +166,26 @@ class AuthService:
         except Exception as e:
             logger.error("Failed to store API key", provider=provider, error=str(e))
             return False
+
+    async def get_model_params(
+        self, provider: str, session_id: str = "default"
+    ) -> Dict[str, Dict[str, Any]]:
+        """Return per-model params (context_length etc.) for the provider.
+
+        Reads straight from the credentials DB — there's no in-memory
+        cache for these because they're consulted at most once per
+        chat-model execution and the DB read is cheap. Empty dict for
+        cloud providers (whose per-model params live in
+        ``model_registry.json``) and for any local provider that hasn't
+        been validated yet.
+        """
+        try:
+            return await self.credentials_db.get_api_key_model_params(
+                provider, session_id
+            )
+        except Exception as e:
+            logger.error("Failed to get model_params", provider=provider, error=str(e))
+            return {}
 
     async def get_api_key(self, provider: str, session_id: str = "default") -> Optional[str]:
         """Get decrypted API key.

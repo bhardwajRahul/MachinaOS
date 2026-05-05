@@ -235,6 +235,82 @@ class ModelRegistryService:
 
         return None
 
+    def register_local_model(
+        self,
+        provider: str,
+        model_id: str,
+        params: Dict[str, Any],
+    ) -> None:
+        """Register an Ollama / LM Studio model with its actual params.
+
+        Called from ``validate_local_llm`` after the official SDK probe
+        (``ollama.AsyncClient.ps()`` / ``lmstudio.AsyncClient.llm.list_loaded()``)
+        returns each currently-loaded model with its typed params:
+        ``context_length`` (live n_ctx the server enforces),
+        ``vision`` / ``supports_tools`` capability flags, and metadata
+        (``architecture``, ``param_size``, ``quantization``). The sync
+        ``get_context_length`` / ``get_max_output_tokens`` lookups find
+        this entry first, so chat / agent execution honour the real
+        n_ctx the server is serving — no JSON guess, no string parsing.
+
+        Stored under the same ``{provider}/{local_id}`` key shape as
+        cloud models so ``get_model_info``'s waterfall matches without
+        any per-provider branching. ``provider`` is canonical
+        (``ollama`` / ``lmstudio``).
+
+        Idempotent: a re-validation overwrites the prior entry.
+
+        Persisted to the same ``model_registry.json`` cache the
+        OpenRouter refresh writes — the entry survives a server
+        restart, so the user doesn't have to re-click "Fetch" every
+        time the process bounces just to keep the n_ctx context
+        registered for their local model.
+        """
+        ctx = int(params.get("context_length") or 0)
+        max_out = int(params.get("max_output_tokens") or 0)
+        # Default max_output to 25% of context (OpenRouter convention for
+        # local models), capped at 4096 — local backends rarely benefit
+        # from larger budgets and overcommitting eats into the prompt.
+        if not max_out and ctx:
+            max_out = min(4096, max(512, ctx // 4))
+
+        # Capability flags + metadata from the SDK probe go into
+        # `supported_parameters` so they survive the JSON roundtrip via
+        # `ModelInfo.to_dict` / `from_dict`. Cloud models populate this
+        # from OpenRouter's listing; for locals we use it as a typed
+        # capability bag so downstream code (tool-binding, vision UI
+        # gating) can read the same fields regardless of provider.
+        supported: List[str] = []
+        if params.get("supports_tools"):
+            supported.append("tools")
+        if params.get("vision"):
+            supported.append("vision")
+
+        # Match the user-friendly temperature default for OpenAI-compat
+        # local servers (0..2 range — same as the JSON default).
+        info = ModelInfo(
+            id=f"{provider}/{model_id}",
+            name=model_id,
+            provider=provider,
+            local_id=model_id,
+            context_length=ctx,
+            max_output_tokens=max_out,
+            temperature_range=(0.0, 2.0),
+            supported_parameters=supported,
+        )
+        self._models[f"{provider}/{model_id}"] = info
+        logger.info(
+            "[%s] registered model %s (ctx=%s, max_out=%s, tools=%s, vision=%s)",
+            provider, model_id, ctx, max_out,
+            params.get("supports_tools", False), params.get("vision", False),
+        )
+        # Persist so the entry survives process restart.
+        try:
+            self._save_cache()
+        except Exception as e:  # noqa: BLE001 — best-effort persistence
+            logger.warning("Failed to persist local model entry %s/%s: %s",
+                           provider, model_id, e)
+
     def get_max_output_tokens(self, model: str, provider: str) -> int:
         """Get max output tokens: registry -> llm_defaults -> 4096."""
         info = self.get_model_info(model, provider)

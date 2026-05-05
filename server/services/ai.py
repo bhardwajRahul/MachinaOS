@@ -41,6 +41,15 @@ import operator
 from langchain_core.messages import BaseMessage  # eager: needed for AgentState type resolution
 import json
 
+# Eager imports — both are tiny and read on every chat/agent execution
+# path. ``openai`` is the canonical SDK whose typed exception hierarchy
+# (``BadRequestError`` / ``AuthenticationError`` / ``RateLimitError`` / …)
+# is the contract this module dispatches on; ``NodeUserError`` is the
+# framework's "user-correctable, no-traceback" sentinel used to surface
+# those typed errors cleanly through ``BaseNode.execute()``.
+import openai
+from services.plugin import NodeUserError
+
 if TYPE_CHECKING:
     from langchain_openai import ChatOpenAI  # noqa: F401
     from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage  # noqa: F401
@@ -456,9 +465,24 @@ def detect_provider_from_model(model: str) -> str:
 
 
 def is_model_valid_for_provider(model: str, provider: str) -> bool:
-    """Check if model name matches the provider's patterns."""
-    # OpenRouter is a proxy supporting all models (provider/model format) - always valid
-    if provider == 'openrouter':
+    """Check if model name matches the provider's patterns.
+
+    Pattern-matching is meaningful for cloud providers — `gpt-*` is OpenAI,
+    `claude-*` is Anthropic, etc. — and the check guards against picking
+    a model from one provider's dropdown after switching to another.
+
+    For "open-world" providers (OpenRouter proxy, local Ollama / LM Studio
+    servers) the model namespace is whatever the user has installed:
+    `llama-3.2`, `qwen2.5-coder`, `phi-3-mini`, custom GGUF files, etc.
+    None of those contain the literal substrings `ollama` or `lmstudio`,
+    so applying the cloud-style filter produces a false negative on every
+    valid local model — the call site then "uses default" which for a
+    local provider is the SAME model name, emitting a confusing
+    "invalid ... using default: <same name>" log line. Treat all three
+    as always-valid; the local-server SDK will reject genuinely missing
+    models at request time with a clear 404.
+    """
+    if provider in ('openrouter', 'ollama', 'lmstudio'):
         return True
     config = get_provider_configs().get(provider)
     if not config:
@@ -1590,6 +1614,16 @@ class AIService:
                 "execution_time": time.time() - start_time
             }
 
+        except openai.OpenAIError as e:
+            # Typed openai SDK exception — context overflow (BadRequestError),
+            # bad key (AuthenticationError), missing model (NotFoundError),
+            # server unreachable (APIConnectionError), etc. All
+            # user-correctable. Propagate as NodeUserError so BaseNode.execute()
+            # logs at WARN with no traceback.
+            log_api_call(logger, provider if 'provider' in locals() else 'unknown',
+                        model if 'model' in locals() else 'unknown', "chat", False, error=str(e))
+            raise NodeUserError(str(e)) from e
+
         except Exception as e:
             logger.error("AI execution failed", node_id=node_id, error=str(e))
             log_api_call(logger, provider if 'provider' in locals() else 'unknown',
@@ -2069,6 +2103,13 @@ class AIService:
                 "execution_time": time.time() - start_time
             }
 
+        except openai.OpenAIError as e:
+            # See execute_chat for the rationale — typed SDK errors are
+            # user-correctable and re-raised as NodeUserError so BaseNode
+            # logs at WARN without a traceback.
+            log_api_call(logger, provider, model, "agent", False, error=str(e))
+            raise NodeUserError(str(e)) from e
+
         except Exception as e:
             logger.error("[LangGraph] AI agent execution failed", node_id=node_id, error=str(e))
             log_api_call(logger, provider, model, "agent", False, error=str(e))
@@ -2524,6 +2565,11 @@ class AIService:
                 "result": result,
                 "execution_time": time.time() - start_time
             }
+
+        except openai.OpenAIError as e:
+            # Typed SDK error — see execute_chat for rationale.
+            log_api_call(logger, provider, model, "chat_agent", False, error=str(e))
+            raise NodeUserError(str(e)) from e
 
         except Exception as e:
             logger.error("[ChatAgent] Execution failed", node_id=node_id, error=str(e))

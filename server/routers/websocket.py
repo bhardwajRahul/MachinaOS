@@ -1227,7 +1227,18 @@ async def handle_validate_api_key(data: Dict[str, Any], websocket: WebSocket) ->
     ``/v1/models`` probe via ``ai_service.fetch_models``. The frontend
     calls this one handler for every provider — no per-provider branching
     on the TypeScript side.
+
+    Invalid-key responses (401/403) and provider-side errors (4xx/5xx,
+    timeouts, DNS failures) are mapped to a clean
+    ``{success: True, valid: False, message: "..."}`` envelope — same
+    shape the Maps/Apify validators return — so the frontend toast
+    surfaces the actual reason instead of the generic
+    "Validation failed" fallback. These are user-correctable input
+    failures, not handler bugs, so they log at WARNING with a one-liner
+    rather than ERROR with a stacktrace.
     """
+    import httpx
+
     provider = data["provider"].lower()
     normalized = dict(data, provider=provider)
 
@@ -1241,7 +1252,32 @@ async def handle_validate_api_key(data: Dict[str, Any], websocket: WebSocket) ->
 
     # Fetch models for AI providers (any provider with a models_endpoint in llm_defaults.json)
     from services.ai import PROVIDER_CONFIGS
-    models = await ai_service.fetch_models(provider, api_key) if provider in PROVIDER_CONFIGS else []
+    try:
+        models = await ai_service.fetch_models(provider, api_key) if provider in PROVIDER_CONFIGS else []
+    except httpx.HTTPStatusError as e:
+        status = e.response.status_code
+        if status in (401, 403):
+            msg = "Invalid API key"
+        elif status == 429:
+            msg = "Rate limited by provider — try again in a moment"
+        elif 500 <= status < 600:
+            msg = f"Provider error ({status}) — try again later"
+        else:
+            msg = f"Provider rejected the key ({status})"
+        logger.warning("API key validation failed for %s: HTTP %s", provider, status)
+        await broadcaster.update_api_key_status(
+            provider=provider, valid=False, message=msg, has_key=False, models=[]
+        )
+        return {"provider": provider, "valid": False, "message": msg, "timestamp": time.time()}
+    except (httpx.TimeoutException, httpx.RequestError) as e:
+        # DNS, connect, read timeouts — the provider is unreachable.
+        logger.warning("API key validation could not reach %s: %s", provider, e)
+        msg = "Could not reach provider — check your network and try again"
+        await broadcaster.update_api_key_status(
+            provider=provider, valid=False, message=msg, has_key=False, models=[]
+        )
+        return {"provider": provider, "valid": False, "message": msg, "timestamp": time.time()}
+
     await auth_service.store_api_key(provider=provider, api_key=api_key, models=models,
                                       session_id=data.get("session_id", "default"))
     # Broadcast with hasKey and models so frontend can update reactively

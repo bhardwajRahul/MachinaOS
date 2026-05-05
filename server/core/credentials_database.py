@@ -189,6 +189,7 @@ class CredentialsDatabase:
         api_key: str,
         models: Optional[List[str]] = None,
         session_id: str = "default",
+        model_params: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> None:
         """
         Save encrypted API key.
@@ -198,10 +199,23 @@ class CredentialsDatabase:
             api_key: Plaintext API key to encrypt and store
             models: List of available models for this key
             session_id: Session identifier (default: "default")
+            model_params: Optional per-model parameters keyed by model id, e.g.
+                ``{"qwen2.5-7b": {"context_length": 8192}}``. Used by local
+                providers (Ollama, LM Studio) where the context window depends
+                on what the user has loaded — the value is fetched from the
+                official SDK during validation. Stored alongside the model
+                list under the same JSON column (``model_params`` subkey) so
+                ``model_registry.get_context_length()`` can read the real
+                ctx instead of a JSON default. Cloud providers leave this
+                empty — their per-model params live in ``model_registry.json``
+                from OpenRouter.
         """
         key_id = f"{session_id}_{provider}"
         encrypted = self.encryption.encrypt(api_key)
         key_hash = hashlib.sha256(api_key.encode()).hexdigest()[:16]
+        models_blob: Dict[str, Any] = {"models": models or []}
+        if model_params:
+            models_blob["model_params"] = model_params
 
         async with self.get_session() as session:
             existing = await session.get(EncryptedAPIKey, key_id)
@@ -210,7 +224,7 @@ class CredentialsDatabase:
             if existing:
                 existing.key_encrypted = encrypted
                 existing.key_hash = key_hash
-                existing.models = {"models": models or []}
+                existing.models = models_blob
                 existing.is_valid = True
                 existing.last_validated = now
                 existing.updated_at = now
@@ -222,13 +236,32 @@ class CredentialsDatabase:
                         session_id=session_id,
                         key_encrypted=encrypted,
                         key_hash=key_hash,
-                        models={"models": models or []},
+                        models=models_blob,
                         is_valid=True,
                         last_validated=now,
                     )
                 )
             await session.commit()
             logger.debug(f"Saved encrypted API key for provider: {provider}")
+
+    async def get_api_key_model_params(
+        self, provider: str, session_id: str = "default"
+    ) -> Dict[str, Dict[str, Any]]:
+        """Return the per-model param map stored alongside the model list.
+
+        Empty dict if the provider has no entry, no params were stored,
+        or the row predates the ``model_params`` column. The runtime
+        path (``model_registry.get_context_length`` etc.) consults this
+        before falling back to JSON defaults so local-LLM context comes
+        from the actual loaded model, not a guess.
+        """
+        key_id = f"{session_id}_{provider}"
+        async with self.get_session() as session:
+            row = await session.get(EncryptedAPIKey, key_id)
+            if not row or not row.models:
+                return {}
+            params = row.models.get("model_params") or {}
+            return params if isinstance(params, dict) else {}
 
     async def get_api_key(
         self, provider: str, session_id: str = "default"

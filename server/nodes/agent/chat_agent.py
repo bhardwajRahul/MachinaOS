@@ -28,6 +28,9 @@ class ChatAgentParams(BaseModel):
     provider: Literal[
         "openai", "anthropic", "gemini", "openrouter",
         "groq", "cerebras", "deepseek", "kimi", "mistral",
+        # Local-server providers — see ai_agent.Params for the proxy_url
+        # rationale. Same fix; same reason.
+        "ollama", "lmstudio",
     ] = "openai"
     model: str = Field(
         default="", json_schema_extra={"placeholder": "Select a model..."},

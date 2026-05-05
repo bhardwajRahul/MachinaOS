@@ -18,6 +18,14 @@ const AI_MODEL_PROVIDERS = [
   'deepseek',
   'kimi',
   'mistral',
+  // Local-server providers — the chat-model plugins exist
+  // (`ollamaChatModel`, `lmstudioChatModel`), so they MUST live in this
+  // map for `ParameterRenderer` to derive the provider id from the node
+  // type when the schema-implicit `provider` param is absent. Without
+  // them the model dropdown stays empty and the runtime falls back to
+  // the OpenAI cloud.
+  'ollama',
+  'lmstudio',
 ] as const;
 
 /** `<provider>ChatModel` node type → provider id (matches the backend-served

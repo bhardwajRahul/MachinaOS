@@ -92,6 +92,14 @@ dependencies = [
     # Markdown formatting (GFM to platform-native)
     "markdown-it-py>=3.0.0",
 
+    # Local LLM SDKs — used by `nodes/model/_local_validator.py` to
+    # introspect the user's actually-loaded models (context_length,
+    # max_output_tokens). Replaces hand-rolled httpx probes against
+    # /api/show and /api/v0/models so each SDK's own typed result
+    # struct is the source of truth.
+    "ollama>=0.6.0",
+    "lmstudio>=1.5.0",
+
     # Gmail API
     "google-api-python-client>=2.100.0",
     "google-auth>=2.27.0",

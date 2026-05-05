@@ -109,6 +109,13 @@ def detect_provider_from_model(model: str) -> str:
 
 
 def is_model_valid_for_provider(model: str, provider: str) -> bool:
+    # Open-world providers — OpenRouter is a multi-vendor proxy, ollama
+    # and lmstudio serve user-installed local models whose names don't
+    # match any "lmstudio"/"ollama" substring. Treat as always-valid;
+    # the upstream API will 404 a genuinely missing model. See the
+    # mirror in services/ai.py for the full rationale.
+    if provider in ('openrouter', 'ollama', 'lmstudio'):
+        return True
     cfg = PROVIDER_CONFIGS.get(provider)
     if not cfg:
         return True

@@ -41,6 +41,12 @@ class AIAgentParams(BaseModel):
     provider: Literal[
         "openai", "anthropic", "gemini", "openrouter",
         "groq", "cerebras", "deepseek", "kimi", "mistral",
+        # Local-server providers — agent execution reads
+        # ``{provider}_proxy`` to point the LangChain client at the
+        # user's localhost server. Without these entries the dropdown
+        # silently falls back to ``"openai"`` and execute_agent ends
+        # up calling api.openai.com instead.
+        "ollama", "lmstudio",
     ] = "openai"
     model: str = Field(
         default="", json_schema_extra={"placeholder": "Select a model..."},
@@ -126,6 +132,10 @@ class AIAgentNode(ActionNode):
             context=ctx.raw, database=database,
             log_prefix="[AI Agent]",
         )
+        # ``execute_agent`` raises ``NodeUserError`` directly for typed
+        # openai SDK failures (context overflow, bad key, server down).
+        # Anything that comes back here as ``success=False`` is a real
+        # bug worth a stacktrace via ``RuntimeError``.
         response = await ai_service.execute_agent(ctx.node_id, **kwargs)
         if response.get("success"):
             return response.get("result") or response
