@@ -5,15 +5,15 @@ each isolated in its own git worktree, with a shared MCP server hosting
 MachinaOs tools (``mcp__machina__*``) discovered via VSCode-style
 lockfile.
 
-Self-registers two WebSocket handlers (``cli_login`` /
-``cli_auth_status``) into ``services.ws_handler_registry`` on import,
-mirroring the telegram / whatsapp plugin folder pattern. The router
-does not need to know about us by name.
+Self-registers per-provider WebSocket handlers
+(``claude_code_login``, ``claude_code_logout``, ``codex_cli_login``,
+``codex_cli_logout``) into ``services.ws_handler_registry`` on import,
+mirroring the telegram / whatsapp / stripe plugin folder pattern. The
+router does not need to know about us by name.
 """
 
 from __future__ import annotations
 
-from services.cli_agent.cli_auth import run_native_login
 from services.cli_agent.factory import (
     ALL_PROVIDERS,
     SUPPORTED_PROVIDERS,
@@ -67,6 +67,4 @@ __all__ = [
     "BatchSummary",
     "BatchResultModel",
     "session_result_to_model",
-    # Native auth helpers (also used by the router for Credentials Modal)
-    "run_native_login",
 ]

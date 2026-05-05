@@ -1,35 +1,43 @@
-"""WebSocket handlers for the CLI agent framework.
+"""Per-provider WebSocket handlers for CLI-managed OAuth.
 
 Self-registered into ``services.ws_handler_registry`` from
-``services/cli_agent/__init__.py``. The router does not import this
-module directly — it discovers handlers via the registry at dispatch
-time, mirroring the telegram / whatsapp / stripe plugin pattern.
+``services/cli_agent/__init__.py``.
 
-Adopted from `nodes/stripe/_handlers.py` (CLI-managed OAuth pattern):
+Naming convention matches Twitter / Google / Stripe — each provider gets
+its own message type (``claude_code_login`` / ``claude_code_logout`` /
+``codex_cli_login`` / ``codex_cli_logout``). The frontend dispatches with
+an empty payload (see ``OAuthConnect.tsx`` ->
+``useCredentialPanel.oauthLogin`` -> ``sendRequest(config.ws!.login, {})``);
+the handler name encodes which provider to spawn.
 
-  - On successful ``<provider> login``, write a synthetic ``"cli-managed"``
-    marker OAuth token via ``auth_service.store_oauth_tokens()``. The
-    catalogue handler's ``stored`` check (keyed off
-    ``status_hook``) flips ``true`` automatically — the existing
-    ``OAuthConnect.tsx`` primitive renders the modal as Connected.
-  - Broadcast ``credential_catalogue_updated`` so the frontend
-    invalidates its catalogue cache and re-fetches reactively.
-  - No ``cli_auth_status`` handler — redundant once ``stored`` drives
-    the modal.
+Claude flow uses the documented CLI subcommands from
+https://code.claude.com/docs/en/cli-reference:
 
-Logout: drop the marker token + broadcast.
+- ``claude auth login``  — opens the browser, writes credentials.
+- ``claude auth status`` — exits 0 when logged in, 1 otherwise.
+- ``claude auth logout`` — clears credentials.
 
-The actual subprocess spawning lives in ``cli_auth.run_native_login``.
+We delegate to ``services.claude_oauth`` for the spawn + status checks.
+After ``auth login`` returns the spawned PID, a background task polls
+``claude auth status`` until it reports success, then writes the synthetic
+``"cli-managed"`` marker via ``auth_service.store_oauth_tokens()`` and
+broadcasts ``credential_catalogue_updated`` (Stripe pattern, see
+``nodes/stripe/_handlers.py``).
+
+Codex login is not yet wired (no ``codex_oauth.py`` yet); the handler
+returns a graceful "not yet supported" error pointing the user at the
+manual flow. Logout works for both providers — drops the catalogue marker.
 """
 
 from __future__ import annotations
 
+import asyncio
+import time
 from typing import Any, Awaitable, Callable, Dict
 
 from fastapi import WebSocket
 
 from core.logging import get_logger
-from services.cli_agent.cli_auth import run_native_login
 
 logger = get_logger(__name__)
 
@@ -40,19 +48,17 @@ logger = get_logger(__name__)
 # handler.
 _MARKER_TOKEN = "cli-managed"
 
-# Maps `cli_login.provider` field values to the credential-catalogue
-# provider keys that `auth_service` indexes its OAuth tokens under.
-# Aligns with the `status_hook` field in `credential_providers.json`.
-_PROVIDER_TO_CATALOGUE_KEY: Dict[str, str] = {
-    "claude": "claude_code",
-    "codex": "codex_cli",
-    "gemini": "gemini_cli",
-}
+# How long the background finaliser polls for `claude auth status` before
+# giving up (the user may simply close the browser tab).
+_LOGIN_TIMEOUT_SECONDS = 600.0
+_LOGIN_POLL_INTERVAL = 2.0
 
+
+# ---------------------------------------------------------------------------
+# Marker-token + catalogue broadcast (Stripe pattern)
+# ---------------------------------------------------------------------------
 
 async def _mark_logged_in(catalogue_key: str) -> None:
-    """Write the marker token via `auth_service.store_oauth_tokens()` —
-    same plumbing Google / Twitter / Stripe use after their OAuth flow."""
     from core.container import container
     await container.auth_service().store_oauth_tokens(
         provider=catalogue_key,
@@ -67,81 +73,132 @@ async def _mark_logged_out(catalogue_key: str) -> None:
 
 
 async def _broadcast_catalogue_updated() -> None:
-    """Generic catalogue-invalidation broadcast — same event the Stripe /
-    Google / Twitter handlers fire. Frontend listens in
-    ``WebSocketContext`` (``case 'credential_catalogue_updated'``) and
-    re-fetches the catalogue."""
     from services.status_broadcaster import get_status_broadcaster
     await get_status_broadcaster().broadcast({"type": "credential_catalogue_updated"})
 
 
-async def handle_cli_login(
-    data: Dict[str, Any],
+# ---------------------------------------------------------------------------
+# Claude — `claude auth login` / `auth status` / `auth logout`
+# ---------------------------------------------------------------------------
+
+async def _wait_until_logged_in(timeout_seconds: float) -> bool:
+    """Poll ``claude auth status`` until it reports success or we time out."""
+    from services.claude_oauth import claude_auth_status
+
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        if await claude_auth_status():
+            return True
+        await asyncio.sleep(_LOGIN_POLL_INTERVAL)
+    return False
+
+
+async def _finalize_claude_login() -> None:
+    try:
+        ok = await _wait_until_logged_in(_LOGIN_TIMEOUT_SECONDS)
+        if ok:
+            await _mark_logged_in("claude_code")
+            await _broadcast_catalogue_updated()
+            logger.info("[claude_code_login] marker written + broadcast fired")
+        else:
+            logger.warning(
+                "[claude_code_login] timed out after %.0fs waiting for "
+                "`claude auth status` to report success — modal stays Disconnected",
+                _LOGIN_TIMEOUT_SECONDS,
+            )
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:  # pragma: no cover — defensive
+        logger.exception("[claude_code_login] finalize failed: %s", exc)
+
+
+async def handle_claude_code_login(
+    data: Dict[str, Any],  # noqa: ARG001 — frontend sends {}
     websocket: WebSocket,  # noqa: ARG001 — registry signature
 ) -> Dict[str, Any]:
-    """Trigger the CLI's native login flow.
+    """Spawn ``claude auth login``; let the CLI open the user's browser."""
+    from services.claude_oauth import claude_auth_status, initiate_claude_oauth
 
-    Payload: ``{provider: "claude" | "codex" | "gemini"}``.
+    if await claude_auth_status():
+        try:
+            await _mark_logged_in("claude_code")
+            await _broadcast_catalogue_updated()
+        except Exception as exc:
+            logger.warning("[claude_code_login] mark/broadcast failed: %s", exc)
+        return {
+            "success": True,
+            "already_logged_in": True,
+            "message": "Already authenticated; refreshed status.",
+        }
 
-    On success: write the marker token via ``auth_service`` (so the
-    catalogue's ``stored`` flag flips) and broadcast
-    ``credential_catalogue_updated`` so the modal refreshes reactively.
-
-    The CLI itself stores its real credentials in ``~/.claude/``,
-    ``~/.codex/``, ``~/.gemini/`` — we never touch them.
-    """
-    provider = (data.get("provider") or "").strip().lower()
-    if not provider:
-        return {"success": False, "error": "missing 'provider' field"}
-
-    result = await run_native_login(provider)
+    result = await initiate_claude_oauth()
     if result.get("success"):
-        catalogue_key = _PROVIDER_TO_CATALOGUE_KEY.get(provider)
-        if catalogue_key:
-            try:
-                await _mark_logged_in(catalogue_key)
-                await _broadcast_catalogue_updated()
-            except Exception as exc:
-                # Login itself succeeded; failing to mark/broadcast is a
-                # cosmetic/UI issue, not a user-visible login failure.
-                logger.warning(
-                    "[cli_login:%s] mark/broadcast failed: %s", provider, exc,
-                )
+        asyncio.create_task(
+            _finalize_claude_login(), name="claude_code_login_finalize",
+        )
     return result
 
 
-async def handle_cli_logout(
-    data: Dict[str, Any],
-    websocket: WebSocket,  # noqa: ARG001 — registry signature
+async def handle_claude_code_logout(
+    data: Dict[str, Any],  # noqa: ARG001
+    websocket: WebSocket,  # noqa: ARG001
 ) -> Dict[str, Any]:
-    """Drop the marker token + broadcast catalogue update.
-
-    The actual CLI auth lives in the CLI's own ~/. config — the user
-    can run ``<provider> logout`` themselves to drop it. We just clear
-    our catalogue marker so the modal flips back to Disconnected.
-    """
-    provider = (data.get("provider") or "").strip().lower()
-    if not provider:
-        return {"success": False, "error": "missing 'provider' field"}
-
-    catalogue_key = _PROVIDER_TO_CATALOGUE_KEY.get(provider)
-    if not catalogue_key:
-        return {"success": False, "error": f"unknown provider {provider!r}"}
+    """Run ``claude auth logout``, drop the catalogue marker, broadcast."""
+    from services.claude_oauth import claude_auth_logout
 
     try:
-        await _mark_logged_out(catalogue_key)
+        await claude_auth_logout()
+        await _mark_logged_out("claude_code")
         await _broadcast_catalogue_updated()
     except Exception as exc:
-        logger.warning("[cli_logout:%s] mark/broadcast failed: %s", provider, exc)
+        logger.warning("[claude_code_logout] failed: %s", exc)
         return {"success": False, "error": str(exc)}
     return {"success": True}
 
 
+# ---------------------------------------------------------------------------
+# Codex — login flow not yet wired; logout works for marker cleanup
+# ---------------------------------------------------------------------------
+
+async def handle_codex_cli_login(
+    data: Dict[str, Any],  # noqa: ARG001
+    websocket: WebSocket,  # noqa: ARG001
+) -> Dict[str, Any]:
+    return {
+        "success": False,
+        "error": (
+            "Codex login is not yet wired in MachinaOs. "
+            "Install with `npm install -g @openai/codex` and run "
+            "`codex login` in your terminal — then click Login again "
+            "to mark connected."
+        ),
+    }
+
+
+async def handle_codex_cli_logout(
+    data: Dict[str, Any],  # noqa: ARG001
+    websocket: WebSocket,  # noqa: ARG001
+) -> Dict[str, Any]:
+    try:
+        await _mark_logged_out("codex_cli")
+        await _broadcast_catalogue_updated()
+    except Exception as exc:
+        logger.warning("[codex_cli_logout] failed: %s", exc)
+        return {"success": False, "error": str(exc)}
+    return {"success": True}
+
+
+# ---------------------------------------------------------------------------
 # Registry payload — `services/cli_agent/__init__.py` registers these
-# into `services.ws_handler_registry` on package import.
+# into `services.ws_handler_registry` on package import. Names match
+# `credential_providers.json:ws.login/logout`.
+# ---------------------------------------------------------------------------
+
 WSHandler = Callable[[Dict[str, Any], WebSocket], Awaitable[Dict[str, Any]]]
 
 WS_HANDLERS: Dict[str, WSHandler] = {
-    "cli_login": handle_cli_login,
-    "cli_logout": handle_cli_logout,
+    "claude_code_login": handle_claude_code_login,
+    "claude_code_logout": handle_claude_code_logout,
+    "codex_cli_login": handle_codex_cli_login,
+    "codex_cli_logout": handle_codex_cli_logout,
 }

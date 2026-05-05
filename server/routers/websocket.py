@@ -1386,9 +1386,10 @@ async def handle_claude_oauth_login(data: Dict[str, Any], websocket: WebSocket) 
 
 @ws_handler()
 async def handle_claude_oauth_status(data: Dict[str, Any], websocket: WebSocket) -> Dict[str, Any]:
-    """Check Claude OAuth credentials status."""
-    from services.claude_oauth import get_claude_credentials
-    return get_claude_credentials()
+    """Check Claude OAuth credentials status via ``claude auth status``."""
+    from services.claude_oauth import claude_auth_status
+    has_token = await claude_auth_status()
+    return {"success": True, "has_token": has_token}
 
 
 # NOTE: `cli_login` / `cli_auth_status` handlers are owned by

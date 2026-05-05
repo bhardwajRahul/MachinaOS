@@ -1,138 +1,154 @@
-"""Claude OAuth Service - Isolated login that doesn't affect user's main session."""
+"""Claude OAuth — project-local install + plain ``claude login`` spawn.
 
+The Claude Code CLI lives at ``<repo>/data/claude-machina/npm/`` (on-demand
+``npm install`` on first use, mirroring the WhatsApp project-local layout)
+and ``CLAUDE_CONFIG_DIR`` points at ``<repo>/data/claude-machina/`` so the
+credentials file lands inside the project tree, isolated from the user's
+own ``~/.claude/`` session.
+
+Login uses the documented subcommand from
+https://code.claude.com/docs/en/cli-reference: ``claude auth login`` opens
+the browser, ``claude auth logout`` signs out, ``claude auth status``
+exits 0 when logged in / 1 otherwise. We spawn ``auth login`` with
+inherited stdio so the CLI opens the browser itself (same as the VSCode
+Claude Code extension; Anthropic does not expose a programmatic OAuth
+helper or a ``--print-url`` flag — see issue
+anthropics/claude-code#7100). The background poller in
+``services/cli_agent/_handlers.py`` invokes ``claude auth status`` to
+flip the catalogue marker on success.
+"""
+
+from __future__ import annotations
+
+import asyncio
 import json
 import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any, Dict
 
 from core.logging import get_logger
 
 logger = get_logger(__name__)
 
-# Isolated directories for MachinaOs
-MACHINA_CLAUDE_DIR = Path.home() / ".claude-machina"
+# server/services/claude_oauth.py -> parents[2] is the repo root.
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+MACHINA_CLAUDE_DIR = (_PROJECT_ROOT / "data" / "claude-machina").resolve()
 MACHINA_NPM_DIR = MACHINA_CLAUDE_DIR / "npm"
+CLAUDE_CREDENTIALS_PATH = MACHINA_CLAUDE_DIR / ".credentials.json"
 
 
 def _get_claude_cmd() -> str:
-    """Get path to isolated claude CLI, installing if needed."""
+    """Return path to the project-local claude CLI, installing on miss."""
     if sys.platform == "win32":
-        claude_path = MACHINA_NPM_DIR / "claude.cmd"
+        bin_path = MACHINA_NPM_DIR / "node_modules" / ".bin" / "claude.cmd"
     else:
-        claude_path = MACHINA_NPM_DIR / "bin" / "claude"
+        bin_path = MACHINA_NPM_DIR / "node_modules" / ".bin" / "claude"
 
-    if claude_path.exists():
-        return str(claude_path)
+    if bin_path.exists():
+        return str(bin_path)
 
-    # Install claude-code in isolated location
-    logger.info("Installing Claude Code CLI in isolated environment...")
+    logger.info("Installing Claude Code CLI in project-local environment...")
     MACHINA_NPM_DIR.mkdir(parents=True, exist_ok=True)
 
     npm_cmd = shutil.which("npm")
     if not npm_cmd:
-        raise FileNotFoundError("npm not found")
+        raise FileNotFoundError("npm not found on PATH")
 
     result = subprocess.run(
         [npm_cmd, "install", "@anthropic-ai/claude-code", "--prefix", str(MACHINA_NPM_DIR)],
         capture_output=True,
         text=True,
     )
-
     if result.returncode != 0:
         logger.error(f"npm install failed: {result.stderr}")
         raise RuntimeError(f"Failed to install claude-code: {result.stderr}")
 
-    # Find the installed binary
-    if sys.platform == "win32":
-        claude_path = MACHINA_NPM_DIR / "node_modules" / ".bin" / "claude.cmd"
-    else:
-        claude_path = MACHINA_NPM_DIR / "node_modules" / ".bin" / "claude"
+    if not bin_path.exists():
+        raise FileNotFoundError(f"Claude CLI not found at {bin_path} after install")
 
-    if not claude_path.exists():
-        raise FileNotFoundError(f"Claude CLI not found at {claude_path} after install")
+    logger.info(f"Claude Code CLI installed at: {bin_path}")
+    return str(bin_path)
 
-    logger.info(f"Claude Code CLI installed at: {claude_path}")
-    return str(claude_path)
+
+def _claude_env() -> Dict[str, str]:
+    env = os.environ.copy()
+    env["CLAUDE_CONFIG_DIR"] = str(MACHINA_CLAUDE_DIR)
+    return env
 
 
 async def initiate_claude_oauth() -> Dict[str, Any]:
-    """Run claude login in isolated environment with auto-filled prompts."""
+    """Spawn ``claude auth login`` and let the CLI open the browser."""
     try:
-        MACHINA_CLAUDE_DIR.mkdir(exist_ok=True)
-
-        # Get or install claude CLI
+        MACHINA_CLAUDE_DIR.mkdir(parents=True, exist_ok=True)
         claude_cmd = _get_claude_cmd()
 
-        env = os.environ.copy()
-        env["CLAUDE_CONFIG_DIR"] = str(MACHINA_CLAUDE_DIR)
-
-        # Run claude login with stdin to auto-fill prompts
-        # Claude login asks: 1) "Do you agree?" (yes) 2) "Open browser?" (yes)
-        if sys.platform == "win32":
-            # Windows: pipe inputs and let it open browser
-            process = subprocess.Popen(
-                [claude_cmd, "login"],
-                env=env,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                creationflags=subprocess.CREATE_NO_WINDOW,
-            )
-            # Send "yes" responses for the prompts
-            try:
-                process.stdin.write(b"yes\nyes\n")
-                process.stdin.flush()
-            except Exception:
-                pass
-        else:
-            # Unix: pipe inputs
-            process = subprocess.Popen(
-                [claude_cmd, "login"],
-                env=env,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-            try:
-                process.stdin.write(b"yes\nyes\n")
-                process.stdin.flush()
-            except Exception:
-                pass
-
-        logger.info(f"Claude OAuth login started with PID {process.pid}")
+        proc = await asyncio.create_subprocess_exec(
+            claude_cmd,
+            "auth",
+            "login",
+            env=_claude_env(),
+        )
+        logger.info(f"Claude OAuth login started with PID {proc.pid}")
 
         return {
             "success": True,
-            "message": "OAuth login started. Browser should open for authentication.",
+            "pid": proc.pid,
             "config_dir": str(MACHINA_CLAUDE_DIR),
-            "pid": process.pid,
+            "message": "Claude is opening your browser to authenticate.",
         }
     except FileNotFoundError as e:
         logger.error(f"CLI not found: {e}")
         return {"success": False, "error": str(e)}
     except Exception as e:
-        logger.error(f"Failed to start Claude OAuth: {e}")
+        logger.exception(f"Failed to start Claude OAuth: {e}")
         return {"success": False, "error": str(e)}
 
 
-def get_claude_credentials() -> Dict[str, Any]:
-    """Read credentials from isolated config."""
+async def claude_auth_status() -> bool:
+    """Return True iff ``claude auth status`` exits 0 (logged in)."""
     try:
-        creds_path = MACHINA_CLAUDE_DIR / ".credentials.json"
-        if not creds_path.exists():
-            return {"success": False, "has_token": False}
+        claude_cmd = _get_claude_cmd()
+    except (FileNotFoundError, RuntimeError):
+        return False
 
-        with open(creds_path) as f:
-            creds = json.load(f)
-
-        return {
-            "success": True,
-            "has_token": bool(creds.get("accessToken")),
-            "access_token": creds.get("accessToken"),
-            "expires_at": creds.get("expiresAt"),
-        }
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            claude_cmd,
+            "auth",
+            "status",
+            env=_claude_env(),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return await proc.wait() == 0
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        logger.warning(f"claude auth status check failed: {e}")
+        return False
+
+
+async def claude_auth_logout() -> bool:
+    """Run ``claude auth logout``. Returns True on exit 0."""
+    try:
+        claude_cmd = _get_claude_cmd()
+    except (FileNotFoundError, RuntimeError):
+        return False
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            claude_cmd,
+            "auth",
+            "logout",
+            env=_claude_env(),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return await proc.wait() == 0
+    except Exception as e:
+        logger.warning(f"claude auth logout failed: {e}")
+        return False
