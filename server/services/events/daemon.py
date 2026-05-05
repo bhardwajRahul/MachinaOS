@@ -4,14 +4,18 @@ events into the framework.
 Used by stripe-listen, future telegram/whatsapp daemon migrations, and
 any plugin that wraps a CLI tool. The class delegates lifecycle to
 :class:`services.process_service.ProcessService` (already battle-tested:
-PATHEXT-aware, ``kill_tree`` cleanup, log capture) and adds:
+PATHEXT-aware, ``kill_tree`` cleanup, log capture, terminal broadcast)
+and subscribes to its standard per-line callback hook for typed event
+emission. We do NOT re-tail the on-disk log files — that's the same
+data ProcessService already streamed to us via ``line_handler``.
 
-- typed event emission via :meth:`parse_line` (one event per stdout line,
-  optionally per stderr line)
-- declarative ``build_command(secrets) -> str`` so credential resolution
-  is uniform across daemons
-- pre-flight ``shutil.which`` check with a clear error if the binary
-  isn't on PATH
+Subclasses contribute:
+
+- :meth:`build_command(secrets) -> str` — full command string
+- :meth:`parse_line(stream, line) -> Optional[WorkflowEvent]` — turn one
+  line into one event (or ``None`` for log-only lines)
+- :attr:`binary_name` (optional) — pre-flight ``shutil.which`` check
+  with a clear error if the binary isn't on PATH
 """
 
 from __future__ import annotations
@@ -51,7 +55,6 @@ class DaemonEventSource(EventSource):
         super().__init__()
         self._pid: Optional[int] = None
         self._lock = asyncio.Lock()
-        self._tail_task: Optional[asyncio.Task] = None
         self._queue: asyncio.Queue[WorkflowEvent] = asyncio.Queue()
 
     @property
@@ -94,10 +97,21 @@ class DaemonEventSource(EventSource):
     async def start(self) -> Dict[str, Any]:
         async with self._lock:
             if self._started:
+                logger.info("[%s] start() noop — already running (pid=%s)", self.type, self._pid)
                 return {"success": True, "message": "already running", "status": await self.status()}
 
+            logger.info("[%s] start() entered: resolving secrets + checking credential gate", self.type)
             secrets = await self._resolve_secrets()
-            if self.credential is not None and not secrets.get("api_key"):
+            # Gate via :meth:`has_credential` so subclasses that authenticate
+            # without an ``api_key`` field (Stripe — auth lives in the CLI's
+            # config file, signalled by ``is_logged_in()``) can override the
+            # check. The default ``has_credential`` still tests
+            # ``secrets["api_key"]`` so api-key plugins keep working.
+            if self.credential is not None and not await self.has_credential():
+                logger.warning(
+                    "[%s] start() blocked: has_credential() returned False — refusing to spawn daemon",
+                    self.type,
+                )
                 return {"success": False, "error": f"{self.type}: credential required"}
 
             if self.binary_name and shutil.which(self.binary_name) is None:
@@ -111,6 +125,7 @@ class DaemonEventSource(EventSource):
                 command=cmd,
                 workflow_id=self.workflow_namespace,
                 working_directory=str(cwd),
+                line_handler=self._on_line,
             )
             if not result.get("success"):
                 return result
@@ -118,20 +133,12 @@ class DaemonEventSource(EventSource):
             self._pid = (result.get("result") or {}).get("pid")
             self._started = True
             self._stopped = False
-            self._tail_task = asyncio.create_task(self._tail_logs(cwd))
             logger.info("[%s] daemon started pid=%s", self.type, self._pid)
             return {"success": True, "message": f"started (pid {self._pid})", "status": await self.status()}
 
     async def stop(self) -> Dict[str, Any]:
         async with self._lock:
             self._stopped = True
-            if self._tail_task and not self._tail_task.done():
-                self._tail_task.cancel()
-                try:
-                    await self._tail_task
-                except asyncio.CancelledError:
-                    pass
-            self._tail_task = None
             await get_process_service().stop(
                 name=self.process_name, workflow_id=self.workflow_namespace,
             )
@@ -143,34 +150,12 @@ class DaemonEventSource(EventSource):
         await self.stop()
         return await self.start()
 
-    async def _tail_logs(self, cwd: Path) -> None:
-        """Tail both stdout.log and stderr.log; feed each new line to
-        :meth:`parse_line` and queue any returned events."""
-        await asyncio.gather(
-            self._tail_one(cwd / ".processes" / self.process_name / "stdout.log", "stdout"),
-            self._tail_one(cwd / ".processes" / self.process_name / "stderr.log", "stderr"),
-        )
-
-    async def _tail_one(self, path: Path, stream: str) -> None:
-        offset = 0
-        try:
-            while not self._stopped:
-                if path.exists():
-                    size = path.stat().st_size
-                    if size > offset:
-                        with path.open("r", encoding="utf-8", errors="replace") as f:
-                            f.seek(offset)
-                            for raw in f:
-                                if not raw.endswith("\n"):
-                                    break
-                                line = raw.rstrip("\n")
-                                offset = f.tell()
-                                event = self.parse_line(stream, line)
-                                if event is not None:
-                                    await self._queue.put(event)
-                await asyncio.sleep(0.5)
-        except asyncio.CancelledError:
-            raise
+    async def _on_line(self, stream: str, line: str) -> None:
+        """ProcessService callback: one decoded stdout/stderr line.
+        Subclasses' :meth:`parse_line` decides whether to emit an event."""
+        event = self.parse_line(stream, line)
+        if event is not None:
+            await self._queue.put(event)
 
     async def emit(self) -> AsyncIterator[WorkflowEvent]:
         while not self._stopped:

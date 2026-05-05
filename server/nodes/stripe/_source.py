@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import os
 import re
+import shlex
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -81,11 +82,13 @@ class StripeListenSource(DaemonEventSource):
         # (populated by `stripe login`). No --api-key flag here.
         # Binary path is resolved by `ensure_stripe_cli` (called from
         # the start() override below) and cached for sync access here.
+        # ``shlex.quote`` so Windows backslashes survive ProcessService's
+        # ``shlex.split`` round-trip (POSIX-mode parser eats raw ``\``).
         from core.config import Settings
         from ._install import stripe_cli_path
 
         port = int(Settings().port)
-        binary = str(stripe_cli_path() or "stripe")
+        binary = shlex.quote(str(stripe_cli_path() or "stripe"))
         return (
             f"{binary} listen --forward-to http://localhost:{port}/webhook/stripe "
             f"--print-secret"
@@ -96,8 +99,10 @@ class StripeListenSource(DaemonEventSource):
         framework's daemon-start path (which calls ``build_command``)."""
         from ._install import ensure_stripe_cli
         try:
-            await ensure_stripe_cli()
+            path = await ensure_stripe_cli()
+            logger.info("[Stripe] daemon start: CLI binary resolved at %s", path)
         except Exception as e:
+            logger.warning("[Stripe] daemon start failed at install step: %s", e)
             return {"success": False, "error": f"Stripe CLI install failed: {e}"}
         return await super().start()
 
@@ -109,6 +114,7 @@ class StripeListenSource(DaemonEventSource):
     def parse_line(self, stream: str, line: str) -> Optional[WorkflowEvent]:
         if stream == "stderr" and (m := _SECRET_RE.search(line)):
             secret = m.group(0)
+            logger.info("[Stripe] whsec_… signing secret detected in daemon stderr — persisting")
             asyncio.create_task(self._persist_secret(secret))
         return None
 
@@ -116,7 +122,10 @@ class StripeListenSource(DaemonEventSource):
         try:
             from core.container import container
             await container.auth_service().store_api_key(_SECRET_FIELD, secret, models=[])
-            logger.info("[Stripe] webhook signing secret captured and persisted")
+            logger.info(
+                "[Stripe] webhook signing secret persisted (key=%s, len=%d)",
+                _SECRET_FIELD, len(secret),
+            )
         except Exception as e:
             logger.warning("[Stripe] persist secret failed: %s", e)
 

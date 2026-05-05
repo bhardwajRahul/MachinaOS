@@ -16,7 +16,7 @@ import shutil
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from core.logging import get_logger
 from services._supervisor.util import kill_tree
@@ -24,6 +24,10 @@ from services._supervisor.util import kill_tree
 logger = get_logger(__name__)
 
 MAX_PROCESSES = 10  # Default limit, configurable via Settings panel
+
+
+# (stream_name, line) -> awaitable. Invoked once per decoded stdout/stderr line.
+LineHandler = Callable[[str, str], Awaitable[None]]
 
 
 @dataclass
@@ -43,6 +47,11 @@ class ManagedProcess:
     exit_code: Optional[int] = None
     stdout_lines: int = 0
     stderr_lines: int = 0
+    # Optional per-line callback: framework-level subscribers (e.g. the
+    # generalised event source `DaemonEventSource`) install this to ingest
+    # the daemon's stdout/stderr without re-tailing the log files we already
+    # write for the Terminal tab.
+    line_handler: Optional[LineHandler] = None
 
 
 class ProcessService:
@@ -70,8 +79,17 @@ class ProcessService:
         command: str,
         workflow_id: str = "default",
         working_directory: str = "",
+        *,
+        line_handler: Optional[LineHandler] = None,
     ) -> Dict[str, Any]:
-        """Start a long-running process."""
+        """Start a long-running process.
+
+        ``line_handler``: optional ``async (stream_name, line) -> None``
+        callback invoked for every decoded stdout/stderr line, AFTER the
+        line has been written to the log file and broadcast to the
+        Terminal tab. Used by ``DaemonEventSource`` to parse subprocess
+        output into typed events without re-tailing the log files.
+        """
         if not command:
             return {"success": False, "error": "command is required"}
 
@@ -170,6 +188,7 @@ class ProcessService:
             working_directory=cwd,
             process=proc,
             log_dir=log_dir,
+            line_handler=line_handler,
         )
 
         managed.stdout_task = asyncio.create_task(
@@ -392,6 +411,16 @@ class ProcessService:
                             "message": text,
                             "source": source,
                         })
+
+                    # Optional framework-level subscriber.
+                    if managed.line_handler is not None:
+                        try:
+                            await managed.line_handler(stream_name, text)
+                        except Exception as cb_err:
+                            logger.debug(
+                                "[Process] line_handler %s/%s raised: %s",
+                                managed.name, stream_name, cb_err,
+                            )
         except asyncio.CancelledError:
             pass
         except Exception as e:

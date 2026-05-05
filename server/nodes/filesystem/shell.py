@@ -2,11 +2,21 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
+from services.plugin import ActionNode, NodeContext, NodeUserError, Operation, TaskQueue
+
+
+# Bash chain-operators (` && ` / ` || `) are explicitly rejected by the
+# Nushell parser. Detect them up-front so the LLM gets a corrective
+# message ("use `;` or `try { … }`") instead of nu's
+# ``shell_andand`` / ``shell_oror`` parse error two layers down.
+# Surrounding spaces ensure we don't flag valid nu syntax accidentally
+# (closure params `|x|` never carry spaces around the pipe pair).
+_BASH_CHAIN_RE = re.compile(r"\s(\&\&|\|\|)\s")
 
 
 class ShellParams(BaseModel):
@@ -51,6 +61,19 @@ class ShellNode(ActionNode):
         from ._backend import get_backend
 
         log = get_logger(__name__)
+
+        # Pre-flight: catch the most common bash-style chain mistake before
+        # Nushell's parser does, so the LLM sees an actionable hint instead
+        # of ``nu::parser::shell_andand``. Documented in
+        # ``server/skills/terminal/shell-skill/SKILL.md``.
+        if (m := _BASH_CHAIN_RE.search(params.command)):
+            op = m.group(1)
+            replacement = "; (sequential)" if op == "&&" else "try { … } catch { … }"
+            raise NodeUserError(
+                f"Nushell does not support `{op}`. Use `{replacement}` instead. "
+                "See shell-skill: https://www.nushell.sh/book/control_flow.html"
+            )
+
         backend = get_backend(params.model_dump(), ctx.raw)
         # "non-blocking" here only meant the asyncio event loop isn't
         # blocked (the call is offloaded via ``to_thread``). The
