@@ -23,6 +23,25 @@ from machina.colors import console
 from machina.platform_ import project_root
 
 
+# Source dirs / entry-point modules under ``server/`` that ``machina build``
+# pre-compiles to optimised bytecode in step [5/6]. Public so tests and
+# ``scripts/install.js`` (which mirrors this list) stay in sync — both
+# the install pipeline and tests should read this constant rather than
+# duplicate the list. Excludes ``.venv/`` (uv compiles deps at install
+# time and some site-packages contain non-Python templates) and
+# ``tests/`` (ships outside the production tarball).
+COMPILEALL_SOURCE_DIRS: tuple[str, ...] = (
+    "services",
+    "core",
+    "nodes",
+    "routers",
+    "models",
+    "middleware",
+    "main.py",
+    "constants.py",
+)
+
+
 # ---------------------------------------------------------------- helpers
 
 def _which_python() -> str | None:
@@ -175,9 +194,8 @@ def build_command() -> None:
     # tarball. Compiling `.venv/` is wasted work and fails on cookiecutter
     # template files inside packages like crawlee that aren't real Python.
     console.log("[5/6] Compiling Python bytecode...")
-    source_dirs = ["services", "core", "nodes", "routers", "models", "middleware", "main.py", "constants.py"]
     run(
-        ["uv", "run", "python", "-O", "-m", "compileall", "-q", "-j", "0", *source_dirs],
+        ["uv", "run", "python", "-O", "-m", "compileall", "-q", "-j", "0", *COMPILEALL_SOURCE_DIRS],
         cwd=server_dir,
         check=False,  # missing pyc is non-fatal — runtime regenerates as needed
     )
