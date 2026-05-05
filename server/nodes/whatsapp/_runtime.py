@@ -3,7 +3,7 @@
 Spawns the binary with cwd inside the project (``<data_dir>/whatsapp``)
 so the SQLite session DB lives next to ``credentials.db`` and survives
 ``pnpm install``, version bumps, and worktree switches. Lazy-init from
-``services.whatsapp_service.get_client()``; teardown from FastAPI lifespan.
+``nodes.whatsapp._service.get_client()``; teardown from FastAPI lifespan.
 
 Subclasses :class:`BaseProcessSupervisor` for spawning, tree-kill, status
 snapshots, restart policy, and the singleton ``get_instance()`` accessor.

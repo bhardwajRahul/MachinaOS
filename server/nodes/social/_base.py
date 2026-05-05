@@ -7,7 +7,7 @@ Email, Matrix, Teams).
 
 Imported by :class:`nodes.social.social_receive.SocialReceiveNode` and
 :class:`nodes.social.social_send.SocialSendNode`. Calls into
-``services.whatsapp_service`` for the WhatsApp bridge stay unchanged — moving
+``nodes.whatsapp._service`` for the WhatsApp bridge stay unchanged — moving
 them out is a separate refactor.
 """
 
@@ -475,7 +475,7 @@ async def _send_via_whatsapp(
 
     Maps socialSend parameters to whatsappSend parameters.
     """
-    from services.whatsapp_service import handle_whatsapp_send as whatsapp_send_handler
+    from nodes.whatsapp._service import handle_whatsapp_send as whatsapp_send_handler
 
     # Map socialSend params to whatsappSend format
     whatsapp_params = {

@@ -355,7 +355,7 @@ class TestSocialSend:
             return_value={"success": True, "message_id": "wamid.xyz"}
         )
 
-        with patch("services.whatsapp_service.handle_whatsapp_send", whatsapp_send):
+        with patch("nodes.whatsapp._service.handle_whatsapp_send", whatsapp_send):
             result = await harness.execute(
                 "socialSend",
                 {
@@ -385,7 +385,7 @@ class TestSocialSend:
         # recipientType=phone but no phone param -> ValueError inside handler
         whatsapp_send = AsyncMock()
 
-        with patch("services.whatsapp_service.handle_whatsapp_send", whatsapp_send):
+        with patch("nodes.whatsapp._service.handle_whatsapp_send", whatsapp_send):
             result = await harness.execute(
                 "socialSend",
                 {
@@ -404,7 +404,7 @@ class TestSocialSend:
         # Any non-whatsapp channel should surface as a failed envelope.
         whatsapp_send = AsyncMock()
 
-        with patch("services.whatsapp_service.handle_whatsapp_send", whatsapp_send):
+        with patch("nodes.whatsapp._service.handle_whatsapp_send", whatsapp_send):
             result = await harness.execute(
                 "socialSend",
                 {
@@ -425,7 +425,7 @@ class TestSocialSend:
             return_value={"success": False, "error": "rpc boom"}
         )
 
-        with patch("services.whatsapp_service.handle_whatsapp_send", whatsapp_send):
+        with patch("nodes.whatsapp._service.handle_whatsapp_send", whatsapp_send):
             result = await harness.execute(
                 "socialSend",
                 {

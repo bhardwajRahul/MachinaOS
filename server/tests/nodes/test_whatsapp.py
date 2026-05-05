@@ -5,9 +5,9 @@ These tests freeze the input -> output behaviour documented in
 to the Go `whatsapp-rpc` service via a WebSocket RPC client in
 `routers/whatsapp.py`. We patch the two entry points the handlers use:
 
-  - `services.whatsapp_service.handle_whatsapp_send` - sending messages
-  - `services.whatsapp_service.whatsapp_rpc_call`    - generic RPC calls
-  - `services.whatsapp_service.handle_whatsapp_chat_history` - chat history RPC
+  - `nodes.whatsapp._service.handle_whatsapp_send` - sending messages
+  - `nodes.whatsapp._service.whatsapp_rpc_call`    - generic RPC calls
+  - `nodes.whatsapp._service.handle_whatsapp_chat_history` - chat history RPC
 
 For `whatsappReceive` we use the same event-waiter stub pattern as
 `test_telegram_social.py` - patching the module reference imported by both
@@ -32,15 +32,15 @@ pytestmark = pytest.mark.node_contract
 
 
 def _patch_whatsapp_send(return_value):
-    """Patch services.whatsapp_service.handle_whatsapp_send at the import site."""
+    """Patch nodes.whatsapp._service.handle_whatsapp_send at the import site."""
     return patch(
-        "services.whatsapp_service.handle_whatsapp_send",
+        "nodes.whatsapp._service.handle_whatsapp_send",
         new=AsyncMock(return_value=return_value),
     )
 
 
 def _patch_rpc_call(return_value=None, *, side_effect=None):
-    """Patch services.whatsapp_service.whatsapp_rpc_call.
+    """Patch nodes.whatsapp._service.whatsapp_rpc_call.
 
     ``return_value`` may be a dict or list. ``side_effect`` may be a callable
     for per-method routing.
@@ -50,12 +50,12 @@ def _patch_rpc_call(return_value=None, *, side_effect=None):
         kwargs["side_effect"] = side_effect
     else:
         kwargs["return_value"] = return_value if return_value is not None else {}
-    return patch("services.whatsapp_service.whatsapp_rpc_call", new=AsyncMock(**kwargs))
+    return patch("nodes.whatsapp._service.whatsapp_rpc_call", new=AsyncMock(**kwargs))
 
 
 def _patch_chat_history_handler(return_value):
     return patch(
-        "services.whatsapp_service.handle_whatsapp_chat_history",
+        "nodes.whatsapp._service.handle_whatsapp_chat_history",
         new=AsyncMock(return_value=return_value),
     )
 
@@ -95,7 +95,7 @@ class TestWhatsappSend:
             return {"success": True}
 
         with patch(
-            "services.whatsapp_service.handle_whatsapp_send",
+            "nodes.whatsapp._service.handle_whatsapp_send",
             new=AsyncMock(side_effect=fake_send),
         ), patch(
             "services.markdown_formatter.to_whatsapp",

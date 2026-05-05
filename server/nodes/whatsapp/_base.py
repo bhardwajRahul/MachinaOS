@@ -1,7 +1,7 @@
 """WhatsApp send + DB business logic (Wave 11.D.9 inlined).
 
 Imported by nodes.whatsapp.whatsapp_send and nodes.whatsapp.whatsapp_db.
-RPC dispatch still flows through services.whatsapp_service (HTTP to the Go
+RPC dispatch still flows through nodes.whatsapp._service (HTTP to the Go
 bridge) — extracting that is a separate refactor, not required for the
 plugin migration.
 """
@@ -145,7 +145,7 @@ async def handle_whatsapp_send(
     Returns:
         Execution result dict
     """
-    from services.whatsapp_service import handle_whatsapp_send as whatsapp_send_handler
+    from nodes.whatsapp._service import handle_whatsapp_send as whatsapp_send_handler
     start_time = time.time()
 
     try:
@@ -289,7 +289,7 @@ async def handle_whatsapp_db(
     Returns:
         Execution result dict
     """
-    from services.whatsapp_service import (
+    from nodes.whatsapp._service import (
         handle_whatsapp_chat_history as whatsapp_chat_history_handler,
         whatsapp_rpc_call
     )

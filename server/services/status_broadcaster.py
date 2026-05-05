@@ -323,7 +323,7 @@ class StatusBroadcaster:
         """
         with tracer.start_as_current_span("broadcaster.refresh_whatsapp") as span:
             try:
-                from services.whatsapp_service import get_client
+                from nodes.whatsapp._service import get_client
                 import time
 
                 client = await get_client()

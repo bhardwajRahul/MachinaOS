@@ -33,7 +33,7 @@ class WebSocketLogHandler(logging.Handler):
             'services.workflow': 'workflow',
             'services.ai': 'ai',
             'services.android': 'android',
-            'services.whatsapp_service': 'whatsapp',
+            'nodes.whatsapp._service': 'whatsapp',
             'routers.android': 'android',
             'routers.websocket': 'websocket',
             'routers.workflow': 'workflow',
