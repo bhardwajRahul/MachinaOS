@@ -11,6 +11,7 @@
  */
 
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import ReconnectingWebSocket from 'partysocket/ws';
 import { API_CONFIG } from '../config/api';
 import { useAppStore } from '../store/useAppStore';
 import { useAuth } from './AuthContext';
@@ -18,6 +19,8 @@ import { queryClient } from '../lib/queryClient';
 import { queryKeys } from '../lib/queryConfig';
 import { invalidateCatalogue } from '../hooks/useCatalogueQuery';
 import { nodeParamsQueryKey } from '../hooks/useNodeParamsQuery';
+import type { WorkflowEvent } from '../types/cloudEvents';
+import { WS_CLOSE, WS_RECONNECT } from '../lib/connectionConfig';
 import {
   useNodeStatusStore,
   useNodeStatusForId,
@@ -500,8 +503,13 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   // Per-workflow compaction stats: workflow_id -> session_id -> CompactionStats (n8n pattern)
   const [allCompactionStats, setAllCompactionStats] = useState<Record<string, Record<string, CompactionStats>>>({});
 
-  const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // PartySocket's `ReconnectingWebSocket` implements the native WebSocket
+  // surface (`send`, `close`, `readyState`, `addEventListener`, `onopen`,
+  // `onmessage`, `onclose`, `onerror`) so consumers — including the request
+  // correlation map and ping loop below — work unchanged. The ref's element
+  // type tightens to the library's class so any feature-specific calls
+  // (`shouldReconnect`, `reconnect()`) type-check.
+  const wsRef = useRef<ReconnectingWebSocket | null>(null);
   const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const pendingRequestsRef = useRef<Map<string, PendingRequest>>(new Map());
   // Pending-send queue for backpressure + replay across reconnects.
@@ -526,7 +534,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
       // Fetch deployment status for the new workflow (n8n pattern)
       // This ensures the deploy button shows correct state when switching workflows
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
+      if (wsRef.current?.readyState === ReconnectingWebSocket.OPEN) {
         const fetchDeploymentStatus = async () => {
           try {
             const requestId = generateRequestId();
@@ -676,12 +684,22 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           }
           break;
 
-        case 'credential_catalogue_updated':
-          // Future server emitter (per useCatalogueQuery.ts TODO). Client
-          // handler is wired now so once the server pushes it, consumers
-          // refresh automatically.
+        case 'credential_catalogue_updated': {
+          // The backend wraps a CloudEvents v1.0 `WorkflowEvent` envelope
+          // inside `data` (see server/services/status_broadcaster.py and
+          // server/services/events/envelope.py). The legacy outer wire
+          // key stays as the dispatch tag for back-compat, but the
+          // envelope's `id` / `time` / nested `type` (e.g.
+          // `credential.api_key.saved`) are now statically typed for any
+          // future consumer that wants ordering, dedup, or fine-grained
+          // glob dispatch via `matchesType()`.
+          const event = data as WorkflowEvent<{ provider: string; customer_id?: string }>;
+          // Today the only action is to refetch the catalogue; the
+          // envelope is read for telemetry / future dispatch.
+          void event;
           invalidateCatalogue(queryClient);
           break;
+        }
 
         case 'android_status':
           setAndroidStatus(data || defaultAndroidStatus);
@@ -1161,7 +1179,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   // fresh request_id and a reset timeout budget; responses correlate via the
   // existing pendingRequestsRef map. Per-call abortController cancels the
   // queue-side timeout that was running while the request was waiting in line.
-  const drainPendingSends = useCallback((ws: WebSocket) => {
+  const drainPendingSends = useCallback((ws: ReconnectingWebSocket) => {
     const queue = pendingSendQueueRef.current;
     pendingSendQueueRef.current = [];
     for (const queued of queue) {
@@ -1202,16 +1220,34 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, []);
 
-  // Connect to WebSocket
+  // Connect to WebSocket. Uses PartySocket's `ReconnectingWebSocket` —
+  // a native-WebSocket-compatible class with built-in jittered exponential
+  // backoff, message replay, and intentional-close (code 1000) handling.
+  // Replaces the previous flat 3 s `setTimeout(reconnect)` loop.
+  // Backoff envelope is configured via `WS_RECONNECT` in
+  // `lib/connectionConfig.ts` so a future tuning pass is a one-file edit.
+  // Ref: https://docs.partykit.io/reference/partysocket-api/
   const connect = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
+    if (wsRef.current?.readyState === ReconnectingWebSocket.OPEN) {
       return;
     }
 
     const wsUrl = getWebSocketUrl();
 
     try {
-      const ws = new WebSocket(wsUrl);
+      const ws = new ReconnectingWebSocket(wsUrl, [], {
+        minReconnectionDelay: WS_RECONNECT.MIN_DELAY_MS,
+        maxReconnectionDelay: WS_RECONNECT.MAX_DELAY_MS,
+        reconnectionDelayGrowFactor: WS_RECONNECT.GROW_FACTOR,
+        // Reconnect indefinitely while the page is open. Intentional
+        // closes via `ws.close(1000, ...)` (logout / unmount) skip the
+        // reconnect path because PartySocket inspects the close code.
+        maxRetries: Infinity,
+        // Send-while-disconnected buffer; replayed automatically on the
+        // next OPEN. Mirrors the previous `pendingSendQueueRef` cap intent
+        // for opportunistic out-of-band sends.
+        maxEnqueuedMessages: WS_RECONNECT.MAX_ENQUEUED_MESSAGES,
+      });
 
       ws.onopen = async () => {
         setIsConnected(true);
@@ -1227,7 +1263,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
         // Start ping interval
         pingIntervalRef.current = setInterval(() => {
-          if (ws.readyState === WebSocket.OPEN) {
+          if (ws.readyState === ReconnectingWebSocket.OPEN) {
             ws.send(JSON.stringify({ type: 'ping' }));
           }
         }, 30000);
@@ -1399,9 +1435,10 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           pendingRequestsRef.current.clear();
         }
 
-        // Pending-send queue handling: only drop on intentional close (code 1000).
-        // Transient closes preserve the queue so the next onopen drain replays them.
-        if (event.code === 1000) {
+        // Pending-send queue handling: only drop on intentional close
+        // (RFC 6455 §7.4.1 Normal Closure, code 1000). Transient closes
+        // preserve the queue so the next onopen drain replays them.
+        if (event.code === WS_CLOSE.NORMAL_CLOSURE) {
           if (pendingSendQueueRef.current.length > 0) {
             for (const queued of pendingSendQueueRef.current) {
               try {
@@ -1421,12 +1458,13 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           pingIntervalRef.current = null;
         }
 
-        // Reconnect after delay (unless intentional close)
-        if (event.code !== 1000) {
+        // PartySocket performs the reconnect itself when
+        // `event.code !== WS_CLOSE.NORMAL_CLOSURE`, honouring the
+        // `WS_RECONNECT` envelope passed at construction time. Surface
+        // "reconnecting" to the UI for transient closes; intentional
+        // closes (logout / unmount) leave the flag false.
+        if (event.code !== WS_CLOSE.NORMAL_CLOSURE) {
           setReconnecting(true);
-          reconnectTimeoutRef.current = setTimeout(() => {
-            connect();
-          }, 3000);
         }
       };
 
@@ -1436,15 +1474,18 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
       wsRef.current = ws;
     } catch (error) {
+      // Construction-time error (e.g. malformed URL). PartySocket has
+      // not installed its retry loop yet, so just log — there is
+      // nothing to reconnect to. The runtime path (network drops after
+      // successful construction) is covered by PartySocket's internal
+      // jittered backoff.
       console.error('[WebSocket] Failed to create connection:', error);
-      setReconnecting(true);
-      reconnectTimeoutRef.current = setTimeout(connect, 3000);
     }
   }, [handleMessage, drainPendingSends]);
 
   // Request current status
   const requestStatus = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
+    if (wsRef.current?.readyState === ReconnectingWebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'get_status' }));
     }
   }, []);
@@ -1504,7 +1545,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   // the currently-open workflow so other workflows' history survives.
   const clearConsoleLogs = useCallback(() => {
     setConsoleLogs([]);
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
+    if (wsRef.current?.readyState === ReconnectingWebSocket.OPEN) {
       const workflowId = useAppStore.getState().currentWorkflow?.id;
       wsRef.current.send(JSON.stringify({
         type: 'clear_console_logs',
@@ -1517,7 +1558,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const clearTerminalLogs = useCallback(() => {
     setTerminalLogs([]);
     // Also notify server to clear its terminal log history
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
+    if (wsRef.current?.readyState === ReconnectingWebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'clear_terminal_logs' }));
     }
   }, []);
@@ -1528,7 +1569,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   // Uses direct WebSocket send to avoid dependency on sendRequest (which is defined later).
   const clearChatMessages = useCallback(() => {
     setChatMessages([]);
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
+    if (wsRef.current?.readyState === ReconnectingWebSocket.OPEN) {
       const workflowId = useAppStore.getState().currentWorkflow?.id || 'default';
       wsRef.current.send(JSON.stringify({
         type: 'clear_chat_messages',
@@ -1645,7 +1686,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const effectiveTimeout = (timeoutMs === -1 || !useTimeout) ? -1 : actualTimeout;
 
       // FAST PATH: socket open — send immediately.
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
+      if (wsRef.current?.readyState === ReconnectingWebSocket.OPEN) {
         const requestId = generateRequestId();
         let timeout: NodeJS.Timeout | null = null;
         if (effectiveTimeout > 0) {
@@ -2515,7 +2556,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
 
     // Skip if already connected
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
+    if (wsRef.current?.readyState === ReconnectingWebSocket.OPEN) {
       return;
     }
 
@@ -2546,7 +2587,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         }
         pendingSendQueueRef.current = [];
       }
-      wsRef.current.close(1000, 'User logged out');
+      wsRef.current.close(WS_CLOSE.NORMAL_CLOSURE, 'User logged out');
       wsRef.current = null;
       setIsConnected(false);
       setIsReady(false);
@@ -2557,7 +2598,6 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
-      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
       // Drain the pending-send queue so any in-flight awaiters fail fast on
       // unmount instead of dangling forever.
@@ -2572,8 +2612,8 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         }
         pendingSendQueueRef.current = [];
       }
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.close(1000, 'Component unmounted');
+      if (wsRef.current?.readyState === ReconnectingWebSocket.OPEN) {
+        wsRef.current.close(WS_CLOSE.NORMAL_CLOSURE, 'Component unmounted');
       }
     };
   }, []);

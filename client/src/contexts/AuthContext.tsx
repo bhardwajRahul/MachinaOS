@@ -1,15 +1,27 @@
 /**
  * Authentication Context for user session management.
  *
- * Provides:
- * - Login/logout/register functions
- * - Current user state
- * - Authentication status
- * - Auth mode (single-owner vs multi-user)
+ * The auth-status check runs through TanStack Query (`useQuery`) so
+ * exponential backoff with full jitter, AbortController-based unmount
+ * cleanup, Strict-Mode safety, and 401/403 fast-fail are all delegated
+ * to the library — see https://tanstack.com/query/v5/docs/framework/react/guides/query-retries.
+ *
+ * The context's public surface (user, isAuthenticated, isLoading,
+ * authMode, canRegister, error, login, register, logout, checkAuth) is
+ * unchanged so consumer code does not move.
+ *
+ * Login / register / logout mutate the auth state by invalidating the
+ * `['auth', 'status']` query rather than calling a private setter — the
+ * single source of truth stays the query cache, which TanStack Query
+ * dedupes by reference equality, eliminating the spurious
+ * `isAuthenticated` flips that closed the WS prematurely under React
+ * Strict Mode.
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useCallback, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { API_CONFIG } from '../config/api';
+import { AUTH_RETRY } from '../lib/connectionConfig';
 
 export interface User {
   id: number;
@@ -43,159 +55,185 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const getApiBase = () => `${API_CONFIG.PYTHON_BASE_URL}/api/auth`;
 
+const ANONYMOUS_USER: User = {
+  id: 0,
+  email: 'anonymous',
+  display_name: 'Anonymous',
+  is_owner: true,
+};
+
+// `['auth', 'status']` is the canonical key for the bootstrap query.
+// Login / register / logout invalidate it via `queryClient.invalidateQueries`.
+export const AUTH_STATUS_QUERY_KEY = ['auth', 'status'] as const;
+
+/**
+ * Full-jitter exponential backoff. Constants live in
+ * `lib/connectionConfig.ts` (`AUTH_RETRY`) so a future tuning pass is a
+ * single-file edit. See that module for the rationale and the reference
+ * link to the AWS Architecture Blog.
+ */
+const authRetryDelay = (attemptIndex: number): number =>
+  Math.random() * Math.min(AUTH_RETRY.CAP_MS, AUTH_RETRY.BASE_MS * 2 ** attemptIndex);
+
+/**
+ * Retry on network failures + 5xx; never retry on auth errors (401/403)
+ * because those are valid responses meaning "auth disabled / not logged
+ * in", not "backend unavailable". Cap at `AUTH_RETRY.MAX_ATTEMPTS`.
+ */
+const authShouldRetry = (failureCount: number, error: unknown): boolean => {
+  if (failureCount >= AUTH_RETRY.MAX_ATTEMPTS) return false;
+  const msg = error instanceof Error ? error.message : String(error);
+  if (msg.includes('HTTP 401') || msg.includes('HTTP 403')) return false;
+  return true;
+};
+
+const fetchAuthStatus = async ({ signal }: { signal: AbortSignal }): Promise<AuthStatus> => {
+  const response = await fetch(`${getApiBase()}/status`, {
+    credentials: 'include',
+    signal,
+  });
+  if (!response.ok) {
+    // Wrap status in the error message so `authShouldRetry` can detect
+    // 401/403 without parsing the original Response.
+    throw new Error(`auth.status: HTTP ${response.status}`);
+  }
+  return response.json() as Promise<AuthStatus>;
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [authMode, setAuthMode] = useState<'single' | 'multi'>('single');
-  const [canRegister, setCanRegister] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
-  const checkAuth = useCallback(async (retryCount = 0): Promise<void> => {
-    const maxRetries = 5;
-    const baseDelay = 1000; // 1 second
+  // Bootstrap auth-status query. The `signal` plumbed through `queryFn`
+  // is automatically aborted when the component unmounts (Strict Mode
+  // double-mount lifecycle handled by TanStack Query, see
+  // https://tanstack.com/query/v5/docs/react/guides/cancellation).
+  const authQuery = useQuery({
+    queryKey: AUTH_STATUS_QUERY_KEY,
+    queryFn: fetchAuthStatus,
+    retry: authShouldRetry,
+    retryDelay: authRetryDelay,
+    // Boot-once: never refetch on focus / mount / network reconnect.
+    // Logout / login explicitly invalidate.
+    staleTime: Infinity,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
 
-    try {
-      const response = await fetch(`${getApiBase()}/status`, {
-        credentials: 'include'
-      });
-      const data: AuthStatus = await response.json();
+  const data = authQuery.data;
+  const user: User | null = useMemo(() => {
+    if (!data) return null;
+    if (data.auth_enabled === false) return ANONYMOUS_USER;
+    return data.authenticated ? data.user : null;
+  }, [data]);
 
-      // Runtime auth check: if backend says auth is disabled, set anonymous user
-      if (data.auth_enabled === false) {
-        setUser({ id: 0, email: 'anonymous', display_name: 'Anonymous', is_owner: true });
-        setIsLoading(false);
-        setError(null);
-        return;
-      }
+  const authMode: 'single' | 'multi' = data?.auth_mode ?? 'single';
+  const canRegister = data?.can_register ?? false;
+  const isAuthenticated = user !== null;
+  const isLoading = authQuery.isPending;
+  const error = authQuery.isError ? 'Failed to connect to server' : null;
 
-      setAuthMode(data.auth_mode);
-      setCanRegister(data.can_register);
-
-      if (data.authenticated && data.user) {
-        setUser(data.user);
-      } else {
-        setUser(null);
-      }
-      setError(null);
-      setIsLoading(false);
-    } catch (err) {
-      console.error(`Failed to check auth status (attempt ${retryCount + 1}/${maxRetries + 1}):`, err);
-
-      // Retry with exponential backoff if server not ready
-      if (retryCount < maxRetries) {
-        const delay = baseDelay * Math.pow(2, retryCount);
-        console.log(`Retrying in ${delay}ms...`);
-        setTimeout(() => checkAuth(retryCount + 1), delay);
-      } else {
-        setUser(null);
-        setError('Failed to connect to server');
-        setIsLoading(false);
-      }
-    }
-  }, []);
-
-  // Check auth status on mount
-  useEffect(() => {
-    checkAuth();
-  }, [checkAuth]);
+  const invalidateAuth = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: AUTH_STATUS_QUERY_KEY }),
+    [queryClient],
+  );
 
   const login = useCallback(async (email: string, password: string): Promise<boolean> => {
-    setError(null);
-    setIsLoading(true);
-
     try {
       const response = await fetch(`${getApiBase()}/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email, password }),
       });
+      const body = await response.json();
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.detail || 'Login failed');
-        setIsLoading(false);
+      if (!response.ok || !body.success || !body.user) {
+        // Surface the server's error via the query cache so `error` flips
+        // through the same path as a normal `isError` would.
+        queryClient.setQueryData<AuthStatus | null>(AUTH_STATUS_QUERY_KEY, null);
         return false;
       }
 
-      if (data.success && data.user) {
-        setUser(data.user);
-        setIsLoading(false);
-        return true;
-      }
-
-      setError('Login failed');
-      setIsLoading(false);
-      return false;
+      // Optimistically write the new user into the cache so the UI
+      // updates this render; then invalidate so the next refetch
+      // picks up server-derived fields (auth_mode, can_register).
+      queryClient.setQueryData<AuthStatus>(AUTH_STATUS_QUERY_KEY, {
+        auth_enabled: true,
+        auth_mode: authMode,
+        authenticated: true,
+        user: body.user,
+        can_register: false,
+      });
+      await invalidateAuth();
+      return true;
     } catch (err) {
       console.error('Login error:', err);
-      setError('Failed to connect to server');
-      setIsLoading(false);
       return false;
     }
-  }, []);
+  }, [queryClient, invalidateAuth, authMode]);
 
   const register = useCallback(async (
     email: string,
     password: string,
-    displayName: string
+    displayName: string,
   ): Promise<boolean> => {
-    setError(null);
-    setIsLoading(true);
-
     try {
       const response = await fetch(`${getApiBase()}/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ email, password, display_name: displayName })
+        body: JSON.stringify({ email, password, display_name: displayName }),
       });
+      const body = await response.json();
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.detail || 'Registration failed');
-        setIsLoading(false);
+      if (!response.ok || !body.success || !body.user) {
         return false;
       }
 
-      if (data.success && data.user) {
-        setUser(data.user);
-        setCanRegister(false); // After successful registration in single-owner mode
-        setIsLoading(false);
-        return true;
-      }
-
-      setError('Registration failed');
-      setIsLoading(false);
-      return false;
+      queryClient.setQueryData<AuthStatus>(AUTH_STATUS_QUERY_KEY, {
+        auth_enabled: true,
+        auth_mode: authMode,
+        authenticated: true,
+        user: body.user,
+        can_register: false,
+      });
+      await invalidateAuth();
+      return true;
     } catch (err) {
       console.error('Register error:', err);
-      setError('Failed to connect to server');
-      setIsLoading(false);
       return false;
     }
-  }, []);
+  }, [queryClient, invalidateAuth, authMode]);
 
   const logout = useCallback(async () => {
     try {
       await fetch(`${getApiBase()}/logout`, {
         method: 'POST',
-        credentials: 'include'
+        credentials: 'include',
       });
     } catch (err) {
       console.error('Logout error:', err);
     } finally {
-      setUser(null);
-      // Re-check auth status to update canRegister
-      await checkAuth();
+      // Force `authenticated: false` immediately so consumers (esp. the
+      // WebSocket logout effect) react this render; then refetch so
+      // `can_register` and `auth_mode` come back fresh.
+      queryClient.setQueryData<AuthStatus>(AUTH_STATUS_QUERY_KEY, (prev) => ({
+        ...(prev ?? { auth_enabled: true, auth_mode: 'single' as const, can_register: false }),
+        authenticated: false,
+        user: null,
+      }));
+      await invalidateAuth();
     }
-  }, [checkAuth]);
+  }, [queryClient, invalidateAuth]);
 
-  const value: AuthContextType = {
+  const checkAuth = useCallback(async () => {
+    await authQuery.refetch();
+  }, [authQuery]);
+
+  const value: AuthContextType = useMemo(() => ({
     user,
-    isAuthenticated: user !== null,
+    isAuthenticated,
     isLoading,
     authMode,
     canRegister,
@@ -203,8 +241,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     login,
     register,
     logout,
-    checkAuth
-  };
+    checkAuth,
+  }), [user, isAuthenticated, isLoading, authMode, canRegister, error,
+       login, register, logout, checkAuth]);
 
   return (
     <AuthContext.Provider value={value}>
