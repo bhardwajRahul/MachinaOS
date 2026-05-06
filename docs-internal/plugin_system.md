@@ -761,14 +761,29 @@ every CI run. Examples:
   LOC.
 - Wave 11.G — Nodes cookbook (`server/nodes/README.md`) + CLAUDE.md
   plugin section + this file refreshed to match shipped state.
-- Wave 11.H — Self-contained plugin folders. Five new generic
-  registries replace per-plugin hardcoding in core services:
-  `services.ws_handler_registry` (WebSocket commands),
+- Wave 11.H — Self-contained plugin folders. Six generic registries
+  replace per-plugin hardcoding in core services:
+  `services.ws_handler_registry.register_ws_handlers` (WebSocket
+  commands), `services.ws_handler_registry.register_router` (FastAPI
+  routers — sibling concern in the same file as `register_ws_handlers`,
+  added Wave 11.I),
   `event_waiter.register_filter_builder` (event filters),
   `event_waiter.register_trigger_precheck` (trigger pre-execution
   checks), `status_broadcaster.register_service_refresh` (WS-connect
   refresh callbacks), `node_output_schemas.register_output_schema`
   (output schemas).
+- Wave 11.I — Eight more plugin domains migrated to the
+  self-contained pattern: WhatsApp, Twitter, Google Workspace,
+  Android, Browser, Email, Code (Claude Code), and the credential
+  validation scaffold (`Credential.validate` + `Credential._probe`)
+  for Maps / Apify / Ollama / LM Studio. `routers/websocket.py`
+  shrunk by ~808 LOC; three plugin routers (twitter / google /
+  android) moved into `nodes/<plugin>/_router.py` and mount via the
+  plugin-router loop in `main.py`. `tests/test_plugin_self_containment.py`
+  locks the contract with 7 invariant classes (forbidden-imports /
+  no-router-outside-nodes / per-plugin self-registration /
+  registry-API sanity / stale-paths-absent / main.py-does-not-mount /
+  WS_HANDLERS-non-empty).
 - Wave 12 — Generalized event framework
   ([`services/events/`](../server/services/events/)). Adds
   `WorkflowEvent` (CloudEvents v1.0 envelope, in-house Pydantic),
@@ -794,14 +809,15 @@ every CI run. Examples:
   changes. Frontend identifies plugin commands by WebSocket message
   type strings, not Python module paths.
 
-`services/handlers/` is now **4 files / 1,112 LOC** (down from 16
-files / 12,800 LOC):
+`services/handlers/` is now **4 files / ~970 LOC** (down from 16
+files / 12,800 LOC; `google_auth.py` moved to `nodes/google/_auth_helper.py`
+in Wave 11.I commit D):
 
 | File | LOC | Purpose |
 |---|---|---|
 | `tools.py` | 821 | AI-tool dispatcher, plugin fast-path, agent delegation infrastructure (shared `_delegated_tasks` / `_delegation_results` state). |
-| `google_auth.py` | 142 | Shared OAuth helper for the 7 Google plugins. |
-| `triggers.py` | 126 | Generic event-trigger handler for `twitterReceive` and other polling triggers. |
+| `triggers.py` | 126 | Generic event-trigger handler for polling triggers (gmailReceive, twitterReceive, etc.). |
+| `todo.py` | 65 | TaskManager / writeTodos invocation surface for AI tool nodes. |
 | `__init__.py` | 23 | Package docstring; nothing imports from `services.handlers` at package level. |
 
 Every domain owns its own code under `nodes/<group>/` — plugin file +

@@ -234,7 +234,7 @@ server/nodes/telegram/
 └── telegram_receive.py  # TriggerNode
 ```
 
-### Five generic registries to plug into
+### Six generic registries to plug into
 
 Telegram's `__init__.py` is the canonical wiring example. Adding any
 of these concerns to your plugin is one `register_*` call from your
@@ -243,13 +243,25 @@ package's `__init__.py` — the consumer never imports your folder.
 | Concern | Where to register | What it does |
 |---|---|---|
 | Credentials-modal WebSocket commands | `services.ws_handler_registry.register_ws_handlers({"<type>": handler})` | Adds `<type>` to the central WS dispatcher (no router edits) |
+| FastAPI router (Wave 11.I) | `services.ws_handler_registry.register_router(router, name="<name>")` | Plugin's HTTP router mounts via the plugin loop in `main.py`; sibling concern in the same file as `register_ws_handlers` |
 | Event-trigger filter | `services.event_waiter.register_filter_builder(node_type, fn)` | Plugs into `FILTER_BUILDERS` for `event_waiter.build_filter()` |
 | Trigger pre-execution check | `services.event_waiter.register_trigger_precheck(node_type, async_fn)` | Generic `triggers.py` handler runs `run_trigger_precheck` before entering the wait loop |
 | Service-status refresh on WS connect | `services.status_broadcaster.register_service_refresh(async_callback)` | Callback runs once per `_refresh_all_services` cycle |
 | Output schema | `services.node_output_schemas.register_output_schema(node_type, ModelClass)` | Avoids declaring a duplicate `Output` class in the central schema file |
 
-All five are idempotent (same callable / class for the same key is a
+All six are idempotent (same callable / class for the same key is a
 no-op; conflicts raise `ValueError`).
+
+### Credential validation (Wave 11.I)
+
+The credential-validator dispatch is a sibling concern, handled by the
+existing `services/plugin/credential.py:Credential` base class. Your
+`Credential` subclass overrides `_probe(api_key) -> ProbeResult` (or,
+in rare cases like local-LLM 2-storage, the whole `validate(data)
+-> dict` classmethod). Maps, Apify, all 9 cloud LLM providers, and
+both local-LLM providers (Ollama / LM Studio) all dispatch through the
+same scaffold — no `_SPECIAL_PROVIDER_VALIDATORS` dict in
+`routers/websocket.py`.
 
 ### When NOT to use this shape
 
