@@ -361,6 +361,7 @@ async def handle_get_credential_catalogue(data: Dict[str, Any], websocket: WebSo
         kind = provider.get("kind", "")
         status_hook = provider.get("status_hook")
 
+        tokens = None
         if status_hook:
             # Status-hook providers (whatsapp, android, twitter, google, telegram)
             # use OAuth tokens or special connection state.
@@ -375,6 +376,15 @@ async def handle_get_credential_catalogue(data: Dict[str, Any], websocket: WebSo
             provider["stored"] = tokens is not None
         else:
             provider["stored"] = False
+
+        # Surface the connected account identifier (email > display name)
+        # so the modal can render "Connected as foo@bar.com" without a
+        # per-provider status hook. Twitter / Google / Stripe / Claude
+        # all populate `email` / `name` via `auth_service.store_oauth_tokens`.
+        if tokens:
+            provider["account_label"] = tokens.get("email") or tokens.get("name")
+        else:
+            provider["account_label"] = None
 
     return catalogue
 

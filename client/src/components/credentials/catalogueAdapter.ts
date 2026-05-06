@@ -172,6 +172,7 @@ export function rehydrateProvider(entry: ServerProviderConfig): ProviderConfig {
     hasRateLimits: entry.has_rate_limits,
     usageService: entry.usage_service,
     stored: entry.stored,
+    account_label: entry.account_label ?? null,
   };
 }
 

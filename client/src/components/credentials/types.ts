@@ -119,6 +119,8 @@ export interface ProviderConfig {
   usageService?: string;
   /** Server-resolved: whether a key/token exists in the credentials DB. */
   stored?: boolean;
+  /** Connected account identifier (email or display name) for OAuth providers. */
+  account_label?: string | null;
 }
 
 // ============================================================================

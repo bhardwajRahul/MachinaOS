@@ -93,7 +93,9 @@ const OAuthConnect: React.FC<Props> = ({
       <div className="rounded-md border border-accent/30 bg-accent/10 p-3">
         <div className="text-sm leading-relaxed text-muted-foreground">
           {connected
-            ? `Your ${config.name} account is connected.`
+            ? config.account_label
+              ? `Connected as ${config.account_label}.`
+              : `Your ${config.name} account is connected.`
             : (stored || !hasFields)
               ? 'Click Login to authorize.'
               : 'Enter your credentials above to get started.'}
