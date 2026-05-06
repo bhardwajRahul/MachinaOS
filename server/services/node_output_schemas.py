@@ -866,6 +866,26 @@ def list_node_types_with_schema() -> list[str]:
     return sorted(NODE_OUTPUT_SCHEMAS.keys())
 
 
+from services.plugin.registry import IdempotentRegistry as _IdempotentRegistry  # noqa: E402
+
+
+def _bust_schema_cache(node_type: str, _model_class: type[BaseModel]) -> None:
+    """on_register hook: drop the cached JSON schema for the re-registered type."""
+    _schema_cache.pop(node_type, None)
+
+
+# Backed by the module-level NODE_OUTPUT_SCHEMAS dict so existing
+# readers (e.g. get_output_schema, list_node_types_with_schema, tests)
+# keep working.
+_OUTPUT_SCHEMA_REGISTRY: _IdempotentRegistry[str, type[BaseModel]] = (
+    _IdempotentRegistry(
+        "output_schema",
+        items=NODE_OUTPUT_SCHEMAS,
+        on_register=_bust_schema_cache,
+    )
+)
+
+
 def register_output_schema(node_type: str, model_class: type[BaseModel]) -> None:
     """Publish an output schema for a node type from a plugin package.
 
@@ -877,13 +897,4 @@ def register_output_schema(node_type: str, model_class: type[BaseModel]) -> None
 
     See e.g. ``nodes/telegram/__init__.py``.
     """
-    existing = NODE_OUTPUT_SCHEMAS.get(node_type)
-    if existing is not None and existing is not model_class:
-        raise ValueError(
-            f"Output schema for '{node_type}' is already registered as "
-            f"{existing.__module__}.{existing.__qualname__}; refusing to "
-            f"overwrite with {model_class.__module__}.{model_class.__qualname__}"
-        )
-    NODE_OUTPUT_SCHEMAS[node_type] = model_class
-    # Bust the JSON-schema cache so the next call re-serialises.
-    _schema_cache.pop(node_type, None)
+    _OUTPUT_SCHEMA_REGISTRY.register(node_type, model_class)

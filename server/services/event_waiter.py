@@ -515,6 +515,14 @@ FILTER_BUILDERS: Dict[str, Callable[[Dict], Callable[[Dict], bool]]] = {
     'emailReceive': build_email_filter,
 }
 
+from services.plugin.registry import IdempotentRegistry as _IdempotentRegistry  # noqa: E402
+
+# Backed by the module-level FILTER_BUILDERS dict so existing readers
+# (e.g. build_filter, _ensure_populated, tests) keep working.
+_FILTER_REGISTRY: _IdempotentRegistry[str, Callable[[Dict], Callable[[Dict], bool]]] = (
+    _IdempotentRegistry("filter_builder", items=FILTER_BUILDERS)
+)
+
 
 def register_filter_builder(
     node_type: str,
@@ -526,13 +534,7 @@ def register_filter_builder(
     Used by plugin packages to keep all per-node-type knowledge inside
     the plugin folder instead of hardcoding it here.
     """
-    existing = FILTER_BUILDERS.get(node_type)
-    if existing is not None and existing is not builder:
-        raise ValueError(
-            f"Filter builder for '{node_type}' is already registered by "
-            f"{existing.__module__}.{existing.__qualname__}"
-        )
-    FILTER_BUILDERS[node_type] = builder
+    _FILTER_REGISTRY.register(node_type, builder)
 
 
 def build_filter(node_type: str, params: Dict) -> Callable[[Dict], bool]:
@@ -568,6 +570,9 @@ import inspect as _inspect
 
 _TriggerPrecheck = Callable[[Dict[str, Any]], Any]
 _TRIGGER_PRECHECKS: Dict[str, _TriggerPrecheck] = {}
+_TRIGGER_PRECHECK_REGISTRY: _IdempotentRegistry[str, _TriggerPrecheck] = (
+    _IdempotentRegistry("trigger_precheck", items=_TRIGGER_PRECHECKS)
+)
 
 
 def register_trigger_precheck(node_type: str, fn: _TriggerPrecheck) -> None:
@@ -576,13 +581,7 @@ def register_trigger_precheck(node_type: str, fn: _TriggerPrecheck) -> None:
     Idempotent on re-import. The callback may be sync or async; ``run_trigger_precheck``
     awaits the coroutine when needed.
     """
-    existing = _TRIGGER_PRECHECKS.get(node_type)
-    if existing is not None and existing is not fn:
-        raise ValueError(
-            f"Trigger precheck for '{node_type}' is already registered by "
-            f"{existing.__module__}.{existing.__qualname__}"
-        )
-    _TRIGGER_PRECHECKS[node_type] = fn
+    _TRIGGER_PRECHECK_REGISTRY.register(node_type, fn)
 
 
 async def run_trigger_precheck(node_type: str, parameters: Dict) -> Any:

@@ -1269,6 +1269,15 @@ _ServiceRefreshCallback = _typing.Callable[
 ]
 _SERVICE_REFRESH_CALLBACKS: _typing.List[_ServiceRefreshCallback] = []
 
+from services.plugin.registry import IdempotentList as _IdempotentList  # noqa: E402
+
+# Backed by the module-level _SERVICE_REFRESH_CALLBACKS list so the
+# existing iterator at line 153 (``for callback in list(_SERVICE_REFRESH_CALLBACKS)``)
+# keeps working unchanged.
+_SERVICE_REFRESH_FANOUT: _IdempotentList[_ServiceRefreshCallback] = _IdempotentList(
+    "service_refresh", items=_SERVICE_REFRESH_CALLBACKS
+)
+
 
 def register_service_refresh(callback: _ServiceRefreshCallback) -> None:
     """Register a per-service refresh callback.
@@ -1277,8 +1286,7 @@ def register_service_refresh(callback: _ServiceRefreshCallback) -> None:
     callback runs once per ``_refresh_all_services()`` cycle (i.e. on
     every WebSocket client connect).
     """
-    if callback not in _SERVICE_REFRESH_CALLBACKS:
-        _SERVICE_REFRESH_CALLBACKS.append(callback)
+    _SERVICE_REFRESH_FANOUT.register(callback)
 
 
 # Global singleton instance

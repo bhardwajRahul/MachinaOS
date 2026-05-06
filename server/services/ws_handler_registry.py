@@ -26,12 +26,14 @@ from typing import Any, Awaitable, Callable, Dict, List
 
 from fastapi import APIRouter, WebSocket
 
+from services.plugin.registry import IdempotentRegistry
+
 logger = logging.getLogger(__name__)
 
 WSHandler = Callable[[Dict[str, Any], WebSocket], Awaitable[Dict[str, Any]]]
 
-_WS_REGISTRY: Dict[str, WSHandler] = {}
-_ROUTER_REGISTRY: Dict[str, APIRouter] = {}
+_WS_REGISTRY: IdempotentRegistry[str, WSHandler] = IdempotentRegistry("ws_handler")
+_ROUTER_REGISTRY: IdempotentRegistry[str, APIRouter] = IdempotentRegistry("router")
 
 
 # ---- WebSocket handlers --------------------------------------------------
@@ -44,14 +46,7 @@ def register_ws_handlers(handlers: Dict[str, WSHandler]) -> None:
     ``ValueError`` to surface plugin namespace collisions early.
     """
     for msg_type, handler in handlers.items():
-        existing = _WS_REGISTRY.get(msg_type)
-        if existing is not None and existing is not handler:
-            raise ValueError(
-                f"WS handler for message_type '{msg_type}' is already registered "
-                f"by {existing.__module__}.{existing.__qualname__}; refusing to "
-                f"overwrite with {handler.__module__}.{handler.__qualname__}"
-            )
-        _WS_REGISTRY[msg_type] = handler
+        _WS_REGISTRY.register(msg_type, handler)
 
 
 def get_ws_handlers() -> Dict[str, WSHandler]:
@@ -60,7 +55,7 @@ def get_ws_handlers() -> Dict[str, WSHandler]:
     Returns a fresh dict so callers can mutate without affecting the
     registry (e.g. ``MESSAGE_HANDLERS = {**core, **get_ws_handlers()}``).
     """
-    return dict(_WS_REGISTRY)
+    return dict(_WS_REGISTRY.items())
 
 
 def list_registered_types() -> list[str]:
@@ -79,18 +74,12 @@ def register_router(router: APIRouter, *, name: str) -> None:
     existing name raises ``ValueError`` so plugin-name collisions fail
     at import time, not request time.
     """
-    existing = _ROUTER_REGISTRY.get(name)
-    if existing is not None and existing is not router:
-        raise ValueError(
-            f"Router for '{name}' is already registered; two plugin folders "
-            f"cannot claim the same name."
-        )
-    _ROUTER_REGISTRY[name] = router
+    _ROUTER_REGISTRY.register(name, router)
 
 
 def get_routers() -> List[APIRouter]:
     """Snapshot of registered routers in registration order."""
-    return list(_ROUTER_REGISTRY.values())
+    return _ROUTER_REGISTRY.values()
 
 
 def list_registered_routers() -> List[str]:
