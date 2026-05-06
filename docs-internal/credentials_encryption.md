@@ -86,8 +86,9 @@ There are **two distinct storage paths** inside `credentials.db`, and they are n
 For secrets the user enters manually in the Credentials modal (OpenAI API key, Anthropic key, Google client ID, Google client secret, Twitter client secret, Brave Search key, etc.).
 
 - Table: `EncryptedAPIKey`
-- Access: `AuthService.store_api_key(provider, key, models=[...], session_id=...)` and `AuthService.get_api_key(provider)`
+- Access: `AuthService.store_api_key(provider, key, models=[...], session_id=..., model_params=...)` and `AuthService.get_api_key(provider)`
 - Cache: `AuthService._api_key_cache: Dict[str, str]`
+- **Per-model parameters** (Ollama / LM Studio): the `models` JSON column carries an optional `model_params` subkey alongside the model list — `{"models": [...], "model_params": {model_id: {context_length, vision, supports_tools, ...}}}`. Populated by [`nodes/model/_local_validator.py`](../server/nodes/model/_local_validator.py) from the official SDK probes (`ollama.AsyncClient.ps()` / `lmstudio.AsyncClient.llm.list_loaded()`) so the runtime knows the user's actual loaded n_ctx instead of guessing from `llm_defaults.json`. Read back via `AuthService.get_model_params(provider)` or `CredentialsDatabase.get_api_key_model_params(provider)`. Cloud providers leave this empty — their per-model params live in `model_registry.json` (refreshed from OpenRouter).
 
 ### 2. OAuth Token System
 

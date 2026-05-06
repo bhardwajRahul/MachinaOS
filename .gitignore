@@ -120,9 +120,17 @@ pnpm-store/
 *.cache
 
 # =============================================================================
-# Claude Code configuration
+# Claude Code configuration + per-workflow runtime data
 # =============================================================================
+# Claude Code's local config / session state / scheduled tasks.
 .claude/
+# Per-workflow runtime workspace (CLAUDE.md "Per-Workflow Workspace
+# Directory" — `data/workspaces/<workflow_id>/`). User-uploaded files,
+# downloaded artifacts, agent-shell state. Always machine-local.
+/data/
+# Patch archive left behind by `git format-patch` during one-off
+# merges (see ../.merge-archive cleanup commits). Never committed.
+.merge-archive/
 
 # =============================================================================
 # Documentation (docs-MachinaOs is a separate GitHub project)
