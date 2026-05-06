@@ -22,8 +22,12 @@ async def run_cli_command(
     credential: Optional[Type] = None,
     api_key_arg: str = "--api-key",
     timeout: float = 30.0,
+    env: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
     """Run ``<binary> <argv> [api_key_arg <key>]`` once, return parsed JSON.
+
+    ``env``: optional process environment override. When None, the child
+    inherits the parent's environment (asyncio default).
 
     Returns a uniform envelope:
         {"success": bool, "result": parsed-JSON-or-None,
@@ -52,6 +56,7 @@ async def run_cli_command(
             *full_argv,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            env=env,
         )
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
     except asyncio.TimeoutError:

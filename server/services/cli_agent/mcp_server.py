@@ -59,6 +59,12 @@ class BatchContext:
     workspace_dir: Path
     connected_skill_names: Set[str] = field(default_factory=set)
     allowed_credentials: Set[str] = field(default_factory=set)
+    # Connected ``input-tools`` nodes (entries from
+    # ``services.plugin.edge_walker.collect_agent_connections``). Each
+    # dict: ``{node_id, node_type, label, parameters, ...}``. Drives the
+    # ``listMachinaOsTools`` / ``callMachinaOsTool`` MCP tools so the
+    # CLI agent sees the same tool surface the AI Agent does.
+    connected_tools: List[Dict[str, Any]] = field(default_factory=list)
     # Optional broadcaster for `broadcastLog`. Lazily resolved from the
     # global container if None.
     broadcaster: Optional[Any] = None
@@ -75,25 +81,37 @@ def issue_token() -> str:
 
 
 def register_batch(token: str, ctx: BatchContext) -> None:
-    """Register a batch's auth token. Idempotent on identical context."""
+    """Register a batch's auth token + expose its connected workflow
+    tools on the FastMCP server. Idempotent on identical context."""
     if token in _active_tokens:
-        # Same token registered twice — refuse to overwrite a different ctx.
         existing = _active_tokens[token]
         if existing is not ctx:
             raise ValueError("Token collision in MCP server batch registry")
         return
     _active_tokens[token] = ctx
-    logger.debug(
-        "[MCP] registered batch token=%s... node=%s wf=%s",
-        token[:8], ctx.node_id, ctx.workflow_id,
+    tool_names = [t.get("node_type") for t in ctx.connected_tools]
+    logger.info(
+        "[CC-Agent MCP register_batch] node=%s wf=%s token=%s... "
+        "skills=%d tools=%d creds=%d %s",
+        ctx.node_id, ctx.workflow_id, token[:8],
+        len(ctx.connected_skill_names), len(ctx.connected_tools),
+        len(ctx.allowed_credentials),
+        f"tools={tool_names}" if tool_names else "(no tools wired)",
     )
+    # Per-batch workflow-tool exposure lives in workflow_tools.py.
+    from services.cli_agent.workflow_tools import expose_workflow_tools
+    expose_workflow_tools(ctx.connected_tools)
 
 
 def unregister_batch(token: str) -> None:
-    """Drop a batch's token. Safe to call twice."""
+    """Drop a batch's token + un-expose its tools when the refcount
+    hits zero. Safe to call twice."""
     ctx = _active_tokens.pop(token, None)
-    if ctx is not None:
-        logger.debug("[MCP] unregistered batch token=%s...", token[:8])
+    if ctx is None:
+        return
+    logger.debug("[CC-Agent MCP] unregistered batch token=%s...", token[:8])
+    from services.cli_agent.workflow_tools import unexpose_workflow_tools
+    unexpose_workflow_tools(ctx.connected_tools)
 
 
 def lookup_batch(token: str) -> Optional[BatchContext]:
@@ -123,6 +141,13 @@ def _require_batch() -> BatchContext:
     return ctx
 
 
+# Per-batch workflow-tool exposure happens in `_expose_workflow_tools`
+# (above). Each connected node lands as its own
+# `mcp__machinaos__<node_type>` entry; FastMCP infers the inputSchema
+# from the typed `params` annotation. The legacy generic wrapper has
+# been removed.
+
+
 # ---------------------------------------------------------------------------
 # Auth middleware
 # ---------------------------------------------------------------------------
@@ -143,7 +168,9 @@ class _BearerAuthMiddleware(BaseHTTPMiddleware):
         request: Request,
         call_next: Callable[[Request], Awaitable[Response]],
     ) -> Response:
-        if request.url.path.endswith("/healthz"):
+        path = request.url.path
+        method = request.method
+        if path.endswith("/healthz"):
             return await call_next(request)
 
         auth = request.headers.get("authorization") or request.headers.get(
@@ -154,6 +181,13 @@ class _BearerAuthMiddleware(BaseHTTPMiddleware):
             token = auth[7:].strip() or None
 
         if not token:
+            ua = request.headers.get("user-agent", "")
+            logger.warning(
+                "[CC-Agent MCP auth] %s %s -> 401 (no Bearer token; "
+                "auth_header=%r ua=%r) — claude CLI either didn't read the "
+                "lockfile or is hitting the wrong URL.",
+                method, path, auth, ua,
+            )
             return JSONResponse(
                 {"error": "missing or malformed Authorization header"},
                 status_code=401,
@@ -161,10 +195,20 @@ class _BearerAuthMiddleware(BaseHTTPMiddleware):
 
         ctx = lookup_batch(token)
         if ctx is None:
+            logger.warning(
+                "[CC-Agent MCP auth] %s %s -> 401 (token=%s... not in "
+                "active registry — batch may have ended)",
+                method, path, token[:8],
+            )
             return JSONResponse(
                 {"error": "invalid or expired token"},
                 status_code=401,
             )
+
+        logger.info(
+            "[CC-Agent MCP auth] %s %s -> OK (node=%s wf=%s token=%s...)",
+            method, path, ctx.node_id, ctx.workflow_id, token[:8],
+        )
 
         reset_token = _current_batch.set(ctx)
         try:
@@ -242,7 +286,7 @@ def _build_tools(mcp: Any) -> None:  # FastMCP type
 
             return {"files": entries, "path": str(path)}
         except Exception as exc:  # pragma: no cover — defensive
-            logger.exception("[MCP] getWorkspaceFiles failed")
+            logger.exception("[CC-Agent MCP] getWorkspaceFiles failed")
             return {"error": str(exc), "path": str(path)}
 
     @mcp.tool(
@@ -275,7 +319,7 @@ def _build_tools(mcp: Any) -> None:  # FastMCP type
                 })
             return {"skills": results}
         except Exception as exc:  # pragma: no cover
-            logger.exception("[MCP] listSkills failed")
+            logger.exception("[CC-Agent MCP] listSkills failed")
             return {"error": str(exc), "skills": []}
 
     @mcp.tool(
@@ -310,7 +354,7 @@ def _build_tools(mcp: Any) -> None:  # FastMCP type
                 # `assets` (binary) excluded by default — too big for MCP responses.
             }
         except Exception as exc:  # pragma: no cover
-            logger.exception("[MCP] getSkill failed for %r", name)
+            logger.exception("[CC-Agent MCP] getSkill failed for %r", name)
             return {"error": str(exc), "name": name}
 
     @mcp.tool(
@@ -341,8 +385,13 @@ def _build_tools(mcp: Any) -> None:  # FastMCP type
                 }
             return {"name": name, "value": value}
         except Exception as exc:  # pragma: no cover
-            logger.exception("[MCP] getCredential failed for %r", name)
+            logger.exception("[CC-Agent MCP] getCredential failed for %r", name)
             return {"error": str(exc), "name": name, "status": 500}
+
+    # Per-batch workflow tools are exposed dynamically on
+    # `register_batch` via `_expose_workflow_tools` — each connected
+    # node lands as its own `mcp__machinaos__<node_type>` entry. No
+    # generic `listMachinaOsTools` / `callMachinaOsTool` wrapper.
 
     @mcp.tool(
         name="broadcastLog",
@@ -373,7 +422,7 @@ def _build_tools(mcp: Any) -> None:  # FastMCP type
             await broadcaster.broadcast_terminal_log(payload)
             return {"success": True}
         except Exception as exc:  # pragma: no cover
-            logger.exception("[MCP] broadcastLog failed")
+            logger.exception("[CC-Agent MCP] broadcastLog failed")
             return {"error": str(exc)}
 
 
@@ -382,6 +431,8 @@ def _build_tools(mcp: Any) -> None:  # FastMCP type
 # ---------------------------------------------------------------------------
 
 _app_singleton: Optional[Any] = None  # Starlette app
+_mcp_singleton: Optional[Any] = None  # FastMCP instance — used by per-batch
+                                       # dynamic tool (un)registration.
 
 
 def get_mcp_app() -> Any:
@@ -390,7 +441,7 @@ def get_mcp_app() -> Any:
     Idempotent — multiple calls return the same instance, so the FastAPI
     lifespan can wire it without worrying about duplicate registration.
     """
-    global _app_singleton
+    global _app_singleton, _mcp_singleton
     if _app_singleton is not None:
         return _app_singleton
 
@@ -407,6 +458,7 @@ def get_mcp_app() -> Any:
         # under /mcp/ide externally.
     )
     _build_tools(mcp)
+    _mcp_singleton = mcp
 
     asgi_app = mcp.streamable_http_app()
     asgi_app.add_middleware(_BearerAuthMiddleware)
@@ -420,7 +472,11 @@ def get_mcp_app() -> Any:
 # ---------------------------------------------------------------------------
 
 def _reset_for_tests() -> None:  # pragma: no cover
-    """Wipe the token registry. ONLY use in tests."""
-    global _app_singleton
+    """Wipe the token registry + per-batch workflow-tool refcounts.
+    ONLY use in tests."""
+    global _app_singleton, _mcp_singleton
     _active_tokens.clear()
     _app_singleton = None
+    _mcp_singleton = None
+    from services.cli_agent.workflow_tools import _reset_for_tests as _wt_reset
+    _wt_reset()

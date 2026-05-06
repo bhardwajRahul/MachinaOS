@@ -4,12 +4,18 @@ Reference implementation for the `AICliProvider` Protocol. Full feature
 set: sessions, resume, budget, turns, allowed_tools, permission_mode,
 MCP lockfile, cost-in-JSON.
 
-Subprocess: ``claude --print -p <prompt> --output-format stream-json
---include-partial-messages [--session-id|--resume <UUID>] --model ...
---max-turns ... --max-budget-usd ... --allowedTools ...
---permission-mode ... --append-system-prompt ...``
+Subprocess: ``claude -p <prompt> --output-format stream-json --verbose
+--include-partial-messages --include-hook-events --ide
+[--session-id|--resume <UUID>] --model ... --max-turns ...
+--max-budget-usd ... --allowedTools ... --permission-mode ...
+--append-system-prompt ... [--effort ...] [--fallback-model ...]
+[--add-dir ...] [--disallowedTools ...] [--agent ...]``
 
-Auth: native — CLI reads `~/.claude/`. We do NOT inject CLAUDE_CONFIG_DIR.
+Binary + auth: shared with the auth surface via
+``services.claude_oauth.claude_binary_path()`` — single project-local
+install at ``<repo>/data/claude-machina/npm/`` and ``CLAUDE_CONFIG_DIR``
+set on the spawn env so the agent picks up the same credentials the
+Login button wrote.
 
 Final event: ``type == "result"`` carries ``total_cost_usd``,
 ``duration_ms``, ``num_turns``, ``session_id``, and the assistant's
@@ -19,12 +25,12 @@ Final event: ``type == "result"`` carries ``total_cost_usd``,
 from __future__ import annotations
 
 import json
-import shutil
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from core.logging import get_logger
 
+from services.claude_oauth import claude_binary_path
 from services.cli_agent.config import get_provider_config
 from services.cli_agent.protocol import CanonicalUsage
 from services.cli_agent.types import ClaudeTaskSpec
@@ -56,60 +62,65 @@ class AnthropicClaudeProvider:
     # ---- spawn surface ---------------------------------------------------
 
     def binary_path(self) -> Path:
-        """Resolve the `claude` binary.
+        """Resolve the project-local `claude` binary.
 
-        Resolution chain:
-          1) `shutil.which("claude")` — system install / npm-global
-          2) Fall back to `npx --yes @anthropic-ai/claude-code` shim path
-
-        Raises FileNotFoundError if neither is available.
+        Delegates to ``services.claude_oauth.claude_binary_path`` — same
+        path used by the credentials Login button. Lazy-installs into
+        ``<repo>/data/claude-machina/npm/`` on first miss. Raises
+        ``FileNotFoundError`` if ``npm`` isn't on PATH.
         """
-        which_result = shutil.which(self.binary_name)
-        if which_result:
-            return Path(which_result)
-
-        npx = shutil.which("npx")
-        if npx:
-            # Return the npx path — `headless_argv` rebuilds argv with
-            # `npx --yes <package>` when the binary isn't on PATH.
-            return Path(npx)
-
-        raise FileNotFoundError(
-            f"Neither {self.binary_name!r} nor 'npx' found in PATH. "
-            f"Install with: npm install -g {self.package_name}"
-        )
+        return Path(claude_binary_path())
 
     def headless_argv(
         self,
         task: Any,  # ClaudeTaskSpec
         *,
         defaults: Dict[str, Any],
+        mcp_endpoint_url: Optional[str] = None,
+        mcp_bearer_token: Optional[str] = None,
+        connected_tool_names: Optional[List[str]] = None,
     ) -> List[str]:
-        """Build the full argv (binary + flags) for one task."""
+        """Build the full argv (binary + flags) for one task.
+
+        ``mcp_endpoint_url`` + ``mcp_bearer_token`` (if both set) are
+        emitted as a ``--mcp-config <json>`` block so the spawned
+        ``claude -p`` registers MachinaOs's MCP server. The ``--ide`` /
+        lockfile path is for interactive IDE-host scenarios; in headless
+        mode the documented mechanism is ``--mcp-config`` (see
+        https://code.claude.com/docs/en/mcp)."""
         if not isinstance(task, ClaudeTaskSpec):
             raise TypeError(
                 "AnthropicClaudeProvider.headless_argv requires ClaudeTaskSpec, "
                 f"got {type(task).__name__}"
             )
 
-        # Resolve binary — if `claude` isn't on PATH, fall back to npx shim.
-        which_claude = shutil.which(self.binary_name)
-        if which_claude:
-            argv: List[str] = [which_claude]
-        else:
-            npx = shutil.which("npx")
-            if not npx:
-                raise FileNotFoundError(
-                    f"Neither {self.binary_name!r} nor 'npx' found in PATH"
-                )
-            argv = [npx, "--yes", self.package_name]
+        argv: List[str] = [str(self.binary_path())]
 
         argv += [
             "-p", task.prompt,
             "--output-format", "stream-json",
-            "--include-partial-messages",
             "--verbose",  # required by Claude CLI when using stream-json with --print
+            "--include-partial-messages",
+            "--include-hook-events",  # surface SessionStart / hooks into stream-json
         ]
+
+        # MCP server registration — headless path. The shape mirrors
+        # the Claude Code MCP doc's ``mcp.json`` example and the
+        # ``claude mcp add --transport http <name> <url> --header
+        # "Authorization: Bearer ..."`` invocation.
+        if mcp_endpoint_url and mcp_bearer_token:
+            mcp_payload = json.dumps({
+                "mcpServers": {
+                    "machinaos": {
+                        "type": "http",
+                        "url": mcp_endpoint_url,
+                        "headers": {
+                            "Authorization": f"Bearer {mcp_bearer_token}",
+                        },
+                    }
+                }
+            })
+            argv += ["--mcp-config", mcp_payload, "--strict-mcp-config"]
 
         # Model
         model = (
@@ -149,15 +160,38 @@ class AnthropicClaudeProvider:
         if max_budget > 0:
             argv += ["--max-budget-usd", str(max_budget)]
 
-        # Allowed tools
+        # Allowed tools — built-in defaults plus every workflow tool we
+        # exposed via the per-batch FastMCP bridge. Without the
+        # `mcp__machinaos__<name>` entries here, claude sees the tools
+        # in `tools/list` but is denied permission when it tries to
+        # invoke them ("I don't have permission to run a web search…")
+        # because `--permission-mode acceptEdits` only auto-permits
+        # Edit; everything else falls through to the allowlist.
         allowed = task.allowed_tools or defaults.get(
             "default_allowed_tools",
             self._defaults.get(
                 "default_allowed_tools", "Read,Edit,Bash,Glob,Grep,Write"
             ),
         )
-        if allowed:
-            argv += ["--allowedTools", allowed]
+        allowed_list: List[str] = (
+            [t.strip() for t in allowed.split(",") if t.strip()]
+            if allowed else []
+        )
+        if connected_tool_names:
+            allowed_list += [
+                f"mcp__machinaos__{name}" for name in connected_tool_names
+            ]
+        # Always permit MachinaOs's built-in MCP tools so the agent can
+        # discover skills + read workspace files without prompting.
+        allowed_list += [
+            "mcp__machinaos__getWorkspaceFiles",
+            "mcp__machinaos__listSkills",
+            "mcp__machinaos__getSkill",
+            "mcp__machinaos__getCredential",
+            "mcp__machinaos__broadcastLog",
+        ]
+        if allowed_list:
+            argv += ["--allowedTools", ",".join(allowed_list)]
 
         # Permission mode (default acceptEdits)
         perm = task.permission_mode or defaults.get(
@@ -170,6 +204,18 @@ class AnthropicClaudeProvider:
         # System prompt — appended to Claude Code's built-in system prompt
         if task.system_prompt:
             argv += ["--append-system-prompt", task.system_prompt]
+
+        # Optional per-task overrides (documented at code.claude.com/docs/en/cli-reference)
+        if task.effort:
+            argv += ["--effort", task.effort]
+        if task.fallback_model:
+            argv += ["--fallback-model", task.fallback_model]
+        for path in task.add_dir:
+            argv += ["--add-dir", path]
+        if task.disallowed_tools:
+            argv += ["--disallowedTools", task.disallowed_tools]
+        if task.agent:
+            argv += ["--agent", task.agent]
 
         return argv
 

@@ -62,6 +62,7 @@ class AICliSession(BaseProcessSupervisor):
         defaults: Dict[str, Any],
         mcp_port: int,
         batch_token: str,
+        connected_tool_names: Optional[List[str]] = None,
     ) -> None:
         super().__init__()
         self._provider = provider
@@ -78,6 +79,8 @@ class AICliSession(BaseProcessSupervisor):
         self._batch_token = batch_token
         self._node_id = node_id
         self._workflow_id = workflow_id
+        # Names of `mcp__machinaos__*` tools to add to `--allowedTools`.
+        self._connected_tool_names: List[str] = list(connected_tool_names or [])
 
         # Streaming state
         self._events: List[Dict[str, Any]] = []
@@ -113,16 +116,36 @@ class AICliSession(BaseProcessSupervisor):
         return self._provider.binary_path()
 
     def argv(self) -> List[str]:
-        return self._provider.headless_argv(self._task, defaults=self._defaults)
+        return self._provider.headless_argv(
+            self._task,
+            defaults=self._defaults,
+            mcp_endpoint_url=self._mcp_endpoint_url(),
+            mcp_bearer_token=self._batch_token,
+            connected_tool_names=self._connected_tool_names,
+        )
+
+    def _mcp_endpoint_url(self) -> str:
+        """Absolute URL of MachinaOs's FastMCP JSON-RPC endpoint.
+
+        Mirrors the ``url`` written into the IDE lockfile. FastMCP serves
+        at ``/mcp`` of the sub-app; ``main.py`` mounts it at ``/mcp/ide``;
+        the JSON-RPC URL is therefore ``/mcp/ide/mcp``."""
+        return f"http://127.0.0.1:{self._mcp_port}/mcp/ide/mcp"
 
     def cwd(self) -> Optional[Path]:
         return self._worktree_dir
 
     def env(self) -> Dict[str, str]:
-        # Inherit parent env so the CLI finds its own auth in
-        # `~/.claude/`, `~/.codex/`, `~/.gemini/`. Native CLI auth model:
-        # we never inject CLAUDE_CONFIG_DIR / GEMINI_CLI_HOME.
+        # Inherit parent env, then redirect provider config to MachinaOs's
+        # project-local isolation dir for providers that support it (Claude
+        # via CLAUDE_CONFIG_DIR; Codex/Gemini still use their native auth
+        # paths until isolation is wired). Without this, the agent's
+        # spawned CLI reads the user's personal `~/.claude/` credentials
+        # instead of the ones the credentials modal's Login button wrote.
         e: Dict[str, str] = {**os.environ, "PYTHONUNBUFFERED": "1"}
+        if self._provider.name == "claude":
+            from services.claude_oauth import MACHINA_CLAUDE_DIR
+            e["CLAUDE_CONFIG_DIR"] = str(MACHINA_CLAUDE_DIR)
         if self._lockfile_path and self._provider.ide_lock_env_var:
             e[self._provider.ide_lock_env_var] = str(self._lockfile_path)
         # Composio-style parent-run-ID for MCP correlation
@@ -180,6 +203,12 @@ class AICliSession(BaseProcessSupervisor):
         kwargs: Dict[str, Any] = {
             "cwd": str(self.cwd()),
             "env": self.env(),
+            # `claude -p` opens stdin to read piped input; we never pipe
+            # anything, so without DEVNULL the CLI waits 3s and prints
+            # "Warning: no stdin data received in 3s, proceeding without
+            # it." Tools come over MCP, not stdin — close the handle
+            # explicitly to skip the warning + the 3s stall.
+            "stdin": subprocess.DEVNULL,
             "stdout": subprocess.PIPE,
             "stderr": subprocess.PIPE,
         }
@@ -246,11 +275,17 @@ class AICliSession(BaseProcessSupervisor):
                     if not text:
                         continue
                     self._stderr_lines.append(text)
+                    # Mirror to backend log too — without this the spawned
+                    # CLI's MCP-discovery / auth-failure / debug output
+                    # only reaches the Terminal panel, leaving the
+                    # operator log blind during runtime debugging.
+                    self._logger.info("[CC-Agent stderr] %s", text)
                     await self._safe_terminal_log(text, level="error")
             if buf:
                 text = buf.decode("utf-8", errors="replace").rstrip()
                 if text:
                     self._stderr_lines.append(text)
+                    self._logger.info("[CC-Agent stderr] %s", text)
                     await self._safe_terminal_log(text, level="error")
         except (anyio.ClosedResourceError, anyio.EndOfStream, asyncio.CancelledError):
             pass
@@ -262,6 +297,12 @@ class AICliSession(BaseProcessSupervisor):
     # ------------------------------------------------------------------
 
     async def _on_event(self, event: Dict[str, Any]) -> None:
+        # Tag every interesting event in the backend log so the operator
+        # can see what claude is actually doing — tool calls, assistant
+        # text, hook events. Without this the stream is invisible from
+        # the backend (only the Terminal panel saw it).
+        self._log_event_summary(event)
+
         if self._provider.is_final_event(event):
             payload = {
                 "phase": "ai_cli_subtask",
@@ -283,6 +324,73 @@ class AICliSession(BaseProcessSupervisor):
             )
             text = msg if isinstance(msg, str) else json.dumps(msg)
             await self._safe_terminal_log(text[:500], level="info")
+
+    def _log_event_summary(self, event: Dict[str, Any]) -> None:
+        """One-line summary per claude stream event. Picks out the event
+        types that matter for tool-call debugging."""
+        etype = event.get("type", "?")
+        try:
+            if etype == "system" and event.get("subtype") == "init":
+                tools = event.get("tools") or []
+                mcp_servers = event.get("mcp_servers") or []
+                self._logger.info(
+                    "[CC-Agent stream] system.init tools=%d (sample=%s) "
+                    "mcp_servers=%s",
+                    len(tools), tools[:8],
+                    [s.get("name") for s in mcp_servers if isinstance(s, dict)],
+                )
+            elif etype == "assistant":
+                msg = event.get("message") or {}
+                content = msg.get("content") or []
+                tool_uses = [
+                    c for c in content
+                    if isinstance(c, dict) and c.get("type") == "tool_use"
+                ]
+                texts = [
+                    c.get("text", "") for c in content
+                    if isinstance(c, dict) and c.get("type") == "text"
+                ]
+                if tool_uses:
+                    for tu in tool_uses:
+                        self._logger.info(
+                            "[CC-Agent stream] assistant->tool_use name=%s "
+                            "input_keys=%s",
+                            tu.get("name"),
+                            list((tu.get("input") or {}).keys()),
+                        )
+                elif texts:
+                    sample = " ".join(t for t in texts if isinstance(t, str))[:300]
+                    self._logger.info(
+                        "[CC-Agent stream] assistant.text: %r", sample,
+                    )
+            elif etype == "tool_use":
+                self._logger.info(
+                    "[CC-Agent stream] tool_use name=%s input_keys=%s",
+                    event.get("name"),
+                    list((event.get("input") or {}).keys()),
+                )
+            elif etype == "tool_result":
+                content = event.get("content") or ""
+                preview = content if isinstance(content, str) else json.dumps(content)
+                self._logger.info(
+                    "[CC-Agent stream] tool_result is_error=%s content=%r",
+                    event.get("is_error", False), preview[:300],
+                )
+            elif etype == "hook":
+                self._logger.info(
+                    "[CC-Agent stream] hook %s",
+                    event.get("hook_event_name") or event.get("subtype") or "?",
+                )
+            elif etype == "result":
+                self._logger.info(
+                    "[CC-Agent stream] result is_error=%s subtype=%s "
+                    "duration_ms=%s num_turns=%s cost=%s",
+                    event.get("is_error", False), event.get("subtype"),
+                    event.get("duration_ms"), event.get("num_turns"),
+                    event.get("total_cost_usd"),
+                )
+        except Exception:
+            self._logger.debug("[CC-Agent stream] log-summary failed for event")
 
     async def _safe_terminal_log(self, message: str, *, level: str) -> None:
         if not self._broadcaster:

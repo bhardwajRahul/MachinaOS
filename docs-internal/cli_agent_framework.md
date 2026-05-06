@@ -82,6 +82,40 @@ class AICliProvider(Protocol):
         # | json_cost | ide_lockfile | sandbox
 ```
 
+### Claude argv (`AnthropicClaudeProvider.headless_argv`)
+
+Spawned per task — the binary path comes from
+`services.claude_oauth.claude_binary_path()` (the same project-local
+install the credentials Login button uses) and `CLAUDE_CONFIG_DIR` is
+injected on the spawn env so the agent shares one credential store with
+the auth surface.
+
+```
+<repo>/data/claude-machina/npm/node_modules/.bin/claude[.cmd]
+  -p <prompt>
+  --output-format stream-json
+  --verbose                       # required when stream-json + --print
+  --include-partial-messages
+  --include-hook-events           # SessionStart/hook events into stream
+  --ide                           # documented VSCode auto-connect via lockfile
+  --model <model>
+  [--session-id <UUID> | --resume <UUID>]
+  --max-turns <N>
+  [--max-budget-usd <D>]
+  --allowedTools <csv>
+  --permission-mode <mode>
+  [--append-system-prompt <text>]
+  [--effort <low|medium|high|xhigh|max>]
+  [--fallback-model <model>]
+  [--add-dir <path>]*  [--disallowedTools <csv>]  [--agent <name>]
+```
+
+All flags documented at
+[code.claude.com/docs/en/cli-reference](https://code.claude.com/docs/en/cli-reference).
+Worktree, lockfile, and bearer-token MCP server are wired in
+`session.py:_pre_spawn`; the `--ide` flag tells the CLI to discover that
+lockfile via `CLAUDE_IDE_LOCK`.
+
 Factory:
 
 ```python
@@ -106,6 +140,9 @@ class BaseAICliTaskSpec(BaseModel):
     model: Optional[str] = None
     timeout_seconds: int = Field(600, ge=10, le=3600)
     system_prompt: Optional[str] = None
+    # Strict input validation: typo'd task fields raise ValidationError
+    # at the spec boundary instead of being silently dropped.
+    model_config = ConfigDict(extra="forbid")
 
 class ClaudeTaskSpec(BaseAICliTaskSpec):
     provider: Literal["claude"] = "claude"
@@ -114,7 +151,14 @@ class ClaudeTaskSpec(BaseAICliTaskSpec):
     max_turns: Optional[int] = None
     max_budget_usd: Optional[float] = None
     allowed_tools: Optional[str] = None
-    permission_mode: Literal["default", "acceptEdits", "plan", "auto"] = "acceptEdits"
+    permission_mode: Literal["default", "acceptEdits", "plan", "auto",
+                             "dontAsk", "bypassPermissions"] = "acceptEdits"
+    # Optional documented CLI flags
+    effort: Optional[Literal["low", "medium", "high", "xhigh", "max"]] = None
+    fallback_model: Optional[str] = None
+    add_dir: List[str] = Field(default_factory=list)
+    disallowed_tools: Optional[str] = None
+    agent: Optional[str] = None
 
 class CodexTaskSpec(BaseAICliTaskSpec):
     provider: Literal["codex"] = "codex"

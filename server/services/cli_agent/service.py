@@ -76,6 +76,7 @@ class AICliService:
         broadcaster: Any,
         repo_root: Optional[Path] = None,
         connected_skill_names: Optional[List[str]] = None,
+        connected_tools: Optional[List[Dict[str, Any]]] = None,
         allowed_credentials: Optional[List[str]] = None,
         max_parallel: int = DEFAULT_MAX_PARALLEL,
         mcp_port: Optional[int] = None,
@@ -90,16 +91,33 @@ class AICliService:
         """
         provider = create_cli_provider(provider_name)
         task_list: List[BaseAICliTaskSpec] = list(tasks)
+        tool_names = [t.get("node_type") for t in (connected_tools or [])]
+        logger.info(
+            "[CC-Agent run_batch] enter provider=%s node=%s wf=%s tasks=%d "
+            "skills=%s tools=%s creds=%s workspace=%s",
+            provider_name, node_id, workflow_id, len(task_list),
+            connected_skill_names or [], tool_names,
+            allowed_credentials or [], workspace_dir,
+        )
 
         # Verify the working directory is under a git repo.
         resolved_repo_root = await self._resolve_repo_root(
             workspace_dir=workspace_dir, override=repo_root,
         )
         if resolved_repo_root is None:
+            logger.warning(
+                "[CC-Agent run_batch] aborting: workspace=%s is not inside a git "
+                "repo (run `git init` there or set `working_directory` to "
+                "an existing repo).", workspace_dir,
+            )
             return self._abort_not_git_repo(
                 provider_name=provider_name,
                 tasks=task_list,
             )
+        logger.info(
+            "[CC-Agent run_batch] resolved repo_root=%s for workspace=%s",
+            resolved_repo_root, workspace_dir,
+        )
 
         # Per-batch bearer token + MCP context
         token = issue_token()
@@ -110,6 +128,7 @@ class AICliService:
             workspace_dir=Path(workspace_dir).resolve(),
             connected_skill_names=set(connected_skill_names or []),
             allowed_credentials=set(allowed_credentials or []),
+            connected_tools=list(connected_tools or []),
             broadcaster=broadcaster,
         )
         register_batch(token, ctx)
@@ -121,7 +140,7 @@ class AICliService:
         async with self._lock:
             if key in self._active_sessions:
                 logger.warning(
-                    "[ai_cli_service] replacing stale session list for %s", key,
+                    "[CC-Agent service] replacing stale session list for %s", key,
                 )
                 # Cancel anything previously left dangling.
                 for sess in self._active_sessions[key]:
@@ -149,6 +168,10 @@ class AICliService:
                     node_id=node_id, workflow_id=workflow_id,
                     broadcaster=broadcaster, defaults=defaults,
                     mcp_port=port, batch_token=token,
+                    connected_tool_names=[
+                        t.get("node_type") for t in (connected_tools or [])
+                        if t.get("node_type")
+                    ],
                 )
                 async with self._lock:
                     self._active_sessions[key].append(session)
@@ -163,7 +186,7 @@ class AICliService:
                         return self._fail_result(provider_name, task, session.task_id,
                                                  f"worktree_setup_failed: {exc}")
                     except Exception as exc:
-                        logger.exception("[ai_cli_service] start failed")
+                        logger.exception("[CC-Agent service] start failed")
                         return self._fail_result(provider_name, task, session.task_id,
                                                  f"start_failed: {exc}")
                     return await session.wait_for_completion(task.timeout_seconds)
@@ -171,7 +194,7 @@ class AICliService:
                     try:
                         await session.cleanup()
                     except Exception as exc:
-                        logger.debug("[ai_cli_service] cleanup: %s", exc)
+                        logger.debug("[CC-Agent service] cleanup: %s", exc)
                     async with self._lock:
                         try:
                             self._active_sessions[key].remove(session)
@@ -242,7 +265,7 @@ class AICliService:
                 await sess.cleanup()
                 cancelled += 1
             except Exception as exc:
-                logger.debug("[ai_cli_service] cancel: %s", exc)
+                logger.debug("[CC-Agent service] cancel: %s", exc)
         return cancelled
 
     async def cancel_node(self, node_id: str) -> int:
@@ -258,7 +281,7 @@ class AICliService:
                 await sess.cleanup()
                 cancelled += 1
             except Exception as exc:
-                logger.debug("[ai_cli_service] cancel: %s", exc)
+                logger.debug("[CC-Agent service] cancel: %s", exc)
         return cancelled
 
     # ------------------------------------------------------------------
@@ -334,7 +357,7 @@ class AICliService:
             total = breakdown.get("total_cost")
             return float(total) if total else None
         except Exception as exc:  # pragma: no cover — pricing is non-critical
-            logger.debug("[ai_cli_service] pricing lookup failed: %s", exc)
+            logger.debug("[CC-Agent service] pricing lookup failed: %s", exc)
             return None
 
     @staticmethod

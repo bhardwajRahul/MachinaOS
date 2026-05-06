@@ -1,26 +1,27 @@
-"""Claude OAuth — project-local install + plain ``claude login`` spawn.
+"""Claude OAuth — project-local install + the documented `claude auth` subcommands.
 
 The Claude Code CLI lives at ``<repo>/data/claude-machina/npm/`` (on-demand
-``npm install`` on first use, mirroring the WhatsApp project-local layout)
-and ``CLAUDE_CONFIG_DIR`` points at ``<repo>/data/claude-machina/`` so the
-credentials file lands inside the project tree, isolated from the user's
-own ``~/.claude/`` session.
+``npm install`` on first use, mirroring the WhatsApp project-local layout).
+``CLAUDE_CONFIG_DIR`` points at ``<repo>/data/claude-machina/`` so the CLI
+manages its own credentials inside the project tree, isolated from the
+user's own ``~/.claude/`` session.
 
-Login uses the documented subcommand from
-https://code.claude.com/docs/en/cli-reference: ``claude auth login`` opens
-the browser, ``claude auth logout`` signs out, ``claude auth status``
-exits 0 when logged in / 1 otherwise. We spawn ``auth login`` with
-inherited stdio so the CLI opens the browser itself (same as the VSCode
-Claude Code extension; Anthropic does not expose a programmatic OAuth
-helper or a ``--print-url`` flag — see issue
-anthropics/claude-code#7100). The background poller in
-``services/cli_agent/_handlers.py`` invokes ``claude auth status`` to
-flip the catalogue marker on success.
+Every subprocess call goes through ``services.events.cli.run_cli_command``
+— the canonical one-shot CLI helper used by Stripe / future plugins. Auth
+surface follows https://code.claude.com/docs/en/cli-reference verbatim:
+
+- ``claude auth login``  — opens the browser, writes credentials.
+- ``claude auth status`` — prints JSON; exits 0 when logged in / 1 otherwise.
+- ``claude auth logout`` — log out (CLI clears its own credentials).
+
+The CLI owns its own credentials file; we never read or write it.
+``login`` is a long-running one-shot (waits for the browser flow to
+complete) so callers schedule it as ``asyncio.create_task`` — same shape
+Stripe uses for ``stripe login --complete``.
 """
 
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 import shutil
@@ -30,6 +31,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 from core.logging import get_logger
+from services.events.cli import run_cli_command
 
 logger = get_logger(__name__)
 
@@ -38,11 +40,20 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 MACHINA_CLAUDE_DIR = (_PROJECT_ROOT / "data" / "claude-machina").resolve()
 MACHINA_NPM_DIR = MACHINA_CLAUDE_DIR / "npm"
-CLAUDE_CREDENTIALS_PATH = MACHINA_CLAUDE_DIR / ".credentials.json"
+
+# Generous timeout for browser-flow login; Stripe uses the same window.
+LOGIN_TIMEOUT_SECONDS = 600.0
+# One-shot status / logout return immediately.
+ONESHOT_TIMEOUT_SECONDS = 30.0
 
 
-def _get_claude_cmd() -> str:
-    """Return path to the project-local claude CLI, installing on miss."""
+def claude_binary_path() -> str:
+    """Return path to the project-local claude CLI, installing on miss.
+
+    Single source of truth shared by the auth handler
+    (``services/cli_agent/_handlers.py``) AND the agent spawn
+    (``services/cli_agent/providers/anthropic_claude.py``) so both surfaces
+    use the same binary + ``CLAUDE_CONFIG_DIR``-isolated credentials."""
     if sys.platform == "win32":
         bin_path = MACHINA_NPM_DIR / "node_modules" / ".bin" / "claude.cmd"
     else:
@@ -80,75 +91,74 @@ def _claude_env() -> Dict[str, str]:
     return env
 
 
-async def initiate_claude_oauth() -> Dict[str, Any]:
-    """Spawn ``claude auth login`` and let the CLI open the browser."""
+async def _run_auth(subcommand: str, *, timeout: float) -> Dict[str, Any]:
+    """Run ``claude auth <subcommand>`` via the canonical helper. Returns
+    the ``run_cli_command`` envelope (``{success, result, stdout, stderr,
+    error}``)."""
     try:
-        MACHINA_CLAUDE_DIR.mkdir(parents=True, exist_ok=True)
-        claude_cmd = _get_claude_cmd()
+        binary = claude_binary_path()
+    except (FileNotFoundError, RuntimeError) as e:
+        return {"success": False, "error": str(e), "stdout": "", "stderr": ""}
 
-        proc = await asyncio.create_subprocess_exec(
-            claude_cmd,
-            "auth",
-            "login",
-            env=_claude_env(),
-        )
-        logger.info(f"Claude OAuth login started with PID {proc.pid}")
+    MACHINA_CLAUDE_DIR.mkdir(parents=True, exist_ok=True)
+    envelope = await run_cli_command(
+        binary=binary,
+        argv=["auth", subcommand],
+        timeout=timeout,
+        env=_claude_env(),
+    )
+    logger.info(
+        "[claude auth %s] success=%s stdout=%r stderr=%r",
+        subcommand,
+        envelope.get("success"),
+        (envelope.get("stdout") or "")[:512],
+        (envelope.get("stderr") or "")[:512],
+    )
+    return envelope
 
-        return {
-            "success": True,
-            "pid": proc.pid,
-            "config_dir": str(MACHINA_CLAUDE_DIR),
-            "message": "Claude is opening your browser to authenticate.",
-        }
-    except FileNotFoundError as e:
-        logger.error(f"CLI not found: {e}")
-        return {"success": False, "error": str(e)}
-    except Exception as e:
-        logger.exception(f"Failed to start Claude OAuth: {e}")
-        return {"success": False, "error": str(e)}
+
+async def claude_auth_status_info() -> Dict[str, Any]:
+    """Return parsed JSON from ``claude auth status``. Always includes
+    ``loggedIn: bool``; populates ``email``/``orgName``/``subscriptionType``
+    when logged in."""
+    envelope = await _run_auth("status", timeout=ONESHOT_TIMEOUT_SECONDS)
+    parsed = envelope.get("result")
+    if isinstance(parsed, dict):
+        parsed.setdefault("loggedIn", bool(envelope.get("success")))
+        return parsed
+
+    # Status returns exit 1 when not logged in; the JSON still parses but
+    # run_cli_command treats non-zero exits as failure and skips parsing.
+    # Fall back to parsing stdout directly so we still surface the body.
+    stdout = envelope.get("stdout") or ""
+    if stdout:
+        try:
+            data = json.loads(stdout)
+            if isinstance(data, dict):
+                data.setdefault("loggedIn", False)
+                return data
+        except json.JSONDecodeError:
+            pass
+    return {"loggedIn": bool(envelope.get("success"))}
 
 
 async def claude_auth_status() -> bool:
-    """Return True iff ``claude auth status`` exits 0 (logged in)."""
-    try:
-        claude_cmd = _get_claude_cmd()
-    except (FileNotFoundError, RuntimeError):
-        return False
+    """True iff ``claude auth status`` reports loggedIn=True."""
+    info = await claude_auth_status_info()
+    return bool(info.get("loggedIn"))
 
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            claude_cmd,
-            "auth",
-            "status",
-            env=_claude_env(),
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        return await proc.wait() == 0
-    except Exception as e:
-        logger.warning(f"claude auth status check failed: {e}")
-        return False
+
+async def run_claude_login() -> Dict[str, Any]:
+    """Run ``claude auth login`` to completion. The CLI opens the user's
+    browser, runs its own callback server, and exits when the flow ends.
+
+    Long-running: callers should schedule this via ``asyncio.create_task``
+    (Stripe ``stripe login --complete`` precedent). Returns the envelope
+    from ``run_cli_command``."""
+    return await _run_auth("login", timeout=LOGIN_TIMEOUT_SECONDS)
 
 
 async def claude_auth_logout() -> bool:
-    """Run ``claude auth logout``. Returns True on exit 0."""
-    try:
-        claude_cmd = _get_claude_cmd()
-    except (FileNotFoundError, RuntimeError):
-        return False
-
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            claude_cmd,
-            "auth",
-            "logout",
-            env=_claude_env(),
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        return await proc.wait() == 0
-    except Exception as e:
-        logger.warning(f"claude auth logout failed: {e}")
-        return False
+    """Run ``claude auth logout``. True on exit 0."""
+    envelope = await _run_auth("logout", timeout=ONESHOT_TIMEOUT_SECONDS)
+    return bool(envelope.get("success"))

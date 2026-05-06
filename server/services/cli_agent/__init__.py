@@ -14,6 +14,14 @@ router does not need to know about us by name.
 
 from __future__ import annotations
 
+import logging as _logging
+
+# Pin every `[CC-Agent ...]` logger in this package at INFO so live
+# debugging surfaces without flipping the global LOG_LEVEL. Override with
+# ``logging.getLogger("services.cli_agent").setLevel(...)`` for quieter
+# runs.
+_logging.getLogger("services.cli_agent").setLevel(_logging.INFO)
+
 from services.cli_agent.factory import (
     ALL_PROVIDERS,
     SUPPORTED_PROVIDERS,

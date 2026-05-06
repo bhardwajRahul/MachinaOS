@@ -54,9 +54,16 @@ def write_ide_lockfile(
         ide_lockfile_dir=ide_lockfile_dir, pid=pid, port=port, ide_name=ide_name,
     )
 
+    # FastMCP's ``streamable_http_app()`` registers the JSON-RPC route at
+    # ``/mcp`` of the sub-app; ``main.py`` mounts the sub-app at
+    # ``/mcp/ide``. The absolute endpoint the claude CLI POSTs to via
+    # ``--ide`` lockfile discovery is therefore ``/mcp/ide/mcp``. Older
+    # builds advertised ``/mcp/ide`` here and the CLI silently 404'd
+    # before reaching the bearer-token middleware — see ``[CC-Agent MCP
+    # auth]`` log lines.
     payload = {
         "port": port,
-        "url": url or f"http://127.0.0.1:{port}/mcp/ide",
+        "url": url or f"http://127.0.0.1:{port}/mcp/ide/mcp",
         "authToken": token,
         "workspaceFolders": [str(workspace_dir)],
         "ideName": ide_name,

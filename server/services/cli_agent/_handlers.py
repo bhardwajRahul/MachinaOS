@@ -1,39 +1,42 @@
 """Per-provider WebSocket handlers for CLI-managed OAuth.
 
 Self-registered into ``services.ws_handler_registry`` from
-``services/cli_agent/__init__.py``.
-
-Naming convention matches Twitter / Google / Stripe — each provider gets
-its own message type (``claude_code_login`` / ``claude_code_logout`` /
-``codex_cli_login`` / ``codex_cli_logout``). The frontend dispatches with
-an empty payload (see ``OAuthConnect.tsx`` ->
-``useCredentialPanel.oauthLogin`` -> ``sendRequest(config.ws!.login, {})``);
-the handler name encodes which provider to spawn.
+``services/cli_agent/__init__.py``. Naming convention matches Twitter /
+Google / Stripe — each provider gets its own message type
+(``claude_code_login`` / ``claude_code_logout`` / ``codex_cli_login`` /
+``codex_cli_logout``); the frontend dispatches with an empty payload.
 
 Claude flow uses the documented CLI subcommands from
-https://code.claude.com/docs/en/cli-reference:
+https://code.claude.com/docs/en/cli-reference (``claude auth login`` /
+``status`` / ``logout``). Every subprocess invocation goes through
+``services.events.cli.run_cli_command`` (Stripe precedent — see
+``nodes/stripe/_handlers.py``); the CLI owns its own credentials file
+and we never touch it.
 
-- ``claude auth login``  — opens the browser, writes credentials.
-- ``claude auth status`` — exits 0 when logged in, 1 otherwise.
-- ``claude auth logout`` — clears credentials.
+Login lifecycle:
 
-We delegate to ``services.claude_oauth`` for the spawn + status checks.
-After ``auth login`` returns the spawned PID, a background task polls
-``claude auth status`` until it reports success, then writes the synthetic
-``"cli-managed"`` marker via ``auth_service.store_oauth_tokens()`` and
-broadcasts ``credential_catalogue_updated`` (Stripe pattern, see
-``nodes/stripe/_handlers.py``).
+1. ``handle_claude_code_login`` schedules ``run_claude_login`` as an
+   ``asyncio.create_task`` (mirrors Stripe's ``stripe login --complete``)
+   and returns immediately. The CLI opens the user's browser; up to
+   10 minutes are allowed for the flow to complete.
+2. When the task resolves, ``_finalize_claude_login`` reads
+   ``claude auth status``, stores the synthetic ``"cli-managed"`` marker
+   along with the user's ``email``/``orgName`` via
+   ``auth_service.store_oauth_tokens()``, and fires
+   ``broadcast_credential_event("credential.oauth.connected", ...)`` —
+   the frontend's ``WebSocketContext`` re-fetches the catalogue.
 
-Codex login is not yet wired (no ``codex_oauth.py`` yet); the handler
-returns a graceful "not yet supported" error pointing the user at the
-manual flow. Logout works for both providers — drops the catalogue marker.
+Logout runs ``claude auth logout`` (CLI clears its own credentials),
+drops the catalogue marker, and broadcasts ``.disconnected``.
+
+Codex login is not yet wired (no ``codex_oauth.py``); the handler returns
+a graceful error pointing the user at the manual flow.
 """
 
 from __future__ import annotations
 
 import asyncio
-import time
-from typing import Any, Awaitable, Callable, Dict
+from typing import Any, Awaitable, Callable, Dict, Optional
 
 from fastapi import WebSocket
 
@@ -48,22 +51,24 @@ logger = get_logger(__name__)
 # handler.
 _MARKER_TOKEN = "cli-managed"
 
-# How long the background finaliser polls for `claude auth status` before
-# giving up (the user may simply close the browser tab).
-_LOGIN_TIMEOUT_SECONDS = 600.0
-_LOGIN_POLL_INTERVAL = 2.0
-
 
 # ---------------------------------------------------------------------------
-# Marker-token + catalogue broadcast (Stripe pattern)
+# Marker-token + credential-event broadcast (Stripe pattern)
 # ---------------------------------------------------------------------------
 
-async def _mark_logged_in(catalogue_key: str) -> None:
+async def _mark_logged_in(
+    catalogue_key: str,
+    *,
+    email: Optional[str] = None,
+    name: Optional[str] = None,
+) -> None:
     from core.container import container
     await container.auth_service().store_oauth_tokens(
         provider=catalogue_key,
         access_token=_MARKER_TOKEN,
         refresh_token=_MARKER_TOKEN,
+        email=email,
+        name=name,
     )
 
 
@@ -72,40 +77,53 @@ async def _mark_logged_out(catalogue_key: str) -> None:
     await container.auth_service().remove_oauth_tokens(catalogue_key)
 
 
-async def _broadcast_catalogue_updated() -> None:
+async def _broadcast_credential_event(event_type: str, provider: str) -> None:
+    """Fire a CloudEvents-shaped catalogue-invalidation. Frontend listens
+    via ``WebSocketContext`` and re-fetches the catalogue."""
     from services.status_broadcaster import get_status_broadcaster
-    await get_status_broadcaster().broadcast({"type": "credential_catalogue_updated"})
+    await get_status_broadcaster().broadcast_credential_event(
+        event_type, provider=provider,
+    )
 
 
 # ---------------------------------------------------------------------------
 # Claude — `claude auth login` / `auth status` / `auth logout`
 # ---------------------------------------------------------------------------
 
-async def _wait_until_logged_in(timeout_seconds: float) -> bool:
-    """Poll ``claude auth status`` until it reports success or we time out."""
-    from services.claude_oauth import claude_auth_status
-
-    deadline = time.monotonic() + timeout_seconds
-    while time.monotonic() < deadline:
-        if await claude_auth_status():
-            return True
-        await asyncio.sleep(_LOGIN_POLL_INTERVAL)
-    return False
-
-
 async def _finalize_claude_login() -> None:
+    """Run ``claude auth login`` to completion, then store user info +
+    broadcast on success."""
+    from services.claude_oauth import claude_auth_status_info, run_claude_login
+
     try:
-        ok = await _wait_until_logged_in(_LOGIN_TIMEOUT_SECONDS)
-        if ok:
-            await _mark_logged_in("claude_code")
-            await _broadcast_catalogue_updated()
-            logger.info("[claude_code_login] marker written + broadcast fired")
-        else:
+        envelope = await run_claude_login()
+        if not envelope.get("success"):
             logger.warning(
-                "[claude_code_login] timed out after %.0fs waiting for "
-                "`claude auth status` to report success — modal stays Disconnected",
-                _LOGIN_TIMEOUT_SECONDS,
+                "[claude_code_login] CLI exited unsuccessfully: %s",
+                envelope.get("error") or envelope.get("stderr"),
             )
+            return
+
+        info = await claude_auth_status_info()
+        if not info.get("loggedIn"):
+            logger.warning(
+                "[claude_code_login] CLI exited cleanly but auth status "
+                "reports not logged in: %s", info,
+            )
+            return
+
+        email = info.get("email")
+        org_name = info.get("orgName")
+        await _mark_logged_in("claude_code", email=email, name=org_name)
+        await _broadcast_credential_event(
+            "credential.oauth.connected", provider="claude_code",
+        )
+        logger.info(
+            "[claude_code_login] connected as %s (%s · %s)",
+            email or "unknown",
+            org_name or "unknown org",
+            info.get("subscriptionType") or "unknown plan",
+        )
     except asyncio.CancelledError:
         raise
     except Exception as exc:  # pragma: no cover — defensive
@@ -116,40 +134,54 @@ async def handle_claude_code_login(
     data: Dict[str, Any],  # noqa: ARG001 — frontend sends {}
     websocket: WebSocket,  # noqa: ARG001 — registry signature
 ) -> Dict[str, Any]:
-    """Spawn ``claude auth login``; let the CLI open the user's browser."""
-    from services.claude_oauth import claude_auth_status, initiate_claude_oauth
+    """Spawn ``claude auth login`` in the background; let the CLI open
+    the user's browser. Idempotent re-click syncs the marker without
+    re-running the flow."""
+    from services.claude_oauth import claude_auth_status_info
 
-    if await claude_auth_status():
+    info = await claude_auth_status_info()
+    if info.get("loggedIn"):
         try:
-            await _mark_logged_in("claude_code")
-            await _broadcast_catalogue_updated()
+            await _mark_logged_in(
+                "claude_code",
+                email=info.get("email"),
+                name=info.get("orgName"),
+            )
+            await _broadcast_credential_event(
+                "credential.oauth.connected", provider="claude_code",
+            )
         except Exception as exc:
             logger.warning("[claude_code_login] mark/broadcast failed: %s", exc)
         return {
             "success": True,
             "already_logged_in": True,
+            "email": info.get("email"),
+            "org_name": info.get("orgName"),
+            "subscription_type": info.get("subscriptionType"),
             "message": "Already authenticated; refreshed status.",
         }
 
-    result = await initiate_claude_oauth()
-    if result.get("success"):
-        asyncio.create_task(
-            _finalize_claude_login(), name="claude_code_login_finalize",
-        )
-    return result
+    asyncio.create_task(_finalize_claude_login(), name="claude_code_login")
+    return {
+        "success": True,
+        "message": "Claude is opening your browser to authenticate.",
+    }
 
 
 async def handle_claude_code_logout(
     data: Dict[str, Any],  # noqa: ARG001
     websocket: WebSocket,  # noqa: ARG001
 ) -> Dict[str, Any]:
-    """Run ``claude auth logout``, drop the catalogue marker, broadcast."""
+    """Run ``claude auth logout`` (CLI clears its own credentials), drop
+    the catalogue marker, broadcast ``.disconnected``."""
     from services.claude_oauth import claude_auth_logout
 
     try:
         await claude_auth_logout()
         await _mark_logged_out("claude_code")
-        await _broadcast_catalogue_updated()
+        await _broadcast_credential_event(
+            "credential.oauth.disconnected", provider="claude_code",
+        )
     except Exception as exc:
         logger.warning("[claude_code_logout] failed: %s", exc)
         return {"success": False, "error": str(exc)}
@@ -181,7 +213,9 @@ async def handle_codex_cli_logout(
 ) -> Dict[str, Any]:
     try:
         await _mark_logged_out("codex_cli")
-        await _broadcast_catalogue_updated()
+        await _broadcast_credential_event(
+            "credential.oauth.disconnected", provider="codex_cli",
+        )
     except Exception as exc:
         logger.warning("[codex_cli_logout] failed: %s", exc)
         return {"success": False, "error": str(exc)}
@@ -190,8 +224,7 @@ async def handle_codex_cli_logout(
 
 # ---------------------------------------------------------------------------
 # Registry payload — `services/cli_agent/__init__.py` registers these
-# into `services.ws_handler_registry` on package import. Names match
-# `credential_providers.json:ws.login/logout`.
+# into `services.ws_handler_registry` on package import.
 # ---------------------------------------------------------------------------
 
 WSHandler = Callable[[Dict[str, Any], WebSocket], Awaitable[Dict[str, Any]]]

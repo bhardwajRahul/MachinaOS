@@ -141,3 +141,144 @@ async def test_resolver_returns_none_when_override_not_git():
             override=Path(tmp),
         )
         assert root is None
+
+
+# ---------------------------------------------------------------------------
+# Execution-engine integration: drive the real `run_batch` (via the DI
+# accessor) and assert the `[CC-Agent ...]` log lines fire at the right
+# transitions. This replaces direct contextvar pokes — every assertion
+# walks the same resolver / register_batch / session-start path the
+# production code does.
+#
+# The top-level `tests/conftest.py` stubs `core.logging.get_logger` with
+# a shared MagicMock, so we can't use `caplog`. Instead each module's
+# module-level ``logger`` IS that shared MagicMock — we inspect its
+# ``info``/``warning`` ``call_args_list`` to verify the diagnostic
+# chain fires.
+# ---------------------------------------------------------------------------
+
+
+def _logger_messages(*module_loggers) -> str:
+    """Concatenate every ``.info`` / ``.warning`` / ``.error`` call's
+    rendered template+args across one or more module-level loggers."""
+    out: list[str] = []
+    for lg in module_loggers:
+        for level in ("info", "warning", "error", "exception", "debug"):
+            method = getattr(lg, level, None)
+            if method is None or not hasattr(method, "call_args_list"):
+                continue
+            for call in method.call_args_list:
+                args = call.args or ()
+                if not args:
+                    continue
+                template = args[0]
+                if not isinstance(template, str):
+                    out.append(repr(template))
+                    continue
+                try:
+                    out.append(template % args[1:] if len(args) > 1 else template)
+                except (TypeError, ValueError):
+                    out.append(template + " | " + repr(args[1:]))
+    return "\n".join(out)
+
+
+@pytest.mark.asyncio
+async def test_run_batch_emits_diagnostic_logs_when_workspace_not_git():
+    """Abort path: `run_batch` enters, fails the resolver, returns
+    structured failure. The `[CC-Agent run_batch] enter` and
+    `[CC-Agent run_batch] aborting` log lines must fire so the operator
+    sees WHY the batch never reached `register_batch`."""
+    from services.cli_agent.service import logger as svc_logger
+    svc_logger.reset_mock()
+
+    svc = get_ai_cli_service()  # DI singleton — same accessor production uses
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        result = await svc.run_batch(
+            "claude",
+            tasks=[ClaudeTaskSpec(prompt="hello")],
+            node_id="ccode_test_abort",
+            workflow_id="wf_abort",
+            workspace_dir=Path(tmp),
+            broadcaster=None,
+            repo_root=Path(tmp),
+            connected_tools=[
+                {"node_id": "ddg_1", "node_type": "duckduckgoSearch",
+                 "label": "DDG", "parameters": {}},
+            ],
+        )
+
+    text = _logger_messages(svc_logger)
+    assert "[CC-Agent run_batch] enter" in text, text
+    assert "duckduckgoSearch" in text, text
+    assert "[CC-Agent run_batch] aborting" in text, text
+    # The abort path MUST NOT register a batch (no MCP tokens leaked):
+    assert "[CC-Agent MCP register_batch]" not in text, text
+    assert result.n_failed == 1
+
+
+@pytest.mark.asyncio
+async def test_run_batch_registers_mcp_batch_on_happy_path(monkeypatch):
+    """Happy path: real resolver, real `register_batch`, but
+    `AICliSession.start` is short-circuited so we don't spawn `claude`.
+    Asserts the `[CC-Agent MCP register_batch]` log fires with the
+    expected tool list — proving the diagnostic chain is intact
+    end-to-end and the spawned CLI WOULD see the MCP server registered
+    for it."""
+    from services.cli_agent import session as session_mod
+    from services.cli_agent.service import logger as svc_logger
+    from services.cli_agent.mcp_server import logger as mcp_logger
+    from services.cli_agent.protocol import SessionResult
+
+    svc_logger.reset_mock()
+    mcp_logger.reset_mock()
+
+    started = {"count": 0}
+
+    async def _fake_start(self):  # noqa: ANN001
+        started["count"] += 1
+        self._completed = True
+
+    async def _fake_wait(self, timeout):  # noqa: ANN001, ARG002
+        return SessionResult(
+            task_id=self.task_id, provider=self._provider.name,
+            prompt=getattr(self._task, "prompt", ""),
+            success=True, response="stub",
+        )
+
+    async def _fake_cleanup(self):  # noqa: ANN001
+        pass
+
+    monkeypatch.setattr(session_mod.AICliSession, "start", _fake_start)
+    monkeypatch.setattr(session_mod.AICliSession, "wait_for_completion", _fake_wait)
+    monkeypatch.setattr(session_mod.AICliSession, "cleanup", _fake_cleanup)
+
+    svc = get_ai_cli_service()
+    workspace = Path(__file__).resolve().parents[3]  # the repo root (a git repo)
+    result = await svc.run_batch(
+        "claude",
+        tasks=[ClaudeTaskSpec(prompt="ping")],
+        node_id="ccode_test_happy",
+        workflow_id="wf_happy",
+        workspace_dir=workspace,
+        broadcaster=None,
+        repo_root=None,  # let the resolver find the parent .git
+        connected_tools=[
+            {"node_id": "ddg_1", "node_type": "duckduckgoSearch",
+             "label": "DDG", "parameters": {}},
+        ],
+        connected_skill_names=["duckduckgo-search-skill"],
+    )
+
+    text = _logger_messages(svc_logger, mcp_logger)
+    # Engine-entry log:
+    assert "[CC-Agent run_batch] enter" in text, text
+    assert "duckduckgoSearch" in text, text
+    # Resolver succeeded:
+    assert "[CC-Agent run_batch] resolved repo_root=" in text, text
+    # MCP token registered with our connected tool:
+    assert "[CC-Agent MCP register_batch]" in text, text
+    # Session was actually exercised (proves the engine ran the inner
+    # gather, not just the abort path):
+    assert started["count"] == 1
+    assert result.n_succeeded == 1

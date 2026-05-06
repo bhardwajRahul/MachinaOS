@@ -21,10 +21,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from core.logging import get_logger
-from services.plugin import ActionNode, NodeContext, Operation, TaskQueue
+from services.plugin import ActionNode, NodeContext, NodeUserError, Operation, TaskQueue
 from services.plugin.edge_walker import collect_agent_connections
 
 from ._handles import STD_AGENT_HINTS, std_agent_handles
@@ -35,6 +35,7 @@ logger = get_logger(__name__)
 # Late import the cli_agent types so node_registry import doesn't pull
 # the whole MCP / pool stack at module import time.
 from services.cli_agent import ClaudeTaskSpec  # noqa: E402
+from services.cli_agent.types import SessionResultModel  # noqa: E402
 
 
 class ClaudeCodeAgentParams(BaseModel):
@@ -75,6 +76,14 @@ class ClaudeCodeAgentParams(BaseModel):
         description="Credential names the CLI is permitted to fetch via MCP.",
     )
 
+    # Saved workflow JSON may persist these list fields as `null` rather
+    # than `[]` when the user has never edited them. Coerce so Pydantic's
+    # strict list validation doesn't reject the params on load.
+    @field_validator("tasks", "allowed_credentials", mode="before")
+    @classmethod
+    def _none_is_empty_list(cls, v: Any) -> Any:
+        return [] if v is None else v
+
     model_config = ConfigDict(extra="ignore")
 
 
@@ -86,14 +95,17 @@ class ClaudeCodeAgentOutput(BaseModel):
     n_failed: int = 0
     total_cost_usd: Optional[float] = None
     wall_clock_ms: int = 0
-    tasks: List[Any] = Field(default_factory=list)
+    tasks: List[SessionResultModel] = Field(default_factory=list)
     provider: str = "claude"
     timestamp: Optional[str] = None
     # Legacy single-task fields, populated when n_tasks==1 for back-compat:
     response: Optional[str] = None
     session_id: Optional[str] = None
     cost_usd: Optional[float] = None
-    model_config = ConfigDict(extra="allow")
+    # `extra="forbid"` so a malformed CLI envelope raises a real
+    # ValidationError at the Output boundary instead of silently emitting
+    # an unparseable shape downstream.
+    model_config = ConfigDict(extra="forbid")
 
 
 class ClaudeCodeAgentNode(ActionNode):
@@ -137,14 +149,39 @@ class ClaudeCodeAgentNode(ActionNode):
             workflow_id=workflow_id,
         )
 
+        # Collect connected memory/skills/tools/input/task in one pass —
+        # same edge-walker the AI Agent uses (services/plugin/edge_walker.py).
+        # This must run BEFORE prompt resolution so the auto-fallback can
+        # read from `input_data` exactly the way `nodes/agent/_inline.py`
+        # does for the standard agent path.
+        database = container.database()
+        _, skill_data, tool_data, input_data, _ = await collect_agent_connections(
+            node_id, ctx.raw, database, log_prefix="[Claude Code]",
+        )
+        connected_skills = [
+            s.get("skill_name") or s.get("label")
+            for s in skill_data
+            if s.get("skill_name") or s.get("label")
+        ]
+
         tasks = list(params.tasks)
         if not tasks:
-            # Legacy fallback — synthesise a single task from the
-            # top-level `prompt`/`model`/`system_prompt`.
-            prompt = params.prompt or self._infer_prompt_from_inputs(ctx, node_id)
+            # AI-Agent-style prompt resolution: explicit `prompt` field
+            # wins; otherwise extract from upstream input via the same
+            # `message > text > content > str()` chain `_inline.py` uses.
+            prompt = (params.prompt or "").strip()
+            if not prompt and input_data:
+                prompt = (
+                    (input_data.get("message") if isinstance(input_data, dict) else None)
+                    or (input_data.get("text") if isinstance(input_data, dict) else None)
+                    or (input_data.get("content") if isinstance(input_data, dict) else None)
+                    or str(input_data)
+                )
             if not prompt:
-                raise RuntimeError(
-                    "claude_code_agent: provide either `tasks` or `prompt`"
+                raise NodeUserError(
+                    "Claude Code agent has no prompt — fill in the Prompt "
+                    "field, populate the Tasks array, or connect a node "
+                    "to the Input handle."
                 )
             tasks = [
                 ClaudeTaskSpec(
@@ -163,18 +200,6 @@ class ClaudeCodeAgentNode(ActionNode):
                     changed["system_prompt"] = params.system_prompt
                 if changed:
                     tasks[i] = t.model_copy(update=changed)
-
-        # Collect connected skills (the MCP server's listSkills/getSkill
-        # tools scope to these names).
-        database = container.database()
-        _, skill_data, _, _, _ = await collect_agent_connections(
-            node_id, ctx.raw, database,
-        )
-        connected_skills = [
-            s.get("skill_name") or s.get("label")
-            for s in skill_data
-            if s.get("skill_name") or s.get("label")
-        ]
 
         # Workspace dir — workflow.py injects this into context
         workspace_dir = ctx.raw.get("workspace_dir") or params.working_directory
@@ -199,6 +224,7 @@ class ClaudeCodeAgentNode(ActionNode):
             broadcaster=broadcaster,
             repo_root=repo_root,
             connected_skill_names=connected_skills,
+            connected_tools=tool_data,
             allowed_credentials=params.allowed_credentials,
             max_parallel=params.max_parallel,
         )
@@ -249,23 +275,3 @@ class ClaudeCodeAgentNode(ActionNode):
             "cost_usd": legacy_cost,
         }
 
-    @staticmethod
-    def _infer_prompt_from_inputs(ctx: NodeContext, node_id: str) -> str:
-        """Fall back to whatever the upstream node connected to
-        ``input-main`` produced."""
-        for edge in ctx.raw.get("edges", []):
-            if edge.get("target") != node_id:
-                continue
-            handle = edge.get("targetHandle")
-            if handle not in ("input-main", None):
-                continue
-            src = ctx.raw.get("outputs", {}).get(edge.get("source"), {})
-            if isinstance(src, dict):
-                for k in ("message", "text", "content", "prompt"):
-                    val = src.get(k)
-                    if val:
-                        return str(val)
-                return str(src)
-            elif src:
-                return str(src)
-        return ""

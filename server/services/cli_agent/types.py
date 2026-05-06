@@ -40,7 +40,7 @@ class BaseAICliTaskSpec(BaseModel):
         description="Branch name for the per-task git worktree. "
                     "Auto-named `machina/<task_id>` if omitted.",
     )
-    model: Optional[str] = None
+    model: Optional[str] = Field(default=None)
     timeout_seconds: int = Field(
         default=600, ge=10, le=3600,
         description="Hard timeout per task. On expiry the session is "
@@ -52,7 +52,10 @@ class BaseAICliTaskSpec(BaseModel):
         json_schema_extra={"rows": 3},
     )
 
-    model_config = ConfigDict(extra="ignore")
+    # `extra="forbid"` surfaces typo'd task fields as Pydantic
+    # ValidationError at the spec boundary instead of silently dropping
+    # them and confusing downstream consumers.
+    model_config = ConfigDict(extra="forbid")
 
 
 class ClaudeTaskSpec(BaseAICliTaskSpec):
@@ -82,7 +85,29 @@ class ClaudeTaskSpec(BaseAICliTaskSpec):
         description="Comma-separated tool list. Defaults to "
                     "Read,Edit,Bash,Glob,Grep,Write.",
     )
-    permission_mode: Literal["default", "acceptEdits", "plan", "auto"] = "acceptEdits"
+    permission_mode: Literal["default", "acceptEdits", "plan", "auto", "dontAsk", "bypassPermissions"] = "acceptEdits"
+
+    # ---- optional documented CLI flags (cli-reference) ----
+    effort: Optional[Literal["low", "medium", "high", "xhigh", "max"]] = Field(
+        default=None,
+        description="Reasoning-effort level. Available levels depend on the model.",
+    )
+    fallback_model: Optional[str] = Field(
+        default=None,
+        description="Fallback model when the primary is overloaded (print mode).",
+    )
+    add_dir: List[str] = Field(
+        default_factory=list,
+        description="Extra working directories the CLI may read/edit.",
+    )
+    disallowed_tools: Optional[str] = Field(
+        default=None,
+        description="Comma-separated tools removed from Claude's context.",
+    )
+    agent: Optional[str] = Field(
+        default=None,
+        description="Override the configured `agent` setting for this task.",
+    )
 
 
 class CodexTaskSpec(BaseAICliTaskSpec):

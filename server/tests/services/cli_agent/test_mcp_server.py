@@ -187,7 +187,9 @@ class TestLockfile:
             workspace_dir=tmp_path, ide_name="claude",
         )
         payload = json.loads(path.read_text(encoding="utf-8"))
-        assert payload["url"] == "http://127.0.0.1:3010/mcp/ide"
+        # FastMCP serves at `/mcp` of the sub-app, mounted at `/mcp/ide`.
+        # The lockfile must advertise the absolute JSON-RPC endpoint.
+        assert payload["url"] == "http://127.0.0.1:3010/mcp/ide/mcp"
 
     def test_remove_lockfile_safe_when_missing(self, tmp_path):
         # Should never raise
@@ -229,3 +231,202 @@ class TestLockfile:
     def test_sweep_safe_on_nonexistent_dir(self, tmp_path):
         assert sweep_stale_lockfiles(tmp_path / "no") == 0
         assert sweep_stale_lockfiles(None) == 0
+
+
+# ---------------------------------------------------------------------------
+# MachinaOs workflow-tool bridge — per-batch dynamic FastMCP exposure.
+# Each wired node lands as `mcp__machinaos__<node_type>`; FastMCP infers
+# the schema from the typed `params` annotation (no custom translation).
+#
+# These tests drive FastMCP's own ``list_tools`` / ``call_tool`` API so
+# we exercise the same code path the spawned ``claude`` CLI hits over
+# JSON-RPC.
+# ---------------------------------------------------------------------------
+
+class TestMachinaOsToolBridge:
+    def setup_method(self):
+        _reset_for_tests()
+        import nodes  # noqa: F401 — populate plugin registry
+
+    @staticmethod
+    def _ctx(node_type: str, label: str) -> BatchContext:
+        return BatchContext(
+            workflow_id="wf_test", node_id="claude_code_agent_1",
+            workspace_dir=Path("."),
+            connected_tools=[{
+                "node_id": f"{node_type}_1", "node_type": node_type,
+                "label": label, "parameters": {},
+            }],
+        )
+
+    @pytest.mark.asyncio
+    async def test_register_batch_exposes_tool_on_fastmcp(self):
+        """The connected workflow node must surface in ``list_tools`` so
+        claude sees ``mcp__machinaos__<node_type>`` on first
+        ``tools/list``."""
+        from services.cli_agent.mcp_server import _mcp_singleton, get_mcp_app
+        get_mcp_app()  # ensure FastMCP singleton built
+        from services.cli_agent.mcp_server import _mcp_singleton as mcp
+        assert mcp is not None
+
+        ctx = self._ctx("calculatorTool", "Calculator")
+        token = issue_token()
+        register_batch(token, ctx)
+        try:
+            tools = await mcp.list_tools()
+            names = {t.name for t in tools}
+            assert "calculatorTool" in names
+            calc = next(t for t in tools if t.name == "calculatorTool")
+            # FastMCP infers the inputSchema from the typed `params` arg
+            # (Pydantic-v2 → JSON Schema 2020-12 wire format).
+            assert {"operation", "a", "b"}.issubset(
+                calc.inputSchema["properties"].keys()
+            )
+        finally:
+            unregister_batch(token)
+
+        # After unregister the tool refcount hits zero and FastMCP drops it.
+        tools_after = await mcp.list_tools()
+        assert "calculatorTool" not in {t.name for t in tools_after}
+
+    @pytest.mark.asyncio
+    async def test_call_tool_dispatches_via_execute_tool(self):
+        """``mcp.call_tool`` for a wired node routes through
+        ``services.handlers.tools.execute_tool`` and returns the
+        plugin's result envelope."""
+        from services.cli_agent.mcp_server import (
+            _current_batch, get_mcp_app,
+        )
+        get_mcp_app()
+        from services.cli_agent.mcp_server import _mcp_singleton as mcp
+
+        ctx = self._ctx("calculatorTool", "Calculator")
+        token = issue_token()
+        register_batch(token, ctx)
+        reset = _current_batch.set(ctx)
+        try:
+            out = await mcp.call_tool(
+                "calculatorTool",
+                {"operation": "multiply", "a": 2, "b": 21},
+            )
+        finally:
+            _current_batch.reset(reset)
+            unregister_batch(token)
+
+        # FastMCP's `call_tool` returns either a content sequence or a
+        # dict, depending on `structured_output`. Either way the
+        # calculator's `result` (42) must be in there.
+        text = repr(out)
+        assert "42" in text, text
+
+    @pytest.mark.asyncio
+    async def test_unconnected_tool_call_is_blocked_by_batch_scope(self):
+        """If a tool is registered globally (because some other batch
+        wired it) but the calling batch didn't, the per-handler
+        ``_require_batch`` check returns 403."""
+        from services.cli_agent.mcp_server import _current_batch, get_mcp_app
+        get_mcp_app()
+        from services.cli_agent.mcp_server import _mcp_singleton as mcp
+
+        # Batch A wires both tools — registers them globally.
+        token_a = issue_token()
+        register_batch(token_a, BatchContext(
+            workflow_id="wf_a", node_id="cc_a", workspace_dir=Path("."),
+            connected_tools=[
+                {"node_id": "c1", "node_type": "calculatorTool", "label": "C", "parameters": {}},
+                {"node_id": "h1", "node_type": "httpRequest", "label": "H", "parameters": {}},
+            ],
+        ))
+        # Batch B wires only one. Even though `httpRequest` is exposed
+        # globally (refcount=1), batch B's ctx forbids it.
+        ctx_b = self._ctx("calculatorTool", "C")
+        token_b = issue_token()
+        register_batch(token_b, ctx_b)
+        reset = _current_batch.set(ctx_b)
+        try:
+            out = await mcp.call_tool(
+                "httpRequest", {"method": "GET", "url": "x"},
+            )
+        finally:
+            _current_batch.reset(reset)
+            unregister_batch(token_b)
+            unregister_batch(token_a)
+
+        text = repr(out)
+        assert "403" in text or "not connected" in text, text
+
+    # -- live, real-tool runs (no mocks) ----------------------------------
+
+    @pytest.mark.asyncio
+    async def test_currentTimeTool_real(self):
+        from services.cli_agent.mcp_server import _current_batch, get_mcp_app
+        get_mcp_app()
+        from services.cli_agent.mcp_server import _mcp_singleton as mcp
+
+        ctx = self._ctx("currentTimeTool", "Time")
+        token = issue_token()
+        register_batch(token, ctx)
+        reset = _current_batch.set(ctx)
+        try:
+            tools = {t.name for t in await mcp.list_tools()}
+            assert "currentTimeTool" in tools
+            out = await mcp.call_tool("currentTimeTool", {"timezone": "UTC"})
+        finally:
+            _current_batch.reset(reset)
+            unregister_batch(token)
+        text = repr(out)
+        assert "UTC" in text, text
+
+    @pytest.mark.slow
+    @pytest.mark.asyncio
+    async def test_duckduckgoSearch_real(self):
+        from services.cli_agent.mcp_server import _current_batch, get_mcp_app
+        get_mcp_app()
+        from services.cli_agent.mcp_server import _mcp_singleton as mcp
+
+        ctx = self._ctx("duckduckgoSearch", "DDG")
+        token = issue_token()
+        register_batch(token, ctx)
+        reset = _current_batch.set(ctx)
+        try:
+            try:
+                out = await mcp.call_tool(
+                    "duckduckgoSearch",
+                    {"query": "MachinaOs Anthropic Claude", "max_results": 3},
+                )
+            except OSError as exc:
+                pytest.skip(f"network unavailable: {exc}")
+        finally:
+            _current_batch.reset(reset)
+            unregister_batch(token)
+        text = repr(out)
+        if "error" in text and "duckduckgo" in text.lower():
+            pytest.skip(f"ddgs unavailable: {text[:200]}")
+        assert "duckduckgo" in text.lower(), text[:200]
+
+    @pytest.mark.slow
+    @pytest.mark.asyncio
+    async def test_httpRequest_real(self):
+        from services.cli_agent.mcp_server import _current_batch, get_mcp_app
+        get_mcp_app()
+        from services.cli_agent.mcp_server import _mcp_singleton as mcp
+
+        ctx = self._ctx("httpRequest", "HTTP")
+        token = issue_token()
+        register_batch(token, ctx)
+        reset = _current_batch.set(ctx)
+        try:
+            try:
+                out = await mcp.call_tool(
+                    "httpRequest",
+                    {"method": "GET", "url": "https://httpbin.org/get?bridge=ok"},
+                )
+            except OSError as exc:
+                pytest.skip(f"network unavailable: {exc}")
+        finally:
+            _current_batch.reset(reset)
+            unregister_batch(token)
+        text = repr(out)
+        if '"status": 200' not in text and "'status': 200" not in text:
+            pytest.skip(f"httpbin unavailable: {text[:200]}")
+        assert "bridge" in text and "ok" in text, text[:300]
