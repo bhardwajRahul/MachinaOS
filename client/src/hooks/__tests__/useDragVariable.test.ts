@@ -18,8 +18,14 @@ const storeState: { currentWorkflow: any } = {
   currentWorkflow: null,
 };
 
+// `useAppStore` is consumed via the documented Zustand slice-selector
+// pattern: `useAppStore((s) => s.currentWorkflow)`. The mock has to
+// thread the selector through so it returns the right slice — calling
+// `useAppStore()` without a selector inside the hook would have given us
+// the whole store object and `currentWorkflow.nodes` would be undefined.
 vi.mock('../../store/useAppStore', () => ({
-  useAppStore: () => storeState,
+  useAppStore: <T,>(selector?: (state: typeof storeState) => T): T | typeof storeState =>
+    selector ? selector(storeState) : storeState,
 }));
 
 // nodeDefinitions/ was deleted in commit fc10fd3 — the hook now

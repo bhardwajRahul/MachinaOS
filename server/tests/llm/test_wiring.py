@@ -107,7 +107,11 @@ async def test_fetch_models_uses_native_for_anthropic(ai_service):
         models = await ai_service.fetch_models("anthropic", "sk-ant-test")
 
     assert models == expected_models
-    mock_factory.assert_called_once_with("anthropic", "sk-ant-test")
+    # ai.fetch_models forwards `proxy_url` (defaulting to None) to the native
+    # factory so the Ollama-pattern proxy override path stays uniform with
+    # execute_chat. Asserting the full call signature including the explicit
+    # `None` kwarg ensures the proxy path is not silently dropped.
+    mock_factory.assert_called_once_with("anthropic", "sk-ant-test", proxy_url=None)
 
 
 @pytest.mark.asyncio

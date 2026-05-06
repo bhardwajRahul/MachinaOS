@@ -78,51 +78,55 @@ const wsMock = {
   // status getters aren't actually used here -- they're consumed via the dedicated hooks below
 };
 
-vi.mock('../../contexts/WebSocketContext', async () => {
-  const actual = await vi.importActual<any>('../../contexts/WebSocketContext');
-  return {
-    ...actual,
-    useWebSocket: () => wsMock,
-    useWhatsAppStatus: () => ({
-      connected: false,
-      has_session: false,
-      running: false,
-      pairing: false,
-      device_id: null,
-      connected_phone: null,
-      qr: null,
-    }),
-    useAndroidStatus: () => ({
-      connected: false,
-      paired: false,
-      device_id: null,
-      device_name: null,
-      connected_devices: [],
-      qr_data: null,
-      session_token: null,
-    }),
-    useTwitterStatus: () => ({
-      connected: false,
-      username: null,
-      user_id: null,
-      name: null,
-      profile_image_url: null,
-    }),
-    useGoogleStatus: () => ({
-      connected: false,
-      email: null,
-      name: null,
-      profile_image_url: null,
-    }),
-    useTelegramStatus: () => ({
-      connected: false,
-      bot_username: null,
-      bot_name: null,
-      bot_id: null,
-      owner_chat_id: null,
-    }),
-  };
-});
+// Replace the entire WebSocketContext module with stub exports. The
+// `vi.importActual` + spread pattern was previously used here but failed
+// to override `useWebSocket` reliably under React 19 — the real
+// implementation's `useContext(WebSocketContext)` check fired against the
+// undefined provider, throwing the "must be used within a WebSocketProvider"
+// error before the mocked override could intercept. The full-replace style
+// matches what useApiKeys.test.ts does and works in both vitest 1 and 2.
+vi.mock('../../contexts/WebSocketContext', () => ({
+  useWebSocket: () => wsMock,
+  useWhatsAppStatus: () => ({
+    connected: false,
+    has_session: false,
+    running: false,
+    pairing: false,
+    device_id: null,
+    connected_phone: null,
+    qr: null,
+  }),
+  useAndroidStatus: () => ({
+    connected: false,
+    paired: false,
+    device_id: null,
+    device_name: null,
+    connected_devices: [],
+    qr_data: null,
+    session_token: null,
+  }),
+  useTwitterStatus: () => ({
+    connected: false,
+    username: null,
+    user_id: null,
+    name: null,
+    profile_image_url: null,
+  }),
+  useGoogleStatus: () => ({
+    connected: false,
+    email: null,
+    name: null,
+    profile_image_url: null,
+  }),
+  useTelegramStatus: () => ({
+    connected: false,
+    bot_username: null,
+    bot_name: null,
+    bot_id: null,
+    owner_chat_id: null,
+  }),
+  useNodeStatus: () => ({ status: 'idle', data: {} }),
+}));
 
 vi.mock('../../hooks/useWhatsApp', () => ({
   useWhatsApp: () => ({

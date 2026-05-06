@@ -16,8 +16,12 @@ import { render, screen, waitFor } from '@testing-library/react';
 // --- Mocks -----------------------------------------------------------------
 
 const storeState: { currentWorkflow: any } = { currentWorkflow: null };
+// Threads the slice selector so `useAppStore((s) => s.currentWorkflow)`
+// returns the right slice. A no-arg `useAppStore()` returns the whole
+// state for legacy whole-store consumers.
 vi.mock('../../../store/useAppStore', () => ({
-  useAppStore: () => storeState,
+  useAppStore: <T,>(selector?: (state: typeof storeState) => T): T | typeof storeState =>
+    selector ? selector(storeState) : storeState,
 }));
 
 const wsMock = {
