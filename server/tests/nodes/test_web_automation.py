@@ -50,7 +50,7 @@ class _FakeBrowserService:
 
 def _patch_browser_service(svc):
     """Patch get_browser_service to return the fake."""
-    return patch("services.browser_service.get_browser_service", return_value=svc)
+    return patch("nodes.browser._service.get_browser_service", return_value=svc)
 
 
 # ============================================================================
@@ -140,7 +140,7 @@ class TestBrowser:
 
     async def test_service_not_installed(self, harness):
         with patch(
-            "services.browser_service.get_browser_service", return_value=None
+            "nodes.browser._service.get_browser_service", return_value=None
         ):
             result = await harness.execute("browser", {"operation": "navigate", "url": "https://x"})
 

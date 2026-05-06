@@ -779,7 +779,7 @@ class DeploymentManager:
                                       params: Dict[str, Any]) -> Callable:
         """Create Himalaya email polling coroutine for deployment mode."""
         async def poll(queue: asyncio.Queue, is_running_fn: Callable):
-            from services.email_service import get_email_service
+            from nodes.email._service import get_email_service
 
             svc = get_email_service()
             creds = await svc.resolve_credentials(params)

@@ -27,7 +27,8 @@ pytestmark = pytest.mark.node_contract
 
 def _reset_singletons():
     """Wipe cached singletons so each test gets a clean EmailService / HimalayaService."""
-    from services import email_service, himalaya_service
+    from nodes.email import _service as email_service
+    from nodes.email import _himalaya as himalaya_service
 
     email_service.EmailService._instance = None
     himalaya_service.HimalayaService._instance = None
@@ -47,7 +48,7 @@ def _base_creds_params(**overrides):
 def _patch_ensure_binary():
     """Patch HimalayaService.ensure_binary to return a fake path without shutil.which."""
     return patch(
-        "services.himalaya_service.HimalayaService.ensure_binary",
+        "nodes.email._himalaya.HimalayaService.ensure_binary",
         new=AsyncMock(return_value="/usr/bin/himalaya"),
     )
 
@@ -91,7 +92,7 @@ class TestEmailSend:
         # Return empty JSON so himalaya "succeeds" with no extra fields
         with _patch_ensure_binary(), patched_subprocess(stdout=b"{}", returncode=0), \
              patched_container(auth_api_keys={"email_address": "alice@example.com", "email_password": "sekret", "email_provider": "gmail"}), patched_pricing(), \
-             patch("services.himalaya_service.HimalayaService.execute",
+             patch("nodes.email._himalaya.HimalayaService.execute",
                    new=AsyncMock(return_value={})) as mock_exec:
             result = await harness.execute(
                 "emailSend",
@@ -149,7 +150,7 @@ class TestEmailRead:
         ]
         # Himalaya returns a list for envelope list -> wrapped in {data: ...}
         with _patch_ensure_binary(), \
-             patch("services.himalaya_service.HimalayaService.execute",
+             patch("nodes.email._himalaya.HimalayaService.execute",
                    new=AsyncMock(return_value=envelopes)), \
              patched_container(auth_api_keys={"email_address": "alice@example.com", "email_password": "sekret", "email_provider": "gmail"}), patched_pricing():
             result = await harness.execute(
@@ -166,7 +167,7 @@ class TestEmailRead:
     async def test_read_merges_dict_output(self, harness):
         message = {"subject": "hello", "body": "world", "from": "a@x.com"}
         with _patch_ensure_binary(), \
-             patch("services.himalaya_service.HimalayaService.execute",
+             patch("nodes.email._himalaya.HimalayaService.execute",
                    new=AsyncMock(return_value=message)), \
              patched_container(auth_api_keys={"email_address": "alice@example.com", "email_password": "sekret", "email_provider": "gmail"}), patched_pricing():
             result = await harness.execute(
@@ -213,7 +214,7 @@ class TestEmailRead:
 class TestEmailReceive:
     async def test_new_email_detected_on_second_poll(self, harness):
         """Baseline sees {id1}; next poll returns {id1,id2} -> dispatch id2."""
-        from services.email_service import EmailService
+        from nodes.email._service import EmailService
 
         email_detail = {"from": "c@x.com", "subject": "new!", "body": "hi"}
 
@@ -248,8 +249,8 @@ class TestEmailReceive:
         assert dispatch_mock.call_args.args[0] == "email_received"
 
     async def test_mark_as_read_adds_seen_flag(self, harness):
-        from services.email_service import EmailService
-        from services.himalaya_service import HimalayaService
+        from nodes.email._service import EmailService
+        from nodes.email._himalaya import HimalayaService
 
         poll_ids_mock = AsyncMock(side_effect=[set(), {"42"}])
         fetch_detail_mock = AsyncMock(return_value={"message_id": "42", "folder": "INBOX"})
@@ -291,7 +292,7 @@ class TestEmailReceive:
 
     async def test_subprocess_error_surfaces_as_envelope(self, harness):
         """If poll_ids raises (e.g. Himalaya subprocess fails) the handler returns an error envelope."""
-        from services.email_service import EmailService
+        from nodes.email._service import EmailService
 
         poll_ids_mock = AsyncMock(side_effect=RuntimeError("himalaya error: connection refused"))
 

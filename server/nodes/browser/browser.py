@@ -3,7 +3,7 @@
 Interactive browser automation via the agent-browser CLI. The plugin
 maps the high-level operation enum to CLI argv, resolves the browser
 binary (system Chrome / Edge / Chromium / bundled), and delegates the
-subprocess invocation to ``services.browser_service``.
+subprocess invocation to ``_service`` (the plugin-private service).
 """
 
 from __future__ import annotations
@@ -317,7 +317,7 @@ class BrowserNode(ActionNode):
 
     @Operation("dispatch")
     async def dispatch(self, ctx: NodeContext, params: BrowserParams) -> BrowserOutput:
-        from services.browser_service import get_browser_service
+        from ._service import get_browser_service
 
         svc = get_browser_service()
         if not svc:

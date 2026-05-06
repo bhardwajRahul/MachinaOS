@@ -12,7 +12,7 @@ from core.logging import get_logger
 logger = get_logger(__name__)
 
 _CONFIG: Optional[Dict] = None
-_CONFIG_PATH = Path(__file__).parent.parent / "config" / "email_providers.json"
+_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "email_providers.json"
 
 
 def _load_config() -> Dict:
@@ -46,7 +46,7 @@ class EmailService:
 
     @property
     def himalaya(self):
-        from services.himalaya_service import get_himalaya_service
+        from ._himalaya import get_himalaya_service
         return get_himalaya_service()
 
     def _provider_preset(self, name: str) -> Dict:

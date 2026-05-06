@@ -354,7 +354,7 @@ async def lifespan(app: FastAPI):
     await close_relay_client(clear_stored_session=False)
 
     # Shut down agent-browser daemon (prevents orphaned processes and EBUSY file locks)
-    from services.browser_service import shutdown_browser_service
+    from nodes.browser._service import shutdown_browser_service
     await shutdown_browser_service()
 
     # Kill all managed processes (process manager node)

@@ -68,7 +68,7 @@ class EmailReceiveNode(TriggerNode):
         import asyncio
         import time
         from datetime import datetime
-        from services.email_service import get_email_service
+        from ._service import get_email_service
         from services.status_broadcaster import get_status_broadcaster
         from services import event_waiter
 
