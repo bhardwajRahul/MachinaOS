@@ -79,7 +79,7 @@ class NodeJSExecutorRuntime(BaseProcessSupervisor):
         if shutil.which("node") is None:
             raise RuntimeError(
                 "Node.js not found on PATH — the JS/TS executor sidecar "
-                "requires the same Node 22+ install as the rest of OpenCompany."
+                "requires the same Node 18+ install as the rest of OpenCompany."
             )
         if not (_sidecar_dir() / "dist" / "index.js").is_file():
             raise RuntimeError(

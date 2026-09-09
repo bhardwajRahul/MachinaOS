@@ -441,7 +441,7 @@ echo 'export PATH=$HOME/.npm-global/bin:$PATH' >> ~/.bashrc && source ~/.bashrc
 npm install -g @zeenie-ai/opencompany
 company start
 ```
-uv then downloads its 3.12 into `~/.local/share/uv`, the venvs are usable by the login user, and data lands in `~/.opencompany`. If a root install already exists, remove it first: `sudo npm uninstall -g @zeenie-ai/opencompany && sudo rm -rf /root/.opencompany`. Verified on an EC2 t3a.small running Ubuntu 26.04.
+uv then downloads its 3.12 into `~/.local/share/uv`, the venvs are usable by the login user, and data lands in `~/.opencompany`. If a root install already exists, remove it first: `sudo npm uninstall -g @zeenie-ai/opencompany && sudo rm -rf /root/.opencompany`. Verified on an EC2 t3a.small running Ubuntu 26.04. `install.sh` (the `curl | bash` installer) now does this itself whenever the global prefix is not writable, instead of retrying with `sudo`; verified end to end on a fresh Ubuntu 24.04 t3.micro.
 
 ---
 
@@ -462,3 +462,13 @@ uv then downloads its 3.12 into `~/.local/share/uv`, the venvs are usable by the
 **Root cause**: `MachinaWorkflow` stamps `generation`, `graphVersion`, `context_execution_id` and `context_session_id` on each node's activity context, but the per-type activity wrapper in `services/plugin/base.py::as_activity` rebuilds the node context by calling `workflow_service.execute_node` with a fixed argument list and forwards only an allowlist of extra keys. The conversation-scope keys were not on it. The Context descriptor builder (`nodes/context/_descriptor.py`) returns `None` when `generation` is 0, and the edge walker treats `None` as "this edge contributes nothing", so the Context edge was silently dropped before the bridge ever ran. Native agents were unaffected because they run as an `AgentWorkflow` child that reads `generation` from its own payload; the nodes that always take the activity path were the ones affected. The in-process adapter `WorkflowService._execute_node_adapter` dropped the same keys.
 
 **Fix**: both handoffs now forward `generation`, `graphVersion`, `root_execution_id`, `context_execution_id`, `context_session_id` and `data_scope_id` as extras. Locked by `tests/temporal/test_context_scope_forwarding.py`. With the descriptor intact the pool key is `(workflow_id, agent_node_id, generation)`, so chat messages within a deployment reuse one warm claude process and each turn is recorded in the Context store.
+
+---
+
+## 19. JS/TS Executor Fails on a Fresh npm Install: `Cannot find package 'express'`
+
+**Symptom**: On a machine set up with `npm install -g @zeenie-ai/opencompany`, the first JavaScript or TypeScript executor node run fails with `Node.js executor did not become ready`, and the sidecar log shows `Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'express' imported from .../server/nodejs/dist/index.js`.
+
+**Root cause**: The sidecar bundle is built with `--packages=external`, so Express stays a runtime dependency, but it was declared only in `server/nodejs/package.json`. The npm package excludes every `node_modules`, and `nodes/code/_runtime.py` only checks that `dist/index.js` exists, so nothing ever installed Express on an npm-installed copy. Source checkouts never saw it because `bun install` provisions the workspace.
+
+**Fix**: `express` is declared in the root `package.json` `dependencies`, so npm installs it beside the package and Node resolves it from `server/nodejs/dist` by walking up to the package root. Nothing else changed; the sidecar still runs under whichever `node` is on `PATH` (18+ verified on Ubuntu 24.04's distro package).

@@ -15,7 +15,7 @@ OpenCompany is an open-source, self-hosted canvas for AI agent workflows — thi
 
 ## Quick Start
 
-**Prerequisites:** Node.js 22+, Python 3.12
+**Prerequisites:** Node.js 18+, Python 3.12
 
 ```bash
 npm install -g @zeenie-ai/opencompany

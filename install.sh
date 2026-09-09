@@ -3,13 +3,13 @@
 # Usage: curl -fsSL https://raw.githubusercontent.com/zeenie-ai/OpenCompany/main/install.sh | bash
 #
 # This script installs OpenCompany and its dependencies:
-# - Node.js 22+ (via brew/apt/dnf/pacman)
+# - Node.js 18+ (distro package via brew/apt/dnf/pacman)
 # - Python 3.12+ (via brew/apt/dnf/pacman)
 # - uv (Python package manager)
 
 set -e
 
-MIN_NODE_VERSION=22
+MIN_NODE_VERSION=18
 MIN_PYTHON_VERSION_MINOR=12
 
 # Colors
@@ -155,8 +155,10 @@ install_node() {
       fi
       ;;
     debian)
-      curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-      sudo apt-get install -y nodejs
+      # The distro package is enough: Ubuntu 24.04 / Debian 12 ship Node 18,
+      # Ubuntu 26.04 ships 22. No third-party apt repo needed.
+      sudo apt-get update
+      sudo apt-get install -y nodejs npm
       # Force rehash PATH to find newly installed node
       hash -r 2>/dev/null || true
       # Source profile to update PATH if needed
@@ -172,14 +174,14 @@ install_node() {
       hash -r 2>/dev/null || true
       ;;
     *)
-      error_exit "Please install Node.js 22+ manually from https://nodejs.org/"
+      error_exit "Please install Node.js 18+ manually from https://nodejs.org/"
       ;;
   esac
 
   # Clear hash and verify using full path as fallback
   hash -r 2>/dev/null || true
 
-  # Check using direct path first (NodeSource installs to /usr/bin/node)
+  # Check using direct path first (distro packages install to /usr/bin/node)
   if [ -x /usr/bin/node ]; then
     version=$(/usr/bin/node --version | tr -d 'v')
     major=$(echo "$version" | cut -d. -f1)
@@ -295,16 +297,24 @@ main() {
   info "Installing OpenCompany..."
   echo ""
 
-  # Install OpenCompany from npm
-  # On Linux/WSL without nvm, global npm install needs sudo unless prefix is user-writable
-  if npm install -g '@zeenie-ai/opencompany' 2>/dev/null; then
-    : # Installed successfully
-  elif command -v sudo &> /dev/null; then
-    info "Retrying with sudo..."
-    sudo npm install -g '@zeenie-ai/opencompany'
-  else
-    error_exit "npm install -g failed. Try: sudo npm install -g @zeenie-ai/opencompany"
+  # Install OpenCompany from npm, as the current user. If the global npm
+  # prefix is not writable (system-wide Node on Linux), switch to a
+  # user-owned prefix rather than sudo: a root install leaves the venvs and
+  # ~/.opencompany owned by root, and `company start` as the login user
+  # then fails with "python: not found" (docs-internal/errors.md #16).
+  # https://docs.npmjs.com/resolving-eacces-permissions-errors-when-installing-packages-globally
+  if [ ! -w "$(npm prefix -g)" ]; then
+    info "Global npm prefix is not writable; using ~/.npm-global"
+    mkdir -p "$HOME/.npm-global"
+    npm config set prefix "$HOME/.npm-global"
+    export PATH="$HOME/.npm-global/bin:$PATH"
+    if ! grep -q 'npm-global' "$HOME/.bashrc" 2>/dev/null; then
+      echo '' >> "$HOME/.bashrc"
+      echo '# npm global packages (OpenCompany installer)' >> "$HOME/.bashrc"
+      echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >> "$HOME/.bashrc"
+    fi
   fi
+  npm install -g '@zeenie-ai/opencompany' || error_exit "npm install -g failed."
 
   echo ""
   echo -e "${GREEN}============================================${NC}"

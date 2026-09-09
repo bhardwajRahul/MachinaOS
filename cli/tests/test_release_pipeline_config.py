@@ -132,7 +132,7 @@ def test_sidecar_dev_keeps_tsx_for_hot_reload(sidecar_pkg: dict):
         "src/index.ts",
         "--bundle",
         "--platform=node",
-        "--target=node22",
+        "--target=node18",
         "--format=esm",
         "--packages=external",
         "--outfile=dist/index.js",
@@ -145,7 +145,7 @@ def test_sidecar_build_script_carries_required_esbuild_flag(
 
     - ``--bundle`` — concat the executor's own TS into one file.
     - ``--platform=node`` — preserve Node built-in resolution.
-    - ``--target=node22`` — match ``engines.node`` in the same file.
+    - ``--target=node18`` — match ``engines.node`` in the same file.
     - ``--format=esm`` — package.json ``type=module`` requires ESM.
     - ``--packages=external`` — keep Express in node_modules; only the
       executor's own TS is concatenated, so patch flow stays intact.
@@ -157,13 +157,13 @@ def test_sidecar_build_script_carries_required_esbuild_flag(
 
 
 def test_sidecar_engines_match_esbuild_target(sidecar_pkg: dict):
-    """``--target=node22`` and ``engines.node`` must agree. Bumping one
+    """``--target=node18`` and ``engines.node`` must agree. Bumping one
     without the other would silently produce code that runs on a Node
     version the package claims it doesn't support (or vice versa).
     """
     engines_node = sidecar_pkg.get("engines", {}).get("node", "")
-    assert "22" in engines_node, (
-        f"engines.node must declare ≥22 to match esbuild --target=node22, "
+    assert "18" in engines_node, (
+        f"engines.node must declare ≥18 to match esbuild --target=node18, "
         f"got {engines_node!r}"
     )
 
