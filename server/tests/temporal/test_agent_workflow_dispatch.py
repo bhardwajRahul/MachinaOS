@@ -20,31 +20,31 @@ def _settings(*, enabled: bool = True):
     )
 
 
-def test_new_generation_routes_to_v2_but_missing_metadata_stays_v1():
+def test_admitted_generation_routes_to_child_workflow_but_missing_metadata_stays_activity():
     from services.temporal.workflow import MachinaWorkflow
 
     instance = MachinaWorkflow()
     with patch("core.config.Settings", side_effect=lambda: _settings()):
-        v2 = instance._resolve_dispatch(
+        admitted = instance._resolve_dispatch(
             "aiAgent",
             graph_version=2,
             generation=4,
-            context_v2_enabled=True,
+            context_enabled=True,
         )
         missing_generation = instance._resolve_dispatch(
             "aiAgent",
             graph_version=2,
             generation=0,
-            context_v2_enabled=True,
+            context_enabled=True,
         )
         missing_version = instance._resolve_dispatch(
             "aiAgent",
             graph_version=0,
             generation=4,
-            context_v2_enabled=True,
+            context_enabled=True,
         )
 
-    assert v2 == {
+    assert admitted == {
         "kind": "child_workflow",
         "name": "AgentWorkflow",
     }

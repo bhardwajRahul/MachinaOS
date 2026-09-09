@@ -277,7 +277,7 @@ result = await instance.execute(node_id, child_params, child_ctx)
 
 **File:** `server/nodes/agent/_inline.py`, `prepare_agent_call()` (called by every agent plugin's `@Operation`)
 
-The spawned child's `execute()` runs `prepare_agent_call()`, which calls `collect_agent_connections()` (from `server/services/plugin/edge_walker.py`) with **its own node_id**. The function returns a **5-tuple** — `(context_data, skill_data, tool_data, input_data, task_data)` (`edge_walker.py:181-199`; the first element is the Context descriptor, or the legacy Memory descriptor on immutable V1 snapshots):
+The spawned child's `execute()` runs `prepare_agent_call()`, which calls `collect_agent_connections()` (from `server/services/plugin/edge_walker.py`) with **its own node_id**. The function returns a **5-tuple** — `(context_data, skill_data, tool_data, input_data, task_data)` (`edge_walker.py:181-199`; the first element is the Context descriptor, or the legacy Memory descriptor on `input-memory` graphs):
 
 ```python
 context_data, skill_data, tool_data, input_data, task_data = await collect_agent_connections(
@@ -346,8 +346,8 @@ Parent and child agents have completely separate memory systems. On current
 (V2) graphs the child's conversation is its own RFC-0002 Context store row,
 keyed by `(workflow_id, generation, <child agent_node_id>)`, and `simpleMemory`
 is an explicit tool the child calls on its own `input-tools`; the table below
-describes the legacy V1 markdown model, which survives only for immutable V1
-snapshots:
+describes the legacy markdown model, which survives only for graphs recorded
+with an `input-memory` edge:
 
 | Aspect | Parent Agent | Child Agent |
 |--------|-------------|-------------|

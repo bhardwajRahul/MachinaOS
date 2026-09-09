@@ -502,7 +502,7 @@ Certain nodes provide configuration rather than executing:
 CONFIG_HANDLES = {
     "input-context",
     "input-tools",
-    "input-memory",  # replay/import compatibility for V1 graph snapshots only
+    "input-memory",  # replay/import compatibility for legacy input-memory graphs only
     "input-model",
     "input-skill",
     "input-task",

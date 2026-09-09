@@ -2,7 +2,7 @@
 
 > **TL;DR.** `ClaudeSessionPool` keeps a warm `claude` subprocess per
 > session key (the RFC-0002 conversation key `context_bridge.pool_key` when
-> a Context node is wired; the legacy `simpleMemory.node_id` on immutable V1
+> a Context node is wired; the legacy `simpleMemory.node_id` on `input-memory`
 > graphs — `services/cli_agent/service.py:354-358`) and drives it with the same flags Anthropic's
 > own VSCode extension uses — stdio pipes, `--output-format stream-json
 > --input-format stream-json --verbose --ide`. Multi-turn happens by

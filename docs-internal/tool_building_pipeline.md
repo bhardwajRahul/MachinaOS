@@ -45,7 +45,7 @@ Replaces the partial explanations previously scattered across
 ```
 
 (`edge_walker.py:181-199` — the first element is the Context descriptor from
-`input-context`, or the legacy Memory descriptor on immutable V1 snapshots.)
+`input-context`, or the legacy Memory descriptor on `input-memory` graphs.)
 
 - **`tool_data`** is a list of dicts. Each entry: `{node_id, node_type, parameters, label}`. (The `connected_services` extra belonged to the retired `androidTool` gateway tool — see §7.)
 - **MasterSkill expansion** runs at discovery time: a single `masterSkill` connection with `skillsConfig` expands into N individual skill entries, one per enabled skill key.

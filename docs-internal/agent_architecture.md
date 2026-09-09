@@ -5,7 +5,7 @@ Detailed architecture reference for how AI Agent (`aiAgent`) and Chat Agent (`ch
 > **Related Documentation:**
 > - [Node Creation Guide](./node_creation.md) - Canonical plugin recipe (covers tool nodes, dual-purpose nodes, specialized agents)
 > - [Tool Building Pipeline](./tool_building_pipeline.md) - Canonical home for `_build_tool_from_node`, tool discovery, per-type Temporal dispatch
-> - [Agent Context Flow](./agent_context_flow.md) - Canonical home for conversation continuity (RFC-0002 Context store); [Memory Lifecycle](./memory_lifecycle.md) covers only the retired V1 markdown model
+> - [Agent Context Flow](./agent_context_flow.md) - Canonical home for conversation continuity (RFC-0002 Context store); [Memory Lifecycle](./memory_lifecycle.md) covers only the retired markdown model
 > - [CLAUDE.md](../CLAUDE.md) - Project overview and full node inventory
 
 ## Table of Contents
@@ -53,7 +53,7 @@ collect_agent_connections()               server/services/plugin/edge_walker.py
   Groups by targetHandle into 5 buckets (returns a 5-tuple
    context_data, skill_data, tool_data, input_data, task_data —
    edge_walker.py:181-199; the first element is the Context descriptor,
-   or the legacy Memory descriptor on immutable V1 snapshots):
+   or the legacy Memory descriptor on `input-memory` graphs):
     input-context            -> context_data
     input-skill              -> skill_data[]
     input-tools              -> tool_data[]
@@ -67,8 +67,8 @@ AIService.execute_agent() / execute_chat_agent()   server/services/ai.py
      skills ride the Skill tool instead
   2. Build provider-neutral AgentToolSpecs from tool_data
   3. Call run_native_agent_loop(ChatUnifier, ...)
-  4. Save the conversation (Context store; legacy V1 memory markdown
-     only for immutable V1 snapshots), return result
+  4. Save the conversation (Context store; legacy memory markdown
+     only for `input-memory` graphs), return result
         |
         v
 run_native_agent_loop() execution
@@ -467,7 +467,7 @@ it; `normalize_workflow_graph` rewrites legacy `simpleMemory -> input-memory`
 edges into a Context node plus an ordinary tool edge. The legacy markdown
 memory path (`memory_data`, `parse_memory_markdown`,
 `append_to_memory_markdown`, `trim_markdown_window`, the vector store) is
-reached only for immutable V1 snapshots: `execute_agent` passes the tuple's
+reached only for `input-memory` graphs: `execute_agent` passes the tuple's
 first element as `context_data` to `_prepare_context` and sets `memory_data =
 None` whenever a Context runtime resolves (`ai.py:969-980`). Token tracking
 and compaction thresholds are in [memory_compaction.md](memory_compaction.md).

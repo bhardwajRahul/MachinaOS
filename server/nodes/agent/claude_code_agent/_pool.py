@@ -2,7 +2,7 @@
 
 Keeps one warm ``claude --output-format stream-json --input-format
 stream-json --verbose --ide`` subprocess per Context thread+epoch (or per
-``simpleMemory.node_id`` for immutable V1 generations) so successive turns
+``simpleMemory.node_id`` for legacy ``input-memory`` graphs) so successive turns
 can reuse the same process — same session UUID across turns, no respawn cost.
 Mirrors what Anthropic's official
 VSCode extension does (verified from the on-disk extension source at

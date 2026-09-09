@@ -1,4 +1,4 @@
-# RFC-0002 — Agent Context V2 and Tool-Based Memory
+# RFC-0002 — Agent Context and Tool-Based Memory
 
 Status: Partly superseded (August 2026)  
 Graph version: 2  
@@ -47,8 +47,8 @@ shared.
 
 - Reuse `MessageWireV2`, including ordered blocks, raw malformed tool
   arguments, signed/thought blocks, and provider continuation state.
-- Preserve existing Temporal V1 histories. Context V2 is selected only by a
-  new graph/generation and uses new workflow/activity type names.
+- Preserve existing Temporal histories. The Context store is selected only by
+  a new graph/generation and uses new workflow/activity type names.
 - Keep Gemini on `generate_content`; an Interactions migration is out of
   scope.
 - Do not reintroduce LangChain compatibility.

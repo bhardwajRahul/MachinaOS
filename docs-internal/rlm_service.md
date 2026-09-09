@@ -1,6 +1,6 @@
 # RLM Service -- Recursive Language Model Agent Integration
 
-> **Related docs:** [agent_context_flow.md](./agent_context_flow.md) for conversation continuity — RLM is a specialized provider, so a connected Context node reaches it through `SpecializedAgentContextBridge` (`services/cli_agent/context_bridge.py`); [tool_building_pipeline.md](./tool_building_pipeline.md) for how connected tool nodes are bound to the REPL via `ToolBridgeAdapter`. [memory_lifecycle.md](./memory_lifecycle.md) describes only the retired V1 markdown memory path.
+> **Related docs:** [agent_context_flow.md](./agent_context_flow.md) for conversation continuity — RLM is a specialized provider, so a connected Context node reaches it through `SpecializedAgentContextBridge` (`services/cli_agent/context_bridge.py`); [tool_building_pipeline.md](./tool_building_pipeline.md) for how connected tool nodes are bound to the REPL via `ToolBridgeAdapter`. [memory_lifecycle.md](./memory_lifecycle.md) describes only the retired markdown memory path.
 
 ## Overview
 
@@ -208,11 +208,12 @@ preparation helpers, then delegates to the independent RLM service:
 context_data, skill_data, tool_data, input_data, task_data = await collect_agent_connections(
     node_id, ctx.raw, database, log_prefix="[RLM Agent]"
 )
-# The first element is a Context descriptor on V2 graphs (kind == "context"),
-# or the legacy Memory descriptor on immutable V1 snapshots. The service
-# receives them as separate kwargs: context_data=context_v2, memory_data=legacy.
-context_v2 = context_data if (context_data or {}).get("kind") == "context" else None
-memory_data = context_data if context_data and not context_v2 else None
+# The first element is a Context descriptor (kind == "context") when a
+# Context node is wired, or the legacy Memory descriptor on input-memory
+# graphs. The service receives them as separate kwargs:
+# context_data=context_descriptor, memory_data=legacy.
+context_descriptor = context_data if (context_data or {}).get("kind") == "context" else None
+memory_data = context_data if context_data and not context_descriptor else None
 
 # 2. Inject task context and strip tools for terminal task notifications
 if task_data:

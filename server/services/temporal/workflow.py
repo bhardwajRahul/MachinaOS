@@ -43,7 +43,7 @@ CONDITIONAL_EDGES_PATCH = "machina-conditional-edges-v1"
 CONFIG_HANDLES = {
     "input-context",
     "input-tools",
-    "input-memory",  # replay/import compatibility for V1 graph snapshots
+    "input-memory",  # replay/import compatibility for legacy input-memory graphs
     "input-model",
     "input-skill",
     "input-task",
@@ -557,7 +557,7 @@ class MachinaWorkflow:
                     node_type,
                     graph_version=graph_version,
                     generation=generation,
-                    context_v2_enabled=(
+                    context_enabled=(
                         graph_version >= AGENT_CONTEXT_GRAPH_VERSION
                         and generation > 0
                     ),
@@ -695,7 +695,7 @@ class MachinaWorkflow:
         *,
         graph_version: int = 0,
         generation: int = 0,
-        context_v2_enabled: bool = False,
+        context_enabled: bool = False,
         routing_snapshot: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Resolve dispatch kind for a node type.

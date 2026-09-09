@@ -4,7 +4,7 @@
 long-lived **interactive** subprocess (stdio pipes, no PTY) over the VSCode-extension
 stream-json protocol — not the `claude -p` headless path. A warm `ClaudeSessionPool`
 (keyed by the RFC-0002 conversation key when a Context node is connected, or by the
-legacy `simpleMemory.node_id` on immutable V1 graphs — `services/cli_agent/service.py:354-358`)
+legacy `simpleMemory.node_id` on `input-memory` graphs — `services/cli_agent/service.py:354-358`)
 preserves the session across turns;
 memory continuity is claude-native via a host-minted `--session-id` on the first run and `--resume <last_session_id>` afterwards on a stable
 `cwd=repo_root`. Connected tools and skills reach claude through an MCP bridge; the spawn

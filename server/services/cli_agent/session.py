@@ -143,7 +143,7 @@ class AICliSession(BaseProcessSupervisor):
         # incompatible with this — every spawn would land under a
         # brand-new project_key with no prior JSONL.
         self._memory_bound: bool = bool(memory_bound)
-        # Backend Context V2 raw-event sink. It receives each decoded
+        # Backend Context raw-event sink. It receives each decoded
         # provider event before UI logging and before result presentation
         # truncates the assistant text to 4,000 characters.
         self._context_event_sink = context_event_sink

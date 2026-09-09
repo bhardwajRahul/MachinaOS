@@ -1,4 +1,4 @@
-"""Thin-node wiring tests for specialized Context V2 backends."""
+"""Thin-node wiring tests for specialized Context backends."""
 
 from __future__ import annotations
 

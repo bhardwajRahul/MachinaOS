@@ -426,10 +426,10 @@ intentionally NOT emitted in interactive mode — claude rejects it.
 ```
 ClaudeCodeAgentNode.execute_op                      (__init__.py:291-330)
   ├─ collect_agent_connections() → context_data (first tuple element)
-  │    ├─ V2 graphs: a Context descriptor (kind == "context") → context_v2,
+  │    ├─ Context node wired: a Context descriptor (kind == "context") → context_descriptor,
   │    │   handed to AICliService as connected_context and bridged through
   │    │   SpecializedAgentContextBridge; memory_data stays None
-  │    └─ immutable V1 snapshots: the legacy Memory descriptor → memory_data
+  │    └─ legacy input-memory graphs: the recorded Memory descriptor → memory_data
   │        {node_id, session_id, memory_content, window_size,
   │         long_term_enabled, last_session_id (display-only)}
   ├─ continue_session = bool(memory_data)
@@ -441,7 +441,7 @@ ClaudeCodeAgentNode.execute_op                      (__init__.py:291-330)
           (service.py:343-358 — use_pool = claude AND one task AND
            (connected_memory OR a Context bridge)):
             ├─ pool.acquire(session_key, spec, cwd=repo_root, env, ...)
-            │    session_key = context_bridge.pool_key on V2 graphs (the
+            │    session_key = context_bridge.pool_key when a Context node is wired (the
             │    RFC-0002 conversation key, so a Reset's generation bump
             │    fences the warm subprocess), else the legacy
             │    connected_memory["node_id"]
