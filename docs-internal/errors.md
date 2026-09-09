@@ -445,3 +445,13 @@ Seen on Ubuntu 26.04 (system Python 3.14).
 **Root cause**: The idle footprint is roughly 200 MB for the uvicorn backend plus 150 MB for the Temporal dev server it spawns, on top of the OS baseline (about 220 MB on a stock Ubuntu cloud image). The supervisor restarts the killed backend, so the box thrashes until it is rebooted.
 
 **Fix**: Use at least 1 GB of RAM. Measured on a t2.micro (951 MB): backend 197 MB RSS, Temporal 156 MB, about 300 MB still available after two minutes, zero OOM kills.
+
+---
+
+## 17. Claude Code Agent ignores its wired Context node: `context=no` in the log, a fresh session per chat message, zero rows in `agent_conversations`
+
+**Symptom**: A deployed workflow has a Context node wired to `input-context` on a `claude_code_agent` (or `rlm_agent`). Every chat message starts a brand-new claude session, the Context panel never shows a conversation, and the node log prints `[Claude Code] Collected: ... context=no` even though the edge exists. `agent_conversations` stays empty across generations.
+
+**Root cause**: `MachinaWorkflow` stamps `generation`, `graphVersion`, `context_execution_id` and `context_session_id` on each node's activity context, but the per-type activity wrapper in `services/plugin/base.py::as_activity` rebuilds the node context by calling `workflow_service.execute_node` with a fixed argument list and forwards only an allowlist of extra keys. The conversation-scope keys were not on it. The Context descriptor builder (`nodes/context/_descriptor.py`) returns `None` when `generation` is 0, and the edge walker treats `None` as "this edge contributes nothing", so the Context edge was silently dropped before the bridge ever ran. Native agents were unaffected because they run as an `AgentWorkflow` child that reads `generation` from its own payload; the nodes that always take the activity path were the ones affected. The in-process adapter `WorkflowService._execute_node_adapter` dropped the same keys.
+
+**Fix**: both handoffs now forward `generation`, `graphVersion`, `root_execution_id`, `context_execution_id`, `context_session_id` and `data_scope_id` as extras. Locked by `tests/temporal/test_context_scope_forwarding.py`. With the descriptor intact the pool key is `(workflow_id, agent_node_id, generation)`, so chat messages within a deployment reuse one warm claude process and each turn is recorded in the Context store.
