@@ -124,15 +124,23 @@ back-compat; they're silently dropped in `interactive_argv`.
 
 All flags documented at
 [code.claude.com/docs/en/cli-reference](https://code.claude.com/docs/en/cli-reference).
-Worktree, lockfile, and bearer-token MCP server are wired in
-`nodes/agent/claude_code_agent/_pool.py:_spawn` (pool path) and
-`services/cli_agent/session.py:_pre_spawn` (non-pool path); the `--ide`
-flag tells the CLI to discover that lockfile via `CLAUDE_IDE_LOCK`.
+Skill materialisation and the bearer-token MCP server are wired in
+`nodes/agent/claude_code_agent/_pool.py:_spawn`. **Every Claude run
+routes through the pool** (`AICliService.run_batch`): memory- or
+Context-bound runs get one warm session keyed by the conversation;
+unbound runs get one ephemeral session per task keyed by
+`<node_id>:<turn_execution_id>:<index>` and terminated once the batch
+settles. `AICliSession` (PTY + on-disk JSONL watcher) is no longer used
+for Claude — a PTY stdin makes the CLI reject stream-json input, and
+that path never wrote the prompt (GitHub issues #133 / #134).
 
-The non-pooled `AICliSession` path (one-shot prompt-in-argv runs that
-don't need session reuse) still uses PTY (`ptyprocess` POSIX /
-`pywinpty>=3.0.3` Windows) and remains out of scope for the
-subprocess+stream-json refactor.
+Session identity follows the CLI reference: a cold spawn mints
+`--session-id <uuid4>` so the UUID is known before the first event;
+memory-bound runs pass `--resume <last_session_id>` (persisted on the
+memory node by `_persist_memory`). `--continue` is not used because the
+CLI skips non-interactively created sessions when resolving it. A child
+that exits without a `result` event wakes `send_turn` on stdout EOF and
+reports the exit code instead of burning the turn timeout.
 
 Factory — a registry lookup, not a hardcoded branch per provider. Each plugin
 calls `register_provider(name, factory)` on import (claude from
@@ -228,7 +236,7 @@ Steps:
 
 1. Run `claude auth status`. If it exits 0, write the marker + broadcast and return immediately (idempotent re-click).
 2. Otherwise schedule `_finalize_claude_login()` (in `nodes/agent/claude_code_agent/_handlers.py`), which calls `run_claude_login()` from `_oauth.py`:
-   - OpenCompany-managed install of `@anthropic-ai/claude-code` into the shared npm tree at `<DATA_DIR>/packages/` via `npm install --prefix <packages_dir>` (same tree as `edgymeow` / `agent-browser`; skipped if already installed). Binary resolves to `<DATA_DIR>/packages/node_modules/.bin/claude[.cmd]`.
+   - OpenCompany-managed install of `@anthropic-ai/claude-code` into the shared npm tree at `<DATA_DIR>/packages/` via `npm install <package_name>@<package_version> --prefix <packages_dir>` (same tree as `edgymeow` / `agent-browser`; skipped if already installed). The exact version is pinned in `server/config/ai_cli_providers.json` (`package_version`, the vercel / cloudflare idiom) because the stream-json contract and flag surface are verified against that version only. Binary resolves to `<DATA_DIR>/packages/node_modules/.bin/claude[.cmd]`.
    - `claude auth login` via `run_cli_command(..., env={..., CLAUDE_CONFIG_DIR=<DATA_DIR>/claude/}, stdin=asyncio.subprocess.PIPE)` — same way the VSCode Claude Code extension delegates to the binary. Anthropic doesn't expose `--print-url` or a programmatic OAuth helper (issue [anthropics/claude-code#7100](https://github.com/anthropics/claude-code/issues/7100), closed "not planned"), so we let the CLI open the user's browser via its own OS-level call. `stdin=PIPE` is **load-bearing** for claude-code >= 2.1.162's native binary: it reads stdin while waiting for the browser callback, and an inherited (closed) stdin EOFs it into an early exit that kills the localhost callback server before the redirect arrives — `stdin=PIPE` (never written) makes the read block so the server stays up.
 3. Schedule a background task that polls `claude auth status` every 2s up to 600s. On exit-0, write the synthetic `"cli-managed"` marker via `auth_service.store_oauth_tokens("claude_code", ...)` and broadcast `credential_catalogue_updated`. The catalogue's `stored` flag flips and the existing `OAuthConnect.tsx` primitive renders the modal as Connected.
 
@@ -291,13 +299,13 @@ Shared by every CLI provider plugin. Imports nothing from `nodes/`.
 | `mcp_server.py` | FastMCP sub-app mounted at `/mcp/ide` (JSON-RPC endpoint `/mcp/ide/mcp`) with bearer-token middleware + 7 infrastructure tools (`getWorkspaceFiles`, `listSkills`, `getSkill`, `readSkillResource`, `searchSkillResource`, `getCredential`, `broadcastLog`) + `rebind_batch` for warm-reuse context updates. |
 | `context_bridge.py` | `SpecializedAgentContextBridge` — RFC-0002 Context continuity for specialized providers (`resolve` / `augment_prompt` / `record_turn`); shared with RLM and Vertex. |
 | `workflow_tools.py` | Per-batch MCP tool exposure (`mcp__opencompany__<node_type>`) + handler scope check + `tools/list_changed` notify. |
-| `session.py` | `AICliSession(BaseProcessSupervisor)` — generic non-pool path (still PTY on POSIX). |
-| `service.py` | `AICliService.run_batch()` — dispatcher; routes to pool when memory-bound via `factory.get_session_pool(provider_name)`. |
+| `session.py` | `AICliSession(BaseProcessSupervisor)` — generic PTY + JSONL path for non-claude providers; not used for claude. |
+| `service.py` | `AICliService.run_batch()` — dispatcher; every claude task goes to the pool via `factory.get_session_pool(provider_name)` (warm keyed session when bound, ephemeral per-task session otherwise). |
 | `_cli_auth.py` | CLI-agnostic `mark_logged_in` / `mark_logged_out` / `broadcast_credential_event` + `"cli-managed"` marker token. Shared by claude + codex handlers. |
 | `_handlers.py` | Codex WS handlers (`codex_cli_login` / `codex_cli_logout`). Claude's moved to the plugin folder. |
 | `providers/openai_codex.py` | Codex provider — sandbox-first, no session continuity. Will move when codex_agent adopts the per-folder layout. |
 | `providers/google_gemini.py` | v2 stub. |
-| `jsonl_watcher.py` | Still used by the non-pooled `AICliSession` (out-of-scope path). |
+| `jsonl_watcher.py` | Used only by `AICliSession`; no claude caller. |
 
 ### Claude plugin — `server/nodes/agent/claude_code_agent/`
 
@@ -398,7 +406,8 @@ finds its own JSONL.
 
 | Run state | Argv emitted | Why |
 |---|---|---|
-| First cold spawn under a memory-wired node | `--continue` | Claude auto-loads the most recent conversation under cwd's `project_key` (per [code.claude.com/docs/en/cli-reference](https://code.claude.com/docs/en/cli-reference)). No UUID round-trip needed — claude tracks its own latest session per cwd on disk. |
+| First cold spawn, no stored session | `--session-id <uuid4>` | `ClaudeSessionPool._spawn` mints the UUID so it is known before the first event; `_persist_memory` stores it on the memory node as `last_session_id`. |
+| Cold spawn under a memory-wired node with a stored session | `--resume <last_session_id>` | Resume by UUID, never `--continue`: per [code.claude.com/docs/en/cli-reference](https://code.claude.com/docs/en/cli-reference) `--continue` skips sessions created non-interactively (`-p` / stream-json), which is every session the pool creates. |
 | Subsequent turn, SAME warm subprocess | nothing argv-level — stream-json line on `proc.stdin` | The pool keeps the subprocess alive between turns. Claude maintains the conversation in-process; same `session_id` across turns (verified end-to-end). |
 | Crash recovery (subprocess died between batches) | `--resume <captured_uuid>` | `ClaudeSessionPool.acquire` detects `process.returncode is not None`, captures the dead session's `current_session_uuid`, and respawns with `--resume`. Same `cwd=repo_root` → same `project_key` → claude finds the same JSONL it was writing before the crash. Mutually exclusive with `--continue`. |
 
@@ -438,7 +447,7 @@ ClaudeCodeAgentNode.execute_op                      (__init__.py:291-330)
             │    connected_memory["node_id"]
             │    ├─ cold: spawn `claude --output-format stream-json
             │    │         --input-format stream-json --verbose --ide
-            │    │         --continue ...` as subprocess with stdio pipes;
+            │    │         --session-id <uuid> | --resume <uuid> ...` as subprocess with stdio pipes;
             │    │         no PTY. stdout_reader_task parses each event line
             │    │         and dispatches to _handle_stream_event.
             │    └─ warm reuse: return the existing PooledClaudeSession;
@@ -481,9 +490,9 @@ ClaudeCodeAgentNode.execute_op                      (__init__.py:291-330)
 
 ### Parallel-batch guard
 
-Memory continuity requires serial execution — N concurrent `--continue`
-spawns against the same `project_key` would race claude's
-session-resolution. When `memory_data` is wired AND `len(tasks) > 1`,
+Memory continuity requires serial execution — N concurrent `--resume`
+spawns against the same session would race claude's transcript
+writes. When `memory_data` is wired AND `len(tasks) > 1`,
 `claude_code_agent` raises `NodeUserError("Memory-bound batches must
 run one task at a time. ...")` at handler entry.
 
@@ -491,7 +500,8 @@ run one task at a time. ...")` at handler entry.
 
 `memory_content` (the markdown surface the simpleMemory UI shows) is
 a **display mirror**, not the resume channel. Claude's own JSONL on
-disk is what `--continue` and `--resume` load from. `_persist_memory`
+disk is what `--resume` loads from; `last_session_id` on the memory
+node is the resume handle. `_persist_memory`
 appends each successful run's prompt + response to `memory_content`
 via `append_to_memory_markdown` so the UI shows the conversation grow
 live. User edits to `memory_content` do NOT influence claude's next
@@ -501,19 +511,19 @@ To reset both: click the simpleMemory's clear button or invoke the
 `clear_memory` WS handler — backend wipes `memory_content` to the
 default placeholder AND clears `last_session_id` in one DB write.
 Claude's on-disk JSONL is left alone (orphan, harmless). The next run
-spawns fresh with `--continue` against a project_key that has no
-matching prior session, and claude assigns a brand-new UUID.
+has no `last_session_id`, so the pool mints a new `--session-id` and
+claude starts a brand-new session.
 
 ### Logs to watch
 
 ```
-[Claude Code memory] memory_node=<id> -> --continue
-   (claude auto-finds latest session under cwd)
+[Claude Code memory] memory_node=<id> -> --resume <UUID>
+   (or "fresh session (no last_session_id yet)" on the first run)
 
 [CC-Agent run_batch] enter ... memory=<memory_node_id> ...
 
 [ClaudeSessionPool] spawned new session memory_node=<id> pid=<N>
-   (cold spawn — argv carries --continue or --resume <UUID>)
+   (cold spawn — argv carries --session-id <UUID> or --resume <UUID>)
 [ClaudeSessionPool] warm reuse memory_node=<id> pid=<N> uuid=<UUID>
    (intra-process turn — stream-json on stdin)
 

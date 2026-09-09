@@ -288,8 +288,9 @@ stream-json`, `--verbose`, `--ide`, `--model`, `--permission-mode`,
 `--allowedTools <csv>`.
 
 **Conditional:** `--mcp-config <json>` + `--strict-mcp-config` (when
-`mcp_endpoint_url` and `mcp_bearer_token` set), `--continue`/`--resume`
-(memory-bound runs, mutually exclusive), `--append-system-prompt`,
+`mcp_endpoint_url` and `mcp_bearer_token` set), `--resume` /
+`--session-id` (memory-bound runs / cold spawn, mutually exclusive with
+each other and with `--continue`), `--append-system-prompt`,
 `--effort`, `--add-dir`, `--disallowedTools`, `--agent`.
 
 **Never emitted** (`_provider.py:316-320`): `--max-turns`,
@@ -416,11 +417,13 @@ Either works.
 ### 4.8 Memory bridge — `simpleMemory` → `claude_code_agent` (DONE in `ecbe69b`)
 
 **Status:** native claude session continuity works end-to-end. The
-mechanism was later simplified from the UUID5 / `--session-id`
-round-trip described in this section to `--continue` (first cold spawn
-for a memory-wired run) + intra-process stream-json multi-turn against a
-warm subprocess + `--resume <UUID>` for crash recovery — all on a stable
-`cwd=repo_root`. The entry point is
+mechanism is a host-minted `--session-id <uuid4>` on the first cold
+spawn + intra-process stream-json multi-turn against a warm subprocess +
+`--resume <last_session_id>` on later cold spawns and crash recovery —
+all on a stable `cwd=repo_root`. (An interim `--continue` variant was
+reverted: the CLI resolves `--continue` only against interactive
+sessions, so it never found the pool's non-interactive ones.) The entry
+point is
 [`claude_code_agent/__init__.py::execute_op`](../server/nodes/agent/claude_code_agent/__init__.py)
 (sets `continue_session = bool(memory_data)`) and the warm-subprocess
 pool at [`claude_code_agent/_pool.py`](../server/nodes/agent/claude_code_agent/_pool.py).
@@ -549,20 +552,20 @@ runs (Closes I-6).** Three coupled mechanisms:
    skips `git worktree add`; `cleanup` skips `git worktree remove`.
    Confirms claude's `project_key` is constant across runs.
 
-2. **`--continue` first-run / warm-subprocess multi-turn / `--resume`
-   crash recovery.**
+2. **`--session-id` first-run / warm-subprocess multi-turn / `--resume`
+   later runs and crash recovery.**
    [`claude_code_agent/__init__.py`](../server/nodes/agent/claude_code_agent/__init__.py)
-   sets `continue_session = bool(memory_data)`; the argv-builder
+   sets `resume_session_id` from the memory node's persisted
+   `last_session_id`; the argv-builder
    [`_provider.py::interactive_argv`](../server/nodes/agent/claude_code_agent/_provider.py)
-   emits `--continue` on the first cold spawn for a memory-wired run
-   (claude auto-loads the most recent conversation under the stable
-   cwd's `project_key`). Subsequent turns are written as stream-json to
-   the same warm subprocess held by
+   emits `--resume <UUID>` when present, otherwise the pool mints a
+   `uuid4` and emits `--session-id <UUID>` on the cold spawn. Subsequent
+   turns are written as stream-json to the same warm subprocess held by
    [`_pool.py`](../server/nodes/agent/claude_code_agent/_pool.py), which
    preserves the session UUID in-process. If the subprocess dies between
    batches, the pool respawns with `--resume <current_session_uuid>`.
-   `--continue` and `--resume` are mutually exclusive in argv emission.
-   (This supersedes the earlier UUID5 / `--session-id` first-run dance.)
+   `--resume`, `--continue` and `--session-id` are mutually exclusive in
+   argv emission, in that precedence order.
 
 3. **Auto-clear stale `last_session_id`.**
    [`_persist_memory`](../server/services/cli_agent/service.py)
@@ -587,8 +590,8 @@ runs (Closes I-6).** Three coupled mechanisms:
    origin; locked by `tests/test_cloudevents_node_parameters.py`.
 
 5. **Parallel-batch guard.** `len(tasks) > 1` with memory wired raises
-   `NodeUserError` at handler entry — concurrent `--continue` spawns
-   against one project_key would race claude's session resolution.
+   `NodeUserError` at handler entry — concurrent `--resume` spawns
+   against one session would race claude's transcript writes.
 
 Markdown is the UI mirror. The `simpleMemory.memory_content` field
 keeps mirroring conversation turns via

@@ -16,8 +16,10 @@ as a plain subprocess driven over the VSCode-extension stream-json protocol
 (`--output-format stream-json --input-format stream-json --verbose --ide`) —
 NOT the old headless `claude -p`. The common case is a single visible
 `prompt` that synthesises a one-task batch. Memory continuity is handled by
-claude's own on-disk session JSONL via `--continue` / `--resume` over a
-stable `cwd`, not by re-injecting markdown. This is the only
+claude's own on-disk session JSONL via a host-minted `--session-id` on the
+first run and `--resume <last_session_id>` afterwards (never `--continue`,
+which the CLI resolves only against interactive sessions) over a stable
+`cwd`, not by re-injecting markdown. This is the only
 specialized-agent node that shells out; the others stay in-process.
 
 ## Inputs (handles)
@@ -28,7 +30,7 @@ Standard `std_agent_handles()` topology (same as the generic agents).
 |--------|---------|
 | `input-main` | Auto-prompt fallback (reads `source.message / text / content / str`) |
 | `input-skill` | Connected skill names collected; SKILL.md trees materialised under `<workspace>/.claude/skills/` and exposed to the CLI (not injected into a system prompt) |
-| `input-memory` | When wired, sets `continue_session=True` so claude emits `--continue` and resumes its on-disk session under the stable cwd |
+| `input-memory` | When wired, sets `resume_session_id` from the memory node's persisted `last_session_id` so claude emits `--resume <UUID>` and continues its on-disk session; the first run has no UUID yet and the pool mints one via `--session-id` |
 | `input-tools` | Connected tool nodes exposed to the CLI as `mcp__opencompany__<type>` MCP tools |
 | `input-task` | Collected by the edge-walker; `task_data` is unpacked but the 5th element is ignored (`_`) here |
 
@@ -117,11 +119,13 @@ flowchart TD
   `effort` + `fallback_model` + `continue_session`.
 - **Batch defaulting**: when `params.tasks` is non-empty, node-level
   `model`/`system_prompt`/`effort`/`fallback_model` fill any task that
-  didn't override; `continue_session=True` is auto-set only when memory is
-  wired AND the task didn't explicitly opt in or pick a resume UUID.
-- **Memory bridge**: `continue_session = bool(memory_data)`; the argv builder
-  emits `--continue` (first run is a benign no-op, later runs resume the
-  on-disk JSONL). NO markdown re-injection.
+  didn't override; `resume_session_id` is auto-set from the memory node's
+  `last_session_id` only when memory is wired AND the task didn't explicitly
+  opt in/out or pick its own UUID.
+- **Memory bridge**: `resume_session_id = memory_data["last_session_id"]`;
+  the argv builder emits `--resume <UUID>` (first run has none, so the pool
+  mints `--session-id` and `_persist_memory` stores it for next time). NO
+  markdown re-injection.
 - **Serial-memory guard**: memory wired AND `len(tasks) > 1` -> `NodeUserError`
   (parallel `--resume` against one JSONL would corrupt it).
 - **Workspace**: `ctx.raw["workspace_dir"]` (injected by workflow.py) or

@@ -407,7 +407,7 @@ python -c "import ntpath; print(ntpath.join(r'D:\ws\AI_Employee_1', '2:processMa
 
 ---
 
-## 14. `npm install -g` Fails With `externally-managed-environment` (Ubuntu 24.04+)
+## 15. `npm install -g` Fails With `externally-managed-environment` (Ubuntu 24.04+)
 
 **Symptom**: `npm install -g @zeenie-ai/opencompany` aborts inside the postinstall with:
 ```
