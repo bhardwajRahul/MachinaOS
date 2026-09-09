@@ -263,7 +263,7 @@ Across the official documentation:
 > stdin protocol.
 >
 > Fix is structural, not format-related: when memory is wired, spawn
-> under `cwd=repo_root` so `project_key` is stable across runs, and
+> in one stable per-node worktree so `project_key` is stable across runs, and
 > pass either `--resume <last_session_id>` (subsequent runs) or
 > `--session-id <UUID5(memory_node_id, simpleMemory.session_id)>`
 > (first run). On "No conversation found" error, auto-clear the stale
@@ -420,7 +420,7 @@ Either works.
 mechanism is a host-minted `--session-id <uuid4>` on the first cold
 spawn + intra-process stream-json multi-turn against a warm subprocess +
 `--resume <last_session_id>` on later cold spawns and crash recovery —
-all on a stable `cwd=repo_root`. (An interim `--continue` variant was
+all in a stable per-node worktree under the workspace. (An interim `--continue` variant was
 reverted: the CLI resolves `--continue` only against interactive
 sessions, so it never found the pool's non-interactive ones.) The entry
 point is
@@ -447,7 +447,7 @@ sample names matched byte-for-byte:
 - `[CC-Agent stderr] No conversation found with session ID: cddd6def-...`
   every spawn → confirmed that ephemeral worktree paths were defeating
   `--resume`.
-- After switching to `cwd=repo_root`: same UUID continues across spawns,
+- After switching to a stable per-node worktree: same UUID continues across spawns,
   `r.session_id` matches `last_session_id` on subsequent runs.
 - `_persist_memory` broadcast addition fixed a UI-staleness issue where
   `memory_content` was correctly written to the DB but the simpleMemory

@@ -440,21 +440,16 @@ class ClaudeCodeAgentNode(ActionNode):
         task_models = [
             session_result_to_model(t).model_dump() for t in result.tasks
         ]
-        if context_descriptor is not None:
-            for task_model in task_models:
-                task_model["session_id"] = None
 
-        # Legacy single-task convenience fields
+        # Legacy single-task convenience fields. ``session_id`` is claude's
+        # own session UUID (the pooled process reports it on every turn), so
+        # the operator can see whether successive messages share a session.
         legacy_response = None
         legacy_session_id = None
         legacy_cost = None
         if len(result.tasks) == 1:
             legacy_response = result.tasks[0].response
-            legacy_session_id = (
-                result.tasks[0].session_id
-                if context_descriptor is None
-                else None
-            )
+            legacy_session_id = result.tasks[0].session_id
             legacy_cost = result.tasks[0].cost_usd
 
         return {

@@ -6,8 +6,8 @@ stream-json protocol — not the `claude -p` headless path. A warm `ClaudeSessio
 (keyed by the RFC-0002 conversation key when a Context node is connected, or by the
 legacy `simpleMemory.node_id` on `input-memory` graphs — `services/cli_agent/service.py:354-358`)
 preserves the session across turns;
-memory continuity is claude-native via a host-minted `--session-id` on the first run and `--resume <last_session_id>` afterwards on a stable
-`cwd=repo_root`. Connected tools and skills reach claude through an MCP bridge; the spawn
+memory continuity is claude-native via a host-minted `--session-id` on the first run and `--resume <last_session_id>` afterwards in a stable
+per-workflow git worktree (`<workspace>/<node>/wt_session`, branched off the enclosing repo; the repo root is never the cwd). Connected tools and skills reach claude through an MCP bridge; the spawn
 runs under `--permission-mode dontAsk` with a strict `--allowedTools` allowlist and stays
 in interactive billing (entrypoint `claude-vscode`, not `sdk-cli`).
 

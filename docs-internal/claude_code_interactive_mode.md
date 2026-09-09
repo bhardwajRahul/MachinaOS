@@ -334,8 +334,8 @@ rule, claude scans `.claude/skills/` inside every `--add-dir` path.
 Two properties fall out:
 
 - **Per-workflow isolation.** Workflow A's wired skills never bleed
-  into workflow B's subprocess even when both spawn with
-  `cwd=repo_root`. The workspace dir is unique per workflow.
+  into workflow B's subprocess: each runs in its own worktree under its
+  own workspace dir.
 - **Live add/remove.** Claude live-watches the skills tree (same
   skills spec, [Live change detection](https://code.claude.com/docs/en/skills#live-change-detection)),
   so warm-reuse turns can toggle skills without respawning. Pool's
@@ -382,9 +382,10 @@ splices the per-workflow workspace
 right after `task_list` is built — `interactive_argv` already emits
 `--add-dir <path>` per entry. Runs BEFORE the pool branch so every
 pooled session gets it. Without this, the workspace is invisible to
-claude: sessions spawn with `cwd=repo_root` (stable for `--resume`'s
-`project_key` resolution), which does not see files dropped by
-upstream nodes (`fileDownloader`,
+claude: sessions spawn in a git worktree under
+`<workspace>/<node>/` (`wt_session` for bound runs, one per task
+otherwise), which does not see files dropped by upstream nodes
+(`fileDownloader`,
 `documentParser`, code executors, etc.). Mirrors the ai_agent
 pattern ([`services/ai.py:1186`](../server/services/ai.py) in
 `execute_agent`, `:1924` in `execute_chat_agent` —

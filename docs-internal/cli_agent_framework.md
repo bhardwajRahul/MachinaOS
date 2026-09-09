@@ -398,9 +398,12 @@ every spawn → fresh project_key every run → `--resume <UUID>` looked
 under a brand-new directory with zero prior JSONL ("No conversation
 found with session ID").
 
-The fix: when memory is wired, spawn under `cwd=repo_root` and skip
-the worktree entirely. Same cwd every run → same project_key → claude
-finds its own JSONL.
+The fix: when memory is wired, spawn in one stable worktree per agent
+node (`<workspace>/<node>/wt_session`) instead of a fresh per-task one.
+Same cwd every run → same project_key → claude finds its own JSONL.
+Pooled sessions never run in the repo root itself: claude reads
+CLAUDE.md from cwd upward, and the checkout that contains DATA_DIR
+would otherwise ride into every session.
 
 ### Argv contract
 
@@ -440,7 +443,7 @@ ClaudeCodeAgentNode.execute_op                      (__init__.py:291-330)
        └─ For context/memory-wired single-task runs, route through ClaudeSessionPool
           (service.py:343-358 — use_pool = claude AND one task AND
            (connected_memory OR a Context bridge)):
-            ├─ pool.acquire(session_key, spec, cwd=repo_root, env, ...)
+            ├─ pool.acquire(session_key, spec, cwd=<workspace>/<node>/wt_session, env, ...)
             │    session_key = context_bridge.pool_key when a Context node is wired (the
             │    RFC-0002 conversation key, so a Reset's generation bump
             │    fences the warm subprocess), else the legacy
