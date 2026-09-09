@@ -394,3 +394,54 @@ python -c "import ntpath; print(ntpath.join(r'D:\ws\AI_Employee_1', '2:processMa
 **Root cause**: the `/ws/status` endpoint's cleanup cancelled every in-flight handler task the instant the socket closed. A handler cancelled while inside a database call receives `CancelledError` at the aiosqlite await; the session teardown then returns the connection to the pool, whose reset-on-return rollback is itself interrupted by the pending cancellation. SQLAlchemy's `_finalize_fairy` logs the traceback at ERROR, invalidates the connection, and re-raises, so nothing was actually broken (the pool rebuilt the connection) but every reconnect produced a traceback per cancelled handler. The `Send failed` warning came from a broadcast racing the close frame.
 
 **Fix**: `core/session_teardown.py` runs rollback + close under `asyncio.shield` in both `Database.get_session` and `CredentialsDatabase.get_session`, so a cancelled caller cannot interrupt the pool reset; `_drain_handler_tasks` in `routers/websocket.py` gives in-flight handlers a one-second grace to finish before cancelling stragglers; `StatusBroadcaster.broadcast` skips sockets that are no longer `CONNECTED` on either side and prunes them quietly. Locked by `tests/test_ws_disconnect_cancellation.py`.
+
+---
+
+## 14. `claude_code_agent` never completes a plain run: `timeout after 600s`, empty response, or `CLAUDE_CONFIG_DIR is misconfigured` (GitHub #132 / #133 / #134)
+
+**Symptom**: A Claude Code Agent with nothing wired (no Memory / Context) either fails after 5 s with "No session JSONL appeared ... the CLAUDE_CONFIG_DIR is misconfigured", or burns the full `timeout_seconds` and reports an empty response, even though the CLI is installed and logged in. Memory-bound runs silently start a fresh conversation every batch. On a headless server every Login click leaves another `claude auth login` process parked for ten minutes (#129).
+
+**Root cause**, three independent defects: (1) plain runs went through `AICliSession`, which spawned the CLI on a PTY and tailed the on-disk session JSONL, but never wrote the prompt to the process at all, and a PTY stdin makes the CLI reject `--input-format stream-json`; (2) `AICliSession` watched `<CLAUDE_CONFIG_DIR>/projects/<key>/` with a key regex that preserved dots, while the CLI replaces every non-`[a-zA-Z0-9-]` character with `-`, so `.opencompany` paths pointed at a directory the CLI never wrote to; (3) `ClaudeSessionPool._consume_stdout` returned silently on stdout EOF, so a child that died mid-turn never woke `send_turn`. Separately, memory continuity relied on `--continue`, which per the CLI reference skips sessions created non-interactively (`-p` / stream-json), i.e. every session the pool creates.
+
+**Fix**: every Claude run routes through `ClaudeSessionPool` (plain pipes, stream-json, the same invocation the Agent SDK uses); unbound runs get an ephemeral session per task keyed by `<node_id>:<turn_execution_id>:<index>` and terminated after the batch. The project-key regex drops the dot. Stdout EOF sets `result_event` and `send_turn` reports `claude exited (code N) before emitting a result event`. A cold spawn mints `--session-id <uuid4>`, memory-bound runs pass `--resume <last_session_id>` instead of `--continue`. The login handler is single-flight with a strong task reference. The CLI version is pinned through `package_version` in `config/ai_cli_providers.json`. Locked by `tests/services/cli_agent/test_claude_pool_turn.py`, `test_claude_login_handlers.py`, and the updated `test_service.py` / `test_providers.py`.
+
+---
+
+## 14. `npm install -g` Fails With `externally-managed-environment` (Ubuntu 24.04+)
+
+**Symptom**: `npm install -g @zeenie-ai/opencompany` aborts inside the postinstall with:
+```
+Installing uv via pip...
+error: externally-managed-environment
+```
+Seen on Ubuntu 24.04 (EC2 `ubuntu-noble` AMI). `python3 -m ensurepip` also fails there with `No module named ensurepip` because Debian ships pip as a separate package.
+
+**Root cause**: `scripts/install.js` installed uv with `python3 -m pip install uv` and had no other path. PEP 668 marks the distro Python as externally managed, so the system pip refuses every install outside a venv.
+
+**Fix** (shipped after 0.1.1): `installUv` tries pip first and, on failure, runs uv's official standalone installer (`curl -LsSf https://astral.sh/uv/install.sh | sh`, `irm https://astral.sh/uv/install.ps1 | iex` on Windows) and prepends `~/.local/bin` to `PATH` for the rest of the install. On a 0.1.1 install, run that installer yourself first; the postinstall then finds `uv` and continues.
+
+---
+
+## 15. `company start` Says `python: not found` After a `sudo npm install -g`
+
+**Symptom**: The global install completes, but `company start` as the login user prints:
+```
+> @zeenie-ai/opencompany@0.1.1 start
+> python -m cli start
+sh: 1: python: not found
+```
+Seen on Ubuntu 26.04 (system Python 3.14).
+
+**Root cause**: `server/pyproject.toml` pins `requires-python = ">=3.11,<3.13"`. When the system Python falls outside that range, `uv sync` downloads a managed CPython 3.12 into the invoking user's `~/.local/share/uv/python/` and both `server/.venv` and `.cli-venv` symlink into it. With `sudo npm install -g` that user is root, and `/root` is mode 700, so the venv interpreters are unusable by anyone else. `bin/cli.js` then falls back to `npm run start`, which needs a bare `python` on `PATH`; Ubuntu has only `python3`.
+
+**Workaround**: start it the same way it was installed, `sudo company start` (data then lives under `/root/.opencompany`). Alternatively install a system Python 3.12 before the npm install so uv reuses it instead of downloading one.
+
+---
+
+## 16. Backend OOM-Killed in a Loop on Small VMs (512 MB)
+
+**Symptom**: `company start` comes up and `/health` answers, then within a minute the machine stops responding; `dmesg` shows `Out of memory: Killed process ... (python)` repeatedly. Seen on an EC2 t2.nano (451 MB usable, no swap).
+
+**Root cause**: The idle footprint is roughly 200 MB for the uvicorn backend plus 150 MB for the Temporal dev server it spawns, on top of the OS baseline (about 220 MB on a stock Ubuntu cloud image). The supervisor restarts the killed backend, so the box thrashes until it is rebooted.
+
+**Fix**: Use at least 1 GB of RAM. Measured on a t2.micro (951 MB): backend 197 MB RSS, Temporal 156 MB, about 300 MB still available after two minutes, zero OOM kills.

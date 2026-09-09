@@ -29,6 +29,19 @@ company start
 Open http://localhost:5678 — `company start` is single-port (API +
 WebSocket + built SPA on the backend port).
 
+Notes for Linux servers:
+
+- **Memory**: plan on at least 1 GB of RAM. The backend plus the Temporal dev
+  server it spawns idle at about 350 MB; a 512 MB VM is OOM-killed in a loop
+  (see [errors.md #16](./errors.md#16-backend-oom-killed-in-a-loop-on-small-vms-512-mb)).
+- **uv** is installed by the postinstall: via pip where allowed, otherwise via
+  uv's official installer (PEP 668 distros such as Ubuntu 24.04, see
+  [errors.md #14](./errors.md#14-npm-install--g-fails-with-externally-managed-environment-ubuntu-2404)).
+- **sudo**: with a system-wide Node the global install needs `sudo`. If the
+  system Python is outside `>=3.11,<3.13`, uv downloads a 3.12 under the
+  installing user's home, so start it with `sudo company start` too (see
+  [errors.md #15](./errors.md#15-company-start-says-python-not-found-after-a-sudo-npm-install--g)).
+
 ### Local Development (from source)
 
 **Prerequisites:** Node.js 22+, Python 3.12+, uv, bun 1.4+ (https://bun.sh)
