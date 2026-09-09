@@ -422,7 +422,7 @@ Seen on Ubuntu 24.04 (EC2 `ubuntu-noble` AMI). `python3 -m ensurepip` also fails
 
 ---
 
-## 15. `company start` Says `python: not found` After a `sudo npm install -g`
+## 16. `company start` Says `python: not found` After a `sudo npm install -g`
 
 **Symptom**: The global install completes, but `company start` as the login user prints:
 ```
@@ -434,11 +434,18 @@ Seen on Ubuntu 26.04 (system Python 3.14).
 
 **Root cause**: `server/pyproject.toml` pins `requires-python = ">=3.11,<3.13"`. When the system Python falls outside that range, `uv sync` downloads a managed CPython 3.12 into the invoking user's `~/.local/share/uv/python/` and both `server/.venv` and `.cli-venv` symlink into it. With `sudo npm install -g` that user is root, and `/root` is mode 700, so the venv interpreters are unusable by anyone else. `bin/cli.js` then falls back to `npm run start`, which needs a bare `python` on `PATH`; Ubuntu has only `python3`.
 
-**Workaround**: start it the same way it was installed, `sudo company start` (data then lives under `/root/.opencompany`). Alternatively install a system Python 3.12 before the npm install so uv reuses it instead of downloading one.
+**Fix**: do the global install without `sudo`, using a user-writable npm prefix (the npm-documented way; Ubuntu 26.04 has no `python3.12` apt package to fall back on):
+```bash
+npm config set prefix ~/.npm-global
+echo 'export PATH=$HOME/.npm-global/bin:$PATH' >> ~/.bashrc && source ~/.bashrc
+npm install -g @zeenie-ai/opencompany
+company start
+```
+uv then downloads its 3.12 into `~/.local/share/uv`, the venvs are usable by the login user, and data lands in `~/.opencompany`. If a root install already exists, remove it first: `sudo npm uninstall -g @zeenie-ai/opencompany && sudo rm -rf /root/.opencompany`. Verified on an EC2 t3a.small running Ubuntu 26.04.
 
 ---
 
-## 16. Backend OOM-Killed in a Loop on Small VMs (512 MB)
+## 17. Backend OOM-Killed in a Loop on Small VMs (512 MB)
 
 **Symptom**: `company start` comes up and `/health` answers, then within a minute the machine stops responding; `dmesg` shows `Out of memory: Killed process ... (python)` repeatedly. Seen on an EC2 t2.nano (451 MB usable, no swap).
 
@@ -448,7 +455,7 @@ Seen on Ubuntu 26.04 (system Python 3.14).
 
 ---
 
-## 17. Claude Code Agent ignores its wired Context node: `context=no` in the log, a fresh session per chat message, zero rows in `agent_conversations`
+## 18. Claude Code Agent ignores its wired Context node: `context=no` in the log, a fresh session per chat message, zero rows in `agent_conversations`
 
 **Symptom**: A deployed workflow has a Context node wired to `input-context` on a `claude_code_agent` (or `rlm_agent`). Every chat message starts a brand-new claude session, the Context panel never shows a conversation, and the node log prints `[Claude Code] Collected: ... context=no` even though the edge exists. `agent_conversations` stays empty across generations.
 
