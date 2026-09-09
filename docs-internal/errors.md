@@ -384,3 +384,13 @@ python -c "import ntpath; print(ntpath.join(r'D:\ws\AI_Employee_1', '2:processMa
 ```
 
 **Fix** (`21fb1a9a`): `core.paths.safe_path_component` sanitizes a wire identifier before it becomes a path component; `processManager` and `cli_agent/session.py` route the node id through it. The guardrail error now names the rejected resolved path and says to omit `cwd` (the designed happy path — the process-manager skill never passes one), and `httpRequest` maps `ConnectError` / `TimeoutException` to `NodeUserError`. Rule: never join a node id, model-supplied name, or any other wire identifier into a path raw — go through `safe_path_component`. Locked by `tests/nodes/test_process_manager_cwd.py`.
+
+---
+
+## 13. `Exception during reset or similar` / `CancelledError` in aiosqlite rollback on WebSocket disconnect
+
+**Symptom**: Right after `[StatusBroadcaster] Client connected`, the operator log shows one or more SQLAlchemy tracebacks ending in `asyncio.exceptions.CancelledError` from `aiosqlite/core.py ... rollback`, then `[StatusBroadcaster] Send failed: Cannot call "send" once a close message has been sent`, then `Client disconnected`. Typical trigger: a client that disconnects within ~100 ms of connecting (React Strict Mode double mount in `company dev`, a health probe), i.e. while the connect-time init burst (chat / console / terminal history, credential probes) is still running.
+
+**Root cause**: the `/ws/status` endpoint's cleanup cancelled every in-flight handler task the instant the socket closed. A handler cancelled while inside a database call receives `CancelledError` at the aiosqlite await; the session teardown then returns the connection to the pool, whose reset-on-return rollback is itself interrupted by the pending cancellation. SQLAlchemy's `_finalize_fairy` logs the traceback at ERROR, invalidates the connection, and re-raises, so nothing was actually broken (the pool rebuilt the connection) but every reconnect produced a traceback per cancelled handler. The `Send failed` warning came from a broadcast racing the close frame.
+
+**Fix**: `core/session_teardown.py` runs rollback + close under `asyncio.shield` in both `Database.get_session` and `CredentialsDatabase.get_session`, so a cancelled caller cannot interrupt the pool reset; `_drain_handler_tasks` in `routers/websocket.py` gives in-flight handlers a one-second grace to finish before cancelling stragglers; `StatusBroadcaster.broadcast` skips sockets that are no longer `CONNECTED` on either side and prunes them quietly. Locked by `tests/test_ws_disconnect_cancellation.py`.
