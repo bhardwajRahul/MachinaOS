@@ -170,3 +170,6 @@ server/tests/_test_opencompany_root/
 # Experiments (work in progress)
 # =============================================================================
 server/experiments/
+
+# Terraform provider cache (cli/terraform/*)
+**/.terraform/

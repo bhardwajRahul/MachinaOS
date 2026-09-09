@@ -314,7 +314,9 @@ main() {
       echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >> "$HOME/.bashrc"
     fi
   fi
-  npm install -g '@zeenie-ai/opencompany' || error_exit "npm install -g failed."
+  # OPENCOMPANY_VERSION pins a release (used by cli/terraform startup scripts).
+  PKG="@zeenie-ai/opencompany${OPENCOMPANY_VERSION:+@$OPENCOMPANY_VERSION}"
+  npm install -g "$PKG" || error_exit "npm install -g $PKG failed."
 
   echo ""
   echo -e "${GREEN}============================================${NC}"
