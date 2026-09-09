@@ -55,7 +55,10 @@ def test_installers_target_scoped_package_without_touching_unscoped_package():
         ).read_text(encoding="utf-8"),
     }
 
-    assert "npm install -g '@zeenie-ai/opencompany'" in installers["install.sh"]
+    # install.sh builds the spec (optionally pinned by OPENCOMPANY_VERSION)
+    # into $PKG before the single `npm install -g "$PKG"` call.
+    assert 'PKG="@zeenie-ai/opencompany${VERSION:+@$VERSION}"' in installers["install.sh"]
+    assert 'npm install -g "$PKG"' in installers["install.sh"]
     assert 'npm install -g "@zeenie-ai/opencompany"' in installers["install.ps1"]
     assert "npm install -g @zeenie-ai/opencompany@${version}" in installers["gcp startup"]
 

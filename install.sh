@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # OpenCompany Installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/zeenie-ai/OpenCompany/main/install.sh | bash
+# Usage: curl -fsSL https://opencompany.sh/install.sh | bash
+#
+# Served from opencompany.sh (not the GitHub raw URL) so installs are
+# trackable. The release to install comes from https://opencompany.sh/version
+# unless OPENCOMPANY_VERSION is set.
 #
 # This script installs OpenCompany and its dependencies:
 # - Node.js 18+ (distro package via brew/apt/dnf/pacman)
@@ -155,10 +159,11 @@ install_node() {
       fi
       ;;
     debian)
-      # The distro package is enough: Ubuntu 24.04 / Debian 12 ship Node 18,
-      # Ubuntu 26.04 ships 22. No third-party apt repo needed.
-      sudo apt-get update
-      sudo apt-get install -y nodejs npm
+      # An existing Node >= 18 is kept (checked above). When none is
+      # present, install the current LTS: the published package may still
+      # require it, and Ubuntu 24.04's apt package is 18.
+      curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+      sudo apt-get install -y nodejs
       # Force rehash PATH to find newly installed node
       hash -r 2>/dev/null || true
       # Source profile to update PATH if needed
@@ -314,8 +319,11 @@ main() {
       echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >> "$HOME/.bashrc"
     fi
   fi
-  # OPENCOMPANY_VERSION pins a release (used by cli/terraform startup scripts).
-  PKG="@zeenie-ai/opencompany${OPENCOMPANY_VERSION:+@$OPENCOMPANY_VERSION}"
+  # OPENCOMPANY_VERSION pins a release (the cli/terraform startup scripts set
+  # it). Otherwise ask opencompany.sh which release is current; if that is
+  # unreachable, fall back to npm's latest tag.
+  VERSION="${OPENCOMPANY_VERSION:-$(curl -fsSL --max-time 10 https://opencompany.sh/version 2>/dev/null | tr -d '[:space:]' || true)}"
+  PKG="@zeenie-ai/opencompany${VERSION:+@$VERSION}"
   npm install -g "$PKG" || error_exit "npm install -g $PKG failed."
 
   echo ""

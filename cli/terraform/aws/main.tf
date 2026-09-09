@@ -61,11 +61,11 @@ resource "aws_instance" "app_server" {
   }
 
   user_data = templatefile("${path.module}/startup.sh.tftpl", {
-    instance_name = var.instance_name
-    version       = var.opencompany_version
-    app_env       = var.app_env
+    instance_name  = var.instance_name
+    version        = var.opencompany_version
+    install_sh_url = var.install_sh_url
+    app_env        = var.app_env
   })
-  user_data_replace_on_change = true
 
   tags = {
     Name = var.instance_name

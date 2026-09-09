@@ -173,3 +173,8 @@ server/experiments/
 
 # Terraform provider cache (cli/terraform/*)
 **/.terraform/
+# Terraform state and variable files carry secrets (owner password, JWT keys)
+cli/terraform/**/*.tfstate
+cli/terraform/**/*.tfstate.*
+cli/terraform/**/*.tfvars
+cli/terraform/**/*.tfvars.json

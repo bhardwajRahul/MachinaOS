@@ -29,9 +29,9 @@ variable "key_name" {
 }
 
 variable "port" {
-  description = "Public port the app binds and the security group opens."
+  description = "Public port the app binds and the security group opens. The server rejects ports below 1024; 80/443 are left for a TLS front door."
   type        = number
-  default     = 80
+  default     = 5678
 }
 
 variable "allow_cidr" {
@@ -44,6 +44,12 @@ variable "opencompany_version" {
   description = "opencompany version to install from npm. Empty = latest."
   type        = string
   default     = ""
+}
+
+variable "install_sh_url" {
+  description = "URL of the OpenCompany install script the first boot runs. Override to test an unreleased installer."
+  type        = string
+  default     = "https://opencompany.sh/install.sh"
 }
 
 variable "app_env" {

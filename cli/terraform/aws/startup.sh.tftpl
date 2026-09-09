@@ -16,7 +16,7 @@ export DEBIAN_FRONTEND=noninteractive
 
 APP_USER=ubuntu
 APP_HOME=/home/$APP_USER
-INSTALL_SH=https://raw.githubusercontent.com/zeenie-ai/OpenCompany/main/install.sh
+INSTALL_SH='${install_sh_url}'
 
 echo "[${instance_name}] installing OpenCompany as $APP_USER..."
 sudo -u $APP_USER -H env OPENCOMPANY_VERSION="${version}" \
@@ -37,9 +37,10 @@ mkdir -p /var/lib/${instance_name}
 chown $APP_USER:$APP_USER /var/lib/${instance_name}
 
 echo "[${instance_name}] installing systemd service..."
-# install.sh uses ~/.npm-global when the global prefix is not writable (the
-# apt Node case); otherwise the shim lands on the system path.
-OPENCOMPANY_BIN=$(ls $APP_HOME/.npm-global/bin/company /usr/local/bin/company /usr/bin/company 2>/dev/null | head -1)
+# The shim lives under the user's npm global prefix (install.sh points it at
+# ~/.npm-global when the system prefix is not writable).
+OPENCOMPANY_BIN="$(sudo -u $APP_USER -H npm prefix -g)/bin/company"
+test -x "$OPENCOMPANY_BIN"
 cat > /etc/systemd/system/${instance_name}.service <<SERVICE_EOF
 [Unit]
 Description=OpenCompany (single login-gated instance)
@@ -52,8 +53,6 @@ User=$APP_USER
 WorkingDirectory=$APP_HOME
 EnvironmentFile=/etc/${instance_name}/opencompany.env
 ExecStart=$OPENCOMPANY_BIN serve
-# Lets the unprivileged service bind port 80 (inherited by the uvicorn child).
-AmbientCapabilities=CAP_NET_BIND_SERVICE
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=20
