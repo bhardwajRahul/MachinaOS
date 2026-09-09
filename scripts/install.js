@@ -95,9 +95,29 @@ function ensurePip(pythonCmd) {
 }
 
 function installUv(pythonCmd) {
-  ensurePip(pythonCmd);
-  console.log('Installing uv via pip...');
-  run(`${pythonCmd} -m pip install uv`);
+  // pip first (works on Windows, macOS python.org builds, conda, venvs).
+  // On Debian/Ubuntu 24.04+, Fedora, Homebrew, etc. the system pip refuses
+  // with PEP 668 "externally-managed-environment" and Debian ships no
+  // ensurepip module, so fall back to the official standalone installer
+  // (https://docs.astral.sh/uv/getting-started/installation/), the same
+  // path install.sh takes. The installer drops uv in ~/.local/bin, which
+  // is not on PATH for this process yet, so prepend it before re-checking.
+  try {
+    ensurePip(pythonCmd);
+    console.log('Installing uv via pip...');
+    run(`${pythonCmd} -m pip install uv`);
+    return;
+  } catch (err) {
+    console.log(`  pip install failed (${err.message.split('\n')[0]}); using the official uv installer...`);
+  }
+  const home = process.env.HOME || process.env.USERPROFILE || '';
+  if (process.platform === 'win32') {
+    run('powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"');
+  } else {
+    run('curl -LsSf https://astral.sh/uv/install.sh | sh');
+  }
+  const localBin = resolve(home, '.local', 'bin');
+  process.env.PATH = `${localBin}${process.platform === 'win32' ? ';' : ':'}${process.env.PATH || ''}`;
 }
 
 // ============================================================================

@@ -26,8 +26,11 @@ except ImportError:
     pass  # Windows - uvloop not available, use default asyncio
 
 import asyncio
+import functools
+import json
 from datetime import datetime
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 # Note: We don't register custom signal handlers.
 # uvicorn already handles SIGINT (Ctrl+C) and SIGTERM (docker stop) gracefully.
@@ -601,6 +604,22 @@ async def _sweep_cli_lockfiles_on_startup() -> None:
         logger.debug("[main] CLI lockfile sweep failed: %s", exc)
 
 
+@functools.lru_cache(maxsize=1)
+def _app_version() -> str:
+    """The published OpenCompany version, read from the root ``package.json``.
+
+    That file is the single source of truth (``company version sync`` writes it
+    from the git tag), and it ships inside the npm package one level above
+    ``server/``. Never hardcode a literal here — ``/health`` previously reported
+    a stale ``3.3.0`` while the package was ``0.1.1``.
+    """
+    try:
+        pkg = json.loads((Path(__file__).resolve().parent.parent / "package.json").read_text(encoding="utf-8"))
+        return str(pkg.get("version") or "0.0.0")
+    except (OSError, json.JSONDecodeError):
+        return "0.0.0"
+
+
 @app.get("/health")
 async def health_check():
     """Detailed health check with resource monitoring."""
@@ -631,7 +650,7 @@ async def health_check():
     return {
         "status": health["status"],
         "service": "python",
-        "version": "3.3.0",  # Bumped for daemon service support
+        "version": _app_version(),
         "environment": "development" if settings.debug else "production",
         "uptime_seconds": health["uptime_seconds"],
         "resources": {
